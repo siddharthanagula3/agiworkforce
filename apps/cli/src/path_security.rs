@@ -55,6 +55,15 @@ pub fn registered_additional_workspace_roots() -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+/// Remove roots owned by a session that is crossing into a newly reviewed
+/// privacy boundary. The caller supplies canonical paths previously returned
+/// by `register_additional_workspace_root*`; no filesystem content is changed.
+pub fn unregister_additional_workspace_roots(paths: &[PathBuf]) {
+    if let Ok(mut roots) = additional_roots().write() {
+        roots.retain(|root| !paths.iter().any(|path| path == root));
+    }
+}
+
 #[cfg(test)]
 pub fn clear_additional_workspace_roots_for_tests() {
     if let Ok(mut roots) = additional_roots().write() {

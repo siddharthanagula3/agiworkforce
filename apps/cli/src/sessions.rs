@@ -40,10 +40,15 @@ use std::sync::LazyLock;
 use uuid::Uuid;
 
 use crate::models::{ContentBlock, Message, MessageContent};
-use crate::runtime::session::{ManagedSession, MANAGED_SESSION_JSONL_EXTENSION};
+use crate::runtime::session::{
+    validate_managed_session_id, validate_summary_text, ManagedSession,
+    MANAGED_SESSION_CWD_MAX_UTF16, MANAGED_SESSION_JSONL_EXTENSION,
+    MANAGED_SESSION_MODEL_MAX_UTF16, MANAGED_SESSION_TITLE_MAX_UTF16,
+};
 use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_DIR_NAME};
 
 const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
+const SESSION_METADATA_MAX_BYTES: u64 = 64 * 1024;
 
 static GITHUB_PR_URL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -126,6 +131,26 @@ struct SessionMetadata {
     git_branch: Option<String>,
 }
 
+fn validate_metadata(metadata: &SessionMetadata) -> Result<()> {
+    if let Some(title) = metadata.title.as_deref() {
+        validate_summary_text(title, "metadata title", MANAGED_SESSION_TITLE_MAX_UTF16)?;
+    }
+    if let Some(model) = metadata.model.as_deref() {
+        validate_summary_text(model, "metadata model", MANAGED_SESSION_MODEL_MAX_UTF16)?;
+    }
+    if let Some(cwd) = metadata.cwd.as_deref() {
+        validate_summary_text(cwd, "metadata cwd", MANAGED_SESSION_CWD_MAX_UTF16)?;
+    }
+    if let Some(git_branch) = metadata.git_branch.as_deref() {
+        validate_summary_text(
+            git_branch,
+            "metadata git_branch",
+            MANAGED_SESSION_TITLE_MAX_UTF16,
+        )?;
+    }
+    Ok(())
+}
+
 /// Lightweight view of a session returned by list/search queries.
 #[derive(Debug, Clone)]
 pub struct SessionSummary {
@@ -195,12 +220,16 @@ fn session_file_candidates(base_dir: &Path, session_id: &str) -> [PathBuf; 2] {
 }
 
 fn find_session_path(base_dir: &Path, session_id: &str) -> Option<PathBuf> {
+    if validate_managed_session_id(session_id).is_err() {
+        return None;
+    }
     session_file_candidates(base_dir, session_id)
         .into_iter()
         .find(|path| path.exists())
 }
 
 fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Result<PathBuf> {
+    validate_managed_session_id(&session.session_id)?;
     let path = managed_sessions_dir(base_dir).join(format!(
         "{}.{}",
         session.session_id, MANAGED_SESSION_JSONL_EXTENSION
@@ -214,22 +243,45 @@ fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Re
 }
 
 fn read_metadata(base_dir: &Path, session_id: &str) -> Result<Option<SessionMetadata>> {
+    validate_managed_session_id(session_id)?;
     let path = metadata_path(base_dir, session_id);
     if !path.exists() {
         return Ok(None);
+    }
+
+    let metadata_size = fs::metadata(&path)
+        .with_context(|| format!("Failed to inspect session metadata {}", path.display()))?
+        .len();
+    if metadata_size > SESSION_METADATA_MAX_BYTES {
+        bail!(
+            "Session metadata {} exceeds the {} byte limit",
+            path.display(),
+            SESSION_METADATA_MAX_BYTES
+        );
     }
 
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("Failed to read session metadata {}", path.display()))?;
     let metadata: SessionMetadata = serde_json::from_str(&contents)
         .with_context(|| format!("Failed to parse session metadata {}", path.display()))?;
+    validate_metadata(&metadata)
+        .with_context(|| format!("Invalid session metadata {}", path.display()))?;
     Ok(Some(metadata))
 }
 
 fn write_metadata(base_dir: &Path, session_id: &str, metadata: &SessionMetadata) -> Result<()> {
+    validate_managed_session_id(session_id)?;
+    validate_metadata(metadata)?;
     let path = metadata_path(base_dir, session_id);
     let contents =
         serde_json::to_string_pretty(metadata).context("Failed to serialize session metadata")?;
+    if contents.len() as u64 > SESSION_METADATA_MAX_BYTES {
+        bail!(
+            "Session metadata {} exceeds the {} byte limit",
+            path.display(),
+            SESSION_METADATA_MAX_BYTES
+        );
+    }
     atomic_write(&path, contents.as_bytes())
         .with_context(|| format!("Failed to write session metadata {}", path.display()))?;
     Ok(())
@@ -241,8 +293,9 @@ fn infer_title(messages: &[Message]) -> String {
         .find(|message| message.role == "user")
         .map(|message| {
             let text = message.text_content();
-            let truncated: String = text.chars().take(50).collect();
-            if text.chars().count() > 50 {
+            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            let truncated: String = normalized.chars().take(50).collect();
+            if normalized.chars().count() > 50 {
                 format!("{truncated}...")
             } else {
                 truncated
@@ -318,14 +371,41 @@ fn load_all_sessions(
     for entry in fs::read_dir(&dir)
         .with_context(|| format!("Failed to read managed session directory {}", dir.display()))?
     {
-        let path = entry?.path();
+        let path = match entry {
+            Ok(entry) => entry.path(),
+            Err(error) => {
+                eprintln!(
+                    "warning: skipped unreadable managed-session directory entry in {}: {error}",
+                    dir.display()
+                );
+                continue;
+            }
+        };
         let extension = path.extension().and_then(|value| value.to_str());
         if !matches!(extension, Some("jsonl") | Some("json")) {
             continue;
         }
 
-        let session = load_managed_session_from_path(&path)?;
-        let metadata = read_metadata(base_dir, &session.session_id)?;
+        let session = match load_managed_session_from_path(&path) {
+            Ok(session) => session,
+            Err(error) => {
+                eprintln!(
+                    "warning: skipped invalid managed session {}: {error:#}",
+                    path.display()
+                );
+                continue;
+            }
+        };
+        let metadata = match read_metadata(base_dir, &session.session_id) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                eprintln!(
+                    "warning: ignored invalid metadata for managed session '{}': {error:#}",
+                    session.session_id
+                );
+                None
+            }
+        };
 
         match by_session_id.get(&session.session_id) {
             Some((existing_path, existing_session, _))

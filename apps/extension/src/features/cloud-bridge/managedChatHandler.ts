@@ -1,5 +1,11 @@
 import type { RoutingTaskType } from '@agiworkforce/routing';
-import { canUseBillingPlanCapability } from '@agiworkforce/types';
+import type { AgentTaskState } from '@agiworkforce/types/protocol';
+import {
+  canUseBillingPlanCapability,
+  getModelMetadataById,
+  resolveModelEffort,
+  type Effort,
+} from '@agiworkforce/types';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   ManagedCloudAgentRunReferenceSchema,
@@ -19,6 +25,7 @@ import {
   type ManagedModelAccess,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
+import type { ChromeManagedRoutingMetadata } from '../../types';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
@@ -26,6 +33,7 @@ const MAX_SYSTEM_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const ROUTING_TASKS = new Set<RoutingTaskType>([
   'coding',
   'reasoning',
@@ -38,6 +46,15 @@ const ROUTING_TASKS = new Set<RoutingTaskType>([
   'creative_writing',
   'long_context',
   'simple_chat',
+]);
+const REASONING_EFFORTS: ReadonlySet<Effort> = new Set([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
 ]);
 
 export function createChromeManagedStreamKey(clientInstanceId: string, streamId: string): string {
@@ -56,6 +73,8 @@ export interface ChromeManagedChatRequest {
   modelSelection?: string;
   /** Route this turn through the lowest-cost, low-latency Auto profile. */
   quickMode?: boolean;
+  /** Requested catalog effort; reconciled again after a concrete route exists. */
+  effort?: Effort;
   pageContext?: string;
   systemPrompt?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -63,14 +82,14 @@ export interface ChromeManagedChatRequest {
   extendedThinking?: boolean;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
+  /** Internal retry-stable identity; extension messages cannot supply it. */
+  idempotencyKey?: string;
+  /** Background work must finish without pausing for a human response. */
+  completionMode?: 'interactive' | 'unattended';
   signal?: AbortSignal;
 }
 
-export interface ChromeManagedRoutingResult {
-  modelKey: string;
-  taskType: RoutingTaskType;
-  reason: string;
-}
+export type ChromeManagedRoutingResult = ChromeManagedRoutingMetadata;
 
 export type ChromeManagedChatResult =
   | { status: 'success'; routing: ChromeManagedRoutingResult }
@@ -91,6 +110,8 @@ export interface ChromeManagedChatDependencies {
   getAuthToken: typeof getAuthToken;
   getModelAccess: typeof getManagedModelAccess;
   streamChat: typeof streamFreeChat;
+  /** Fires after admission + concrete routing, before provider streaming starts. */
+  onRouting?: (routing: ChromeManagedRoutingResult) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
@@ -148,6 +169,12 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     return 'Invalid Quick mode value.';
   }
   if (
+    request.effort !== undefined &&
+    (typeof request.effort !== 'string' || !REASONING_EFFORTS.has(request.effort))
+  ) {
+    return 'Invalid reasoning effort.';
+  }
+  if (
     request.pageContext !== undefined &&
     (typeof request.pageContext !== 'string' || request.pageContext.length > MAX_PAGE_CONTEXT_CHARS)
   ) {
@@ -178,6 +205,19 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
   }
   if (!Array.isArray(request.attachments ?? [])) return 'Attachments are malformed.';
   if (
+    request.idempotencyKey !== undefined &&
+    !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)
+  ) {
+    return 'Invalid Managed Cloud request identity.';
+  }
+  if (
+    request.completionMode !== undefined &&
+    request.completionMode !== 'interactive' &&
+    request.completionMode !== 'unattended'
+  ) {
+    return 'Invalid Managed Cloud completion mode.';
+  }
+  if (
     request.currentModelKey !== undefined &&
     request.currentModelKey !== null &&
     (typeof request.currentModelKey !== 'string' ||
@@ -194,6 +234,17 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     return 'Previous routing task is invalid.';
   }
   return null;
+}
+
+async function managedChatIdempotencyKey(
+  kind: 'send' | 'approval',
+  value: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  );
+  return `agi.chrome.${kind}.${hex}`;
 }
 
 function createFenceNonce(): string {
@@ -221,6 +272,74 @@ function attachmentMime(dataUrl: string): string {
 
 function isAutoSelection(selection: string): boolean {
   return selection === 'auto' || selection.startsWith('auto-');
+}
+
+/**
+ * A live stream ending at an input boundary is successful for an interactive
+ * panel: the user can approve or continue it. The same boundary is terminally
+ * incomplete for scheduled work, which has nobody present to respond.
+ */
+function adjudicateManagedChatCompletion(
+  completionMode: ChromeManagedChatRequest['completionMode'],
+  taskState: AgentTaskState | undefined,
+  routing: ChromeManagedRoutingResult,
+): ChromeManagedChatResult {
+  if (completionMode === 'unattended' && taskState === 'awaiting_input') {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'The scheduled AGI Cloud run requires input and cannot finish unattended.',
+      routing,
+    };
+  }
+  if (completionMode === 'unattended' && taskState === 'paused') {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'The scheduled AGI Cloud run is paused.',
+      routing,
+    };
+  }
+  return { status: 'success', routing };
+}
+
+/** Runtime boundary for route metadata restored from browser-local history. */
+export function normalizeChromeManagedRoutingMetadata(
+  value: unknown,
+): ChromeManagedRoutingMetadata | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const modelKey = record['modelKey'];
+  const taskType = record['taskType'];
+  const reason = record['reason'];
+  const requestedEffort = record['effort'];
+  if (
+    typeof modelKey !== 'string' ||
+    modelKey.length === 0 ||
+    modelKey.length > MAX_IDENTIFIER_CHARS ||
+    !getModelMetadataById(modelKey) ||
+    typeof taskType !== 'string' ||
+    !ROUTING_TASKS.has(taskType as RoutingTaskType) ||
+    typeof reason !== 'string' ||
+    reason.length === 0 ||
+    reason.length > 500
+  ) {
+    return null;
+  }
+  if (
+    requestedEffort !== undefined &&
+    (typeof requestedEffort !== 'string' ||
+      !REASONING_EFFORTS.has(requestedEffort as Effort) ||
+      resolveModelEffort(modelKey, requestedEffort) !== requestedEffort)
+  ) {
+    return null;
+  }
+  return {
+    modelKey,
+    taskType: taskType as RoutingTaskType,
+    reason,
+    ...(requestedEffort === undefined ? {} : { effort: requestedEffort as Effort }),
+  };
 }
 
 export async function executeChromeManagedChat(
@@ -332,32 +451,48 @@ export async function executeChromeManagedChat(
     };
   }
 
-  const routingResult: ChromeManagedRoutingResult = {
-    modelKey: routing.modelKey,
-    taskType: routing.taskType,
-    reason: routing.reason,
-  };
   const messages: FreeTrialMessage[] = [];
   if (request.systemPrompt) messages.push({ role: 'system', content: request.systemPrompt });
   messages.push(...(request.conversationHistory ?? []).map((message) => ({ ...message })));
   messages.push({ role: 'user', content: finalUserContent });
 
+  // Auto and Quick do not have a trustworthy effort ladder until routing has
+  // selected a concrete model. Reconcile here at the privileged owner so a
+  // stale cross-model preference can never become an unsupported wire value.
+  const effort =
+    request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
+
+  const routingResult: ChromeManagedRoutingResult = {
+    modelKey: routing.modelKey,
+    taskType: routing.taskType,
+    reason: routing.reason,
+    ...(effort ? { effort } : {}),
+  };
+  await dependencies.onRouting?.(routingResult);
+
   const streamOptions: ManagedChatStreamOptions = {
     model: routing.modelKey,
+    idempotencyKey: request.idempotencyKey ?? (await managedChatIdempotencyKey('send', request.id)),
+    ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
     workMode: 'agiwork',
     signal: request.signal,
   };
+  let latestTaskState: AgentTaskState | undefined;
   for await (const chunk of dependencies.streamChat(messages, token, streamOptions)) {
     if (chunk.type === 'text') {
       await dependencies.onText(chunk.text);
       continue;
     }
     if (chunk.type === 'agent-event') {
+      if (chunk.envelope.event.type === 'task-state-changed') {
+        latestTaskState = chunk.envelope.event.state;
+      }
       await dependencies.onAgentEvent?.(chunk);
       continue;
     }
     if (chunk.type === 'run') {
+      if (chunk.run.state) latestTaskState = chunk.run.state;
       await dependencies.onRunReference?.(chunk.run);
       continue;
     }
@@ -369,7 +504,7 @@ export async function executeChromeManagedChat(
         routing: routingResult,
       };
     }
-    return { status: 'success', routing: routingResult };
+    return adjudicateManagedChatCompletion(request.completionMode, latestTaskState, routingResult);
   }
 
   return {
@@ -412,7 +547,13 @@ export async function executeChromeManagedApproval(
     request.run.runId,
     request.toolApprovals,
     token,
-    { signal: request.signal },
+    {
+      signal: request.signal,
+      idempotencyKey: await managedChatIdempotencyKey(
+        'approval',
+        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}`,
+      ),
+    },
   )) {
     if (chunk.type === 'text') {
       await dependencies.onText(chunk.text);
@@ -441,7 +582,10 @@ export async function executeChromeManagedApproval(
 
 export function createChromeManagedChatDependencies(
   onText: ChromeManagedChatDependencies['onText'],
-  callbacks: Pick<ChromeManagedChatDependencies, 'onAgentEvent' | 'onRunReference'> = {},
+  callbacks: Pick<
+    ChromeManagedChatDependencies,
+    'onRouting' | 'onAgentEvent' | 'onRunReference'
+  > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
 }

@@ -364,7 +364,9 @@ mod harness_key_tests {
     const VALID_HEX: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 
     fn with_env<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
-        let _guard = ENV_GUARD.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = ENV_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         match value {
             Some(value) => std::env::set_var("AGI_DESKTOP_WDIO_DATABASE_KEY", value),
             None => std::env::remove_var("AGI_DESKTOP_WDIO_DATABASE_KEY"),
@@ -389,7 +391,9 @@ mod harness_key_tests {
 
             // The shipped bundles must never honour it, or an environment
             // variable could dictate a production database key.
-            assert!(store_for("com.agiworkforce.desktop").harness_key().is_none());
+            assert!(store_for("com.agiworkforce.desktop")
+                .harness_key()
+                .is_none());
             assert!(store_for("com.agiworkforce.desktop.wdio.other")
                 .harness_key()
                 .is_none());

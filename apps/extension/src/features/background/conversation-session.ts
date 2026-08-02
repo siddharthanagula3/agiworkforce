@@ -1,11 +1,18 @@
 import { createBrowserConversationId } from './conversation-history';
+import {
+  normalizeManagedCloudOwner,
+  sameManagedCloudOwner,
+  type ManagedCloudOwner,
+} from '../cloud-bridge/managedCloudAuthority';
 
 const SESSION_OWNER_KEY = 'agi_browser_conversation_owners_v1';
 const SESSION_OWNER_LOCK = 'agi-browser-conversation-owners-v1';
 const MAX_SESSION_OWNERS = 32;
+const MAX_SESSION_OWNER_SCAN = MAX_SESSION_OWNERS * 2;
 
 interface ConversationOwnerRecord {
   conversationId: string;
+  owner: ManagedCloudOwner;
   touchedAt: number;
 }
 
@@ -18,6 +25,12 @@ export interface ClaimedConversationOwner {
   conversationId: string;
   /** Existing conversation used only to seed a newly-created window owner. */
   seedConversationId?: string;
+}
+
+export interface SelectedConversationOwner {
+  conversationId: string;
+  /** True only when another live scope already owns the selected conversation. */
+  forked: boolean;
 }
 
 let mutationQueue: Promise<void> = Promise.resolve();
@@ -39,6 +52,10 @@ function isSafeIdentifier(value: unknown): value is string {
   );
 }
 
+function assertManagedCloudOwner(owner: ManagedCloudOwner): void {
+  if (!normalizeManagedCloudOwner(owner)) throw new Error('Invalid Managed Cloud owner');
+}
+
 function normalizeOwnerStore(value: unknown): ConversationOwnerStore {
   if (!value || typeof value !== 'object') return { version: 1, owners: {} };
   const candidate = value as Record<string, unknown>;
@@ -51,10 +68,21 @@ function normalizeOwnerStore(value: unknown): ConversationOwnerStore {
   }
 
   const owners: Record<string, ConversationOwnerRecord> = {};
-  for (const [scope, rawRecord] of Object.entries(candidate['owners'] as Record<string, unknown>)) {
+  const rawOwners = candidate['owners'] as Record<string, unknown>;
+  let scanned = 0;
+  // Avoid Object.entries(): a hostile/corrupt session record can contain far
+  // more keys than Chrome will ever retain, and materializing them all defeats
+  // the write-side cap before validation even starts.
+  for (const scope in rawOwners) {
+    if (!Object.prototype.hasOwnProperty.call(rawOwners, scope)) continue;
+    if (scanned >= MAX_SESSION_OWNER_SCAN) break;
+    scanned += 1;
+    const rawRecord = rawOwners[scope];
     if (!isSafeIdentifier(scope) || !rawRecord || typeof rawRecord !== 'object') continue;
     const record = rawRecord as Record<string, unknown>;
+    const owner = normalizeManagedCloudOwner(record['owner']);
     if (
+      !owner ||
       !isSafeIdentifier(record['conversationId']) ||
       typeof record['touchedAt'] !== 'number' ||
       !Number.isFinite(record['touchedAt'])
@@ -63,6 +91,7 @@ function normalizeOwnerStore(value: unknown): ConversationOwnerStore {
     }
     owners[scope] = {
       conversationId: record['conversationId'],
+      owner,
       touchedAt: record['touchedAt'],
     };
   }
@@ -103,6 +132,34 @@ function mutateOwners<T>(operation: (store: ConversationOwnerStore) => Promise<T
   return result;
 }
 
+async function resolveLiveWindowScopes(): Promise<ReadonlySet<string> | null> {
+  try {
+    if (!chrome.windows?.getAll) return null;
+    const windows = await chrome.windows.getAll();
+    return new Set(
+      windows.flatMap((window) =>
+        typeof window.id === 'number' && Number.isSafeInteger(window.id) && window.id >= 0
+          ? [`window:${window.id}`]
+          : [],
+      ),
+    );
+  } catch {
+    // Failing closed is safer than stealing a conversation from a window whose
+    // liveness Chrome could not establish.
+    return null;
+  }
+}
+
+function pruneClosedWindowOwners(
+  store: ConversationOwnerStore,
+  liveWindowScopes: ReadonlySet<string> | null,
+): void {
+  if (!liveWindowScopes) return;
+  for (const scope of Object.keys(store.owners)) {
+    if (scope.startsWith('window:') && !liveWindowScopes.has(scope)) delete store.owners[scope];
+  }
+}
+
 export async function resolveBrowserConversationScope(panelInstanceId: string): Promise<string> {
   if (!isSafeIdentifier(panelInstanceId)) throw new Error('Invalid side-panel instance id');
   try {
@@ -122,49 +179,145 @@ export async function resolveBrowserConversationScope(panelInstanceId: string): 
 
 export async function claimConversationOwner(
   scope: string,
+  owner: ManagedCloudOwner,
   seedConversationId?: string,
 ): Promise<ClaimedConversationOwner> {
   if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
+  assertManagedCloudOwner(owner);
   if (seedConversationId !== undefined && !isSafeIdentifier(seedConversationId)) {
     throw new Error('Invalid seed conversation id');
   }
 
   return mutateOwners(async (store) => {
+    // Window liveness is sampled while the owner lock is held. Taking this
+    // snapshot before entering the serialized mutation allowed a queued claim
+    // from a newly-created window to be pruned by an older snapshot.
+    const liveWindowScopes = await resolveLiveWindowScopes();
+    pruneClosedWindowOwners(store, liveWindowScopes);
     const existing = store.owners[scope];
-    if (existing) {
-      existing.touchedAt = Date.now();
+    if (existing && !sameManagedCloudOwner(existing.owner, owner)) {
+      delete store.owners[scope];
+    }
+    const currentOwner = store.owners[scope];
+    if (currentOwner) {
+      currentOwner.touchedAt = Date.now();
       await writeOwnerStore(store);
-      return { conversationId: existing.conversationId };
+      return { conversationId: currentOwner.conversationId };
     }
 
-    const conversationId = createBrowserConversationId();
-    store.owners[scope] = { conversationId, touchedAt: Date.now() };
+    const seedHasLiveOwner = seedConversationId
+      ? Object.entries(store.owners).some(
+          ([ownerScope, candidate]) =>
+            ownerScope !== scope &&
+            sameManagedCloudOwner(candidate.owner, owner) &&
+            candidate.conversationId === seedConversationId,
+        )
+      : false;
+    // Adopt an unowned seed directly. Only a real live-window collision needs
+    // a new id and a durable seeded copy.
+    const conversationId =
+      seedConversationId && !seedHasLiveOwner ? seedConversationId : createBrowserConversationId();
+    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
     await writeOwnerStore(store);
     return {
       conversationId,
-      ...(seedConversationId ? { seedConversationId } : {}),
+      ...(seedConversationId && seedHasLiveOwner ? { seedConversationId } : {}),
     };
   });
 }
 
-export async function replaceConversationOwner(scope: string): Promise<string> {
+export async function replaceConversationOwner(
+  scope: string,
+  owner: ManagedCloudOwner,
+): Promise<string> {
   if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
+  assertManagedCloudOwner(owner);
   return mutateOwners(async (store) => {
     const conversationId = createBrowserConversationId();
-    store.owners[scope] = { conversationId, touchedAt: Date.now() };
+    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
     await writeOwnerStore(store);
     return conversationId;
   });
 }
 
+/**
+ * Make a selected history record the current scope's owner without turning a
+ * read into an unconditional copy. A new branch is allocated only when another
+ * live Chrome window already owns that exact conversation.
+ */
+export async function claimSelectedConversationOwner(
+  scope: string,
+  owner: ManagedCloudOwner,
+  selectedConversationId: string,
+): Promise<SelectedConversationOwner> {
+  if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
+  assertManagedCloudOwner(owner);
+  if (!isSafeIdentifier(selectedConversationId)) {
+    throw new Error('Invalid selected conversation id');
+  }
+
+  return mutateOwners(async (store) => {
+    // Query while serialized with the store read and write. Otherwise a stale
+    // pre-lock snapshot can erase an owner that won an earlier queued claim.
+    const liveWindowScopes = await resolveLiveWindowScopes();
+    pruneClosedWindowOwners(store, liveWindowScopes);
+    const conflictingOwner = Object.entries(store.owners).some(
+      ([ownerScope, candidate]) =>
+        ownerScope !== scope &&
+        sameManagedCloudOwner(candidate.owner, owner) &&
+        candidate.conversationId === selectedConversationId,
+    );
+    const conversationId = conflictingOwner
+      ? createBrowserConversationId()
+      : selectedConversationId;
+    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
+    await writeOwnerStore(store);
+    return { conversationId, forked: conflictingOwner };
+  });
+}
+
 export async function assignConversationOwner(
   scope: string,
+  owner: ManagedCloudOwner,
   conversationId: string,
 ): Promise<void> {
   if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
+  assertManagedCloudOwner(owner);
   if (!isSafeIdentifier(conversationId)) throw new Error('Invalid browser conversation id');
   await mutateOwners(async (store) => {
-    store.owners[scope] = { conversationId, touchedAt: Date.now() };
+    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
     await writeOwnerStore(store);
+  });
+}
+
+/**
+ * Roll back a stale async history claim without overwriting a newer New Chat
+ * or restore claim that already won the same scope.
+ */
+export async function restoreConversationOwnerIfCurrent(
+  scope: string,
+  owner: ManagedCloudOwner,
+  expectedConversationId: string,
+  replacementConversationId: string,
+): Promise<boolean> {
+  if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
+  assertManagedCloudOwner(owner);
+  if (!isSafeIdentifier(expectedConversationId) || !isSafeIdentifier(replacementConversationId)) {
+    throw new Error('Invalid browser conversation id');
+  }
+  return mutateOwners(async (store) => {
+    if (
+      store.owners[scope]?.conversationId !== expectedConversationId ||
+      !sameManagedCloudOwner(store.owners[scope]?.owner, owner)
+    ) {
+      return false;
+    }
+    store.owners[scope] = {
+      conversationId: replacementConversationId,
+      owner: { ...owner },
+      touchedAt: Date.now(),
+    };
+    await writeOwnerStore(store);
+    return true;
   });
 }

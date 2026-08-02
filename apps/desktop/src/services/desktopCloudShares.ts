@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CLOUD_API_BASE_URL, cloudFetch, getAuthHeaders } from '../api/cloudApi';
-import { assertManagedCloudBoundary, captureManagedCloudBoundary } from './managedCloudBoundary';
+import { CLOUD_API_BASE_URL } from '../api/cloudApi';
+import { createManagedCloudRequestContext } from './managedCloudRequestContext';
 
 const ShareMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
@@ -49,22 +49,22 @@ function shareError(body: unknown, status: number): string {
 
 /** Publish a Managed Cloud conversation without crossing the Local boundary. */
 export async function createDesktopCloudShare(input: CreateDesktopCloudShareInput) {
-  const boundary = captureManagedCloudBoundary('Managed Cloud conversation sharing');
+  const request = createManagedCloudRequestContext('Managed Cloud conversation sharing');
   const payload = CreateShareRequestSchema.parse({
     title: input.title,
     ...(input.modelId ? { model_id: input.modelId } : {}),
     ...(input.provider ? { provider: input.provider } : {}),
     messages: input.messages,
   });
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/share`, {
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/share`, {
     method: 'POST',
     credentials: 'include',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     body: JSON.stringify(payload),
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(shareError(body, response.status));
   const result = CreateShareResponseSchema.parse(body);
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   return result;
 }

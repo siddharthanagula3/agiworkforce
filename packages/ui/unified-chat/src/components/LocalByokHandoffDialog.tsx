@@ -55,6 +55,10 @@ export interface LocalByokHandoffDialogProps {
   /** True while the confirm action's own async work is in flight. Defaults to false. */
   isConfirming?: boolean;
   error?: string | null;
+  /** Non-blocking disclosure about context that was omitted or truncated. */
+  notice?: string | null;
+  /** Selected payload items whose original bytes could not be secret-scanned. */
+  unscannedContextCount?: number;
   onConfirm: () => void | Promise<void>;
   /**
    * Context items the user can include/exclude. When omitted, the
@@ -97,6 +101,8 @@ export function LocalByokHandoffDialog({
   isBuilding,
   isConfirming = false,
   error = null,
+  notice = null,
+  unscannedContextCount = 0,
   onConfirm,
   candidates,
   selectedContextIds = [],
@@ -208,11 +214,20 @@ export function LocalByokHandoffDialog({
                   <div
                     className={cn(
                       'mt-2 text-lg font-semibold',
-                      findings.length > 0 ? 'text-amber-300' : 'text-emerald-300',
+                      findings.length > 0 || unscannedContextCount > 0
+                        ? 'text-amber-300'
+                        : 'text-emerald-300',
                     )}
                   >
                     {findings.length}
                   </div>
+                  {unscannedContextCount > 0 && (
+                    <div className="mt-1 text-xs text-amber-200">
+                      {unscannedContextCount}{' '}
+                      {unscannedContextCount === 1 ? 'selected file was' : 'selected files were'}{' '}
+                      not content-scanned
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-lg border border-border/60 p-3">
                   <div className="text-xs text-muted-foreground">Redacted bytes</div>
@@ -226,6 +241,13 @@ export function LocalByokHandoffDialog({
                 <div className="mt-3 flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
+                </div>
+              )}
+
+              {notice && (
+                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{notice}</span>
                 </div>
               )}
 
@@ -274,9 +296,20 @@ export function LocalByokHandoffDialog({
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-medium">Redacted Payload</h3>
                   {preview && !blocked && (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-300">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Ready for confirmation
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 text-xs',
+                        unscannedContextCount > 0 ? 'text-amber-200' : 'text-emerald-300',
+                      )}
+                    >
+                      {unscannedContextCount > 0 ? (
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      {unscannedContextCount > 0
+                        ? 'Ready with scan limits disclosed'
+                        : 'Ready for confirmation'}
                     </span>
                   )}
                 </div>

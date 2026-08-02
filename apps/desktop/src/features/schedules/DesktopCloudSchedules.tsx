@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarClock,
   ChevronDown,
@@ -12,7 +12,7 @@ import {
   RotateCcw,
   Trash2,
 } from 'lucide-react';
-import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
+import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleMutation,
   ManagedCloudScheduleRecurrence,
@@ -20,6 +20,9 @@ import type {
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
+import { getCloudModels, type CloudModelInfo } from '../../api/cloudApi';
+import type { PlanTier } from '../../lib/cloudAccountTypes';
+import { resolveDesktopCloudPickerModels } from '../../services/desktopCloudEntitlements';
 import {
   desktopCloudSchedules,
   type DesktopCloudSchedulesApi,
@@ -92,17 +95,12 @@ function resolvedTimezone(): string {
   }
 }
 
-const MODEL_OPTIONS = [
-  ...getAutoRoutingProfiles().map((profile) => ({ value: profile.id, label: profile.label })),
-  ...getCoreManualModelOptions().map((model) => ({ value: model.id, label: model.label })),
-];
-
-function initialDraft(): ScheduleDraft {
+function initialDraft(model = ''): ScheduleDraft {
   return {
     name: '',
     description: '',
     prompt: '',
-    model: MODEL_OPTIONS[0]?.value ?? '',
+    model,
     recurrence: 'daily',
     cronExpression: '',
     scheduledLocal: '',
@@ -246,7 +244,10 @@ function isoToLocalInput(value: string | null, timezone: string): string {
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
-function draftFromSchedule(schedule: ManagedCloudScheduleTask): ScheduleDraft {
+function draftFromSchedule(
+  schedule: ManagedCloudScheduleTask,
+  modelOptions: readonly CloudModelInfo[],
+): ScheduleDraft {
   const metadata = schedule.metadata ?? {};
   const storedDays = metadata['daysOfWeek'];
   const storedDayOfMonth = metadata['dayOfMonth'];
@@ -254,7 +255,7 @@ function draftFromSchedule(schedule: ManagedCloudScheduleTask): ScheduleDraft {
     name: schedule.name,
     description: schedule.description ?? '',
     prompt: schedule.prompt ?? '',
-    model: schedule.model ?? MODEL_OPTIONS[0]?.value ?? '',
+    model: modelOptions.some((model) => model.id === schedule.model) ? (schedule.model ?? '') : '',
     recurrence: recurrenceOf(schedule),
     cronExpression: schedule.cronExpression ?? '',
     scheduledLocal: isoToLocalInput(schedule.executeAt, schedule.timezone),
@@ -351,12 +352,67 @@ function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
-export interface DesktopCloudSchedulesProps {
-  api?: DesktopCloudSchedulesApi;
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
-export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCloudSchedulesProps) {
-  const isSignedIn = useAuthStore(selectHasCloudAccountSession);
+function abortedRequest(): DOMException {
+  return new DOMException('The Managed Cloud schedule request was canceled.', 'AbortError');
+}
+
+function assertRequestActive(signal: AbortSignal): void {
+  if (signal.aborted) throw abortedRequest();
+}
+
+function useAbortableRequests() {
+  const controllers = useRef(new Set<AbortController>());
+
+  useEffect(
+    () => () => {
+      for (const controller of controllers.current) controller.abort();
+      controllers.current.clear();
+    },
+    [],
+  );
+
+  return useCallback(async <T,>(request: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    const controller = new AbortController();
+    controllers.current.add(controller);
+    try {
+      const result = await request(controller.signal);
+      if (controller.signal.aborted) throw abortedRequest();
+      return result;
+    } finally {
+      controllers.current.delete(controller);
+    }
+  }, []);
+}
+
+export type DesktopCloudScheduleModelsLoader = (signal?: AbortSignal) => Promise<CloudModelInfo[]>;
+
+async function loadDesktopCloudScheduleModels(signal?: AbortSignal): Promise<CloudModelInfo[]> {
+  const models = await getCloudModels();
+  if (signal?.aborted) throw abortedRequest();
+  return models;
+}
+
+export interface DesktopCloudSchedulesProps {
+  api?: DesktopCloudSchedulesApi;
+  loadModels?: DesktopCloudScheduleModelsLoader;
+}
+
+interface AuthenticatedDesktopCloudSchedulesProps {
+  api: DesktopCloudSchedulesApi;
+  loadModels: DesktopCloudScheduleModelsLoader;
+  plan: PlanTier | null;
+}
+
+function AuthenticatedDesktopCloudSchedules({
+  api,
+  loadModels,
+  plan,
+}: AuthenticatedDesktopCloudSchedulesProps) {
+  const runAbortable = useAbortableRequests();
   const [schedules, setSchedules] = useState<ManagedCloudScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [listError, setListError] = useState<string | null>(null);
@@ -365,70 +421,128 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
   const [loadingMore, setLoadingMore] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedCloudScheduleTask | null>(null);
-  const [draft, setDraft] = useState<ScheduleDraft>(initialDraft);
+  const [draft, setDraft] = useState<ScheduleDraft>(() => initialDraft());
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, HistoryState>>({});
+  const [discoveredModels, setDiscoveredModels] = useState<CloudModelInfo[]>([]);
+  const [modelStatus, setModelStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [modelError, setModelError] = useState<string | null>(null);
   const manualRunKeys = useRef<Record<string, string>>({});
 
+  const modelOptions = useMemo(
+    () => resolveDesktopCloudPickerModels(discoveredModels, plan),
+    [discoveredModels, plan],
+  );
+  const scheduleLimit = getPlanMaxScheduledTasks(plan);
+  const schedulesEnabled = scheduleLimit === null || scheduleLimit > 0;
+  const scheduleLimitReached =
+    listStatus === 'success' && scheduleLimit !== null && schedules.length >= scheduleLimit;
+  const modelCatalogReady = modelStatus === 'success' && modelOptions.length > 0;
+  const canCreateSchedule =
+    schedulesEnabled && !scheduleLimitReached && modelCatalogReady && listStatus === 'success';
+
+  const loadModelCatalog = useCallback(async () => {
+    setModelStatus('loading');
+    setModelError(null);
+    try {
+      const models = await runAbortable((signal) => loadModels(signal));
+      setDiscoveredModels(models);
+      setModelStatus('success');
+    } catch (error) {
+      if (isAbortError(error)) return;
+      setDiscoveredModels([]);
+      setModelStatus('error');
+      setModelError(errorText(error, 'Managed model catalog could not be loaded.'));
+    }
+  }, [loadModels, runAbortable]);
+
+  useEffect(() => {
+    if (schedulesEnabled) return;
+    setEditorOpen(false);
+    setEditing(null);
+    setDraft(initialDraft());
+    setFormError(null);
+  }, [schedulesEnabled]);
+
   const loadSchedules = useCallback(
-    async (append = false, offset = 0, signal?: AbortSignal) => {
+    async (append = false, offset = 0) => {
       if (append) setLoadingMore(true);
       else setListStatus('loading');
       setListError(null);
       try {
-        const result = await api.listSchedules({
-          limit: SCHEDULE_PAGE_SIZE,
-          offset,
-          signal,
-        });
+        const result = await runAbortable((signal) =>
+          api.listSchedules({
+            limit: SCHEDULE_PAGE_SIZE,
+            offset,
+            signal,
+          }),
+        );
         setSchedules((current) => (append ? [...current, ...result.schedules] : result.schedules));
         setHasMore(result.hasMore);
         setNextOffset(result.pagination.offset + result.pagination.limit);
         setListStatus('success');
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (isAbortError(error)) return;
         setListError(errorText(error, 'Schedules could not be loaded.'));
         if (!append) setListStatus('error');
       } finally {
         if (append) setLoadingMore(false);
       }
     },
-    [api],
+    [api, runAbortable],
   );
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    const controller = new AbortController();
-    void loadSchedules(false, 0, controller.signal);
-    return () => controller.abort();
-  }, [isSignedIn, loadSchedules]);
+    void loadSchedules();
+    void loadModelCatalog();
+  }, [loadModelCatalog, loadSchedules]);
 
   const openCreate = () => {
+    if (!canCreateSchedule) return;
     setEditing(null);
-    setDraft(initialDraft());
+    setDraft(initialDraft(modelOptions[0]?.id));
     setFormError(null);
     setEditorOpen(true);
   };
 
   const openEdit = (schedule: ManagedCloudScheduleTask) => {
+    if (!schedulesEnabled || !modelCatalogReady) return;
     setEditing(schedule);
-    setDraft(draftFromSchedule(schedule));
-    setFormError(null);
+    setDraft(draftFromSchedule(schedule, modelOptions));
+    setFormError(
+      schedule.model && !modelOptions.some((model) => model.id === schedule.model)
+        ? 'This schedule’s saved model is not currently available. Select another model before saving.'
+        : null,
+    );
     setEditorOpen(true);
   };
 
   const save = async () => {
+    if (!schedulesEnabled) {
+      setFormError('Upgrade to Basic or higher to manage Managed Cloud schedules.');
+      return;
+    }
+    if (!editing && scheduleLimitReached) {
+      setFormError('Delete a schedule or upgrade before creating another one.');
+      return;
+    }
+    if (!modelCatalogReady || !modelOptions.some((model) => model.id === draft.model)) {
+      setFormError('Select a currently available Managed Cloud model.');
+      return;
+    }
     setFormError(null);
     setSaving(true);
     try {
       const payload = mutationFromDraft(draft);
-      const saved = editing
-        ? await api.updateSchedule(editing.id, payload)
-        : await api.createSchedule(payload);
+      const saved = await runAbortable((signal) =>
+        editing
+          ? api.updateSchedule(editing.id, payload, signal)
+          : api.createSchedule(payload, signal),
+      );
       setSchedules((current) =>
         editing
           ? current.map((schedule) => (schedule.id === saved.id ? saved : schedule))
@@ -437,6 +551,7 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
       setEditorOpen(false);
       setEditing(null);
     } catch (error) {
+      if (isAbortError(error)) return;
       setFormError(errorText(error, 'Schedule could not be saved.'));
     } finally {
       setSaving(false);
@@ -446,13 +561,14 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
   const runOperation = async (
     schedule: ManagedCloudScheduleTask,
     label: string,
-    work: () => Promise<void>,
+    work: (signal: AbortSignal) => Promise<void>,
   ) => {
     setOperation((current) => ({ ...current, [schedule.id]: label }));
     setRowErrors((current) => ({ ...current, [schedule.id]: null }));
     try {
-      await work();
+      await runAbortable(work);
     } catch (error) {
+      if (isAbortError(error)) return;
       setRowErrors((current) => ({
         ...current,
         [schedule.id]: errorText(error, `Schedule ${label} failed.`),
@@ -462,18 +578,28 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
     }
   };
 
-  const toggleSchedule = (schedule: ManagedCloudScheduleTask) =>
-    runOperation(schedule, 'status update', async () => {
-      const updated = await api.setScheduleEnabled(schedule.id, !schedule.isEnabled);
+  const toggleSchedule = (schedule: ManagedCloudScheduleTask) => {
+    if (!schedulesEnabled && !schedule.isEnabled) {
+      setRowErrors((current) => ({
+        ...current,
+        [schedule.id]: 'Upgrade to Basic or higher before resuming unattended runs.',
+      }));
+      return;
+    }
+    return runOperation(schedule, 'status update', async (signal) => {
+      const updated = await api.setScheduleEnabled(schedule.id, !schedule.isEnabled, signal);
+      assertRequestActive(signal);
       setSchedules((current) =>
         current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
       );
     });
+  };
 
   const deleteSchedule = (schedule: ManagedCloudScheduleTask) => {
     if (!window.confirm(`Delete “${schedule.name}”? Its run history will also be removed.`)) return;
-    void runOperation(schedule, 'deletion', async () => {
-      await api.deleteSchedule(schedule.id);
+    void runOperation(schedule, 'deletion', async (signal) => {
+      await api.deleteSchedule(schedule.id, signal);
+      assertRequestActive(signal);
       setSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
       setExpandedHistoryId((current) => (current === schedule.id ? null : current));
     });
@@ -491,10 +617,13 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
       },
     }));
     try {
-      const result = await api.listRuns(schedule.id, {
-        limit: RUN_PAGE_SIZE,
-        offset: append ? current.nextOffset : 0,
-      });
+      const result = await runAbortable((signal) =>
+        api.listRuns(schedule.id, {
+          limit: RUN_PAGE_SIZE,
+          offset: append ? current.nextOffset : 0,
+          signal,
+        }),
+      );
       setHistoryById((all) => ({
         ...all,
         [schedule.id]: {
@@ -507,6 +636,7 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
         },
       }));
     } catch (error) {
+      if (isAbortError(error)) return;
       setHistoryById((all) => ({
         ...all,
         [schedule.id]: {
@@ -530,11 +660,19 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
     }
   };
 
-  const runNow = (schedule: ManagedCloudScheduleTask) =>
-    runOperation(schedule, 'manual run', async () => {
+  const runNow = (schedule: ManagedCloudScheduleTask) => {
+    if (!schedulesEnabled) {
+      setRowErrors((current) => ({
+        ...current,
+        [schedule.id]: 'Upgrade to Basic or higher before running unattended tasks.',
+      }));
+      return;
+    }
+    return runOperation(schedule, 'manual run', async (signal) => {
       const idempotencyKey = manualRunKeys.current[schedule.id] ?? crypto.randomUUID();
       manualRunKeys.current[schedule.id] = idempotencyKey;
-      const result = await api.runNow(schedule.id, idempotencyKey);
+      const result = await api.runNow(schedule.id, idempotencyKey, signal);
+      assertRequestActive(signal);
       delete manualRunKeys.current[schedule.id];
       setHistoryById((all) => {
         const current = all[schedule.id] ?? EMPTY_HISTORY;
@@ -547,26 +685,29 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
           },
         };
       });
-      const refreshed = await api.getSchedule(schedule.id);
+      const refreshed = await api.getSchedule(schedule.id, signal);
+      assertRequestActive(signal);
       setSchedules((current) =>
         current.map((candidate) => (candidate.id === refreshed.id ? refreshed : candidate)),
       );
     });
+  };
 
-  if (!isSignedIn) {
-    return (
-      <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center px-6 text-center">
-        <CalendarClock className="mb-3 h-8 w-8 text-[var(--chat-text-muted)]" aria-hidden />
-        <p className="text-base font-semibold text-[var(--chat-text-primary)]">
-          Sign in to manage Cloud schedules
-        </p>
-        <p className="mt-2 max-w-md text-sm text-[var(--chat-text-muted)]">
-          Managed schedules are account-owned runs that continue while Desktop is closed. Local
-          schedules stay on this device and remain available in Local mode.
-        </p>
-      </div>
-    );
-  }
+  const createBlockedReason = !schedulesEnabled
+    ? plan === null
+      ? 'Scheduling is disabled until your Cloud plan is confirmed.'
+      : 'Upgrade to Basic or higher to create Managed Cloud schedules.'
+    : scheduleLimitReached
+      ? `This plan's ${scheduleLimit} schedule slots are in use.`
+      : modelStatus === 'loading'
+        ? 'The Managed Cloud model catalog is still loading.'
+        : modelStatus === 'error'
+          ? 'Retry the Managed Cloud model catalog before creating a schedule.'
+          : modelOptions.length === 0
+            ? 'No schedule-compatible Managed Cloud models are currently available.'
+            : listStatus !== 'success'
+              ? 'Wait for the account schedule list to finish loading.'
+              : undefined;
 
   return (
     <div className="h-full overflow-y-auto px-6 py-6 text-[var(--chat-text-primary)]">
@@ -593,11 +734,89 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
               ))}
             </div>
           </div>
-          <button type="button" onClick={openCreate} className={PRIMARY_BUTTON}>
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={!canCreateSchedule}
+            title={createBlockedReason}
+            className={PRIMARY_BUTTON}
+          >
             <Plus className="h-4 w-4" aria-hidden />
             Create schedule
           </button>
         </header>
+
+        {!schedulesEnabled ? (
+          <div
+            role="status"
+            className="rounded-xl border border-[var(--chat-warning)]/30 bg-[var(--chat-warning)]/5 p-4 text-sm text-[var(--chat-text-secondary)]"
+          >
+            <p className="font-medium text-[var(--chat-text-primary)]">
+              Managed Cloud schedules are disabled for this plan
+            </p>
+            <p className="mt-1">
+              {plan === null
+                ? 'Your Cloud plan is still loading or could not be confirmed. Scheduling stays disabled until account entitlements are available.'
+                : 'Free does not include unattended scheduled runs. Upgrade to Basic or higher to create, resume, edit, or run schedules.'}
+            </p>
+          </div>
+        ) : scheduleLimit !== null ? (
+          <div
+            role="status"
+            className="rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-4 py-3 text-sm text-[var(--chat-text-secondary)]"
+          >
+            <span className="font-medium text-[var(--chat-text-primary)]">
+              {Math.min(schedules.length, scheduleLimit)} of {scheduleLimit} schedule slots used
+            </span>
+            {scheduleLimitReached ? (
+              <span> · Delete a schedule or upgrade before creating another.</span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {schedulesEnabled && modelStatus === 'loading' ? (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-4 py-3 text-sm text-[var(--chat-text-muted)]"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading schedule-compatible Managed Cloud models…
+          </div>
+        ) : null}
+
+        {schedulesEnabled && modelStatus === 'error' ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--chat-destructive)]/30 bg-[var(--chat-destructive)]/5 p-4 text-sm text-[var(--chat-destructive)]"
+          >
+            <span>{modelError ?? 'Managed model catalog could not be loaded.'}</span>
+            <button
+              type="button"
+              onClick={() => void loadModelCatalog()}
+              className={SECONDARY_BUTTON}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Retry models
+            </button>
+          </div>
+        ) : null}
+
+        {schedulesEnabled && modelStatus === 'success' && modelOptions.length === 0 ? (
+          <div
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--chat-warning)]/30 bg-[var(--chat-warning)]/5 p-4 text-sm text-[var(--chat-text-secondary)]"
+          >
+            <span>No schedule-compatible Managed Cloud models are currently available.</span>
+            <button
+              type="button"
+              onClick={() => void loadModelCatalog()}
+              className={SECONDARY_BUTTON}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Retry models
+            </button>
+          </div>
+        ) : null}
 
         {listError ? (
           <div
@@ -624,7 +843,13 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
             <p className="mt-1 text-sm text-[var(--chat-text-muted)]">
               Create a recurring brief, reminder, or unattended text task.
             </p>
-            <button type="button" onClick={openCreate} className={`${PRIMARY_BUTTON} mt-4`}>
+            <button
+              type="button"
+              onClick={openCreate}
+              disabled={!canCreateSchedule}
+              title={createBlockedReason}
+              className={`${PRIMARY_BUTTON} mt-4`}
+            >
               <Plus className="h-4 w-4" aria-hidden />
               Create schedule
             </button>
@@ -680,7 +905,12 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
                         <button
                           type="button"
                           onClick={() => void toggleSchedule(schedule)}
-                          disabled={Boolean(busy)}
+                          disabled={Boolean(busy) || (!schedulesEnabled && !schedule.isEnabled)}
+                          title={
+                            !schedulesEnabled && !schedule.isEnabled
+                              ? 'Upgrade to Basic or higher to resume this schedule.'
+                              : undefined
+                          }
                           className={SECONDARY_BUTTON}
                         >
                           {busy === 'status update' ? (
@@ -691,7 +921,12 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
                         <button
                           type="button"
                           onClick={() => void runNow(schedule)}
-                          disabled={Boolean(busy)}
+                          disabled={Boolean(busy) || !schedulesEnabled}
+                          title={
+                            !schedulesEnabled
+                              ? 'Upgrade to Basic or higher to run this schedule.'
+                              : undefined
+                          }
                           className={SECONDARY_BUTTON}
                         >
                           {busy === 'manual run' ? (
@@ -720,7 +955,7 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
-                          disabled={Boolean(busy)}
+                          disabled={Boolean(busy) || !schedulesEnabled || !modelCatalogReady}
                           className={SECONDARY_BUTTON}
                         >
                           <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -921,9 +1156,10 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
                   }
                   className={FIELD_CLASS}
                 >
-                  {MODEL_OPTIONS.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
+                  {draft.model === '' ? <option value="">Select a model</option> : null}
+                  {modelOptions.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name}
                     </option>
                   ))}
                 </select>
@@ -1140,7 +1376,12 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={
+                  saving ||
+                  !schedulesEnabled ||
+                  !modelCatalogReady ||
+                  (!editing && scheduleLimitReached)
+                }
                 onClick={() => void save()}
                 className={PRIMARY_BUTTON}
               >
@@ -1152,6 +1393,42 @@ export function DesktopCloudSchedules({ api = desktopCloudSchedules }: DesktopCl
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SignedOutDesktopCloudSchedules() {
+  return (
+    <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center px-6 text-center">
+      <CalendarClock className="mb-3 h-8 w-8 text-[var(--chat-text-muted)]" aria-hidden />
+      <p className="text-base font-semibold text-[var(--chat-text-primary)]">
+        Sign in to manage Cloud schedules
+      </p>
+      <p className="mt-2 max-w-md text-sm text-[var(--chat-text-muted)]">
+        Managed schedules are account-owned runs that continue while Desktop is closed. Local
+        schedules stay on this device and remain available in Local mode.
+      </p>
+    </div>
+  );
+}
+
+export function DesktopCloudSchedules({
+  api = desktopCloudSchedules,
+  loadModels = loadDesktopCloudScheduleModels,
+}: DesktopCloudSchedulesProps) {
+  const isSignedIn = useAuthStore(selectHasCloudAccountSession);
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
+  const cloudSessionEpoch = useAuthStore((state) => state.cloudSessionEpoch);
+  const plan = useAuthStore((state) => state.plan);
+
+  if (!isSignedIn || !accountId) return <SignedOutDesktopCloudSchedules />;
+
+  return (
+    <AuthenticatedDesktopCloudSchedules
+      key={`${accountId}:${cloudSessionEpoch}`}
+      api={api}
+      loadModels={loadModels}
+      plan={plan}
+    />
   );
 }
 

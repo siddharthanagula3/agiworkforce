@@ -3,6 +3,8 @@ import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFolderSelection } from '../useFolderSelection';
 import { useProjectStore } from '../../stores/projectStore';
+import { useAppModeStore } from '../../stores/appModeStore';
+import { useUnifiedAuthStore } from '../../stores/auth';
 
 // Mirrors the module-mock pattern in features/chat/FolderSelector.test.tsx —
 // override the global test/setup.ts mock (which pins isTauri: false) so the
@@ -21,10 +23,12 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 
 const toastInfoMock = vi.fn();
 const toastSuccessMock = vi.fn();
+const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
     info: (...args: unknown[]) => toastInfoMock(...args),
     success: (...args: unknown[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
@@ -34,7 +38,9 @@ describe('useFolderSelection', () => {
     openDialogMock.mockReset();
     toastInfoMock.mockReset();
     toastSuccessMock.mockReset();
+    toastErrorMock.mockReset();
     useProjectStore.setState({ currentFolder: null, recentFolders: [] });
+    useAppModeStore.setState({ mode: 'local' });
   });
 
   it('opens the native dialog and syncs the selected path to the backend + store', async () => {
@@ -89,12 +95,27 @@ describe('useFolderSelection', () => {
 });
 
 describe('useFolderSelection — cloud mode grants no capability', () => {
+  const cloudGrant = {
+    grantId: '11111111-1111-4111-8111-111111111111',
+    path: '/Users/x/repo',
+  };
+
   beforeEach(() => {
     invokeMock.mockReset();
     openDialogMock.mockReset();
     toastInfoMock.mockReset();
     toastSuccessMock.mockReset();
+    toastErrorMock.mockReset();
     useProjectStore.getState().setCurrentFolder(null);
+    useAppModeStore.setState({ mode: 'cloud' });
+    useUnifiedAuthStore.setState({
+      user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+      isAuthenticated: true,
+      isLocalDeviceAccount: false,
+      accessToken: 'cloud-token-a',
+      refreshToken: 'refresh-token-a',
+      cloudSessionEpoch: 1,
+    });
   });
 
   /**
@@ -104,34 +125,36 @@ describe('useFolderSelection — cloud mode grants no capability', () => {
    * it from Managed Cloud would widen filesystem permissions with no consent
    * step and leave them in place after switching back to Local.
    */
-  it('never invokes the backend folder-scope command', async () => {
-    openDialogMock.mockResolvedValue('/Users/x/repo');
+  it('uses only the native picker-owned grant and never invokes the folder-scope command', async () => {
+    invokeMock.mockResolvedValue(cloudGrant);
 
     const { result } = renderHook(() => useFolderSelection('cloud'));
     await act(async () => {
       await result.current.selectFolder();
     });
 
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith('select_cloud_handoff_folder');
+    expect(invokeMock).not.toHaveBeenCalledWith('project_context_set_folder', expect.anything());
+    expect(openDialogMock).not.toHaveBeenCalled();
   });
 
-  it('still records the folder for display and returns the picked path', async () => {
-    openDialogMock.mockResolvedValue('/Users/x/repo');
+  it('records the display path and returns the opaque native grant', async () => {
+    invokeMock.mockResolvedValue(cloudGrant);
 
     const { result } = renderHook(() => useFolderSelection('cloud'));
-    let picked: string | null = null;
+    let picked: Awaited<ReturnType<typeof result.current.selectFolder>> = null;
     await act(async () => {
       picked = await result.current.selectFolder();
     });
 
-    expect(picked).toBe('/Users/x/repo');
+    expect(picked).toEqual({ path: '/Users/x/repo', cloudGrantId: cloudGrant.grantId });
     await waitFor(() => {
       expect(useProjectStore.getState().currentFolder).toBe('/Users/x/repo');
     });
   });
 
   it('tells the user files stay on the device until approved', async () => {
-    openDialogMock.mockResolvedValue('/Users/x/repo');
+    invokeMock.mockResolvedValue(cloudGrant);
 
     const { result } = renderHook(() => useFolderSelection('cloud'));
     await act(async () => {
@@ -143,8 +166,43 @@ describe('useFolderSelection — cloud mode grants no capability', () => {
     );
   });
 
+  it('revokes and suppresses a grant when the same account changes auth incarnation', async () => {
+    let resolvePicker!: (grant: typeof cloudGrant) => void;
+    const picker = new Promise<typeof cloudGrant>((resolve) => {
+      resolvePicker = resolve;
+    });
+    invokeMock.mockImplementation((command: string) => {
+      if (command === 'select_cloud_handoff_folder') return picker;
+      if (command === 'revoke_cloud_handoff_grant') return Promise.resolve(true);
+      return Promise.resolve(undefined);
+    });
+    const { result } = renderHook(() => useFolderSelection('cloud'));
+    let selection!: Promise<Awaited<ReturnType<typeof result.current.selectFolder>>>;
+    act(() => {
+      selection = result.current.selectFolder();
+    });
+    act(() => {
+      useUnifiedAuthStore.setState({
+        user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+        isAuthenticated: true,
+        isLocalDeviceAccount: false,
+        accessToken: 'cloud-token-b',
+        refreshToken: 'refresh-token-b',
+        cloudSessionEpoch: 2,
+      });
+    });
+    resolvePicker(cloudGrant);
+
+    await expect(selection).resolves.toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith('revoke_cloud_handoff_grant', {
+      grantId: cloudGrant.grantId,
+    });
+    expect(useProjectStore.getState().currentFolder).toBeNull();
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
   it('clears without revoking a capability it never granted', async () => {
-    openDialogMock.mockResolvedValue('/Users/x/repo');
+    invokeMock.mockResolvedValue(cloudGrant);
     const { result } = renderHook(() => useFolderSelection('cloud'));
     await act(async () => {
       await result.current.selectFolder();
@@ -162,6 +220,7 @@ describe('useFolderSelection — cloud mode grants no capability', () => {
   });
 
   it('local mode still grants the working scope', async () => {
+    useAppModeStore.setState({ mode: 'local' });
     openDialogMock.mockResolvedValue('/Users/x/repo');
     invokeMock.mockResolvedValue(undefined);
 

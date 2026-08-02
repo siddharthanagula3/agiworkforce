@@ -212,7 +212,7 @@ export class WebRuntime implements ChatRuntime {
 
     const uploadedAttachments =
       !isContinuation && options?.attachments?.length
-        ? await uploadDesktopCloudAttachments(options.attachments)
+        ? await uploadDesktopCloudAttachments(options.attachments, controller.signal)
         : [];
     const messageHistory = options?.messageHistory ?? [];
     const currentHistoryAttachments = messageHistory[messageHistory.length - 1]?.attachments ?? [];

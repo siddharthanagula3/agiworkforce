@@ -156,6 +156,7 @@ describe('managed Cloud agent-run client', () => {
     await expect(
       client.listRuns({
         states: ['running', 'awaiting_input'],
+        requestId: 'request-1',
         limit: 25,
         cursor: 'current-page',
       }),
@@ -164,7 +165,7 @@ describe('managed Cloud agent-run client', () => {
       nextCursor: 'next-page',
     });
     expect(fetchImpl).toHaveBeenCalledWith(
-      'https://agi.example/api/llm/v1/chat/completions/runs?state=running&state=awaiting_input&limit=25&cursor=current-page',
+      'https://agi.example/api/llm/v1/chat/completions/runs?state=running&state=awaiting_input&limit=25&requestId=request-1&cursor=current-page',
       expect.objectContaining({
         headers: { Authorization: 'Bearer token-1' },
         signal: undefined,
@@ -178,6 +179,8 @@ describe('managed Cloud agent-run client', () => {
 
     await expect(client.listRuns({ states: ['not-a-state'] as never[] })).rejects.toThrow();
     await expect(client.listRuns({ cursor: 'x'.repeat(513) })).rejects.toThrow();
+    await expect(client.listRuns({ requestId: 'bad key' })).rejects.toThrow();
+    await expect(client.listRuns({ requestId: 'x'.repeat(129) })).rejects.toThrow();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

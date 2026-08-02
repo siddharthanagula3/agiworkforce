@@ -253,6 +253,8 @@ export interface ChatInterfaceProps {
    * put through the consent ceremony.
    */
   pendingAttachments?: { id: string; files: File[] } | null;
+  /** Host destination identity used to purge unsent File bytes on boundary changes. */
+  attachmentContextKey?: string;
   /** Host-owned replacement for the default browser speech-recognition mic. */
   voiceInputController?: ComposerVoiceController;
   externalSendRequest?: {
@@ -380,6 +382,7 @@ export function ChatInterface({
   className,
   externalSendRequest = null,
   pendingAttachments = null,
+  attachmentContextKey,
   voiceInputController,
   manageTheme = false,
   enableShortcuts = true,
@@ -931,6 +934,7 @@ export function ChatInterface({
                 supportsResearch={runtime?.supportsResearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
                 pendingAttachments={pendingAttachments}
+                attachmentContextKey={attachmentContextKey}
                 voiceInputController={voiceInputController}
                 slashCommandHost={slashCommandHost}
               />

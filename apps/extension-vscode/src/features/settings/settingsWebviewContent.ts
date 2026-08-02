@@ -920,6 +920,23 @@ export function getSettingsWebviewContent(
             </div>
             <div class="setting-row">
               <div>
+                <label class="setting-name" for="setting-follow-up-behavior">Active-turn send</label>
+                <span class="setting-description">
+                  Queue starts a new turn after the current response. Steer adds the message to the current turn. Cmd/Ctrl+Enter uses the other behavior once.
+                </span>
+              </div>
+              <select
+                class="select-input"
+                id="setting-follow-up-behavior"
+                data-setting="composer.followUpBehavior"
+                data-kind="string"
+              >
+                <option value="queue">Queue next turn</option>
+                <option value="steer">Steer current turn</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div>
                 <label class="setting-name" for="setting-context-lines">Context lines</label>
                 <span class="setting-description">
                   Surrounding editor lines included with cloud-backed utility requests.
@@ -1584,6 +1601,7 @@ ${capabilityAvailabilityRows}
           model: 'Model',
           cliPath: 'CLI path',
           streamingEnabled: 'Streaming',
+          'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
           telemetryEnabled: 'Telemetry',
           hoverEnabled: 'Hover actions',

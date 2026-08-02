@@ -233,6 +233,7 @@ import {
   registerActiveTab,
   unregisterActiveTab,
   ensureOnDetachListener,
+  type as typeIntoPage,
   REDACTED_FIELD_PLACEHOLDER,
 } from '../src/features/computer-use/cdpDriver';
 import {
@@ -377,6 +378,32 @@ describe('P1-1: waitForStable gate', () => {
     const staticWaits = setTimeoutSpy.mock.calls.filter((c) => c[1] === 800);
     expect(staticWaits.length).toBe(0);
     setTimeoutSpy.mockRestore();
+  });
+});
+
+describe('computer-use cancellation reaches CDP action internals', () => {
+  it('does not type after Stop lands during the action focus click', async () => {
+    await getPageContent(42);
+    const controller = new AbortController();
+    chromeMock.debugger.sendCommand.mockImplementation(
+      (target: unknown, method: string, params: unknown, callback: (result: unknown) => void) => {
+        if (
+          method === 'Input.dispatchMouseEvent' &&
+          (params as { type?: string }).type === 'mousePressed'
+        ) {
+          controller.abort(new Error('Computer-use run cancelled: user stopped'));
+        }
+        defaultSendCommandImpl(target, method, params, callback);
+      },
+    );
+
+    await expect(typeIntoPage(42, 'must-not-egress', 2, controller.signal)).rejects.toThrow(
+      /user stopped/,
+    );
+
+    const methods = chromeMock.debugger.sendCommand.mock.calls.map((call) => call[1]);
+    expect(methods).toContain('Input.dispatchMouseEvent');
+    expect(methods).not.toContain('Input.insertText');
   });
 });
 
@@ -1012,6 +1039,34 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
       DEFAULT_GATEWAY_BASE,
     );
     expect(tokensUsed).toBe(0);
+  });
+
+  it('callCloud cancels a pending SSE reader and rejects with the owning Stop reason', async () => {
+    const controller = new AbortController();
+    const cancelled = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        // Deliberately remain pending until AbortSignal cancellation reaches
+        // the reader owned by callCloud.
+      },
+      cancel(reason) {
+        cancelled(reason);
+      },
+    });
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body });
+
+    const stopReason = new Error('Computer-use run cancelled: user stopped');
+    const request = callCloud(
+      [{ role: 'user', content: 'wait' }],
+      'credential-a',
+      DEFAULT_GATEWAY_BASE,
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    controller.abort(stopReason);
+
+    await expect(request).rejects.toBe(stopReason);
+    expect(cancelled).toHaveBeenCalledWith(stopReason);
   });
 
   it('callCloud returns tokensUsed from total_tokens field', async () => {

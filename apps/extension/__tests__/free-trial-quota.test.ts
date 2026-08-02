@@ -22,6 +22,9 @@ const chromeMock = vi.hoisted(() => {
   const sessionStore: Record<string, unknown> = {};
 
   const mock = {
+    runtime: {
+      sendMessage: vi.fn(async (): Promise<{ success: boolean }> => ({ success: true })),
+    },
     storage: {
       local: {
         get: vi.fn(async (keys: string | string[]): Promise<Record<string, unknown>> => {
@@ -71,8 +74,15 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 const clerkAuthMock = vi.hoisted(() => ({
+  getFreshClerkAuthContext: vi.fn(
+    async (): Promise<{
+      token: string;
+      owner: { accountId: string; authIncarnation: string };
+    } | null> => null,
+  ),
   getFreshClerkToken: vi.fn(async (): Promise<string | null> => null),
   signOutClerk: vi.fn(async (): Promise<void> => undefined),
+  signOutClerkIfCurrent: vi.fn(async (): Promise<boolean> => false),
 }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
@@ -181,8 +191,10 @@ beforeEach(() => {
   for (const k of Object.keys(chromeMock._sessionStore)) delete chromeMock._sessionStore[k];
   vi.clearAllMocks();
   fetchMock.mockReset();
+  clerkAuthMock.getFreshClerkAuthContext.mockResolvedValue(null);
   clerkAuthMock.getFreshClerkToken.mockResolvedValue(null);
   clerkAuthMock.signOutClerk.mockResolvedValue(undefined);
+  clerkAuthMock.signOutClerkIfCurrent.mockResolvedValue(false);
   // Re-install chrome global after clearAllMocks resets mocks
   (globalThis as Record<string, unknown>).chrome = chromeMock;
 });
@@ -459,6 +471,23 @@ describe('clearAuthToken', () => {
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
+
+  it('tears down the exact Managed Cloud owner before options-page sign-out', async () => {
+    clerkAuthMock.getFreshClerkAuthContext.mockResolvedValueOnce({
+      token: 'token-a',
+      owner: { accountId: 'account-a', authIncarnation: 'session-a' },
+    });
+
+    await clearAuthToken();
+
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'MANAGED_CLOUD_AUTH_CHANGED',
+      previousOwner: { accountId: 'account-a', authIncarnation: 'session-a' },
+    });
+    expect(chromeMock.runtime.sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      clerkAuthMock.signOutClerk.mock.invocationCallOrder[0]!,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -491,13 +520,14 @@ describe('streamFreeChat — network failure', () => {
 // ---------------------------------------------------------------------------
 
 describe('streamFreeChat — auth and quota errors', () => {
-  it('yields auth_required on 401', async () => {
+  it('yields auth_required on 401 without clearing ambient auth in the transport', async () => {
     chromeMock._sessionStore['agi_clerk_session_token'] = 'bad-token';
     fetchMock.mockResolvedValueOnce(makeErrorResponse(401, 'Unauthorized'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'bad-token'));
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'auth_required' });
-    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
+    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBe('bad-token');
+    expect(clerkAuthMock.signOutClerk).not.toHaveBeenCalled();
   });
 
   it('yields quota_exceeded on 403 with the server usage-budget code', async () => {
@@ -709,6 +739,45 @@ describe('streamFreeChat — SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = fetchOpts.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer my-clerk-token');
+  });
+
+  it('sends the caller-owned retry-stable idempotency key', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        idempotencyKey: 'agi.chrome.task.request-1',
+      }),
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = fetchOpts.headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBe('agi.chrome.task.request-1');
+  });
+
+  it('generates a valid identity for direct transport callers', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = fetchOpts.headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toMatch(/^agi\.chrome\.chat\.[A-Za-z0-9-]{36}$/);
+  });
+
+  it('rejects a malformed request identity without touching the network', async () => {
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', { idempotencyKey: 'bad key' }),
+    );
+
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('sends X-Requested-With: XMLHttpRequest header', async () => {
@@ -1058,6 +1127,24 @@ describe('streamFreeChat — model routing', () => {
     expect(body.thinking_mode).toBe(true);
   });
 
+  it('forwards the catalog-reconciled reasoning effort', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        effort: 'high',
+      }),
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { effort?: string };
+    expect(body.effort).toBe('high');
+  });
+
   it('requests stream=true', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
@@ -1264,7 +1351,12 @@ describe('streamManagedChatApproval', () => {
     );
 
     const chunks = await collectChunks(
-      streamManagedChatApproval(runId, [{ tool_call_id: 'call-1', decision: 'approved' }], 'token'),
+      streamManagedChatApproval(
+        runId,
+        [{ tool_call_id: 'call-1', decision: 'approved' }],
+        'token',
+        { idempotencyKey: 'agi.chrome.approval.request-1' },
+      ),
     );
 
     const [url, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -1273,6 +1365,9 @@ describe('streamManagedChatApproval', () => {
       run_id: runId,
       tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
     });
+    expect((fetchOpts.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'agi.chrome.approval.request-1',
+    );
     expect(chunks).toContainEqual({ type: 'text', text: 'continued' });
     expect(chunks.at(-1)).toEqual({ type: 'done' });
   });

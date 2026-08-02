@@ -17,13 +17,85 @@ import {
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   MESSAGE_POLICY,
+  MAX_WEBMCP_SCHEMA_BYTES,
+  MAX_WEBMCP_TOOLS,
   ORIGIN_EXTENSION_PAGE,
   generateRecordId,
   getMessagePolicy,
   isTrustedExtensionPageSender,
+  normalizeWebMCPToolsUpdate,
+  resolveMessageTargetTabId,
   validateBridgeUrl,
   validateShortcutActions,
 } from '../src/background/policy';
+
+describe('policy — WebMCP native metadata boundary', () => {
+  it('returns a bounded clone and uses the sender tab as the URL authority', () => {
+    const normalized = normalizeWebMCPToolsUpdate(
+      [
+        {
+          name: 'search_users',
+          description: 'Search users',
+          source: 'declarative',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+        },
+      ],
+      'https://example.com/tools?reported=1#fragment',
+      'https://example.com/tools?sender=1#other',
+    );
+
+    expect(normalized).toEqual({
+      url: 'https://example.com/tools',
+      tools: [
+        {
+          name: 'search_users',
+          description: 'Search users',
+          source: 'declarative',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+        },
+      ],
+    });
+  });
+
+  it('rejects forged URLs, duplicate names, oversized lists, and oversized schemas', () => {
+    const validTool = {
+      name: 'search_users',
+      description: 'Search users',
+      source: 'imperative' as const,
+    };
+    expect(
+      normalizeWebMCPToolsUpdate(
+        [validTool],
+        'https://attacker.example/tools',
+        'https://example.com/tools',
+      ),
+    ).toBeNull();
+    expect(
+      normalizeWebMCPToolsUpdate(
+        [validTool, validTool],
+        'https://example.com/tools',
+        'https://example.com/tools',
+      ),
+    ).toBeNull();
+    expect(
+      normalizeWebMCPToolsUpdate(
+        Array.from({ length: MAX_WEBMCP_TOOLS + 1 }, (_, index) => ({
+          ...validTool,
+          name: `tool_${index}`,
+        })),
+        undefined,
+        'https://example.com/tools',
+      ),
+    ).toBeNull();
+    expect(
+      normalizeWebMCPToolsUpdate(
+        [{ ...validTool, inputSchema: { description: 'x'.repeat(MAX_WEBMCP_SCHEMA_BYTES) } }],
+        undefined,
+        'https://example.com/tools',
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
   it('includes all task and shortcut creation/mutation types', () => {
@@ -37,6 +109,8 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
       'RESUME_CHAT_RUN',
       'APPROVE_CONTEXT_HANDOFF',
       'CANCEL_CONTEXT_HANDOFF',
+      'WEBMCP_DISCOVER_TOOLS',
+      'WEBMCP_CALL_TOOL',
     ]) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(t)).toBe(true);
     }
@@ -134,6 +208,42 @@ describe('policy — trusted extension page senders', () => {
         extensionOrigin,
       ),
     ).toBe(false);
+  });
+
+  it('honors an explicit target from tab-associated extension UI', () => {
+    expect(
+      resolveMessageTargetTabId(
+        {
+          id: extensionId,
+          url: `${extensionOrigin}/src/options.html`,
+          origin: extensionOrigin,
+          tabId: 11,
+          tabUrl: `${extensionOrigin}/src/options.html`,
+          hasTab: true,
+        },
+        42,
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(42);
+  });
+
+  it('pins a content script to its sender tab despite a forged target', () => {
+    expect(
+      resolveMessageTargetTabId(
+        {
+          id: extensionId,
+          url: 'https://allowed.example/page',
+          origin: 'https://allowed.example',
+          tabId: 11,
+          tabUrl: 'https://allowed.example/page',
+          hasTab: true,
+        },
+        42,
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(11);
   });
 });
 

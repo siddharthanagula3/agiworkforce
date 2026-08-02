@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Confirm;
-use tokio::process::Command;
 
 use crate::safety::{classify_command, CommandSafety};
 use crate::terminal_style as ts;
@@ -113,8 +112,10 @@ pub(super) async fn execute_run_command(
                             }
                             ApprovalDecision::AlwaysAllow => {
                                 if let Err(error) =
-                                    crate::features::exec::exec_policy::persist_allow_command(command)
-                                        .await
+                                    crate::features::exec::exec_policy::persist_allow_command(
+                                        command,
+                                    )
+                                    .await
                                 {
                                     return Ok(ToolResult {
                                         tool_name: "run_command".to_string(),
@@ -168,32 +169,40 @@ pub(super) async fn execute_run_command(
         }
     }
 
-    let result: std::result::Result<
-        std::result::Result<std::process::Output, std::io::Error>,
-        tokio::time::error::Elapsed,
-    > = if crate::sandbox::sandbox_disabled() {
-        tokio::time::timeout(
-            COMMAND_TIMEOUT,
-            Command::new("sh").arg("-c").arg(command).output(),
-        )
-        .await
+    let result: std::io::Result<std::process::Output> = if crate::sandbox::sandbox_disabled() {
+        let mut command_process = tokio::process::Command::new("sh");
+        command_process.arg("-c").arg(command);
+        crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
     } else {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let cmd = command.to_string();
-        let sandbox_result = tokio::time::timeout(COMMAND_TIMEOUT, async move {
+        let sandbox_result = async move {
             let mgr = crate::sandbox::SandboxManager::for_command_execution(
                 cwd.clone(),
                 crate::sandbox::NetworkPolicy::Deny,
             )
             .map_err(|e| std::io::Error::other(e.to_string()))?;
-            crate::sandbox::execute_sandboxed(&mgr, &cmd, Some(&cwd))
-                .await
-                .map_err(|e| std::io::Error::other(e.to_string()))
-        })
+            crate::sandbox::execute_sandboxed_with_timeout(
+                &mgr,
+                &cmd,
+                Some(&cwd),
+                Some(COMMAND_TIMEOUT),
+            )
+            .await
+            .map_err(|error| {
+                let kind = error
+                    .downcast_ref::<std::io::Error>()
+                    .map(std::io::Error::kind)
+                    .unwrap_or(std::io::ErrorKind::Other);
+                std::io::Error::new(kind, error.to_string())
+            })
+        }
         .await;
-        if let Ok(Err(ref e)) = sandbox_result {
+        if let Err(ref e) = sandbox_result {
             let msg = e.to_string();
-            if msg.contains("sandbox") || msg.contains("bwrap") || msg.contains("Seatbelt") {
+            if e.kind() != std::io::ErrorKind::TimedOut
+                && (msg.contains("sandbox") || msg.contains("bwrap") || msg.contains("Seatbelt"))
+            {
                 return Ok(ToolResult {
                     tool_name: "run_command".to_string(),
                     success: false,
@@ -208,7 +217,7 @@ pub(super) async fn execute_run_command(
     };
 
     match result {
-        Ok(Ok(output)) => {
+        Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -240,7 +249,7 @@ pub(super) async fn execute_run_command(
                 ),
             })
         }
-        Ok(Err(e)) => Ok(ToolResult {
+        Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
             tool_name: "run_command".to_string(),
             success: false,
             output: format!("Failed to execute command: {}", e),

@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getPickerModels } from '@agiworkforce/types';
+import {
+  getModelEffortOptions,
+  getPickerModels,
+  resolveModelEffort,
+  type Effort,
+} from '@agiworkforce/types';
 import {
   createChromeManagedStreamKey,
   executeChromeManagedApproval,
   executeChromeManagedChat,
+  normalizeChromeManagedRoutingMetadata,
   type ChromeManagedApprovalDependencies,
   type ChromeManagedChatDependencies,
 } from '../src/features/cloud-bridge/managedChatHandler';
@@ -89,7 +95,261 @@ describe('executeChromeManagedChat', () => {
     expect(options.model).not.toMatch(/^auto/);
     expect(options.extendedThinking).toBe(true);
     expect(options.workMode).toBe('agiwork');
+    expect(options.idempotencyKey).toMatch(/^agi\.chrome\.send\.[a-f0-9]{64}$/);
     expect(deps.onText).toHaveBeenCalledWith('hello');
+  });
+
+  it('preserves a scheduler-owned idempotency key across dispatch', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-scheduled',
+        text: 'Run the scheduled brief.',
+        modelSelection: 'auto',
+        idempotencyKey: 'agi.chrome.task.request-1',
+      },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(options.idempotencyKey).toBe('agi.chrome.task.request-1');
+  });
+
+  it.each(['awaiting_input', 'paused'] as const)(
+    'does not report unattended work as complete when its live stream reaches %s',
+    async (state) => {
+      const deps = dependencies({
+        streamChat: vi.fn(() =>
+          stream(
+            {
+              type: 'agent-event',
+              envelope: {
+                schemaVersion: 3,
+                sessionId: 'session-1',
+                turnId: 'turn-1',
+                sequence: 1,
+                emittedAtMs: 1_000,
+                event: {
+                  type: 'task-state-changed',
+                  taskId: 'task-1',
+                  state,
+                },
+              },
+            },
+            { type: 'done' },
+          ),
+        ),
+      });
+
+      const result = await executeChromeManagedChat(
+        {
+          id: `stream-${state}`,
+          text: 'Run the scheduled brief.',
+          modelSelection: 'auto',
+          completionMode: 'unattended',
+        },
+        deps,
+      );
+
+      expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+      expect(result).toHaveProperty(
+        'message',
+        state === 'awaiting_input'
+          ? 'The scheduled AGI Cloud run requires input and cannot finish unattended.'
+          : 'The scheduled AGI Cloud run is paused.',
+      );
+    },
+  );
+
+  it('preserves default interactive awaiting-input semantics from the durable run state', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const onRunReference = vi.fn();
+    const deps = dependencies({
+      onRunReference,
+      streamChat: vi.fn(() =>
+        stream(
+          {
+            type: 'run',
+            run: {
+              runId,
+              runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+              lastSequence: 4,
+              state: 'awaiting_input',
+            },
+          },
+          { type: 'done' },
+        ),
+      ),
+    });
+
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-interactive-approval',
+        text: 'Ask before acting.',
+        modelSelection: 'auto',
+      },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    expect(onRunReference).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'awaiting_input' }),
+    );
+  });
+
+  it('rejects a forged completion mode before authentication', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-invalid-mode',
+        text: 'Hello',
+        modelSelection: 'auto',
+        completionMode: 'invented' as never,
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(deps.getAuthToken).not.toHaveBeenCalled();
+    expect(deps.streamChat).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed internal request identity before authentication', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-scheduled',
+        text: 'Run the scheduled brief.',
+        modelSelection: 'auto',
+        idempotencyKey: 'bad key',
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(deps.getAuthToken).not.toHaveBeenCalled();
+    expect(deps.streamChat).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a stale effort against the concrete routed model catalog', async () => {
+    const allEfforts: Effort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+    const candidate = ADMITTED_MANAGED_MODEL_IDS.map((modelId) => ({
+      modelId,
+      options: getModelEffortOptions(modelId),
+    })).find(({ options }) => options.length > 0 && options.length < allEfforts.length);
+    expect(candidate).toBeDefined();
+    const unsupported = allEfforts.find((effort) => !candidate!.options.includes(effort));
+    expect(unsupported).toBeDefined();
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'max',
+        modelIds: ADMITTED_MANAGED_MODEL_IDS,
+        allowedAutoModes: ['auto', 'auto-economy'],
+      })),
+    });
+
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-effort',
+        text: 'Think carefully.',
+        modelSelection: candidate!.modelId,
+        effort: unsupported,
+      },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(options.effort).toBe(resolveModelEffort(candidate!.modelId, unsupported));
+    expect(candidate!.options).toContain(options.effort);
+    expect(result).toMatchObject({
+      routing: { modelKey: candidate!.modelId, effort: options.effort },
+    });
+  });
+
+  it('publishes the concrete route and effort before provider streaming begins', async () => {
+    const candidate = ADMITTED_MANAGED_MODEL_IDS.map((modelId) => ({
+      modelId,
+      options: getModelEffortOptions(modelId),
+    })).find(({ options }) => options.length > 0);
+    expect(candidate).toBeDefined();
+    const requestedEffort = candidate!.options.at(-1)!;
+    const order: string[] = [];
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'max',
+        modelIds: ADMITTED_MANAGED_MODEL_IDS,
+        allowedAutoModes: ['auto', 'auto-economy'],
+      })),
+      onRouting: vi.fn(() => {
+        order.push('routing');
+      }),
+      streamChat: vi.fn(() => {
+        order.push('stream');
+        return stream({ type: 'done' });
+      }),
+    });
+
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-route-first',
+        text: 'Preserve this route.',
+        modelSelection: candidate!.modelId,
+        effort: requestedEffort,
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: 'success',
+      routing: {
+        modelKey: candidate!.modelId,
+        effort: requestedEffort,
+      },
+    });
+    expect(deps.onRouting).toHaveBeenCalledWith(
+      expect.objectContaining({ modelKey: candidate!.modelId, effort: requestedEffort }),
+    );
+    expect(order).toEqual(['routing', 'stream']);
+  });
+
+  it('validates durable routing metadata against the model catalog', () => {
+    const candidate = ADMITTED_MANAGED_MODEL_IDS.map((modelKey) => ({
+      modelKey,
+      effort: getModelEffortOptions(modelKey)[0],
+    })).find(({ effort }) => effort !== undefined);
+    expect(candidate).toBeDefined();
+    const valid = {
+      modelKey: candidate!.modelKey,
+      taskType: 'general',
+      reason: 'durable_resume',
+      effort: candidate!.effort,
+    };
+
+    expect(normalizeChromeManagedRoutingMetadata(valid)).toEqual(valid);
+    expect(
+      normalizeChromeManagedRoutingMetadata({ ...valid, modelKey: 'invented/model' }),
+    ).toBeNull();
+    expect(normalizeChromeManagedRoutingMetadata({ ...valid, taskType: 'invented' })).toBeNull();
+    expect(normalizeChromeManagedRoutingMetadata({ ...valid, effort: 'invented' })).toBeNull();
+  });
+
+  it('rejects an invented effort before authentication', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-invalid-effort',
+        text: 'Hello',
+        modelSelection: 'auto',
+        effort: 'ultra-invented' as never,
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(deps.getAuthToken).not.toHaveBeenCalled();
+    expect(deps.streamChat).not.toHaveBeenCalled();
   });
 
   it('does not fall back to Desktop, Local, or BYOK after a cloud failure', async () => {
@@ -270,9 +530,29 @@ describe('executeChromeManagedApproval', () => {
       runId,
       [{ tool_call_id: 'call-1', decision: 'approved' }],
       'token',
-      { signal: undefined },
+      {
+        signal: undefined,
+        idempotencyKey: expect.stringMatching(/^agi\.chrome\.approval\.[a-f0-9]{64}$/),
+      },
     );
     expect(deps.onText).toHaveBeenCalledWith('continued');
+  });
+
+  it('derives a retry-stable approval identity from the run and decisions', async () => {
+    const deps = approvalDependencies();
+    const request = {
+      id: 'stream-approval',
+      run,
+      toolApprovals: [{ tool_call_id: 'call-1', decision: 'approved' as const }],
+    };
+
+    await executeChromeManagedApproval(request, deps);
+    await executeChromeManagedApproval(request, deps);
+
+    const first = vi.mocked(deps.streamApproval).mock.calls[0]?.[3].idempotencyKey;
+    const second = vi.mocked(deps.streamApproval).mock.calls[1]?.[3].idempotencyKey;
+    expect(first).toMatch(/^agi\.chrome\.approval\.[a-f0-9]{64}$/);
+    expect(second).toBe(first);
   });
 
   it('rejects a forged run path and malformed decisions before authentication', async () => {

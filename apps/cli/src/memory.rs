@@ -809,11 +809,7 @@ mod tests {
         assert!(!first.contains("Always active."));
         assert!(active_sources.contains(&conditional_source));
 
-        let repeated = activate_matching_rules(
-            &rules,
-            &["src/core/main.rs"],
-            &mut active_sources,
-        );
+        let repeated = activate_matching_rules(&rules, &["src/core/main.rs"], &mut active_sources);
         assert!(repeated.is_empty());
     }
 

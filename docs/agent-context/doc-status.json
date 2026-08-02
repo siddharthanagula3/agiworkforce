@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-07-16",
+  "lastUpdated": "2026-08-02",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "CLAUDE.md",
@@ -41,7 +41,8 @@
   "currentEvidence": [
     "docs/reference/REFERENCE_INDEX.md",
     "docs/reference/REFERENCE_STRUCTURE.md",
-    "docs/research/claude-live-frontend-system-2026-07-16.md"
+    "docs/research/claude-live-frontend-system-2026-07-16.md",
+    "docs/plans/developer-surfaces-cloud-loop-closure-2026-08-02.md"
   ],
   "supportingRules": [
     "docs/agent-context/repo-map.json",
@@ -59,6 +60,11 @@
   "historicalOrCaution": [
     {
       "path": "/Users/siddhartha/Desktop/claude_reference",
+      "status": "external-reference-evidence",
+      "rule": "Use screenshots and notes for product parity research only. Do not copy proprietary code or assets."
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/chatgpt_reference",
       "status": "external-reference-evidence",
       "rule": "Use screenshots and notes for product parity research only. Do not copy proprietary code or assets."
     }

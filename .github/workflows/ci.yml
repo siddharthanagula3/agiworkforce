@@ -211,10 +211,12 @@ jobs:
           # Public, non-routable contract fixtures. Real release values live in
           # the protected release environment; CI proves manifest injection and
           # validation without producing a publishable authenticated artifact.
-          CLERK_PUBLISHABLE_KEY: pk_live_ci_contract_fixture
+          CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
           CLERK_FRONTEND_API: https://clerk-ci.invalid
           CLERK_SYNC_HOST: https://clerk-ci.invalid
-          CHROME_EXTENSION_PUBLIC_KEY: ci-contract-public-key-not-for-release
+          # Syntactically valid public-only RSA fixture so Chromium can load
+          # the exact package; it is unrelated to the production store item.
+          CHROME_EXTENSION_PUBLIC_KEY: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5cGnbsCvSikskJTyhn/hqB8wtzGwhZDaa6PQTePWdmuxI7u2JR7dPuAcyOL8zYW8japmuv7P/SBJ/wr1CiFQAJIToFv3pbDbZDxrUy0ttLNpvZumZ/GPj/4kEMwlWV0PZIRHzF91Cm41O3iQUhctXifllGX5IMicNSwXj/I52fWAcHKLm7Ut6C/PP4s3RP26K/I+s4D9E8Q8PgVGmkgsxxwyxX0ct+N2tdDXVYhFiPSXyU3wPp1gyoD8FRzy+N+xEWNF/a/mm+TSjI3cxkNPL9jpY00IRy/gh7PywS3h5lNa8skhxy2OklT2k7br1xNBAMHJAZRKdmAf5z/1z12rxwIDAQAB
         run: |
           pnpm --filter @agiworkforce/extension package
           pnpm --filter agi-workforce package
@@ -438,6 +440,13 @@ jobs:
     needs: check
     if: needs.check.outputs.extension_changed == 'true'
     timeout-minutes: 30
+    env:
+      # Public, non-routable fixtures. This produces a structurally valid ZIP
+      # for exact-byte Chromium smoke without creating a publishable artifact.
+      CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+      CLERK_FRONTEND_API: https://clerk-ci.invalid
+      CLERK_SYNC_HOST: https://clerk-ci.invalid
+      CHROME_EXTENSION_PUBLIC_KEY: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5cGnbsCvSikskJTyhn/hqB8wtzGwhZDaa6PQTePWdmuxI7u2JR7dPuAcyOL8zYW8japmuv7P/SBJ/wr1CiFQAJIToFv3pbDbZDxrUy0ttLNpvZumZ/GPj/4kEMwlWV0PZIRHzF91Cm41O3iQUhctXifllGX5IMicNSwXj/I52fWAcHKLm7Ut6C/PP4s3RP26K/I+s4D9E8Q8PgVGmkgsxxwyxX0ct+N2tdDXVYhFiPSXyU3wPp1gyoD8FRzy+N+xEWNF/a/mm+TSjI3cxkNPL9jpY00IRy/gh7PywS3h5lNa8skhxy2OklT2k7br1xNBAMHJAZRKdmAf5z/1z12rxwIDAQAB
     steps:
       - uses: actions/checkout@v6
 
@@ -456,15 +465,17 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Exercise the unpacked extension in Chromium
-        run: pnpm --filter @agiworkforce/extension test:e2e
+      - name: Build and exercise the exact store ZIP in Chromium
+        run: |
+          pnpm --filter @agiworkforce/extension package
+          pnpm --filter @agiworkforce/extension test:e2e:package
 
   vscode-extension-e2e:
-    name: VS Code extension-host E2E
+    name: VS Code + CLI clean-profile E2E
     runs-on: ubuntu-24.04
     needs: check
     if: needs.check.outputs.vscode_changed == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -477,14 +488,33 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
+        with:
+          toolchain: '1.94.0'
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
+
       - name: Install extension-host dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb libasound2-dev libudev-dev pkg-config
           pnpm install --frozen-lockfile
 
-      - name: Exercise the extension in VS Code
-        run: xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration
+      - name: Build the first-party CLI runtime for the protocol probe
+        env:
+          AGIWORKFORCE_SKIP_VENDORED_BWRAP: '1'
+          RUSTFLAGS: ''
+          CARGO_INCREMENTAL: '0'
+        run: cargo build --locked -p agiworkforce-cli --bin agi
+
+      - name: Build and exercise the exact VSIX in a clean VS Code profile
+        env:
+          AGI_VSCODE_E2E_CLI: ${{ github.workspace }}/target/debug/agi
+        run: xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration:package
 
   mobile-e2e:
     name: Mobile E2E (iOS simulator)

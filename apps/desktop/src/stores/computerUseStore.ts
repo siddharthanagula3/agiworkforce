@@ -89,12 +89,95 @@ export interface ZoomRegionResponse {
   saved_path?: string;
 }
 
-// OPA task result
+// Wire representation of Rust `CompletionReason` from
+// automation/computer_use/observe_plan_act.rs (`#[serde(tag = "type",
+// rename_all = "snake_case")]`). Keep this tagged object intact: treating it
+// as a string renders failures as `[object Object]` and hides why native
+// desktop control stopped.
+export type OpaCompletionReason =
+  | { type: 'task_complete' }
+  | { type: 'max_iterations_reached' }
+  | { type: 'timeout' }
+  | { type: 'too_many_failures'; failures: number }
+  | { type: 'user_cancelled' }
+  | { type: 'safety_blocked'; reason: string }
+  | { type: 'not_making_progress' };
+
 export interface OpaTaskResult {
   success: boolean;
-  reason?: string;
+  reason: OpaCompletionReason;
   state?: unknown;
   outcome?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function parseOpaTaskResult(value: unknown): OpaTaskResult {
+  if (!isRecord(value) || typeof value['success'] !== 'boolean') {
+    throw new Error('Native desktop control returned an invalid task result.');
+  }
+  if (!isRecord(value['reason']) || typeof value['reason']['type'] !== 'string') {
+    throw new Error('Native desktop control returned an invalid completion reason.');
+  }
+
+  const reason = value['reason'];
+  let parsedReason: OpaCompletionReason;
+  switch (reason['type']) {
+    case 'task_complete':
+    case 'max_iterations_reached':
+    case 'timeout':
+    case 'user_cancelled':
+    case 'not_making_progress':
+      parsedReason = { type: reason['type'] };
+      break;
+    case 'too_many_failures':
+      if (!Number.isInteger(reason['failures']) || Number(reason['failures']) < 0) {
+        throw new Error('Native desktop control returned an invalid failure count.');
+      }
+      parsedReason = { type: reason['type'], failures: Number(reason['failures']) };
+      break;
+    case 'safety_blocked':
+      if (typeof reason['reason'] !== 'string' || reason['reason'].trim() === '') {
+        throw new Error('Native desktop control returned an invalid safety reason.');
+      }
+      parsedReason = { type: reason['type'], reason: reason['reason'] };
+      break;
+    default:
+      throw new Error(
+        `Native desktop control returned unknown completion reason '${reason['type']}'.`,
+      );
+  }
+  if (value['success'] !== (parsedReason.type === 'task_complete')) {
+    throw new Error('Native desktop control returned an inconsistent task result.');
+  }
+
+  return {
+    success: value['success'],
+    reason: parsedReason,
+    ...(value['state'] === undefined ? {} : { state: value['state'] }),
+    ...(value['outcome'] === undefined ? {} : { outcome: value['outcome'] }),
+  };
+}
+
+export function formatOpaCompletionReason(reason: OpaCompletionReason): string {
+  switch (reason.type) {
+    case 'task_complete':
+      return 'Desktop control completed the action.';
+    case 'max_iterations_reached':
+      return 'Desktop control reached its action limit before completing the task.';
+    case 'timeout':
+      return 'Desktop control timed out before completing the task.';
+    case 'too_many_failures':
+      return `Desktop control stopped after ${reason.failures} failed actions.`;
+    case 'user_cancelled':
+      return 'Desktop control was stopped by the user.';
+    case 'safety_blocked':
+      return `Desktop control was blocked by a safety check: ${reason.reason}`;
+    case 'not_making_progress':
+      return 'Desktop control stopped because it was not making progress.';
+  }
 }
 
 interface ComputerUseState {
@@ -107,6 +190,8 @@ interface ComputerUseState {
   sessions: DesktopComputerUseSession[];
   error: string | null;
   isExecutingOpa: boolean;
+  activeOpaExecutionId: string | null;
+  cancellingOpaExecutionId: string | null;
   lastOpaResult: OpaTaskResult | null;
 
   // Settings
@@ -161,9 +246,15 @@ interface ComputerUseState {
       /** Stream 2: explicit provider name override (`anthropic`, `openai`,
        *  `google`, `xai`). Resolved from `model` if omitted. */
       provider?: string;
+      /** Exact native execution owner. Callers that need scoped cancellation
+       *  should create this UUID and retain it for `cancelOpaTask`. */
+      executionId?: string;
     },
   ) => Promise<OpaTaskResult | null>;
+  cancelOpaTask: (executionId?: string) => Promise<boolean>;
 }
+
+let pendingOpaCancellation: Promise<boolean> | null = null;
 
 export const useComputerUseStore = create<ComputerUseState>()(
   devtools(
@@ -177,6 +268,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
       sessions: [],
       error: null,
       isExecutingOpa: false,
+      activeOpaExecutionId: null,
+      cancellingOpaExecutionId: null,
       lastOpaResult: null,
 
       // Settings defaults
@@ -187,7 +280,10 @@ export const useComputerUseStore = create<ComputerUseState>()(
       hideAppsOnTask: true,
 
       // Settings actions
-      setComputerUseEnabled: (enabled: boolean) => set({ computerUseEnabled: enabled }),
+      setComputerUseEnabled: (enabled: boolean) => {
+        if (!enabled) void get().cancelOpaTask();
+        set({ computerUseEnabled: enabled });
+      },
       setConsentAccepted: (accepted: boolean) => set({ consentAccepted: accepted }),
       addAllowedApp: (app: string) =>
         set((state) => {
@@ -304,6 +400,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
       },
 
       reset: () => {
+        void get().cancelOpaTask();
         set(
           {
             isActive: false,
@@ -315,6 +412,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
             sessions: [],
             error: null,
             isExecutingOpa: false,
+            activeOpaExecutionId: null,
             lastOpaResult: null,
           },
           undefined,
@@ -514,9 +612,25 @@ export const useComputerUseStore = create<ComputerUseState>()(
       },
 
       executeOpaTask: async (description, options) => {
+        if (pendingOpaCancellation) await pendingOpaCancellation;
+        if (get().activeOpaExecutionId || get().cancellingOpaExecutionId) {
+          set(
+            (state) => {
+              state.error = state.cancellingOpaExecutionId
+                ? 'The previous desktop-control action has not been confirmed stopped.'
+                : 'Another desktop-control action is already running.';
+            },
+            undefined,
+            'computerUse/executeOpa/already-running',
+          );
+          return null;
+        }
+
+        const executionId = options?.executionId ?? crypto.randomUUID();
         set(
           (state) => {
             state.isExecutingOpa = true;
+            state.activeOpaExecutionId = executionId;
             state.error = null;
           },
           undefined,
@@ -552,7 +666,8 @@ export const useComputerUseStore = create<ComputerUseState>()(
           );
         }
         try {
-          const result = await invoke<OpaTaskResult>('computer_use_execute_opa_task', {
+          const rawResult = await invoke<unknown>('computer_use_execute_opa_task', {
+            executionId,
             description,
             timeoutMs: options?.timeoutMs,
             maxActions: options?.maxActions,
@@ -562,26 +677,100 @@ export const useComputerUseStore = create<ComputerUseState>()(
             provider: providerCrossesLocalBoundary ? null : resolvedProvider,
             executionMode,
           });
+          if (get().activeOpaExecutionId !== executionId) return null;
+          const result = parseOpaTaskResult(rawResult);
           set(
             (state) => {
               state.lastOpaResult = result;
               state.isExecutingOpa = false;
+              state.activeOpaExecutionId = null;
             },
             undefined,
             'computerUse/executeOpa/done',
           );
           return result;
         } catch (err) {
+          if (get().activeOpaExecutionId !== executionId) return null;
           set(
             (state) => {
               state.error = String(err);
               state.isExecutingOpa = false;
+              state.activeOpaExecutionId = null;
             },
             undefined,
             'computerUse/executeOpa/error',
           );
           return null;
         }
+      },
+
+      cancelOpaTask: async (requestedExecutionId) => {
+        const state = get();
+        if (
+          pendingOpaCancellation &&
+          state.cancellingOpaExecutionId !== null &&
+          (requestedExecutionId === undefined ||
+            requestedExecutionId === state.cancellingOpaExecutionId)
+        ) {
+          return pendingOpaCancellation;
+        }
+        const executionId = state.activeOpaExecutionId ?? state.cancellingOpaExecutionId;
+        if (!executionId || (requestedExecutionId && requestedExecutionId !== executionId)) {
+          return false;
+        }
+
+        if (state.activeOpaExecutionId === executionId) {
+          set(
+            (draft) => {
+              draft.activeOpaExecutionId = null;
+              draft.cancellingOpaExecutionId = executionId;
+              draft.isExecutingOpa = false;
+            },
+            undefined,
+            'computerUse/executeOpa/cancelling',
+          );
+        }
+
+        const cancellation = invoke<unknown>('computer_use_cancel_opa_task', { executionId })
+          .then((value) => {
+            const cancelled = value === true;
+            if (cancelled && get().cancellingOpaExecutionId === executionId) {
+              set(
+                (draft) => {
+                  draft.cancellingOpaExecutionId = null;
+                },
+                undefined,
+                'computerUse/executeOpa/cancelled',
+              );
+            } else if (!cancelled && get().cancellingOpaExecutionId === executionId) {
+              set(
+                (draft) => {
+                  draft.error =
+                    'Native desktop control did not acknowledge cancellation; new actions remain blocked.';
+                },
+                undefined,
+                'computerUse/executeOpa/cancel-unacknowledged',
+              );
+            }
+            return cancelled;
+          })
+          .catch((err) => {
+            if (get().cancellingOpaExecutionId === executionId) {
+              set(
+                (draft) => {
+                  draft.error = `Failed to stop desktop control: ${String(err)}`;
+                },
+                undefined,
+                'computerUse/executeOpa/cancel-error',
+              );
+            }
+            return false;
+          })
+          .finally(() => {
+            if (pendingOpaCancellation === cancellation) pendingOpaCancellation = null;
+          });
+        pendingOpaCancellation = cancellation;
+        return cancellation;
       },
     })),
     { name: 'ComputerUseStore', enabled: import.meta.env.DEV },

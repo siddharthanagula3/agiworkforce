@@ -196,6 +196,7 @@ sysinfo = "0.30"
 tiktoken-rs = "0.9.1"
 lazy_static = "1.4"
 libc = "0.2"
+cap-std = "4.0.2"
 
 
 flate2 = "1.0"

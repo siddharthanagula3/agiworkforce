@@ -1,8 +1,5 @@
-import { cloudFetch, CLOUD_API_BASE_URL, getAuthHeaders } from './cloudApi';
-import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-} from '../services/managedCloudBoundary';
+import { CLOUD_API_BASE_URL } from './cloudApi';
+import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
 export interface CloudSkillEntry {
   name: string;
@@ -25,17 +22,17 @@ function parseCloudSkill(value: unknown): CloudSkillEntry | null {
 
 /** List the authenticated Managed Cloud skill catalog used by chat admission. */
 export async function listCloudSkills(): Promise<CloudSkillEntry[]> {
-  const boundary = captureManagedCloudBoundary('Cloud skill catalog');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/skills`, {
+  const request = createManagedCloudRequestContext('Cloud skill catalog');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/skills`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     credentials: 'include',
   });
   if (!response.ok) {
     throw new Error(`Failed to list Cloud skills: HTTP ${response.status}`);
   }
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('The Cloud skill catalog returned an invalid response.');
   }

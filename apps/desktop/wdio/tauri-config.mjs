@@ -6,10 +6,13 @@
  * both were verified against the running binary on 2026-08-01 by reading the
  * WebKit CSP violation report and the isolation handshake directly:
  *
- * 1. ISOLATED IDENTITY. `tauri.conf.wdio.json` swaps the bundle identifier to
- *    com.agiworkforce.desktop.wdio so a native run never opens or mutates the
- *    user's installed-app database, and so OsDatabaseKeyStore::harness_key can
- *    accept AGI_DESKTOP_WDIO_DATABASE_KEY instead of prompting the Keychain.
+ * 1. ISOLATED IDENTITY AND TEST BRIDGE. `tauri.conf.wdio.json` swaps the bundle
+ *    identifier to com.agiworkforce.desktop.wdio so a native run never opens
+ *    or mutates the user's installed-app database, and so
+ *    OsDatabaseKeyStore::harness_key can accept AGI_DESKTOP_WDIO_DATABASE_KEY
+ *    instead of prompting the Keychain. It also enables `withGlobalTauri` only
+ *    in the harness build because @wdio/tauri-plugin reaches the native invoke
+ *    bridge through `window.__TAURI__.core.invoke`.
  *
  * 2. AN ISOLATION-COMPATIBLE frame-src. The app runs Tauri's `isolation`
  *    pattern: every invoke() is relayed through a hidden iframe served from a
@@ -24,15 +27,15 @@
  *    with no resolve and no reject. The schema is a fresh uuid per build, so no
  *    static frame-src string can ever name it.
  *
- * This script therefore rewrites the product CSP the same way the product
- * config itself has to be fixed: it deletes `frame-src` and folds its sources
- * into `default-src`, which Tauri then extends with the isolation schema. It
- * reads apps/desktop/src-tauri/tauri.conf.json at build time, so it tracks the
- * real policy instead of duplicating it.
+ * The product config currently has no explicit `frame-src`. As a regression
+ * defense, this script detects one and rewrites the harness CSP by deleting
+ * `frame-src` and folding its sources into `default-src`, which Tauri then
+ * extends with the isolation schema. It reads the product config at build time,
+ * so it tracks the real policy instead of duplicating it.
  *
- * THIS IS A HARNESS COMPENSATION, NOT A PRODUCT FIX. The shipped configuration
- * still has the isolation-incompatible `frame-src`; `pnpm run test:e2e` prints
- * a warning while that remains true.
+ * This fallback is a harness compensation, not a product fix. If the shipped
+ * configuration regresses, `pnpm run test:e2e` prints a warning until the
+ * product CSP is corrected.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -103,6 +106,13 @@ export function foldFrameSrcIntoDefaultSrc(policy) {
 export function buildMergeConfig() {
   const prod = JSON.parse(readFileSync(PROD_CONFIG_PATH, 'utf8'));
   const wdio = JSON.parse(readFileSync(WDIO_CONFIG_PATH, 'utf8'));
+
+  if (wdio?.app?.withGlobalTauri !== true) {
+    throw new Error(
+      `${WDIO_CONFIG_PATH}: expected app.withGlobalTauri=true because ` +
+        '@wdio/tauri-plugin requires window.__TAURI__.core.invoke.',
+    );
+  }
 
   const csp = prod?.app?.security?.csp;
   if (typeof csp !== 'string' || csp.length === 0) {

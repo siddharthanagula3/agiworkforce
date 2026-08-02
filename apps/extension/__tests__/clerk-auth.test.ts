@@ -56,8 +56,9 @@ describe('Clerk Chrome Extension auth', () => {
     const load = vi.fn().mockResolvedValue(undefined);
     createClerkClient.mockReturnValue({
       load,
-      session: { getToken: vi.fn().mockResolvedValue('fresh-token') },
+      session: { id: 'session-ada', getToken: vi.fn().mockResolvedValue('fresh-token') },
       user: {
+        id: 'user-ada',
         fullName: 'Ada Lovelace',
         primaryEmailAddress: { emailAddress: 'ada@example.com' },
       },
@@ -90,6 +91,7 @@ describe('Clerk Chrome Extension auth', () => {
     vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
       success: true,
       token: 'background-sync-token',
+      owner: { accountId: 'user-ada', authIncarnation: 'session-ada' },
     });
 
     const auth = await importClerkAuth();
@@ -108,6 +110,7 @@ describe('Clerk Chrome Extension auth', () => {
     vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
       success: true,
       token: 'newly-synced-token',
+      owner: { accountId: 'user-ada', authIncarnation: 'session-new' },
     });
 
     const auth = await importClerkAuth();
@@ -124,8 +127,9 @@ describe('Clerk Chrome Extension auth', () => {
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
     createClerkClient.mockReturnValue({
       load: vi.fn().mockResolvedValue(undefined),
-      session: { getToken: vi.fn().mockResolvedValue('fresh-token') },
+      session: { id: 'session-ada', getToken: vi.fn().mockResolvedValue('fresh-token') },
       user: {
+        id: 'user-ada',
         fullName: 'Ada Lovelace',
         firstName: 'Ada',
         lastName: 'Lovelace',
@@ -138,6 +142,7 @@ describe('Clerk Chrome Extension auth', () => {
     const auth = await importClerkAuth();
 
     await expect(auth.getClerkAccountProfile()).resolves.toEqual({
+      owner: { accountId: 'user-ada', authIncarnation: 'session-ada' },
       displayName: 'Ada Lovelace',
       email: 'ada@example.com',
       initials: 'AL',
@@ -173,7 +178,10 @@ describe('Clerk Chrome Extension auth', () => {
     process.env['CLERK_SYNC_HOST'] = 'http://localhost';
     vi.stubGlobal('document', undefined);
     const getToken = vi.fn().mockResolvedValue('background-token');
-    createClerkClient.mockResolvedValue({ session: { getToken } });
+    createClerkClient.mockResolvedValue({
+      session: { id: 'session-background', user: { id: 'user-background' }, getToken },
+      user: { id: 'user-background' },
+    });
 
     const auth = await importClerkAuth();
 
@@ -190,7 +198,12 @@ describe('Clerk Chrome Extension auth', () => {
     process.env['CLERK_SYNC_HOST'] = 'http://localhost';
     vi.stubGlobal('document', undefined);
     createClerkClient.mockResolvedValueOnce({ session: null }).mockResolvedValueOnce({
-      session: { getToken: vi.fn().mockResolvedValue('refreshed-background-token') },
+      session: {
+        id: 'session-refreshed',
+        user: { id: 'user-refreshed' },
+        getToken: vi.fn().mockResolvedValue('refreshed-background-token'),
+      },
+      user: { id: 'user-refreshed' },
     });
 
     const auth = await importClerkAuth();
@@ -198,5 +211,78 @@ describe('Clerk Chrome Extension auth', () => {
     await expect(auth.getFreshClerkToken()).resolves.toBeNull();
     await expect(auth.getFreshClerkToken(true)).resolves.toBe('refreshed-background-token');
     expect(createClerkClient).toHaveBeenCalledTimes(2);
+  });
+
+  it('signs out only the exact rejected background session and bearer', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+    vi.stubGlobal('document', undefined);
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    const session = {
+      id: 'session-a',
+      user: { id: 'user-a' },
+      getToken: vi.fn().mockResolvedValue('token-a'),
+    };
+    createClerkClient.mockResolvedValue({ session, user: { id: 'user-a' }, signOut });
+
+    const auth = await importClerkAuth();
+
+    await expect(
+      auth.signOutClerkIfCurrent({
+        token: 'token-a',
+        owner: { accountId: 'user-a', authIncarnation: 'session-a' },
+      }),
+    ).resolves.toBe(true);
+    expect(signOut).toHaveBeenCalledWith({
+      sessionId: 'session-a',
+      redirectUrl: 'chrome-extension://stable-extension/src/side_panel.html',
+    });
+  });
+
+  it('does not let a delayed account-A rejection sign out ambient account B', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+    vi.stubGlobal('document', undefined);
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    const getToken = vi.fn().mockResolvedValue('token-b');
+    createClerkClient.mockResolvedValue({
+      session: { id: 'session-b', user: { id: 'user-b' }, getToken },
+      user: { id: 'user-b' },
+      signOut,
+    });
+
+    const auth = await importClerkAuth();
+
+    await expect(
+      auth.signOutClerkIfCurrent({
+        token: 'token-a',
+        owner: { accountId: 'user-a', authIncarnation: 'session-a' },
+      }),
+    ).resolves.toBe(false);
+    expect(getToken).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a refreshed bearer for the same account/session', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+    vi.stubGlobal('document', undefined);
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    const session = {
+      id: 'session-a',
+      user: { id: 'user-a' },
+      getToken: vi.fn().mockResolvedValue('token-refreshed'),
+    };
+    createClerkClient.mockResolvedValue({ session, user: { id: 'user-a' }, signOut });
+
+    const auth = await importClerkAuth();
+
+    await expect(
+      auth.signOutClerkIfCurrent({
+        token: 'token-retired',
+        owner: { accountId: 'user-a', authIncarnation: 'session-a' },
+      }),
+    ).resolves.toBe(false);
+    expect(signOut).not.toHaveBeenCalled();
   });
 });

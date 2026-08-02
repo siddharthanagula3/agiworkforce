@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use agiworkforce_model_registry::{
-    AutoRouteDecision, AutoRoutingRequest, RoutingTaskType, TrustMode, resolve_auto_route,
+    resolve_auto_route, AutoRouteDecision, AutoRoutingRequest, RoutingTaskType, TrustMode,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1729,7 +1729,7 @@ mod tests {
             "\"gpt-5.5\"",
             "\"claude-opus-4-6-mini\"",
             "\"claude-sonnet-5\"", // must come from catalog, not hardcoded
-            "\"gpt-5.4-mini\"",     // must come from catalog, not hardcoded
+            "\"gpt-5.4-mini\"",    // must come from catalog, not hardcoded
         ];
 
         for literal in forbidden {

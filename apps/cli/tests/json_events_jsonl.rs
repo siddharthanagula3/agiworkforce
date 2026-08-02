@@ -25,6 +25,7 @@
 /// `[DEMO MODE] Synthesized response ...` which is not JSON.
 use assert_cmd::prelude::*;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn agiworkforce_cmd() -> Command {
     Command::cargo_bin("agiworkforce").expect("binary must be built")
@@ -68,8 +69,23 @@ fn anthropic_models_arg() -> String {
 
 /// Helper: run the binary and collect stdout lines (non-empty, trimmed).
 fn run_json_events(models_arg: &str, prompt: &str) -> (Vec<String>, String, String) {
+    let workspace = tempdir().expect("trusted JSON-events workspace");
+    let home = tempdir().expect("isolated JSON-events home");
+    let initialized = agiworkforce_cmd()
+        .arg("init")
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .output()
+        .expect("failed to initialize trusted JSON-events workspace");
+    assert!(
+        initialized.status.success(),
+        "agi init failed: {}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
     let output = agiworkforce_cmd()
         .args(["--demo", "--json-events", "exec", "-m", models_arg, prompt])
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
         .output()
         .expect("failed to spawn agiworkforce");
 

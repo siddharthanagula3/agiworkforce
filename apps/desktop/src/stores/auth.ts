@@ -148,6 +148,13 @@ interface AuthState {
    */
   isLocalDeviceAccount: boolean;
 
+  /**
+   * Monotonic identity for the current Managed Cloud session incarnation.
+   * It changes when the account id changes or the session is torn down, but
+   * deliberately remains stable across bearer-token refreshes for one account.
+   */
+  cloudSessionEpoch: number;
+
   // ─────────────────────────────────────────────────────────────────────────
   // Subscription & Plan (merged from accountStore + billingStore)
   // ─────────────────────────────────────────────────────────────────────────
@@ -352,6 +359,7 @@ function clearCreditsCache(): void {
 // Retry mechanism for failed subscription fetches
 let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 let retryCount = 0;
+let authAttemptGeneration = 0;
 const MAX_SUBSCRIPTION_RETRIES = 3;
 
 // Schedule retry is exported for use by authOrchestrator
@@ -383,8 +391,9 @@ function resetRetryCount(): void {
   }
 }
 
-async function runLogoutCleanup(): Promise<void> {
+async function runLogoutCleanup(isStillSignedOut: () => boolean = () => true): Promise<void> {
   const { cleanupAllStoresOnLogout, clearPersistedUserData } = await import('./logoutCleanup');
+  if (!isStillSignedOut()) return;
   cleanupAllStoresOnLogout();
   clearPersistedUserData();
 }
@@ -426,6 +435,7 @@ function getDefaultState(): AuthState {
     _hasHydrated: false,
     sessionValidated: false,
     isLocalDeviceAccount: false,
+    cloudSessionEpoch: 0,
 
     // Subscription & Plan
     plan,
@@ -504,11 +514,77 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 
         setUser: (user: User | null) => {
           set(
-            {
-              user,
-              isAuthenticated: !!user,
-              sessionValidated: true,
-              error: null,
+            (state) => {
+              const previousUserId = state.user?.id ?? null;
+              const nextUserId = user?.id ?? null;
+              const identityChanged = previousUserId !== nextUserId;
+
+              if (!identityChanged) {
+                return {
+                  user,
+                  isAuthenticated: !!user,
+                  isLoading: false,
+                  sessionValidated: true,
+                  error: null,
+                };
+              }
+
+              // Identity and every account-scoped capability/billing field
+              // move in one Zustand transaction. A newly projected account
+              // must never inherit the previous tenant's plan, flags, Stripe
+              // records, or credit balance while its own refresh is pending.
+              return {
+                user,
+                isAuthenticated: !!user,
+                isLoading: false,
+                isLocalDeviceAccount: false,
+                cloudSessionEpoch: state.cloudSessionEpoch + 1,
+                sessionValidated: true,
+                error: null,
+                plan: null,
+                planDisplayName: 'Loading...',
+                subscriptionStatus: 'none' as SubscriptionStatus,
+                subscriptionFetchStatus: 'idle' as SubscriptionFetchStatus,
+                currentPeriodEnd: null,
+                isPro: false,
+                isEnterprise: false,
+                featureFlags: {},
+                stripeCustomerId: null,
+                stripeCustomer: null,
+                stripeSubscription: null,
+                credits: null,
+                creditBalance_cents: null,
+                dailyUsage_cents: null,
+                dailyLimit_cents: null,
+                dailyResetAt: null,
+                accessToken: null,
+                refreshToken: null,
+                deviceLinkId: null,
+                deviceLinkCode: null,
+                lastSyncedAt: null,
+                account: {
+                  id: nextUserId,
+                  email: user?.email ?? null,
+                  displayName: user?.name ?? null,
+                  avatar: user?.avatar,
+                  plan: null,
+                  planDisplayName: 'Loading...',
+                  subscriptionStatus: 'none' as SubscriptionStatus,
+                  subscriptionFetchStatus: 'idle' as SubscriptionFetchStatus,
+                  currentPeriodEnd: null,
+                  stripeCustomerId: null,
+                  featureFlags: {},
+                  credits: null,
+                  accessToken: null,
+                  refreshToken: null,
+                  deviceLinkId: null,
+                  deviceLinkCode: null,
+                  createdAt: state.createdAt,
+                  lastSyncedAt: null,
+                },
+                subscription: null,
+                customer: null,
+              };
             },
             undefined,
             'auth/setUser',
@@ -522,13 +598,14 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 
         clearAuth: () => {
           set(
-            {
+            (state) => ({
               user: null,
               isAuthenticated: false,
               isLoading: false,
               error: null,
               sessionValidated: true,
               isLocalDeviceAccount: false,
+              cloudSessionEpoch: state.cloudSessionEpoch + 1,
               plan: null,
               planDisplayName: 'Loading...',
               subscriptionStatus: 'none',
@@ -572,7 +649,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               },
               subscription: null,
               customer: null,
-            },
+            }),
             undefined,
             'auth/clearAuth',
           );
@@ -592,13 +669,16 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         },
 
         signIn: async (email: string, password: string) => {
+          const attemptGeneration = ++authAttemptGeneration;
           set({ isLoading: true, error: null }, undefined, 'auth/signIn/start');
 
           try {
             const response = await cloudAccountAuth.signIn({ email, password });
 
             if (response.error) {
-              set({ error: response.error.message }, undefined, 'auth/signIn/error');
+              if (authAttemptGeneration === attemptGeneration) {
+                set({ error: response.error.message }, undefined, 'auth/signIn/error');
+              }
               return { error: response.error.message };
             }
 
@@ -606,10 +686,14 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Sign in exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/signIn/exception');
+            if (authAttemptGeneration === attemptGeneration) {
+              set({ error: message }, undefined, 'auth/signIn/exception');
+            }
             return { error: message };
           } finally {
-            set({ isLoading: false }, undefined, 'auth/signIn/complete');
+            if (authAttemptGeneration === attemptGeneration) {
+              set({ isLoading: false }, undefined, 'auth/signIn/complete');
+            }
           }
         },
 
@@ -617,13 +701,16 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           accessToken: string;
           refreshToken?: string;
         }) => {
+          const attemptGeneration = ++authAttemptGeneration;
           set({ isLoading: true, error: null }, undefined, 'auth/nativeSignIn/start');
 
           try {
             const response = await cloudAccountAuth.adoptNativeCredential(credential);
 
             if (response.error) {
-              set({ error: response.error.message }, undefined, 'auth/nativeSignIn/error');
+              if (authAttemptGeneration === attemptGeneration) {
+                set({ error: response.error.message }, undefined, 'auth/nativeSignIn/error');
+              }
               return { error: response.error.message };
             }
 
@@ -631,53 +718,89 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Native sign-in exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/nativeSignIn/exception');
+            if (authAttemptGeneration === attemptGeneration) {
+              set({ error: message }, undefined, 'auth/nativeSignIn/exception');
+            }
             return { error: message };
           } finally {
-            set({ isLoading: false }, undefined, 'auth/nativeSignIn/complete');
+            if (authAttemptGeneration === attemptGeneration) {
+              set({ isLoading: false }, undefined, 'auth/nativeSignIn/complete');
+            }
           }
         },
 
         signOut: async () => {
-          set({ isLoading: true }, undefined, 'auth/signOut/start');
+          authAttemptGeneration += 1;
+          const sessionEpochAtStart = get().cloudSessionEpoch;
+          set(
+            (state) => ({
+              isLoading: true,
+              // Deny every new Managed Cloud operation at sign-out intent,
+              // before runtime teardown or remote revocation can wait. Keep
+              // the bearer in memory only long enough for those cleanup paths;
+              // the shared admission predicate is already false.
+              isAuthenticated: false,
+              cloudSessionEpoch: state.cloudSessionEpoch + 1,
+            }),
+            undefined,
+            'auth/signOut/start',
+          );
+          // CloudAccountAuth clears in-memory authority and cancels refreshes
+          // synchronously. It then lets the retiring runtime cancel its own
+          // durable runs before the server bearer is remotely revoked.
+          const cloudSignOutPromise = cloudAccountAuth.signOut({
+            beforeCredentialRevocation: async () => {
+              await disposeAuthenticatedChatRuntime().catch((error: unknown) => {
+                console.warn(
+                  '[UnifiedAuth] Could not fully dispose the active chat runtime:',
+                  error,
+                );
+              });
+            },
+          });
+          const hasReplacementCloudSession = () => cloudAccountAuth.getSession() !== null;
+          const isStillSignedOut = () =>
+            !hasReplacementCloudSession() && !selectHasCloudAccountSession(get());
           try {
-            // Abort and cancel managed work while its bearer credential is
-            // still available. Replacing the runtime after auth is cleared is
-            // too late: the orphaned instance could otherwise persist or emit
-            // into the next account boundary.
-            await disposeAuthenticatedChatRuntime().catch((error: unknown) => {
-              console.warn('[UnifiedAuth] Could not fully dispose the active chat runtime:', error);
-            });
+            await cloudSignOutPromise;
+            if (hasReplacementCloudSession()) return;
             await closeAuthenticatedChildWindows().catch((error: unknown) => {
               console.warn('[UnifiedAuth] Could not close every Cloud child window:', error);
             });
-            await cloudAccountAuth.signOut();
-
+            if (hasReplacementCloudSession()) return;
             // Clean up all stores after successful sign out
-            await runLogoutCleanup();
+            await runLogoutCleanup(isStillSignedOut);
           } catch (error) {
             console.error('[UnifiedAuth] Sign out error:', error);
             // Still attempt cleanup even if sign out fails
             try {
-              await runLogoutCleanup();
+              await runLogoutCleanup(isStillSignedOut);
             } catch (cleanupError) {
               console.error('[UnifiedAuth] Store cleanup error:', cleanupError);
             }
           } finally {
-            // Clear all caches
-            clearCachedSubscription();
-            clearCreditsCache();
-            resetRetryCount();
+            if (isStillSignedOut()) {
+              // Clear all caches
+              clearCachedSubscription();
+              clearCreditsCache();
+              resetRetryCount();
 
-            set(
-              {
-                ...getDefaultState(),
-                _hasHydrated: true,
-                sessionValidated: true,
-              },
-              undefined,
-              'auth/signOut/complete',
-            );
+              set(
+                (state) => ({
+                  ...getDefaultState(),
+                  _hasHydrated: true,
+                  sessionValidated: true,
+                  // cloudAccountAuth normally publishes its signed-out state
+                  // synchronously, which calls clearAuth above. Preserve that
+                  // bump; if a listener was unavailable, guarantee teardown
+                  // still advances the incarnation exactly enough to invalidate
+                  // every boundary captured before sign-out.
+                  cloudSessionEpoch: Math.max(state.cloudSessionEpoch, sessionEpochAtStart + 1),
+                }),
+                undefined,
+                'auth/signOut/complete',
+              );
+            }
           }
         },
 
@@ -688,25 +811,38 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         setAccount: (updates: Partial<AccountUpdates>) => {
           set(
             (state) => {
-              const newPlan = updates.plan !== undefined ? updates.plan : state.plan;
+              const previousUserId = state.user?.id ?? null;
+              const requestedUserId =
+                updates.id !== undefined ? updates.id || null : previousUserId;
+              const identityChanged =
+                updates.id !== undefined && requestedUserId !== previousUserId;
+              const previousUser = identityChanged ? null : state.user;
+              const newPlan =
+                updates.plan !== undefined ? updates.plan : identityChanged ? null : state.plan;
               const newUser: User | null =
                 updates.id !== undefined
-                  ? {
-                      id: updates.id || '',
-                      email: updates.email || state.user?.email || '',
-                      name: updates.displayName || state.user?.name,
-                      avatar: updates.avatar || state.user?.avatar,
-                    }
+                  ? requestedUserId
+                    ? {
+                        id: requestedUserId,
+                        email: updates.email ?? previousUser?.email ?? '',
+                        name: updates.displayName ?? previousUser?.name,
+                        avatar: updates.avatar ?? previousUser?.avatar,
+                      }
+                    : null
                   : state.user;
 
               const newSubscriptionStatus =
                 updates.subscriptionStatus !== undefined
                   ? updates.subscriptionStatus
-                  : state.subscriptionStatus;
+                  : identityChanged
+                    ? 'none'
+                    : state.subscriptionStatus;
               const newSubscriptionFetchStatus =
                 updates.subscriptionFetchStatus !== undefined
                   ? updates.subscriptionFetchStatus
-                  : state.subscriptionFetchStatus;
+                  : identityChanged
+                    ? 'idle'
+                    : state.subscriptionFetchStatus;
               // 'Loading...' is a transient sentinel, not a state the user may
               // be left in. Once the tier fetch has failed there is nothing
               // still loading, so the sidebar footer and account menu say so
@@ -722,35 +858,81 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               const newCurrentPeriodEnd =
                 updates.currentPeriodEnd !== undefined
                   ? updates.currentPeriodEnd
-                  : state.currentPeriodEnd;
+                  : identityChanged
+                    ? null
+                    : state.currentPeriodEnd;
               const newStripeCustomerId =
                 updates.stripeCustomerId !== undefined
                   ? updates.stripeCustomerId
-                  : state.stripeCustomerId;
+                  : identityChanged
+                    ? null
+                    : state.stripeCustomerId;
               const newFeatureFlags =
-                updates.featureFlags !== undefined ? updates.featureFlags : state.featureFlags;
-              const newCredits = updates.credits !== undefined ? updates.credits : state.credits;
+                updates.featureFlags !== undefined
+                  ? updates.featureFlags
+                  : identityChanged
+                    ? {}
+                    : state.featureFlags;
+              const newCredits =
+                updates.credits !== undefined
+                  ? updates.credits
+                  : identityChanged
+                    ? null
+                    : state.credits;
               const newAccessToken =
-                updates.accessToken !== undefined ? updates.accessToken : state.accessToken;
+                updates.accessToken !== undefined
+                  ? updates.accessToken
+                  : identityChanged
+                    ? null
+                    : state.accessToken;
               const newRefreshToken =
-                updates.refreshToken !== undefined ? updates.refreshToken : state.refreshToken;
+                updates.refreshToken !== undefined
+                  ? updates.refreshToken
+                  : identityChanged
+                    ? null
+                    : state.refreshToken;
               const newDeviceLinkId =
-                updates.deviceLinkId !== undefined ? updates.deviceLinkId : state.deviceLinkId;
+                updates.deviceLinkId !== undefined
+                  ? updates.deviceLinkId
+                  : identityChanged
+                    ? null
+                    : state.deviceLinkId;
               const newDeviceLinkCode =
                 updates.deviceLinkCode !== undefined
                   ? updates.deviceLinkCode
-                  : state.deviceLinkCode;
+                  : identityChanged
+                    ? null
+                    : state.deviceLinkCode;
               const newLastSyncedAt =
-                updates.lastSyncedAt !== undefined ? updates.lastSyncedAt : state.lastSyncedAt;
+                updates.lastSyncedAt !== undefined
+                  ? updates.lastSyncedAt
+                  : identityChanged
+                    ? null
+                    : state.lastSyncedAt;
               const newIsLocalDeviceAccount =
                 updates.isLocalDeviceAccount !== undefined
                   ? updates.isLocalDeviceAccount
-                  : state.isLocalDeviceAccount;
+                  : identityChanged
+                    ? false
+                    : state.isLocalDeviceAccount;
 
               return {
                 user: newUser,
                 isAuthenticated: !!newUser?.id,
                 isLocalDeviceAccount: newIsLocalDeviceAccount,
+                ...(identityChanged
+                  ? {
+                      cloudSessionEpoch: state.cloudSessionEpoch + 1,
+                      stripeCustomer: null,
+                      stripeSubscription: null,
+                      creditBalance_cents: null,
+                      dailyUsage_cents: null,
+                      dailyLimit_cents: null,
+                      dailyResetAt: null,
+                      subscription: null,
+                      customer: null,
+                    }
+                  : {}),
                 plan: newPlan,
                 planDisplayName: newPlanDisplayName,
                 subscriptionStatus: newSubscriptionStatus,
@@ -904,10 +1086,11 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           resetRetryCount();
 
           set(
-            {
+            (state) => ({
               ...getDefaultState(),
               _hasHydrated: true,
-            },
+              cloudSessionEpoch: state.cloudSessionEpoch + 1,
+            }),
             undefined,
             'auth/reset',
           );

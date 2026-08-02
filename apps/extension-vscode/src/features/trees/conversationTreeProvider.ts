@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
 import { type LocalRuntimeClient } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
+import { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 import { getAllWorkspaceFolders } from '../../platform/workspaceFolders';
+
+export { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly thread: ThreadSummary) {
@@ -22,12 +25,21 @@ export class ConversationTreeItem extends vscode.TreeItem {
   }
 }
 
+export interface ResolvedDeveloperSession {
+  response: ThreadReadResponse;
+  runtime: LocalRuntimeClient;
+  cwd: string;
+}
+
 export class ConversationTreeProvider implements vscode.TreeDataProvider<ConversationTreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
     ConversationTreeItem | undefined | null | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-  private readonly runtimeByThread = new Map<string, LocalRuntimeClient>();
+  private readonly runtimeByThread = new Map<
+    string,
+    { runtime: LocalRuntimeClient; cwd: string }
+  >();
 
   constructor(private readonly runtimes: LocalRuntimePool) {}
 
@@ -57,8 +69,19 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
             limit: 100,
             includeArchived: false,
           });
-          for (const thread of page.threads) this.runtimeByThread.set(thread.id, runtime);
-          return page.threads;
+          const ownedThreads = page.threads.filter((thread) => {
+            const owned = isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
+            if (!owned) {
+              console.warn(
+                `[AGI Workforce] ignoring developer session ${thread.id} with mismatched workspace metadata`,
+              );
+            }
+            return owned;
+          });
+          for (const thread of ownedThreads) {
+            this.runtimeByThread.set(thread.id, { runtime, cwd: folder.uri.fsPath });
+          }
+          return ownedThreads;
         } catch (error) {
           console.warn(`[AGI Workforce] failed to list sessions for ${folder.uri.fsPath}`, error);
           return [];
@@ -69,22 +92,35 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
   }
 
   async readThread(threadId: string): Promise<ThreadReadResponse | undefined> {
-    let runtime = this.runtimeByThread.get(threadId);
-    if (runtime === undefined) {
+    return (await this.resolveThread(threadId))?.response;
+  }
+
+  async resolveThread(threadId: string): Promise<ResolvedDeveloperSession | undefined> {
+    let owner = this.runtimeByThread.get(threadId);
+    if (owner === undefined) {
       await this.getThreads();
-      runtime = this.runtimeByThread.get(threadId);
+      owner = this.runtimeByThread.get(threadId);
     }
-    return runtime?.readThread(threadId);
+    if (owner === undefined) return undefined;
+    const response = await owner.runtime.readThread(threadId);
+    if (response.thread.id !== threadId || !isSameWorkspacePath(owner.cwd, response.thread.cwd)) {
+      throw new Error('Developer session ownership metadata does not match the open workspace.');
+    }
+    return {
+      response,
+      runtime: owner.runtime,
+      cwd: owner.cwd,
+    };
   }
 
   async archiveThread(threadId: string): Promise<boolean> {
-    let runtime = this.runtimeByThread.get(threadId);
-    if (runtime === undefined) {
+    let owner = this.runtimeByThread.get(threadId);
+    if (owner === undefined) {
       await this.getThreads();
-      runtime = this.runtimeByThread.get(threadId);
+      owner = this.runtimeByThread.get(threadId);
     }
-    if (runtime === undefined) return false;
-    await runtime.archiveThread(threadId);
+    if (owner === undefined) return false;
+    await owner.runtime.archiveThread(threadId);
     this.runtimeByThread.delete(threadId);
     this.refresh();
     return true;

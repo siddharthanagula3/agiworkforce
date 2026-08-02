@@ -304,6 +304,7 @@ export async function callCloud(
   messages: AgentMessage[],
   token: string,
   gatewayBase: string = DEFAULT_GATEWAY_BASE,
+  signal?: AbortSignal,
 ): Promise<CloudAgentResponse> {
   // Validate gateway origin before sending JWT
   const validatedBase = validateGatewayUrl(gatewayBase);
@@ -349,6 +350,7 @@ export async function callCloud(
       'x-agi-managed-compute-beta': '1',
     },
     body,
+    signal,
   });
 
   if (!response.ok) {
@@ -386,6 +388,13 @@ export async function callCloud(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('callCloud: response body is not readable');
 
+  const cancelReader = (): void => {
+    void reader.cancel(signal?.reason).catch(() => {
+      // Fetch abort and stream cancellation can race; either one is sufficient.
+    });
+  };
+  signal?.addEventListener('abort', cancelReader, { once: true });
+
   const decoder = new TextDecoder();
   let textContent = '';
   const toolCallsAcc: ToolCall[] = [];
@@ -393,81 +402,93 @@ export async function callCloud(
   let buffer = '';
   let tokensUsed = 0; // P2-7: accumulate token usage from SSE usage fields
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    // Accumulate chunks into buffer; parse only complete lines.
-    buffer += decoder.decode(value, { stream: true });
-
-    // Extract all complete SSE lines from the buffer in one pass.
-    // parseSseChunk yields data payloads from every `data: ...` line present.
-    // We do NOT reset buffer inside the loop — all lines are already in buffer
-    // and the generator reads them all before we clear.
-    for (const data of parseSseChunk(buffer)) {
-      if (data === '[DONE]') {
-        isDone = true;
-        break;
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        if (signal.reason instanceof Error) throw signal.reason;
+        throw new DOMException('Computer-use cloud request was cancelled', 'AbortError');
       }
+      const { done, value } = await reader.read();
+      if (signal?.aborted) {
+        if (signal.reason instanceof Error) throw signal.reason;
+        throw new DOMException('Computer-use cloud request was cancelled', 'AbortError');
+      }
+      if (done) break;
 
-      let parsed: {
-        choices?: Array<{
-          finish_reason?: string | null;
-          delta?: {
-            content?: string | null;
-            tool_calls?: Array<{
-              index: number;
-              id?: string;
-              type?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
+      // Accumulate chunks into buffer; parse only complete lines.
+      buffer += decoder.decode(value, { stream: true });
+
+      // Extract all complete SSE lines from the buffer in one pass.
+      // parseSseChunk yields data payloads from every `data: ...` line present.
+      // We do NOT reset buffer inside the loop — all lines are already in buffer
+      // and the generator reads them all before we clear.
+      for (const data of parseSseChunk(buffer)) {
+        if (data === '[DONE]') {
+          isDone = true;
+          break;
+        }
+
+        let parsed: {
+          choices?: Array<{
+            finish_reason?: string | null;
+            delta?: {
+              content?: string | null;
+              tool_calls?: Array<{
+                index: number;
+                id?: string;
+                type?: string;
+                function?: { name?: string; arguments?: string };
+              }>;
+            };
+          }>;
+          // P2-7: OpenAI-style usage field (may appear in final chunk)
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            total_tokens?: number;
           };
-        }>;
-        // P2-7: OpenAI-style usage field (may appear in final chunk)
-        usage?: {
-          prompt_tokens?: number;
-          completion_tokens?: number;
-          total_tokens?: number;
         };
-      };
 
-      try {
-        parsed = JSON.parse(data) as typeof parsed;
-      } catch {
-        continue; // malformed chunk — skip
+        try {
+          parsed = JSON.parse(data) as typeof parsed;
+        } catch {
+          continue; // malformed chunk — skip
+        }
+
+        // P2-7: Accumulate token usage when the gateway emits it
+        if (parsed.usage?.total_tokens) {
+          tokensUsed = parsed.usage.total_tokens;
+        } else if (
+          parsed.usage?.prompt_tokens !== undefined &&
+          parsed.usage?.completion_tokens !== undefined
+        ) {
+          tokensUsed = (parsed.usage.prompt_tokens ?? 0) + (parsed.usage.completion_tokens ?? 0);
+        }
+
+        const choice = parsed.choices?.[0];
+        if (!choice) continue;
+
+        if (choice.finish_reason === 'stop') isDone = true;
+
+        const delta = choice.delta;
+        if (!delta) continue;
+
+        if (typeof delta.content === 'string') {
+          textContent += delta.content;
+        }
+        if (Array.isArray(delta.tool_calls)) {
+          mergeToolCallDelta(toolCallsAcc, delta.tool_calls);
+        }
       }
 
-      // P2-7: Accumulate token usage when the gateway emits it
-      if (parsed.usage?.total_tokens) {
-        tokensUsed = parsed.usage.total_tokens;
-      } else if (
-        parsed.usage?.prompt_tokens !== undefined &&
-        parsed.usage?.completion_tokens !== undefined
-      ) {
-        tokensUsed = (parsed.usage.prompt_tokens ?? 0) + (parsed.usage.completion_tokens ?? 0);
-      }
+      // Clear the buffer after fully parsing; incomplete trailing lines would need
+      // a line-boundary tracker but SSE lines are always newline-terminated.
+      buffer = '';
 
-      const choice = parsed.choices?.[0];
-      if (!choice) continue;
-
-      if (choice.finish_reason === 'stop') isDone = true;
-
-      const delta = choice.delta;
-      if (!delta) continue;
-
-      if (typeof delta.content === 'string') {
-        textContent += delta.content;
-      }
-      if (Array.isArray(delta.tool_calls)) {
-        mergeToolCallDelta(toolCallsAcc, delta.tool_calls);
-      }
+      if (isDone) break;
     }
-
-    // Clear the buffer after fully parsing; incomplete trailing lines would need
-    // a line-boundary tracker but SSE lines are always newline-terminated.
-    buffer = '';
-
-    if (isDone) break;
+  } finally {
+    signal?.removeEventListener('abort', cancelReader);
   }
 
   const message: AssistantMessage = {

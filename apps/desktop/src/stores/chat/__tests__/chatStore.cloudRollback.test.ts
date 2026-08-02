@@ -98,4 +98,14 @@ describe('DESKTOP-CLOUDROLLBACK-01: cloud-create failure must not lose a sent me
     expect(state.messagesByConversation[id]).toBeUndefined();
     expect(state.conversations.some((c) => c.id === id)).toBe(false);
   });
+
+  it('seeds an empty Cloud boundary with an explicitly managed conversation', () => {
+    useChatStore.getState().ensureActiveConversation();
+
+    const state = useChatStore.getState();
+    const active = state.conversations.find(
+      (conversation) => conversation.id === state.activeConversationId,
+    );
+    expect(active?.executionMode).toBe('cloud_managed');
+  });
 });

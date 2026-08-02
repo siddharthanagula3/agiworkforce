@@ -1,9 +1,10 @@
-import type { RoutingTaskType } from '@agiworkforce/types';
+import type { Effort, RoutingTaskType } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import type {
   ManagedCloudAgentRunReference,
   ToolApprovalDecisionWire,
 } from '@agiworkforce/cloud-contracts';
+import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -23,6 +24,7 @@ export type NativeMessageType =
   | 'SUBMIT_FORM'
   | 'GET_CONNECTION_STATUS'
   | 'GET_CLOUD_AUTH_TOKEN'
+  | 'MANAGED_CLOUD_AUTH_CHANGED'
   | 'RECONNECT_NATIVE'
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
@@ -38,6 +40,7 @@ export type NativeMessageType =
   | 'CANCEL_STREAM'
   | 'RESUME_CHAT_RUN'
   | 'RESOLVE_CHAT_APPROVAL'
+  | 'CANCEL_COMPUTER_USE'
   | 'OPEN_SIDE_PANEL'
   | 'GET_COOKIES'
   | 'SET_COOKIE'
@@ -374,7 +377,13 @@ export interface GetCloudAuthTokenMessage extends BaseMessage {
 export interface GetCloudAuthTokenResponse {
   success: boolean;
   token?: string;
+  owner?: ManagedCloudOwner;
   error?: string;
+}
+
+export interface ManagedCloudAuthChangedMessage extends BaseMessage {
+  type: 'MANAGED_CLOUD_AUTH_CHANGED';
+  previousOwner: ManagedCloudOwner;
 }
 
 export interface ReconnectNativeMessage extends BaseMessage {
@@ -485,6 +494,8 @@ export interface QueueMessageMessage extends BaseMessage {
 // Chat message — sent from side panel to background to stream an AI response
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
+  /** Exact account/session that owns the history and resulting stream. */
+  owner: ManagedCloudOwner;
   /** Per-extension-view nonce used to prevent cross-panel stream delivery. */
   clientInstanceId: string;
   id: string;
@@ -512,6 +523,8 @@ export interface ChatMessageMessage extends BaseMessage {
   modelSelection?: string;
   /** Route this turn through Auto Economy without changing the saved picker selection. */
   quickMode?: boolean;
+  /** Catalog-supported reasoning effort; the routed model remains authoritative. */
+  effort?: Effort;
   /** Prior successful route for prompt-cache continuity in this conversation. */
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
@@ -519,21 +532,34 @@ export interface ChatMessageMessage extends BaseMessage {
 
 export interface CancelStreamMessage extends BaseMessage {
   type: 'CANCEL_STREAM';
+  owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
   cloudRun?: ManagedCloudAgentRunReference;
 }
 
+export interface ChromeManagedRoutingMetadata {
+  modelKey: string;
+  taskType: RoutingTaskType;
+  reason: string;
+  /** Effective catalog effort for the resolved concrete model, when supported. */
+  effort?: Effort;
+}
+
 export interface ResumeChatRunMessage extends BaseMessage {
   type: 'RESUME_CHAT_RUN';
+  owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
   cloudRun: ManagedCloudAgentRunReference;
   alreadyVisibleText: string;
+  /** Persisted route for continuity while replaying a server-owned run. */
+  routing?: ChromeManagedRoutingMetadata;
 }
 
 export interface ResolveChatApprovalMessage extends BaseMessage {
   type: 'RESOLVE_CHAT_APPROVAL';
+  owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
   cloudRun: ManagedCloudAgentRunReference;
@@ -543,6 +569,7 @@ export interface ResolveChatApprovalMessage extends BaseMessage {
 // Chat chunk — sent from background to side panel as streaming response arrives
 export interface ChatChunkMessage {
   type: 'CHAT_CHUNK';
+  owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
   text: string;
@@ -551,11 +578,7 @@ export interface ChatChunkMessage {
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
-  routing?: {
-    modelKey: string;
-    taskType: RoutingTaskType;
-    reason: string;
-  };
+  routing?: ChromeManagedRoutingMetadata;
 }
 
 export interface ChatMessageResponse {
@@ -763,12 +786,17 @@ export interface WebMCPToolInfo {
 
 export interface WebMCPDiscoverToolsMessage extends BaseMessage {
   type: 'WEBMCP_DISCOVER_TOOLS';
+  /** Side-panel-local navigation epoch echoed by the privileged background. */
+  pageGeneration?: number;
 }
 
 export interface WebMCPDiscoverToolsResponse {
   success: boolean;
   supported: boolean;
   tools: WebMCPToolInfo[];
+  /** Privileged target identity used by the side panel to reject cross-tab updates. */
+  tabId?: number;
+  pageGeneration?: number;
   url?: string;
   error?: string;
 }
@@ -900,6 +928,12 @@ export interface ScheduledTask {
   createdAt: number;
   lastRun?: number;
   /**
+   * Account that explicitly authorized a prompt-backed Managed Cloud schedule.
+   * Session incarnations are intentionally not persisted here: a schedule is
+   * durable across normal re-authentication, but must never jump accounts.
+   */
+  managedCloudAccountId?: string;
+  /**
    * SECURITY (C-02 audit 2026-05-19): origin that created this task.
    * Sentinel `__extension_page__` for tasks created from the side-panel
    * Workflows tab. Real URL origins for any future content-script-callable
@@ -911,15 +945,21 @@ export interface ScheduledTask {
 
 export interface CreateScheduledTaskMessage extends BaseMessage {
   type: 'CREATE_SCHEDULED_TASK';
-  task: Omit<ScheduledTask, 'id' | 'createdAt' | 'lastRun'>;
+  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
+  owner?: ManagedCloudOwner;
+  task: Omit<ScheduledTask, 'id' | 'createdAt' | 'lastRun' | 'managedCloudAccountId'>;
 }
 
 export interface ListScheduledTasksMessage extends BaseMessage {
   type: 'LIST_SCHEDULED_TASKS';
+  /** Exact side-panel authority captured when the account-scoped list is requested. */
+  owner?: ManagedCloudOwner;
 }
 
 export interface UpdateScheduledTaskMessage extends BaseMessage {
   type: 'UPDATE_SCHEDULED_TASK';
+  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
+  owner?: ManagedCloudOwner;
   taskId: string;
   updates: Partial<
     Pick<
@@ -931,6 +971,8 @@ export interface UpdateScheduledTaskMessage extends BaseMessage {
 
 export interface DeleteScheduledTaskMessage extends BaseMessage {
   type: 'DELETE_SCHEDULED_TASK';
+  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
+  owner?: ManagedCloudOwner;
   taskId: string;
 }
 
@@ -982,8 +1024,26 @@ export interface RunAutofillMessage {
  */
 export interface StartComputerUseMessage {
   type: 'AGI_START_COMPUTER_USE';
+  /** Generated by the trusted panel before admission so teardown can cancel the pending start. */
+  runId: string;
   goal: string;
   tabId: number;
+}
+
+/** Stop the active privileged loop. Only trusted extension pages may send it. */
+export interface CancelComputerUseMessage extends BaseMessage {
+  type: 'CANCEL_COMPUTER_USE';
+  /** When supplied, a stale panel cannot cancel a newer replacement run. */
+  runId?: string;
+  reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
+}
+
+export interface ComputerUseCommandResponse {
+  success: boolean;
+  runId?: string;
+  runGeneration?: number;
+  running?: boolean;
+  error?: string;
 }
 
 export type ExtensionMessage =
@@ -1003,6 +1063,7 @@ export type ExtensionMessage =
   | SubmitFormMessage
   | ConnectionStatusMessage
   | GetCloudAuthTokenMessage
+  | ManagedCloudAuthChangedMessage
   | ReconnectNativeMessage
   | ConnectionStatusChangedMessage
   | TabReadyMessage
@@ -1059,6 +1120,7 @@ export type ExtensionMessage =
   | SetQuickModeMessage
   | RunAutofillMessage
   | StartComputerUseMessage
+  | CancelComputerUseMessage
   | ApproveContextHandoffMessage
   | CancelContextHandoffMessage;
 
@@ -1101,6 +1163,7 @@ export type ExtensionResponse =
   | ShortcutResponse
   | ScheduledTaskResponse
   | GetQuickModeResponse
+  | ComputerUseCommandResponse
   | ContextHandoffResponse;
 
 export interface PopupState {

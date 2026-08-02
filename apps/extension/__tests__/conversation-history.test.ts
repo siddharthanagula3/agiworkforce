@@ -4,22 +4,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
-  activateConversation,
+  activateConversation as activateOwnedConversation,
   createBrowserConversationId,
-  getActiveConversation,
-  saveConversation,
-  saveActiveConversation,
-  upsertConversation,
-  startNewConversation,
-  listConversations,
-  getConversation,
-  deleteConversation,
+  getActiveConversation as getOwnedActiveConversation,
+  saveConversation as saveOwnedConversation,
+  saveActiveConversation as saveOwnedActiveConversation,
+  upsertConversation as upsertOwnedConversation,
+  startNewConversation as startNewOwnedConversation,
+  listConversations as listOwnedConversations,
+  getConversation as getOwnedConversation,
+  deleteConversation as deleteOwnedConversation,
+  filterConversations,
+  persistConversationSeed as persistOwnedConversationSeed,
+  MAX_CONVERSATION_STORE_BYTES,
   type HistoryMessage,
+  type ConversationEntry,
+  type ConversationRoutingState,
 } from '../src/features/background/conversation-history';
+import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
 
 // ─── Chrome storage mock ─────────────────────────────────────────────────────
 
 const _store: Record<string, unknown> = {};
+const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
+const OTHER_OWNER: ManagedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };
+
+const activateConversation = (id: string) => activateOwnedConversation(OWNER, id);
+const getActiveConversation = () => getOwnedActiveConversation(OWNER);
+const saveConversation = (messages: HistoryMessage[], routing?: ConversationRoutingState) =>
+  saveOwnedConversation(OWNER, messages, routing);
+const saveActiveConversation = (messages: HistoryMessage[], routing?: ConversationRoutingState) =>
+  saveOwnedActiveConversation(OWNER, messages, routing);
+const upsertConversation = (
+  id: string,
+  messages: HistoryMessage[],
+  routing?: ConversationRoutingState,
+) => upsertOwnedConversation(OWNER, id, messages, routing);
+const startNewConversation = () => startNewOwnedConversation(OWNER);
+const listConversations = () => listOwnedConversations(OWNER);
+const getConversation = (id: string) => getOwnedConversation(OWNER, id);
+const deleteConversation = (id: string) => deleteOwnedConversation(OWNER, id);
+const persistConversationSeed = (id: string, seed: ConversationEntry) =>
+  persistOwnedConversationSeed(OWNER, id, seed);
 
 function selectedValues(key: string | string[]): Record<string, unknown> {
   const keys = Array.isArray(key) ? key : [key];
@@ -124,6 +150,64 @@ describe('conversation-history', () => {
     expect(list[0].id).toBe(id);
   });
 
+  it('partitions identical conversation ids by account and auth incarnation', async () => {
+    await upsertOwnedConversation(OWNER, 'conv-shared-id', [
+      { role: 'user', content: 'account A transcript', timestamp: 1 },
+    ]);
+    await upsertOwnedConversation(OTHER_OWNER, 'conv-shared-id', [
+      { role: 'user', content: 'account B transcript', timestamp: 2 },
+    ]);
+
+    expect((await getOwnedConversation(OWNER, 'conv-shared-id'))?.messages[0]?.content).toBe(
+      'account A transcript',
+    );
+    expect((await getOwnedConversation(OTHER_OWNER, 'conv-shared-id'))?.messages[0]?.content).toBe(
+      'account B transcript',
+    );
+    expect(await listOwnedConversations(OWNER)).toHaveLength(1);
+    expect(await listOwnedConversations(OTHER_OWNER)).toHaveLength(1);
+  });
+
+  it('does not resolve an active conversation id through another account owner', async () => {
+    await upsertOwnedConversation(OWNER, 'conv-shared-id', [
+      { role: 'user', content: 'account A transcript', timestamp: 1 },
+    ]);
+    await upsertOwnedConversation(OTHER_OWNER, 'conv-shared-id', [
+      { role: 'user', content: 'account B transcript', timestamp: 2 },
+    ]);
+
+    expect(await getOwnedActiveConversation(OWNER)).toBeUndefined();
+    expect((await getOwnedActiveConversation(OTHER_OWNER))?.messages[0]?.content).toBe(
+      'account B transcript',
+    );
+
+    await activateOwnedConversation(OWNER, 'conv-shared-id');
+    expect((await getOwnedActiveConversation(OWNER))?.messages[0]?.content).toBe(
+      'account A transcript',
+    );
+    expect(await getOwnedActiveConversation(OTHER_OWNER)).toBeUndefined();
+  });
+
+  it('durably seeds a collision branch without changing the active conversation', async () => {
+    const source = await saveActiveConversation(msgs(4), {
+      selectedModel: 'auto',
+      currentModelKey: 'openai/gpt-current',
+      previousTaskType: 'reasoning',
+      effort: 'medium',
+    });
+    expect(source).toBeDefined();
+
+    const seeded = await persistConversationSeed('conv-window-branch', source!);
+
+    expect(seeded).toMatchObject({
+      id: 'conv-window-branch',
+      messages: source!.messages,
+      routing: source!.routing,
+    });
+    expect((await getActiveConversation())?.id).toBe(source!.id);
+    expect((await getConversation('conv-window-branch'))?.messages).toEqual(source!.messages);
+  });
+
   it('deriveTitle uses first user message (truncated at 60 chars)', async () => {
     const longContent = 'A'.repeat(80);
     await saveConversation([{ role: 'user', content: longContent, timestamp: Date.now() }]);
@@ -169,11 +253,18 @@ describe('conversation-history', () => {
     const THIRTY_ONE_DAYS = 31 * 24 * 60 * 60 * 1000;
     const old: import('../src/features/background/conversation-history').ConversationEntry = {
       id: 'old-conv',
+      owner: OWNER,
       title: 'Old',
       messages: msgs(2),
       savedAt: Date.now() - THIRTY_ONE_DAYS,
+      routing: { selectedModel: 'auto' },
     };
-    _store[HISTORY_KEY] = [old];
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: old.id,
+      activeOwner: OWNER,
+      conversations: [old],
+    };
     const list = await listConversations();
     expect(list).toHaveLength(0);
   });
@@ -182,11 +273,18 @@ describe('conversation-history', () => {
     const entries: import('../src/features/background/conversation-history').ConversationEntry[] =
       Array.from({ length: 100 }, (_, i) => ({
         id: `conv-old-${i}`,
+        owner: OWNER,
         title: `Old ${i}`,
         messages: msgs(2),
         savedAt: Date.now() - (100 - i) * 1000,
+        routing: { selectedModel: 'auto' },
       }));
-    _store[HISTORY_KEY] = entries;
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: null,
+      activeOwner: null,
+      conversations: entries,
+    };
     const newId = await saveConversation(msgs(2));
     const list = await listConversations();
     expect(list).toHaveLength(100);
@@ -252,9 +350,11 @@ describe('conversation-history', () => {
     _store[BROWSER_STORE_KEY] = {
       version: 2,
       activeConversationId: 'unsafe-activity',
+      activeOwner: OWNER,
       conversations: [
         {
           id: 'unsafe-activity',
+          owner: OWNER,
           title: 'Keep answer',
           messages: [
             {
@@ -321,12 +421,14 @@ describe('conversation-history', () => {
       selectedModel: 'auto',
       currentModelKey: 'anthropic/claude-current',
       previousTaskType: 'coding',
+      effort: 'high',
     });
     await startNewConversation();
     await saveActiveConversation(msgs(4), {
       selectedModel: 'openai/gpt-current',
       currentModelKey: 'openai/gpt-current',
       previousTaskType: 'reasoning',
+      effort: 'medium',
     });
 
     const restored = await activateConversation(first!.id);
@@ -335,11 +437,12 @@ describe('conversation-history', () => {
       selectedModel: 'auto',
       currentModelKey: 'anthropic/claude-current',
       previousTaskType: 'coding',
+      effort: 'high',
     });
     expect((await getActiveConversation())?.id).toBe(first?.id);
   });
 
-  it('migrates a version-one browser store without losing conversations', async () => {
+  it('discards a version-one browser store that predates account ownership', async () => {
     _store[LEGACY_BROWSER_STORE_KEY] = {
       version: 1,
       activeConversationId: 'legacy-v1',
@@ -355,9 +458,14 @@ describe('conversation-history', () => {
 
     const active = await getActiveConversation();
 
-    expect(active?.id).toBe('legacy-v1');
-    expect(active?.routing).toEqual({ selectedModel: 'auto' });
-    expect(_store[BROWSER_STORE_KEY]).toMatchObject({ version: 2 });
+    expect(active).toBeUndefined();
+    expect(await listConversations()).toEqual([]);
+    expect(_store[BROWSER_STORE_KEY]).toMatchObject({
+      version: 2,
+      activeConversationId: null,
+      activeOwner: null,
+      conversations: [],
+    });
     expect(_store[LEGACY_BROWSER_STORE_KEY]).toBeUndefined();
   });
 
@@ -365,9 +473,11 @@ describe('conversation-history', () => {
     _store[BROWSER_STORE_KEY] = {
       version: 2,
       activeConversationId: 'corrupt-route',
+      activeOwner: OWNER,
       conversations: [
         {
           id: 'corrupt-route',
+          owner: OWNER,
           title: 'Keep my messages',
           messages: msgs(2),
           savedAt: Date.now(),
@@ -375,6 +485,7 @@ describe('conversation-history', () => {
             selectedModel: 42,
             currentModelKey: { injected: true },
             previousTaskType: 'not-a-routing-task',
+            effort: 'invented-ultra',
           },
         },
       ],
@@ -384,6 +495,162 @@ describe('conversation-history', () => {
 
     expect(active?.messages).toHaveLength(2);
     expect(active?.routing).toEqual({ selectedModel: 'auto' });
+  });
+
+  it('bounds malformed stored history without dropping valid neighboring conversations', async () => {
+    const now = Date.now();
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'valid-a',
+      activeOwner: OWNER,
+      conversations: [
+        {
+          id: 'valid-a',
+          owner: OWNER,
+          title: 'First valid chat',
+          messages: [{ role: 'user', content: 'alpha needle', timestamp: now }],
+          savedAt: now,
+          routing: { selectedModel: 'auto' },
+        },
+        {
+          id: 'valid-a',
+          owner: OWNER,
+          title: 'Duplicate must not replace the first entry',
+          messages: [{ role: 'user', content: 'duplicate needle', timestamp: now + 1 }],
+          savedAt: now + 1,
+          routing: { selectedModel: 'auto' },
+        },
+        {
+          id: `bad\u0000id`,
+          owner: OWNER,
+          title: 'Malformed owner',
+          messages: [{ role: 'user', content: 'x'.repeat(64_001), timestamp: now }],
+          savedAt: now,
+          routing: { selectedModel: 'auto' },
+        },
+        {
+          id: 'valid-b',
+          owner: OWNER,
+          title: 'Second valid chat',
+          messages: Array.from({ length: 150 }, (_, index) => ({
+            role: index % 2 === 0 ? 'user' : 'assistant',
+            content: `bounded ${index}`,
+            timestamp: now + index,
+          })),
+          savedAt: now,
+          routing: { selectedModel: 'auto' },
+        },
+        {
+          id: 'oversized-title',
+          owner: OWNER,
+          title: 'x'.repeat(81),
+          messages: [{ role: 'user', content: 'discard me', timestamp: now }],
+          savedAt: now,
+          routing: { selectedModel: 'auto' },
+        },
+      ],
+    };
+
+    const entries = await listConversations();
+    expect(entries.map((entry) => entry.id)).toEqual(['valid-a', 'valid-b']);
+    expect(entries[1]?.messages).toHaveLength(100);
+    expect(filterConversations(entries, 'alpha needle').map((entry) => entry.id)).toEqual([
+      'valid-a',
+    ]);
+    expect(filterConversations(entries, 'duplicate needle')).toEqual([]);
+  });
+
+  it('caps aggregate activity normalization across otherwise valid messages', async () => {
+    const now = Date.now();
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'event-heavy',
+      activeOwner: OWNER,
+      conversations: [
+        {
+          id: 'event-heavy',
+          owner: OWNER,
+          title: 'Bounded events',
+          messages: Array.from({ length: 6 }, (_, messageIndex) => ({
+            role: 'assistant',
+            content: `event batch ${messageIndex}`,
+            timestamp: now + messageIndex,
+            agentEvents: Array.from({ length: 200 }, (_, eventIndex) =>
+              agentEvent(messageIndex * 200 + eventIndex),
+            ),
+          })),
+          savedAt: now,
+          routing: { selectedModel: 'auto' },
+        },
+      ],
+    };
+
+    const entry = (await listConversations())[0];
+    expect(entry?.messages).toHaveLength(6);
+    const totalEvents =
+      entry?.messages.reduce((total, message) => total + (message.agentEvents?.length ?? 0), 0) ??
+      0;
+    expect(totalEvents).toBe(1_000);
+  });
+
+  it('evicts oldest aggregate history before exceeding the storage budget', async () => {
+    const now = Date.now();
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'large-0',
+      activeOwner: OWNER,
+      conversations: Array.from({ length: 8 }, (_, conversationIndex) => ({
+        id: `large-${conversationIndex}`,
+        owner: OWNER,
+        title: `Large ${conversationIndex}`,
+        messages: Array.from({ length: 20 }, (_, messageIndex) => ({
+          role: messageIndex % 2 === 0 ? 'user' : 'assistant',
+          content: `${conversationIndex}-${messageIndex}-${'x'.repeat(39_980)}`,
+          timestamp: now + messageIndex,
+        })),
+        savedAt: now - conversationIndex,
+        routing: { selectedModel: 'auto' },
+      })),
+    };
+
+    await saveConversation(msgs(2));
+
+    const persisted = _store[BROWSER_STORE_KEY];
+    expect(new TextEncoder().encode(JSON.stringify(persisted)).byteLength).toBeLessThanOrEqual(
+      MAX_CONVERSATION_STORE_BYTES,
+    );
+    expect((persisted as { conversations: unknown[] }).conversations.length).toBeGreaterThan(0);
+  });
+
+  it('searches titles and transcript content locally with case-insensitive terms', () => {
+    const now = Date.now();
+    const entries = [
+      {
+        id: 'release-notes',
+        owner: OWNER,
+        title: 'Launch review',
+        messages: [
+          { role: 'user' as const, content: 'Find the Chrome permission notes', timestamp: now },
+        ],
+        savedAt: now,
+        routing: { selectedModel: 'auto' },
+      },
+      {
+        id: 'other',
+        owner: OWNER,
+        title: 'Dinner ideas',
+        messages: [{ role: 'user' as const, content: 'Vegetarian pasta', timestamp: now }],
+        savedAt: now,
+        routing: { selectedModel: 'auto' },
+      },
+    ];
+
+    expect(filterConversations(entries, 'CHROME notes').map((entry) => entry.id)).toEqual([
+      'release-notes',
+    ]);
+    expect(filterConversations(entries, 'launch')).toHaveLength(1);
+    expect(filterConversations(entries, '   ')).toEqual(entries);
+    expect(filterConversations(entries, 'missing')).toEqual([]);
   });
 
   it('keeps route continuity isolated across new, restored, and deleted conversations', async () => {
@@ -413,7 +680,7 @@ describe('conversation-history', () => {
     );
   });
 
-  it('migrates the legacy live thread and archive into the single browser-owned store', async () => {
+  it('discards legacy live and archive records that have no account owner', async () => {
     _store[HISTORY_KEY] = [
       {
         id: 'legacy-archive',
@@ -427,9 +694,14 @@ describe('conversation-history', () => {
     const active = await getActiveConversation();
     const all = await listConversations();
 
-    expect(active?.messages).toHaveLength(4);
-    expect(all.map((entry) => entry.id)).toContain('legacy-archive');
-    expect(_store[BROWSER_STORE_KEY]).toBeDefined();
+    expect(active).toBeUndefined();
+    expect(all).toEqual([]);
+    expect(_store[BROWSER_STORE_KEY]).toMatchObject({
+      version: 2,
+      activeConversationId: null,
+      activeOwner: null,
+      conversations: [],
+    });
     expect(_store[HISTORY_KEY]).toBeUndefined();
     expect(_store[ACTIVE_MESSAGES_KEY]).toBeUndefined();
   });

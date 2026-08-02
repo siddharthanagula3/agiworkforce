@@ -23,6 +23,10 @@ import { desktopCloudProjects } from '../services/desktopCloudProjects';
 import { updateCloudConversation } from '../services/cloudChat';
 import { useChatStore } from './chat/chatStore';
 import { selectHasCloudAccountSession, useAuthStore } from './auth';
+import {
+  assertManagedCloudBoundary,
+  captureManagedCloudBoundary,
+} from '../services/managedCloudBoundary';
 
 export interface ProjectFile {
   id: string;
@@ -178,6 +182,7 @@ const PROJECT_STORE_VERSION = 1;
 const MAX_RECENT_FOLDERS = 10;
 let managedProjectsLoad: { boundaryKey: string; promise: Promise<Project[]> } | null = null;
 let projectLoadGeneration = 0;
+const moveConversationGenerations = new Map<string, number>();
 
 function isManagedCloudMode(): boolean {
   return useAppModeStore.getState().mode === 'cloud';
@@ -187,7 +192,7 @@ function managedProjectBoundaryKey(): string | null {
   if (!isManagedCloudMode()) return null;
   const auth = useAuthStore.getState();
   if (!selectHasCloudAccountSession(auth) || !auth.user) return null;
-  return `cloud:${auth.user.id}`;
+  return `cloud:${auth.user.id}:${auth.cloudSessionEpoch}`;
 }
 
 function mergeManagedConversationMembership(projects: Project[], current: Project[]): Project[] {
@@ -555,32 +560,54 @@ export const useProjectStore = create<ProjectState>()(
           };
 
           if (isManagedCloudMode()) {
+            const boundary = captureManagedCloudBoundary('Move Cloud conversation to project');
+            const operationGeneration = (moveConversationGenerations.get(conversationId) ?? 0) + 1;
+            moveConversationGenerations.set(conversationId, operationGeneration);
+            const optimisticProjects = projectsBefore.map((candidate) => {
+              const conversationIds = projectMembership(candidate);
+              const previousCount = candidate.conversationCount ?? candidate.conversationIds.length;
+              const countDelta =
+                candidate.id === previousProjectId ? -1 : candidate.id === projectId ? 1 : 0;
+              return {
+                ...candidate,
+                conversationIds,
+                conversationCount: Math.max(0, previousCount + countDelta),
+              };
+            });
             useChatStore.getState().setConversationProject(conversationId, projectId);
             set({
-              projects: projectsBefore.map((candidate) => {
-                const conversationIds = projectMembership(candidate);
-                const previousCount =
-                  candidate.conversationCount ?? candidate.conversationIds.length;
-                const countDelta =
-                  candidate.id === previousProjectId ? -1 : candidate.id === projectId ? 1 : 0;
-                return {
-                  ...candidate,
-                  conversationIds,
-                  conversationCount: Math.max(0, previousCount + countDelta),
-                };
-              }),
+              projects: optimisticProjects,
               error: null,
             });
 
             try {
               await updateCloudConversation(conversationId, { projectId });
             } catch (error) {
-              useChatStore.getState().setConversationProject(conversationId, previousProjectId);
-              set({
-                projects: projectsBefore,
-                error: error instanceof Error ? error.message : String(error),
-              });
+              let stillOwnsOptimisticState = false;
+              try {
+                assertManagedCloudBoundary(boundary);
+                stillOwnsOptimisticState =
+                  moveConversationGenerations.get(conversationId) === operationGeneration &&
+                  get().projects === optimisticProjects &&
+                  useChatStore
+                    .getState()
+                    .conversations.find((candidate) => candidate.id === conversationId)
+                    ?.projectId === projectId;
+              } catch {
+                // A stale boundary must never republish the old account's snapshot.
+              }
+              if (stillOwnsOptimisticState) {
+                useChatStore.getState().setConversationProject(conversationId, previousProjectId);
+                set({
+                  projects: projectsBefore,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              }
               throw error;
+            } finally {
+              if (moveConversationGenerations.get(conversationId) === operationGeneration) {
+                moveConversationGenerations.delete(conversationId);
+              }
             }
             return;
           }

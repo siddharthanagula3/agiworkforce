@@ -513,17 +513,152 @@ pub async fn oauth_refresh(
     parse_json_response(&response)
 }
 
+use std::future::Future;
 use std::sync::RwLock;
 
 // In-memory token cache for Rust API calls. Durable copies live in the OS
 // credential store and are repopulated only after structural validation.
-static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
+#[derive(Clone, PartialEq, Eq)]
+struct ManagedAuthSessionIdentity {
+    subject: String,
+    session_id: Option<String>,
+}
+
+struct ManagedAccessTokenState {
+    token: Option<String>,
+    identity: Option<ManagedAuthSessionIdentity>,
+    generation: u64,
+}
+
+impl ManagedAccessTokenState {
+    const fn empty() -> Self {
+        Self {
+            token: None,
+            identity: None,
+            generation: 0,
+        }
+    }
+}
+
+/// Native ownership proof captured when a Managed Cloud goal starts.
+///
+/// The subject identifies the account, while the optional JWT `sid` plus the
+/// monotonic generation distinguish sign-out/sign-in boundaries. Rotating an
+/// access token inside the same account session deliberately keeps the same
+/// boundary so a long-running goal is not interrupted by an ordinary refresh.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct ManagedAuthBoundary {
+    identity: ManagedAuthSessionIdentity,
+    generation: u64,
+}
+
+static ACCESS_TOKEN: RwLock<ManagedAccessTokenState> =
+    RwLock::new(ManagedAccessTokenState::empty());
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
 const CLOUD_ACCESS_TOKEN_SECRET_KEY: &str = "cloud_account_access_token";
 const CLOUD_REFRESH_TOKEN_SECRET_KEY: &str = "cloud_account_refresh_token";
 const CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT: &str = "access-token";
 const CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT: &str = "refresh-token";
+
+tokio::task_local! {
+    static ACTIVE_MANAGED_AUTH_BOUNDARY: Option<ManagedAuthBoundary>;
+}
+
+fn managed_auth_session_identity(token: &str) -> Result<ManagedAuthSessionIdentity, String> {
+    use base64::Engine;
+
+    let payload = token
+        .split('.')
+        .nth(1)
+        .ok_or_else(|| "Access token is missing its JWT payload".to_string())?;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(payload))
+        .map_err(|_| "Access token has an invalid JWT payload".to_string())?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded)
+        .map_err(|_| "Access token has an invalid JWT claims object".to_string())?;
+    let subject = claims
+        .get("sub")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|subject| !subject.is_empty() && subject.len() <= 512)
+        .ok_or_else(|| "Access token is missing a bounded subject claim".to_string())?;
+    let session_id = claims
+        .get("sid")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|session_id| !session_id.is_empty() && session_id.len() <= 512)
+        .map(str::to_string);
+
+    Ok(ManagedAuthSessionIdentity {
+        subject: subject.to_string(),
+        session_id,
+    })
+}
+
+fn install_access_token_in_memory(access_token: String) -> Result<(), String> {
+    let identity = managed_auth_session_identity(&access_token)?;
+    let mut state = ACCESS_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if state.identity.as_ref() != Some(&identity) {
+        state.generation = state.generation.saturating_add(1);
+    }
+    state.token = Some(access_token);
+    state.identity = Some(identity);
+    Ok(())
+}
+
+fn clear_access_token_in_memory() {
+    let mut state = ACCESS_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if state.token.is_some() || state.identity.is_some() {
+        state.generation = state.generation.saturating_add(1);
+    }
+    state.token = None;
+    state.identity = None;
+}
+
+/// Capture the current native Managed Cloud account/session boundary.
+pub(crate) fn capture_managed_auth_boundary() -> Result<ManagedAuthBoundary, String> {
+    let state = ACCESS_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if state.token.is_none() {
+        return Err("No access token stored. Please sign in.".to_string());
+    }
+    let identity = state
+        .identity
+        .clone()
+        .ok_or_else(|| "The stored access token has no account ownership metadata".to_string())?;
+    Ok(ManagedAuthBoundary {
+        identity,
+        generation: state.generation,
+    })
+}
+
+/// Return the boundary inherited by the currently executing native goal.
+pub(crate) fn current_managed_auth_boundary() -> Option<ManagedAuthBoundary> {
+    ACTIVE_MANAGED_AUTH_BOUNDARY
+        .try_with(Clone::clone)
+        .ok()
+        .flatten()
+}
+
+/// Scope all managed-provider calls made by a native goal to its captured
+/// account/session. Tokio task locals are explicit here because spawned tasks
+/// do not inherit them automatically.
+pub(crate) async fn scope_managed_auth_boundary<F>(
+    boundary: Option<ManagedAuthBoundary>,
+    future: F,
+) -> F::Output
+where
+    F: Future,
+{
+    ACTIVE_MANAGED_AUTH_BOUNDARY.scope(boundary, future).await
+}
 
 trait CloudCredentialVault {
     fn load(&self, account: &str) -> Result<Option<String>, String>;
@@ -785,16 +920,16 @@ pub fn account_store_access_token(
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
     validate_token_format(&accessToken, "Access token")?;
+    // Decode the ownership claims before persisting anything. Native managed
+    // goal execution depends on `sub`/`sid` to distinguish an ordinary token
+    // refresh from an account or session replacement.
+    managed_auth_session_identity(&accessToken)?;
     store_cloud_access_token(
         &OsCloudCredentialVault::for_app(&app),
         secret_state.manager(),
         &accessToken,
     )?;
-    let mut token = ACCESS_TOKEN
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *token = Some(accessToken);
-    Ok(())
+    install_access_token_in_memory(accessToken)
 }
 
 fn store_cloud_access_token(
@@ -872,12 +1007,7 @@ pub fn account_clear_tokens(
         &OsCloudCredentialVault::for_app(&app),
         secret_state.manager(),
     )?;
-    {
-        let mut token = ACCESS_TOKEN
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *token = None;
-    }
+    clear_access_token_in_memory();
     {
         let mut token = REFRESH_TOKEN
             .write()
@@ -951,10 +1081,7 @@ fn restore_cloud_access_token(
     else {
         return Ok(None);
     };
-    let mut token = ACCESS_TOKEN
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *token = Some(access_token.clone());
+    install_access_token_in_memory(access_token.clone())?;
     Ok(Some(access_token))
 }
 
@@ -981,12 +1108,49 @@ fn restore_cloud_refresh_token(
 
 // Helpers to get tokens from in-memory storage
 pub fn get_access_token() -> Result<String, String> {
-    let token = ACCESS_TOKEN
+    // Native goal workers carry a task-scoped boundary. Delegating every
+    // access-token read through the same guard covers managed media and other
+    // account-backed tools as well as the primary LLM provider.
+    get_access_token_for_active_managed_boundary()
+}
+
+/// Return the current token only when it still belongs to the native goal's
+/// captured account/session. The comparison and token clone happen under one
+/// read lock, so a credential replacement cannot slip between validation and
+/// the provider attaching its bearer header.
+pub(crate) fn get_access_token_for_active_managed_boundary() -> Result<String, String> {
+    let expected = current_managed_auth_boundary();
+    let state = ACCESS_TOKEN
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    token
-        .clone()
-        .ok_or_else(|| "No access token stored. Please sign in.".to_string())
+    let token = state
+        .token
+        .as_ref()
+        .ok_or_else(|| "No access token stored. Please sign in.".to_string())?;
+
+    if let Some(expected) = expected {
+        let is_current = state.generation == expected.generation
+            && state.identity.as_ref() == Some(&expected.identity);
+        if !is_current {
+            return Err(
+                "Managed Cloud account session changed while this goal was running; the old goal was stopped before using the replacement account credential."
+                    .to_string(),
+            );
+        }
+    }
+
+    Ok(token.clone())
+}
+
+#[cfg(test)]
+pub(crate) fn replace_access_token_for_managed_boundary_test(access_token: Option<String>) {
+    match access_token {
+        Some(access_token) => {
+            install_access_token_in_memory(access_token)
+                .expect("managed-boundary test token must contain valid ownership claims");
+        }
+        None => clear_access_token_in_memory(),
+    }
 }
 
 pub fn get_refresh_token() -> Result<String, String> {
@@ -1171,8 +1335,14 @@ mod tests {
 
     #[test]
     fn normalizes_only_well_formed_device_user_codes() {
-        assert_eq!(normalize_device_user_code(" abcd-1234 ").unwrap(), "ABCD-1234");
-        assert_eq!(normalize_device_user_code("WXYZ-7890").unwrap(), "WXYZ-7890");
+        assert_eq!(
+            normalize_device_user_code(" abcd-1234 ").unwrap(),
+            "ABCD-1234"
+        );
+        assert_eq!(
+            normalize_device_user_code("WXYZ-7890").unwrap(),
+            "WXYZ-7890"
+        );
 
         // Anything the web route would reject must be refused before it leaves
         // the device, so a malformed code can never be blamed on the server.

@@ -52,7 +52,11 @@ export interface ManagedCloudConversationDetail {
   hasMore: boolean;
 }
 
-export interface ManagedCloudSaveMessageOptions {
+export interface ManagedCloudChatRequestOptions {
+  signal?: AbortSignal;
+}
+
+export interface ManagedCloudSaveMessageOptions extends ManagedCloudChatRequestOptions {
   maxAttempts?: number;
   retryDelayMs?: number;
 }
@@ -64,25 +68,36 @@ export interface ManagedCloudSaveMessageResult {
 export interface ManagedCloudChatClient {
   listConversations(
     query?: ManagedCloudConversationListQuery,
+    options?: ManagedCloudChatRequestOptions,
   ): Promise<ManagedCloudConversationPage>;
   createConversation(
     input: ManagedCloudCreateConversationRequest,
+    options?: ManagedCloudChatRequestOptions,
   ): Promise<ManagedCloudConversation>;
   getConversation(
     conversationId: string,
     query?: { limit?: number; offset?: number },
+    options?: ManagedCloudChatRequestOptions,
   ): Promise<ManagedCloudConversationDetail>;
   updateConversation(
     conversationId: string,
     input: ManagedCloudUpdateConversationRequest,
+    options?: ManagedCloudChatRequestOptions,
   ): Promise<ManagedCloudConversation>;
-  deleteConversation(conversationId: string): Promise<void>;
+  deleteConversation(
+    conversationId: string,
+    options?: ManagedCloudChatRequestOptions,
+  ): Promise<void>;
   saveMessage(
     conversationId: string,
     input: ManagedCloudCreateMessageRequest,
     options?: ManagedCloudSaveMessageOptions,
   ): Promise<ManagedCloudSaveMessageResult>;
-  deleteMessage(conversationId: string, messageId: string): Promise<void>;
+  deleteMessage(
+    conversationId: string,
+    messageId: string,
+    options?: ManagedCloudChatRequestOptions,
+  ): Promise<void>;
 }
 
 const DEFAULT_SAVE_ATTEMPTS = 3;
@@ -142,8 +157,59 @@ async function parseContract<T>(
   return parsed.data;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error('Managed Cloud chat request was aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal | null): void {
+  if (signal?.aborted) throw abortError(signal);
+}
+
+function awaitWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  throwIfAborted(signal);
+  if (!signal) return promise;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return false;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      return true;
+    };
+    const onAbort = () => {
+      if (finish()) reject(abortError(signal));
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        if (finish()) resolve(value);
+      },
+      (error: unknown) => {
+        if (finish()) reject(error);
+      },
+    );
+  });
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
+      reject(abortError(signal!));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export function createManagedCloudChatClient(
@@ -152,27 +218,32 @@ export function createManagedCloudChatClient(
   const baseUrl = normalizeBaseUrl(config.baseUrl ?? '');
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
-  async function readHeaders(): Promise<ManagedCloudChatHeaders> {
-    const token = await config.getAuthToken?.();
+  async function readHeaders(signal?: AbortSignal): Promise<ManagedCloudChatHeaders> {
+    throwIfAborted(signal);
+    const token = await awaitWithAbort(Promise.resolve(config.getAuthToken?.()), signal);
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async function mutationHeaders(json: boolean): Promise<HeadersInit> {
+  async function mutationHeaders(json: boolean, signal?: AbortSignal): Promise<HeadersInit> {
     const headers: ManagedCloudChatHeaders = {
       ...(json ? { 'Content-Type': 'application/json' } : {}),
-      ...(await readHeaders()),
+      ...(await readHeaders(signal)),
     };
-    return config.decorateMutationHeaders ? config.decorateMutationHeaders(headers) : headers;
+    return config.decorateMutationHeaders
+      ? await awaitWithAbort(Promise.resolve(config.decorateMutationHeaders(headers)), signal)
+      : headers;
   }
 
   async function request(path: string, init: RequestInit): Promise<Response> {
+    throwIfAborted(init.signal);
     const response = await fetchImpl(withBaseUrl(baseUrl, path), init);
+    throwIfAborted(init.signal);
     if (!response.ok) throw await responseError(response);
     return response;
   }
 
   return {
-    async listConversations(query = {}) {
+    async listConversations(query = {}, options = {}) {
       const parsedQuery = ManagedCloudConversationListQuerySchema.parse(query);
       const params = new URLSearchParams();
       if (parsedQuery.q) params.set('q', parsedQuery.q);
@@ -181,7 +252,8 @@ export function createManagedCloudChatClient(
       if (parsedQuery.includeHistoryStats) params.set('includeHistoryStats', '1');
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${MANAGED_CLOUD_CHAT_BASE_PATH}${suffix}`, {
-        headers: await readHeaders(),
+        headers: await readHeaders(options.signal),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       const body = await parseContract(
         response,
@@ -196,12 +268,13 @@ export function createManagedCloudChatClient(
       };
     },
 
-    async createConversation(input) {
+    async createConversation(input, options = {}) {
       const body = ManagedCloudCreateConversationRequestSchema.parse(input);
       const response = await request(MANAGED_CLOUD_CHAT_BASE_PATH, {
         method: 'POST',
-        headers: await mutationHeaders(true),
+        headers: await mutationHeaders(true, options.signal),
         body: JSON.stringify(body),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       const result = await parseContract(
         response,
@@ -211,13 +284,14 @@ export function createManagedCloudChatClient(
       return normalizeManagedCloudConversation(result.conversation);
     },
 
-    async getConversation(conversationId, query = {}) {
+    async getConversation(conversationId, query = {}, options = {}) {
       const params = new URLSearchParams();
       if (query.limit !== undefined) params.set('limit', String(query.limit));
       if (query.offset !== undefined) params.set('offset', String(query.offset));
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${managedCloudConversationPath(conversationId)}${suffix}`, {
-        headers: await readHeaders(),
+        headers: await readHeaders(options.signal),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       const body = await parseContract(
         response,
@@ -234,12 +308,13 @@ export function createManagedCloudChatClient(
       };
     },
 
-    async updateConversation(conversationId, input) {
+    async updateConversation(conversationId, input, options = {}) {
       const body = ManagedCloudUpdateConversationRequestSchema.parse(input);
       const response = await request(managedCloudConversationPath(conversationId), {
         method: 'PUT',
-        headers: await mutationHeaders(true),
+        headers: await mutationHeaders(true, options.signal),
         body: JSON.stringify(body),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       const result = await parseContract(
         response,
@@ -249,10 +324,11 @@ export function createManagedCloudChatClient(
       return normalizeManagedCloudConversation(result.conversation);
     },
 
-    async deleteConversation(conversationId) {
+    async deleteConversation(conversationId, options = {}) {
       const response = await request(managedCloudConversationPath(conversationId), {
         method: 'DELETE',
-        headers: await mutationHeaders(false),
+        headers: await mutationHeaders(false, options.signal),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       await parseContract(
         response,
@@ -270,8 +346,9 @@ export function createManagedCloudChatClient(
         try {
           const response = await request(managedCloudConversationMessagesPath(conversationId), {
             method: 'POST',
-            headers: await mutationHeaders(true),
+            headers: await mutationHeaders(true, options.signal),
             body: JSON.stringify(body),
+            ...(options.signal ? { signal: options.signal } : {}),
           });
           const result = await parseContract(
             response,
@@ -290,16 +367,17 @@ export function createManagedCloudChatClient(
           const retryable =
             !(error instanceof ManagedCloudChatContractError) && (status === null || status >= 500);
           if (!retryable || attempt >= attempts) throw error;
-          await delay(retryDelayMs * attempt);
+          await delay(retryDelayMs * attempt, options.signal);
         }
       }
       throw lastError instanceof Error ? lastError : new Error('Failed to save cloud message');
     },
 
-    async deleteMessage(conversationId, messageId) {
+    async deleteMessage(conversationId, messageId, options = {}) {
       const response = await request(managedCloudMessagePath(conversationId, messageId), {
         method: 'DELETE',
-        headers: await mutationHeaders(false),
+        headers: await mutationHeaders(false, options.signal),
+        ...(options.signal ? { signal: options.signal } : {}),
       });
       await parseContract(
         response,

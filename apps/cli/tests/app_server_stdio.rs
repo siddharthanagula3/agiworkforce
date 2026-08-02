@@ -1,3 +1,4 @@
+use agiworkforce_protocol::developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION;
 use serde_json::{json, Value};
 use std::process::Stdio;
 use tempfile::tempdir;
@@ -8,6 +9,21 @@ use tokio::process::Command;
 async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
     let workspace = tempdir().expect("workspace");
     let home = tempdir().expect("home");
+    // App-server is a headless developer entry point and must fail closed for
+    // an untrusted workspace. Establish trust through the same explicit `init`
+    // action documented for users before exercising the stdio protocol.
+    let initialized_project = Command::new(env!("CARGO_BIN_EXE_agi"))
+        .arg("init")
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .output()
+        .await
+        .expect("initialize trusted test project");
+    assert!(
+        initialized_project.status.success(),
+        "agi init failed: {}",
+        String::from_utf8_lossy(&initialized_project.stderr)
+    );
     std::fs::write(
         workspace.path().join(".mcp.json"),
         serde_json::to_vec(&json!({
@@ -53,9 +69,14 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
     )
     .await;
     let initialized = next_response(&mut lines).await;
-    // Must match DEVELOPER_SESSION_PROTOCOL_VERSION (crates/agiworkforce-protocol);
-    // it was bumped 3→5 but this assertion wasn't updated, so the test stalled.
-    assert_eq!(initialized["result"]["protocolVersion"], 6);
+    assert_eq!(
+        initialized["result"]["protocolVersion"],
+        DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+    assert_eq!(
+        initialized["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
 
     send(
         &mut stdin,
@@ -76,6 +97,8 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
             .expect("thread/start must not wait for MCP discovery");
     assert_eq!(started["id"], 2);
     assert!(started.get("error").is_none(), "{started}");
+    assert_ne!(started["result"]["thread"]["trustMode"], "unknown");
+    assert!(started["result"]["thread"]["provider"].is_string());
 
     send(
         &mut stdin,

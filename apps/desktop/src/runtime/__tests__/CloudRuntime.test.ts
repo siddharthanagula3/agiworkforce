@@ -69,6 +69,7 @@ vi.mock('../../stores/auth', async (importOriginal) => {
   const state = {
     isAuthenticated: true,
     accessToken: 'desktop-cloud-token',
+    cloudSessionEpoch: 1,
     // Empty email claim: exactly what /api/auth/device/token mints for a
     // browser-approved desktop device.
     user: { id: 'user-desktop', email: '' },
@@ -87,9 +88,11 @@ vi.mock('../sessionLabeling', () => ({
 }));
 
 const sendCloudMessage = vi.fn();
+const sendCloudApprovalResume = vi.fn();
 const generateCloudImage = vi.fn();
 const followRun = vi.fn();
 const cancelRun = vi.fn();
+const createCleanupClient = vi.fn((_credential?: unknown) => ({ followRun, cancelRun }));
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
   // Declared inside the factory: vi.mock is hoisted above module scope.
@@ -114,7 +117,9 @@ vi.mock('../../api/cloudApi', () => ({
   })),
   generateCloudImage: (...args: unknown[]) => generateCloudImage(...args),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
+  sendCloudApprovalResume: (...args: unknown[]) => sendCloudApprovalResume(...args),
   createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun }),
+  createDesktopCloudAgentRunCleanupClient: (credential: unknown) => createCleanupClient(credential),
 }));
 
 const MANAGED_RUN_ID = '019c3330-02b7-7000-8000-000000000001';
@@ -162,7 +167,7 @@ describe('CloudRuntime', () => {
 
   describe('sendMessage', () => {
     it('forwards managed search, thinking, code, Research, effort, work mode, and skill selection', async () => {
-      const runtime = new CloudRuntime();
+      const runtime = new CloudRuntime(null, true);
       expect(runtime.supportsManagedWebSearch).toBe(true);
       expect(runtime.supportsCodeExecution).toBe(true);
       expect(runtime.supportsResearch).toBe(true);
@@ -214,6 +219,7 @@ describe('CloudRuntime', () => {
       expect(saveMessage).toHaveBeenCalledWith(
         'conv_ids',
         expect.objectContaining({ id: '0199c1f2-0000-7000-8000-00000000aaaa', role: 'user' }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
@@ -334,6 +340,7 @@ describe('CloudRuntime', () => {
         1,
         'conv_1',
         expect.objectContaining({ role: 'user', content: 'Hi there' }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(sendCloudMessage).toHaveBeenCalledTimes(1);
 
@@ -707,6 +714,66 @@ describe('CloudRuntime', () => {
   });
 
   describe('stopGeneration', () => {
+    it('stops during user-message persistence before any managed model request starts', async () => {
+      const runtime = new CloudRuntime();
+      let persistenceSignal: AbortSignal | undefined;
+      saveMessage.mockImplementationOnce(
+        (_conversationId, _input, options?: { signal?: AbortSignal }) =>
+          new Promise<{ id: string }>((_resolve, reject) => {
+            persistenceSignal = options?.signal;
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('stopped');
+                error.name = 'AbortError';
+                reject(error);
+              },
+              { once: true },
+            );
+          }),
+      );
+
+      const send = runtime.sendMessage('conv_preflight_stop', 'Do not dispatch this');
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledOnce());
+      expect(persistenceSignal?.aborted).toBe(false);
+
+      runtime.stopGeneration('conv_preflight_stop');
+      await send;
+
+      expect(persistenceSignal?.aborted).toBe(true);
+      expect(sendCloudMessage).not.toHaveBeenCalled();
+      expect(generateCloudImage).not.toHaveBeenCalled();
+    });
+
+    it('does not let an older stopped preflight clear a newer turn controller', async () => {
+      const runtime = new CloudRuntime();
+      let releaseFirstSave!: (value: { id: string }) => void;
+      let secondSignal: AbortSignal | undefined;
+      saveMessage.mockImplementationOnce(
+        () =>
+          new Promise<{ id: string }>((resolve) => {
+            releaseFirstSave = resolve;
+          }),
+      );
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        secondSignal = args[6] as AbortSignal;
+        await new Promise(() => {});
+      });
+
+      const firstSend = runtime.sendMessage('conv_controller_race', 'first');
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledOnce());
+      runtime.stopGeneration('conv_controller_race');
+
+      void runtime.sendMessage('conv_controller_race', 'second');
+      await vi.waitFor(() => expect(secondSignal).toBeDefined());
+
+      releaseFirstSave({ id: 'saved-first-message' });
+      await firstSend;
+      runtime.stopGeneration('conv_controller_race');
+
+      expect(secondSignal?.aborted).toBe(true);
+    });
+
     it('aborts the in-flight controller passed to sendCloudMessage', async () => {
       const runtime = new CloudRuntime();
       let capturedSignal: AbortSignal | undefined;
@@ -834,11 +901,47 @@ describe('CloudRuntime', () => {
         MANAGED_RUN_ID,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
+      expect(createCleanupClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'user-desktop',
+          accessToken: 'desktop-cloud-token',
+          sessionEpoch: 1,
+        }),
+      );
       expect(saveMessage).toHaveBeenCalledTimes(savesBeforeDispose);
       expect(events).toEqual(eventsBeforeDispose);
       await expect(runtime.sendMessage('conv_after_dispose', 'must not send')).rejects.toThrow(
         'no longer active',
       );
+    });
+
+    it('cancels a durable run with the bearer used after same-account rotation', async () => {
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const signal = args[6] as AbortSignal;
+        const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
+        const onCredential = args[15] as (credential: {
+          accountId: string;
+          accessToken: string;
+        }) => void;
+        onCredential({ accountId: 'user-desktop', accessToken: 'rotated-token-2' });
+        onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+      cancelRun.mockResolvedValue({ id: MANAGED_RUN_ID, state: 'cancelled' });
+
+      const runtime = new CloudRuntime('user-desktop');
+      const send = runtime.sendMessage('conv_rotated_cleanup', 'keep working');
+      await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+
+      await runtime.dispose();
+      await send;
+
+      expect(createCleanupClient).toHaveBeenCalledWith({
+        accountId: 'user-desktop',
+        accessToken: 'rotated-token-2',
+      });
     });
   });
 
@@ -860,6 +963,7 @@ describe('CloudRuntime', () => {
 
       expect(createConversation).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'New Conversation', id: expect.any(String) }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       const callArg = createConversation.mock.calls[0]?.[0] as { id: string };
       expect(callArg.id).toMatch(
@@ -905,6 +1009,31 @@ describe('CloudRuntime', () => {
         { id: 'conv_1', title: 'Chat 1', updatedAt: '2026-01-02T00:00:00.000Z' },
       ]);
     });
+
+    it('rejects a non-advancing conversation cursor with an actionable structured failure', async () => {
+      listConversations.mockResolvedValue({
+        conversations: [
+          {
+            id: 'conv_stuck',
+            title: 'Stuck page',
+            projectId: null,
+            pinned: false,
+            isTemporary: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        hasMore: true,
+        nextOffset: 0,
+      });
+
+      await expect(new CloudRuntime().listConversations()).rejects.toMatchObject({
+        code: 'managed_cloud_pagination_non_advancing',
+        resource: 'conversations',
+        message: expect.stringContaining('Archive older conversations in AGI Web'),
+      });
+      expect(listConversations).toHaveBeenCalledOnce();
+    });
   });
 
   describe('message loading', () => {
@@ -942,6 +1071,30 @@ describe('CloudRuntime', () => {
         content: 'hi',
         createdAt: '2026-01-01T00:00:00.000Z',
         model: undefined,
+      });
+    });
+
+    it('rejects an oversized transcript before materializing its messages', async () => {
+      getConversation.mockResolvedValue({
+        conversation: {
+          id: 'conv_large',
+          title: 'Large chat',
+          projectId: null,
+          pinned: false,
+          isTemporary: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        messages: [],
+        total: 1_001,
+        hasMore: false,
+      });
+
+      await expect(new CloudRuntime().getMessages('conv_large')).rejects.toMatchObject({
+        code: 'managed_cloud_pagination_item_limit',
+        resource: 'messages',
+        limit: 1_000,
+        message: expect.stringContaining('Start a new chat'),
       });
     });
 
@@ -1157,5 +1310,67 @@ describe('CloudRuntime', () => {
         }),
       ).toBe(true);
     });
+
+    it.each(['stop', 'dispose'] as const)(
+      'cancels an in-flight approved durable run on %s with its dispatched bearer',
+      async (action) => {
+        const runtime = new CloudRuntime('user-desktop');
+        runtime.hasLiveApprovalTurn('conv_approval_cancel', {
+          assistantMessageId: 'assistant-approval',
+          runId: MANAGED_RUN_ID,
+          runReference: {
+            runId: MANAGED_RUN_ID,
+            runPath: MANAGED_RUN_PATH,
+            lastSequence: 3,
+          },
+          model: 'gpt-5',
+          assistantContent: 'Waiting.',
+          calls: [{ toolCallId: 'call_approve', name: 'write_file', args: {} }],
+        });
+        sendCloudApprovalResume.mockImplementationOnce(async (...args: unknown[]) => {
+          const onError = args[4] as (error: Error) => void;
+          const signal = args[5] as AbortSignal;
+          const onCredential = args[8] as (credential: {
+            accountId: string;
+            accessToken: string;
+          }) => void;
+          onCredential({ accountId: 'user-desktop', accessToken: 'approval-token-2' });
+          await new Promise<void>((resolve) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                onError(new DOMException('Stopped', 'AbortError'));
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        });
+
+        const resolution = runtime.resolveToolApproval(
+          'conv_approval_cancel',
+          'call_approve',
+          'approved',
+        );
+        await vi.waitFor(() => expect(sendCloudApprovalResume).toHaveBeenCalledOnce());
+
+        if (action === 'stop') runtime.stopGeneration('conv_approval_cancel');
+        else await runtime.dispose();
+
+        await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() =>
+          expect(cancelRun).toHaveBeenCalledWith(
+            MANAGED_RUN_ID,
+            ...(action === 'dispose'
+              ? [expect.objectContaining({ signal: expect.any(AbortSignal) })]
+              : []),
+          ),
+        );
+        expect(createCleanupClient).toHaveBeenCalledWith({
+          accountId: 'user-desktop',
+          accessToken: 'approval-token-2',
+        });
+      },
+    );
   });
 });

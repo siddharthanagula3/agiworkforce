@@ -2,14 +2,14 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 
 use agiworkforce_agent_core::context::{
-    compact_context, context_budget, estimate_context_tokens, format_summary_input,
     ContextCompactionConfig, ContextCompactionResult, ContextSummarizer, ContextUsageAnchor,
-    SummaryRequest, DEFAULT_SUMMARY_INSTRUCTION,
+    DEFAULT_SUMMARY_INSTRUCTION, SummaryRequest, compact_context, context_budget,
+    estimate_context_tokens, format_summary_input,
 };
 use agiworkforce_agent_core::{
-    run_turn, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
-    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
-    TurnParams, TurnPhase, MAX_AGENTIC_ITERATIONS,
+    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, MAX_AGENTIC_ITERATIONS,
+    Prepared, PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent,
+    TurnHost, TurnParams, TurnPhase, run_turn,
 };
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
@@ -86,8 +86,8 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
             None,
             Box::new(|_| {}),
             None,
-        None,
-    )
+            None,
+        )
         .await
         .context("context summarization failed")?;
         if let Ok(mut usage) = self.usage.lock() {
@@ -500,12 +500,9 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
-        // Complete a pending `/continue-with-byok` handoff only when this message
-        // carries the reviewed draft's BYOK preamble. This is the consent moment —
-        // an unrelated Local message does NOT flip the boundary, so it still blocks
-        // below. (Drafting alone must never leave Local mode.)
-        self.consume_byok_handoff(user_input);
-        self.consume_managed_handoff(user_input);
+        // Consent creates and adopts a new durable session before the reviewed
+        // prompt can leave Local mode. The source file/session stays untouched.
+        self.complete_pending_privacy_handoff(user_input)?;
         self.validate_privacy_boundary()?;
 
         // Auto sessions: classify this turn and re-resolve the route before
@@ -845,7 +842,7 @@ message -- revise and call `update_plan` again.\n\n",
                 let config_clone = config.clone();
                 // Local sessions must consolidate on-device only (no cloud egress).
                 let local_only = self.privacy_mode == super::PrivacyMode::Local;
-                tokio::spawn(async move {
+                let task = tokio::spawn(async move {
                     if let Err(e) = crate::memory_pipeline::MemoryPipeline::consolidate(
                         &home_clone,
                         &config_clone,
@@ -856,6 +853,7 @@ message -- revise and call `update_plan` again.\n\n",
                         eprintln!("[memory_pipeline] consolidation error: {}", e);
                     }
                 });
+                self.track_memory_consolidation(task);
             }
         }
 
@@ -923,8 +921,8 @@ message -- revise and call `update_plan` again.\n\n",
             None,
             on_chunk,
             None, // send_btw never uses extended thinking,
-        None,
-    )
+            None,
+        )
         .await?;
 
         Ok(result.text)
@@ -988,8 +986,8 @@ impl TurnHostAdapter<'_> {
                 Some(&self.tool_defs),
                 on_chunk,
                 self.session.thinking_budget_tokens,
-            self.session.effort,
-        )
+                self.session.effort,
+            )
             .await
         };
 
@@ -1032,8 +1030,8 @@ impl TurnHostAdapter<'_> {
                                 Some(&self.tool_defs),
                                 self.session.continuation_sink(),
                                 self.session.thinking_budget_tokens,
-                            self.session.effort,
-                        )
+                                self.session.effort,
+                            )
                             .await
                             {
                                 Ok(r) => recovered = Some(r),
@@ -1124,8 +1122,8 @@ impl TurnHostAdapter<'_> {
                                         Some(&self.tool_defs),
                                         self.session.continuation_sink(),
                                         self.session.thinking_budget_tokens,
-                                    self.session.effort,
-                                )
+                                        self.session.effort,
+                                    )
                                     .await
                                 };
                                 match fallback_call {
@@ -1164,8 +1162,8 @@ impl TurnHostAdapter<'_> {
             Some(&self.tool_defs),
             self.session.continuation_sink(),
             self.session.thinking_budget_tokens,
-        self.session.effort,
-    )
+            self.session.effort,
+        )
         .await
         {
             Ok(r) => r,
@@ -1195,8 +1193,8 @@ impl TurnHostAdapter<'_> {
                             Some(&self.tool_defs),
                             self.session.continuation_sink(),
                             self.session.thinking_budget_tokens,
-                        self.session.effort,
-                    )
+                            self.session.effort,
+                        )
                         .await?
                     } else {
                         return Err(e);
@@ -2060,7 +2058,10 @@ impl TurnHost for TurnHostAdapter<'_> {
         let loop_msg = format!(
             "  Warning: Detected {} identical consecutive tool calls ({}). Possible loop. [strike {}/2]",
             agiworkforce_agent_core::LOOP_DETECTION_THRESHOLD,
-            calls.first().map(|tc| tc.name.as_str()).unwrap_or("unknown"),
+            calls
+                .first()
+                .map(|tc| tc.name.as_str())
+                .unwrap_or("unknown"),
             strike
         );
         eprintln!("\n{}", ts::warning(&loop_msg));
@@ -2684,9 +2685,11 @@ mod tests {
         adapter.commit_tool_results(vec![block], 0).await;
         drop(adapter);
 
-        assert!(session.messages.iter().any(|message| message
-            .text_content()
-            .contains("Never mutate Rust without reviewing this rule.")));
+        assert!(session.messages.iter().any(|message| {
+            message
+                .text_content()
+                .contains("Never mutate Rust without reviewing this rule.")
+        }));
     }
 
     // -----------------------------------------------------------------------

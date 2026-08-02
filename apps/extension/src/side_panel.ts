@@ -5,9 +5,12 @@ import { getExtensionTokensCssAuto } from './tokens';
 import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
+  EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   normalizeModelId,
   PROVIDER_DISPLAY,
+  resolveModelEffort,
+  type Effort,
   type ProviderId,
   type RoutingTaskType,
 } from '@agiworkforce/types';
@@ -20,12 +23,13 @@ import {
   appendSvgString,
 } from './dom-helpers';
 import {
-  activateConversation,
   createBrowserConversationId,
+  filterConversations,
   getActiveConversation,
   getConversation,
   listConversations,
   deleteConversation,
+  persistConversationSeed,
   upsertConversation,
   startNewConversation,
   type ConversationEntry,
@@ -33,6 +37,8 @@ import {
 import {
   assignConversationOwner,
   claimConversationOwner,
+  claimSelectedConversationOwner,
+  restoreConversationOwnerIfCurrent,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import {
@@ -46,7 +52,7 @@ import { buildBubbleWithTools } from './features/side-panel/bubbles';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
-  projectCanonicalAgentActivity,
+  hydrateStoredChatMessage,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
@@ -56,6 +62,13 @@ import {
 import { setupVoiceInput } from './features/side-panel/voice';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
 import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
+import {
+  createActiveWebMCPPageIdentity,
+  isWebMCPUpdateHintForActivePage,
+  selectWebMCPToolsForActivePage,
+  type ActiveWebMCPPageIdentity,
+} from './features/side-panel/webmcp-tools';
+import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
 import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   FilePen,
@@ -102,7 +115,7 @@ import {
   type ContextHandoffPreviewController,
 } from './features/context-handoff';
 import {
-  getAuthToken,
+  getManagedCloudAuthContext,
   getManagedModelAccess,
   clearAuthToken,
   type ManagedModelAccess,
@@ -118,10 +131,18 @@ import {
   formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
+  getManagedEffortControlState,
+  getManagedOutboundEffort,
   getManagedModelPickerOptions,
   reconcileManagedModelSelection,
   type ManagedModelPickerOption,
 } from './features/cloud-bridge/managedModelPicker';
+import {
+  isManagedCloudBroadcastOwnedBy,
+  normalizeManagedCloudOwner,
+  sameManagedCloudOwner,
+  type ManagedCloudOwner,
+} from './features/cloud-bridge/managedCloudAuthority';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -149,6 +170,9 @@ let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async
 let refreshModelPickerUI: () => void = () => {
   /* no-op until buildUI() initialises the real implementation */
 };
+let refreshEffortUI: () => void = () => {
+  /* no-op until buildUI() initialises the real implementation */
+};
 
 /**
  * Load a stored conversation into the panel by id.
@@ -160,8 +184,16 @@ let refreshModelPickerUI: () => void = () => {
  * entry uses. Real implementation is installed by buildUI().
  */
 let openStoredConversation: (conversationId: string) => Promise<boolean> = async () => false;
+let historyRestoreInProgress = false;
+let historyRestoreToken = 0;
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
+const scheduledTasksRequestFence = new ManagedCloudOwnerRequestFence();
+const scheduledTaskCreateRequestFence = new ManagedCloudOwnerRequestFence();
+let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
+  /* no-op until buildUI() creates the Workflows form */
+};
+let initialCloudAccountRefresh: Promise<void> = Promise.resolve();
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
 type ManagedCloudGateAction =
   | 'none'
@@ -232,6 +264,7 @@ type ChatMessage = SidePanelChatMessage;
 
 interface ChatChunk {
   type: 'CHAT_CHUNK';
+  owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
   text: string;
@@ -244,6 +277,7 @@ interface ChatChunk {
     modelKey: string;
     taskType: RoutingTaskType;
     reason: string;
+    effort?: Effort;
   };
 }
 
@@ -270,9 +304,13 @@ export interface SharedSidePanelContext {
   conversationScope: string | null;
   /** Invalidates delayed boot/history continuations after the user changes state. */
   conversationGeneration: number;
+  /** Exact account/session incarnation that owns all visible Managed Cloud state. */
+  managedCloudOwner: ManagedCloudOwner | null;
   selectedModel: string;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
+  /** Conversation-scoped reasoning preference, validated against the routed model. */
+  reasoningEffort?: Effort;
 }
 
 function createSharedSidePanelContext(): SharedSidePanelContext {
@@ -290,6 +328,7 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     conversationId: createBrowserConversationId(),
     conversationScope: null,
     conversationGeneration: 0,
+    managedCloudOwner: null,
     selectedModel: 'auto',
   };
 }
@@ -311,6 +350,8 @@ async function getConversationScope(): Promise<string> {
 }
 
 function persistCurrentConversationOwner(): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
   const conversationId = _ctx.conversationId;
   const generation = _ctx.conversationGeneration;
   void getConversationScope()
@@ -318,7 +359,8 @@ function persistCurrentConversationOwner(): void {
       if (_ctx.conversationId !== conversationId || _ctx.conversationGeneration !== generation) {
         return;
       }
-      return assignConversationOwner(scope, conversationId);
+      if (!sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) return;
+      return assignConversationOwner(scope, owner, conversationId);
     })
     .catch((error) => {
       console.warn('[SidePanel] Failed to persist window conversation owner:', error);
@@ -339,19 +381,58 @@ const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
   'simple_chat',
 ]);
 
-function applyRoutingContinuation(routing: ChatChunk['routing']): void {
-  if (!routing) return;
+function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
+  if (!routing) return false;
   if (
     typeof routing.modelKey !== 'string' ||
     routing.modelKey.length === 0 ||
     routing.modelKey.length > 200 ||
-    !ROUTING_TASK_TYPES.has(routing.taskType)
+    !ROUTING_TASK_TYPES.has(routing.taskType) ||
+    typeof routing.reason !== 'string' ||
+    routing.reason.length === 0 ||
+    routing.reason.length > 500
   ) {
     console.warn('[SidePanel] Ignored malformed Managed Cloud routing metadata');
-    return;
+    return false;
   }
+  const nextEffort = resolveModelEffort(routing.modelKey, routing.effort);
+  if (routing.effort !== undefined && nextEffort !== routing.effort) {
+    console.warn('[SidePanel] Ignored unsupported Managed Cloud effort metadata');
+    return false;
+  }
+  const changed =
+    _ctx.currentModelKey !== routing.modelKey ||
+    _ctx.previousTaskType !== routing.taskType ||
+    _ctx.reasoningEffort !== nextEffort;
   _ctx.currentModelKey = routing.modelKey;
   _ctx.previousTaskType = routing.taskType;
+  _ctx.reasoningEffort = nextEffort;
+  refreshEffortUI();
+  return changed;
+}
+
+function managedOutboundEffortPayload(usePersistedSelection = false): { effort?: Effort } {
+  if (_ctx.quickMode && !usePersistedSelection) return {};
+  const routingSelection = _ctx.selectedModel;
+  const effort = getManagedOutboundEffort(
+    routingSelection,
+    _ctx.currentModelKey,
+    _ctx.reasoningEffort,
+  );
+  return effort === undefined ? {} : { effort };
+}
+
+function managedOutboundRoutingPayload(): {
+  effort?: Effort;
+  currentModelKey?: string;
+  previousTaskType?: RoutingTaskType;
+} {
+  if (_ctx.quickMode) return {};
+  return {
+    ...managedOutboundEffortPayload(),
+    ...(_ctx.currentModelKey ? { currentModelKey: _ctx.currentModelKey } : {}),
+    ...(_ctx.previousTaskType ? { previousTaskType: _ctx.previousTaskType } : {}),
+  };
 }
 
 // Provider display order in the grouped picker.
@@ -390,12 +471,18 @@ let recordingActionCount = 0;
  */
 const pendingAttachments: string[] = [];
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
+/** Snapshot request-only Quick state per stream; UI toggles may change mid-run. */
+const quickModeByStreamId = new Map<string, boolean>();
+/** Exact account/session incarnation captured when each stream was admitted. */
+const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 
 /**
  * Hostname of the active browser tab, shown in the persistent context chip.
  * Updated whenever the side panel receives focus or a tab-changed message.
  */
 let currentPageHostname = '';
+let activeWebMCPPage: ActiveWebMCPPageIdentity | null = null;
+let webMCPPageGeneration = 0;
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
 
@@ -408,9 +495,8 @@ function trimLiveMessages(): void {
   }
 }
 
-function saveMessages(): void {
-  persistCurrentConversationOwner();
-  const toSave = _ctx.messages
+function serializeMessagesForHistory() {
+  return _ctx.messages
     .filter((message) => !message.error)
     .slice(-MAX_STORED_MESSAGES)
     .map((message) => ({
@@ -429,59 +515,112 @@ function saveMessages(): void {
       ...(message.role === 'assistant' && message.cloudApprovalError
         ? { cloudApprovalError: message.cloudApprovalError }
         : {}),
+      ...(message.role === 'assistant' && message.managedQuickMode
+        ? { managedQuickMode: true }
+        : {}),
     }));
-  upsertConversation(_ctx.conversationId, toSave, {
+}
+
+function persistMessages(): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return Promise.resolve();
+  persistCurrentConversationOwner();
+  return upsertConversation(owner, _ctx.conversationId, serializeMessagesForHistory(), {
     selectedModel: _ctx.selectedModel,
     currentModelKey: _ctx.currentModelKey,
     previousTaskType: _ctx.previousTaskType,
-  }).catch((err) => {
+    effort: _ctx.reasoningEffort,
+  }).then(() => undefined);
+}
+
+function saveMessages(): void {
+  void persistMessages().catch((err) => {
     console.warn('[SidePanel] Failed to persist messages:', err);
   });
 }
 
 async function loadMessages(): Promise<void> {
+  const ownerAtStart = _ctx.managedCloudOwner;
+  if (!ownerAtStart) return;
   const expectedGeneration = _ctx.conversationGeneration;
   const scope = await getConversationScope();
-  if (_ctx.conversationGeneration !== expectedGeneration) return;
-  const lastActive = await getActiveConversation();
-  if (_ctx.conversationGeneration !== expectedGeneration) return;
-  const owner = await claimConversationOwner(scope, lastActive?.id);
-  if (_ctx.conversationGeneration !== expectedGeneration) return;
-  const ownedConversation = await getConversation(owner.conversationId);
-  if (_ctx.conversationGeneration !== expectedGeneration) return;
-  const active =
+  if (
+    _ctx.conversationGeneration !== expectedGeneration ||
+    !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+  )
+    return;
+  const lastActive = await getActiveConversation(ownerAtStart);
+  if (
+    _ctx.conversationGeneration !== expectedGeneration ||
+    !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+  )
+    return;
+  const conversationOwner = await claimConversationOwner(scope, ownerAtStart, lastActive?.id);
+  if (
+    _ctx.conversationGeneration !== expectedGeneration ||
+    !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+  )
+    return;
+  const ownedConversation = await getConversation(ownerAtStart, conversationOwner.conversationId);
+  if (
+    _ctx.conversationGeneration !== expectedGeneration ||
+    !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+  )
+    return;
+  let active =
     ownedConversation ??
-    (owner.seedConversationId && owner.seedConversationId === lastActive?.id
+    (conversationOwner.seedConversationId && conversationOwner.seedConversationId === lastActive?.id
       ? lastActive
       : undefined);
-  _ctx.conversationId = owner.conversationId;
+  _ctx.conversationId = conversationOwner.conversationId;
   if (!active) return;
+  if (
+    !ownedConversation &&
+    conversationOwner.seedConversationId &&
+    active.id === conversationOwner.seedConversationId
+  ) {
+    const persistedSeed = await persistConversationSeed(
+      ownerAtStart,
+      conversationOwner.conversationId,
+      active,
+    );
+    if (
+      _ctx.conversationGeneration !== expectedGeneration ||
+      !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+    )
+      return;
+    if (persistedSeed) active = persistedSeed;
+  }
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
   _ctx.currentModelKey = active.routing.currentModelKey;
   _ctx.previousTaskType = active.routing.previousTaskType;
+  const effortModel =
+    _ctx.selectedModel === 'auto' || _ctx.selectedModel.startsWith('auto-')
+      ? _ctx.currentModelKey
+      : _ctx.selectedModel;
+  _ctx.reasoningEffort = effortModel
+    ? resolveModelEffort(effortModel, active.routing.effort)
+    : undefined;
   refreshModelPickerUI();
+  refreshEffortUI();
   _ctx.messages.push(
-    ...active.messages.slice(-MAX_STORED_MESSAGES).map((message) => {
-      const agentEvents = message.agentEvents?.map((event) => ({ ...event }));
-      return {
-        id: `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
-        ...message,
-        ...(agentEvents
-          ? {
-              agentEvents,
-              agentActivity: projectCanonicalAgentActivity(agentEvents),
-            }
-          : {}),
-        ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
-        ...(message.cloudApprovalDecisions
-          ? { cloudApprovalDecisions: { ...message.cloudApprovalDecisions } }
-          : {}),
-        ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
-      };
-    }),
+    ...active.messages
+      .slice(-MAX_STORED_MESSAGES)
+      .map((message) =>
+        hydrateStoredChatMessage(
+          message,
+          `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
+        ),
+      ),
   );
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
+  resumeLatestStoredManagedRun(expectedGeneration);
+}
+
+function resumeLatestStoredManagedRun(expectedGeneration: number): void {
+  const ownerAtAdmission = _ctx.managedCloudOwner;
+  if (!ownerAtAdmission) return;
   const resumable = [..._ctx.messages]
     .reverse()
     .find(
@@ -495,22 +634,37 @@ async function loadMessages(): Promise<void> {
   if (resumable?.cloudAgentRun) {
     resumable.streaming = true;
     queueMicrotask(() => {
-      if (_ctx.conversationGeneration !== expectedGeneration || !resumable.cloudAgentRun) return;
-      resumeManagedCloudRun(resumable.id, resumable.cloudAgentRun, resumable.content);
+      if (
+        _ctx.conversationGeneration !== expectedGeneration ||
+        !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtAdmission) ||
+        !resumable.cloudAgentRun
+      )
+        return;
+      resumeManagedCloudRun(
+        resumable.id,
+        resumable.cloudAgentRun,
+        resumable.content,
+        resumable.managedQuickMode === true,
+      );
     });
   }
 }
 
 function clearStoredMessages(): void {
+  historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
   _ctx.conversationId = createBrowserConversationId();
   persistCurrentConversationOwner();
   _ctx.selectedModel = 'auto';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
+  _ctx.reasoningEffort = undefined;
   refreshModelPickerUI();
+  refreshEffortUI();
   chrome.storage.local.remove('agi_model').catch(() => {});
-  startNewConversation().catch((err) => {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
+  startNewConversation(owner).catch((err) => {
     console.warn('[SidePanel] Failed to clear stored messages:', err);
   });
 }
@@ -524,6 +678,67 @@ function resetConversationView(): void {
   updateContextButton();
   updateSendButton();
   renderMessages();
+}
+
+/**
+ * Revoke all renderer-owned Managed Cloud state before exposing a new Clerk
+ * account/session. The background is then told to abort every operation owned
+ * by the prior incarnation and cancel durable runs with their captured token.
+ */
+async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null): Promise<boolean> {
+  const previousOwner = _ctx.managedCloudOwner;
+  if (
+    (previousOwner === null && nextOwner === null) ||
+    sameManagedCloudOwner(previousOwner, nextOwner)
+  ) {
+    return false;
+  }
+
+  historyRestoreToken += 1;
+  _ctx.conversationGeneration += 1;
+  scheduledTasksRequestFence.invalidate();
+  scheduledTaskCreateRequestFence.invalidate();
+  resetScheduledTaskDraftForOwnerTransition();
+  clearWorkflowsTaskRows();
+  if (_ctx.currentStreamId) cancelCurrentManagedStream(false);
+  stopManagedChatKeepalive();
+  if (_ctx.streamTimeoutHandle) {
+    clearTimeout(_ctx.streamTimeoutHandle);
+    _ctx.streamTimeoutHandle = null;
+  }
+  _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  _ctx.messages.length = 0;
+  _ctx.lastRenderedCount = 0;
+  _ctx.needsMessageRebuild = true;
+  _ctx.isStreaming = false;
+  _ctx.currentStreamId = null;
+  _ctx.pendingPageContext = null;
+  _ctx.conversationId = createBrowserConversationId();
+  _ctx.selectedModel = 'auto';
+  _ctx.currentModelKey = undefined;
+  _ctx.previousTaskType = undefined;
+  _ctx.reasoningEffort = undefined;
+  cloudRunsByStreamId.clear();
+  quickModeByStreamId.clear();
+  ownerByStreamId.clear();
+  refreshModelPickerUI();
+  refreshEffortUI();
+  updateContextButton();
+  updateSendButton();
+  removeThinking();
+  renderMessages();
+
+  if (previousOwner) {
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'MANAGED_CLOUD_AUTH_CHANGED',
+        previousOwner,
+      });
+    } catch {
+      // A restarting service worker has no surviving in-memory operation map.
+    }
+  }
+  return true;
 }
 
 function injectStyles(): void {
@@ -1754,7 +1969,6 @@ function injectStyles(): void {
     #sp-quick-mode-toggle {
       display: inline-flex;
       align-items: center;
-      margin-left: auto;
       background: var(--agi-ext-overlay);
       border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
@@ -1775,6 +1989,75 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
     }
     #sp-quick-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
+    /* Catalog-driven reasoning effort. The popover opens upward so it remains
+       usable in the short side-panel composer. */
+    #sp-effort-control {
+      position: relative;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    #sp-effort-btn {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 12px;
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #sp-effort-btn:hover,
+    #sp-effort-btn[aria-expanded='true'] {
+      color: var(--agi-ext-accent);
+      border-color: var(--agi-ext-accent);
+    }
+    #sp-effort-btn[data-disabled='true'] { opacity: 0.72; }
+    #sp-effort-popover {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 7px);
+      z-index: 80;
+      display: none;
+      width: min(250px, calc(100vw - 24px));
+      padding: 11px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 10px;
+      background: var(--agi-ext-surface);
+      box-shadow: 0 10px 30px var(--agi-ext-modal-shadow);
+    }
+    #sp-effort-popover.open { display: block; }
+    .sp-effort-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    #sp-effort-value { color: var(--agi-ext-accent); }
+    #sp-effort-slider { width: 100%; accent-color: var(--agi-ext-accent); cursor: pointer; }
+    #sp-effort-slider:disabled { cursor: not-allowed; opacity: 0.45; }
+    #sp-effort-scale {
+      display: flex;
+      justify-content: space-between;
+      gap: 5px;
+      margin-top: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: 9px;
+    }
+    #sp-effort-description {
+      margin-top: 8px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
 
     /* ── Offline onboarding screen (BLOCKER-02b) ── */
     #sp-offline-onboarding {
@@ -2006,9 +2289,11 @@ function injectStyles(): void {
     .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
     .sp-wf-form-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
     .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-wf-form-save-btn:disabled { cursor: wait; opacity: 0.6; }
     .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger); font-size: 11px; line-height: 1.35; }
     .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
@@ -2427,6 +2712,24 @@ function injectStyles(): void {
       gap: 3px;
     }
     #sp-drawer-history-list[hidden] { display: none; }
+    #sp-drawer-history-search {
+      width: 100%;
+      margin-top: 7px;
+      padding: 7px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 7px;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: 11px;
+    }
+    #sp-drawer-history-search::placeholder { color: var(--agi-ext-text-muted); }
+    #sp-drawer-history-search:focus {
+      border-color: var(--agi-ext-accent);
+      outline: 2px solid color-mix(in srgb, var(--agi-ext-focus) 45%, transparent);
+      outline-offset: 1px;
+    }
+    #sp-drawer-history-search[hidden] { display: none; }
     .sp-drawer-history-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 2px; }
     .sp-drawer-history-item {
       display: flex;
@@ -3211,6 +3514,7 @@ function resolveManagedToolApproval(
     (message) => message.id === assistantMessageId && message.role === 'assistant',
   );
   const run = assistant?.cloudAgentRun;
+  const owner = _ctx.managedCloudOwner;
   const pendingCalls =
     assistant?.agentActivity?.entries.filter(
       (entry): entry is AgentActivityToolEntry =>
@@ -3222,6 +3526,7 @@ function resolveManagedToolApproval(
   if (
     !assistant ||
     !run ||
+    !owner ||
     _ctx.isStreaming ||
     !pendingCalls.some((entry) => entry.toolCallId === toolCallId)
   ) {
@@ -3249,6 +3554,7 @@ function resolveManagedToolApproval(
   }));
   assistant.streaming = true;
   _ctx.currentStreamId = assistant.id;
+  ownerByStreamId.set(assistant.id, { ...owner });
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
   armManagedStreamInactivityWatchdog(assistant.id);
@@ -3259,6 +3565,7 @@ function resolveManagedToolApproval(
   chrome.runtime.sendMessage(
     {
       type: 'RESOLVE_CHAT_APPROVAL',
+      owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: assistant.id,
       cloudRun: run,
@@ -3495,12 +3802,15 @@ function expandSlashCommand(
 }
 
 function requestStreamCancellation(streamId: string): void {
+  const owner = ownerByStreamId.get(streamId);
+  if (!owner) return;
   const cloudRun =
     cloudRunsByStreamId.get(streamId) ??
     _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
   chrome.runtime
     .sendMessage({
       type: 'CANCEL_STREAM',
+      owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
       ...(cloudRun ? { cloudRun } : {}),
@@ -3533,7 +3843,12 @@ function ensureManagedChatKeepalivePort(): chrome.runtime.Port | null {
         const assistant = _ctx.messages.find((message) => message.id === streamId);
         const cloudRun = cloudRunsByStreamId.get(streamId) ?? assistant?.cloudAgentRun;
         if (assistant && cloudRun) {
-          resumeManagedCloudRun(streamId, cloudRun, assistant.content);
+          resumeManagedCloudRun(
+            streamId,
+            cloudRun,
+            assistant.content,
+            assistant.managedQuickMode === true,
+          );
         } else {
           handleStreamError(streamId, 'The extension service restarted before the run was saved.');
         }
@@ -3559,8 +3874,12 @@ function startManagedChatKeepalive(): void {
   managedChatKeepaliveTimer = setInterval(sendHeartbeat, 20_000);
 }
 
-function beginManagedStream(): string {
+function beginManagedStream(quickMode: boolean): string {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) throw new Error('Managed Cloud authority is unavailable.');
   const streamId = `stream-${crypto.randomUUID()}`;
+  ownerByStreamId.set(streamId, { ...owner });
+  quickModeByStreamId.set(streamId, quickMode);
   _ctx.currentStreamId = streamId;
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
@@ -3584,13 +3903,18 @@ function resumeManagedCloudRun(
   streamId: string,
   cloudRun: ManagedCloudAgentRunReference,
   alreadyVisibleText: string,
+  quickMode = false,
 ): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
   if (_ctx.isStreaming && _ctx.currentStreamId && _ctx.currentStreamId !== streamId) return;
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return;
   assistant.streaming = true;
   assistant.cloudAgentRun = { ...cloudRun };
   cloudRunsByStreamId.set(streamId, { ...cloudRun });
+  ownerByStreamId.set(streamId, { ...owner });
+  quickModeByStreamId.set(streamId, quickMode);
   _ctx.currentStreamId = streamId;
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
@@ -3600,10 +3924,21 @@ function resumeManagedCloudRun(
   chrome.runtime.sendMessage(
     {
       type: 'RESUME_CHAT_RUN',
+      owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
       cloudRun,
       alreadyVisibleText,
+      ...(!quickMode && _ctx.currentModelKey && _ctx.previousTaskType
+        ? {
+            routing: {
+              modelKey: _ctx.currentModelKey,
+              taskType: _ctx.previousTaskType,
+              reason: 'durable_resume',
+              ...managedOutboundEffortPayload(true),
+            },
+          }
+        : {}),
     },
     (response: { success?: boolean; error?: string }) => {
       if (_ctx.currentStreamId !== streamId) return;
@@ -3627,6 +3962,8 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   if (streamId) {
     const existing = _ctx.messages.find((message) => message.id === streamId);
     if (existing) existing.streaming = false;
+    quickModeByStreamId.delete(streamId);
+    ownerByStreamId.delete(streamId);
   }
   removeThinking();
   _ctx.isStreaming = false;
@@ -3640,7 +3977,8 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
 
 function sendMessage(text: string): void {
   const prompt = resolveComposerPrompt(text, pendingAttachments.length);
-  if (!prompt || _ctx.isStreaming) return;
+  const owner = _ctx.managedCloudOwner;
+  if (!prompt || !owner || _ctx.isStreaming || historyRestoreInProgress) return;
   _ctx.conversationGeneration += 1;
 
   // Route through the shared priority send queue for backpressure /
@@ -3683,7 +4021,7 @@ function sendMessage(text: string): void {
     saveMessages();
     renderMessages();
 
-    const streamId = beginManagedStream();
+    const streamId = beginManagedStream(_ctx.quickMode);
 
     capturePageContext()
       .then((capturedCtx) => {
@@ -3695,6 +4033,7 @@ function sendMessage(text: string): void {
         chrome.runtime.sendMessage(
           {
             type: 'CHAT_MESSAGE',
+            owner,
             clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
             id: streamId,
             text: actualPrompt,
@@ -3706,8 +4045,7 @@ function sendMessage(text: string): void {
             extendedThinking: _ctx.thinkingEnabled || undefined,
             modelSelection: _ctx.selectedModel,
             quickMode: _ctx.quickMode || undefined,
-            currentModelKey: _ctx.currentModelKey,
-            previousTaskType: _ctx.previousTaskType,
+            ...managedOutboundRoutingPayload(),
           },
           (response?: { success?: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
@@ -3747,7 +4085,7 @@ function sendMessage(text: string): void {
   updateContextButton();
   updateAttachmentPreview();
 
-  const streamId = beginManagedStream();
+  const streamId = beginManagedStream(_ctx.quickMode);
 
   // Build conversation history (exclude the message we're about to send)
   const history = selectModelHistory(_ctx.messages, userMsg.id);
@@ -3755,6 +4093,7 @@ function sendMessage(text: string): void {
   chrome.runtime.sendMessage(
     {
       type: 'CHAT_MESSAGE',
+      owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
       text: userMsg.content,
@@ -3766,8 +4105,7 @@ function sendMessage(text: string): void {
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
       quickMode: _ctx.quickMode || undefined,
-      currentModelKey: _ctx.currentModelKey,
-      previousTaskType: _ctx.previousTaskType,
+      ...managedOutboundRoutingPayload(),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {
@@ -3816,6 +4154,9 @@ function retryFailedMessage(messageId: string): void {
 
 function handleStreamError(id: string, errorText: string): void {
   if (_ctx.currentStreamId !== id) return;
+  const streamUsedQuick = quickModeByStreamId.get(id) === true;
+  quickModeByStreamId.delete(id);
+  ownerByStreamId.delete(id);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -3832,10 +4173,15 @@ function handleStreamError(id: string, errorText: string): void {
   );
   if (existing && canRetryApproval) {
     existing.streaming = false;
+    if (streamUsedQuick) existing.managedQuickMode = true;
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
   } else {
     applyStreamFailure(_ctx.messages, id, errorText);
+  }
+  if (streamUsedQuick) {
+    const failedTurn = _ctx.messages.find((message) => message.id === id);
+    if (failedTurn) failedTurn.managedQuickMode = true;
   }
   trimLiveMessages();
   _ctx.isStreaming = false;
@@ -3927,7 +4273,7 @@ function updateSendButton(): void {
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
   } else {
-    btn.disabled = managedCloudChatState !== 'ready';
+    btn.disabled = managedCloudChatState !== 'ready' || historyRestoreInProgress;
     btn.setAttribute('data-mode', 'send');
     btn.title = 'Send';
     btn.setAttribute('aria-label', 'Send message');
@@ -4070,6 +4416,52 @@ function updateToolsButton(): void {
   }
 }
 
+function clearDiscoveredTools(): void {
+  if (discoveredTools.length === 0) return;
+  discoveredTools = [];
+  updateToolsButton();
+}
+
+function applyWebMCPToolsUpdate(message: unknown): boolean {
+  const tools = selectWebMCPToolsForActivePage(message, activeWebMCPPage);
+  if (!tools) return false;
+  discoveredTools = tools;
+  updateToolsButton();
+  return true;
+}
+
+function updateActivePageIdentity(tabId: unknown, url: string, forceInvalidate = false): void {
+  let nextIdentity = createActiveWebMCPPageIdentity(tabId, url, webMCPPageGeneration);
+  const identityChanged =
+    nextIdentity?.tabId !== activeWebMCPPage?.tabId || nextIdentity?.url !== activeWebMCPPage?.url;
+  if (forceInvalidate || identityChanged) {
+    webMCPPageGeneration += 1;
+    clearDiscoveredTools();
+    nextIdentity = createActiveWebMCPPageIdentity(tabId, url, webMCPPageGeneration);
+  }
+  activeWebMCPPage = nextIdentity;
+  currentPageHostname = pageChipLabel(url);
+  setBlockedState(isRestrictedUrl(url));
+  updateContextButton();
+}
+
+function refreshWebMCPToolsForActivePage(identity: ActiveWebMCPPageIdentity): void {
+  void chrome.runtime
+    .sendMessage({
+      type: 'WEBMCP_DISCOVER_TOOLS',
+      tabId: identity.tabId,
+      pageGeneration: identity.pageGeneration,
+    })
+    .then((response: unknown) => {
+      // The request may resolve after a tab switch/navigation. Attribution is
+      // rechecked against the current identity before anything is displayed.
+      applyWebMCPToolsUpdate(response);
+    })
+    .catch(() => {
+      // Restricted/unallowlisted pages legitimately have no content script.
+    });
+}
+
 function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = 'auto';
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
@@ -4131,14 +4523,14 @@ function setBlockedState(blocked: boolean): void {
  * Queries the active tab URL and updates the persistent context chip label.
  * Safe to call multiple times; falls back gracefully when tab API is unavailable.
  */
-function refreshPageHostname(): void {
+function refreshPageHostname(forceInvalidate = false): void {
   try {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (chrome.runtime.lastError) return;
-      const url = tabs[0]?.url ?? '';
-      currentPageHostname = pageChipLabel(url);
-      setBlockedState(isRestrictedUrl(url));
-      updateContextButton();
+      const tab = tabs[0];
+      const url = tab?.url ?? '';
+      updateActivePageIdentity(tab?.id, url, forceInvalidate);
+      if (activeWebMCPPage) refreshWebMCPToolsForActivePage(activeWebMCPPage);
     });
   } catch {
     // chrome.tabs unavailable in test/SSR environment — ignore
@@ -4697,10 +5089,15 @@ function buildUI(): void {
         _ctx.conversationGeneration += 1;
         _ctx.currentModelKey = undefined;
         _ctx.previousTaskType = undefined;
+        _ctx.reasoningEffort =
+          _ctx.quickMode || m.value === 'auto' || m.value.startsWith('auto-')
+            ? undefined
+            : resolveModelEffort(m.value, _ctx.reasoningEffort);
       }
       _ctx.selectedModel = m.value;
       updateModelBadge(m.value);
       renderModelDropdown();
+      refreshEffortUI();
       modelDropdownEl.classList.remove('open');
       modelSelectorBtn.classList.remove('open');
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
@@ -4810,6 +5207,7 @@ function buildUI(): void {
   refreshModelPickerUI = () => {
     updateModelBadge(_ctx.selectedModel);
     renderModelDropdown();
+    refreshEffortUI();
   };
   modelSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -4905,42 +5303,89 @@ function buildUI(): void {
       : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 
-  function restoreHistoryEntry(entry: ConversationEntry): void {
-    if (_ctx.isStreaming) return;
-    if (_ctx.streamTimeoutHandle) {
-      clearTimeout(_ctx.streamTimeoutHandle);
-      _ctx.streamTimeoutHandle = null;
-    }
-    _ctx.messages.length = 0;
-    _ctx.lastRenderedCount = 0;
-    _ctx.needsMessageRebuild = true;
-    _ctx.isStreaming = false;
-    _ctx.currentStreamId = null;
-    _ctx.pendingPageContext = null;
-    _ctx.conversationGeneration += 1;
-    // Continue the selected history as a window-owned branch. Another open
-    // side panel may be viewing the same source entry and must not overwrite it.
-    _ctx.conversationId = createBrowserConversationId();
-    persistCurrentConversationOwner();
-    _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
-    _ctx.currentModelKey = entry.routing.currentModelKey;
-    _ctx.previousTaskType = entry.routing.previousTaskType;
-    for (const hm of entry.messages) {
-      _ctx.messages.push({
-        id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
-        role: hm.role,
-        content: hm.content,
-        timestamp: hm.timestamp,
-      });
-    }
-    activateConversation(entry.id).catch((err) =>
-      console.warn('[SidePanel] failed to activate browser conversation:', err),
-    );
-    refreshModelPickerUI();
-    updateContextButton();
+  async function restoreHistoryEntry(conversationId: string): Promise<boolean> {
+    const ownerAtStart = _ctx.managedCloudOwner;
+    if (!ownerAtStart || _ctx.isStreaming || historyRestoreInProgress) return false;
+    const restoreToken = ++historyRestoreToken;
+    const restoreGeneration = _ctx.conversationGeneration;
+    const restoreIsCurrent = (): boolean =>
+      historyRestoreToken === restoreToken &&
+      _ctx.conversationGeneration === restoreGeneration &&
+      sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart) &&
+      !_ctx.isStreaming;
+    historyRestoreInProgress = true;
     updateSendButton();
-    renderMessages();
-    scrollToBottom();
+    try {
+      const entry = await getConversation(ownerAtStart, conversationId);
+      if (!entry || !restoreIsCurrent()) return false;
+      const scope = await getConversationScope();
+      if (!restoreIsCurrent()) return false;
+      const conversationOwner = await claimSelectedConversationOwner(scope, ownerAtStart, entry.id);
+      if (!restoreIsCurrent()) {
+        await restoreConversationOwnerIfCurrent(
+          scope,
+          ownerAtStart,
+          conversationOwner.conversationId,
+          _ctx.conversationId,
+        );
+        return false;
+      }
+      if (_ctx.streamTimeoutHandle) {
+        clearTimeout(_ctx.streamTimeoutHandle);
+        _ctx.streamTimeoutHandle = null;
+      }
+      _ctx.messages.length = 0;
+      _ctx.lastRenderedCount = 0;
+      _ctx.needsMessageRebuild = true;
+      _ctx.isStreaming = false;
+      _ctx.currentStreamId = null;
+      _ctx.pendingPageContext = null;
+      _ctx.conversationGeneration += 1;
+      // Opening history is a read. Adopt the selected id directly unless the
+      // atomic session-owner claim found another live window using it.
+      _ctx.conversationId = conversationOwner.conversationId;
+      _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
+      _ctx.currentModelKey = entry.routing.currentModelKey;
+      _ctx.previousTaskType = entry.routing.previousTaskType;
+      const effortModel =
+        _ctx.selectedModel === 'auto' || _ctx.selectedModel.startsWith('auto-')
+          ? _ctx.currentModelKey
+          : _ctx.selectedModel;
+      _ctx.reasoningEffort = effortModel
+        ? resolveModelEffort(effortModel, entry.routing.effort)
+        : undefined;
+      _ctx.messages.push(
+        ...entry.messages
+          .slice(-MAX_STORED_MESSAGES)
+          .map((message) =>
+            hydrateStoredChatMessage(
+              message,
+              `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
+            ),
+          ),
+      );
+      refreshModelPickerUI();
+      refreshEffortUI();
+      updateContextButton();
+      updateSendButton();
+      renderMessages();
+      scrollToBottom();
+      const expectedGeneration = _ctx.conversationGeneration;
+      if (conversationOwner.forked) {
+        try {
+          // A real cross-window collision owns a distinct durable branch so a
+          // panel reload cannot discard the in-memory copy.
+          await persistMessages();
+        } catch (err) {
+          console.warn('[SidePanel] failed to persist browser conversation branch:', err);
+        }
+      }
+      resumeLatestStoredManagedRun(expectedGeneration);
+      return true;
+    } finally {
+      historyRestoreInProgress = false;
+      updateSendButton();
+    }
   }
 
   // Install the module-scope hook so notification clicks, the boot sequence and
@@ -4948,9 +5393,8 @@ function buildUI(): void {
   // same restore path a history entry uses.
   openStoredConversation = async (conversationId: string): Promise<boolean> => {
     try {
-      const entry = await getConversation(conversationId);
-      if (!entry) return false;
-      restoreHistoryEntry(entry);
+      const restored = await restoreHistoryEntry(conversationId);
+      if (!restored) return false;
       // Restoring while Workflows or Computer Use is showing would put the
       // conversation behind whatever tab the click came from.
       switchTab('chat');
@@ -5048,15 +5492,28 @@ function buildUI(): void {
   // Styled via stylesheet classes, NOT element.style.cssText — the manifest's
   // style-src 'self' CSP blocks runtime cssText on extension pages.
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list', hidden: '' });
+  const drawerHistorySearch = el('input', {
+    id: 'sp-drawer-history-search',
+    type: 'search',
+    placeholder: 'Search recent chats',
+    'aria-label': 'Search recent chats',
+    maxlength: '200',
+    autocomplete: 'off',
+    hidden: '',
+  }) as HTMLInputElement;
+  let drawerHistoryEntries: ConversationEntry[] = [];
 
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
-    if (entries.length === 0) {
-      const empty = el('div', { class: 'sp-drawer-history-empty' }, 'No saved conversations');
+    const filteredEntries = filterConversations(entries, drawerHistorySearch.value);
+    if (filteredEntries.length === 0) {
+      const emptyLabel =
+        entries.length === 0 ? 'No saved conversations' : 'No matching conversations';
+      const empty = el('div', { class: 'sp-drawer-history-empty' }, emptyLabel);
       drawerHistoryList.appendChild(empty);
       return;
     }
-    for (const entry of entries) {
+    for (const entry of filteredEntries) {
       const item = el('div', { class: 'sp-drawer-history-item' });
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
@@ -5069,36 +5526,53 @@ function buildUI(): void {
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const deletingCurrentConversation = entry.id === _ctx.conversationId;
+        const deletionGeneration = _ctx.conversationGeneration;
         if (deletingCurrentConversation) cancelCurrentManagedStream(false);
-        deleteConversation(entry.id)
+        const owner = _ctx.managedCloudOwner;
+        if (!owner) return;
+        deleteConversation(owner, entry.id)
           .then(() => {
-            if (deletingCurrentConversation) {
+            if (
+              deletingCurrentConversation &&
+              _ctx.conversationId === entry.id &&
+              _ctx.conversationGeneration === deletionGeneration
+            ) {
               resetConversationView();
             }
           })
-          .then(() => listConversations())
-          .then((updated) => renderDrawerHistory(updated))
+          .then(() => refreshDrawerHistory())
           .catch((err) => console.warn('[SidePanel] history delete failed:', err));
       });
       item.appendChild(delBtn);
 
       item.addEventListener('click', () => {
-        restoreHistoryEntry(entry);
-        closeDrawer();
+        void restoreHistoryEntry(entry.id).finally(closeDrawer);
       });
       drawerHistoryList.appendChild(item);
     }
   }
 
+  async function refreshDrawerHistory(): Promise<void> {
+    const owner = _ctx.managedCloudOwner;
+    drawerHistoryEntries = owner ? await listConversations(owner) : [];
+    renderDrawerHistory(drawerHistoryEntries);
+  }
+
+  drawerHistorySearch.addEventListener('input', () => {
+    renderDrawerHistory(drawerHistoryEntries);
+  });
+
   drawerHistoryBtn.addEventListener('click', () => {
     const isHidden = drawerHistoryList.hasAttribute('hidden');
     if (isHidden) {
       drawerHistoryList.removeAttribute('hidden');
-      listConversations()
-        .then((entries) => renderDrawerHistory(entries))
+      drawerHistorySearch.removeAttribute('hidden');
+      refreshDrawerHistory()
+        .then(() => drawerHistorySearch.focus())
         .catch((err) => console.warn('[SidePanel] history list failed:', err));
     } else {
       drawerHistoryList.setAttribute('hidden', '');
+      drawerHistorySearch.setAttribute('hidden', '');
     }
   });
   chatActionsRow.appendChild(drawerHistoryBtn);
@@ -5106,10 +5580,10 @@ function buildUI(): void {
   historyBtn.addEventListener('click', () => {
     openDrawer(historyBtn);
     drawerHistoryList.removeAttribute('hidden');
-    listConversations()
-      .then((entries) => renderDrawerHistory(entries))
+    drawerHistorySearch.removeAttribute('hidden');
+    refreshDrawerHistory()
+      .then(() => drawerHistorySearch.focus())
       .catch((err) => console.warn('[SidePanel] history list failed:', err));
-    drawerHistoryBtn.focus();
   });
 
   // Summarize button
@@ -5142,6 +5616,7 @@ function buildUI(): void {
   chatActionsRow.appendChild(drawerClearChatBtn);
 
   chatActionsSection.appendChild(chatActionsRow);
+  chatActionsSection.appendChild(drawerHistorySearch);
   chatActionsSection.appendChild(drawerHistoryList);
   drawerBody.appendChild(chatActionsSection);
 
@@ -6079,17 +6554,25 @@ function buildUI(): void {
   // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
-    const [token, accountProfile] = await Promise.all([
-      getAuthToken(forceAuthRefresh),
+    const [authContext, accountProfile] = await Promise.all([
+      getManagedCloudAuthContext(forceAuthRefresh),
       getClerkAccountProfile().catch(() => null),
     ]);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    const token = authContext?.token ?? null;
+    const currentAccountProfile =
+      authContext && sameManagedCloudOwner(accountProfile?.owner, authContext.owner)
+        ? accountProfile
+        : null;
     if (!token) {
       // Signed out
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
+      _ctx.reasoningEffort = undefined;
       signinDescription.textContent = isClerkExtensionAuthConfigured()
         ? signInAwaitingCompletion
           ? 'Finish sign-in in the new tab, then click Check sign-in.'
@@ -6123,6 +6606,7 @@ function buildUI(): void {
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
+      _ctx.reasoningEffort = undefined;
       refreshModelPickerUI();
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
@@ -6130,6 +6614,7 @@ function buildUI(): void {
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof Error && error.message.includes('Authentication')) {
+        await transitionManagedCloudOwner(null);
         await clearAuthToken();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
         signinDescription.textContent = 'Your session expired. Sign in again to continue.';
@@ -6163,6 +6648,7 @@ function buildUI(): void {
       _ctx.selectedModel = reconciledSelection;
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
+      _ctx.reasoningEffort = undefined;
     }
     refreshModelPickerUI();
 
@@ -6171,9 +6657,10 @@ function buildUI(): void {
     signedInView.style.display = '';
     cloudLinkHint.style.display = '';
     cloudLinkRow.style.display = 'flex';
-    userLabelEl.textContent = accountProfile?.displayName ?? accountProfile?.email ?? 'AGI Account';
-    userLabelEl.title = accountProfile?.email ?? '';
-    avatarEl.textContent = accountProfile?.initials ?? 'A';
+    userLabelEl.textContent =
+      currentAccountProfile?.displayName ?? currentAccountProfile?.email ?? 'AGI Account';
+    userLabelEl.title = currentAccountProfile?.email ?? '';
+    avatarEl.textContent = currentAccountProfile?.initials ?? 'A';
     userTierEl.textContent = formatManagedTierLabel(
       access.accountPlanTier ?? access.subscriptionTier,
     );
@@ -6224,6 +6711,12 @@ function buildUI(): void {
       quotaBadgeEl.textContent = access.subscriptionTier.trim().toUpperCase();
       setManagedCloudChatState('ready');
       refreshPageHostname();
+      if (ownerChanged) {
+        refreshWorkflowsTasks();
+        await loadMessages();
+        if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+        renderMessages();
+      }
       return;
     }
 
@@ -6246,6 +6739,7 @@ function buildUI(): void {
 
   // Sign-out handler
   signoutBtn.addEventListener('click', async () => {
+    await transitionManagedCloudOwner(null);
     await clearAuthToken();
     await refreshCloudAccountUI();
   });
@@ -6271,7 +6765,7 @@ function buildUI(): void {
   }
 
   // Initial load
-  void refreshCloudAccountUI();
+  initialCloudAccountRefresh = refreshCloudAccountUI();
 
   drawer.appendChild(drawerBody);
 
@@ -6928,23 +7422,46 @@ function buildUI(): void {
     ntScheduleSelect.appendChild(el('option', { value: opt.value }, opt.label));
   }
   newTaskForm.appendChild(ntScheduleSelect);
+  const ntFormError = el('div', {
+    class: 'sp-wf-form-error',
+    id: 'sp-wf-nt-error',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  newTaskForm.appendChild(ntFormError);
   const ntFormActions = el('div', { class: 'sp-wf-form-actions' });
   const ntCancelBtn = el('button', { class: 'sp-wf-form-cancel-btn' }, 'Cancel');
-  const ntSaveBtn = el('button', { class: 'sp-wf-form-save-btn' }, 'Create Task');
+  const ntSaveBtn = el(
+    'button',
+    { class: 'sp-wf-form-save-btn', id: 'sp-wf-nt-save' },
+    'Create Task',
+  );
   ntFormActions.appendChild(ntCancelBtn);
   ntFormActions.appendChild(ntSaveBtn);
   newTaskForm.appendChild(ntFormActions);
   tasksSection.appendChild(newTaskForm);
   workflowsPanel.appendChild(tasksSection);
 
-  newTaskBtn.addEventListener('click', () => {
-    newTaskForm.classList.toggle('open');
-    if (newTaskForm.classList.contains('open')) ntNameInput.focus();
-  });
-  ntCancelBtn.addEventListener('click', () => {
+  const resetNewTaskForm = (): void => {
     newTaskForm.classList.remove('open');
     ntNameInput.value = '';
     ntPromptInput.value = '';
+    ntNameInput.style.borderColor = '';
+    ntPromptInput.style.borderColor = '';
+    ntFormError.textContent = '';
+    ntSaveBtn.removeAttribute('disabled');
+    ntSaveBtn.textContent = 'Create Task';
+  };
+  resetScheduledTaskDraftForOwnerTransition = resetNewTaskForm;
+
+  newTaskBtn.addEventListener('click', () => {
+    newTaskForm.classList.toggle('open');
+    ntFormError.textContent = '';
+    if (newTaskForm.classList.contains('open')) ntNameInput.focus();
+  });
+  ntCancelBtn.addEventListener('click', () => {
+    scheduledTaskCreateRequestFence.invalidate();
+    resetNewTaskForm();
   });
   ntSaveBtn.addEventListener('click', () => {
     const name = ntNameInput.value.trim();
@@ -6964,9 +7481,14 @@ function buildUI(): void {
       }
       return;
     }
+    ntFormError.textContent = '';
+    ntSaveBtn.setAttribute('disabled', 'true');
+    ntSaveBtn.textContent = 'Creating…';
+    const createRequest = scheduledTaskCreateRequestFence.begin(_ctx.managedCloudOwner);
     chrome.runtime.sendMessage(
       {
         type: 'CREATE_SCHEDULED_TASK',
+        ...(createRequest.owner ? { owner: createRequest.owner } : {}),
         task: {
           name,
           prompt,
@@ -6975,11 +7497,19 @@ function buildUI(): void {
           scheduleValue: '',
         },
       },
-      () => {
-        if (chrome.runtime.lastError) return;
-        ntNameInput.value = '';
-        ntPromptInput.value = '';
-        newTaskForm.classList.remove('open');
+      (response: { success?: boolean; error?: string } | undefined) => {
+        if (!scheduledTaskCreateRequestFence.isCurrent(createRequest, _ctx.managedCloudOwner)) {
+          return;
+        }
+        ntSaveBtn.removeAttribute('disabled');
+        ntSaveBtn.textContent = 'Create Task';
+        const runtimeError = chrome.runtime.lastError?.message;
+        if (runtimeError || response?.success !== true) {
+          ntFormError.textContent =
+            runtimeError || response?.error || 'The scheduled task could not be created.';
+          return;
+        }
+        resetNewTaskForm();
         refreshWorkflowsTasks();
       },
     );
@@ -7039,12 +7569,30 @@ function buildUI(): void {
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
-    if (m['type'] === 'AGI_CU_STEP') {
+    const runId = m['runId'];
+    const runGeneration =
+      typeof m['runGeneration'] === 'number' && Number.isSafeInteger(m['runGeneration'])
+        ? m['runGeneration']
+        : undefined;
+    if (m['type'] === 'AGI_CU_STATE') {
+      const status = m['status'];
+      if (status === 'running' && typeof runId === 'string' && runGeneration !== undefined) {
+        cuPanel.setRunState(true, runId, runGeneration);
+        switchTab('computer-use');
+      } else if (
+        (status === 'stopped' || status === 'completed' || status === 'error') &&
+        cuPanel.ownsRun(runId)
+      ) {
+        cuPanel.setRunState(false, runId as string);
+      }
+    } else if (m['type'] === 'AGI_CU_STEP') {
+      if (!cuPanel.ownsRun(runId)) return;
       const step = m['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0];
       cuPanel.appendStep(step);
       // Auto-switch to Computer Use tab when the agent starts
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_USAGE') {
+      if (!cuPanel.ownsRun(runId)) return;
       // Live step/token counts from the background agent loop. Guard the shape so
       // a malformed message can never render NaN into the usage meter.
       const usage = m['usage'] as Parameters<ComputerUsePanelAPI['updateUsageMeter']>[0];
@@ -7057,10 +7605,12 @@ function buildUI(): void {
         cuPanel.updateUsageMeter(usage);
       }
     } else if (m['type'] === 'AGI_CU_ESCALATE') {
+      if (!cuPanel.ownsRun(runId)) return;
       const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
       cuPanel.showHandoffBanner(reason);
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
+      if (!cuPanel.ownsRun(runId)) return;
       // Background is asking the panel to show an approval card for an action.
       // The panel resolves the card and replies with AGI_CU_APPROVE_RESPONSE.
       const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
@@ -7139,12 +7689,46 @@ function buildUI(): void {
         agi_cu_ask_before_acting: cuPanel.isAskBeforeActing(),
       });
 
-      // Ask background to start the CDP agent loop.
-      void chrome.runtime.sendMessage({
-        type: 'AGI_START_COMPUTER_USE',
-        goal,
-        tabId: activeTabId,
-      });
+      // Bind the pending admission to an exact run id before sending. Stop,
+      // Clear, and pagehide can now invalidate the start even while the worker
+      // is still awaiting tab/auth/storage checks.
+      const requestedRunId = `cu_run_${crypto.randomUUID()}`;
+      cuPanel.setRunState(true, requestedRunId);
+
+      let startResponse:
+        | { success?: boolean; runId?: string; runGeneration?: number; error?: string }
+        | undefined;
+      try {
+        startResponse = (await chrome.runtime.sendMessage({
+          type: 'AGI_START_COMPUTER_USE',
+          runId: requestedRunId,
+          goal,
+          tabId: activeTabId,
+        })) as typeof startResponse;
+      } catch (error) {
+        if (!cuPanel.ownsRun(requestedRunId)) return;
+        cuPanel.setRunState(false, requestedRunId);
+        cuPanel.showHandoffBanner(
+          error instanceof Error
+            ? error.message
+            : 'Computer use could not start. Please try again.',
+          'error',
+        );
+        return;
+      }
+
+      // A Stop/Clear/pagehide during admission tombstoned this exact intent.
+      // Its eventual response must not revive the controls or show a stale error.
+      if (!cuPanel.ownsRun(requestedRunId)) return;
+      if (startResponse?.success === true && startResponse.runId === requestedRunId) {
+        cuPanel.setRunState(true, startResponse.runId, startResponse.runGeneration);
+        return;
+      }
+      cuPanel.setRunState(false, requestedRunId);
+      cuPanel.showHandoffBanner(
+        startResponse?.error ?? 'Computer use could not start. Please try again.',
+        'error',
+      );
     })();
   });
 
@@ -7643,6 +8227,127 @@ function buildUI(): void {
 
   composerBar.appendChild(autonomyChip);
 
+  // ── Catalog-driven reasoning effort ─────────────────────────────────────
+  // Auto and Quick do not claim a provider effort ladder before the router has
+  // returned a concrete model. The control remains openable in that state so
+  // its disabled explanation is visible instead of presenting a dead mystery.
+  const effortControl = el('div', { id: 'sp-effort-control' });
+  const effortButton = el('button', {
+    id: 'sp-effort-btn',
+    type: 'button',
+    'aria-haspopup': 'dialog',
+    'aria-expanded': 'false',
+  }) as HTMLButtonElement;
+  const effortPopover = el('div', {
+    id: 'sp-effort-popover',
+    role: 'dialog',
+    'aria-label': 'Reasoning effort',
+    tabindex: '-1',
+  });
+  const effortHeading = el('div', { class: 'sp-effort-heading' });
+  effortHeading.appendChild(el('span', {}, 'Reasoning effort'));
+  const effortValue = el('span', { id: 'sp-effort-value' });
+  effortHeading.appendChild(effortValue);
+  const effortSlider = el('input', {
+    id: 'sp-effort-slider',
+    type: 'range',
+    min: '0',
+    max: '0',
+    step: '1',
+    value: '0',
+    'aria-label': 'Reasoning effort',
+  }) as HTMLInputElement;
+  const effortScale = el('div', { id: 'sp-effort-scale' });
+  const effortDescription = el('div', { id: 'sp-effort-description' });
+  effortPopover.appendChild(effortHeading);
+  effortPopover.appendChild(effortSlider);
+  effortPopover.appendChild(effortScale);
+  effortPopover.appendChild(effortDescription);
+  effortControl.appendChild(effortButton);
+  effortControl.appendChild(effortPopover);
+
+  function renderEffortControl(): void {
+    const routingSelection = _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel;
+    const state = getManagedEffortControlState(
+      routingSelection,
+      _ctx.quickMode ? undefined : _ctx.currentModelKey,
+      _ctx.reasoningEffort,
+    );
+    const ready = state.status === 'ready' && state.effort !== undefined;
+    const valueLabel = ready
+      ? EFFORT_LABEL[state.effort!]
+      : state.status === 'awaiting-route'
+        ? 'Auto'
+        : 'N/A';
+
+    effortButton.textContent = `Advanced · ${valueLabel}`;
+    effortButton.title = state.description;
+    effortButton.dataset['disabled'] = String(!ready);
+    effortButton.setAttribute(
+      'aria-label',
+      ready
+        ? `Reasoning effort: ${valueLabel}`
+        : `Reasoning effort unavailable. ${state.description}`,
+    );
+    effortValue.textContent = valueLabel;
+    effortDescription.textContent = state.description;
+    effortSlider.disabled = !ready;
+    effortSlider.min = '0';
+    effortSlider.max = String(Math.max(0, state.options.length - 1));
+    const selectedIndex = ready ? Math.max(0, state.options.indexOf(state.effort!)) : 0;
+    effortSlider.value = String(selectedIndex);
+    effortSlider.setAttribute('aria-valuemin', '0');
+    effortSlider.setAttribute('aria-valuemax', effortSlider.max);
+    effortSlider.setAttribute('aria-valuenow', String(selectedIndex));
+    effortSlider.setAttribute('aria-valuetext', valueLabel);
+    clearChildren(effortScale);
+    if (ready) {
+      const firstEffort = state.options[0];
+      const lastEffort = state.options[state.options.length - 1];
+      if (firstEffort) effortScale.appendChild(el('span', {}, EFFORT_LABEL[firstEffort]));
+      if (lastEffort && lastEffort !== firstEffort) {
+        effortScale.appendChild(el('span', {}, EFFORT_LABEL[lastEffort]));
+      }
+    } else {
+      effortScale.appendChild(el('span', {}, 'Available after a supported model is known'));
+    }
+  }
+
+  refreshEffortUI = renderEffortControl;
+  effortSlider.addEventListener('input', () => {
+    const routingSelection = _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel;
+    const state = getManagedEffortControlState(
+      routingSelection,
+      _ctx.quickMode ? undefined : _ctx.currentModelKey,
+      _ctx.reasoningEffort,
+    );
+    const selected = state.options[Number(effortSlider.value)];
+    if (!selected) return;
+    _ctx.reasoningEffort = selected;
+    renderEffortControl();
+    saveMessages();
+  });
+  effortButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = effortPopover.classList.toggle('open');
+    effortButton.setAttribute('aria-expanded', String(open));
+    if (open) (effortSlider.disabled ? effortPopover : effortSlider).focus();
+  });
+  effortPopover.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    effortPopover.classList.remove('open');
+    effortButton.setAttribute('aria-expanded', 'false');
+    effortButton.focus();
+  });
+  document.addEventListener('click', (event: MouseEvent) => {
+    if (effortControl.contains(event.target as Node)) return;
+    effortPopover.classList.remove('open');
+    effortButton.setAttribute('aria-expanded', 'false');
+  });
+  renderEffortControl();
+  composerBar.appendChild(effortControl);
+
   // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
     id: 'sp-quick-mode-toggle',
@@ -7655,6 +8360,7 @@ function buildUI(): void {
     _ctx.quickMode = active;
     quickModeToggle.setAttribute('data-active', active ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', active);
+    refreshEffortUI();
   });
   quickModeToggle.addEventListener('click', () => {
     const current = quickModeToggle.getAttribute('data-active') === 'true';
@@ -7662,16 +8368,19 @@ function buildUI(): void {
     _ctx.quickMode = next;
     quickModeToggle.setAttribute('data-active', next ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', next);
+    refreshEffortUI();
     chrome.runtime
       .sendMessage({ type: 'SET_QUICK_MODE', enabled: next })
       .then((response: { success?: boolean } | undefined) => {
         if (response?.success === true) return;
         _ctx.quickMode = current;
+        refreshEffortUI();
         quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
         quickModeToggle.classList.toggle('sp-quick-mode-active', current);
       })
       .catch((err: unknown) => {
         _ctx.quickMode = current;
+        refreshEffortUI();
         quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
         quickModeToggle.classList.toggle('sp-quick-mode-active', current);
         console.warn('[SidePanel] Failed to set quick mode:', err);
@@ -7987,7 +8696,8 @@ function refreshWorkflowsShortcuts(): void {
       }
       // A prompt shortcut's answer is filed under a shortcut-scoped
       // conversation. Only offer "View last result" where one actually exists.
-      void listConversations()
+      const owner = _ctx.managedCloudOwner;
+      void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
         .catch(() => [] as ConversationEntry[])
         .then((entries) => renderShortcutRows(list, shortcuts, new Set(entries.map((e) => e.id))));
     },
@@ -8077,8 +8787,9 @@ function renderShortcutRows(
 }
 
 function refreshWorkflowsTasks(): void {
+  const request = scheduledTasksRequestFence.begin(_ctx.managedCloudOwner);
   chrome.runtime.sendMessage(
-    { type: 'LIST_SCHEDULED_TASKS' },
+    { type: 'LIST_SCHEDULED_TASKS', ...(request.owner ? { owner: request.owner } : {}) },
     (
       response:
         | {
@@ -8094,6 +8805,7 @@ function refreshWorkflowsTasks(): void {
           }
         | undefined,
     ) => {
+      if (!scheduledTasksRequestFence.isCurrent(request, _ctx.managedCloudOwner)) return;
       if (chrome.runtime.lastError || !response?.success) return;
       const list = document.getElementById('sp-wf-tasks-list');
       const countBadge = document.getElementById('sp-wf-tasks-count');
@@ -8109,11 +8821,24 @@ function refreshWorkflowsTasks(): void {
       // Look up which of those exist so "View result" is only rendered when it
       // has something to open — an always-on button would be the dead control
       // this fix is closing.
-      void listConversations()
+      const owner = request.owner;
+      void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
         .catch(() => [] as ConversationEntry[])
-        .then((entries) => renderTaskRows(list, tasks, new Set(entries.map((e) => e.id))));
+        .then((entries) => {
+          if (!scheduledTasksRequestFence.isCurrent(request, _ctx.managedCloudOwner)) return;
+          renderTaskRows(list, tasks, new Set(entries.map((e) => e.id)), owner);
+        });
     },
   );
+}
+
+function clearWorkflowsTaskRows(): void {
+  const list = document.getElementById('sp-wf-tasks-list');
+  const countBadge = document.getElementById('sp-wf-tasks-count');
+  if (countBadge) countBadge.textContent = '0';
+  if (list) {
+    setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
+  }
 }
 
 function renderTaskRows(
@@ -8127,6 +8852,7 @@ function renderTaskRows(
     lastRun?: number;
   }>,
   storedConversationIds: ReadonlySet<string>,
+  owner: ManagedCloudOwner | null,
 ): void {
   clearChildren(list);
   for (const task of tasks) {
@@ -8141,6 +8867,7 @@ function renderTaskRows(
       chrome.runtime.sendMessage(
         {
           type: 'UPDATE_SCHEDULED_TASK',
+          ...(owner ? { owner } : {}),
           taskId: task.id,
           updates: { enabled: toggle.checked },
         },
@@ -8169,9 +8896,12 @@ function renderTaskRows(
     }
     const delBtn = iconButton({ class: 'sp-wf-task-delete', title: 'Delete task' }, Trash2);
     delBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
-        if (!chrome.runtime.lastError) refreshWorkflowsTasks();
-      });
+      chrome.runtime.sendMessage(
+        { type: 'DELETE_SCHEDULED_TASK', taskId: task.id, ...(owner ? { owner } : {}) },
+        () => {
+          if (!chrome.runtime.lastError) refreshWorkflowsTasks();
+        },
+      );
     });
     item.appendChild(delBtn);
     list.appendChild(item);
@@ -8184,24 +8914,29 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   // A completion notification for a scheduled task / shortcut was clicked while
   // this panel was already open. Open the conversation holding its answer.
   if (envelope.type === OPEN_BROWSER_CONVERSATION_MESSAGE) {
-    const request = msg as { conversationId?: unknown };
-    if (typeof request.conversationId === 'string' && request.conversationId.length > 0) {
+    const request = msg as { owner?: unknown; conversationId?: unknown };
+    const owner = normalizeManagedCloudOwner(request.owner);
+    if (
+      owner &&
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner) &&
+      typeof request.conversationId === 'string' &&
+      request.conversationId.length > 0
+    ) {
       void openStoredConversation(request.conversationId).then((opened) => {
         // The boot-time pointer is the fallback for a panel that was not yet
         // listening; consume it here so the result is not opened twice.
-        if (opened) void takePendingResultConversation();
+        if (opened) void takePendingResultConversation(owner);
       });
     }
     return;
   }
 
   if (envelope.type === 'WEBMCP_TOOLS_CHANGED') {
-    const toolsMsg = msg as { tools: WebMCPToolEntry[] };
-    discoveredTools = (toolsMsg.tools ?? []).map((t) => ({
-      name: t.name,
-      description: t.description,
-    }));
-    updateToolsButton();
+    // Background broadcasts are hints only. Re-discover with this panel's
+    // current navigation epoch so a delayed payload can never populate UI.
+    if (isWebMCPUpdateHintForActivePage(msg, activeWebMCPPage) && activeWebMCPPage) {
+      refreshWebMCPToolsForActivePage(activeWebMCPPage);
+    }
     return;
   }
 
@@ -8224,9 +8959,23 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
+  const chunkOwner = normalizeManagedCloudOwner(chunk.owner);
+  if (
+    !chunkOwner ||
+    !isManagedCloudBroadcastOwnedBy(
+      _ctx.managedCloudOwner,
+      ownerByStreamId.get(chunk.id),
+      chunkOwner,
+    )
+  )
+    return;
   if (chunk.clientInstanceId !== SIDE_PANEL_CLIENT_INSTANCE_ID) return;
   if (chunk.id !== _ctx.currentStreamId) return;
   armManagedStreamInactivityWatchdog(chunk.id);
+  const streamUsedQuick = quickModeByStreamId.get(chunk.id) === true;
+  // Quick is a request-only overlay. Its resolved economy route must not
+  // replace the conversation's durable Auto/manual route or effort.
+  if (!streamUsedQuick && applyRoutingContinuation(chunk.routing)) saveMessages();
 
   if (chunk.error) {
     // Cloud free-trial sentinels: show actionable UI instead of a generic error
@@ -8253,7 +9002,25 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.cloudRun) {
     cloudRunsByStreamId.set(chunk.id, { ...chunk.cloudRun });
     const existing = _ctx.messages.find((message) => message.id === chunk.id);
-    if (existing) existing.cloudAgentRun = { ...chunk.cloudRun };
+    if (existing) {
+      existing.cloudAgentRun = { ...chunk.cloudRun };
+      if (streamUsedQuick) existing.managedQuickMode = true;
+    } else {
+      // The gateway publishes its durable run handle before the first text
+      // frame. Persist an invisible placeholder immediately so closing the
+      // panel in that gap still leaves enough state to resume.
+      _ctx.messages.push({
+        id: chunk.id,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        timestamp: Date.now(),
+        cloudAgentRun: { ...chunk.cloudRun },
+        ...(streamUsedQuick ? { managedQuickMode: true } : {}),
+      });
+      trimLiveMessages();
+    }
+    saveMessages();
   }
 
   if (chunk.agentEvent) {
@@ -8271,6 +9038,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       before.cloudApprovalError = undefined;
     }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
+    if (streamUsedQuick) assistant.managedQuickMode = true;
     if (
       chunk.agentEvent.event.type === 'approval-resolved' &&
       !assistant.agentActivity?.entries.some(
@@ -8298,6 +9066,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       content: chunk.text,
       streaming: true,
       timestamp: Date.now(),
+      ...(streamUsedQuick ? { managedQuickMode: true } : {}),
       ...(cloudRunsByStreamId.get(chunk.id)
         ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
         : {}),
@@ -8308,10 +9077,17 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   } else {
     const existing = _ctx.messages.find((m) => m.id === chunk.id)!;
     existing.content += chunk.text;
-    updateStreamingBubble(chunk.id, existing.content, chunk.done);
+    if (document.getElementById(`sp-bubble-${chunk.id}`)) {
+      updateStreamingBubble(chunk.id, existing.content, chunk.done);
+    } else {
+      removeThinking();
+      renderMessages();
+    }
   }
 
   if (chunk.done) {
+    quickModeByStreamId.delete(chunk.id);
+    ownerByStreamId.delete(chunk.id);
     stopManagedChatKeepalive();
     if (_ctx.streamTimeoutHandle) {
       clearTimeout(_ctx.streamTimeoutHandle);
@@ -8324,7 +9100,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
     }
     cloudRunsByStreamId.delete(chunk.id);
-    applyRoutingContinuation(chunk.routing);
     removeThinking();
     _ctx.isStreaming = false;
     _ctx.currentStreamId = null;
@@ -8337,6 +9112,29 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 buildUI();
+chrome.tabs.onActivated?.addListener(() => {
+  refreshPageHostname(true);
+});
+chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
+  // When the current page is restricted its normalized identity is null. Keep
+  // querying this panel window on navigation so a later HTTP(S) page becomes
+  // discoverable; updates still cannot inject tools without an exact identity.
+  if (activeWebMCPPage && tabId !== activeWebMCPPage.tabId) return;
+  if (!activeWebMCPPage) {
+    if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
+      refreshPageHostname(changeInfo.url !== undefined);
+    }
+    return;
+  }
+  if (typeof changeInfo.url === 'string') {
+    // Clear the old page's tools synchronously; the follow-up query refreshes
+    // the exact active identity and asks that content script for its catalog.
+    updateActivePageIdentity(tabId, changeInfo.url, true);
+  }
+  if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
+    refreshPageHostname();
+  }
+});
 // Populate hostname chip as soon as UI is available
 refreshPageHostname();
 
@@ -8357,7 +9155,7 @@ void (async () => {
     void checkPendingContextHandoff();
     // Defer bridge status until onboarding carousel is dismissed.
     // probeBridgeStatus() is invoked by the onComplete callback in buildUI().
-    loadMessages()
+    initialCloudAccountRefresh
       .then(() => {
         if (_ctx.messages.length > 0) renderMessages();
       })
@@ -8366,7 +9164,7 @@ void (async () => {
   }
   // Onboarding already complete — normal boot.
   Promise.all([
-    loadMessages().then(() => {
+    initialCloudAccountRefresh.then(() => {
       if (_ctx.messages.length > 0) {
         renderMessages();
       }
@@ -8428,7 +9226,9 @@ async function probeBridgeStatus(): Promise<void> {
  * deleted, or aged out of the 30-day store) cannot re-fire on every boot.
  */
 async function checkPendingBackgroundResult(): Promise<void> {
-  const conversationId = await takePendingResultConversation();
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
+  const conversationId = await takePendingResultConversation(owner);
   if (!conversationId) return;
   await openStoredConversation(conversationId);
 }

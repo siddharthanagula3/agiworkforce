@@ -1253,7 +1253,6 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
     }
 }
 
-
 #[cfg(test)]
 mod protocol_era_tests {
     use super::*;
@@ -1275,10 +1274,12 @@ mod protocol_era_tests {
     /// Every other JSON-RPC error frame keeps its existing classification.
     #[test]
     fn test_other_jsonrpc_frames_stay_server_errors() {
-        let engine_err = agiworkforce_mcp::McpError::from(anyhow::anyhow!(
-            "MCP error -32601: Method not found"
+        let engine_err =
+            agiworkforce_mcp::McpError::from(anyhow::anyhow!("MCP error -32601: Method not found"));
+        assert!(matches!(
+            map_engine_error(engine_err),
+            McpError::RmcpError(_)
         ));
-        assert!(matches!(map_engine_error(engine_err), McpError::RmcpError(_)));
     }
 
     /// Transport faults are not protocol faults.

@@ -36,10 +36,12 @@ import {
   getRoutingSlotModel,
   MAX_ATTACHMENT_BYTES,
   parseManagedUsageSummaryResponse,
+  type Effort,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
-import { getFreshClerkToken, signOutClerk } from './clerkAuth';
+import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
+import type { ManagedCloudOwner } from './managedCloudAuthority';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,12 @@ export interface ManagedModelAccess {
   hasUsageRemaining?: boolean;
   modelIds: string[];
   allowedAutoModes: string[];
+}
+
+/** Token and non-secret owner are captured atomically and never separated. */
+export interface ManagedCloudAuthContext {
+  token: string;
+  owner: ManagedCloudOwner;
 }
 
 const MAX_MANAGED_MODEL_IDS = 200;
@@ -255,6 +263,47 @@ export async function getAuthToken(forceRefresh = false): Promise<string | null>
   return null;
 }
 
+async function developmentTokenOwner(token: string): Promise<ManagedCloudOwner> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  const fingerprint = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
+  return {
+    accountId: `development-${fingerprint}`,
+    authIncarnation: `development-${fingerprint}`,
+  };
+}
+
+/**
+ * Capture Managed Cloud authority once at operation admission.
+ *
+ * Production uses Clerk's user id + session id. The development-only manual
+ * token path derives a non-reversible local fingerprint so the raw credential
+ * is never persisted or placed on extension messages.
+ */
+export async function getManagedCloudAuthContext(
+  forceRefresh = false,
+): Promise<ManagedCloudAuthContext | null> {
+  try {
+    const context = await getFreshClerkAuthContext(forceRefresh);
+    if (context) return context;
+  } catch (error) {
+    if (forceRefresh) throw error;
+  }
+
+  if (!isDevBuild()) return null;
+  try {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) return null;
+    const local = await chrome.storage.local.get([DEV_TOKEN_KEY]);
+    const token = local[DEV_TOKEN_KEY];
+    if (typeof token !== 'string' || token.length === 0) return null;
+    return { token, owner: await developmentTokenOwner(token) };
+  } catch {
+    return null;
+  }
+}
+
 /** True only in dev/test Vite builds; false in production builds (tree-shaken). */
 function isDevBuild(): boolean {
   return Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV);
@@ -264,6 +313,26 @@ function isDevBuild(): boolean {
  * Sign out of Clerk and remove retired development/manual token remnants.
  */
 export async function clearAuthToken(): Promise<void> {
+  // Capture the exact owner before Clerk is cleared. Options-page sign-out has
+  // no side-panel transition hook, so the worker must tear down every stream,
+  // scheduled recovery, and browser-automation run for this incarnation first.
+  let previousOwner: ManagedCloudOwner | undefined;
+  try {
+    previousOwner = (await getManagedCloudAuthContext())?.owner;
+  } catch {
+    // Fall through to the ownerless computer-use cancellation below.
+  }
+  try {
+    if (typeof document !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage(
+        previousOwner
+          ? { type: 'MANAGED_CLOUD_AUTH_CHANGED', previousOwner }
+          : { type: 'CANCEL_COMPUTER_USE', reason: 'account_changed' },
+      );
+    }
+  } catch {
+    // A restarting worker has no surviving in-memory computer-use run.
+  }
   try {
     await signOutClerk();
   } catch {
@@ -452,14 +521,20 @@ export type FreeTrialChunk =
 export interface ManagedChatStreamOptions {
   /** Concrete canonical model selected by the shared router. */
   model?: string;
+  /** Effort already reconciled against the concrete routed model catalog. */
+  effort?: Effort;
   extendedThinking?: boolean;
   /** Paid Chrome agent mode. Chat remains available for non-agent transports. */
   workMode?: 'chat' | 'agiwork';
   /** Internal continuation body validated by the shared approval contract. */
   approvalResume?: ToolApprovalResumeRequest;
+  /** Retry-stable billing/run key required by the Managed Cloud route. */
+  idempotencyKey?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
+
+const MANAGED_CHAT_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return Boolean(
@@ -701,6 +776,15 @@ export async function* streamFreeChat(
 ): AsyncGenerator<FreeTrialChunk> {
   const options = normalizeStreamOptions(optionsOrSignal);
   const model = (options.model ?? FREE_TRIAL_MODEL).trim();
+  const idempotencyKey = options.idempotencyKey?.trim() ?? `agi.chrome.chat.${crypto.randomUUID()}`;
+  if (!MANAGED_CHAT_IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    yield {
+      type: 'error',
+      message: 'The Managed Cloud request identity is invalid.',
+      code: 'protocol_error',
+    };
+    return;
+  }
   if (!token.trim()) {
     yield { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
     return;
@@ -783,6 +867,7 @@ export async function* streamFreeChat(
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'Idempotency-Key': idempotencyKey,
           'X-Requested-With': 'XMLHttpRequest',
           'X-AGI-Surface': 'chrome',
         },
@@ -793,6 +878,7 @@ export async function* streamFreeChat(
             stream: true,
             ...(options.workMode ? { work_mode: options.workMode } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),
+            ...(options.effort ? { effort: options.effort } : {}),
           },
         ),
         signal: controller.signal,
@@ -824,7 +910,6 @@ export async function* streamFreeChat(
       }
 
       if (response.status === 401) {
-        await clearAuthToken();
         yield {
           type: 'error',
           message: 'Sign in to use AGI Cloud chat.',

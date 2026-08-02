@@ -6,6 +6,46 @@ use std::path::{Path, PathBuf};
 pub const NATIVE_MESSAGING_HOST_NAME: &str = "com.agiworkforce.browser";
 pub const DEFAULT_BROWSER_EXTENSION_IDS: &[&str] = &["bblfoadbknbnmbchfjpgcefpkccpdnfc"];
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ManifestInstallOutcome {
+    Installed(Vec<PathBuf>),
+    SkippedTestHarness,
+}
+
+fn is_test_harness_bundle_identifier(bundle_identifier: &str) -> bool {
+    bundle_identifier
+        .split('.')
+        .any(|component| component.eq_ignore_ascii_case("wdio"))
+}
+
+fn install_manifests_for_bundle_identifier_with<F>(
+    bundle_identifier: &str,
+    extension_id: Option<&str>,
+    installer: F,
+) -> Result<ManifestInstallOutcome>
+where
+    F: FnOnce(Option<&str>) -> Result<Vec<PathBuf>>,
+{
+    if is_test_harness_bundle_identifier(bundle_identifier) {
+        return Ok(ManifestInstallOutcome::SkippedTestHarness);
+    }
+
+    installer(extension_id).map(ManifestInstallOutcome::Installed)
+}
+
+/// Install browser native-host manifests only for a normal application bundle.
+///
+/// WDIO runs the real Desktop binary under a separate bundle identifier, but
+/// Chrome and Edge manifests live in browser-global user directories. Letting
+/// that harness execute the normal startup installer would therefore replace a
+/// user's persistent production registration with the repository's debug host.
+pub fn install_manifests_for_bundle_identifier(
+    bundle_identifier: &str,
+    extension_id: Option<&str>,
+) -> Result<ManifestInstallOutcome> {
+    install_manifests_for_bundle_identifier_with(bundle_identifier, extension_id, install_manifests)
+}
+
 pub fn is_valid_chrome_extension_id(extension_id: &str) -> bool {
     extension_id.len() == 32 && extension_id.bytes().all(|byte| matches!(byte, b'a'..=b'p'))
 }
@@ -776,6 +816,43 @@ mod tests {
         let json = manifest.to_json().unwrap();
         assert!(json.contains("com.test.host"));
         assert!(json.contains("chrome-extension://abcdefghijklmnop/"));
+    }
+
+    #[test]
+    fn test_harness_bundle_skips_browser_global_manifest_installation() {
+        let mut installer_called = false;
+
+        let outcome = install_manifests_for_bundle_identifier_with(
+            "com.agiworkforce.desktop.wdio",
+            None,
+            |_| {
+                installer_called = true;
+                Ok(vec![PathBuf::from("should-not-be-written.json")])
+            },
+        )
+        .unwrap();
+
+        assert_eq!(outcome, ManifestInstallOutcome::SkippedTestHarness);
+        assert!(!installer_called);
+    }
+
+    #[test]
+    fn test_production_bundle_keeps_browser_manifest_installation() {
+        let expected_path = PathBuf::from("com.agiworkforce.browser.json");
+        let mut installer_called = false;
+
+        let outcome =
+            install_manifests_for_bundle_identifier_with("com.agiworkforce.desktop", None, |_| {
+                installer_called = true;
+                Ok(vec![expected_path.clone()])
+            })
+            .unwrap();
+
+        assert!(installer_called);
+        assert_eq!(
+            outcome,
+            ManifestInstallOutcome::Installed(vec![expected_path])
+        );
     }
 
     #[cfg(target_os = "macos")]

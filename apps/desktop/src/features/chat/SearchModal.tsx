@@ -19,7 +19,12 @@ import type { ConversationSummary } from '../../stores/chat/types';
 import type { Project } from '../../stores/projectStore';
 import type { ArtifactSummary } from '../../stores/artifactStore';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
-import { CLOUD_API_BASE_URL, cloudFetch } from '../../api/cloudApi';
+import { CLOUD_API_BASE_URL } from '../../api/cloudApi';
+import {
+  createManagedCloudRequestContext,
+  type ManagedCloudRequestContext,
+} from '../../services/managedCloudRequestContext';
+import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +40,14 @@ interface SearchResult {
   /** Payload for navigation on select */
   payload: ConversationSummary | Project | LibraryItem | ArtifactSummary;
 }
+
+interface LibrarySearchState {
+  requestKey: string;
+  items: LibraryItem[];
+  error: string | null;
+}
+
+const EMPTY_LIBRARY_ITEMS: LibraryItem[] = [];
 
 // ─── Timestamp helper ─────────────────────────────────────────────────────────
 
@@ -83,8 +96,7 @@ export function SearchModal() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
-  const [librarySearchError, setLibrarySearchError] = useState<string | null>(null);
+  const [librarySearch, setLibrarySearch] = useState<LibrarySearchState | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
@@ -97,40 +109,86 @@ export function SearchModal() {
   const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
   const openArtifactPanel = useArtifactStore((s) => s.openPanel);
   const privacyMode = useAppModeStore(selectPrivacyMode);
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
+  const cloudAccountId = useAuthStore((state) => state.user?.id ?? null);
+  const cloudSessionEpoch = useAuthStore((state) => state.cloudSessionEpoch);
+  const normalizedLibraryQuery = query.trim();
+  const libraryRequestKey =
+    isOpen &&
+    privacyMode === 'managed' &&
+    hasCloudAccountSession &&
+    cloudAccountId &&
+    normalizedLibraryQuery &&
+    ['all', 'files'].includes(filter)
+      ? JSON.stringify([cloudAccountId, cloudSessionEpoch, filter, normalizedLibraryQuery])
+      : null;
+  const activeLibrarySearch =
+    librarySearch?.requestKey === libraryRequestKey ? librarySearch : null;
+  const libraryItems = activeLibrarySearch?.items ?? EMPTY_LIBRARY_ITEMS;
+  const librarySearchError = activeLibrarySearch?.error ?? null;
 
   useEffect(() => {
-    const normalized = query.trim();
-    if (privacyMode !== 'managed' || !normalized || !['all', 'files'].includes(filter)) {
-      setLibraryItems([]);
-      setLibrarySearchError(null);
-      return;
-    }
+    setLibrarySearch(null);
+    if (!libraryRequestKey) return;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams({ q: normalized, limit: '10', offset: '0' });
-      void cloudFetch(`${CLOUD_API_BASE_URL}/api/library?${params.toString()}`, {
-        signal: controller.signal,
-      })
-        .then(async (response) => {
+      void (async () => {
+        let request: ManagedCloudRequestContext | undefined;
+        try {
+          request = createManagedCloudRequestContext('Managed Cloud library search');
+          const headers = await request.getHeaders();
+          if (controller.signal.aborted) return;
+          const params = new URLSearchParams({
+            q: normalizedLibraryQuery,
+            limit: '10',
+            offset: '0',
+          });
+          const response = await request.fetch(
+            `${CLOUD_API_BASE_URL}/api/library?${params.toString()}`,
+            {
+              credentials: 'include',
+              headers,
+              signal: controller.signal,
+            },
+          );
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const parsed = LibraryListResponseSchema.safeParse(await response.json());
           if (!parsed.success) throw new Error('Library returned an invalid response.');
-          setLibraryItems(parsed.data.items);
-          setLibrarySearchError(null);
-        })
-        .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === 'AbortError') return;
-          setLibraryItems([]);
-          setLibrarySearchError(
-            error instanceof Error ? error.message : 'Library search could not be completed.',
-          );
-        });
+          if (controller.signal.aborted) return;
+          request.assertBoundary();
+          setLibrarySearch({
+            requestKey: libraryRequestKey,
+            items: parsed.data.items,
+            error: null,
+          });
+        } catch (error: unknown) {
+          if (
+            controller.signal.aborted ||
+            (error instanceof DOMException && error.name === 'AbortError')
+          ) {
+            return;
+          }
+          if (request) {
+            try {
+              request.assertBoundary();
+            } catch {
+              return;
+            }
+          }
+          setLibrarySearch({
+            requestKey: libraryRequestKey,
+            items: [],
+            error:
+              error instanceof Error ? error.message : 'Library search could not be completed.',
+          });
+        }
+      })();
     }, 250);
     return () => {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [filter, privacyMode, query]);
+  }, [libraryRequestKey, normalizedLibraryQuery]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -212,7 +270,9 @@ export function SearchModal() {
         : [];
 
     const libraryResults: SearchResult[] =
-      privacyMode === 'managed' && (filter === 'all' || filter === 'files')
+      privacyMode === 'managed' &&
+      hasCloudAccountSession &&
+      (filter === 'all' || filter === 'files')
         ? libraryItems.map((item) => ({
             id: `library-${item.id}`,
             type: 'library' as const,
@@ -234,7 +294,16 @@ export function SearchModal() {
     }
 
     return [...chatResults, ...projectResults, ...libraryResults, ...artifactResults];
-  }, [query, filter, conversations, projects, summaries, privacyMode, libraryItems]);
+  }, [
+    query,
+    filter,
+    conversations,
+    projects,
+    summaries,
+    privacyMode,
+    hasCloudAccountSession,
+    libraryItems,
+  ]);
 
   // Group results by type for display
   const groupedResults = useMemo(() => {

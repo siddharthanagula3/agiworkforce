@@ -1,14 +1,20 @@
 import { EventEmitter } from 'node:events';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
 
 function fakeRuntime(
-  protocolVersion = 6,
+  protocolVersion = 7,
   options: {
     approvals?: boolean;
     ignoreMethods?: readonly string[];
     legacyInitialize?: boolean;
+    omitTranscriptTruncated?: boolean;
+    provider?: string;
+    serverVersion?: string;
+    exitOnShutdown?: boolean;
+    shutdownResult?: unknown;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -21,6 +27,7 @@ function fakeRuntime(
   const stderr = new PassThrough();
   const requests: Array<Record<string, unknown>> = [];
   const children: EventEmitter[] = [];
+  let activeChild: EventEmitter | undefined;
   let buffer = '';
 
   stdin.on('data', (chunk: Buffer) => {
@@ -42,7 +49,11 @@ function fakeRuntime(
                 capabilities: { streaming: true, tools: true },
               }
             : {
-                serverInfo: { name: 'agiworkforce-app-server', title: 'AGI', version: '0.1.0' },
+                serverInfo: {
+                  name: 'agiworkforce-app-server',
+                  title: 'AGI',
+                  version: options.serverVersion ?? '1.7.1',
+                },
                 protocolVersion,
                 capabilities: {
                   threads: true,
@@ -63,6 +74,8 @@ function fakeRuntime(
                   title: 'Test',
                   model: 'model-1',
                   cwd: '/workspace',
+                  provider: options.provider ?? 'anthropic',
+                  trustMode: 'byok',
                   createdAt: '2026-07-14T00:00:00Z',
                   updatedAt: '2026-07-14T00:00:00Z',
                   createdBy: 'vscode',
@@ -84,6 +97,8 @@ function fakeRuntime(
                         title: 'Test',
                         model: 'model-1',
                         cwd: '/workspace',
+                        provider: options.provider ?? 'anthropic',
+                        trustMode: 'byok',
                         createdAt: '2026-07-14T00:00:00Z',
                         updatedAt: '2026-07-14T00:00:00Z',
                         createdBy: 'vscode',
@@ -98,17 +113,27 @@ function fakeRuntime(
                         title: 'Test',
                         model: 'model-1',
                         cwd: '/workspace',
+                        provider: options.provider ?? 'anthropic',
+                        trustMode: 'byok',
                         createdAt: '2026-07-14T00:00:00Z',
                         updatedAt: '2026-07-14T00:00:00Z',
                         createdBy: 'vscode',
                         status: 'idle',
                       },
                       messages: [{ role: 'user', text: 'Fix it' }],
+                      ...(options.omitTranscriptTruncated === true
+                        ? {}
+                        : { transcriptTruncated: false }),
                     }
                   : method === 'turn/start' || method === 'turn/steer'
                     ? { turn: { id: 'turn-1', threadId: 'thread-1', status: 'running' } }
-                    : { acknowledged: true };
+                    : method === 'shutdown' && options.shutdownResult !== undefined
+                      ? options.shutdownResult
+                      : { acknowledged: true };
       stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
+      if (method === 'shutdown' && options.exitOnShutdown !== false) {
+        setImmediate(() => activeChild?.emit('exit', 0, null));
+      }
     }
   });
 
@@ -124,6 +149,7 @@ function fakeRuntime(
     child.stderr = stderr;
     child.kill = vi.fn(() => true);
     children.push(child);
+    activeChild = child;
     return child;
   }) as unknown as SpawnLocalRuntime;
 
@@ -142,12 +168,43 @@ describe('LocalRuntimeClient', () => {
       spawn: runtime.spawn,
     });
 
-    await expect(client.initialize()).rejects.toThrow('version 6 or newer is required');
-    client.dispose();
+    await expect(client.initialize()).rejects.toThrow('requires exactly protocol 7');
+    await client.dispose();
   });
 
+  it('rejects a future protocol until the extension explicitly supports it', async () => {
+    const runtime = fakeRuntime(8);
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(
+      'uses developer-session protocol 8; this extension requires exactly protocol 7',
+    );
+    await client.dispose();
+  });
+
+  it.each(['1.7.0', '1.7.1-beta.1', '0.1.0', 'not-semver'])(
+    'rejects an incompatible owning CLI version %s even when protocol 7 is claimed',
+    async (serverVersion) => {
+      const runtime = fakeRuntime(7, { serverVersion });
+      const client = new LocalRuntimeClient({
+        cliPath: 'agi',
+        cwd: '/workspace',
+        clientVersion: '0.3.0',
+        spawn: runtime.spawn,
+      });
+
+      await expect(client.initialize()).rejects.toThrow('version 1.7.1 or newer is required');
+      await client.dispose();
+    },
+  );
+
   it('rejects a runtime that cannot carry approval decisions', async () => {
-    const runtime = fakeRuntime(6, { approvals: false });
+    const runtime = fakeRuntime(7, { approvals: false });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -156,11 +213,11 @@ describe('LocalRuntimeClient', () => {
     });
 
     await expect(client.initialize()).rejects.toThrow('required developer-session protocol');
-    client.dispose();
+    await client.dispose();
   });
 
   it('gives an actionable upgrade error for the legacy CLI handshake', async () => {
-    const runtime = fakeRuntime(6, { legacyInitialize: true });
+    const runtime = fakeRuntime(7, { legacyInitialize: true });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -171,7 +228,7 @@ describe('LocalRuntimeClient', () => {
     await expect(client.initialize()).rejects.toThrow(
       'Update the AGI CLI or set agiWorkforce.cliPath to a current binary',
     );
-    client.dispose();
+    await client.dispose();
   });
 
   it('launches the configured CLI in the workspace and uses typed thread/turn methods', async () => {
@@ -204,11 +261,11 @@ describe('LocalRuntimeClient', () => {
       expect.arrayContaining([expect.objectContaining({ jsonrpc: '2.0', id: expect.any(Number) })]),
     );
     expect(turn.id).toBe('turn-1');
-    client.dispose();
+    await client.dispose();
   });
 
   it('surfaces a standard null-id JSON-RPC parse error from the runtime', async () => {
-    const runtime = fakeRuntime(6, { ignoreMethods: ['initialize'] });
+    const runtime = fakeRuntime(7, { ignoreMethods: ['initialize'] });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -230,7 +287,7 @@ describe('LocalRuntimeClient', () => {
       code: -32700,
       message: 'Parse error',
     });
-    client.dispose();
+    await client.dispose();
   });
 
   it('forwards streamed notifications and rejects server errors', async () => {
@@ -251,7 +308,7 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(notifications).toEqual(['turn/output_delta']);
 
-    client.dispose();
+    await client.dispose();
   });
 
   it('validates developer-session events before exposing them to UI code', async () => {
@@ -277,7 +334,7 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(deltas).toEqual(['ok']);
-    client.dispose();
+    await client.dispose();
   });
 
   it('exposes canonical progress and tool execution events and ignores malformed envelopes', async () => {
@@ -378,7 +435,7 @@ describe('LocalRuntimeClient', () => {
       { type: 'tool_execution_end', id: 'tool-1' },
       { type: 'progress_update', id: 'turn-work' },
     ]);
-    client.dispose();
+    await client.dispose();
   });
 
   it('emits MCP lifecycle status and ignores unrelated notifications without closing the stream', async () => {
@@ -408,7 +465,7 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(events).toEqual(['mcp_status', 'mcp_status', 'output_delta']);
-    client.dispose();
+    await client.dispose();
   });
 
   it('exposes interrupted turns as terminal runtime events', async () => {
@@ -427,7 +484,7 @@ describe('LocalRuntimeClient', () => {
     );
     await new Promise((resolve) => setImmediate(resolve));
     expect(events).toEqual(['turn_interrupted']);
-    client.dispose();
+    await client.dispose();
   });
 
   it('routes steering, cancellation, and approvals through the same runtime', async () => {
@@ -458,7 +515,7 @@ describe('LocalRuntimeClient', () => {
       'approval/respond',
       'turn/interrupt',
     ]);
-    client.dispose();
+    await client.dispose();
   });
 
   it('reads and archives runtime-owned thread history', async () => {
@@ -476,14 +533,44 @@ describe('LocalRuntimeClient', () => {
 
     expect(page.threads).toHaveLength(1);
     expect(history.messages).toEqual([{ role: 'user', text: 'Fix it' }]);
+    expect(history.transcriptTruncated).toBe(false);
     expect(runtime.requests.map((request) => request.method)).toEqual([
       'initialize',
       'thread/list',
       'thread/read',
       'thread/archive',
     ]);
-    client.dispose();
+    await client.dispose();
   });
+
+  it('rejects thread history that omits the protocol-v7 truncation signal', async () => {
+    const runtime = fakeRuntime(7, { omitTranscriptTruncated: true });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.readThread('thread-1')).rejects.toThrow();
+    await client.dispose();
+  });
+
+  it.each([`${'p'.repeat(201)}`, 'anthropic\nspoofed'])(
+    'rejects unsafe provider metadata from runtime IPC',
+    async (provider) => {
+      const runtime = fakeRuntime(7, { provider });
+      const client = new LocalRuntimeClient({
+        cliPath: 'agi',
+        cwd: '/workspace',
+        clientVersion: '0.3.0',
+        spawn: runtime.spawn,
+      });
+
+      await expect(client.listThreads({ cwd: '/workspace' })).rejects.toThrow();
+      await client.dispose();
+    },
+  );
 
   it('discovers local model ids and providers through the shared runtime', async () => {
     const runtime = fakeRuntime();
@@ -501,7 +588,7 @@ describe('LocalRuntimeClient', () => {
       ],
     });
     expect(runtime.requests.map((request) => request.method)).toEqual(['initialize', 'model/list']);
-    client.dispose();
+    await client.dispose();
   });
 
   it('resumes a persisted thread through the runtime owner', async () => {
@@ -520,7 +607,7 @@ describe('LocalRuntimeClient', () => {
       'initialize',
       'thread/resume',
     ]);
-    client.dispose();
+    await client.dispose();
   });
 
   it('launches a replacement app-server after the workspace process exits', async () => {
@@ -538,7 +625,69 @@ describe('LocalRuntimeClient', () => {
 
     expect(page.threads).toHaveLength(1);
     expect(runtime.spawn).toHaveBeenCalledTimes(2);
-    client.dispose();
+    await client.dispose();
+  });
+
+  it('restarts the owned process in place and waits for the current CLI path to initialize', async () => {
+    const runtime = fakeRuntime();
+    let cliPath = '/opt/agi/bin/agi-old';
+    const client = new LocalRuntimeClient({
+      cliPath: () => cliPath,
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    await client.initialize();
+    cliPath = '/opt/agi/bin/agi-current';
+
+    await client.restart();
+
+    expect(runtime.spawn).toHaveBeenNthCalledWith(
+      1,
+      '/opt/agi/bin/agi-old',
+      ['app-server'],
+      expect.any(Object),
+    );
+    expect(runtime.spawn).toHaveBeenNthCalledWith(
+      2,
+      '/opt/agi/bin/agi-current',
+      ['app-server'],
+      expect.any(Object),
+    );
+    expect(runtime.requests.map((request) => request.method)).toEqual([
+      'initialize',
+      'shutdown',
+      'initialize',
+    ]);
+    await client.dispose();
+  });
+
+  it('preserves existing event subscriptions across an in-place restart', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const output = vi.fn();
+    client.onEvent((event) => {
+      if (event.type === 'output_delta') output(event.delta);
+    });
+    await client.initialize();
+
+    await client.restart();
+    runtime.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'turn/output_delta',
+        params: { threadId: 'thread-1', turnId: 'turn-1', delta: 'after restart' },
+      })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(output).toHaveBeenCalledWith('after restart');
+    await client.dispose();
   });
 
   it('notifies active UI adapters when the app-server disconnects', async () => {
@@ -583,21 +732,72 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('force-terminates a runtime that does not acknowledge shutdown', async () => {
-    const runtime = fakeRuntime(6, { ignoreMethods: ['shutdown'] });
+    const runtime = fakeRuntime(7, { ignoreMethods: ['shutdown'] });
+    const terminateProcessTree = vi.fn(async (child: ChildProcessWithoutNullStreams) => {
+      child.emit('exit', null, 'SIGKILL');
+    });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
       spawn: runtime.spawn,
+      terminateProcessTree,
     });
     await client.initialize();
     vi.useFakeTimers();
 
-    client.dispose();
-    await vi.advanceTimersByTimeAsync(1_000);
+    const disposing = client.dispose();
+    await vi.advanceTimersByTimeAsync(7_000);
+    await disposing;
 
-    const child = runtime.children[0] as EventEmitter & { kill: ReturnType<typeof vi.fn> };
-    expect(child.kill).toHaveBeenCalledOnce();
+    expect(terminateProcessTree).toHaveBeenCalledOnce();
+  });
+
+  it('validates the shutdown acknowledgment before trusting a graceful exit', async () => {
+    const runtime = fakeRuntime(7, {
+      exitOnShutdown: false,
+      shutdownResult: { acknowledged: 'yes' },
+    });
+    const terminateProcessTree = vi.fn(async (child: ChildProcessWithoutNullStreams) => {
+      child.emit('exit', null, 'SIGKILL');
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+      terminateProcessTree,
+    });
+    await client.initialize();
+
+    await client.dispose();
+
+    expect(terminateProcessTree).toHaveBeenCalledOnce();
+  });
+
+  it('does not finish graceful disposal until the acknowledged child actually exits', async () => {
+    const runtime = fakeRuntime(7, { exitOnShutdown: false });
+    const terminateProcessTree = vi.fn(async () => undefined);
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+      terminateProcessTree,
+    });
+    await client.initialize();
+    let settled = false;
+
+    const disposing = client.dispose().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(settled).toBe(false);
+    expect(terminateProcessTree).not.toHaveBeenCalled();
+    runtime.children[0]?.emit('exit', 0, null);
+    await disposing;
+    expect(settled).toBe(true);
   });
 
   it('notifies active UI adapters synchronously when configuration disposes the client', async () => {
@@ -614,8 +814,9 @@ describe('LocalRuntimeClient', () => {
     });
     await client.initialize();
 
-    client.dispose();
+    const disposing = client.dispose();
 
-    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('restarted'));
+    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('restarting'));
+    await disposing;
   });
 });

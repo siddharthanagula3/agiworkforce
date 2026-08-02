@@ -718,6 +718,19 @@
           "default": true,
           "description": "Enable streaming responses from AGI Workforce API"
         },
+        "agiWorkforce.composer.followUpBehavior": {
+          "type": "string",
+          "enum": [
+            "queue",
+            "steer"
+          ],
+          "enumDescriptions": [
+            "Queue messages sent during an active turn and start them in order after that turn finishes.",
+            "Steer the active turn with messages sent while it is running; conflicts visibly fall back to the next-turn queue."
+          ],
+          "default": "queue",
+          "description": "Default behavior when sending from the composer during an active developer turn. Cmd/Ctrl+Enter uses the other behavior for one message."
+        },
         "agiWorkforce.contextLines": {
           "type": "number",
           "default": 50,
@@ -955,12 +968,14 @@
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
+    "package": "pnpm run clean && node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "verify:package": "node scripts/verify-vsix.mjs",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",
     "test:integration": "tsc -p tsconfig.test.json && node esbuild.js && node out/test/runTests.js",
+    "test:integration:vsix": "tsc -p tsconfig.test.json && node out/test/runTests.js",
+    "test:integration:package": "pnpm run package && tsc -p tsconfig.test.json && node out/test/runTests.js --vsix-package",
     "typecheck": "tsc --noEmit",
     "check:refs": "tsc -b tsconfig.build.json",
     "clean": "rimraf out",
@@ -995,6 +1010,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.7.1",
+    "@zip.js/zip.js": "2.8.26",
     "esbuild": "^0.27.4",
     "eslint": "^9.39.4",
     "glob": "^10.5.0",

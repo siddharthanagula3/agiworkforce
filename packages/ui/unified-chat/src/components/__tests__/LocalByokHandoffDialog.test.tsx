@@ -114,4 +114,22 @@ describe('LocalByokHandoffDialog target labelling', () => {
       (screen.getByRole('button', { name: 'Attach these files' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  it('does not present a zero-finding all-clear when selected binary bytes were unscanned', () => {
+    render(
+      <LocalByokHandoffDialog
+        open
+        onOpenChange={vi.fn()}
+        preview={preview()}
+        isBuilding={false}
+        onConfirm={vi.fn()}
+        target="managed"
+        unscannedContextCount={2}
+      />,
+    );
+
+    expect(screen.getByText('2 selected files were not content-scanned')).toBeTruthy();
+    expect(screen.getByText('Ready with scan limits disclosed')).toBeTruthy();
+    expect(screen.queryByText('Ready for confirmation')).toBeNull();
+  });
 });

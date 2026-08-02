@@ -189,8 +189,14 @@ mod tests {
         view.handle_key(KeyAction::Enter);
         match view.take_result() {
             Some(crate::tui::widgets::interactive::OverlayResult::SkillsDisabled(names)) => {
-                assert!(names.contains(&"web-search".to_string()), "just-disabled skill included");
-                assert!(names.contains(&"code-review".to_string()), "already-disabled skill included");
+                assert!(
+                    names.contains(&"web-search".to_string()),
+                    "just-disabled skill included"
+                );
+                assert!(
+                    names.contains(&"code-review".to_string()),
+                    "already-disabled skill included"
+                );
             }
             other => panic!("expected SkillsDisabled after save, got {other:?}"),
         }

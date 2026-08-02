@@ -74,7 +74,10 @@ pub(super) fn inject_mcp_server_instructions(
         multimodal_content: None,
     });
 
-    info!("[Chat] Injected usage guidance from {} MCP server(s)", count);
+    info!(
+        "[Chat] Injected usage guidance from {} MCP server(s)",
+        count
+    );
 }
 
 /// Load relevant project memories and inject them as a system message into the LLM context.

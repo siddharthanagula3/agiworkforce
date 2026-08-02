@@ -6,6 +6,7 @@ import {
   AgentEventEnvelopeSchema,
   AgentTaskStateSchema,
   CloudAgentRunSchema,
+  ManagedCloudAgentRunRequestIdSchema,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
   type CloudAgentWorkMode,
@@ -455,11 +456,13 @@ export async function listCloudAgentRuns(
   input: {
     userId: string;
     states: AgentTaskState[];
+    requestId?: string;
     before?: CloudAgentRunCursor;
     limit?: number;
   },
 ): Promise<CloudAgentRunList> {
   const states = z.array(AgentTaskStateSchema).min(1).max(9).parse(input.states);
+  const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(input.requestId);
   const before = input.before
     ? z.object({ updatedAt: z.string().datetime(), id: z.string().uuid() }).parse(input.before)
     : null;
@@ -468,10 +471,18 @@ export async function listCloudAgentRuns(
     `select * from public.cloud_agent_runs
       where user_id = $1
         and state = any($2::text[])
-        and ($3::timestamptz is null or (updated_at, id) < ($3::timestamptz, $4::uuid))
+        and ($3::text is null or request_id = $3)
+        and ($4::timestamptz is null or (updated_at, id) < ($4::timestamptz, $5::uuid))
       order by updated_at desc, id desc
-      limit $5`,
-    [input.userId, states, before?.updatedAt ?? null, before?.id ?? null, limit + 1],
+      limit $6`,
+    [
+      input.userId,
+      states,
+      requestId ?? null,
+      before?.updatedAt ?? null,
+      before?.id ?? null,
+      limit + 1,
+    ],
   );
   const pageRows = rows.slice(0, limit);
   const lastRow = pageRows.at(-1);

@@ -11,7 +11,7 @@ use crate::mcp;
 use crate::memory::{self, MemoryManager};
 use crate::models::ToolDefinition;
 use crate::models::{self, Message, Provider};
-use crate::runtime::session::ManagedSession;
+use crate::runtime::session::{ManagedSession, ManagedSessionRoutingAuthority};
 use crate::skills;
 use crate::subagent;
 use crate::teams;
@@ -22,8 +22,10 @@ mod history;
 mod prompt;
 mod tools;
 
+pub use crate::runtime::session::PrivacyMode;
 pub use executor::ToolCall;
 pub use prompt::assemble_system_prompt;
+pub(crate) use prompt::encode_untrusted_context;
 
 // ---------------------------------------------------------------------------
 // Tool definitions (native API JSON Schema) — test-only helpers
@@ -169,13 +171,10 @@ pub struct AgentSession {
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub privacy_mode: PrivacyMode,
-    /// Armed by `/continue-with-byok` (stores the draft's BYOK preamble). The
-    /// Local→BYOK transition fires only when the user sends a message carrying
-    /// that preamble — drafting alone never leaves Local mode.
-    pub pending_byok_handoff: Option<String>,
-    /// Armed by `/continue-with-cloud`; consumed only when the reviewed draft
-    /// itself is sent, exactly like the BYOK handoff gate.
-    pub pending_managed_handoff: Option<String>,
+    /// A reviewed Local→cloud continuation that has been drafted but not sent.
+    /// The source durable session remains authoritative until the reviewed
+    /// draft is sent and a new persisted fork has been adopted.
+    pending_privacy_handoff: Option<PendingPrivacyHandoff>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
     /// Rules discovered for this workspace. Unconditional rules are included
@@ -188,6 +187,12 @@ pub struct AgentSession {
     pub debug_mode: bool,
     pub(crate) subagent_manager: Option<subagent::SubagentManager>,
     pub(crate) team_manager: Option<teams::TeamManager>,
+    /// Post-turn memory consolidation work owned by this session.
+    ///
+    /// The app-server drains these handles during interrupt/shutdown so an old
+    /// runtime cannot keep issuing provider requests or writing memory after
+    /// its shutdown acknowledgment.
+    memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
     /// When false this session must never write managed-session state — not the
@@ -243,40 +248,23 @@ pub struct TurnResult {
     pub via_subscription: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PrivacyMode {
-    Local,
-    Byok,
-    Managed,
+#[derive(Debug, Clone)]
+struct PendingPrivacyHandoff {
+    reviewed_payload: String,
+    destination: PrivacyMode,
+    source_session_id: Option<String>,
+    source_session_path: Option<PathBuf>,
+    destination_model: String,
+    destination_provider: String,
+    destination_auto_routing: Option<crate::runtime::session::ManagedSessionAutoRouting>,
 }
 
-impl PrivacyMode {
-    pub fn label(self) -> &'static str {
-        match self {
-            PrivacyMode::Local => "local",
-            PrivacyMode::Byok => "byok",
-            PrivacyMode::Managed => "managed",
-        }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            PrivacyMode::Local => "no prompt, chat, or file context should leave this device",
-            PrivacyMode::Byok => {
-                "selected context may be sent directly to the user's configured provider key"
-            }
-            PrivacyMode::Managed => "selected context may be sent through AGI managed cloud",
-        }
-    }
-
-    pub fn from_arg(arg: &str) -> Option<Self> {
-        match arg.trim().to_ascii_lowercase().as_str() {
-            "local" | "offline" | "device" => Some(PrivacyMode::Local),
-            "byok" | "cloud-byok" | "provider" => Some(PrivacyMode::Byok),
-            "managed" | "agi" | "agi-cloud" | "cloud" => Some(PrivacyMode::Managed),
-            _ => None,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivacyHandoffCompletion {
+    pub source_session_id: String,
+    pub destination_session_id: String,
+    pub destination: PrivacyMode,
+    pub provider: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -589,8 +577,7 @@ impl AgentSession {
             allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
-            pending_byok_handoff: None,
-            pending_managed_handoff: None,
+            pending_privacy_handoff: None,
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
             workspace_rules: rules,
@@ -598,6 +585,7 @@ impl AgentSession {
             debug_mode: false,
             subagent_manager: None,
             team_manager: None,
+            memory_consolidation_tasks: Vec::new(),
             managed_session: None,
             managed_session_path: None,
             session_persistence: crate::cli_options::session_persistence_enabled(),
@@ -730,9 +718,25 @@ impl AgentSession {
                     model
                 )
             })?;
+        let current_provider_mode = self.provider_privacy_mode();
+        if current_provider_mode != self.privacy_mode && self.privacy_mode != PrivacyMode::Local {
+            anyhow::bail!(
+                "Cannot switch models while the session's {} privacy authority conflicts with its {} provider route",
+                self.privacy_mode.label(),
+                current_provider_mode.label()
+            );
+        }
+        let next_provider_mode = provider_privacy_mode(&next_provider);
+        if self.privacy_mode != PrivacyMode::Local && next_provider_mode != self.privacy_mode {
+            anyhow::bail!(
+                "Model '{}' routes through {} mode, but this established session is {}; start a new session instead of carrying its transcript across trust boundaries",
+                model,
+                next_provider_mode.label(),
+                self.privacy_mode.label()
+            );
+        }
         self.model = model.to_string();
         self.provider = next_provider;
-        self.adopt_provider_privacy_mode();
         Ok(())
     }
 
@@ -740,6 +744,19 @@ impl AgentSession {
     /// preserving the managed trust/billing boundary instead of inferring the
     /// upstream vendor from the model id.
     pub fn switch_managed_model(&mut self, model: &str) -> Result<()> {
+        let already_managed = self.privacy_mode == PrivacyMode::Managed
+            && self.provider_privacy_mode() == PrivacyMode::Managed;
+        let fresh_session = self.turn_count == 0
+            && self.messages.len() <= 1
+            && self.attached_context_files.is_empty()
+            && self.additional_context_dirs.is_empty()
+            && self.pending_image_blocks.is_empty();
+        if !already_managed && !fresh_session {
+            anyhow::bail!(
+                "Cannot carry an established {} transcript into Managed Cloud; start a fresh Managed session or use a reviewed continuation",
+                self.privacy_mode.label()
+            );
+        }
         if !crate::models::gateway_models::cached_model_is_available(model) {
             anyhow::bail!(
                 "model '{}' is not in the live managed gateway catalog; run `agi models list` and choose an available Cloud model",
@@ -748,7 +765,7 @@ impl AgentSession {
         }
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
-        self.adopt_provider_privacy_mode();
+        self.set_privacy_mode(PrivacyMode::Managed);
         Ok(())
     }
 
@@ -909,9 +926,11 @@ impl AgentSession {
 
     /// Override the provider from config.
     pub fn set_provider_override(&mut self, provider_name: &str) {
-        if let Some(p) = models::provider_from_name(provider_name) {
-            self.provider = p;
-            self.adopt_provider_privacy_mode();
+        if let Some(provider) = models::provider_from_name(provider_name) {
+            let provider_mode = provider_privacy_mode(&provider);
+            if self.privacy_mode == PrivacyMode::Local || provider_mode == self.privacy_mode {
+                self.provider = provider;
+            }
         }
     }
 
@@ -940,51 +959,154 @@ impl AgentSession {
         provider_privacy_mode(&self.provider)
     }
 
-    /// Arm an explicit `/continue-with-byok` handoff. Records the draft's BYOK
-    /// preamble so the Local→BYOK transition can be completed only when the user
-    /// actually sends a message carrying that preamble. Arming never changes the
-    /// privacy mode — drafting is not consent.
-    pub fn arm_byok_handoff(&mut self, draft: &str) {
-        let token = draft.lines().next().unwrap_or("").trim().to_string();
-        self.pending_byok_handoff = (!token.is_empty()).then_some(token);
-        self.pending_managed_handoff = None;
-    }
-
-    /// Complete an armed BYOK handoff iff `user_input` carries the reviewed
-    /// draft's BYOK preamble (the consent moment). An unrelated Local message
-    /// leaves the boundary intact and the flag armed. Returns true if the
-    /// Local→BYOK transition fired.
-    pub fn consume_byok_handoff(&mut self, user_input: &str) -> bool {
-        let matched = self
-            .pending_byok_handoff
-            .as_deref()
-            .is_some_and(|token| user_input.trim_start().starts_with(token));
-        if matched {
-            self.pending_byok_handoff = None;
-            self.set_privacy_mode(self.provider_privacy_mode());
+    fn arm_privacy_handoff(&mut self, draft: &str, destination: PrivacyMode) -> Result<()> {
+        if self.privacy_mode != PrivacyMode::Local {
+            anyhow::bail!("Only a Local session can create a reviewed cloud continuation");
         }
-        matched
-    }
-
-    /// Arm a Local→Managed Cloud continuation without changing the boundary.
-    pub fn arm_managed_handoff(&mut self, draft: &str) {
-        let token = draft.lines().next().unwrap_or("").trim().to_string();
-        self.pending_managed_handoff = (!token.is_empty()).then_some(token);
-        self.pending_byok_handoff = None;
-    }
-
-    /// Complete a reviewed Local→Managed Cloud continuation only when the
-    /// exact draft preamble is sent. Unrelated input remains Local and blocked.
-    pub fn consume_managed_handoff(&mut self, user_input: &str) -> bool {
-        let matched = self
-            .pending_managed_handoff
-            .as_deref()
-            .is_some_and(|token| user_input.trim_start().starts_with(token));
-        if matched {
-            self.pending_managed_handoff = None;
-            self.set_privacy_mode(PrivacyMode::Managed);
+        if destination == PrivacyMode::Local || self.provider_privacy_mode() != destination {
+            anyhow::bail!(
+                "Selected provider routes through {} mode, not {} mode",
+                self.provider_privacy_mode().label(),
+                destination.label()
+            );
         }
-        matched
+        if !self.session_persistence {
+            anyhow::bail!(
+                "A reviewed continuation requires session persistence so the Local source can remain unchanged"
+            );
+        }
+        let source_session_id = self.managed_session_id().map(str::to_string);
+        let source_session_path = self.managed_session_path.clone();
+        if source_session_id.is_none() || source_session_path.is_none() {
+            anyhow::bail!("Save this Local session before creating a reviewed cloud continuation");
+        }
+        let reviewed_payload = draft.trim().to_string();
+        if reviewed_payload.is_empty() {
+            anyhow::bail!("The continuation draft is missing its confirmation preamble");
+        }
+        self.pending_privacy_handoff = Some(PendingPrivacyHandoff {
+            reviewed_payload,
+            destination,
+            source_session_id,
+            source_session_path,
+            destination_model: self.model.clone(),
+            destination_provider: models::provider_persistence_name(&self.provider),
+            destination_auto_routing: self
+                .managed_auto_routing()
+                .filter(|state| {
+                    auto_routing_matches_privacy(state, destination)
+                        && agiworkforce_model_registry::is_auto_routing_selection(&state.selection)
+                })
+                .cloned(),
+        });
+        Ok(())
+    }
+
+    /// Arm an explicit Local→BYOK continuation. Drafting is not consent and
+    /// does not mutate the source session's trust boundary.
+    pub fn arm_byok_handoff(&mut self, draft: &str) -> Result<()> {
+        self.arm_privacy_handoff(draft, PrivacyMode::Byok)
+    }
+
+    /// Arm an explicit Local→Managed Cloud continuation.
+    pub fn arm_managed_handoff(&mut self, draft: &str) -> Result<()> {
+        self.arm_privacy_handoff(draft, PrivacyMode::Managed)
+    }
+
+    pub fn cancel_pending_privacy_handoff(&mut self) {
+        self.pending_privacy_handoff = None;
+    }
+
+    /// Complete a reviewed continuation by forking the durable Local source,
+    /// removing unselected Local history from the destination, persisting the
+    /// new authority, and only then adopting the new session ID.
+    pub fn complete_pending_privacy_handoff(
+        &mut self,
+        user_input: &str,
+    ) -> Result<Option<PrivacyHandoffCompletion>> {
+        if self.pending_privacy_handoff.is_none() {
+            return Ok(None);
+        }
+        let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
+        self.complete_pending_privacy_handoff_with_store(user_input, &store)
+    }
+
+    fn complete_pending_privacy_handoff_with_store(
+        &mut self,
+        user_input: &str,
+        store: &crate::runtime::session_control::ManagedSessionStore,
+    ) -> Result<Option<PrivacyHandoffCompletion>> {
+        let Some(pending) = self.pending_privacy_handoff.clone() else {
+            return Ok(None);
+        };
+        if user_input.trim() != pending.reviewed_payload {
+            // Consent is scoped to the next send. A later matching phrase must
+            // require a fresh payload preview.
+            self.pending_privacy_handoff = None;
+            return Ok(None);
+        }
+
+        let source_session_id = pending.source_session_id.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("The continuation has no durable Local source session")
+        })?;
+        let source_session_path = pending
+            .source_session_path
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("The continuation has no durable Local source path"))?;
+        if self.privacy_mode != PrivacyMode::Local
+            || self.managed_session_id() != Some(source_session_id)
+            || self.managed_session_path.as_ref() != Some(source_session_path)
+            || self.model != pending.destination_model
+            || models::provider_persistence_name(&self.provider) != pending.destination_provider
+        {
+            self.pending_privacy_handoff = None;
+            anyhow::bail!(
+                "The Local source or destination route changed after preview; create a fresh continuation draft"
+            );
+        }
+
+        let resolved = store.fork_redacted_continuation(
+            crate::runtime::session_control::ManagedSessionReference::Path(
+                source_session_path.clone(),
+            ),
+        )?;
+        let mut destination = ManagedSession::load_from_path(&resolved.path)?;
+        debug_assert!(destination.messages.is_empty());
+        destination.model = Some(pending.destination_model.clone());
+        destination.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: pending.destination,
+            provider: pending.destination_provider.clone(),
+        });
+        destination.messages = vec![Message::text(
+            "system",
+            prompt::build_reviewed_continuation_system_prompt(
+                pending.destination.label(),
+                &pending.destination_provider,
+            ),
+        )];
+        destination.auto_routing = pending.destination_auto_routing;
+        destination.permission_mode = Some(self.permission_mode);
+        destination.plan_mode = Some(self.plan_mode);
+        destination.plan_approved = Some(false);
+        destination.current_plan = None;
+        destination.fast_mode = Some(false);
+        destination.output_style = Some(self.output_style.clone());
+        destination.fallback_model_ids = None;
+        destination.touch();
+        let destination_path = store.save(&destination)?;
+        let destination_session_id = destination.session_id.clone();
+        let destination_messages = destination.messages.clone();
+
+        self.adopt_managed_session(destination, destination_path)?;
+        self.messages = destination_messages;
+        self.reset_source_context_after_privacy_handoff();
+        self.pending_privacy_handoff = None;
+        Ok(Some(PrivacyHandoffCompletion {
+            source_session_id: source_session_id.to_string(),
+            destination_session_id,
+            destination: pending.destination,
+            provider: pending.destination_provider,
+        }))
     }
 
     pub fn validate_privacy_boundary(&self) -> Result<()> {
@@ -1004,14 +1126,15 @@ impl AgentSession {
                 handoff_command,
             );
         }
-        Ok(())
-    }
-
-    fn adopt_provider_privacy_mode(&mut self) {
-        let provider_mode = self.provider_privacy_mode();
-        if self.privacy_mode != PrivacyMode::Local || provider_mode == PrivacyMode::Local {
-            self.set_privacy_mode(provider_mode);
+        if self.privacy_mode != provider_mode {
+            anyhow::bail!(
+                "Privacy boundary blocked: this session is {}, but model `{}` routes through {} mode. Start a new session instead of carrying its transcript across trust boundaries.",
+                self.privacy_mode.label(),
+                self.model,
+                provider_mode.label()
+            );
         }
+        Ok(())
     }
 
     /// Switch the active output style.
@@ -1042,6 +1165,39 @@ impl AgentSession {
         self.loop_strike_count = 0;
         self.reset_plan_state();
         self.attached_context_files.clear();
+        self.pending_privacy_handoff = None;
+    }
+
+    fn reset_source_context_after_privacy_handoff(&mut self) {
+        crate::path_security::unregister_additional_workspace_roots(&self.additional_context_dirs);
+        self.additional_context_dirs.clear();
+        self.attached_context_files.clear();
+        self.pending_image_blocks.clear();
+        self.workspace_rules.clear();
+        self.active_rule_sources.clear();
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_rejection_feedback = None;
+        self.plan_approved = false;
+        self.context_usage_anchor = None;
+        self.checkpoints.clear();
+        self.recent_tool_calls.clear();
+        self.loop_strike_count = 0;
+        self.mcp_manager = None;
+        self.subagent_manager = None;
+        self.team_manager = None;
+        self.fallback_chain = None;
+        self.fallback_model = None;
+        self.fast_mode = false;
+        self.original_model = None;
+        self.auto_routing_tier = None;
+        self.turn_count = 0;
+        self.total_input_tokens = 0;
+        self.total_output_tokens = 0;
+        self.total_cache_read_tokens = 0;
+        self.total_cache_creation_tokens = 0;
+        self.total_reasoning_tokens = 0;
+        self.cost_ledger = crate::cost_ledger::CostLedger::default();
     }
 
     /// Clear all four plan-mode state fields.
@@ -1136,15 +1292,18 @@ impl AgentSession {
         if self.managed_session.is_some() {
             return Ok(());
         }
-        let resolved =
-            crate::runtime::session_control::create_managed_session(self.messages.clone())?;
-        let managed_session = ManagedSession::load_from_path(&resolved.path)?;
-        self.adopt_managed_session(managed_session, resolved.path);
-        if let Some(managed_session) = self.managed_session.as_mut() {
-            managed_session.model = Some(self.model.clone());
-            managed_session.workspace_root = std::env::current_dir().ok();
-            managed_session.created_by = Some("cli".to_string());
-        }
+        let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
+        let mut managed_session = ManagedSession::with_messages(
+            uuid::Uuid::new_v4().to_string(),
+            chrono::Utc::now(),
+            self.messages.clone(),
+        );
+        managed_session.model = Some(self.model.clone());
+        managed_session.routing_authority = Some(self.current_routing_authority());
+        managed_session.workspace_root = std::env::current_dir().ok();
+        managed_session.created_by = Some("cli".to_string());
+        let path = store.save(&managed_session)?;
+        self.adopt_managed_session(managed_session, path)?;
         self.sync_managed_session_metadata()?;
         Ok(())
     }
@@ -1156,6 +1315,7 @@ impl AgentSession {
         if !self.session_persistence {
             return Ok(());
         }
+        crate::runtime::session::validate_managed_session_id(session_id)?;
         if let Some(ref mut ms) = self.managed_session {
             ms.session_id = session_id.to_string();
             if let Some(ref path) = self.managed_session_path {
@@ -1166,9 +1326,29 @@ impl AgentSession {
         Ok(())
     }
 
-    /// Adopt an existing managed session as the persistence backing.
-    /// Rehydrates session-state fields (permission_mode, plan_mode, etc.) if present.
-    pub fn adopt_managed_session(&mut self, managed_session: ManagedSession, path: PathBuf) {
+    pub fn current_routing_authority(&self) -> ManagedSessionRoutingAuthority {
+        ManagedSessionRoutingAuthority {
+            privacy_mode: self.privacy_mode,
+            provider: models::provider_persistence_name(&self.provider),
+        }
+    }
+
+    /// Adopt an existing managed session as the persistence backing. The
+    /// persisted route is authority; process config is never allowed to
+    /// silently rebind a resumed session.
+    pub fn adopt_managed_session(
+        &mut self,
+        managed_session: ManagedSession,
+        path: PathBuf,
+    ) -> Result<()> {
+        let model = managed_session.require_model()?.to_string();
+        let authority = managed_session.require_routing_authority()?.clone();
+        let provider =
+            resolve_persisted_session_provider(&model, &authority, &managed_session.session_id)?;
+
+        self.model = model;
+        self.provider = provider;
+        self.set_privacy_mode(authority.privacy_mode);
         if let Some(pm) = managed_session.permission_mode {
             self.permission_mode = pm;
         }
@@ -1192,8 +1372,12 @@ impl AgentSession {
                 &ids.join(","),
             ));
         }
+        self.runtime_session_id = managed_session.session_id.clone();
+        self.json_session_id = managed_session.session_id.clone();
+        self.pending_privacy_handoff = None;
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
+        Ok(())
     }
 
     /// Persist the current in-memory conversation into the managed session file.
@@ -1212,6 +1396,10 @@ impl AgentSession {
         };
         managed_session.messages = self.messages.clone();
         managed_session.model = Some(self.model.clone());
+        managed_session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: self.privacy_mode,
+            provider: models::provider_persistence_name(&self.provider),
+        });
         managed_session.workspace_root = managed_session
             .workspace_root
             .clone()
@@ -1225,7 +1413,14 @@ impl AgentSession {
                 .iter()
                 .find(|message| message.role == "user")
                 .map(Message::text_content)
-                .map(|text| text.trim().chars().take(80).collect::<String>())
+                .map(|text| {
+                    text.split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .chars()
+                        .take(80)
+                        .collect::<String>()
+                })
                 .filter(|title| !title.is_empty());
         }
         managed_session.permission_mode = Some(self.permission_mode);
@@ -1320,6 +1515,22 @@ impl AgentSession {
         self.mcp_manager.take()
     }
 
+    /// Detach the subagent manager so the session owner can cancel and join
+    /// its background OS threads during runtime shutdown.
+    pub fn take_subagent_manager(&mut self) -> Option<subagent::SubagentManager> {
+        self.subagent_manager.take()
+    }
+
+    pub(crate) fn track_memory_consolidation(&mut self, task: tokio::task::JoinHandle<()>) {
+        self.memory_consolidation_tasks
+            .retain(|existing| !existing.is_finished());
+        self.memory_consolidation_tasks.push(task);
+    }
+
+    pub(crate) fn take_memory_consolidation_tasks(&mut self) -> Vec<tokio::task::JoinHandle<()>> {
+        std::mem::take(&mut self.memory_consolidation_tasks)
+    }
+
     /// Return MCP tool metadata (if any MCP servers are connected).
     pub fn mcp_info(&self) -> Option<&[mcp::McpTool]> {
         self.mcp_manager
@@ -1353,18 +1564,32 @@ impl AgentSession {
     #[allow(dead_code)]
     pub fn toggle_fast_mode(&mut self, fast_model: Option<&str>) -> Result<()> {
         if self.fast_mode {
-            if let Some(ref original) = self.original_model.take() {
-                let original_provider = crate::models::try_detect_provider(original).with_context(|| {
-                    format!(
-                        "Original model '{}' is no longer recognized; refusing to switch providers silently.",
-                        original
-                    )
-                })?;
+            if let Some(original) = self.original_model.as_ref() {
+                let original_provider = if self.privacy_mode == PrivacyMode::Managed {
+                    crate::models::resolve_selected_provider(original, Some("managed_cloud"))?
+                } else {
+                    crate::models::try_detect_provider(original).with_context(|| {
+                        format!(
+                            "Original model '{}' is no longer recognized; refusing to switch providers silently.",
+                            original
+                        )
+                    })?
+                };
+                let original_mode = provider_privacy_mode(&original_provider);
+                if original_mode != self.privacy_mode {
+                    anyhow::bail!(
+                        "Original fast-mode model routes through {} mode, not this session's {} authority",
+                        original_mode.label(),
+                        self.privacy_mode.label()
+                    );
+                }
                 self.model = original.clone();
                 self.provider = original_provider;
             }
+            self.original_model = None;
             self.fast_mode = false;
         } else {
+            self.validate_privacy_boundary()?;
             let target = fast_model
                 .map(str::to_string)
                 .unwrap_or_else(|| match &self.provider {
@@ -1374,20 +1599,77 @@ impl AgentSession {
                         crate::model_catalog::fast_completion_model(provider_name)
                     }
                 });
-            crate::models::try_detect_provider(&target).with_context(|| {
-                format!(
-                    "Configured fast model '{}' is not recognized. Set `fast_model` to a catalog model or discovered local model.",
-                    target
-                )
-            }).map(|provider| {
-                self.original_model = Some(self.model.clone());
-                self.model = target.clone();
-                self.provider = provider;
-                self.fast_mode = true;
-            })?;
+            let provider = if self.privacy_mode == PrivacyMode::Managed {
+                crate::models::resolve_selected_provider(&target, Some("managed_cloud"))?
+            } else {
+                crate::models::try_detect_provider(&target).with_context(|| {
+                    format!(
+                        "Configured fast model '{}' is not recognized. Set `fast_model` to a catalog model or discovered local model.",
+                        target
+                    )
+                })?
+            };
+            let provider_mode = provider_privacy_mode(&provider);
+            if provider_mode != self.privacy_mode {
+                anyhow::bail!(
+                    "Fast model '{}' routes through {} mode, not this session's {} authority",
+                    target,
+                    provider_mode.label(),
+                    self.privacy_mode.label()
+                );
+            }
+            self.original_model = Some(self.model.clone());
+            self.model = target;
+            self.provider = provider;
+            self.fast_mode = true;
         }
         Ok(())
     }
+}
+
+pub(crate) fn resolve_persisted_session_provider(
+    model: &str,
+    authority: &ManagedSessionRoutingAuthority,
+    session_id: &str,
+) -> Result<Provider> {
+    let provider_name = authority
+        .validated_provider()
+        .with_context(|| format!("Managed session '{session_id}' has invalid routing authority"))?;
+    let provider = models::resolve_selected_provider(model, Some(provider_name)).with_context(|| {
+        format!(
+            "Persisted provider '{provider_name}' is incompatible with model '{model}' for session '{session_id}'"
+        )
+    })?;
+    let provider_mode = provider_privacy_mode(&provider);
+    if provider_mode != authority.privacy_mode {
+        anyhow::bail!(
+            "Managed session '{}' has incompatible {} trust and {} provider authority",
+            session_id,
+            authority.privacy_mode.label(),
+            provider_name
+        );
+    }
+    Ok(provider)
+}
+
+fn auto_routing_matches_privacy(
+    state: &crate::runtime::session::ManagedSessionAutoRouting,
+    privacy_mode: PrivacyMode,
+) -> bool {
+    matches!(
+        (privacy_mode, state.trust_mode),
+        (
+            PrivacyMode::Local,
+            agiworkforce_model_registry::TrustMode::Local
+                | agiworkforce_model_registry::TrustMode::OnDevice
+        ) | (
+            PrivacyMode::Byok,
+            agiworkforce_model_registry::TrustMode::Byok
+        ) | (
+            PrivacyMode::Managed,
+            agiworkforce_model_registry::TrustMode::ManagedCloud
+        )
+    )
 }
 
 fn resolve_context_file(raw_path: &str) -> Result<PathBuf> {
@@ -1430,22 +1712,18 @@ fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
             base_url,
             api_key_env,
             ..
-        } if api_key_env.is_none() && is_local_provider_url(base_url) => PrivacyMode::Local,
+        } if api_key_env.is_none() && models::is_local_provider_base_url(base_url) => {
+            PrivacyMode::Local
+        }
         Provider::Custom {
             base_url,
             api_key_env,
             ..
-        } if api_key_env.is_none() && is_local_provider_url(base_url) => PrivacyMode::Local,
+        } if api_key_env.is_none() && models::is_local_provider_base_url(base_url) => {
+            PrivacyMode::Local
+        }
         _ => PrivacyMode::Byok,
     }
-}
-
-fn is_local_provider_url(url: &str) -> bool {
-    let lower = url.to_ascii_lowercase();
-    lower.starts_with("http://localhost")
-        || lower.starts_with("http://127.")
-        || lower.starts_with("http://[::1]")
-        || lower.starts_with("http://0.0.0.0")
 }
 
 // ---------------------------------------------------------------------------
@@ -1461,8 +1739,8 @@ mod tests {
     // Loop-guard primitives moved to `agiworkforce-agent-core` (Wave 5e1); the
     // `tool_call_to_legacy` conversion helper stays app-local in `executor`.
     use agiworkforce_agent_core::{
-        detect_content_loop, hash_tool_call, CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD,
-        LOOP_DETECTION_THRESHOLD,
+        CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD, LOOP_DETECTION_THRESHOLD,
+        detect_content_loop, hash_tool_call,
     };
     use executor::tool_call_to_legacy;
     use history::build_assistant_message;
@@ -1484,6 +1762,67 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         }
+    }
+
+    fn durable_local_handoff_session(
+        destination: PrivacyMode,
+    ) -> (
+        tempfile::TempDir,
+        crate::runtime::session_control::ManagedSessionStore,
+        AgentSession,
+        PathBuf,
+    ) {
+        let temp_dir = tempfile::tempdir().expect("session store");
+        let store = crate::runtime::session_control::ManagedSessionStore::new(
+            temp_dir.path().to_path_buf(),
+        );
+        let mut session = AgentSession::new("llama3", &test_context(), None);
+        // This helper exercises durable handoff mechanics, independent of the
+        // process-global CLI flag mutated by unrelated policy tests.
+        session.set_session_persistence(true);
+        session.messages.push(Message::text(
+            "user",
+            "local secret that must not be inherited",
+        ));
+        let mut source = ManagedSession::with_messages(
+            "local-source",
+            chrono::Utc::now(),
+            session.messages.clone(),
+        );
+        source.model = Some("llama3".to_string());
+        source.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "ollama".to_string(),
+        });
+        let source_path = store.save(&source).expect("save Local source");
+        session
+            .adopt_managed_session(source, source_path.clone())
+            .expect("adopt Local source");
+
+        match destination {
+            PrivacyMode::Byok => {
+                let model = crate::model_catalog::models_for("openai")
+                    .into_iter()
+                    .next()
+                    .expect("OpenAI catalog model")
+                    .id
+                    .clone();
+                session.switch_model(&model).expect("select BYOK model");
+            }
+            PrivacyMode::Managed => {
+                let model = crate::model_catalog::cloud_models()
+                    .into_iter()
+                    .next()
+                    .expect("managed-cloud eligible model")
+                    .id
+                    .clone();
+                session.model = model;
+                session.provider = Provider::ManagedCloud;
+            }
+            PrivacyMode::Local => panic!("handoff destination must be cloud"),
+        }
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        (temp_dir, store, session, source_path)
     }
 
     #[test]
@@ -1794,12 +2133,14 @@ mod tests {
         assert!(!report.already_present);
         assert!(report.instructions_loaded);
         assert_eq!(session.additional_context_dirs.len(), 1);
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("Use careful tests."));
+        assert!(
+            session
+                .messages
+                .last()
+                .unwrap()
+                .text_content()
+                .contains("Use careful tests.")
+        );
         crate::path_security::clear_additional_workspace_roots_for_tests();
     }
 
@@ -1839,18 +2180,22 @@ mod tests {
         assert_eq!(report.added.len(), 1);
         assert!(report.failed.is_empty());
         assert_eq!(session.attached_context_files.len(), 1);
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("attached body"));
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("Apply the Rust file rule."));
+        assert!(
+            session
+                .messages
+                .last()
+                .unwrap()
+                .text_content()
+                .contains("attached body")
+        );
+        assert!(
+            session
+                .messages
+                .last()
+                .unwrap()
+                .text_content()
+                .contains("Apply the Rust file rule.")
+        );
     }
 
     #[test]
@@ -1867,12 +2212,14 @@ mod tests {
         let before = session.messages.len();
         session.activate_rules_from_user_input("Please update src/core/main.rs:42.");
         assert_eq!(session.messages.len(), before + 1);
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("Use the project Rust convention."));
+        assert!(
+            session
+                .messages
+                .last()
+                .unwrap()
+                .text_content()
+                .contains("Use the project Rust convention.")
+        );
 
         session.activate_rules_from_user_input("Re-check src/core/main.rs.");
         assert_eq!(session.messages.len(), before + 1);
@@ -1940,57 +2287,114 @@ mod tests {
     }
 
     #[test]
-    fn byok_handoff_consents_only_on_matching_draft_send() {
-        let ctx = SystemContext {
-            cwd: "/tmp".to_string(),
-            git_branch: None,
-            git_status_summary: None,
-            git_remote_url: None,
-            project_type: None,
-            project_language: None,
-            ci_providers: vec![],
-            monorepo_type: None,
-            package_manager: None,
-            containerization: vec![],
-            editor_configs: vec![],
-            os: "test".to_string(),
-            shell: "test".to_string(),
-        };
-        let mut session = AgentSession::new("llama3", &ctx, None);
-        let cloud_model = crate::model_catalog::models_for("openai")
-            .into_iter()
-            .next()
-            .map(|m| m.id.clone())
-            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
-        session
-            .switch_model(&cloud_model)
-            .expect("catalog OpenAI model");
-
-        // Local session + cloud model → blocked until an explicit, consented handoff.
-        assert_eq!(session.privacy_mode, PrivacyMode::Local);
-        assert!(session.validate_privacy_boundary().is_err());
-
-        // Arming the handoff (drafting) must NOT change the privacy mode.
+    fn byok_handoff_requires_exact_review_and_creates_a_redacted_durable_fork() {
+        let (_temp_dir, store, mut session, source_path) =
+            durable_local_handoff_session(PrivacyMode::Byok);
+        session.set_managed_auto_routing(Some(
+            crate::runtime::session::ManagedSessionAutoRouting {
+                selection: "auto-balanced".to_string(),
+                model_key: "llama3".to_string(),
+                task_type:
+                    agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
+                trust_mode: agiworkforce_model_registry::TrustMode::Local,
+            },
+        ));
+        let source_before = std::fs::read(&source_path).expect("read Local source");
         let draft = "You are continuing an AGI Local chat in BYOK mode.\nPrivacy boundary: the user explicitly selected this handoff.";
-        session.arm_byok_handoff(draft);
-        assert_eq!(
-            session.privacy_mode,
-            PrivacyMode::Local,
-            "drafting must not leave Local mode"
+
+        session.arm_byok_handoff(draft).expect("arm BYOK preview");
+        assert!(
+            session
+                .complete_pending_privacy_handoff_with_store(
+                    &format!("{draft}\nedited after preview"),
+                    &store,
+                )
+                .expect("edited draft is safely rejected")
+                .is_none()
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert_eq!(session.managed_session_id(), Some("local-source"));
+
+        session.arm_byok_handoff(draft).expect("re-arm preview");
+        assert!(
+            session
+                .complete_pending_privacy_handoff_with_store("unrelated local message", &store)
+                .expect("unrelated send remains Local")
+                .is_none()
+        );
+        assert_eq!(session.managed_session_id(), Some("local-source"));
+
+        session.arm_byok_handoff(draft).expect("re-arm preview");
+        session.clear();
+        assert!(
+            session
+                .complete_pending_privacy_handoff_with_store(draft, &store)
+                .expect("cancelled preview remains Local")
+                .is_none()
         );
 
-        // Negative (the leak the earlier fix introduced): an unrelated message must
-        // NOT complete the handoff — the Local boundary stays intact and blocking.
-        assert!(!session.consume_byok_handoff("what files are in this repo?"));
-        assert_eq!(session.privacy_mode, PrivacyMode::Local);
-        assert!(session.validate_privacy_boundary().is_err());
+        session.arm_byok_handoff(draft).expect("final preview");
+        let completion = session
+            .complete_pending_privacy_handoff_with_store(draft, &store)
+            .expect("complete BYOK handoff")
+            .expect("handoff completion");
+        assert_eq!(completion.source_session_id, "local-source");
+        assert_ne!(completion.destination_session_id, "local-source");
+        assert_eq!(completion.destination, PrivacyMode::Byok);
+        assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, "system");
+        assert!(!session.messages[0].text_content().contains("local secret"));
+        assert_eq!(
+            std::fs::read(&source_path).expect("re-read Local source"),
+            source_before,
+            "source session must remain byte-for-byte unchanged"
+        );
 
-        // Positive: sending a message carrying the draft's BYOK preamble is consent —
-        // the Local→BYOK transition completes and the boundary clears.
-        assert!(session.consume_byok_handoff(draft));
-        assert_ne!(session.privacy_mode, PrivacyMode::Local);
-        assert!(session.validate_privacy_boundary().is_ok());
-        assert!(session.pending_byok_handoff.is_none(), "consent consumed");
+        let destination_resolved = store
+            .resolve(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    completion.destination_session_id.clone(),
+                ),
+            )
+            .expect("resolve destination");
+        let destination =
+            ManagedSession::load_from_path(&destination_resolved.path).expect("load destination");
+        assert_eq!(destination.messages.len(), 1);
+        assert!(
+            destination.auto_routing.is_none(),
+            "Local Auto metadata must not survive into a BYOK continuation"
+        );
+        assert_eq!(destination.messages[0].role, "system");
+        assert!(
+            !destination.messages[0]
+                .text_content()
+                .contains("local secret that must not be inherited")
+        );
+        assert_eq!(
+            destination
+                .fork
+                .as_ref()
+                .map(|fork| fork.source_session_id.as_str()),
+            Some("local-source")
+        );
+        assert_eq!(
+            destination
+                .routing_authority
+                .as_ref()
+                .map(|authority| authority.privacy_mode),
+            Some(PrivacyMode::Byok)
+        );
+
+        let mut resumed = AgentSession::new("llama3", &test_context(), None);
+        resumed
+            .adopt_managed_session(destination, destination_resolved.path)
+            .expect("restore BYOK authority after restart");
+        assert_eq!(resumed.privacy_mode, PrivacyMode::Byok);
+        assert_eq!(
+            models::provider_persistence_name(&resumed.provider),
+            completion.provider
+        );
     }
 
     #[test]
@@ -2042,35 +2446,262 @@ mod tests {
     }
 
     #[test]
-    fn managed_handoff_consents_only_on_matching_draft_send() {
-        let ctx = SystemContext {
-            cwd: "/tmp".to_string(),
-            git_branch: None,
-            git_status_summary: None,
-            git_remote_url: None,
-            project_type: None,
-            project_language: None,
-            ci_providers: vec![],
-            monorepo_type: None,
-            package_manager: None,
-            containerization: vec![],
-            editor_configs: vec![],
-            os: "test".to_string(),
-            shell: "test".to_string(),
-        };
-        let mut session =
-            AgentSession::new_with_provider("claude-sonnet-5", &ctx, None, Provider::ManagedCloud);
-        session.set_privacy_mode(PrivacyMode::Local);
-        let draft = "You are continuing an AGI Local chat in Managed Cloud mode.\nPrivacy boundary: the user explicitly selected this handoff.";
+    fn established_managed_transcript_cannot_switch_to_a_direct_provider() {
+        let managed_model = crate::model_catalog::cloud_models()
+            .into_iter()
+            .next()
+            .expect("managed-cloud eligible model")
+            .id
+            .clone();
+        let direct_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("Anthropic catalog model")
+            .id
+            .clone();
+        let mut session = AgentSession::new_with_provider(
+            &managed_model,
+            &test_context(),
+            None,
+            Provider::ManagedCloud,
+        );
+        session
+            .messages
+            .push(Message::text("user", "managed-only transcript"));
+        let messages_before = serde_json::to_value(&session.messages).expect("serialize messages");
 
-        session.arm_managed_handoff(draft);
-        assert!(!session.consume_managed_handoff("unrelated local message"));
-        assert_eq!(session.privacy_mode, PrivacyMode::Local);
-        assert!(session.validate_privacy_boundary().is_err());
+        let error = session
+            .switch_model(&direct_model)
+            .expect_err("Managed transcript must not move to a direct provider");
+        assert!(error.to_string().contains("trust boundaries"), "{error:#}");
+        assert_eq!(session.model, managed_model);
+        assert_eq!(session.provider, Provider::ManagedCloud);
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+        assert_eq!(
+            serde_json::to_value(&session.messages).expect("serialize messages"),
+            messages_before
+        );
+    }
 
-        assert!(session.consume_managed_handoff(draft));
+    #[test]
+    fn managed_picker_rejects_established_byok_or_local_transcripts() {
+        let byok_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("Anthropic catalog model")
+            .id
+            .clone();
+        let mut byok = AgentSession::new(&byok_model, &test_context(), None);
+        byok.messages.push(Message::text("user", "BYOK transcript"));
+        let byok_error = byok
+            .switch_managed_model("not-even-consulted")
+            .expect_err("BYOK transcript must not enter Managed Cloud");
+        assert!(byok_error.to_string().contains("established byok"));
+        assert_eq!(byok.privacy_mode, PrivacyMode::Byok);
+
+        let mut local = AgentSession::new("llama3", &test_context(), None);
+        local
+            .messages
+            .push(Message::text("user", "Local transcript"));
+        let local_error = local
+            .switch_managed_model("not-even-consulted")
+            .expect_err("Local transcript must not enter Managed Cloud");
+        assert!(local_error.to_string().contains("established local"));
+        assert_eq!(local.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn privacy_validation_rejects_managed_byok_mismatches_in_both_directions() {
+        let managed_model = crate::model_catalog::cloud_models()
+            .into_iter()
+            .next()
+            .expect("managed-cloud eligible model")
+            .id
+            .clone();
+        let mut managed = AgentSession::new_with_provider(
+            &managed_model,
+            &test_context(),
+            None,
+            Provider::ManagedCloud,
+        );
+        managed.set_privacy_mode(PrivacyMode::Byok);
+        assert!(managed.validate_privacy_boundary().is_err());
+
+        let byok_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("Anthropic catalog model")
+            .id
+            .clone();
+        let mut byok = AgentSession::new(&byok_model, &test_context(), None);
+        byok.provider = Provider::ManagedCloud;
+        assert_eq!(byok.privacy_mode, PrivacyMode::Byok);
+        assert!(byok.validate_privacy_boundary().is_err());
+    }
+
+    #[test]
+    fn managed_fast_mode_keeps_the_gateway_provider_in_both_directions() {
+        let managed_model = crate::model_catalog::cloud_models()
+            .into_iter()
+            .next()
+            .expect("managed-cloud eligible model")
+            .id
+            .clone();
+        let mut session = AgentSession::new_with_provider(
+            &managed_model,
+            &test_context(),
+            None,
+            Provider::ManagedCloud,
+        );
+
+        session
+            .toggle_fast_mode(Some(&managed_model))
+            .expect("enable Managed fast mode");
+        assert_eq!(session.provider, Provider::ManagedCloud);
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
         assert!(session.validate_privacy_boundary().is_ok());
+
+        session
+            .toggle_fast_mode(None)
+            .expect("disable Managed fast mode");
+        assert_eq!(session.model, managed_model);
+        assert_eq!(session.provider, Provider::ManagedCloud);
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn managed_handoff_persists_managed_authority_and_restart_continuity() {
+        let (_temp_dir, store, mut session, source_path) =
+            durable_local_handoff_session(PrivacyMode::Managed);
+        let source_before = std::fs::read(&source_path).expect("read Local source");
+        let draft = "You are continuing an AGI Local chat in Managed Cloud mode.\nPrivacy boundary: the user explicitly selected this handoff.";
+        session
+            .arm_managed_handoff(draft)
+            .expect("arm Managed Cloud preview");
+        let completion = session
+            .complete_pending_privacy_handoff_with_store(draft, &store)
+            .expect("complete Managed Cloud handoff")
+            .expect("handoff completion");
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+        assert_ne!(completion.destination_session_id, "local-source");
+        assert_eq!(completion.provider, "managed_cloud");
+        assert_eq!(
+            std::fs::read(&source_path).expect("re-read Local source"),
+            source_before
+        );
+
+        let destination_resolved = store
+            .resolve(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    completion.destination_session_id,
+                ),
+            )
+            .expect("resolve destination");
+        let destination =
+            ManagedSession::load_from_path(&destination_resolved.path).expect("load destination");
+        assert_eq!(destination.messages.len(), 1);
+        assert_eq!(destination.messages[0].role, "system");
+        assert!(
+            !destination.messages[0]
+                .text_content()
+                .contains("local secret that must not be inherited")
+        );
+        assert_eq!(
+            destination
+                .routing_authority
+                .as_ref()
+                .map(|authority| (&authority.privacy_mode, authority.provider.as_str())),
+            Some((&PrivacyMode::Managed, "managed_cloud"))
+        );
+
+        let mut resumed = AgentSession::new("llama3", &test_context(), None);
+        resumed
+            .adopt_managed_session(destination, destination_resolved.path)
+            .expect("restore Managed Cloud authority after restart");
+        assert_eq!(resumed.privacy_mode, PrivacyMode::Managed);
+        assert_eq!(resumed.provider, Provider::ManagedCloud);
+    }
+
+    #[test]
+    fn reviewed_handoff_clears_unselected_source_context_before_first_send() {
+        let (_temp_dir, store, mut session, _source_path) =
+            durable_local_handoff_session(PrivacyMode::Byok);
+        let local_marker = "LOCAL_CONTEXT_MUST_NOT_CROSS";
+        session.pending_image_blocks = vec![ContentBlock::Image {
+            mime: "image/png".to_string(),
+            data_b64: local_marker.to_string(),
+        }];
+        session
+            .attached_context_files
+            .push(PathBuf::from("/local/private-file.txt"));
+        session
+            .additional_context_dirs
+            .push(PathBuf::from("/local/private-root"));
+        session.workspace_rules = vec![memory::Rule {
+            globs: vec!["src/**/*.rs".to_string()],
+            body: local_marker.to_string(),
+            source: PathBuf::from("/local/private-rule.md"),
+            kind: Some(memory::MemoryKind::Project),
+        }];
+        session
+            .active_rule_sources
+            .insert(PathBuf::from("/local/already-active-rule.md"));
+        session.plan_rejection_feedback = Some(local_marker.to_string());
+        session.fallback_chain = Some(crate::routing::fallback::FallbackChain::parse(
+            &session.model,
+        ));
+        session.save_checkpoint();
+        session.turn_count = 7;
+        session.total_input_tokens = 123;
+        session.total_output_tokens = 456;
+
+        let draft = "You are continuing an AGI Local chat in BYOK mode.\nPrivacy boundary: the user explicitly selected this handoff.";
+        session.arm_byok_handoff(draft).expect("arm BYOK preview");
+        let completion = session
+            .complete_pending_privacy_handoff_with_store(draft, &store)
+            .expect("complete reviewed handoff")
+            .expect("handoff completion");
+
+        assert!(session.pending_image_blocks.is_empty());
+        assert!(session.attached_context_files.is_empty());
+        assert!(session.additional_context_dirs.is_empty());
+        assert!(session.workspace_rules.is_empty());
+        assert!(session.active_rule_sources.is_empty());
+        assert!(session.plan_rejection_feedback.is_none());
+        assert!(session.fallback_chain.is_none());
+        assert_eq!(session.checkpoint_count(), 0);
+        assert_eq!(session.turn_count, 0);
+        assert_eq!(session.total_input_tokens, 0);
+        assert_eq!(session.total_output_tokens, 0);
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, "system");
+        assert!(!session.messages[0].text_content().contains(local_marker));
+
+        let before_rule_activation = session.messages.len();
+        session.activate_rules_from_user_input("Please edit src/private.rs");
+        assert_eq!(session.messages.len(), before_rule_activation);
+        session.messages.push(Message::text("user", draft));
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[1].text_content(), draft);
+        assert!(
+            !session
+                .messages
+                .iter()
+                .any(|message| message.text_content().contains(local_marker))
+        );
+
+        let destination = store
+            .load(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    completion.destination_session_id,
+                ),
+            )
+            .expect("load destination");
+        assert!(destination.current_plan.is_none());
+        assert_eq!(destination.plan_approved, Some(false));
+        assert_eq!(destination.fast_mode, Some(false));
+        assert!(destination.fallback_model_ids.is_none());
     }
 
     #[test]
@@ -2469,16 +3100,20 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("resumed.json");
 
-        let on_disk = crate::runtime::session::ManagedSession::with_messages(
+        let mut session = persistence_test_session(false);
+        let mut on_disk = crate::runtime::session::ManagedSession::with_messages(
             "resumed-session-id",
             chrono::Utc::now(),
             vec![Message::text("user", "first turn")],
         );
+        on_disk.model = Some(session.model.clone());
+        on_disk.routing_authority = Some(session.current_routing_authority());
         on_disk.save_to_path(&path).expect("seed session file");
         let before = std::fs::read_to_string(&path).expect("read seeded file");
 
-        let mut session = persistence_test_session(false);
-        session.adopt_managed_session(on_disk, path.clone());
+        session
+            .adopt_managed_session(on_disk, path.clone())
+            .expect("adopt persisted authority");
         // A resumed session still rehydrates in memory...
         assert_eq!(
             session.managed_session_id(),
@@ -2515,15 +3150,19 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("resumed.json");
 
-        let on_disk = crate::runtime::session::ManagedSession::with_messages(
+        let mut session = persistence_test_session(true);
+        let mut on_disk = crate::runtime::session::ManagedSession::with_messages(
             "resumed-session-id",
             chrono::Utc::now(),
             vec![Message::text("user", "first turn")],
         );
+        on_disk.model = Some(session.model.clone());
+        on_disk.routing_authority = Some(session.current_routing_authority());
         on_disk.save_to_path(&path).expect("seed session file");
 
-        let mut session = persistence_test_session(true);
-        session.adopt_managed_session(on_disk, path.clone());
+        session
+            .adopt_managed_session(on_disk, path.clone())
+            .expect("adopt persisted authority");
         session
             .messages
             .push(Message::text("user", "second turn — expected on disk"));

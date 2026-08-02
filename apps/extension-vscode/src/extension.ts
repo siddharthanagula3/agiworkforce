@@ -21,10 +21,13 @@ import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
+import { ChatEditorPanel } from './providers/chatEditorPanel';
 import {
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
 } from './features/permissions/agentModeConsent';
+
+let activeLocalRuntimes: LocalRuntimePool | undefined;
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -71,11 +74,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
-        cliPath: Config.cliPath(),
+        cliPath: () => Config.cliPath(),
         cwd,
         clientVersion: getExtensionVersion(),
       }),
   );
+  activeLocalRuntimes = localRuntimes;
   context.subscriptions.push(localRuntimes);
 
   // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
@@ -134,8 +138,15 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       if (e.affectsConfiguration('agiWorkforce.cliPath')) {
-        localRuntimes.restartAll();
-        conversationTreeProvider.refresh();
+        void localRuntimes
+          .restartAll()
+          .then(() => conversationTreeProvider.refresh())
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(
+              `AGI Workforce: Could not restart the local runtime after the CLI path changed — ${message}`,
+            );
+          });
       }
 
       if (
@@ -168,6 +179,11 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider();
       }
 
+      if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
+        sidebarProvider.pushFollowUpBehavior();
+        ChatEditorPanel.pushFollowUpBehavior();
+      }
+
       if (
         e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
         e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
@@ -191,8 +207,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
 // ─── Deactivation ─────────────────────────────────────────────────────────────
 
-export function deactivate(): void {
-  // Nothing to clean up — VS Code handles subscriptions disposal
+export async function deactivate(): Promise<void> {
+  const localRuntimes = activeLocalRuntimes;
+  activeLocalRuntimes = undefined;
+  await localRuntimes?.shutdownAll();
 }
 
 // ─── Sessions history helper ───────────────────────────────────────────────────

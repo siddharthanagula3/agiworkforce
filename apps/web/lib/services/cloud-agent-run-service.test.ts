@@ -357,16 +357,42 @@ describe('cloud agent run service', () => {
     expect(result.next).toEqual({ updatedAt: olderRow.updated_at, id: olderRow.id });
     expect(db.query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*\(updated_at, id\) < \(\$3::timestamptz, \$4::uuid\)/i,
+        /user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*request_id = \$3[\s\S]*\(updated_at, id\) < \(\$4::timestamptz, \$5::uuid\)/i,
       ),
       [
         'user-1',
         ['awaiting_input', 'ready_for_review'],
+        null,
         '2026-07-17T20:00:00.000Z',
         '0190a000-0000-7000-8000-000000000099',
         2,
       ],
     );
+  });
+
+  it('looks up an exact request id within both tenant and state scope', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([{ ...RUN_ROW, state: 'completed' }]);
+
+    const result = await listCloudAgentRuns(db, {
+      userId: 'user-1',
+      states: ['completed', 'cancelled'],
+      requestId: RUN_ROW.request_id,
+      limit: 1,
+    });
+
+    expect(result.runs).toHaveLength(1);
+    const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+    expect(sql).toMatch(
+      /where user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*request_id = \$3/i,
+    );
+    expect(params).toEqual([
+      'user-1',
+      ['completed', 'cancelled'],
+      RUN_ROW.request_id,
+      null,
+      null,
+      2,
+    ]);
   });
 
   it('persists cancellation intent without claiming termination before executor acknowledgement', async () => {

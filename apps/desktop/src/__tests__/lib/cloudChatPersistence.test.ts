@@ -86,6 +86,7 @@ beforeEach(() => {
   });
   vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
     access_token: 'desktop-clerk-token',
+    user: { id: 'user-desktop' },
   } as never);
 });
 

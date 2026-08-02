@@ -83,6 +83,11 @@ describe('buildMeCapabilityHandshake — tier-layer honesty (the required proper
     expect(document.granted).toContain('canUseDeepResearch');
   });
 
+  it('enterprise tier grants deep research under its negotiated limits', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'enterprise' });
+    expect(document.granted).toContain('canUseDeepResearch');
+  });
+
   it('an unknown/missing tier string normalizes to the free policy, not an open grant', () => {
     const missing = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: null });
     const bogus = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'not_a_real_tier' });

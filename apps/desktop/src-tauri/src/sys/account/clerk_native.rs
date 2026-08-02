@@ -160,8 +160,14 @@ fn validate_clerk_path(path: &str) -> Result<(), String> {
 
 fn clerk_query_params(extra: Option<&str>) -> Result<HashMap<String, String>, String> {
     let mut params = HashMap::new();
-    params.insert("__clerk_api_version".to_string(), CLERK_API_VERSION.to_string());
-    params.insert("_clerk_js_version".to_string(), CLERK_JS_VERSION.to_string());
+    params.insert(
+        "__clerk_api_version".to_string(),
+        CLERK_API_VERSION.to_string(),
+    );
+    params.insert(
+        "_clerk_js_version".to_string(),
+        CLERK_JS_VERSION.to_string(),
+    );
     params.insert("_is_native".to_string(), "1".to_string());
 
     // The only caller-supplied query parameter native sign-in needs is the
@@ -222,7 +228,11 @@ pub async fn account_clerk_native_request(
     let http_method = match method.to_ascii_uppercase().as_str() {
         "GET" => HttpMethod::Get,
         "POST" => HttpMethod::Post,
-        other => return Err(format!("Refusing an unsupported Clerk request method: {other}")),
+        other => {
+            return Err(format!(
+                "Refusing an unsupported Clerk request method: {other}"
+            ))
+        }
     };
 
     let mut headers = HashMap::from([
@@ -235,7 +245,11 @@ pub async fn account_clerk_native_request(
         // instances treat the request as a browser one and expect cookies.
         ("x-native-app".to_string(), "1".to_string()),
     ]);
-    if let Some(token) = clientToken.as_ref().map(|t| t.trim()).filter(|t| !t.is_empty()) {
+    if let Some(token) = clientToken
+        .as_ref()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+    {
         if token.len() > 8192 {
             return Err("The Clerk client credential is too large.".to_string());
         }

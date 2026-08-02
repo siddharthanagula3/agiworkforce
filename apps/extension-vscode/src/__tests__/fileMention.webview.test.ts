@@ -84,6 +84,7 @@ describe('VS Code sidebar file mentions', () => {
       payload: {
         text: 'Review @src/app.ts#L5-L7',
         browseWeb: false,
+        clientMessageId: expect.stringMatching(/^msg-/),
         references: [
           {
             path: 'src/app.ts',
@@ -118,6 +119,7 @@ describe('VS Code sidebar file mentions', () => {
       payload: {
         text: '@src/fallback.ts#L3-L5',
         browseWeb: false,
+        clientMessageId: expect.stringMatching(/^msg-/),
         references: [reference],
       },
     });

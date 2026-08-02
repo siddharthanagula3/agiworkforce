@@ -84,8 +84,10 @@ The build reads the public values documented in `.env.example`:
 - `CLERK_PUBLISHABLE_KEY` — the same Clerk instance used by Web.
 - `CLERK_FRONTEND_API` — the exact Clerk Frontend API origin.
 - `CLERK_SYNC_HOST` — the exact Clerk web-session Sync Host origin.
-- `CHROME_EXTENSION_PUBLIC_KEY` — public CRX key material that keeps the
-  extension ID stable across unpacked/store builds.
+- `CHROME_EXTENSION_PUBLIC_KEY` — the single-line base64 DER RSA public key
+  copied from the Chrome Web Store dashboard, which keeps the extension ID
+  stable across unpacked/store builds. The package preflight rejects malformed
+  placeholders.
 
 Copy `.env.local.example` to `.env.local` for local development. Production
 packages require a live Clerk key, both Clerk origins, and the CRX public key;
@@ -105,6 +107,13 @@ Chrome capabilities fail closed when the subscription is not active or
 trialing. Account actions open the existing Web usage, billing, connector, and
 Team surfaces; Cloud connectors do not become browser-page tools inside the
 extension.
+
+Managed Cloud state is owned by the exact Clerk account and session
+incarnation. Browser history, panel ownership, active streams, durable
+resume/approval, cancellation, broadcasts, and result pointers must all match
+that owner. Signing out or switching accounts resets the panel and aborts old
+operations; cancellation uses the bearer credential captured when the run was
+admitted, never the newly signed-in account's token.
 
 ## Security, Privacy, Data Boundaries
 

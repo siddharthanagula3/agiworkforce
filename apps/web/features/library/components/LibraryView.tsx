@@ -31,6 +31,10 @@ export function LibraryView() {
       listPage: (params) =>
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
       fetchAsset: (uri) => fetch(uri, { credentials: 'same-origin' }),
+      // Same-origin browser requests carry the Clerk session cookie. Desktop
+      // deliberately omits this capability because its bearer cannot be
+      // attached to an <img> request.
+      inlinePreviewUri: (uri) => uri,
       restoreItem: async (id) => {
         // The restore endpoint is state-changing, so it carries the CSRF token.
         const csrf = await getCsrfToken();

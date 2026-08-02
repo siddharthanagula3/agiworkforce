@@ -5,6 +5,22 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::terminal_style as ts;
 
+const GIT_APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+struct TempPatchFile(PathBuf);
+
+impl TempPatchFile {
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempPatchFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 #[derive(Debug)]
 pub struct PatchResult {
     pub applied: Vec<String>,
@@ -123,34 +139,34 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
 
     // CLI-NEW-007 fix: validate every target path before invoking `git apply`.
     validate_patch_targets(patch, cwd)?;
-    let tmp = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
+    let tmp_path = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
     // Write with restricted permissions (0o600) to prevent other users from reading
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp_path)?;
+    // Arm cleanup only after this invocation successfully created the file.
+    let tmp = TempPatchFile(tmp_path);
+    #[cfg(unix)]
     {
-        use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        }
-        file.write_all(patch.as_bytes())?;
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     }
-    let stat = tokio::process::Command::new("git")
+    file.write_all(patch.as_bytes())?;
+    drop(file);
+    let mut stat_command = tokio::process::Command::new("git");
+    stat_command
         .args(["apply", "--stat"])
-        .arg(&tmp)
-        .current_dir(cwd)
-        .output()
-        .await?;
-    let apply = tokio::process::Command::new("git")
+        .arg(tmp.path())
+        .current_dir(cwd);
+    let stat = crate::process_tree::output(stat_command, None, Some(GIT_APPLY_TIMEOUT)).await?;
+    let mut apply_command = tokio::process::Command::new("git");
+    apply_command
         .args(["apply", "--verbose"])
-        .arg(&tmp)
-        .current_dir(cwd)
-        .output()
-        .await?;
-    let _ = std::fs::remove_file(&tmp);
+        .arg(tmp.path())
+        .current_dir(cwd);
+    let apply = crate::process_tree::output(apply_command, None, Some(GIT_APPLY_TIMEOUT)).await?;
     let code = apply.status.code().unwrap_or(1);
     let mut applied = Vec::new();
     let mut conflicted = Vec::new();
@@ -249,7 +265,7 @@ pub fn print_patch_result(result: &PatchResult) {
 
 #[cfg(test)]
 mod patch_validation_tests {
-    use super::validate_patch_targets;
+    use super::{apply_git_patch, validate_patch_targets};
     use std::path::Path;
 
     /// Pre-fix: this patch flowed straight into `git apply`, which on older
@@ -310,5 +326,27 @@ mod patch_validation_tests {
         // as path headers. Only `--- ` / `+++ ` (note the trailing space).
         let patch = "--- a/x.rs\n+++ b/x.rs\n@@ -1,3 +1,3 @@\n-old line\n+new line\n";
         validate_patch_targets(patch, Path::new(".")).expect("body lines must not trigger");
+    }
+
+    #[tokio::test]
+    async fn applies_a_valid_patch_through_the_supervised_git_process() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git init");
+        std::fs::write(workspace.path().join("example.txt"), "old\n").expect("seed file");
+        let patch = "--- a/example.txt\n+++ b/example.txt\n@@ -1 +1 @@\n-old\n+new\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply patch");
+
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("example.txt")).expect("read result"),
+            "new\n"
+        );
     }
 }

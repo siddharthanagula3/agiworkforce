@@ -2,7 +2,9 @@ import {
   canUseBillingPlanCapability,
   getAutoRoutingProfiles,
   getModelsForTierAndSurface,
+  getModelMetadataById,
   getPlanMaxSandboxes,
+  getTierPolicy,
 } from '@agiworkforce/types';
 
 import type { PlanTier } from '../lib/cloudAccountTypes';
@@ -39,6 +41,11 @@ export function resolveDesktopCloudPickerModels(
     return live ? [live] : [];
   });
 
+  // Auto is executable only when discovery proves that at least one of its
+  // tier- and surface-admitted backing models is live. An empty discovery
+  // response must not become a synthetic "Auto is available" claim.
+  if (admitted.length === 0) return [];
+
   const auto = getAutoRoutingProfiles()[0];
   if (!auto) return admitted;
 
@@ -58,6 +65,16 @@ export function canUseDesktopCloudAgiWork(plan: PlanTier | null | undefined): bo
 
 export function canUseDesktopCloudImageGeneration(plan: PlanTier | null | undefined): boolean {
   return canUseBillingPlanCapability(plan, 'image_generation');
+}
+
+export function canUseDesktopCloudResearch(
+  plan: PlanTier | null | undefined,
+  selectedModelId: string | null | undefined,
+): boolean {
+  if (getTierPolicy(plan).allowDeepResearch !== true || !selectedModelId) return false;
+  if (getAutoRoutingProfiles().some((profile) => profile.id === selectedModelId)) return true;
+  const metadata = getModelMetadataById(selectedModelId);
+  return metadata?.capabilities.research === true && metadata.capabilities.search === true;
 }
 
 /**

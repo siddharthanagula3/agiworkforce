@@ -1985,8 +1985,8 @@ mod tests {
     }
 
     #[test]
-    fn permission_profile_preserves_split_permissions_without_claiming_external_enforcement(
-    ) -> Result<()> {
+    fn permission_profile_preserves_split_permissions_without_claiming_external_enforcement()
+    -> Result<()> {
         let cwd = tempdir()?;
         let permission_profile = PermissionProfile::from_runtime_permissions(
             &FileSystemSandboxPolicy::unrestricted(),

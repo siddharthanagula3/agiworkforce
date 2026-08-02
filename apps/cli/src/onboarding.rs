@@ -110,21 +110,39 @@ fn print_welcome_banner() {
 // Auth provider selection
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn maybe_trust_current_directory() -> Result<bool> {
-    let cwd = match std::env::current_dir() {
-        Ok(cwd) => cwd,
-        Err(_) => return Ok(true),
-    };
+/// Return whether the current project has a persisted trusted decision.
+///
+/// This is deliberately fail-closed: a missing/corrupt registry or an
+/// unavailable current directory must never be treated as trusted.
+pub fn is_current_directory_trusted() -> Result<bool> {
+    let cwd = std::env::current_dir().context("Failed to resolve current directory for trust")?;
     let target = resolve_project_scope(&cwd);
     let agiworkforce_home = crate::config::CliConfig::config_dir()?;
-    let registry = ProjectRegistry::load(&agiworkforce_home).unwrap_or_default();
+    let registry = ProjectRegistry::load(&agiworkforce_home)?;
     let target_key = target.to_string_lossy().to_string();
 
-    let trust_already_decided = registry
+    Ok(registry
         .projects
         .get(&target_key)
-        .is_some_and(|entry| entry.trust_level == "trusted");
-    if trust_already_decided {
+        .is_some_and(|entry| entry.trust_level == "trusted"))
+}
+
+/// Require an explicit trust decision for the current project.
+///
+/// Returns `Ok(false)` when the user declines so callers can exit before
+/// loading repository-controlled configuration, memory, hooks, or tools.
+pub fn ensure_current_directory_trusted() -> Result<bool> {
+    let cwd = std::env::current_dir().context("Failed to resolve current directory for trust")?;
+    let target = resolve_project_scope(&cwd);
+    let agiworkforce_home = crate::config::CliConfig::config_dir()?;
+    let registry = ProjectRegistry::load(&agiworkforce_home)?;
+    let target_key = target.to_string_lossy().to_string();
+
+    if registry
+        .projects
+        .get(&target_key)
+        .is_some_and(|entry| entry.trust_level == "trusted")
+    {
         return Ok(true);
     }
 
@@ -172,7 +190,7 @@ fn maybe_trust_current_directory() -> Result<bool> {
         }
         eprintln!(
             "\n  {}",
-            ts::muted("Setup canceled. Re-run onboarding when you trust this directory.")
+            ts::muted("Launch canceled. Run AGI again when you trust this directory.")
         );
         return Ok(false);
     }
@@ -763,7 +781,7 @@ pub async fn run_onboarding() -> Result<bool> {
     print_welcome_banner();
 
     // Step 2: Trust current directory
-    match maybe_trust_current_directory() {
+    match ensure_current_directory_trusted() {
         Ok(true) => {}
         Ok(false) => return Ok(false),
         Err(_) => {

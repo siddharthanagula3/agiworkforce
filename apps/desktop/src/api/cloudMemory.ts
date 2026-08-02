@@ -1,9 +1,8 @@
-import { cloudFetch, CLOUD_API_BASE_URL, getAuthHeaders } from './cloudApi';
+import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-  type ManagedCloudBoundary,
-} from '../services/managedCloudBoundary';
+  createManagedCloudRequestContext,
+  type ManagedCloudRequestContext,
+} from '../services/managedCloudRequestContext';
 
 export interface CloudMemoryFact {
   id: string;
@@ -46,36 +45,37 @@ function errorMessage(payload: unknown): string | null {
 async function request(
   path: string,
   init: RequestInit,
-  boundary: ManagedCloudBoundary,
+  context: ManagedCloudRequestContext,
 ): Promise<Response> {
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}${path}`, {
+  const response = await context.fetch(`${CLOUD_API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
-      ...(await getAuthHeaders()),
+      ...(await context.getHeaders()),
       ...(init.headers ?? {}),
     },
   });
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null);
+    context.assertBoundary();
     const message = errorMessage(payload);
     throw new Error(message ?? `Cloud memory request failed: HTTP ${response.status}`);
   }
-  assertManagedCloudBoundary(boundary);
   return response;
 }
 
 export async function listCloudMemories(): Promise<CloudMemoryFact[]> {
-  const boundary = captureManagedCloudBoundary('Cloud memory');
+  const context = createManagedCloudRequestContext('Cloud memory');
   const result: CloudMemoryFact[] = [];
   let offset = 0;
   do {
     const response = await request(
       `/api/memory?limit=100&offset=${offset}`,
       { method: 'GET' },
-      boundary,
+      context,
     );
     const payload: unknown = await response.json();
+    context.assertBoundary();
     const rows =
       payload && typeof payload === 'object' && !Array.isArray(payload)
         ? (payload as Record<string, unknown>)['memories']
@@ -91,16 +91,17 @@ export async function listCloudMemories(): Promise<CloudMemoryFact[]> {
 }
 
 export async function createCloudMemory(text: string): Promise<CloudMemoryFact> {
-  const boundary = captureManagedCloudBoundary('Cloud memory creation');
+  const context = createManagedCloudRequestContext('Cloud memory creation');
   const response = await request(
     '/api/memory',
     {
       method: 'POST',
       body: JSON.stringify({ content: text, source: 'desktop' }),
     },
-    boundary,
+    context,
   );
   const payload: unknown = await response.json();
+  context.assertBoundary();
   const fact =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? parseMemoryFact((payload as Record<string, unknown>)['memory'])
@@ -110,16 +111,17 @@ export async function createCloudMemory(text: string): Promise<CloudMemoryFact> 
 }
 
 export async function updateCloudMemory(id: string, text: string): Promise<CloudMemoryFact> {
-  const boundary = captureManagedCloudBoundary('Cloud memory update');
+  const context = createManagedCloudRequestContext('Cloud memory update');
   const response = await request(
     `/api/memory/${encodeURIComponent(id)}`,
     {
       method: 'PUT',
       body: JSON.stringify({ content: text }),
     },
-    boundary,
+    context,
   );
   const payload: unknown = await response.json();
+  context.assertBoundary();
   const fact =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? parseMemoryFact((payload as Record<string, unknown>)['memory'])
@@ -129,6 +131,7 @@ export async function updateCloudMemory(id: string, text: string): Promise<Cloud
 }
 
 export async function deleteCloudMemory(id: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud memory deletion');
-  await request(`/api/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }, boundary);
+  const context = createManagedCloudRequestContext('Cloud memory deletion');
+  await request(`/api/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }, context);
+  context.assertBoundary();
 }

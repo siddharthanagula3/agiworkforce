@@ -124,7 +124,7 @@ pub(super) async fn execute_enter_worktree(
         base,
         target_dir,
     };
-    match crate::runtime::worktree::enter_worktree(&repo, opts) {
+    match crate::runtime::worktree::enter_worktree(&repo, opts).await {
         Ok(wt) => {
             let hcfg = crate::hooks::load_hooks().unwrap_or_default();
             crate::hooks::run_hooks(
@@ -187,7 +187,7 @@ pub(super) async fn execute_exit_worktree(
     }
 
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    match crate::runtime::worktree::exit_worktree(&repo, &path) {
+    match crate::runtime::worktree::exit_worktree(&repo, &path).await {
         Ok(()) => {
             let hcfg = crate::hooks::load_hooks().unwrap_or_default();
             crate::hooks::run_hooks(
@@ -221,7 +221,7 @@ pub(super) async fn execute_exit_worktree(
 
 pub(super) async fn execute_list_worktrees(_args: &HashMap<String, String>) -> Result<ToolResult> {
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    match crate::runtime::worktree::list_worktrees(&repo) {
+    match crate::runtime::worktree::list_worktrees(&repo).await {
         Ok(list) => {
             let entries: Vec<serde_json::Value> = list.iter().map(|w| {
                 serde_json::json!({"branch": w.branch, "path": w.path.display().to_string()})

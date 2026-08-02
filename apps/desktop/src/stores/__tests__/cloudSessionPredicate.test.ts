@@ -28,12 +28,15 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.f
 
 import { useAppModeStore } from '../appModeStore';
 import { selectHasCloudAccountSession, useAuthStore } from '../auth';
-import { captureManagedCloudBoundary } from '../../services/managedCloudBoundary';
+import {
+  assertManagedCloudBoundary,
+  captureManagedCloudBoundary,
+} from '../../services/managedCloudBoundary';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 /**
- * Exactly what stores/authOrchestrator.ts projects (STEP 1 then STEP 5) for a
+ * Exactly what stores/authOrchestrator.ts projects for a
  * real desktop device bearer: display name from /api/me, email from the JWT
  * claim — which is the empty string.
  */
@@ -130,6 +133,76 @@ describe('desktop cloud session: one predicate for every surface', () => {
     expect(egressBoundaryAdmits()).toBe(false);
   });
 
+  it('keeps the same account boundary valid when its device bearer rotates', () => {
+    projectRealDeviceSession();
+    const boundary = captureManagedCloudBoundary();
+    const sessionEpoch = useAuthStore.getState().cloudSessionEpoch;
+
+    useAuthStore.getState().setAccount({
+      id: 'user_demo',
+      accessToken: 'rotated-device-bearer',
+    });
+
+    expect(useAuthStore.getState().cloudSessionEpoch).toBe(sessionEpoch);
+    expect(() => assertManagedCloudBoundary(boundary)).not.toThrow();
+  });
+
+  it('invalidates a captured boundary when the signed-in account changes', () => {
+    projectRealDeviceSession();
+    const boundary = captureManagedCloudBoundary();
+
+    const store = useAuthStore.getState();
+    store.setUser({ id: 'user_other', email: 'other@example.com' });
+    store.setAccount({
+      id: 'user_other',
+      accessToken: 'other-device-bearer',
+      isLocalDeviceAccount: false,
+    });
+
+    expect(() => assertManagedCloudBoundary(boundary)).toThrow(
+      'The Managed Cloud account changed while this request was in progress.',
+    );
+  });
+
+  it('does not revive an old boundary after account A returns through A -> B -> A', () => {
+    projectRealDeviceSession();
+    const firstAccountBoundary = captureManagedCloudBoundary();
+
+    const store = useAuthStore.getState();
+    store.setUser({ id: 'user_other', email: 'other@example.com' });
+    store.setAccount({
+      id: 'user_other',
+      accessToken: 'other-device-bearer',
+      isLocalDeviceAccount: false,
+    });
+    store.setUser({ id: 'user_demo', email: '', name: 'demo' });
+    store.setAccount({
+      id: 'user_demo',
+      accessToken: 'new-device-bearer',
+      isLocalDeviceAccount: false,
+    });
+
+    expect(useAuthStore.getState().user?.id).toBe(firstAccountBoundary.accountId);
+    expect(useAuthStore.getState().cloudSessionEpoch).not.toBe(firstAccountBoundary.sessionEpoch);
+    expect(() => assertManagedCloudBoundary(firstAccountBoundary)).toThrow(
+      'The Managed Cloud account changed while this request was in progress.',
+    );
+  });
+
+  it('invalidates an old boundary when the same account signs out and reconnects', () => {
+    projectRealDeviceSession();
+    const firstSessionBoundary = captureManagedCloudBoundary();
+
+    useAuthStore.getState().clearAuth();
+    projectRealDeviceSession();
+
+    expect(useAuthStore.getState().user?.id).toBe(firstSessionBoundary.accountId);
+    expect(useAuthStore.getState().cloudSessionEpoch).not.toBe(firstSessionBoundary.sessionEpoch);
+    expect(() => assertManagedCloudBoundary(firstSessionBoundary)).toThrow(
+      'The Managed Cloud account changed while this request was in progress.',
+    );
+  });
+
   /**
    * DES-C17. The admission conjunct used to be `plan !== 'local-only'`, which is
    * a *sniff* of a field the auth orchestrator writes several async steps after
@@ -151,7 +224,8 @@ describe('desktop cloud session: one predicate for every surface', () => {
     });
     expect(selectHasCloudAccountSession(useAuthStore.getState())).toBe(false);
 
-    // Act: exactly authOrchestrator STEP 1 — credential projected, no plan yet.
+    // Act: exactly the orchestrator's synchronous boundary projection — the
+    // credential lands while account-scoped capability data is reset.
     const store = useAuthStore.getState();
     store.setUser({ id: 'user_demo', email: '', name: 'demo' });
     store.setAccount({
@@ -162,9 +236,10 @@ describe('desktop cloud session: one predicate for every surface', () => {
       isLocalDeviceAccount: false,
     });
 
-    // Assert: admitted immediately, while `plan` is still the stale carry-over.
+    // Assert: admitted immediately, while the new account's plan is unresolved
+    // and no Local/account-A entitlement survives the identity transition.
     const midWindow = useAuthStore.getState();
-    expect(midWindow.plan).toBe('local-only');
+    expect(midWindow.plan).toBeNull();
     expect(selectHasCloudAccountSession(midWindow)).toBe(true);
     expect(egressBoundaryAdmits()).toBe(true);
   });
@@ -199,5 +274,21 @@ describe('desktop cloud session: one predicate for every surface', () => {
         `${surface} re-derives its own cloud-session predicate`,
       ).toBe(false);
     }
+  });
+
+  it('does not coerce the explicit chat synchronization preference from app mode', () => {
+    const appSource = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+
+    expect(appSource).not.toContain('desiredStorageMode');
+    expect(appSource).not.toMatch(/chatPreferences:\s*\{[^}]*chatStorageMode:/s);
+  });
+
+  it('scopes the managed runtime lifetime to the authenticated account, not its rotating token', () => {
+    const appSource = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+
+    expect(appSource).toContain(
+      "const runtimeAccountId = runtimeAppMode === 'cloud' ? authenticatedUserId : null;",
+    );
+    expect(appSource).toContain('[runtimeAccountId, runtimeAppMode, runtimeResearchEnabled]');
   });
 });

@@ -172,7 +172,8 @@ impl SubagentManager {
         prompt: &str,
     ) -> Result<String> {
         let description = format!("agent {}", definition.name);
-        self.spawn_inner(&description, prompt, Some(definition)).await
+        self.spawn_inner(&description, prompt, Some(definition))
+            .await
     }
 
     async fn spawn_inner(
@@ -231,6 +232,7 @@ impl SubagentManager {
         let task_result = Arc::clone(&result);
         let task_cancelled = Arc::clone(&cancelled);
         let task_description = description.to_string();
+        let process_owner = crate::process_tree::current_owner();
 
         eprintln!(
             "  {} Spawning subagent {} — {}",
@@ -249,19 +251,15 @@ impl SubagentManager {
                     .build()
                     .expect("Failed to create subagent tokio runtime");
 
-                rt.block_on(async move {
+                let task = async move {
                     // Check cancellation before starting
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
                         return;
                     }
 
-                    let outcome = run_subagent(
-                        &task_run_config,
-                        &task_prompt,
-                        &task_cancelled,
-                    )
-                    .await;
+                    let outcome =
+                        run_subagent(&task_run_config, &task_prompt, &task_cancelled).await;
 
                     // Check cancellation after completion
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
@@ -300,7 +298,11 @@ impl SubagentManager {
                             );
                         }
                     }
-                });
+                };
+                match process_owner {
+                    Some(owner) => rt.block_on(crate::process_tree::scope(owner, task)),
+                    None => rt.block_on(task),
+                }
             })?;
 
         let entry = SubagentEntry {
@@ -418,6 +420,27 @@ impl SubagentManager {
         results
     }
 
+    /// Cancel and join every subagent owned by this parent session.
+    ///
+    /// App-server shutdown uses this before acknowledging quiescence so an OS
+    /// thread (and any tool process tree running inside it) cannot outlive the
+    /// local developer runtime.
+    pub async fn shutdown_all(&self) {
+        {
+            let entries = self.entries.read().await;
+            for entry in entries.values() {
+                entry
+                    .cancelled
+                    .store(true, std::sync::atomic::Ordering::Release);
+                let mut status = entry.status.write().await;
+                if matches!(*status, SubagentStatus::Running) {
+                    *status = SubagentStatus::Cancelled;
+                }
+            }
+        }
+        let _ = self.wait_all().await;
+    }
+
     /// Format a human-readable summary of all subagents.
     #[allow(dead_code)]
     pub async fn format_summary(&self) -> String {
@@ -465,7 +488,9 @@ async fn run_subagent(
     session.skip_permissions = run_config.skip_permissions;
     session.permission_mode = run_config.permission_mode;
     session.allowed_tools = run_config.allowed_tools.clone();
-    session.disallowed_tools.clone_from(&run_config.disallowed_tools);
+    session
+        .disallowed_tools
+        .clone_from(&run_config.disallowed_tools);
     // Subagents get a reasonable max turns to avoid runaway loops
     session.max_turns = Some(15);
     if let Some(definition) = run_config.named_agent.as_ref() {
@@ -739,5 +764,47 @@ mod tests {
         );
         assert_eq!(manager.allowed_tools, Some(vec!["read_file".to_string()]));
         assert_eq!(manager.disallowed_tools, vec!["web_fetch".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn manager_shutdown_cancels_and_joins_background_threads() {
+        let manager = SubagentManager::new(
+            CliConfig::default(),
+            "llama3".to_string(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+        );
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_cancelled = cancelled.clone();
+        let handle = thread::spawn(move || {
+            while !worker_cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        manager.entries.write().await.insert(
+            "subagent-test".to_string(),
+            SubagentEntry {
+                id: "subagent-test".to_string(),
+                description: "shutdown sentinel".to_string(),
+                status: Arc::new(RwLock::new(SubagentStatus::Running)),
+                result: Arc::new(RwLock::new(None)),
+                handle: Some(handle),
+                cancelled: cancelled.clone(),
+            },
+        );
+
+        manager.shutdown_all().await;
+
+        assert!(cancelled.load(std::sync::atomic::Ordering::Acquire));
+        let entries = manager.entries.read().await;
+        let entry = entries.get("subagent-test").expect("tracked subagent");
+        assert!(entry.handle.is_none());
+        assert!(matches!(
+            *entry.status.read().await,
+            SubagentStatus::Cancelled
+        ));
     }
 }

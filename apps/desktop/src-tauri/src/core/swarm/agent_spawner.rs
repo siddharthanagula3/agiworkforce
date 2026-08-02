@@ -9,6 +9,7 @@ use super::{constants, task_decomposer::Subtask, AgentHealth, SwarmError, SwarmR
 use crate::automation::AutomationService;
 use crate::core::agi::{AGIConfig, AGICore, Goal, Priority, ResourceLimits};
 use crate::core::llm::LLMRouter;
+use crate::sys::account::{current_managed_auth_boundary, scope_managed_auth_boundary};
 use anyhow::Result;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -368,83 +369,87 @@ impl AgentSpawner {
         let router = self.router.clone();
         let automation = self.automation.clone();
         let app_handle = self.app_handle.clone();
+        let managed_auth_boundary = current_managed_auth_boundary();
 
-        tokio::spawn(async move {
-            tracing::debug!("[Agent {}] Task loop started", agent_id);
+        tokio::spawn(scope_managed_auth_boundary(
+            managed_auth_boundary,
+            async move {
+                tracing::debug!("[Agent {}] Task loop started", agent_id);
 
-            while !stop_signal.load(Ordering::SeqCst) {
-                // Wait for a task with timeout (for checking stop signal)
-                let task = tokio::select! {
-                    task = task_receiver.recv() => task,
-                    _ = tokio::time::sleep(Duration::from_secs(1)) => continue,
-                };
+                while !stop_signal.load(Ordering::SeqCst) {
+                    // Wait for a task with timeout (for checking stop signal)
+                    let task = tokio::select! {
+                        task = task_receiver.recv() => task,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => continue,
+                    };
 
-                let task = match task {
-                    Some(t) => t,
-                    None => {
-                        tracing::debug!("[Agent {}] Task channel closed", agent_id);
-                        break;
-                    }
-                };
-
-                // Update current task
-                *current_task.write() = Some(task.subtask.id.clone());
-
-                // Execute the task
-                let start = Instant::now();
-                let result = Self::execute_subtask(
-                    &agent_id,
-                    &task.subtask,
-                    task.trust_mode,
-                    router.clone(),
-                    automation.clone(),
-                    app_handle.clone(),
-                    config.operation_timeout,
-                )
-                .await;
-
-                let execution_time_ms = start.elapsed().as_millis() as u64;
-
-                let task_result = match result {
-                    Ok(value) => {
-                        circuit_breaker.record_success();
-                        AgentTaskResult {
-                            subtask_id: task.subtask.id.clone(),
-                            agent_id: agent_id.clone(),
-                            success: true,
-                            result: Some(value),
-                            error: None,
-                            execution_time_ms,
-                            retriable: false,
+                    let task = match task {
+                        Some(t) => t,
+                        None => {
+                            tracing::debug!("[Agent {}] Task channel closed", agent_id);
+                            break;
                         }
-                    }
-                    Err(e) => {
-                        let circuit_opened = circuit_breaker.record_failure();
-                        if circuit_opened {
-                            *health.write() = AgentHealth::CircuitOpen;
+                    };
+
+                    // Update current task
+                    *current_task.write() = Some(task.subtask.id.clone());
+
+                    // Execute the task
+                    let start = Instant::now();
+                    let result = Self::execute_subtask(
+                        &agent_id,
+                        &task.subtask,
+                        task.trust_mode,
+                        router.clone(),
+                        automation.clone(),
+                        app_handle.clone(),
+                        config.operation_timeout,
+                    )
+                    .await;
+
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    let task_result = match result {
+                        Ok(value) => {
+                            circuit_breaker.record_success();
+                            AgentTaskResult {
+                                subtask_id: task.subtask.id.clone(),
+                                agent_id: agent_id.clone(),
+                                success: true,
+                                result: Some(value),
+                                error: None,
+                                execution_time_ms,
+                                retriable: false,
+                            }
                         }
-                        AgentTaskResult {
-                            subtask_id: task.subtask.id.clone(),
-                            agent_id: agent_id.clone(),
-                            success: false,
-                            result: None,
-                            error: Some(e.to_string()),
-                            execution_time_ms,
-                            retriable: !circuit_opened,
+                        Err(e) => {
+                            let circuit_opened = circuit_breaker.record_failure();
+                            if circuit_opened {
+                                *health.write() = AgentHealth::CircuitOpen;
+                            }
+                            AgentTaskResult {
+                                subtask_id: task.subtask.id.clone(),
+                                agent_id: agent_id.clone(),
+                                success: false,
+                                result: None,
+                                error: Some(e.to_string()),
+                                execution_time_ms,
+                                retriable: !circuit_opened,
+                            }
                         }
-                    }
-                };
+                    };
 
-                // Clear current task
-                *current_task.write() = None;
+                    // Clear current task
+                    *current_task.write() = None;
 
-                // Send result back
-                let _ = task.result_sender.send(task_result);
-            }
+                    // Send result back
+                    let _ = task.result_sender.send(task_result);
+                }
 
-            tracing::debug!("[Agent {}] Task loop ended", agent_id);
-            *health.write() = AgentHealth::Terminated;
-        })
+                tracing::debug!("[Agent {}] Task loop ended", agent_id);
+                *health.write() = AgentHealth::Terminated;
+            },
+        ))
     }
 
     /// Builds the mini-`Goal` a sub-agent submits for a subtask, carrying the

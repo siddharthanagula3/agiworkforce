@@ -2,4 +2,12 @@
 import type { DeveloperMessage } from './DeveloperMessage';
 import type { ThreadSummary } from './ThreadSummary';
 
-export type ThreadReadResponse = { thread: ThreadSummary; messages: Array<DeveloperMessage> };
+export type ThreadReadResponse = {
+  thread: ThreadSummary;
+  messages: Array<DeveloperMessage>;
+  /**
+   * Whether `messages` is a bounded newest-message window rather than the
+   * thread's complete persisted transcript.
+   */
+  transcriptTruncated: boolean;
+};
