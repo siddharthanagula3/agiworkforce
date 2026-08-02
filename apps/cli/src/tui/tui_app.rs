@@ -2779,16 +2779,34 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
+        // Both arms report the outcome themselves rather than trusting the
+        // handler's `output::print_*` — stdout is not visible under the
+        // alternate screen, so an unconditional "Session saved." would be a
+        // false claim whenever the write was refused.
         "/fork" | "/branch" => {
-            crate::repl::handle_branch(arg, &mut app.session);
-            app.sync_stats();
-            SlashResult::SystemMessage("Session forked.".to_string())
+            if !app.session.session_persistence_enabled() {
+                SlashResult::SystemMessage(
+                    "Cannot branch — this run was started with --no-session-persistence, so no session file exists to fork."
+                        .to_string(),
+                )
+            } else {
+                crate::repl::handle_branch(arg, &mut app.session);
+                app.sync_stats();
+                SlashResult::SystemMessage("Session forked.".to_string())
+            }
         }
 
         "/save" => {
-            crate::repl::handle_save(&mut app.session);
-            app.sync_stats();
-            SlashResult::SystemMessage("Session saved.".to_string())
+            if !app.session.session_persistence_enabled() {
+                SlashResult::SystemMessage(
+                    "Cannot save — this run was started with --no-session-persistence, so nothing is written to disk."
+                        .to_string(),
+                )
+            } else {
+                crate::repl::handle_save(&mut app.session);
+                app.sync_stats();
+                SlashResult::SystemMessage("Session saved.".to_string())
+            }
         }
 
         "/rename" => {

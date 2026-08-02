@@ -14,6 +14,16 @@ use crate::terminal_style as ts;
 // ---------------------------------------------------------------------------
 
 pub fn handle_save(session: &mut AgentSession) {
+    // Fail closed and say so: with `--no-session-persistence` the write gate in
+    // `persist_managed_session` silently no-ops, which would leave /save
+    // printing nothing and reading as a dead command.
+    if !session.session_persistence_enabled() {
+        output::print_error(
+            "Cannot save — this run was started with --no-session-persistence, so nothing is written to disk. Restart without that flag to save sessions.",
+        );
+        return;
+    }
+
     if !session
         .messages
         .iter()
@@ -582,6 +592,15 @@ pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
 }
 
 pub fn handle_branch(arg: &str, session: &mut AgentSession) {
+    // Branching writes a second session file to disk; refuse rather than fork
+    // around the privacy opt-out.
+    if !session.session_persistence_enabled() {
+        output::print_error(
+            "Cannot branch — this run was started with --no-session-persistence, so no session file exists to fork. Restart without that flag to branch.",
+        );
+        return;
+    }
+
     if !session
         .messages
         .iter()
@@ -999,5 +1018,42 @@ pub(super) async fn handle_batch_command(
         Err(e) => {
             output::print_error(&format!("Batch failed: {:#}", e));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::SystemContext;
+
+    fn empty_context() -> SystemContext {
+        let mut ctx = crate::context::gather_system_context();
+        ctx.git_status_summary = None;
+        ctx
+    }
+
+    /// `/save` and `/branch` must refuse under `--no-session-persistence`
+    /// instead of quietly doing nothing: the write gate lower down would have
+    /// made both commands read as dead controls.
+    #[test]
+    fn save_and_branch_refuse_when_session_persistence_is_disabled() {
+        let ctx = empty_context();
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        session.set_session_persistence(false);
+        session
+            .messages
+            .push(crate::models::Message::text("user", "a real turn"));
+
+        handle_save(&mut session);
+        assert!(
+            session.managed_session_id().is_none(),
+            "/save must not create a managed session under --no-session-persistence"
+        );
+
+        handle_branch("branch-name", &mut session);
+        assert!(
+            session.managed_session_id().is_none(),
+            "/branch must not create a managed session under --no-session-persistence"
+        );
     }
 }
