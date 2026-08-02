@@ -36,6 +36,7 @@ import {
   type DisclosureCopy,
 } from '@agiworkforce/compliance';
 import { mmkvDisclosureLedger } from '@/services/complianceLedger';
+import { isSelectableLocalCatalogModel } from '@/src/features/model-picker/catalogSelectability';
 import {
   detectCapabilities,
   getDefaultModel,
@@ -95,27 +96,21 @@ type RecommendedModel = OnDeviceModel & { needsDownload: boolean };
 
 function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
   if (tier === 1) {
-    // System model — already on device
-    const sysModel = getShippableModels().find((m) => m.role === 'system-multimodal') ?? {
-      id: 'apple-foundation-models',
-      displayName: 'Apple Intelligence',
-      family: 'apple-fm' as const,
-      paramCountB: 3,
-      fileSizeBytes: 0,
-      supportedRuntimes: ['apple-foundation-models' as const],
-      contextWindow: 4096,
-      capabilities: {
-        text: true,
-        visionIn: true,
-        audioIn: false,
-        toolCalls: true,
-        structuredOutput: true,
-      },
-      license: 'Apple Entitlement',
-      role: 'system-multimodal' as const,
-      shipsInV1: true,
-    };
-    return { ...sysModel, needsDownload: false };
+    // Tier 1 is an OS-resident runtime, so recommending it means "no download".
+    // Only do that when the row is ALSO selectable for chat: the Mobile picker
+    // filters system-runtime-only rows out of LOCAL_MODEL_LIST
+    // (catalogSelectability.ts SYSTEM_RUNTIME_ONLY), and
+    // `resolveLocalModelRef` refuses an id it cannot find there. Recommending
+    // the unselectable row told a fresh Apple-Intelligence install "a built-in
+    // local model is ready to use", skipped the download screen entirely, and
+    // dropped the user into chat with no usable model — the first send then
+    // failed (SIX-21). Falling through to the downloadable default keeps the
+    // first run honest; the moment system-runtime rows become selectable this
+    // branch starts recommending the zero-download model again on its own.
+    const sysModel = getShippableModels().find(
+      (m) => m.role === 'system-multimodal' && isSelectableLocalCatalogModel(m),
+    );
+    if (sysModel) return { ...sysModel, needsDownload: false };
   }
   const model = getDefaultModel();
   return { ...model, needsDownload: true };

@@ -16,6 +16,7 @@ let mockChatInputDraftProvenance:
   | { scope: 'local' }
   | { scope: 'cloud'; ownerId: string }
   | undefined;
+let mockChatInputOnOpenCompare: (() => void) | undefined;
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -72,12 +73,14 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       props: {
         onSend?: (text: string) => void;
         draftProvenance?: { scope: 'local' } | { scope: 'cloud'; ownerId: string };
+        onOpenCompare?: () => void;
       },
       ref: React.Ref<unknown>,
     ) {
       React.useImperativeHandle(ref, () => ({ addAttachments: jest.fn() }));
       mockChatInputOnSend = props.onSend;
       mockChatInputDraftProvenance = props.draftProvenance;
+      mockChatInputOnOpenCompare = props.onOpenCompare;
       return <View testID="chat-input" />;
     }),
   };
@@ -192,6 +195,7 @@ describe('Chat tab mode toggle', () => {
     activateCloudAccount('mobile-image-test-user');
     mockChatInputOnSend = undefined;
     mockChatInputDraftProvenance = undefined;
+    mockChatInputOnOpenCompare = undefined;
     mockChatFeatures = { imageGen: true };
     useChatAppModeStore.setState({ appMode: 'local' });
     useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
@@ -260,6 +264,26 @@ describe('Chat tab mode toggle', () => {
       scope: 'cloud',
       ownerId: 'mobile-image-test-user',
     });
+  });
+
+  // SIX-23: /compare streams both panes through the managed-cloud gateway.
+  // Offering it in Local Mode dead-ended in guardedFetch's refusal, so the
+  // composer must not receive an onOpenCompare handler outside Cloud.
+  it('withholds the /compare command from the composer in Local Mode', () => {
+    render(<ChatTabScreen />);
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(mockChatInputOnOpenCompare).toBeUndefined();
+  });
+
+  it('offers the /compare command to the composer in Cloud Mode', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+
+    render(<ChatTabScreen />);
+
+    expect(typeof mockChatInputOnOpenCompare).toBe('function');
+    mockChatInputOnOpenCompare?.();
+    expect(mockPush).toHaveBeenCalledWith('/(app)/compare');
   });
 
   it('keeps a registry Auto profile selected inside the Cloud boundary', async () => {

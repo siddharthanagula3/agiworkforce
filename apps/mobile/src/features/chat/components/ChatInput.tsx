@@ -5,6 +5,7 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
 } from 'react';
 import { Alert, View, TextInput, Pressable, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,9 +20,15 @@ import {
   Terminal,
   Paintbrush,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getModelMetadataById,
+  summarizeSendPreview,
+  type SendPreviewInput,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
+import { SendPreview } from './SendPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
@@ -117,6 +124,17 @@ interface ChatInputProps {
    * "Add per-file privacy labels".
    */
   attachmentPrivacyShortLabel?: string;
+  /**
+   * Route half of the "what will be sent" disclosure: the host supplies the
+   * boundary it resolved (provider mode, the model the send will ACTUALLY use,
+   * any destination host / tool list). The composer completes it with the
+   * payload half it alone knows — the live draft length and the staged
+   * attachments — and renders the compact SendPreview above the input.
+   *
+   * Omit it and no disclosure renders (e.g. the Compare screen, which states
+   * its boundary in its own header).
+   */
+  sendPreview?: SendPreviewInput;
   /** When true, composer placeholder reads "Reply to AGI" instead of "Ask anything..." */
   isThreadActive?: boolean;
   /**
@@ -148,6 +166,7 @@ export function ChatInput({
   queueSize = 0,
   attachRef,
   attachmentPrivacyShortLabel,
+  sendPreview,
   isThreadActive = false,
   initialText,
   draftKey,
@@ -630,6 +649,26 @@ export function ChatInput({
     handleSendButtonPress();
   }, [handleSendButtonPress]);
 
+  /**
+   * Payload disclosure. The host owns the route (boundary, model, tools); this
+   * component owns what is staged to leave the device right now, so the two
+   * halves are joined here rather than the host guessing at the draft.
+   * Recomputed on every keystroke on purpose — the char count is part of the
+   * disclosure, and this component already re-renders on each one.
+   */
+  const sendPreviewPresentation = useMemo(() => {
+    if (!sendPreview) return undefined;
+    return summarizeSendPreview({
+      ...sendPreview,
+      messageBody: text,
+      attachmentCount: attachments.length,
+      attachmentSummaries: attachments.map((item) => ({
+        name: item.fileName,
+        mimeType: item.mimeType,
+      })),
+    });
+  }, [sendPreview, text, attachments]);
+
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
   const placeholder = isStreaming
     ? `Reply to ${modelName}...`
@@ -644,6 +683,15 @@ export function ChatInput({
       className="px-4 pt-2"
       style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16) }}
     >
+      {/* "What will be sent" disclosure — the destination stays visible above
+          the composer before every send, and expands to the full payload
+          explanation on demand. Mirrors the web composer's compact SendPreview
+          (ChatComposerNew.tsx). Hidden during voice capture, where the row
+          below morphs into the recording UI and there is no draft to describe. */}
+      {sendPreviewPresentation && !isRecording && !isTranscribing ? (
+        <SendPreview presentation={sendPreviewPresentation} variant="compact" />
+      ) : null}
+
       {/* Attachment preview strip */}
       <AttachmentPreview
         attachments={attachments}

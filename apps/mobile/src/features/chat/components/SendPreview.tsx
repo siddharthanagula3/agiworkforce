@@ -19,6 +19,21 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
   defaultExpanded?: boolean;
+  /**
+   * `card` is the full trust-boundary explainer (unchanged; snapshotted).
+   * `compact` is the composer-mounted form: a single low pill that keeps the
+   * destination permanently visible above the input without consuming a banner
+   * row, and expands in place to the same destination/privacy/banner/detail
+   * block. Mirrors the shared web component's `variant="compact"`, which the
+   * web composer renders at ChatComposerNew.tsx.
+   */
+  variant?: 'card' | 'compact';
+}
+
+function getCompactDestinationLabel(presentation: SendPreviewPresentation): string {
+  if (presentation.staysLocal) return 'Stays on device';
+  if (presentation.providerMode === 'DirectByok') return 'Sign in for AGI Cloud';
+  return 'Sent to AGI Cloud';
 }
 
 function DestinationIcon({
@@ -88,7 +103,50 @@ function DetailRow({
   );
 }
 
-export function SendPreview({ presentation, defaultExpanded = false }: SendPreviewProps) {
+function DetailBlock({
+  presentation,
+  colors,
+}: {
+  presentation: SendPreviewPresentation;
+  colors: ColorScheme;
+}) {
+  return (
+    <View testID="send-preview-details" style={{ gap: 3, paddingTop: 2 }}>
+      {presentation.bodyCharLabel ? (
+        <DetailRow term="Message" definition={presentation.bodyCharLabel} colors={colors} />
+      ) : null}
+      {presentation.attachmentLabel ? (
+        <DetailRow term="Attachments" definition={presentation.attachmentLabel} colors={colors} />
+      ) : null}
+      {presentation.systemPromptLabel ? (
+        <DetailRow
+          term="System prompt"
+          definition={presentation.systemPromptLabel}
+          colors={colors}
+        />
+      ) : null}
+      {presentation.contextLabel ? (
+        <DetailRow term="Context budget" definition={presentation.contextLabel} colors={colors} />
+      ) : null}
+      {presentation.toolsLabel ? (
+        <DetailRow term="Tools" definition={presentation.toolsLabel} colors={colors} />
+      ) : null}
+      {presentation.sourceSessionLabel ? (
+        <DetailRow
+          term="Source session"
+          definition={presentation.sourceSessionLabel}
+          colors={colors}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+export function SendPreview({
+  presentation,
+  defaultExpanded = false,
+  variant = 'card',
+}: SendPreviewProps) {
   const colors = useThemeColors();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const accent = getAccent(presentation, colors);
@@ -100,6 +158,97 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
     presentation.toolsLabel ||
     presentation.sourceSessionLabel,
   );
+
+  if (variant === 'compact') {
+    return (
+      <View testID="send-preview" style={{ gap: 6 }}>
+        <Pressable
+          testID="send-preview-toggle"
+          onPress={() => setExpanded((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${presentation.destinationLabel}. ${
+            expanded ? 'Hide' : 'Show'
+          } send details`}
+          style={{
+            alignSelf: 'flex-start',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingVertical: 2,
+            paddingHorizontal: 4,
+          }}
+        >
+          <DestinationIcon presentation={presentation} colors={colors} />
+          <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textMuted }}>
+            {getCompactDestinationLabel(presentation)}
+          </Text>
+          {expanded ? (
+            <ChevronUp size={10} color={colors.textMuted} />
+          ) : (
+            <ChevronDown size={10} color={colors.textMuted} />
+          )}
+        </Pressable>
+        {expanded ? (
+          <View
+            testID="send-preview-panel"
+            style={{
+              padding: 10,
+              borderRadius: 8,
+              backgroundColor: accent.bg,
+              borderWidth: 1,
+              borderColor: accent.border,
+              gap: 6,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text
+                style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary }}
+                numberOfLines={1}
+              >
+                {getMobileDestinationLabel(presentation)}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 9999,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceBase,
+                }}
+              >
+                <Lock size={10} color={colors.textSecondary} />
+                <Text
+                  style={{
+                    fontSize: 9,
+                    fontWeight: '700',
+                    color: colors.textSecondary,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {getMobilePrivacyLabel(presentation)}
+                </Text>
+              </View>
+            </View>
+            {getMobileModelLabel(presentation) ? (
+              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                {getMobileModelLabel(presentation)}
+              </Text>
+            ) : null}
+            <Text style={{ fontSize: 11, lineHeight: 15, color: colors.textSecondary }}>
+              {getMobileBannerCopy(presentation)}
+            </Text>
+            {detailsAvailable ? <DetailBlock presentation={presentation} colors={colors} /> : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View
@@ -182,42 +331,7 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
         </Pressable>
       ) : null}
       {expanded && detailsAvailable ? (
-        <View testID="send-preview-details" style={{ gap: 3, paddingTop: 2 }}>
-          {presentation.bodyCharLabel ? (
-            <DetailRow term="Message" definition={presentation.bodyCharLabel} colors={colors} />
-          ) : null}
-          {presentation.attachmentLabel ? (
-            <DetailRow
-              term="Attachments"
-              definition={presentation.attachmentLabel}
-              colors={colors}
-            />
-          ) : null}
-          {presentation.systemPromptLabel ? (
-            <DetailRow
-              term="System prompt"
-              definition={presentation.systemPromptLabel}
-              colors={colors}
-            />
-          ) : null}
-          {presentation.contextLabel ? (
-            <DetailRow
-              term="Context budget"
-              definition={presentation.contextLabel}
-              colors={colors}
-            />
-          ) : null}
-          {presentation.toolsLabel ? (
-            <DetailRow term="Tools" definition={presentation.toolsLabel} colors={colors} />
-          ) : null}
-          {presentation.sourceSessionLabel ? (
-            <DetailRow
-              term="Source session"
-              definition={presentation.sourceSessionLabel}
-              colors={colors}
-            />
-          ) : null}
-        </View>
+        <DetailBlock presentation={presentation} colors={colors} />
       ) : null}
     </View>
   );

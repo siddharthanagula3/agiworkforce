@@ -10,8 +10,8 @@
 import {
   getDefaultModel as getCatalogDefaultModel,
   getShippableModels as getCatalogShippableModels,
-  hasRunnableGgufArtifacts,
 } from '@agiworkforce/local-llm';
+import { isSelectableLocalCatalogModel } from './catalogSelectability';
 import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
 import {
   evaluateModelEnvironment,
@@ -144,33 +144,12 @@ export function applyEnvironmentGate(
 }
 
 /**
- * The catalog includes future local models before all native packages are
- * shippable on Mobile. The picker only shows rows that can actually be used:
- * system-runtime rows when their runtime is active, or downloadable rows with
- * either an ExecuTorch preset (tier 2) or verified llama-rn GGUF artifacts
- * (tier 3, incl. multimodal base+mmproj pairs).
+ * Selectability lives in `./catalogSelectability` so a caller that only needs
+ * the predicate (first-run onboarding) does not have to import this module and
+ * trigger the catalog evaluation below. Re-exported here because this is where
+ * every existing consumer looks for it.
  */
-const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
-
-// Backlog: this always excludes system-runtime-only rows rather than showing them
-// once native async capability detection confirms the runtime is actually active.
-// Making the catalog reactive to that detection is a separate scope item, not done here.
-function isSystemRuntimeOnly(model: OnDeviceModel): boolean {
-  return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
-}
-
-/**
- * Exported for unit tests. Note this predicate is applied to SHIPPABLE catalog
- * rows only (`getShippableModels()` already filters `shipsInV1`) — a
- * `shipsInV1:false` row like the qwen3-vl vision pack never reaches it in
- * production listing, regardless of what it returns.
- */
-export function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {
-  if (isSystemRuntimeOnly(model)) return false;
-  if (model.fileSizeBytes <= 0) return true;
-  if (model.executorchPreset) return true;
-  return hasRunnableGgufArtifacts(model);
-}
+export { isSelectableLocalCatalogModel } from './catalogSelectability';
 
 const SHIPPABLE_LOCAL_MODELS = getCatalogShippableModels().filter(isSelectableLocalCatalogModel);
 if (SHIPPABLE_LOCAL_MODELS.length === 0) {
