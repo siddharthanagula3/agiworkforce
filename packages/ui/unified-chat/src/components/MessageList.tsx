@@ -7,11 +7,18 @@ import {
   hasStreamError,
   getStreamErrorMessage,
 } from '../lib/continue-generation';
-import type { Artifact } from '../lib/types';
+import type { Artifact, MessageArtifactProjection } from '../lib/types';
 
 interface MessageListProps {
   conversationId: string;
   onArtifactClick?: (artifact: Artifact) => void;
+  /**
+   * Per-message artifact projections keyed by message id, computed once by
+   * `ChatInterface` from the host's `deriveMessageArtifacts` capability. Absent
+   * (or missing an entry) means "render this message exactly as stored" — the
+   * behaviour for hosts that wire no derivation.
+   */
+  artifactProjections?: ReadonlyMap<string, MessageArtifactProjection> | null;
   /**
    * When true (default), assistant messages render a `ProvenanceFooter`
    * below their bubble. Pass `false` to suppress.
@@ -25,13 +32,12 @@ interface MessageListProps {
    */
   onContinueGeneration?: (assistantMessageId: string) => void;
   /**
-   * Regenerate the LAST assistant turn. Currently used only to wire the
-   * mid-stream-error notice's Retry action (see `hasStreamError` — no
-   * runtime plugged into this component exposes a general regenerate
-   * capability yet, unlike `onContinueGeneration`). When omitted, the
-   * notice still renders (the user needs to know the response may be
-   * incomplete regardless), just without a Retry button — no fake
-   * affordance.
+   * Re-run the user turn that produced an assistant message, replacing the old
+   * exchange. Drives THREE affordances that all die together when it is
+   * omitted: the mid-stream-error notice's Retry (see `hasStreamError`), the
+   * per-message Retry in `ActionBar`, and the resend on an expired
+   * tool-approval card. When omitted every one of them is hidden rather than
+   * rendered dead — no fake affordance.
    */
   onRegenerateMessage?: (assistantMessageId: string) => void;
   /** Forwarded to `MessageBubble` — see its doc comments. */
@@ -57,6 +63,7 @@ const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
 export function MessageList({
   conversationId,
   onArtifactClick,
+  artifactProjections,
   showProvenanceFooter = true,
   onContinueGeneration,
   onRegenerateMessage,
@@ -185,7 +192,9 @@ export function MessageList({
               >
                 <MessageBubble
                   message={msg}
+                  artifactProjection={artifactProjections?.get(msg.id) ?? null}
                   onArtifactClick={onArtifactClick}
+                  onRetry={onRegenerateMessage}
                   onToolApprove={onToolApprove}
                   onToolReject={onToolReject}
                   approvalTurnExpired={approvalTurnExpired}

@@ -46,6 +46,15 @@ export interface ChatHostBridge {
    * hosts must never route Local-mode content through this.
    */
   fetchCloudFile?: (uri: string) => Promise<Blob>;
+  /**
+   * Open the host's real upgrade/checkout surface for `requiredTier`.
+   *
+   * Backs the upgrade CTA on an in-transcript managed quota refusal (see
+   * `MessageLimitCard`). Hosts without a checkout path omit it and the CTA is
+   * NOT rendered — a button that leads nowhere is a dead control, and the card
+   * still explains the ceiling and any reset time without it.
+   */
+  openUpgrade?: (requiredTier: string) => void;
   /** Live host checkpoint transport used by the shared rewind timeline. */
   fetchCodingCheckpoints?: () => Promise<ChatHostCodingCheckpoint[]>;
   /** Restore the workspace to a host checkpoint; rejects on failure. */

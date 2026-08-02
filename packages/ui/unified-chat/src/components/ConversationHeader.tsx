@@ -25,6 +25,12 @@ export interface ConversationHeaderProps {
   onToggleArtifacts?: () => void;
   /** Whether the artifacts panel is currently open, for aria-pressed. */
   artifactsOpen?: boolean;
+  /**
+   * How many artifacts this conversation currently has. Rendered as a badge on
+   * the artifacts toggle and folded into its accessible name, so the control
+   * says what it will open instead of being an unlabelled box.
+   */
+  artifactCount?: number;
 }
 
 export function ConversationHeader({
@@ -32,6 +38,7 @@ export function ConversationHeader({
   onShare,
   onToggleArtifacts,
   artifactsOpen = false,
+  artifactCount = 0,
 }: ConversationHeaderProps = {}) {
   const currentId = useChatStore((s) => s.activeConversationId);
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === currentId));
@@ -104,10 +111,15 @@ export function ConversationHeader({
             ) : null}
             {onToggleArtifacts ? (
               <HeaderAction
-                label="Toggle artifacts panel"
+                label={
+                  artifactCount > 0
+                    ? `Toggle artifacts panel (${artifactCount})`
+                    : 'Toggle artifacts panel'
+                }
                 onClick={onToggleArtifacts}
                 icon={Package}
                 pressed={artifactsOpen}
+                badge={artifactCount > 0 ? artifactCount : undefined}
               />
             ) : null}
             {onShare ? (
@@ -129,11 +141,14 @@ function HeaderAction({
   onClick,
   icon: Icon,
   pressed,
+  badge,
 }: {
   label: string;
   onClick: () => void;
   icon: typeof Pencil;
   pressed?: boolean;
+  /** Numeric count rendered beside the icon (e.g. the artifact count). */
+  badge?: number;
 }) {
   return (
     <button
@@ -142,9 +157,14 @@ function HeaderAction({
       title={label}
       aria-label={label}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-      className="rounded p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
+      className="inline-flex items-center gap-1 rounded p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
     >
       <Icon className="h-4 w-4" aria-hidden />
+      {badge === undefined ? null : (
+        <span className="text-[11px] font-medium leading-none" aria-hidden>
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

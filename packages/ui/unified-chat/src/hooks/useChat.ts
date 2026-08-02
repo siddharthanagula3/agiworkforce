@@ -24,10 +24,19 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { defaultBrowserStorage, enqueuePrompt, getSendQueue } from '../queue/sendQueue';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
 import {
+  classifyManagedQuotaErrorCode,
   getModelMetadataById,
+  getNextUpgradeTier,
   type ChatExecutionMode,
   type CloudWorkMode,
 } from '@agiworkforce/types';
+import { resolveThinkingSendPolicy } from '../lib/thinkingPolicy';
+import {
+  getRegenerateReplayDecision,
+  planRegenerateRollback,
+  type RegenerateReplayMetadata,
+  type SendReplayMetadataLike,
+} from '../lib/regenerateReplay';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
@@ -83,6 +92,24 @@ function getRoutingContext(
     }
   }
   return null;
+}
+
+/**
+ * Data-loss-safe turn replacement, used by `regenerate` (and any future
+ * edit-and-resend). Mirrors web's `sendReplacingMessages`: the caller has
+ * ALREADY removed `messageIds` from the local transcript so the UI is clean
+ * while the replacement streams, but the DURABLE rows are still on the server.
+ * They are deleted only once the replacement send has actually run; if the send
+ * throws before committing anything, `snapshot` is written back so the exchange
+ * is never lost. Worst case degrades from data-loss to at most a duplicate row.
+ */
+interface SendReplacement {
+  /** Durable row ids the replacement send supersedes. */
+  messageIds: string[];
+  /** Exact transcript to restore if the replacement send throws. */
+  snapshot: ChatMessage[];
+  /** Send options recovered from the replaced user turn's `sendReplay`. */
+  replay?: SendReplayMetadataLike | undefined;
 }
 
 interface UseChatOptions {
@@ -719,6 +746,39 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'error': {
+          // Managed quota / rate-limit refusals are not generic failures: the
+          // user needs the reason, the reset time, and (when one exists) an
+          // upgrade path, all IN the transcript. A toast that disappears over
+          // an empty bubble is the behaviour this replaces. Same classifier and
+          // same `metadata.paywall` shape web writes (GOV-20).
+          const quotaBlock = classifyManagedQuotaErrorCode(event.code);
+          if (quotaBlock && assistantMessageIdRef.current) {
+            const blockedId = assistantMessageIdRef.current;
+            const blocked = store.messagesByConversation[convId]?.find((m) => m.id === blockedId);
+            // Null on the top self-serve tier / a sales-assisted plan: there is
+            // no self-serve upgrade to offer, so no CTA is rendered.
+            const nextTier = getNextUpgradeTier(useTierStore.getState().tier);
+            store.updateMessage(convId, blockedId, {
+              isStreaming: false,
+              error: undefined,
+              metadata: {
+                ...blocked?.metadata,
+                finishReason: 'error',
+                paywall: {
+                  feature: quotaBlock.feature,
+                  requiredTier: nextTier ?? 'basic',
+                  reason: event.error || quotaBlock.reason,
+                  showUpgradeCta: quotaBlock.showUpgradeCta && nextTier !== null,
+                  showResetTime: quotaBlock.showResetTime,
+                  suggestStandardModel: quotaBlock.suggestStandardModel,
+                  ...(event.resetAt ? { resetAt: event.resetAt } : {}),
+                },
+              },
+            });
+            assistantMessageIdRef.current = null;
+            store.stopStreaming(convId);
+            break;
+          }
           if (assistantMessageIdRef.current) {
             const failingId = assistantMessageIdRef.current;
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
@@ -796,6 +856,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       writingStyle?: WritingStyle,
       workMode?: CloudWorkMode,
       projectId?: string | null,
+      replacement?: SendReplacement,
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
@@ -928,9 +989,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
       const store = useChatStore.getState();
 
-      // Add user message — desktop store auto-creates conversation if needed
+      // Add user message — desktop store auto-creates conversation if needed.
+      // The id is minted HERE and forwarded to the runtime so the rendered row
+      // and its durable row share one identity: regenerate/edit have to delete
+      // superseded server rows by the ids the transcript actually holds.
+      const userMessageId = crypto.randomUUID();
       addMsg({
-        id: crypto.randomUUID(),
+        id: userMessageId,
         role: 'user',
         content,
         ...(attachments?.length
@@ -967,8 +1032,18 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         .filter((instruction): instruction is string => Boolean(instruction))
         .join('\n\n');
       const modelState = useModelStore.getState();
-      const thinkingEnabled = modelState.thinkingEnabled;
-      const requestedWebSearch = store.webSearchEnabled;
+      // Capability-clamp thinking/effort against the SELECTED model's catalog
+      // reasoning contract before anything reaches the wire. The composer's
+      // persisted "off" is only an intent: the Managed Cloud route answers a
+      // `thinking_mode: false` on an always-on reasoning model with a 422
+      // `invalid_thinking_configuration`, so an unclamped send fails the whole
+      // turn before generation. See lib/thinkingPolicy.ts.
+      const thinkingPolicy = resolveThinkingSendPolicy({
+        modelId: resolvedModelId,
+        requestedThinking: replacement?.replay?.thinkingEnabled ?? modelState.thinkingEnabled,
+        requestedEffort: effort,
+      });
+      const requestedWebSearch = replacement?.replay?.webSearchEnabled ?? store.webSearchEnabled;
 
       // Resolve the selected model's provider so the backend can route it.
       // Without this, a dynamic Local model — e.g. an Ollama model like
@@ -1006,7 +1081,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const modelCapabilities = getModelMetadataById(resolvedModelId)?.capabilities;
       const codeExecution =
         Boolean(runtime.supportsCodeExecution) &&
-        settingsState.codeExecutionEnabled &&
+        (replacement?.replay?.codeExecutionEnabled ?? settingsState.codeExecutionEnabled) &&
         isCodeExecutionAvailable(
           modelCapabilities?.codeExecution,
           modelCapabilities?.tools,
@@ -1014,6 +1089,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           settingsState.codeExecutionDeploymentEnabled,
         );
       const research = Boolean(runtime.supportsResearch && researchEnabled);
+      const effectiveWorkMode = workMode ?? replacement?.replay?.workMode;
 
       // Reset assistant message ref for new response, then create the shared
       // pre-token row immediately. Without this row, a Local model that takes
@@ -1045,7 +1121,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           content: '',
           timestamp: new Date(startedAtMs).toISOString(),
           isStreaming: true,
-          ...(workMode === 'agiwork'
+          ...(effectiveWorkMode === 'agiwork'
             ? {
                 metadata: {
                   agentActivity: startAgentActivityLocally({
@@ -1066,23 +1142,47 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: resolvedModelId,
           ...(resolvedProvider ? { provider: resolvedProvider } : {}),
+          userMessageId,
+          assistantMessageId,
           webSearch: webSearchEnabled,
           ...(research ? { research: true } : {}),
-          ...(workMode ? { workMode } : {}),
+          ...(effectiveWorkMode ? { workMode: effectiveWorkMode } : {}),
           ...(projectId !== undefined ? { projectId } : {}),
-          thinkingEnabled,
+          // `undefined` means the model declares no thinking contract — the
+          // field must be OMITTED, not sent as false (DES-C03).
+          ...(thinkingPolicy.thinkingEnabled !== undefined
+            ? { thinkingEnabled: thinkingPolicy.thinkingEnabled }
+            : {}),
           ...(codeExecution ? { codeExecution: true } : {}),
           messageHistory,
           ...(agentMode ? { agentMode } : {}),
-          ...(effort ? { effort } : {}),
+          ...(thinkingPolicy.effort ? { effort: thinkingPolicy.effort } : {}),
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
+        })
+        .then(() => {
+          // The replacement turn has run, so its user row is durable on the
+          // server. Only now drop the rows it superseded.
+          if (replacement && replacement.messageIds.length > 0) {
+            void runtime.deleteMessages?.(convId, replacement.messageIds).catch(() => {
+              // A failed durable delete leaves at most a stale row that the
+              // next reload reconciles; it must never fail the visible turn.
+            });
+          }
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           const failedStore = useChatStore.getState();
-          const failedAssistant = failedStore.messagesByConversation[convId]?.find(
-            (candidate) => candidate.id === assistantMessageId,
-          );
+          // The replacement never committed: put the exact transcript back
+          // rather than leaving the user with a silently truncated thread. The
+          // superseded server rows were never touched, so nothing is lost.
+          if (replacement) {
+            failedStore.setMessages(convId, replacement.snapshot);
+          }
+          const failedAssistant = replacement
+            ? undefined
+            : failedStore.messagesByConversation[convId]?.find(
+                (candidate) => candidate.id === assistantMessageId,
+              );
           if (failedAssistant?.isStreaming) {
             const currentActivity = failedAssistant.metadata?.['agentActivity'] as
               | AgentActivityState
@@ -1112,7 +1212,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdsRef.current.get(convId) === assistantMessageId) {
             assistantMessageIdsRef.current.delete(convId);
           }
-          toast.error(message || 'Failed to send message');
+          toast.error(
+            message ||
+              (replacement ? 'Could not regenerate this response' : 'Failed to send message'),
+          );
         })
         .finally(() => {
           // Safety net — stop streaming if onStream 'done' wasn't received
@@ -1291,6 +1394,83 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         });
     },
     [runtime],
+  );
+
+  /**
+   * Regenerate (web parity): re-run the user turn that produced
+   * `assistantMessageId`, replacing the old exchange instead of appending a
+   * duplicate one.
+   *
+   * Rolls back from the PRECEDING user message (see `planRegenerateRollback` —
+   * rolling back only the assistant would leave the original prompt in place
+   * and re-sending it would duplicate the user turn), then re-sends through the
+   * normal pipeline with the send options the original turn recorded. The
+   * durable rows are deleted only after the replacement send has run, and the
+   * exact transcript is restored if it throws (see `SendReplacement`).
+   *
+   * Refuses rather than silently sending a different request when the replay
+   * cannot be reproduced: skill-guided turns, legacy tool-assisted turns
+   * (`getRegenerateReplayDecision`), and turns whose prompt carried file
+   * attachments — a persisted row holds attachment metadata, not the bytes, so
+   * a resend would quietly drop the files.
+   */
+  const regenerate = useCallback(
+    (assistantMessageId: string) => {
+      // Without a durable delete the replacement would sit BESIDE the turn it
+      // replaces on the server — a duplicated user message and a stale answer
+      // on the next reload. Refuse rather than half-regenerate; hosts gate the
+      // affordance on the same capability.
+      if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return;
+      const store = useChatStore.getState();
+      const convId = store.activeConversationId;
+      if (!convId) return;
+      const messages = store.messagesByConversation[convId] ?? [];
+      const plan = planRegenerateRollback(messages, assistantMessageId);
+      if (!plan) return;
+      const userMessage = messages[plan.userIndex];
+      if (!userMessage || !userMessage.content.trim()) return;
+
+      if (userMessage.attachments && userMessage.attachments.length > 0) {
+        toast.error(
+          'Regenerate is unavailable for a turn with attachments. Re-send the prompt with the files attached.',
+        );
+        return;
+      }
+
+      const decision = getRegenerateReplayDecision({
+        userMetadata: userMessage.metadata as RegenerateReplayMetadata | undefined,
+        assistantMetadata: messages.find((m) => m.id === assistantMessageId)?.metadata as
+          | RegenerateReplayMetadata
+          | undefined,
+      });
+      if (!decision.ok) {
+        toast.error(decision.message);
+        return;
+      }
+
+      const snapshot = messages.map((message) => ({ ...message }));
+      // Drop the replaced exchange from the transcript up front so the
+      // replacement streams into a clean thread; sendMessage re-adds the user
+      // turn. Restored verbatim by SendReplacement if the send throws.
+      store.setMessages(convId, messages.slice(0, plan.userIndex));
+
+      sendMessage(
+        userMessage.content,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        decision.replay?.workMode,
+        undefined,
+        {
+          messageIds: plan.rollbackIds,
+          snapshot,
+          replay: decision.replay,
+        },
+      );
+    },
+    [runtime, sendMessage],
   );
 
   /**
@@ -1479,6 +1659,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     sendMessage,
     stopGeneration,
     continueGeneration,
+    regenerate,
     resolveToolApproval,
     isStreaming,
     isApprovalTurnLive,

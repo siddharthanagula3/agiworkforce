@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
+import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
+import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
 import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ReactPreview } from './artifact-components/ReactPreview';
@@ -403,6 +405,11 @@ export function ArtifactPanel({
   // AUDIT-FIX ART-15: bumped by the toolbar Retry button to force a fresh
   // preview mount (new iframe / new ReactPreview instance).
   const [previewNonce, setPreviewNonce] = useState(0);
+  // DES-C15: a same-document (`srcdoc`) preview inherits the embedder's CSP.
+  // Inside the packaged desktop app that policy forbids inline scripts, so an
+  // interactive HTML artifact renders its markup and then does nothing at all.
+  // Measure it instead of guessing, and say so rather than showing a dead box.
+  const scriptSupport = useSameDocumentScriptSupport();
 
   useEffect(() => {
     setIsEditing(false);
@@ -905,7 +912,13 @@ export function ArtifactPanel({
           // sandboxed iframe with Babel + React from CDN and posts back ready/
           // error events. Round-2 audit P0 #9 live React preview.
           // AUDIT-FIX ART-15: `previewNonce` re-mounts it when Retry is pressed.
-          <ReactPreview key={previewNonce} code={artifact.content} className="h-full" />
+          <ReactPreview
+            key={previewNonce}
+            code={artifact.content}
+            className="h-full"
+            scriptSupport={scriptSupport}
+            onViewSource={() => onViewModeChange('code')}
+          />
         ) : viewMode === 'preview' && artifact.type === 'html' ? (
           // HTML: sandboxed iframe with CSP meta injection + Run/Stop control.
           // Uses the shared `buildSandboxedHtml` so the security envelope cannot
@@ -925,6 +938,19 @@ export function ArtifactPanel({
                 {htmlPreviewRunning ? <Pause size={12} /> : <Play size={12} />}
               </Button>
             </div>
+            {/* DES-C15: markup and CSS still render, but the embedder CSP this
+                srcdoc inherits forbids inline scripts — so an interactive page
+                looks finished and does nothing. Say it out loud; a silently
+                inert preview reads as a broken app. */}
+            {scriptSupport === 'blocked' && (
+              <p
+                role="note"
+                data-testid="artifact-preview-scripts-blocked"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+              >
+                {SCRIPTS_BLOCKED_NOTICE}
+              </p>
+            )}
             {/* AUDIT-FIX ART-16: three distinct states — build failure, running,
                 paused — instead of collapsing the first into the third. */}
             {htmlPreview.error ? (
