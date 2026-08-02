@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "invariants": {
+    "settings-section-registered": [
+      {
+        "id": "desktop:apps/desktop/src/features/settings/CostEstimator.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/FontSelector.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/GeneralSettings.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/MCPToolsSettings.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/ModelComparison.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/TeamAccountSettings.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/UsageProgressBars.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/index.ts",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:apps/desktop/src/features/settings/tabs/Skills/index.tsx",
+        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
+        "trackedBy": "SIX-32"
+      }
+    ],
+    "route-has-navigation": [
+      {
+        "id": "mobile:apps/mobile/app/(app)/error.tsx",
+        "reason": "Expo Router treats app/error.tsx as a route, but the module exports a Next.js-shaped ErrorBoundary({error, retry}) that no navigation targets. Owned by the mobile wave; declared so no NEW unreachable route can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "mobile:apps/mobile/app/error.tsx",
+        "reason": "Expo Router treats app/error.tsx as a route, but the module exports a Next.js-shaped ErrorBoundary({error, retry}) that no navigation targets. Owned by the mobile wave; declared so no NEW unreachable route can land.",
+        "trackedBy": "SIX-32"
+      }
+    ],
+    "persisted-field-has-reader": [
+      {
+        "id": "desktop:codebaseStats",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:drafts",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:hasOnboarded",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:inputDeviceLabel",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:inputHeight",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:oauthStartedAt",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:pendingOAuth",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:recentFolders",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:recentModels",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:selectedStyle",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:showMarkdownPreview",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:showMessageTimestamps",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:sidecarOpen",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:sidecarSection",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:sidecarWidth",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:speedQualityMode",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:thinkingModeEnabled",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "desktop:trustedWorkflows",
+        "reason": "Persisted to disk with no production reader outside the store tree (only test references). Deleting the field or wiring a reader is the owning surface wave call; declared so no NEW reader-less persisted field can land.",
+        "trackedBy": "SIX-32"
+      }
+    ],
+    "collection-has-reader": [
+      {
+        "id": "apps/desktop/src/features/error-handling/ErrorBoundary.tsx:agi-last-error-boundary",
+        "reason": "Written and never read back, confirmed by repo-wide grep. Owned by the surface wave that owns the module; declared so no NEW write-only collection or storage key can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "apps/extension/src/background.ts:webmcpToolsByTab",
+        "reason": "Written and never read back, confirmed by repo-wide grep. Owned by the surface wave that owns the module; declared so no NEW write-only collection or storage key can land.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "apps/extension/src/background.ts:nlwebByTab",
+        "reason": "Written and never read back, confirmed by repo-wide grep. Owned by the surface wave that owns the module; declared so no NEW write-only collection or storage key can land.",
+        "trackedBy": "SIX-32"
+      }
+    ],
+    "keybinding-tolerates-no-args": []
+  }
+}
