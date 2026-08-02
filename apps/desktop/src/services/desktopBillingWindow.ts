@@ -1,4 +1,5 @@
 import { OWNED_CLOUD_WINDOW_LABELS, waitForOwnedWebviewWindow } from './ownedWebviewWindow';
+import { recordOwnedWindowPresentation, resolveContentProtection } from './ownedWindowPresentation';
 
 const BILLING_WINDOW_LABEL = OWNED_CLOUD_WINDOW_LABELS.billing;
 const TRUSTED_BILLING_HOSTS = new Set([
@@ -17,13 +18,21 @@ function trustedBillingUrl(rawUrl: string): string {
   return url.toString();
 }
 
-/** Open Stripe or the AGI billing surface inside an owned Desktop window. */
+/**
+ * Open Stripe or the AGI billing surface inside an owned Desktop window.
+ *
+ * Screen-capture protection follows the destination rather than the window:
+ * Stripe Checkout and the Stripe portal take card details and stay protected,
+ * while an `agiworkforce.com` billing page is an ordinary account surface and
+ * must remain visible in a screen share (see `ownedWindowPresentation.ts`).
+ */
 export async function openDesktopBillingWindow(
   rawUrl: string,
   title: string,
   onClosed?: () => void | Promise<void>,
 ): Promise<void> {
   const url = trustedBillingUrl(rawUrl);
+  const contentProtected = resolveContentProtection('billing', url);
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   const existing = await WebviewWindow.getByLabel(BILLING_WINDOW_LABEL);
   if (existing) await existing.close().catch(() => undefined);
@@ -43,8 +52,10 @@ export async function openDesktopBillingWindow(
     maximizable: false,
     minimizable: false,
     skipTaskbar: true,
-    contentProtected: true,
+    contentProtected,
   });
+
+  recordOwnedWindowPresentation(BILLING_WINDOW_LABEL, 'billing', contentProtected);
 
   if (onClosed) {
     await billingWindow.once('tauri://destroyed', () => {

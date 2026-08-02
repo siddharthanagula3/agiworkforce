@@ -1,5 +1,6 @@
 import { WEB_APP_URL } from '../api/config';
 import { OWNED_CLOUD_WINDOW_LABELS, waitForOwnedWebviewWindow } from './ownedWebviewWindow';
+import { recordOwnedWindowPresentation, resolveContentProtection } from './ownedWindowPresentation';
 
 const CLOUD_SIGN_IN_WINDOW_LABEL = OWNED_CLOUD_WINDOW_LABELS.signIn;
 
@@ -27,12 +28,19 @@ function trustedDesktopSignInUrl(rawUrl: string): string {
  * The remote webview owns account credentials and Clerk cookies. The main
  * Desktop webview receives only the short-lived device credential through the
  * existing polling contract, preserving the Local/Cloud trust boundary.
+ *
+ * This window is capturable. It used to set `contentProtected`, which renders it
+ * black to every screen recorder and conferencing app — so the first step of a
+ * screen-shared demo or a remote support session was invisible, with no way to
+ * turn it off (the presentation preference lives behind a Cloud session the
+ * user does not have yet). See `ownedWindowPresentation.ts` for the full policy.
  */
 export async function openDesktopCloudSignInWindow(
   rawUrl: string,
   { onUserClosed }: DesktopCloudSignInWindowOptions,
 ): Promise<DesktopCloudSignInWindowSession> {
   const url = trustedDesktopSignInUrl(rawUrl);
+  const contentProtected = resolveContentProtection('sign-in');
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
 
   const existing = await WebviewWindow.getByLabel(CLOUD_SIGN_IN_WINDOW_LABEL);
@@ -55,9 +63,10 @@ export async function openDesktopCloudSignInWindow(
     maximizable: false,
     minimizable: false,
     skipTaskbar: true,
-    contentProtected: true,
+    contentProtected,
   });
 
+  recordOwnedWindowPresentation(CLOUD_SIGN_IN_WINDOW_LABEL, 'sign-in', contentProtected);
   await waitForOwnedWebviewWindow(authWindow, 'Could not open the AGI Cloud sign-in window');
 
   let closingFromApp = false;

@@ -24,10 +24,16 @@
  *   usage        → DesktopUsageSection     (wraps existing UsageDashboard)
  *   capabilities → DesktopCapabilitiesSection (feature flags + agent mode knobs)
  *
- * Web account sections that remain server-rendered (Security, Notifications,
- * Reflect, Time and focus, and Plugins) open in a content-protected, Desktop-
- * owned child window. Device-only appearance, voice, and model-key settings
- * remain in Local settings and are never blended into the Cloud boundary.
+ * Sections that CAN be served to Desktop's device bearer are rendered inline
+ * from `api/cloudAccountSettings.ts` (archived chats, shared links, security
+ * status). The remainder — profile, safety, notifications, Reflect, time and
+ * focus, plugins, team — have no bearer-reachable API, so they open in a
+ * Desktop-owned child window through `CloudBridgedSection`, which states the
+ * child window's separate web sign-in and always offers an explicit
+ * "Sign in again to manage this" recovery instead of a silent /login landing
+ * (see that component for the full reasoning). Device-only appearance, voice,
+ * and model-key settings remain in Local settings and are never blended into
+ * the Cloud boundary.
  */
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -53,6 +59,7 @@ import {
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
 import { openDesktopCloudAccountWindow } from '../../services/desktopCloudAccountWindow';
+import { CloudBridgedSection } from './cloud/CloudBridgedSection';
 import { listCloudSkills } from '../../api/cloudSkills';
 import {
   createDefaultWindowPreferences,
@@ -171,6 +178,17 @@ const LazyPrivacyTab = lazy(() =>
 );
 const LazyMemoryTab = lazy(() => import('./tabs/Memory').then((m) => ({ default: m.MemoryTab })));
 const LazyCoworkTab = lazy(() => import('./tabs/Cowork').then((m) => ({ default: m.CoworkTab })));
+const LazyArchivedChats = lazy(() =>
+  import('./cloud/CloudArchivedChatsSection').then((m) => ({
+    default: m.CloudArchivedChatsSection,
+  })),
+);
+const LazySharedLinks = lazy(() =>
+  import('./cloud/CloudSharedLinksSection').then((m) => ({ default: m.CloudSharedLinksSection })),
+);
+const LazyCloudSecurity = lazy(() =>
+  import('./cloud/CloudSecuritySection').then((m) => ({ default: m.CloudSecuritySection })),
+);
 // ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
@@ -598,65 +616,6 @@ function DesktopTeamSection() {
   );
 }
 
-function DesktopCloudAccountSection({
-  title,
-  description,
-  path,
-  action,
-}: {
-  title: string;
-  description: string;
-  path: string;
-  action: string;
-}) {
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-      <div className="rounded-lg border border-border bg-card/40 p-5">
-        <p className="text-sm text-foreground">
-          This account surface opens in a content-protected child window owned by AGI Desktop.
-        </p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          It uses the Cloud account boundary and never receives Local chats, files, model keys, or
-          workspace permissions.
-        </p>
-        {error ? (
-          <p role="alert" className="mt-3 text-xs text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className={`mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50 ${SETTINGS_FOCUS_RING}`}
-          disabled={opening}
-          aria-busy={opening || undefined}
-          onClick={() => {
-            setError(null);
-            setOpening(true);
-            void openDesktopCloudAccountWindow(path, `AGI Cloud ${title}`)
-              .catch((openError: unknown) => {
-                setError(
-                  openError instanceof Error
-                    ? openError.message
-                    : `Could not open ${title.toLocaleLowerCase()}.`,
-                );
-              })
-              .finally(() => setOpening(false));
-          }}
-        >
-          {opening ? 'Opening…' : action}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Skeleton shown while a section is hydrating ───────────────────────────────
 
 function SectionSkeleton() {
@@ -1053,7 +1012,8 @@ export function DesktopCloudSettingsModal({
     () => ({
       general: (
         <div className="flex flex-col gap-8">
-          <DesktopCloudAccountSection
+          <CloudBridgedSection
+            sectionKey="general"
             title="Cloud profile"
             description="Update your name, preferred form of address, work description, and account-level instructions."
             path="/settings/general"
@@ -1093,20 +1053,20 @@ export function DesktopCloudSettingsModal({
           <LazyCoworkTab />
         </Suspense>
       ),
+      // Two-factor status and recent account activity read fine with the device
+      // bearer, so they render here instead of behind a cookie-gated window.
       security: (
-        <DesktopCloudAccountSection
-          title="Security"
-          description="Manage password, two-factor authentication, and account session timeout."
-          path="/settings/security"
-          action="Open security controls"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudSecurity />
+        </Suspense>
       ),
       // Safety is in SETTINGS_NAV_GROUPS_WEB, which this modal maps over to build
       // its nav — but it had no entry here, so clicking it rendered the shared
       // modal's developer fallback ("No content for section \"safety\".") to the
       // user. It bridges to the same account surface as its neighbours.
       safety: (
-        <DesktopCloudAccountSection
+        <CloudBridgedSection
+          sectionKey="safety"
           title="Safety"
           description="Choose additional safeguards for Managed Cloud prompts."
           path="/settings/safety"
@@ -1116,25 +1076,21 @@ export function DesktopCloudSettingsModal({
       // Archived chats and shared links are conversation-data surfaces web
       // reaches from its Privacy section rather than from the settings nav.
       // Desktop could already publish a share (DesktopShellV3 calls
-      // createDesktopCloudShare) with no way to list or revoke one.
+      // createDesktopCloudShare) with no way to list or revoke one; both are
+      // served by bearer-reachable routes, so both render inline.
       archived: (
-        <DesktopCloudAccountSection
-          title="Archived chats"
-          description="Restore an archived conversation, or delete it permanently."
-          path="/settings/archived"
-          action="Open archived chats"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyArchivedChats />
+        </Suspense>
       ),
       'shared-links': (
-        <DesktopCloudAccountSection
-          title="Shared links"
-          description="Review the conversations you have published as read-only links, and revoke them."
-          path="/settings/shared-links"
-          action="Open shared links"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazySharedLinks />
+        </Suspense>
       ),
       notifications: (
-        <DesktopCloudAccountSection
+        <CloudBridgedSection
+          sectionKey="notifications"
           title="Notifications"
           description="Manage Cloud reply-ready notifications alongside Desktop’s native notification controls."
           path="/settings/notifications"
@@ -1142,7 +1098,8 @@ export function DesktopCloudSettingsModal({
         />
       ),
       reflect: (
-        <DesktopCloudAccountSection
+        <CloudBridgedSection
+          sectionKey="reflect"
           title="Reflect"
           description="Review an account-level recap of activity, topics, and memory-backed insights."
           path="/settings/reflect"
@@ -1150,7 +1107,8 @@ export function DesktopCloudSettingsModal({
         />
       ),
       'time-focus': (
-        <DesktopCloudAccountSection
+        <CloudBridgedSection
+          sectionKey="time-focus"
           title="Time and focus"
           description="Configure break reminders and quiet hours for your signed-in Cloud account."
           path="/settings/time-focus"
@@ -1158,7 +1116,8 @@ export function DesktopCloudSettingsModal({
         />
       ),
       plugins: (
-        <DesktopCloudAccountSection
+        <CloudBridgedSection
+          sectionKey="plugins"
           title="Plugins"
           description="Discover and manage account-installed Cloud plugins. Local extensions remain isolated in Local settings."
           path="/settings/plugins"
