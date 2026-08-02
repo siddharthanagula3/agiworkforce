@@ -310,15 +310,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   BYOK, which stay on your device.
                 </p>
               </div>
+              {/*
+                This card's action enters the Cloud workspace (the host wires
+                `onCloudModeSelected` to `setMode('cloud')`, which renders the
+                device sign-in screen). It was labelled "Continue with Local for
+                now", which described the opposite of what it does — the Local
+                card and "Skip for now" are the ways to stay local.
+              */}
               <button
                 type="button"
+                data-testid="onboarding-cloud-mode"
                 onClick={handleCloudMode}
                 className={cn(
                   'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
                   'bg-primary text-white hover:bg-primary/90',
                 )}
               >
-                Continue with Local for now
+                Sign in to AGI Cloud
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

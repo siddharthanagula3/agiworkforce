@@ -104,7 +104,7 @@ vi.mock('../../../stores/settingsDialogStore', () => ({
 vi.mock('../../../stores/appModeStore', () => ({
   selectPrivacyMode: () => 'local',
   useAppModeStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ privacyMode: 'local' }),
+    selector({ privacyMode: 'local', mode: 'local', setMode: vi.fn() }),
 }));
 
 vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
