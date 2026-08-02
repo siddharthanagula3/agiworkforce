@@ -43,6 +43,7 @@ const deleteConversation = vi.fn();
 const updateConversation = vi.fn();
 const listConversations = vi.fn();
 const getConversation = vi.fn();
+const deleteMessage = vi.fn();
 
 vi.mock('../../lib/cloudChatPersistence', () => ({
   getDesktopCloudChatPersistenceClient: () => ({
@@ -52,6 +53,7 @@ vi.mock('../../lib/cloudChatPersistence', () => ({
     updateConversation,
     listConversations,
     getConversation,
+    deleteMessage,
   }),
 }));
 
@@ -90,6 +92,22 @@ const followRun = vi.fn();
 const cancelRun = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
+  // Declared inside the factory: vi.mock is hoisted above module scope.
+  CloudApiError: class CloudApiError extends Error {
+    status: number;
+    code: string | undefined;
+    resetAt: string | undefined;
+    constructor(
+      message: string,
+      options: { status: number; code?: string | undefined; resetAt?: string | undefined },
+    ) {
+      super(message);
+      this.name = 'CloudApiError';
+      this.status = options.status;
+      this.code = options.code;
+      this.resetAt = options.resetAt;
+    }
+  },
   cloudFetch: vi.fn(),
   getAuthHeaders: vi.fn(async () => ({
     Authorization: 'Bearer desktop-cloud-token',
@@ -173,7 +191,30 @@ describe('CloudRuntime', () => {
         workMode: 'agiwork',
         skillName: 'frontend-design',
         effort: 'high',
+        // DES-C24: always present so the server persists the assistant turn
+        // under the same row id the client upserts.
+        assistantMessageId: expect.any(String),
       });
+    });
+
+    it('sends assistant_message_id for a plain turn and honours the caller-minted ids', async () => {
+      const runtime = new CloudRuntime();
+      sendCloudMessage.mockResolvedValue(undefined);
+
+      await runtime.sendMessage('conv_ids', 'hello', {
+        userMessageId: '0199c1f2-0000-7000-8000-00000000aaaa',
+        assistantMessageId: '0199c1f2-0000-7000-8000-00000000bbbb',
+      });
+
+      expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({
+        assistantMessageId: '0199c1f2-0000-7000-8000-00000000bbbb',
+      });
+      // The durable user row uses the id the transcript already renders, so
+      // Regenerate can delete exactly the rows it removed from the view.
+      expect(saveMessage).toHaveBeenCalledWith(
+        'conv_ids',
+        expect.objectContaining({ id: '0199c1f2-0000-7000-8000-00000000aaaa', role: 'user' }),
+      );
     });
 
     it('dispatches image prompts to durable managed media and persists the generated file', async () => {
@@ -1024,6 +1065,76 @@ describe('CloudRuntime', () => {
 
       const runtime = new CloudRuntime();
       await expect(runtime.loadMessages('conv_1')).resolves.toEqual([]);
+    });
+  });
+
+  describe('deleteMessages (DES-C04 regenerate rollback)', () => {
+    it('drops every superseded durable row, oldest first', async () => {
+      deleteMessage.mockResolvedValue(undefined);
+      const runtime = new CloudRuntime();
+
+      await runtime.deleteMessages('conv_regen', ['user-1', 'assistant-1']);
+
+      expect(deleteMessage.mock.calls).toEqual([
+        ['conv_regen', 'user-1'],
+        ['conv_regen', 'assistant-1'],
+      ]);
+    });
+
+    it('issues no request for an empty rollback', async () => {
+      const runtime = new CloudRuntime();
+      await runtime.deleteMessages('conv_regen', []);
+      expect(deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a failed delete instead of reporting success', async () => {
+      deleteMessage.mockRejectedValue(new Error('row is gone'));
+      const runtime = new CloudRuntime();
+
+      await expect(runtime.deleteMessages('conv_regen', ['user-1'])).rejects.toThrow('row is gone');
+    });
+  });
+
+  describe('quota refusal classification (DES-C22)', () => {
+    it('forwards the server error code and reset instant on the stream error event', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      const { CloudApiError } = await import('../../api/cloudApi');
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const onError = args[5] as (err: Error) => void;
+        onError(
+          new CloudApiError('You have used your weekly capacity.', {
+            status: 429,
+            code: 'weekly_limit_exceeded',
+            resetAt: '2026-08-01T12:00:00.000Z',
+          }),
+        );
+      });
+
+      await runtime.sendMessage('conv_quota', 'hello', {});
+
+      const errorEvent = events.find((event) => event.type === 'error');
+      expect(errorEvent).toMatchObject({
+        type: 'error',
+        error: 'You have used your weekly capacity.',
+        code: 'weekly_limit_exceeded',
+        resetAt: '2026-08-01T12:00:00.000Z',
+      });
+    });
+
+    it('emits no code for an ordinary transport failure', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const onError = args[5] as (err: Error) => void;
+        onError(new Error('Network request failed'));
+      });
+
+      await runtime.sendMessage('conv_net', 'hello', {});
+
+      const errorEvent = events.find((event) => event.type === 'error');
+      expect(errorEvent).not.toHaveProperty('code');
+      expect(errorEvent).not.toHaveProperty('resetAt');
     });
   });
 

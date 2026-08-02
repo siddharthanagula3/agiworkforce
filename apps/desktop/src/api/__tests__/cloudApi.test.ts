@@ -278,6 +278,9 @@ describe('cloudApi', () => {
           messages: [{ role: 'user', content: 'Ping' }],
           conversation_id: 'conv_1',
           stream: true,
+          // DES-C25: the route reads `client_timezone` and drops the whole
+          // "use that local calendar date for 'today'" clause without it.
+          client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           use_prompt_cache: true,
         }),
       }),
