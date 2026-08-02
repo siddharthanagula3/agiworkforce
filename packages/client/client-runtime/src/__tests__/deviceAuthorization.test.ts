@@ -68,6 +68,46 @@ describe('shared device authorization client', () => {
     ).resolves.toEqual(expected);
   });
 
+  /**
+   * Regression: every non-2xx used to produce "AGI Cloud rejected the device
+   * sign-in request", so a backend 500 told the user their ACCOUNT had been
+   * refused. That is both false and unactionable — retrying is exactly the
+   * right response to a server fault, and the old wording implied it was not.
+   */
+  it.each([500, 502, 503, 504])(
+    'reports HTTP %s as a service fault, never as an account rejection',
+    async (status) => {
+      const post = vi.fn().mockResolvedValue({ status, body: '{"error":"Internal Server Error"}' });
+
+      const result = await pollDeviceAuthorization(
+        'https://agiworkforce.com',
+        '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+        post,
+      );
+
+      expect(result.kind).toBe('rejected');
+      const message = result.kind === 'rejected' ? result.message : '';
+      expect(message).toContain(`HTTP ${status}`);
+      expect(message).toMatch(/service fault, not a rejection of your account/i);
+      expect(message).not.toMatch(/rejected the device sign-in request/i);
+    },
+  );
+
+  it('names the status for a non-2xx below 500 instead of claiming a rejection', async () => {
+    const post = vi.fn().mockResolvedValue({ status: 404, body: '{}' });
+
+    const result = await pollDeviceAuthorization(
+      'https://agiworkforce.com',
+      '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+      post,
+    );
+
+    expect(result.kind).toBe('rejected');
+    const message = result.kind === 'rejected' ? result.message : '';
+    expect(message).toContain('HTTP 404');
+    expect(message).not.toMatch(/rejected the device sign-in request/i);
+  });
+
   it('returns a validated bearer credential with its absolute expiry', async () => {
     const post = vi.fn().mockResolvedValue({
       status: 200,

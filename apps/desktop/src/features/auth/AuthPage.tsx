@@ -1,21 +1,7 @@
-import { useState } from 'react';
 import { motion, type HTMLMotionProps } from 'framer-motion';
-import {
-  ArrowLeft,
-  Globe,
-  KeyRound,
-  Layers,
-  Loader2,
-  LogIn,
-  Lock,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { getSimpleErrorMessage } from '../../lib/errorMessages';
-import { selectAuthError, useAuthStore } from '../../stores/auth';
-import { useAppModeStore } from '../../stores/appModeStore';
+import { Globe, KeyRound, Layers, Lock, Sparkles } from 'lucide-react';
 import { AgiMark } from '@agiworkforce/ui';
+import { NativeSignInCard } from './NativeSignInCard';
 
 interface AuthPageProps {
   onAuthSuccess?: () => void;
@@ -57,120 +43,6 @@ function useMotionVariants(): { fadeUp: MotionVariant } {
       animate: { opacity: 1, y: 0 },
     },
   };
-}
-
-function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
-  const signIn = useAuthStore((state) => state.signIn);
-  const clearError = useAuthStore((state) => state.clearError);
-  const setMode = useAppModeStore((state) => state.setMode);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Why this screen is showing matters. A session that expired or was revoked
-  // mid-session (any 401 invalidates the credential) lands here with a specific
-  // message already in the auth store — "Your AGI Cloud session has expired…" —
-  // and rendering only the local attempt error turned that into an
-  // indistinguishable fresh sign-in prompt. `selectAuthError` had no consumer
-  // anywhere in the app before this.
-  const storeAuthError = useAuthStore(selectAuthError);
-  const displayedError = error ?? storeAuthError;
-
-  const beginSignIn = async () => {
-    if (isConnecting) return;
-    setIsConnecting(true);
-    setError(null);
-    // A new attempt supersedes the reason the previous session ended; leaving
-    // it up would keep an expiry notice pinned over a successful retry.
-    clearError();
-    try {
-      // Credentials are intentionally empty: primary authentication happens
-      // in an isolated AGI Desktop sign-in window, and the main Desktop
-      // webview receives only a revocable device credential after approval.
-      const result = await signIn('', '');
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      onSuccess?.();
-    } catch (signInError) {
-      setError(getSimpleErrorMessage(signInError));
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-xl shadow-black/5">
-      <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
-        <AgiMark size={24} ariaLabel="AGI" />
-      </div>
-
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Sign in to AGI Cloud
-      </h1>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        Sign in directly in AGI Desktop. Your Cloud workspace opens here when authorization is
-        complete.
-      </p>
-
-      <div className="my-6 rounded-xl border border-border bg-muted/35 p-4">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-medium text-foreground">Private in-app sign-in</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Your password stays inside AGI&apos;s secure sign-in window. Desktop receives a
-              short-lived, revocable session stored in your system credential vault.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {displayedError ? (
-        <div
-          role="alert"
-          data-testid="device-sign-in-error"
-          className="mb-4 rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-3 text-sm text-destructive"
-        >
-          {displayedError}
-        </div>
-      ) : null}
-
-      <Button
-        type="button"
-        className="h-11 w-full"
-        disabled={isConnecting}
-        aria-busy={isConnecting}
-        onClick={() => void beginSignIn()}
-      >
-        {isConnecting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Signing in…
-          </>
-        ) : (
-          <>
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            Sign in to AGI Cloud
-          </>
-        )}
-      </Button>
-
-      {isConnecting ? (
-        <p className="mt-3 text-center text-xs text-muted-foreground" role="status">
-          Complete sign-in in the AGI window.
-        </p>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={() => setMode('local')}
-        className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        Use Local Mode
-      </button>
-    </div>
-  );
 }
 
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
@@ -273,7 +145,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
           </div>
         </div>
 
-        <DeviceSignInCard onSuccess={onAuthSuccess} />
+        <NativeSignInCard onSuccess={onAuthSuccess} />
       </main>
     </div>
   );

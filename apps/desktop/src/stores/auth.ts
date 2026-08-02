@@ -222,7 +222,23 @@ interface AuthActions {
   setSessionValidated: (state: boolean) => void;
   isAuthReady: () => boolean;
 
+  /**
+   * Browser-approval (device authorization) sign-in.
+   *
+   * Retained as the explicit fallback for native sign-in and as the path the
+   * CLI-shaped grant still uses. Credentials are ignored: this opens the AGI
+   * approval surface and waits for a device credential.
+   */
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  /**
+   * Adopt a credential produced by NATIVE in-app sign-in (the default on
+   * Desktop). The credential is already the first-party device bearer, so it
+   * lands in the same vault and refresh schedule as the fallback path.
+   */
+  completeNativeSignIn: (credential: {
+    accessToken: string;
+    refreshToken?: string;
+  }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -594,6 +610,31 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             return { error: message };
           } finally {
             set({ isLoading: false }, undefined, 'auth/signIn/complete');
+          }
+        },
+
+        completeNativeSignIn: async (credential: {
+          accessToken: string;
+          refreshToken?: string;
+        }) => {
+          set({ isLoading: true, error: null }, undefined, 'auth/nativeSignIn/start');
+
+          try {
+            const response = await cloudAccountAuth.adoptNativeCredential(credential);
+
+            if (response.error) {
+              set({ error: response.error.message }, undefined, 'auth/nativeSignIn/error');
+              return { error: response.error.message };
+            }
+
+            return { error: null };
+          } catch (error) {
+            console.error('[UnifiedAuth] Native sign-in exception:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            set({ error: message }, undefined, 'auth/nativeSignIn/exception');
+            return { error: message };
+          } finally {
+            set({ isLoading: false }, undefined, 'auth/nativeSignIn/complete');
           }
         },
 

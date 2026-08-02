@@ -1,3 +1,5 @@
+pub mod clerk_native;
+
 use crate::sys::api::{ApiClient, ApiRequest, ApiResponse, AuthType, HttpMethod};
 use crate::sys::commands::{security::SecretManagerState, ApiState};
 use crate::sys::security::SecretManager;
@@ -158,11 +160,25 @@ async fn execute_device_authorization_request(
     body: String,
     client: &ApiClient,
 ) -> Result<DeviceAuthorizationHttpResponse, String> {
+    execute_device_authorization_request_with_bearer(path, body, None, client).await
+}
+
+async fn execute_device_authorization_request_with_bearer(
+    path: &str,
+    body: String,
+    bearer: Option<String>,
+    client: &ApiClient,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
     let api_base = get_api_base_url();
     validate_api_base_url(&api_base)?;
 
+    let mut request = build_device_authorization_request(&api_base, path, body);
+    if let Some(token) = bearer {
+        request.auth = AuthType::Bearer { token };
+    }
+
     let response = client
-        .execute(build_device_authorization_request(&api_base, path, body))
+        .execute(request)
         .await
         .map_err(|e| format!("AGI Cloud device authorization request failed: {}", e))?;
 
@@ -170,6 +186,54 @@ async fn execute_device_authorization_request(
         status: response.status,
         body: response.body,
     })
+}
+
+/// Validate a device-authorization user code against the exact format the web
+/// route accepts (`XXXX-XXXX`, uppercase alphanumeric).
+fn normalize_device_user_code(raw: &str) -> Result<String, String> {
+    let candidate = raw.trim().to_ascii_uppercase();
+    let bytes = candidate.as_bytes();
+    let shaped = bytes.len() == 9
+        && bytes[4] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || byte.is_ascii_alphanumeric());
+    if !shaped {
+        return Err("Invalid AGI Cloud device user code.".to_string());
+    }
+    Ok(candidate)
+}
+
+/// Approve this app's own device authorization with a freshly minted Clerk
+/// session token.
+///
+/// This is what makes native sign-in possible without a browser hop: the user
+/// authenticates against Clerk in the app, the app proves that session to
+/// `/api/auth/device/approve`, and the ordinary device-token poll then issues
+/// the same durable first-party credential the browser approval path issues.
+/// The web contract is untouched, and the CLI's device flow keeps working
+/// exactly as before.
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn account_approve_device_authorization(
+    userCode: String,
+    sessionToken: String,
+    state: State<'_, ApiState>,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
+    let user_code = normalize_device_user_code(&userCode)?;
+    let session_token = sessionToken.trim();
+    validate_token_format(session_token, "AGI account session token")?;
+
+    let body = serde_json::json!({ "user_code": user_code, "action": "approve" }).to_string();
+    let client = state.get_single_attempt_client()?;
+    execute_device_authorization_request_with_bearer(
+        "/api/auth/device/approve",
+        body,
+        Some(session_token.to_string()),
+        client,
+    )
+    .await
 }
 
 /// Start the OAuth-style device authorization flow for this Desktop app.
@@ -1094,16 +1158,30 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 mod tests {
     use super::{
         build_device_authorization_request, delete_cloud_credential, load_cloud_credential,
-        store_cloud_credential, validate_api_base_url, CloudCredentialVault, CreditBalanceResponse,
-        OsCloudCredentialVault, UserProfile, CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
-        CLOUD_ACCESS_TOKEN_SECRET_KEY, CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
-        CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        normalize_device_user_code, store_cloud_credential, validate_api_base_url,
+        CloudCredentialVault, CreditBalanceResponse, OsCloudCredentialVault, UserProfile,
+        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT, CLOUD_ACCESS_TOKEN_SECRET_KEY,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT, CLOUD_REFRESH_TOKEN_SECRET_KEY,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
     use rusqlite::Connection;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn normalizes_only_well_formed_device_user_codes() {
+        assert_eq!(normalize_device_user_code(" abcd-1234 ").unwrap(), "ABCD-1234");
+        assert_eq!(normalize_device_user_code("WXYZ-7890").unwrap(), "WXYZ-7890");
+
+        // Anything the web route would reject must be refused before it leaves
+        // the device, so a malformed code can never be blamed on the server.
+        assert!(normalize_device_user_code("ABCD1234").is_err());
+        assert!(normalize_device_user_code("ABC-1234").is_err());
+        assert!(normalize_device_user_code("ABCD-123").is_err());
+        assert!(normalize_device_user_code("ABCD-12_4").is_err());
+        assert!(normalize_device_user_code("").is_err());
+    }
 
     #[derive(Default)]
     struct MemoryCredentialVault {

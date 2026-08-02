@@ -473,6 +473,26 @@ class CloudAccountAuthService {
     return this.authorizeCloudAccount();
   }
 
+  /**
+   * Adopt a credential produced by native in-app sign-in.
+   *
+   * Native sign-in authenticates the user against Clerk inside the app and
+   * exchanges that session for the SAME first-party device credential the
+   * browser-approval path produces (see `desktopNativeSignIn.ts`). From here
+   * on the two paths are indistinguishable: one vault, one refresh route, one
+   * expiry schedule. There is deliberately no second credential store.
+   */
+  async adoptNativeCredential(credential: {
+    accessToken: string;
+    refreshToken?: string;
+  }): Promise<AuthResponse> {
+    // A native attempt supersedes any in-flight browser approval.
+    this.deviceAuthorizationController?.abort();
+    this.deviceAuthorizationController = null;
+    this.updateState({ isLoading: true, error: null });
+    return this.finishDeviceAuthorization(credential);
+  }
+
   async signOut(): Promise<void> {
     this.deviceAuthorizationController?.abort();
     this.deviceAuthorizationController = null;

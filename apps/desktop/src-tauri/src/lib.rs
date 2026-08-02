@@ -1672,6 +1672,8 @@ pub fn run() {
             crate::sys::account::account_restore_refresh_token,
             crate::sys::account::account_start_device_authorization,
             crate::sys::account::account_poll_device_authorization,
+            crate::sys::account::account_approve_device_authorization,
+            crate::sys::account::clerk_native::account_clerk_native_request,
             crate::sys::account::account_list_devices,
             crate::sys::account::account_disconnect_device,
 
