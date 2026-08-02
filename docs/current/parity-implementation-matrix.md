@@ -113,6 +113,33 @@ catalog (resolved same day). Priority shifted the same evening: desktop Cloud
 mode parity with web, verified through the wdio e2e harness, outranks the
 remaining mobile P1/P2 queue.
 
+## 2026-08-01 Completion Standard (Founder)
+
+Goal, superseding the reference-parity goal: across the six shipping surfaces
+**nothing is unwired, zero stubs, zero partial features**. Scope decisions
+taken with it:
+
+- **Surfaces held to the bar:** Web, Desktop, Mobile, CLI, VS Code, Chrome —
+  the canonical six. `apps/slack-app` and `apps/github-app` are inventoried but
+  not driven to zero in this program.
+- **The 190 `missing` ledger rows:** build the ones that leave a dead end or a
+  half-experience in a flow users actually reach. Purely un-started
+  capabilities remain tracked scope, not defects. (46 of those rows arrived by
+  reclassification out of `partial`/`stub`/`unwired`, so they are not
+  automatically out of scope.)
+- **Server contracts:** when a client fix needs a route, schema field, or auth
+  shape that does not exist, build **both sides** — the `apps/web` contract and
+  the client wiring — so the feature is end-to-end rather than an honest half.
+  This authorizes, for example, making `/api/settings/sessions` bearer-aware
+  for Desktop and adding a mobile content-report intake route.
+- **Order:** Desktop to zero first (it is the demo surface), then the rest.
+- **`audit/inventory.json` is not evidence.** It currently claims
+  `partial=0/stub=0/unwired=0/broken=0` against a baseline of `62/13/30/10`;
+  the arithmetic shows 46 items were reclassified rather than built, and
+  independent sweeps keep finding live counterexamples. The ledger is corrected
+  to match verified code at the end of this program, and the checker then
+  enforces reality.
+
 ## Global Product Rules
 
 | Rule                                             | Applies to             | Required implementation behavior                                                                                                                                                                                                                                               | AGI anchors                                                                                               |
