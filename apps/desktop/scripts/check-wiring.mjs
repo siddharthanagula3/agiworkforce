@@ -5,13 +5,22 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  collectReachable,
+  collectWorkspacePackageAliases,
+  createResolver,
+} from '../../../scripts/lib/module-graph.mjs';
+
 const repoRoot = process.cwd();
 const libPath = 'apps/desktop/src-tauri/src/lib.rs';
 const rustRoot = 'apps/desktop/src-tauri/src';
 const allowlistPath = 'apps/desktop/wiring-allowlist.json';
 const hitlPath = 'apps/desktop/.hitl-required-tools.yaml';
+const rendererEntry = 'apps/desktop/src/main.tsx';
 export const INVOKE_CALL_PATTERN =
   /\b(?:invoke[A-Za-z0-9_$]*|[A-Za-z_$][A-Za-z0-9_$]*Invoke)(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
+export const COMMAND_CALL_PATTERN =
+  /\bcommand(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
 const frontendRoots = [
   {
     path: 'apps/desktop/src',
@@ -19,7 +28,7 @@ const frontendRoots = [
   },
   {
     path: 'packages/client/desktop-command-client/src',
-    patterns: [/\bcommand(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g],
+    patterns: [COMMAND_CALL_PATTERN],
   },
   {
     path: 'packages/ui/unified-chat/src',
@@ -159,21 +168,66 @@ function walkFiles(relativeDirectory, predicate) {
   return files;
 }
 
-function extractFrontendCalls() {
+/**
+ * Every module the Tauri renderer can actually load, walked from `main.tsx`
+ * through the real import graph.
+ *
+ * A lexical sweep of the frontend roots counts `invoke('cmd')` inside modules
+ * that no entry point imports, which is how ~96 registered commands passed this
+ * check while being unreachable from the running app (SIX-32). Reachability is
+ * the difference between "the string exists" and "a user can trigger it".
+ */
+export function collectReachableRendererFiles() {
+  const entry = path.join(repoRoot, rendererEntry);
+  if (!fs.existsSync(entry)) {
+    throw new Error(
+      `${rendererEntry} not found; the reachability walk would be vacuously empty. ` +
+        'Update rendererEntry in check-wiring.mjs if the renderer entry point moved.',
+    );
+  }
+
+  const desktopSrc = path.join(repoRoot, 'apps/desktop/src');
+  const resolve = createResolver({
+    '@/*': desktopSrc,
+    '@components/*': path.join(desktopSrc, 'components'),
+    '@stores/*': path.join(desktopSrc, 'stores'),
+    '@hooks/*': path.join(desktopSrc, 'hooks'),
+    '@utils/*': path.join(desktopSrc, 'utils'),
+    '@styles/*': path.join(desktopSrc, 'styles'),
+    '@types/*': path.join(desktopSrc, 'types'),
+    '@assets/*': path.join(desktopSrc, 'assets'),
+    '@lib/*': path.join(desktopSrc, 'lib'),
+    ...collectWorkspacePackageAliases(repoRoot),
+  });
+
+  const reachable = new Set();
+  for (const file of collectReachable([entry], resolve)) {
+    reachable.add(path.resolve(file));
+  }
+  return reachable;
+}
+
+function extractFrontendCalls(reachableFiles) {
   const calls = new Set();
+  const reachableCalls = new Set();
+
   for (const root of frontendRoots) {
     for (const filePath of walkFiles(root.path, (file) => /\.(?:ts|tsx)$/.test(file))) {
       if (/\.(?:test|spec)\.(?:ts|tsx)$/.test(filePath)) continue;
-      const source = stripComments(fs.readFileSync(path.join(repoRoot, filePath), 'utf8'));
+      const absolutePath = path.resolve(path.join(repoRoot, filePath));
+      const source = stripComments(fs.readFileSync(absolutePath, 'utf8'));
+      const isReachable = reachableFiles.has(absolutePath);
       for (const pattern of root.patterns) {
         pattern.lastIndex = 0;
         for (const match of source.matchAll(pattern)) {
           calls.add(match[1]);
+          if (isReachable) reachableCalls.add(match[1]);
         }
       }
     }
   }
-  return calls;
+
+  return { calls, reachableCalls };
 }
 
 function extractRustCommandDefinitions() {
@@ -190,25 +244,18 @@ function extractRustCommandDefinitions() {
   return commands;
 }
 
-function readAllowlist() {
-  const absolutePath = path.join(repoRoot, allowlistPath);
-  if (!fs.existsSync(absolutePath)) {
-    return { registeredWithoutFrontendCaller: [] };
+function readAllowlistSection(allowlist, sectionName, required) {
+  const entries = allowlist[sectionName];
+  if (entries === undefined) {
+    if (required) throw new Error(`${allowlistPath} must contain ${sectionName}[]`);
+    return [];
   }
-
-  const allowlist = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
-  if (
-    !allowlist ||
-    allowlist.schemaVersion !== 1 ||
-    !Array.isArray(allowlist.registeredWithoutFrontendCaller)
-  ) {
-    throw new Error(
-      `${allowlistPath} must have schemaVersion 1 and registeredWithoutFrontendCaller[]`,
-    );
+  if (!Array.isArray(entries)) {
+    throw new Error(`${allowlistPath}.${sectionName} must be an array`);
   }
 
   const commands = new Set();
-  for (const [index, entry] of allowlist.registeredWithoutFrontendCaller.entries()) {
+  for (const [index, entry] of entries.entries()) {
     if (
       !entry ||
       typeof entry.command !== 'string' ||
@@ -216,14 +263,43 @@ function readAllowlist() {
       typeof entry.reason !== 'string' ||
       entry.reason.trim().length < 20
     ) {
-      throw new Error(`${allowlistPath} entry ${index + 1} must contain command and reason`);
+      throw new Error(
+        `${allowlistPath}.${sectionName} entry ${index + 1} must contain command and reason`,
+      );
     }
     if (commands.has(entry.command)) {
-      throw new Error(`${allowlistPath} contains duplicate command ${entry.command}`);
+      throw new Error(
+        `${allowlistPath}.${sectionName} contains duplicate command ${entry.command}`,
+      );
     }
     commands.add(entry.command);
   }
-  return { registeredWithoutFrontendCaller: [...commands] };
+  return [...commands];
+}
+
+function readAllowlist() {
+  const absolutePath = path.join(repoRoot, allowlistPath);
+  if (!fs.existsSync(absolutePath)) {
+    return { registeredWithoutFrontendCaller: [], registeredWithoutReachableCaller: [] };
+  }
+
+  const allowlist = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+  if (!allowlist || allowlist.schemaVersion !== 1) {
+    throw new Error(`${allowlistPath} must have schemaVersion 1`);
+  }
+
+  return {
+    registeredWithoutFrontendCaller: readAllowlistSection(
+      allowlist,
+      'registeredWithoutFrontendCaller',
+      true,
+    ),
+    registeredWithoutReachableCaller: readAllowlistSection(
+      allowlist,
+      'registeredWithoutReachableCaller',
+      false,
+    ),
+  };
 }
 
 function yamlScalar(value) {
@@ -290,7 +366,16 @@ export function analyzeHitlRequirements(requirements, handlerSources) {
   return violations;
 }
 
-export function analyzeWiring({ registeredCommands, frontendCalls, rustDefinitions, allowlisted }) {
+export function analyzeWiring({
+  registeredCommands,
+  frontendCalls,
+  rustDefinitions,
+  allowlisted,
+  // Commands invoked from a module the renderer entry point can actually load.
+  // Defaults to `frontendCalls` so the lexical-only groups keep their meaning.
+  reachableFrontendCalls = frontendCalls,
+  reachabilityAllowlisted = new Set(),
+}) {
   const registered = new Set(registeredCommands);
   const duplicateRegistrations = [
     ...new Set(
@@ -310,12 +395,29 @@ export function analyzeWiring({ registeredCommands, frontendCalls, rustDefinitio
     .filter((command) => !registered.has(command) || frontendCalls.has(command))
     .sort();
 
+  // A command whose only invoke sites sit in modules unreachable from
+  // `main.tsx`: the string exists, the user can never trigger it.
+  const registeredWithoutReachableCaller = [...registered]
+    .filter(
+      (command) =>
+        frontendCalls.has(command) &&
+        !reachableFrontendCalls.has(command) &&
+        !allowlisted.has(command) &&
+        !reachabilityAllowlisted.has(command),
+    )
+    .sort();
+  const staleReachabilityAllowlist = [...reachabilityAllowlisted]
+    .filter((command) => !registered.has(command) || reachableFrontendCalls.has(command))
+    .sort();
+
   return {
     duplicateRegistrations,
     frontendWithoutRegistration,
     definitionWithoutRegistration,
     registeredWithoutFrontend,
     staleAllowlist,
+    registeredWithoutReachableCaller,
+    staleReachabilityAllowlist,
   };
 }
 
@@ -329,6 +431,14 @@ function reportFailures(result) {
       result.registeredWithoutFrontend,
     ],
     ['STALE (allowlist entry is no longer an orphaned registration)', result.staleAllowlist],
+    [
+      'UNREACHABLE (registered command is only invoked from modules unreachable from src/main.tsx)',
+      result.registeredWithoutReachableCaller,
+    ],
+    [
+      'STALE (reachability allowlist entry now has a reachable caller)',
+      result.staleReachabilityAllowlist,
+    ],
     ['MISSING (HITL-required tool approval boundary)', result.hitlViolations],
   ];
 
@@ -346,10 +456,12 @@ export function main() {
   const registeredCommands = extractRegisteredCommands(
     fs.readFileSync(path.join(repoRoot, libPath), 'utf8'),
   );
-  const frontendCalls = extractFrontendCalls();
+  const reachableFiles = collectReachableRendererFiles();
+  const { calls: frontendCalls, reachableCalls } = extractFrontendCalls(reachableFiles);
   const rustDefinitions = extractRustCommandDefinitions();
   const allowlist = readAllowlist();
   const allowlisted = new Set(allowlist.registeredWithoutFrontendCaller);
+  const reachabilityAllowlisted = new Set(allowlist.registeredWithoutReachableCaller);
   const hitlRequirements = extractHitlRequirements(
     fs.readFileSync(path.join(repoRoot, hitlPath), 'utf8'),
   );
@@ -365,6 +477,8 @@ export function main() {
     frontendCalls,
     rustDefinitions,
     allowlisted,
+    reachableFrontendCalls: reachableCalls,
+    reachabilityAllowlisted,
   });
   result.hitlViolations = analyzeHitlRequirements(hitlRequirements, handlerSources);
   const failureCount = reportFailures(result);
@@ -372,15 +486,18 @@ export function main() {
   if (failureCount > 0) {
     console.error(
       `Wiring check failed: ${failureCount} issue(s); ${registeredCommands.length} registrations, ` +
-        `${frontendCalls.size} frontend calls, ${rustDefinitions.size} Rust command definitions.`,
+        `${frontendCalls.size} frontend calls (${reachableCalls.size} from modules reachable from ` +
+        `${rendererEntry}), ${rustDefinitions.size} Rust command definitions.`,
     );
     process.exit(1);
   }
 
   console.log(
     `Wiring check passed: ${registeredCommands.length} registrations, ` +
-      `${frontendCalls.size} frontend calls, ${rustDefinitions.size} Rust command definitions, ` +
-      `${allowlisted.size} reviewed allowlist entries.`,
+      `${frontendCalls.size} frontend calls (${reachableCalls.size} from ${reachableFiles.size} ` +
+      `modules reachable from ${rendererEntry}), ${rustDefinitions.size} Rust command definitions, ` +
+      `${allowlisted.size} reviewed orphan allowlist entries, ` +
+      `${reachabilityAllowlisted.size} reviewed reachability allowlist entries.`,
   );
 }
 
