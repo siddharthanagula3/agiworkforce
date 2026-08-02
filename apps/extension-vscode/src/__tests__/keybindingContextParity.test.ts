@@ -23,9 +23,12 @@
  * a keybinding `when` clause is set somewhere in `src/` via `setContext`.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { activate } from '../extension';
+import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 interface PkgKeybinding {
   command: string;
@@ -110,6 +113,135 @@ describe('keybinding when-clause context parity', () => {
       unwired,
       `Found keybinding when-clause(s) referencing an agi-workforce.* context key that is never ` +
         `set via setContext anywhere in src/ — the keybinding can never fire:\n${unwired.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * SIX-14: a live `when` clause is only half of a working keybinding. VS Code
+ * invokes a keybound command with **no arguments** — there is no way for a
+ * keybinding to supply one. `agi-workforce.acceptDiff` / `rejectDiff` were
+ * registered as `(sessionId: string) => …` and bound to Ctrl/Cmd+Shift+Enter
+ * and Escape, so the keyboard path looked up `undefined` in the session map and
+ * did nothing, with no toast and no log.
+ *
+ * This guard invokes every keybound handler exactly the way the keyboard does.
+ */
+describe('keybound commands tolerate a zero-argument invocation', () => {
+  let handlers: Map<string, (...args: unknown[]) => unknown>;
+  let originalRegisterCommand: typeof vscode.commands.registerCommand;
+
+  function makeMockContext(): vscode.ExtensionContext {
+    return {
+      subscriptions: [],
+      secrets: {
+        get: vi.fn().mockResolvedValue(undefined),
+        store: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+        onDidChange: vi.fn(),
+      },
+      extensionUri: vscode.Uri.file('/mock/extension'),
+      extensionPath: '/mock/extension',
+      globalState: {
+        get: vi.fn().mockReturnValue(undefined),
+        update: vi.fn().mockResolvedValue(undefined),
+        keys: vi.fn().mockReturnValue([]),
+        setKeysForSync: vi.fn(),
+      },
+      workspaceState: {
+        get: vi.fn().mockReturnValue(undefined),
+        update: vi.fn().mockResolvedValue(undefined),
+        keys: vi.fn().mockReturnValue([]),
+      },
+      asAbsolutePath: vi.fn((p: string) => `/mock/extension/${p}`),
+      storageUri: vscode.Uri.file('/mock/storage'),
+      globalStorageUri: vscode.Uri.file('/mock/global-storage'),
+      logUri: vscode.Uri.file('/mock/log'),
+      extensionMode: 1,
+      environmentVariableCollection: {} as never,
+      extension: { packageJSON: { version: '0.3.0' } } as never,
+      languageModelAccessInformation: {} as never,
+    } as unknown as vscode.ExtensionContext;
+  }
+
+  beforeEach(() => {
+    handlers = new Map();
+    originalRegisterCommand = vscode.commands.registerCommand;
+    (
+      vscode.commands as { registerCommand: typeof vscode.commands.registerCommand }
+    ).registerCommand = vi.fn((id: string, handler: (...args: unknown[]) => unknown) => {
+      handlers.set(id, handler);
+      return { dispose: () => undefined } as vscode.Disposable;
+    }) as never;
+    // Keyboard shortcuts fire with no editor, no terminal and no dialog answer.
+    vscode.window.activeTextEditor = undefined;
+    vscode.window.activeTerminal = undefined;
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(undefined);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    (
+      vscode.commands as { registerCommand: typeof vscode.commands.registerCommand }
+    ).registerCommand = originalRegisterCommand;
+    vi.restoreAllMocks();
+    __resetSubsystemHealthForTests();
+  });
+
+  it('invokes every keybound command with no arguments without throwing', async () => {
+    activate(makeMockContext());
+
+    const keybound = [...new Set(readKeybindings().map((kb) => kb.command))];
+    expect(keybound.length).toBeGreaterThan(0);
+
+    const failures: string[] = [];
+    for (const id of keybound) {
+      const handler = handlers.get(id);
+      expect(handler, `${id} is keybound in package.json but never registered`).toBeDefined();
+      try {
+        await Promise.resolve(handler?.());
+      } catch (err) {
+        failures.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    expect(
+      failures,
+      `keybound command(s) failed when invoked with no arguments — the keyboard path is dead:\n${failures.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('registers no keybound command with a required leading parameter', () => {
+    // A no-throw invocation cannot see the real failure mode: `acceptDiff` and
+    // `rejectDiff` did not throw on `undefined`, they just did nothing. A
+    // keybound handler that declares a required first parameter is by
+    // construction relying on an argument the keyboard can never send.
+    const setupSource = fs.readFileSync(path.resolve(__dirname, '../core/commandSetup.ts'), 'utf8');
+    const keybound = [...new Set(readKeybindings().map((kb) => kb.command))];
+
+    const checked: string[] = [];
+    const offenders: string[] = [];
+    for (const id of keybound) {
+      const match = new RegExp(
+        `register\\('${id.replace(/\./g, '\\.')}',\\s*(?:async\\s*)?\\(([^)]*)\\)`,
+      ).exec(setupSource);
+      if (match === null) continue; // registered outside commandSetup.ts
+      checked.push(id);
+      const first = (match[1] ?? '').split(',')[0]?.trim() ?? '';
+      const optional =
+        first === '' || first.startsWith('...') || first.includes('?:') || first.includes('=');
+      if (!optional) offenders.push(`${id} (first parameter "${first}" is required)`);
+    }
+
+    // The two commands this guard exists for must actually be in scope.
+    expect(checked).toEqual(
+      expect.arrayContaining(['agi-workforce.acceptDiff', 'agi-workforce.rejectDiff']),
+    );
+    expect(
+      offenders,
+      `keybound command(s) declare a required first parameter no keybinding can supply:\n${offenders.join('\n')}`,
     ).toEqual([]);
   });
 });

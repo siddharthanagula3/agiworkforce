@@ -118,6 +118,19 @@ function buildSidebarReferenceDraft(target: vscode.Uri): {
 }
 
 /**
+ * Explain a diff shortcut that resolved nothing.
+ *
+ * `agi-workforce.hasDiff` only proves a diff exists *somewhere*, so the chord
+ * can fire while the focused editor has none. Saying so beats the previous
+ * behaviour, where the keypress did nothing and reported nothing.
+ */
+function warnNoDiffUnderCursor(verb: 'accept' | 'dismiss'): void {
+  vscode.window.showWarningMessage(
+    `AGI Workforce: no suggestion to ${verb} in the active editor. Open the file that has the pending change, or use Accept/Reject All.`,
+  );
+}
+
+/**
  * Output channel for git/test commands invoked via execFile.
  * PR-3B (F-12, F-19): replaces `terminal.sendText` for hardcoded commands
  * so shell metacharacters in dynamic args (e.g. commit messages) cannot
@@ -303,11 +316,30 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── diff commands ───────────────────────────────────────────────────────────
-    register('agi-workforce.acceptDiff', async (sessionId: string) => {
-      await diffDecorationProvider.acceptDiff(sessionId);
+    //
+    // `acceptDiff`/`rejectDiff` are reachable two ways: the CodeLens passes the
+    // session id it rendered, and `contributes.keybindings` binds them with no
+    // arguments at all. The argument-free path used to look up `undefined` in
+    // the session map — Ctrl/Cmd+Shift+Enter and Escape over a diff were silent
+    // no-ops with no toast and no log. Resolve the diff under the cursor
+    // instead, exactly as the CodeLens-free shortcuts do.
+    register('agi-workforce.acceptDiff', async (sessionId?: string) => {
+      if (typeof sessionId === 'string' && sessionId !== '') {
+        await diffDecorationProvider.acceptDiff(sessionId);
+        return;
+      }
+      if (!(await diffDecorationProvider.acceptCurrentDiff())) {
+        warnNoDiffUnderCursor('accept');
+      }
     }),
-    register('agi-workforce.rejectDiff', (sessionId: string) => {
-      diffDecorationProvider.rejectDiff(sessionId);
+    register('agi-workforce.rejectDiff', (sessionId?: string) => {
+      if (typeof sessionId === 'string' && sessionId !== '') {
+        diffDecorationProvider.rejectDiff(sessionId);
+        return;
+      }
+      // Escape is bound to this command. It is a global dismissal key, so a
+      // press with no diff under the cursor must stay silent rather than nag.
+      diffDecorationProvider.rejectCurrentDiff();
     }),
     register('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
       await diffDecorationProvider.acceptAll(uri);
@@ -316,10 +348,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       diffDecorationProvider.rejectAll(uri);
     }),
     register('agi-workforce.acceptCurrentDiff', async () => {
-      await diffDecorationProvider.acceptCurrentDiff();
+      if (!(await diffDecorationProvider.acceptCurrentDiff())) {
+        warnNoDiffUnderCursor('accept');
+      }
     }),
     register('agi-workforce.rejectCurrentDiff', () => {
-      diffDecorationProvider.rejectCurrentDiff();
+      if (!diffDecorationProvider.rejectCurrentDiff()) {
+        warnNoDiffUnderCursor('dismiss');
+      }
     }),
     register('agi-workforce.acceptAllDiffsGlobal', async () => {
       await diffDecorationProvider.acceptAllGlobal();

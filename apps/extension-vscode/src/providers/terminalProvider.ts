@@ -4,10 +4,20 @@
  * Provides:
  *   - A dedicated "AGI Workforce" terminal instance (created or reused)
  *   - runCommand(): send arbitrary commands to the AGI terminal
- *   - captureAndExplain(): capture recent terminal output via shellIntegration
- *     and send it to the LLM for explanation
+ *   - captureAndExplain(): replay the last shell execution captured from the
+ *     shell-integration events and send it to the LLM for explanation
  *   - suggestCommand(): ask the LLM to suggest a terminal command based on
  *     workspace context, present via QuickPick, and run on confirmation
+ *
+ * Shell integration note (SIX-15): this file used to declare its own
+ * `TerminalShellIntegration { executions: readonly TerminalShellExecution[] }`
+ * and branch on `shellIntegration.executions`. No such property exists on the
+ * real API — `vscode.TerminalShellIntegration` carries only `cwd` and
+ * `executeCommand`, and executions are delivered through
+ * `window.onDidStartTerminalShellExecution` /
+ * `onDidEndTerminalShellExecution`. The branch was therefore always undefined
+ * and every capture fell through to "Shell integration is not available", which
+ * was false whenever it was in fact active.
  */
 
 import * as vscode from 'vscode';
@@ -139,21 +149,64 @@ export function validateSuggestedCommand(cmd: string): string | undefined {
 
 // ─── TerminalProvider ────────────────────────────────────────────────────────
 
+/**
+ * The most recent shell execution seen in a terminal, with whatever output has
+ * been streamed so far.
+ *
+ * `TerminalShellExecution.read()` only yields data written *after* the first
+ * call, so the stream has to be drained from the
+ * `onDidStartTerminalShellExecution` handler. Reading it later — which is what
+ * "look up the last execution when the user asks" would mean — returns nothing.
+ */
+interface CapturedExecution {
+  readonly execution: vscode.TerminalShellExecution;
+  output: string;
+  truncated: boolean;
+  exitCode: number | undefined;
+  ended: boolean;
+}
+
 export class TerminalProvider implements vscode.Disposable {
   private _terminal: vscode.Terminal | undefined;
   private readonly _secrets: vscode.SecretStorage;
   private readonly _disposables: vscode.Disposable[] = [];
+  /**
+   * Latest drained execution per terminal.
+   *
+   * Kept in extension memory only, capped at {@link MAX_CAPTURE_CHARS} per
+   * terminal, dropped when the terminal closes, and never sent anywhere until
+   * the user explicitly runs "Explain Terminal Output".
+   */
+  private readonly _lastExecutions = new Map<vscode.Terminal, CapturedExecution>();
 
   constructor(secrets: vscode.SecretStorage) {
     this._secrets = secrets;
 
-    // Listen for terminal close events so we clear our reference if the user
-    // manually closes the AGI terminal.
     this._disposables.push(
+      // Listen for terminal close events so we clear our reference if the user
+      // manually closes the AGI terminal.
       vscode.window.onDidCloseTerminal((closed) => {
         if (closed === this._terminal) {
           this._terminal = undefined;
         }
+        this._lastExecutions.delete(closed);
+      }),
+      vscode.window.onDidStartTerminalShellExecution((event) => {
+        const captured: CapturedExecution = {
+          execution: event.execution,
+          output: '',
+          truncated: false,
+          exitCode: undefined,
+          ended: false,
+        };
+        this._lastExecutions.set(event.terminal, captured);
+        void this._drainExecution(captured);
+      }),
+      vscode.window.onDidEndTerminalShellExecution((event) => {
+        const captured = this._lastExecutions.get(event.terminal);
+        if (captured?.execution !== event.execution) return;
+        captured.ended = true;
+        captured.exitCode = event.exitCode;
       }),
     );
   }
@@ -223,17 +276,17 @@ export class TerminalProvider implements vscode.Disposable {
   // ─── captureAndExplain ───────────────────────────────────────────────────
 
   /**
-   * Capture recent terminal output and send it to the LLM for explanation.
+   * Explain the most recent shell execution in the active terminal.
    *
-   * Uses the VS Code Shell Integration API (`terminal.shellIntegration`) when
-   * available. Shell integration provides structured access to command
-   * executions and their output via `TerminalShellExecution.read()`.
-   *
-   * Falls back to asking the user to copy-paste the output when shell
-   * integration is not available.
+   * The output comes from the shell-integration executions this provider
+   * drained live (see the constructor). Falls back to asking the user to paste
+   * the output only when this terminal genuinely has nothing captured — and the
+   * prompt then states which of the two reasons applies.
    */
   async captureAndExplain(cancellationToken: vscode.CancellationToken): Promise<string> {
-    const terminal = this.getOrCreateTerminal();
+    // Explain the terminal the user is actually looking at. Falling straight to
+    // the AGI terminal would explain a shell the user never ran anything in.
+    const terminal = vscode.window.activeTerminal ?? this.getOrCreateTerminal();
     const output = await this._captureOutput(terminal);
 
     if (output === undefined || output.trim() === '') {
@@ -370,90 +423,69 @@ export class TerminalProvider implements vscode.Disposable {
   // ─── Output capture (private) ────────────────────────────────────────────
 
   /**
-   * Attempt to capture recent output from the terminal.
+   * Capture recent output from the terminal.
    *
    * Strategy:
-   *   1. If `terminal.shellIntegration` is available, read the output of the
-   *      most recent shell execution via `read()` async iterable.
-   *   2. Otherwise, fall back to prompting the user to paste output.
+   *   1. Replay the execution this provider drained from
+   *      `onDidStartTerminalShellExecution` for this terminal.
+   *   2. Otherwise, prompt the user to paste output — and say truthfully *why*
+   *      we are asking, which depends on whether shell integration is active.
    */
   private async _captureOutput(terminal: vscode.Terminal): Promise<string | undefined> {
-    // Strategy 1: Shell Integration API (VS Code >= 1.93)
-    // VS Code Shell Integration API may not be in @types/vscode yet — use
-    // runtime property check instead of `as unknown as` double-cast.
-    const shellIntegration =
-      'shellIntegration' in terminal
-        ? (terminal.shellIntegration as TerminalShellIntegration | undefined)
-        : undefined;
-
-    if (shellIntegration !== undefined) {
-      try {
-        const executions = shellIntegration.executions;
-        if (executions !== undefined && executions.length > 0) {
-          // Get the most recent execution
-          const lastExecution = executions[executions.length - 1];
-          if (lastExecution !== undefined) {
-            return await this._readShellExecution(lastExecution);
-          }
-        }
-
-        // If no executions are recorded yet, try running a no-op to trigger
-        // shell integration capture, or fall through to manual paste.
-      } catch {
-        // Shell integration read failed — fall through to manual capture
-      }
+    const captured = this._lastExecutions.get(terminal);
+    if (captured !== undefined) {
+      const transcript = formatCapturedExecution(captured);
+      if (transcript.trim() !== '') return transcript;
     }
 
-    // Strategy 2: Manual paste fallback
-    return this._askUserForOutput();
+    return this._askUserForOutput(terminal);
   }
 
   /**
-   * Read output from a TerminalShellExecution using its async iterable `read()` method.
+   * Drain a live execution's output stream into its capture record.
+   *
+   * Runs for the whole life of the command, so a capture requested while the
+   * command is still running sees the partial output rather than nothing.
    */
-  private async _readShellExecution(execution: TerminalShellExecution): Promise<string> {
-    const chunks: string[] = [];
-    let totalLength = 0;
-
+  private async _drainExecution(captured: CapturedExecution): Promise<void> {
     try {
-      const stream = execution.read();
-      for await (const data of stream) {
-        // data can be string or TerminalShellExecutionOutputData
-        const text = typeof data === 'string' ? data : String(data);
-        totalLength += text.length;
-
-        if (totalLength > MAX_CAPTURE_CHARS) {
-          // Truncate to prevent excessive LLM input
-          const remaining = MAX_CAPTURE_CHARS - (totalLength - text.length);
-          if (remaining > 0) {
-            chunks.push(text.substring(0, remaining));
-          }
-          chunks.push('\n... [output truncated]');
-          break;
+      for await (const data of captured.execution.read()) {
+        // The stream carries raw terminal data, escape sequences included.
+        const text = stripTerminalControlSequences(typeof data === 'string' ? data : String(data));
+        const remaining = MAX_CAPTURE_CHARS - captured.output.length;
+        if (remaining <= 0) {
+          captured.truncated = true;
+          return;
         }
-
-        chunks.push(text);
+        if (text.length > remaining) {
+          captured.output += text.slice(0, remaining);
+          captured.truncated = true;
+          return;
+        }
+        captured.output += text;
       }
     } catch {
-      // Stream may error if the execution is still in progress or already disposed
-      if (chunks.length === 0) {
-        return '';
-      }
+      // The stream can error if the execution is disposed mid-read. Whatever
+      // was already captured stays usable; nothing is invented in its place.
     }
-
-    return chunks.join('');
   }
 
   /**
    * Prompt the user to paste terminal output manually.
-   * Used when shell integration is not available.
+   *
+   * Reached when this terminal has no captured execution. The prompt names the
+   * real reason: shell integration inactive, or active but with no command run
+   * since the extension started listening.
    */
-  private async _askUserForOutput(): Promise<string | undefined> {
+  private async _askUserForOutput(terminal: vscode.Terminal): Promise<string | undefined> {
+    const reason =
+      terminal.shellIntegration === undefined
+        ? 'Shell integration is not active in this terminal.'
+        : 'No command output has been captured in this terminal yet.';
+
     const pastedOutput = await vscode.window.showInputBox({
       title: 'AGI Workforce — Paste Terminal Output',
-      prompt:
-        'Shell integration is not available. Copy the terminal output ' +
-        'you want explained and paste it here.',
+      prompt: `${reason} Copy the terminal output you want explained and paste it here.`,
       placeHolder: 'Paste terminal output here…',
       ignoreFocusOut: true,
     });
@@ -472,23 +504,60 @@ export class TerminalProvider implements vscode.Disposable {
       d.dispose();
     }
     this._disposables.length = 0;
+    this._lastExecutions.clear();
     // Do not dispose the terminal itself — the user may still want it
   }
 }
 
-// ─── Shell Integration type definitions ──────────────────────────────────────
-//
-// These types mirror the VS Code Shell Integration API surface. They are
-// declared locally to avoid hard dependency on a specific @types/vscode
-// version that may not include them yet.
+// ─── Capture formatting ──────────────────────────────────────────────────────
 
-interface TerminalShellExecution {
-  read(): AsyncIterable<string>;
+/**
+ * Terminal control sequences the raw execution stream carries: CSI (colours,
+ * cursor moves), OSC (window title, hyperlinks, shell-integration markers) and
+ * the single-character escapes around them. Stripped before the text is shown
+ * or sent so the explanation is about the output, not about the escape codes.
+ */
+const TERMINAL_CONTROL_SEQUENCES = new RegExp(
+  [
+    '\\u001B\\][^\\u0007\\u001B]*(?:\\u0007|\\u001B\\\\)', // OSC ... BEL | ST
+    '\\u001B\\[[0-9;?]*[ -/]*[@-~]', // CSI
+    '\\u001B[@-Z\\\\-_]', // Fe escapes
+    '[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]', // stray control chars
+  ].join('|'),
+  'g',
+);
+
+function stripTerminalControlSequences(text: string): string {
+  return text.replace(TERMINAL_CONTROL_SEQUENCES, '').replace(/\r\n?/g, '\n');
 }
 
-interface TerminalShellIntegration {
-  readonly executions: readonly TerminalShellExecution[];
-  executeCommand?(command: string): TerminalShellExecution;
+/**
+ * Render a captured execution for the model.
+ *
+ * The command line is included only at High confidence — at Low/Medium VS Code
+ * reconstructs it from the terminal buffer and it may be wrong, and a wrong
+ * command line would be a fabricated premise for the explanation.
+ */
+function formatCapturedExecution(captured: CapturedExecution): string {
+  const { commandLine } = captured.execution;
+  const parts: string[] = [];
+
+  if (
+    commandLine.value.trim() !== '' &&
+    commandLine.confidence === vscode.TerminalShellExecutionCommandLineConfidence.High
+  ) {
+    parts.push(`$ ${commandLine.value.trim()}`);
+  }
+
+  const output = captured.output.trim();
+  if (output !== '') parts.push(output);
+  if (captured.truncated) parts.push('... [output truncated]');
+  if (!captured.ended) parts.push('[command is still running]');
+  else if (captured.exitCode !== undefined) parts.push(`[exit code ${captured.exitCode}]`);
+
+  // A run that produced no output at all is still worth explaining when we know
+  // its exit code, but never claim there was output when there was none.
+  return output === '' && captured.exitCode === undefined ? '' : parts.join('\n');
 }
 
 // ─── Activation ──────────────────────────────────────────────────────────────

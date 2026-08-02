@@ -142,6 +142,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this._stateManager.pushUsageMeter();
   }
 
+  /**
+   * Adopt an externally edited `agiWorkforce.model` setting before the meter is
+   * pushed, so the header trust pill describes the newly configured provider.
+   */
+  public syncModelFromConfiguration(): void {
+    this._stateManager.syncActiveModelFromConfiguration();
+  }
+
   /** Push the current browser/device-auth state into the visible account control. */
   public pushAccountStatus(): void {
     void this._stateManager.pushAccountStatus();
