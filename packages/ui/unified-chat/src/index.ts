@@ -6,7 +6,21 @@ export * from './lib/hostBridge';
 export * from './lib/capabilities';
 export * from './lib/utils';
 export * from './lib/greetings';
-export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
+export {
+  buildSandboxedHtml,
+  ARTIFACT_SANDBOX_ATTR,
+  ARTIFACT_SANDBOX_SCHEME,
+  buildArtifactSandboxUrl,
+  configureArtifactSandboxOrigin,
+  getArtifactSandboxOrigin,
+  isArtifactSandboxMessage,
+  postRenderToArtifactSandbox,
+} from './lib/artifact-sandbox';
+export type {
+  ArtifactRenderPayload,
+  ArtifactSandboxKind,
+  SandboxIncomingMessage,
+} from './lib/artifact-sandbox';
 export {
   getSameDocumentScriptSupport,
   probeSameDocumentScriptSupport,
@@ -382,6 +396,8 @@ export {
   buildReactPreviewDocument,
 } from './components/artifact-components/ReactPreview';
 export type { ReactPreviewProps } from './components/artifact-components/ReactPreview';
+export { ArtifactSandboxFrame } from './components/artifact-components/ArtifactSandboxFrame';
+export type { ArtifactSandboxFrameProps } from './components/artifact-components/ArtifactSandboxFrame';
 export {
   SpreadsheetArtifact,
   SPREADSHEET_ROW_CAP,

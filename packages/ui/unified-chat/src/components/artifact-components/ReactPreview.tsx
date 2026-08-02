@@ -19,6 +19,8 @@ import {
   SCRIPTS_BLOCKED_NOTICE,
   type ArtifactPreviewScriptSupport,
 } from '../../lib/artifact-preview-capability';
+import { getArtifactSandboxOrigin, type ArtifactRenderPayload } from '../../lib/artifact-sandbox';
+import { ArtifactSandboxFrame } from './ArtifactSandboxFrame';
 
 export interface ReactPreviewProps {
   code: string;
@@ -190,11 +192,21 @@ export function ReactPreview({
   scriptSupport = 'unknown',
   onViewSource,
 }: ReactPreviewProps) {
-  const scriptsBlocked = scriptSupport === 'blocked';
+  // DES-C15, second half. When a dedicated artifact ORIGIN exists the preview is
+  // not a same-document frame: it is a cross-origin document with its own CSP, so
+  // `scriptSupport` (which measures the SRCDOC path) does not describe it and the
+  // "can't run here" notice would be false. `sandboxDegraded` flips that back the
+  // moment the sandbox fails its handshake and we fall back to srcdoc.
+  const sandboxOrigin = getArtifactSandboxOrigin();
+  const [sandboxDegraded, setSandboxDegraded] = useState(false);
+  const sandboxActive = sandboxOrigin !== null && !sandboxDegraded;
+  const scriptsBlocked = scriptSupport === 'blocked' && !sandboxActive;
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Nullable element type so the box can be handed to `ArtifactSandboxFrame`,
+  // which owns the iframe now and writes whichever frame it mounted back here.
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const channelId = useRef(crypto.randomUUID());
   const isMountedRef = useRef(true);
   const reloadKeyRef = useRef(0);
@@ -255,12 +267,46 @@ export function ReactPreview({
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  /**
+   * Wire payload for the shared cross-origin renderer.
+   *
+   * The SAME shape web builds (`ArtifactPreview.tsx`): raw source under `code`.
+   * `infrastructure/sandbox/index.html` `renderReact()` drops it straight into a
+   * `text/babel` script, so it must NOT be sanitized or HTML-escaped on the way
+   * in — the origin is the boundary, not an escape pass (AUDIT-FIX ART-1).
+   */
+  const sandboxPayload = useMemo<ArtifactRenderPayload>(
+    () => ({ type: 'render', kind: 'react', code }),
+    [code],
+  );
+
+  const handleSandboxComplete = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setIsLoading(false);
+    setError(null);
+  }, []);
+
+  const handleSandboxError = useCallback((message: string) => {
+    if (!isMountedRef.current) return;
+    setIsLoading(false);
+    setError(message);
+  }, []);
+
+  // The sandbox origin never answered. Fall back to the same-document document,
+  // and let `scriptSupport` speak again — on desktop that means the honest
+  // "scripts are blocked here" notice instead of a permanently blank frame.
+  const handleSandboxFallback = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setSandboxDegraded(true);
+  }, []);
+
   const handleReload = useCallback(() => {
     if (!isMountedRef.current) return;
     reloadKeyRef.current += 1;
     setReloadKey(reloadKeyRef.current);
     setError(null);
     setIsLoading(true);
+    setSandboxDegraded(false);
   }, []);
 
   const toggleExpanded = useCallback(() => {
@@ -337,16 +383,27 @@ export function ReactPreview({
           </div>
         ) : null}
         {srcDoc && !scriptsBlocked && (
-          <iframe
+          // Prefers the dedicated artifact ORIGIN and the shared renderer
+          // (`infrastructure/sandbox/index.html`), which is the only place a
+          // React artifact can load Babel/React at all inside the packaged
+          // desktop app. Falls back to the same-document document built above —
+          // byte-for-byte the previous behaviour — wherever no such origin
+          // exists, so web and browser dev are unchanged.
+          //
+          // Security: the fallback keeps `allow-scripts` ONLY. No
+          // allow-same-origin, so it stays isolated from this window,
+          // localStorage and cookies.
+          <ArtifactSandboxFrame
             key={reloadKey}
-            ref={iframeRef}
-            srcDoc={srcDoc}
+            payload={sandboxPayload}
+            fallbackSrcDoc={srcDoc}
+            fallbackSandbox="allow-scripts"
             title="React Component Preview"
             className="w-full h-full border-0"
-            // Security: allow-scripts only — no allow-same-origin keeps the iframe
-            // isolated from the parent window, localStorage, and cookies.
-            sandbox="allow-scripts"
-            referrerPolicy="no-referrer"
+            frameRef={iframeRef}
+            onRenderComplete={handleSandboxComplete}
+            onRenderError={handleSandboxError}
+            onFallback={handleSandboxFallback}
           />
         )}
         {!srcDoc && !scriptsBlocked && error && (
