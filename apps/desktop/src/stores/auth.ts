@@ -136,6 +136,17 @@ interface AuthState {
   _hasHydrated: boolean;
   // Session has been validated with the cloud auth boundary (not just rehydrated from cache)
   sessionValidated: boolean;
+  /**
+   * True only for the synthesized device-owned Local account (App.tsx's
+   * `applyLocalAccount`), which exists so Local chat stores have a stable owner
+   * id and is NEVER a Managed Cloud tenant. `selectHasCloudAccountSession`
+   * reads this instead of sniffing `plan === 'local-only'`: the plan field is
+   * resolved asynchronously (STEP 4 of the auth orchestrator, behind a hash +
+   * a network call) and `setAccount` preserves the previous value while it is
+   * undefined, so a freshly approved device was still reported as local-only
+   * for the whole entitlement window and bounced back to the sign-in screen.
+   */
+  isLocalDeviceAccount: boolean;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Subscription & Plan (merged from accountStore + billingStore)
@@ -275,6 +286,8 @@ interface AccountUpdates {
   deviceLinkId: string | null;
   deviceLinkCode: string | null;
   lastSyncedAt: number | null;
+  /** Set true ONLY by the Local device-account synthesizer; false by cloud auth. */
+  isLocalDeviceAccount: boolean;
 }
 
 type UnifiedAuthStore = AuthState & AuthActions;
@@ -396,6 +409,7 @@ function getDefaultState(): AuthState {
     error: null,
     _hasHydrated: false,
     sessionValidated: false,
+    isLocalDeviceAccount: false,
 
     // Subscription & Plan
     plan,
@@ -498,6 +512,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               isLoading: false,
               error: null,
               sessionValidated: true,
+              isLocalDeviceAccount: false,
               plan: null,
               planDisplayName: 'Loading...',
               subscriptionStatus: 'none',
@@ -643,12 +658,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                     }
                   : state.user;
 
-              const newPlanDisplayName =
-                updates.planDisplayName !== undefined
-                  ? updates.planDisplayName
-                  : newPlan
-                    ? PLAN_DISPLAY_NAMES[newPlan]
-                    : 'Loading...';
               const newSubscriptionStatus =
                 updates.subscriptionStatus !== undefined
                   ? updates.subscriptionStatus
@@ -657,6 +666,18 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 updates.subscriptionFetchStatus !== undefined
                   ? updates.subscriptionFetchStatus
                   : state.subscriptionFetchStatus;
+              // 'Loading...' is a transient sentinel, not a state the user may
+              // be left in. Once the tier fetch has failed there is nothing
+              // still loading, so the sidebar footer and account menu say so
+              // instead of spinning forever on a transient /api/me outage.
+              const newPlanDisplayName =
+                updates.planDisplayName !== undefined
+                  ? updates.planDisplayName
+                  : newPlan
+                    ? PLAN_DISPLAY_NAMES[newPlan]
+                    : newSubscriptionFetchStatus === 'failed'
+                      ? 'Plan unavailable'
+                      : 'Loading...';
               const newCurrentPeriodEnd =
                 updates.currentPeriodEnd !== undefined
                   ? updates.currentPeriodEnd
@@ -680,10 +701,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   : state.deviceLinkCode;
               const newLastSyncedAt =
                 updates.lastSyncedAt !== undefined ? updates.lastSyncedAt : state.lastSyncedAt;
+              const newIsLocalDeviceAccount =
+                updates.isLocalDeviceAccount !== undefined
+                  ? updates.isLocalDeviceAccount
+                  : state.isLocalDeviceAccount;
 
               return {
                 user: newUser,
                 isAuthenticated: !!newUser?.id,
+                isLocalDeviceAccount: newIsLocalDeviceAccount,
                 plan: newPlan,
                 planDisplayName: newPlanDisplayName,
                 subscriptionStatus: newSubscriptionStatus,
@@ -904,12 +930,21 @@ export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthen
  * Identity is `user.id`, NOT `user.email`: the desktop bearer is minted by
  * /api/auth/device/token with `email: ''` when the browser approval had no
  * email claim, so an email conjunct silently signs valid paying sessions out.
- * The credential is the token; the tenant is the id. `plan !== 'local-only'`
+ * The credential is the token; the tenant is the id. `isLocalDeviceAccount`
  * keeps the synthesized Local account out of the Managed Cloud boundary.
+ *
+ * This conjunct used to be `plan !== 'local-only'`, which was a *sniff*, not a
+ * fact: the real tier is written asynchronously (auth orchestrator STEP 4,
+ * behind `hashUserId` + an untimed credits fetch) and `setAccount` preserves
+ * the previous plan while `updates.plan` is undefined. A user who had just
+ * approved the device therefore still read as local-only for the whole
+ * entitlement window and the shell re-rendered `AuthPage` on top of a
+ * successful sign-in. The flag is written only by the Local synthesizer and
+ * cleared by cloud auth, so it can never lag the credential.
  */
 export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean =>
   state.isAuthenticated &&
-  state.plan !== 'local-only' &&
+  !state.isLocalDeviceAccount &&
   Boolean(state.user?.id) &&
   Boolean(state.accessToken);
 export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;

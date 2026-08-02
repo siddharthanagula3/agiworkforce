@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
-import { useAuthStore } from '../../stores/auth';
+import { selectAuthError, useAuthStore } from '../../stores/auth';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { AgiMark } from '@agiworkforce/ui';
 
@@ -61,14 +61,26 @@ function useMotionVariants(): { fadeUp: MotionVariant } {
 
 function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
   const signIn = useAuthStore((state) => state.signIn);
+  const clearError = useAuthStore((state) => state.clearError);
   const setMode = useAppModeStore((state) => state.setMode);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Why this screen is showing matters. A session that expired or was revoked
+  // mid-session (any 401 invalidates the credential) lands here with a specific
+  // message already in the auth store — "Your AGI Cloud session has expired…" —
+  // and rendering only the local attempt error turned that into an
+  // indistinguishable fresh sign-in prompt. `selectAuthError` had no consumer
+  // anywhere in the app before this.
+  const storeAuthError = useAuthStore(selectAuthError);
+  const displayedError = error ?? storeAuthError;
 
   const beginSignIn = async () => {
     if (isConnecting) return;
     setIsConnecting(true);
     setError(null);
+    // A new attempt supersedes the reason the previous session ended; leaving
+    // it up would keep an expiry notice pinned over a successful retry.
+    clearError();
     try {
       // Credentials are intentionally empty: primary authentication happens
       // in an isolated AGI Desktop sign-in window, and the main Desktop
@@ -113,12 +125,13 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
         </div>
       </div>
 
-      {error ? (
+      {displayedError ? (
         <div
           role="alert"
+          data-testid="device-sign-in-error"
           className="mb-4 rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-3 text-sm text-destructive"
         >
-          {error}
+          {displayedError}
         </div>
       ) : null}
 

@@ -5,7 +5,9 @@ import {
   createChatModelInfo,
   parseDiscoveredChatModels,
   useChatSettingsStore,
+  useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
+import { registerChatStoreStateReader } from './stores/chat/chatStoreRef';
 import { useUnifiedAuthStore } from './stores/auth';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
@@ -93,6 +95,13 @@ import {
 } from './stores/settingsStore';
 import { useProjectStore } from './stores/projectStore';
 import { applyTheme, getThemeById } from './themes/index';
+
+// Managed Cloud turns stream through the SHARED unified-chat store, not the
+// desktop execution store, so the Local/Cloud mode-switch guard in
+// `appModeStore.setMode` cannot see them on its own. Registering it here (the
+// shell is the only module that owns both sides) makes a mid-stream Cloud
+// toggle refuse instead of disposing CloudRuntime under a live response.
+registerChatStoreStateReader(useSharedChatStore);
 
 const VisualizationLayer = lazy(() =>
   import('./features/overlay/VisualizationLayer').then((m) => ({
@@ -314,7 +323,6 @@ const DesktopShell = () => {
   // still read its default "local" value and the sidebar was never loaded.
   useEffect(() => {
     let cancelled = false;
-    let hydrationSucceeded = false;
     const boundaryKey = expectedConversationBoundaryKey;
     setConversationBoundaryReady(false);
     setConversationBoundaryError(null);
@@ -356,9 +364,14 @@ const DesktopShell = () => {
 
       if (appMode === 'cloud') {
         if (!hasCloudSession || !authenticatedUserId) return;
+        // Projects are NOT part of the chat boundary: a 429/500/cold-start on
+        // `/api/projects` must not decide whether chat can open. `loadProjects`
+        // already records its own `error` on the project store for the projects
+        // surface to render, so it is loaded without `throwOnError` and only a
+        // conversation-list failure can reach the boundary error path below.
         await Promise.all([
           useDesktopChatStore.getState().loadConversations(authenticatedUserId),
-          useProjectStore.getState().loadProjects({ throwOnError: true }),
+          useProjectStore.getState().loadProjects(),
         ]);
         const cloudConversations = useDesktopChatStore.getState().conversations;
         useProjectStore.setState((state) => ({
@@ -377,16 +390,15 @@ const DesktopShell = () => {
         return;
       }
 
+      // Same reasoning as the cloud branch: a project-list failure is scoped to
+      // the projects surface and must never gate Local chat either.
       await Promise.all([
         useDesktopChatStore.getState().loadConversations(resolveDesktopChatOwnerId()),
-        useProjectStore.getState().loadProjects({ throwOnError: true }),
+        useProjectStore.getState().loadProjects(),
       ]);
     };
 
     void hydrateBoundary()
-      .then(() => {
-        hydrationSucceeded = true;
-      })
       .catch((error: unknown) => {
         if (!cancelled) {
           console.error('[App] Failed to hydrate the active chat boundary:', error);
@@ -399,7 +411,13 @@ const DesktopShell = () => {
       })
       .finally(() => {
         if (!cancelled) {
-          setConversationBoundaryReady(hydrationSucceeded);
+          // A failed hydration must NOT strand the app on the boot skeleton or
+          // a full-screen alert. Once the boundary itself has been established
+          // (stores reset + ref claimed) the shell mounts and the failure is
+          // reported inline, so composer, sidebar and ChatInterface stay usable
+          // (web precedent: `useConversations` only calls setError and the chat
+          // page keeps rendering).
+          setConversationBoundaryReady(conversationBoundaryRef.current === boundaryKey);
         }
       });
     return () => {
@@ -810,8 +828,18 @@ const DesktopShell = () => {
         if (currentMode === 'cloud') {
           // The native credential is projected before the account snapshot
           // finishes. Do not briefly turn the public all-model catalog into an
-          // entitlement claim while the effective plan is still unknown.
-          if (!accountPlan) {
+          // entitlement claim while the effective plan is still unknown — but
+          // do not leave Cloud with zero selectable models forever either.
+          // `resolveDesktopCloudPickerModels` returns [] for a null plan, so a
+          // transient /api/me failure used to make Cloud chat unusable with no
+          // recovery. Once the tier fetch has actually FAILED, fall back to the
+          // lowest tier (web's /api/me defaults to 'free' for the same reason);
+          // the degraded-account banner above explains the downgrade and its
+          // Retry restores the real tier. Entitlement is still enforced
+          // server-side on every request.
+          const effectivePlan =
+            accountPlan ?? (subscriptionFetchStatus === 'failed' ? ('free' as const) : null);
+          if (!effectivePlan) {
             const modelStore = useChatModelStore.getState();
             modelStore.setModels([]);
             modelStore.selectModel('');
@@ -820,7 +848,7 @@ const DesktopShell = () => {
 
           const discoveredModels = await getCloudModels();
           if (cancelled) return;
-          const entitledModels = resolveDesktopCloudPickerModels(discoveredModels, accountPlan);
+          const entitledModels = resolveDesktopCloudPickerModels(discoveredModels, effectivePlan);
           if (entitledModels.length === 0) {
             throw new Error('No managed models are available for this account and Desktop.');
           }
@@ -966,7 +994,7 @@ const DesktopShell = () => {
     return () => {
       cancelled = true;
     };
-  }, [accountPlan, appMode, hasCloudSession]);
+  }, [accountPlan, appMode, hasCloudSession, subscriptionFetchStatus]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -1483,6 +1511,20 @@ const DesktopShell = () => {
       setConversationModel: (id, modelId) => {
         useDesktopChatStore.getState().setConversationModel(id, modelId);
       },
+      // Upgrade CTA on an in-transcript managed quota refusal. Routes to the
+      // SAME owned Stripe checkout window the billing settings use — the shared
+      // card renders no CTA at all when this is absent, so there is never a
+      // button that leads nowhere.
+      openUpgrade: (requiredTier: string) => {
+        void (async () => {
+          const { openCheckout } = await import('./lib/stripeCheckout');
+          const { normalizeBillingPlanTier } = await import('@agiworkforce/types');
+          const failure = await openCheckout(normalizeBillingPlanTier(requiredTier));
+          if (failure) toast.error(failure);
+        })().catch((error: unknown) => {
+          toast.error(error instanceof Error ? error.message : 'Could not open checkout.');
+        });
+      },
       // Managed-cloud generated files (x_generated_files): fetch bytes from
       // the authenticated /api/files route. Bearer is ONLY attached to uris on
       // our cloud API base (never leaked to arbitrary hosts); guardedFetch
@@ -1599,47 +1641,11 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (
-    conversationBoundaryError &&
-    conversationBoundaryRef.current === expectedConversationBoundaryKey
-  ) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background px-6">
-        <div
-          role="alert"
-          className="w-full max-w-md rounded-2xl border border-[var(--chat-destructive)]/30 bg-[var(--chat-surface-elevated)] p-6 text-center shadow-sm"
-        >
-          <AlertTriangle className="mx-auto h-8 w-8 text-[var(--chat-destructive)]" />
-          <h1 className="mt-4 text-lg font-semibold text-[var(--chat-text-primary)]">
-            Could not open {isCloudMode ? 'Cloud Mode' : 'Local Mode'}
-          </h1>
-          <p className="mt-2 text-sm text-[var(--chat-text-secondary)]">
-            {conversationBoundaryError}
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setConversationBoundaryRetry((attempt) => attempt + 1)}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-4 py-2 text-sm font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-90"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Try again
-            </button>
-            {isCloudMode ? (
-              <button
-                type="button"
-                onClick={() => useAppModeStore.getState().setMode('local')}
-                className="rounded-lg border border-[var(--chat-border)] px-4 py-2 text-sm font-medium text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]"
-              >
-                Use Local Mode
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // NOTE: a conversation-list failure is reported by the inline
+  // `data-testid="conversation-boundary-error"` banner further down, NOT by a
+  // full-screen takeover. Blanking the shell for a background list fetch took
+  // out chat, composer, sidebar and history at once; the shell now stays
+  // mounted and the failure is scoped and retryable.
   if (
     !conversationBoundaryReady ||
     conversationBoundaryRef.current !== expectedConversationBoundaryKey ||
@@ -1703,7 +1709,14 @@ const DesktopShell = () => {
         )}
         {isTauri && showOnboarding && !hasSelectedMode && (
           <Suspense fallback={null}>
-            <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
+            <OnboardingWelcome
+              onComplete={() => setShowOnboarding(false)}
+              // Without this the first-run "Cloud Mode" card completed
+              // onboarding and dropped the user into Local mode, so the very
+              // first screen of a Cloud demo silently chose the wrong trust
+              // boundary. Entering Cloud makes the shell render AuthPage.
+              onCloudModeSelected={() => useAppModeStore.getState().setMode('cloud')}
+            />
           </Suspense>
         )}
         <div className="flex flex-col gap-1">
@@ -1713,6 +1726,40 @@ const DesktopShell = () => {
           <Suspense fallback={null}>
             <OfflineIndicator position="top" />
           </Suspense>
+          {conversationBoundaryError &&
+            conversationBoundaryRef.current === expectedConversationBoundaryKey && (
+              <div
+                role="alert"
+                data-testid="conversation-boundary-error"
+                className="border-b border-[var(--chat-destructive)]/30 bg-[var(--chat-destructive)]/10 px-4 py-2 flex items-center justify-between gap-3 text-sm text-[var(--chat-text-primary)]"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--chat-destructive)]" />
+                  <span className="truncate">
+                    {isCloudMode ? 'Cloud' : 'Local'} conversations could not be loaded.{' '}
+                    {conversationBoundaryError}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConversationBoundaryRetry((attempt) => attempt + 1)}
+                    className="inline-flex items-center gap-1.5 text-xs underline hover:opacity-80"
+                  >
+                    <RefreshCcw className="h-3.5 w-3.5" />
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConversationBoundaryError(null)}
+                    aria-label="Dismiss conversation loading error"
+                    className="text-xs underline hover:opacity-80"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
           {isCloudMode && subscriptionFetchFailed && (
             <div className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 flex items-center justify-between text-sm text-[var(--chat-warning-fg)]">
               <div className="flex items-center gap-2">
@@ -1925,6 +1972,11 @@ const App = () => {
               id,
               email: '',
               displayName: 'Local User',
+              // The authoritative "this is not a Managed Cloud tenant" marker.
+              // selectHasCloudAccountSession reads this flag, not the plan, so
+              // the plan field can resolve asynchronously without ever making a
+              // real Cloud session look local-only (DES-C17).
+              isLocalDeviceAccount: true,
               plan: 'local-only',
               planDisplayName: 'Local Mode',
               subscriptionStatus: 'none',

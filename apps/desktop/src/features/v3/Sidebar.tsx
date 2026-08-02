@@ -238,6 +238,7 @@ export function Sidebar({
   const isSignedIn = hasCloudAccountSession;
   const showAccountMenu = accountMenuOpen && isSignedIn;
   const privacyMode = useAppModeStore(selectPrivacyMode);
+  const setAppMode = useAppModeStore((s) => s.setMode);
 
   const archivedCount = useMemo(
     () => conversations.filter((conversation) => conversation.archived === true).length,
@@ -344,8 +345,14 @@ export function Sidebar({
       onOpenAccountMenu?.();
       return;
     }
-    openSettings('account');
-  }, [isSignedIn, onOpenAccountMenu, openSettings]);
+    // This row is labelled "Sign in" / "Cloud sync", so it has to reach the
+    // Cloud account boundary. It used to call openSettings('account'), but in
+    // Local mode SettingsPanel's LOCAL_HIDDEN_TABS contains 'account' and
+    // resolveVisibleTab rewrites it to 'general' — the button silently opened
+    // General settings and read as a dead control. Entering Cloud makes the
+    // shell render AuthPage, which is the only real sign-in route on Desktop.
+    setAppMode('cloud');
+  }, [isSignedIn, onOpenAccountMenu, setAppMode]);
 
   const handleMoveConversation = useCallback(
     (conversationId: string, projectId: string | null) => {

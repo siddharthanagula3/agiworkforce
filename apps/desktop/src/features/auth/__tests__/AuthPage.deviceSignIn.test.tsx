@@ -44,4 +44,57 @@ describe('Desktop Cloud device sign-in', () => {
     fireEvent.click(screen.getByRole('button', { name: /use local mode/i }));
     expect(useAppModeStore.getState().mode).toBe('local');
   });
+
+  /**
+   * DES-C18. `cloudAccountAuth` produces specific reasons a session ended
+   * ("Your AGI Cloud session has expired…", "…no longer authorized…") and the
+   * orchestrator forwards them into the store, but AuthPage kept only its own
+   * attempt-local `error` state, so an expired or revoked session was
+   * indistinguishable from a first-run sign-in prompt. `selectAuthError` had no
+   * consumer anywhere in the app.
+   */
+  it('surfaces the stored session-expiry reason, not a blank sign-in prompt', () => {
+    useAuthStore.setState({
+      error: 'Your AGI Cloud session has expired. Please connect again.',
+    });
+
+    render(<AuthPage />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/session has expired/i);
+  });
+
+  it('clears the previous session error when a new sign-in attempt starts', async () => {
+    useAuthStore.setState({ error: 'Your AGI Cloud session is no longer authorized.' });
+    // Hold the attempt open so the assertion observes the in-flight state.
+    let releaseSignIn: (value: { error: null }) => void = () => {};
+    signIn.mockImplementation(
+      () =>
+        new Promise<{ error: null }>((resolve) => {
+          releaseSignIn = resolve;
+        }),
+    );
+
+    render(<AuthPage />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/no longer authorized/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in to agi cloud/i }));
+
+    await waitFor(() => expect(useAuthStore.getState().error).toBeNull());
+    expect(screen.queryByTestId('device-sign-in-error')).not.toBeInTheDocument();
+
+    releaseSignIn({ error: null });
+  });
+
+  it('prefers the current attempt failure over a stale stored error', async () => {
+    useAuthStore.setState({ error: 'Your AGI Cloud session has expired. Please connect again.' });
+    signIn.mockResolvedValue({ error: 'AGI Cloud sign-in was denied.' });
+
+    render(<AuthPage />);
+    fireEvent.click(screen.getByRole('button', { name: /sign in to agi cloud/i }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('device-sign-in-error')).toHaveTextContent(/sign-in was denied/i),
+    );
+  });
 });

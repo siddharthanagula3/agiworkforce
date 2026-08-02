@@ -1842,9 +1842,12 @@ registerExecutionMessagePatcher((fn) => {
   fn(messages, activeConversationId ? messagesByConversation[activeConversationId] : undefined);
 });
 
-registerChatStoreStateReader(
-  useChatMessageStore as unknown as Parameters<typeof registerChatStoreStateReader>[0],
-);
+// The mode-switch guard needs the store that actually owns `isStreaming`.
+// `useChatMessageStore` never carries it (every read/write targets the
+// execution store), so registering the message store left
+// `isChatStoreStreaming()` permanently false and a Local↔Cloud toggle could be
+// clicked mid-answer.
+registerChatStoreStateReader(useChatExecutionStore);
 
 // === Combined ChatState interface (unchanged for consumers) ===
 

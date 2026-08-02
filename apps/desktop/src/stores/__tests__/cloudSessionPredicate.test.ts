@@ -100,6 +100,8 @@ describe('desktop cloud session: one predicate for every surface', () => {
           useAuthStore.getState().setAccount({
             id: 'local-abc',
             displayName: 'Local User',
+            // Exactly what App.tsx's applyLocalAccount writes.
+            isLocalDeviceAccount: true,
             plan: 'local-only',
             accessToken: null,
           }),
@@ -119,11 +121,52 @@ describe('desktop cloud session: one predicate for every surface', () => {
     useAuthStore.getState().setAccount({
       id: 'local-abc',
       displayName: 'Local User',
+      isLocalDeviceAccount: true,
       plan: 'local-only',
       accessToken: 'leftover-cloud-bearer',
     });
 
     expect(selectHasCloudAccountSession(useAuthStore.getState())).toBe(false);
+    expect(egressBoundaryAdmits()).toBe(false);
+  });
+
+  /**
+   * DES-C17. The admission conjunct used to be `plan !== 'local-only'`, which is
+   * a *sniff* of a field the auth orchestrator writes several async steps after
+   * the credential: STEP 1 projects id/email/accessToken, and `setAccount`
+   * preserves the previous plan while `updates.plan` is undefined, so a device
+   * that had been running Local mode still read as local-only for the whole
+   * entitlement window (hashUserId + an untimed credits fetch) and App.tsx
+   * re-rendered AuthPage over a user who had just approved the device.
+   */
+  it('admits a freshly approved device before its plan tier resolves', () => {
+    // Arrange: this install was in Local mode, so the synthesized device
+    // account is what is currently in the store.
+    useAuthStore.getState().setAccount({
+      id: 'local-abc',
+      displayName: 'Local User',
+      isLocalDeviceAccount: true,
+      plan: 'local-only',
+      accessToken: null,
+    });
+    expect(selectHasCloudAccountSession(useAuthStore.getState())).toBe(false);
+
+    // Act: exactly authOrchestrator STEP 1 — credential projected, no plan yet.
+    const store = useAuthStore.getState();
+    store.setUser({ id: 'user_demo', email: '', name: 'demo' });
+    store.setAccount({
+      id: 'user_demo',
+      email: null,
+      accessToken: 'device-bearer',
+      refreshToken: null,
+      isLocalDeviceAccount: false,
+    });
+
+    // Assert: admitted immediately, while `plan` is still the stale carry-over.
+    const midWindow = useAuthStore.getState();
+    expect(midWindow.plan).toBe('local-only');
+    expect(selectHasCloudAccountSession(midWindow)).toBe(true);
+    expect(egressBoundaryAdmits()).toBe(true);
   });
 
   it('derives every cloud-gated surface from selectHasCloudAccountSession', () => {
