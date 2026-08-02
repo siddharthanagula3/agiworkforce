@@ -9,7 +9,7 @@ import {
   type ChatInterfaceProps,
   useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
-import type { ChatRuntime } from '@agiworkforce/unified-chat';
+import type { ChatMessage, ChatRuntime } from '@agiworkforce/unified-chat';
 import { EmptyChat } from './EmptyChat';
 import { CapModal } from './CapModal';
 import { Sidebar } from './Sidebar';
@@ -58,8 +58,40 @@ import {
 import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
 import { useCloudVoiceController } from '../voice/useCloudVoiceController';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
+import { deriveDesktopMessageArtifacts } from '../../runtime/desktopArtifactProjection';
 import { McpToolConfirmationPrompt } from '../chat/McpToolConfirmationPrompt';
 import { ComposerContextControls } from './ComposerContextControls';
+
+// ─── share payload helpers ───────────────────────────────────────────────────
+
+/**
+ * Read a message's routing provenance from either shape the shared transcript
+ * carries it in: the typed top-level field (`mapPersistedCloudMessage` writes
+ * `model`/`provider` there when a Cloud conversation is restored) or the
+ * generic `metadata` bag (host-mirrored and surface-specific rows).
+ */
+function readMessageOrigin(message: ChatMessage, key: 'model' | 'provider'): string | undefined {
+  const direct = message[key];
+  if (typeof direct === 'string' && direct.trim().length > 0) return direct;
+  const fromMetadata = message.metadata?.[key];
+  return typeof fromMetadata === 'string' && fromMetadata.trim().length > 0
+    ? fromMetadata
+    : undefined;
+}
+
+/**
+ * `/api/share` requires an ISO-8601 UTC `created_at` per message. Restored
+ * Cloud rows carry `createdAt`; live rows carry the deprecated `timestamp`.
+ * Both are already ISO strings, so this only normalizes and guards the shape —
+ * it never invents an ordering the transcript does not have.
+ */
+function shareTimestamp(message: ChatMessage): string {
+  const raw = message.createdAt ?? message.timestamp;
+  const parsed = raw ? new Date(raw) : null;
+  return parsed && !Number.isNaN(parsed.getTime())
+    ? parsed.toISOString()
+    : new Date(0).toISOString();
+}
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -323,28 +355,56 @@ export function DesktopShellV3({
     [privacyMode],
   );
 
+  // DES-C07: Share used to read `messagesByConversation` off the LEGACY desktop
+  // chat store, which nothing hydrates for a Cloud conversation reopened from
+  // history — `loadConversationMessages` has no production caller, and
+  // `selectConversation` only reads that cache. The transcript the user is
+  // actually looking at is loaded into the shared unified-chat store by
+  // `ChatInterface` via `CloudRuntime.getMessages`. Sourcing the payload from
+  // the legacy store therefore made Share a dead control on every reopened
+  // Cloud chat: it reported "Add a message before sharing" and created nothing.
+  // Read the store that owns the rendered transcript instead, exactly as web's
+  // `use-share-conversation` reads the store its renderer draws from.
   const handleShareConversation = useCallback(
     async (conversationId: string) => {
       if (privacyMode !== 'managed') return;
-      const state = useChatStore.getState();
+      const state = useSharedChatStore.getState();
       const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
-      const messages = state.messagesByConversation[conversationId] ?? [];
-      if (!conversation || messages.length === 0) {
+      // An assistant row exists from the first token onward and is empty until
+      // one arrives; a persisted empty turn restores as '' too. Neither belongs
+      // in a published transcript, and neither should make Share look alive.
+      const messages = (state.messagesByConversation[conversationId] ?? []).filter(
+        (message) => message.content.trim().length > 0,
+      );
+      if (messages.length === 0) {
         toast.info('Add a message before sharing this conversation.');
         return;
       }
+      // Restored Cloud messages carry model/provider at the top level
+      // (`mapPersistedCloudMessage`); host-mirrored ones can carry them in the
+      // generic metadata bag. Read both rather than assuming one shape.
       const modelMessage = [...messages]
         .reverse()
-        .find((message) => message.metadata?.model || message.metadata?.provider);
+        .find(
+          (message) =>
+            readMessageOrigin(message, 'model') ?? readMessageOrigin(message, 'provider'),
+        );
+      const derivedModelId = modelMessage ? readMessageOrigin(modelMessage, 'model') : undefined;
+      const derivedProvider = modelMessage
+        ? readMessageOrigin(modelMessage, 'provider')
+        : undefined;
       try {
         const share = await createDesktopCloudShare({
-          title: conversation.title || 'Shared Session',
-          modelId: conversation.modelOverride ?? modelMessage?.metadata?.model,
-          provider: modelMessage?.metadata?.provider,
+          title: conversation?.title || 'Shared Session',
+          // `Conversation.model` on the shared store is the host's
+          // `modelOverride` (see App.tsx's ChatHostBridge.getSnapshot), so the
+          // pinned model still wins over the last message's model.
+          modelId: conversation?.model ?? derivedModelId,
+          provider: derivedProvider,
           messages: messages.map((message) => ({
             role: message.role,
             content: message.content,
-            created_at: message.timestamp.toISOString(),
+            created_at: shareTimestamp(message),
           })),
         });
         toast.success('Share link created', {
@@ -467,6 +527,12 @@ export function DesktopShellV3({
                 hostBridge={hostBridge}
                 onModelSelectorClick={onModelSelectorClick}
                 conversationActions={conversationActions}
+                // DES-C05: Cloud (and Local) answers containing a renderable
+                // fenced block become real artifacts, with the same canonical,
+                // id-stable derivation web and mobile use. Without this the
+                // desktop transcript can only show artifacts a runtime
+                // pre-attached — which, on the managed cloud wire, is never.
+                deriveMessageArtifacts={deriveDesktopMessageArtifacts}
                 onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
                 pendingAttachments={pendingAttachments}
                 voiceInputController={isManagedCloud ? cloudVoice.controller : undefined}
