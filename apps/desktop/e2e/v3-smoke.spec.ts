@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
 /**
  * v3 smoke suite (@smoke).
@@ -18,13 +19,20 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * `visual-regression.spec.ts`. `injectMockCloudAuth` seeds the real
  * `unified-auth-storage` key (the same mechanism `self-healing.spec.ts`
  * uses) so `hasCloudSession` is true and the production shell is reached.
+ *
+ * Beyond that: a mock session alone was never enough (DES-C14). Cloud admission
+ * immediately hydrates the conversation boundary from `/api/chat/conversations`
+ * and `/api/projects`, and this suite left both unrouted, so the shell reported
+ * a boundary failure instead of mounting. `mockCloudApi` owns that route set and
+ * `expectCloudShellReady` asserts the boundary did not fail.
  */
 test.describe('@smoke v3 shell', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
-    await mockCloudAccountEndpoints(page);
+    await mockCloudApi(page);
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
+    await expectCloudShellReady(page);
   });
 
   test('v3 shell mounts', async ({ page }) => {

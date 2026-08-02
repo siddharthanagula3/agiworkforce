@@ -130,13 +130,31 @@ export async function mockCloudAccountEndpoints(
     routing_preferences: {},
   } satisfies MeResponse;
 
-  await page.route('**/api/me', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(meResponse),
-    });
-  });
+  // DES-C14: this was a `'**/api/me'` glob, which Playwright anchors — so the
+  // real request (`<WEB_APP_URL>/api/me?surface=desktop`, from
+  // `cloudAccountAuth.fetchAccountSnapshot`) never matched and went to the
+  // network, logging "[Auth] Failed to refresh Clerk/Neon account data". Match
+  // on the pathname so the query string cannot slip past, and answer with CORS
+  // headers because that call uses the absolute cloud origin, not same-origin.
+  const meCorsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  };
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({ status: 204, headers: meCorsHeaders });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: meCorsHeaders,
+        body: JSON.stringify(meResponse),
+      });
+    },
+  );
 
   await page.route('**/api/settings/sync**', (route) => {
     const method = route.request().method();

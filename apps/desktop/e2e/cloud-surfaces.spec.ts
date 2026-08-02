@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
 /**
  * Desktop Cloud surfaces (Library, Tasks) inside the real shell, behind the
@@ -20,6 +21,10 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * Assertions are scoped inside the panel by test id — the sidebar also contains
  * the words "Library" and "Tasks", and asserting page-wide passes while the
  * panel is empty.
+ *
+ * The route set this spec worked out in-repo now lives in
+ * `utils/mock-cloud-api.ts` (DES-C14) so every Cloud spec gets it; the fixtures
+ * below are passed in as data.
  */
 const LIBRARY_ITEMS = [
   {
@@ -73,42 +78,6 @@ const LIBRARY_ITEMS = [
 ];
 
 test('renders Library and Tasks in the real cloud shell', async ({ page }) => {
-  await injectMockCloudAuth(page);
-  await mockCloudAccountEndpoints(page);
-
-  // Playwright matches routes last-registered-first, so the catch-all is
-  // registered BEFORE the specific ones below and they take precedence.
-  // Without it an unrouted /api/ call hits the network and the shell reports
-  // "Could not open Cloud Mode — Failed to fetch".
-  await page.route('**/api/**', (route) => {
-    const url = new URL(route.request().url());
-    if (!url.pathname.startsWith('/api/')) return route.fallback();
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({}),
-    });
-  });
-
-  // The generic mock answers every GET with an empty object, which violates the
-  // conversation-list contract and makes the shell fail closed with
-  // "Could not open Cloud Mode". Answer that endpoint properly.
-  await page.route('**/api/chat/conversations**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ conversations: [], hasMore: false, nextOffset: 0 }),
-    }),
-  );
-
-  await page.route('**/api/projects**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ projects: [], hasMore: false, nextOffset: 0 }),
-    }),
-  );
-
   const now = new Date();
   const iso = (minsAgo: number) => new Date(now.getTime() - minsAgo * 60000).toISOString();
   const RUNS = [
@@ -162,26 +131,15 @@ test('renders Library and Tasks in the real cloud shell', async ({ page }) => {
     },
   ];
 
-  await page.route('**/api/llm/v1/chat/completions/runs**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ runs: RUNS, nextCursor: null }),
-    }),
-  );
-
-  await page.route('**/api/library**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ items: LIBRARY_ITEMS, has_more: false, next_offset: null }),
-    }),
-  );
+  await injectMockCloudAuth(page);
+  await mockCloudApi(page, { libraryItems: LIBRARY_ITEMS, agentRuns: RUNS });
 
   await page.goto('/');
   await page.waitForTimeout(4000);
 
-  // The shell must mount past the auth gate for any of this to be meaningful.
+  // The shell must mount past the auth gate for any of this to be meaningful,
+  // and the conversation boundary must not have failed behind it.
+  await expectCloudShellReady(page);
   await expect(page.getByRole('button', { name: /Library/i }).first()).toBeVisible({
     timeout: 20000,
   });
