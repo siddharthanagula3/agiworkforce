@@ -37,6 +37,15 @@ const embeddedPort = process.env.TAURI_WEBDRIVER_PORT
   ? Number(process.env.TAURI_WEBDRIVER_PORT)
   : 40000 + Math.floor(Math.random() * 5000);
 
+// Reading the SQLCipher key from the OS Keychain blocks on a GUI approval
+// dialog whenever the requesting binary's signature is unknown — and every
+// `cargo build` re-signs the debug binary. Nobody can click Allow under WDIO,
+// so the app would hang before opening its database and every command would
+// time out. The isolated `*.wdio` bundle (and only that bundle) accepts this
+// per-run key instead; see OsDatabaseKeyStore::harness_key.
+process.env['AGI_DESKTOP_WDIO_DATABASE_KEY'] =
+  process.env['AGI_DESKTOP_WDIO_DATABASE_KEY'] ?? 'a'.repeat(64);
+
 export const config: WebdriverIO.Config = {
   runner: 'local',
   specs: ['./wdio/specs/**/*.spec.ts'],
@@ -49,7 +58,11 @@ export const config: WebdriverIO.Config = {
   onPrepare: async () => {
     const { spawnSync } = await import('node:child_process');
     const { resolve } = await import('node:path');
-    const binary = resolve(__dirname, appBinaryPath);
+    const { rmSync } = await import('node:fs');
+    const { homedir } = await import('node:os');
+
+    // This config is loaded as ESM (no __dirname); wdio runs it from apps/desktop.
+    const binary = resolve(process.cwd(), appBinaryPath);
     const probe = spawnSync('grep', ['-aq', 'com.agiworkforce.desktop.wdio', binary]);
     if (probe.status !== 0) {
       throw new Error(
@@ -58,19 +71,20 @@ export const config: WebdriverIO.Config = {
           '`pnpm run test:e2e:build` first (see header of this file).',
       );
     }
-  },
 
-  // Specs share one app-data profile per worker; a spec that persists a mode
-  // or layout choice must not leak it into the next file (the
-  // sidebar-navigation -> smoke Cloud-boot poisoning on this branch). Start
-  // every session from a known-clean persisted state.
-  before: async () => {
-    await browser.execute(() => {
-      window.localStorage.removeItem('app-mode-store');
-      window.localStorage.removeItem('sidebar-collapsed');
-      window.location.reload();
-    });
-    await browser.pause(1500);
+    // Specs share one app-data profile, and a spec that persists a mode or
+    // layout choice otherwise leaks it into the next file's boot (the
+    // sidebar-navigation -> smoke Cloud-boot poisoning on this branch). Reset
+    // the isolated profile from the filesystem BEFORE the app launches —
+    // clearing it through browser.execute() would race the tauri plugin's own
+    // init wait and reload the page out from under it.
+    for (const dir of [
+      `${homedir()}/Library/Application Support/com.agiworkforce.desktop.wdio`,
+      `${homedir()}/Library/WebKit/com.agiworkforce.desktop.wdio`,
+      `${homedir()}/Library/Caches/com.agiworkforce.desktop.wdio`,
+    ]) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   },
 
   services: [
