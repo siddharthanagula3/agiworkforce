@@ -51,6 +51,7 @@ jest.mock('../src/features/chat/components/ChatInput', () => {
 
 import CompareScreen from '../src/features/compare';
 import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -63,6 +64,10 @@ describe('CompareScreen Cloud account isolation', () => {
     jest.clearAllMocks();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('account-a');
+    // Compare is a Cloud-only surface (SIX-23): in Local Mode it renders the
+    // boundary notice and no composer, so account-isolation behaviour is only
+    // observable inside the Cloud boundary.
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({
       clerkUserId: 'account-a',
       isClerkLoaded: true,

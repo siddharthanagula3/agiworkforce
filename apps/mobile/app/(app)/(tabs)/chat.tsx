@@ -8,7 +8,11 @@ import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
+import {
+  summarizeSendPreview,
+  type ProviderMode,
+  type SendPreviewInput,
+} from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
@@ -38,6 +42,7 @@ import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
+  getSelectableModelById,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
@@ -59,6 +64,7 @@ import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGene
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
+import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 
 function getTimeOfDayGreeting(): string {
   const hour = new Date().getHours();
@@ -131,22 +137,62 @@ export default function ChatTabScreen() {
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const activeMode = appMode;
-  const hasReadyLocalModel = installedModelIds.length > 0 || readySystemModelIds.length > 0;
+  // Only a model the picker can actually select counts as "ready" (SIX-21).
+  // `readySystemModelIds` reports the OS-resident tier-1 row (Apple
+  // Intelligence / Gemini Nano), but `service.ts` deliberately filters
+  // system-runtime-only rows out of LOCAL_MODEL_LIST, so `resolveLocalModelRef`
+  // can never resolve one. Counting those ids hid this banner on a fresh
+  // install on an Apple-Intelligence device: no model was selectable, nothing
+  // offered to download, and the first send failed in chatExecutionStore.
+  // The same guard covers an installed row the catalog has since retired.
+  const hasReadyLocalModel = useMemo(
+    () =>
+      [...installedModelIds, ...readySystemModelIds].some((modelId) =>
+        Boolean(getSelectableModelById(modelId)),
+      ),
+    [installedModelIds, readySystemModelIds],
+  );
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
     activeMode === 'cloud'
       ? 'Continue with AGI Cloud. Use Chats for full history and global search.'
       : 'Start privately on this device. Use Chats for full history and global search.';
 
-  // SendPreview disclosure data: Mobile supports Local and sign-in-gated AGI Cloud.
-  const sendPreviewPresentation = useMemo(() => {
-    const providerMode: ProviderMode = activeMode === 'cloud' ? 'ManagedGateway' : 'Local';
-    return summarizeSendPreview({
-      providerMode,
-      modelLabel: selectedModel,
-      modelId: selectedModel,
-    });
-  }, [activeMode, selectedModel]);
+  /**
+   * The model this screen will ACTUALLY send with. The selection can sit on
+   * the wrong side of the boundary (e.g. a cloud id still selected right after
+   * a switch back to Local), and `handleSend` already corrects for that — the
+   * disclosure has to describe the corrected route, not the stale selection,
+   * so both read the same value.
+   */
+  const modelForSend = useMemo(() => {
+    if (activeMode === 'cloud') {
+      return executionModeForSelection(selectedModel, activeMode) === 'cloud'
+        ? selectedModel
+        : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
+    }
+    return executionModeForSelection(selectedModel, activeMode) === 'local'
+      ? selectedModel
+      : DEFAULT_LOCAL_MODEL_ID;
+  }, [activeMode, selectedModel, subscriptionTier]);
+
+  // Route half of the "what will be sent" disclosure. Mobile is a Local /
+  // sign-in-gated-AGI-Cloud dual-trust surface, so this is the payload-preview
+  // half of the Local -> Cloud consent contract (SIX-20). The composer joins it
+  // with the live draft and staged attachments and renders it above the input.
+  // `modelLabel` must be the human name — the raw wire id is developer output.
+  const sendPreviewInput = useMemo<SendPreviewInput>(
+    () => ({
+      providerMode: (activeMode === 'cloud' ? 'ManagedGateway' : 'Local') satisfies ProviderMode,
+      modelLabel: modelForSend ? getShortDisplayName(modelForSend, subscriptionTier) : undefined,
+      modelId: modelForSend,
+    }),
+    [activeMode, modelForSend, subscriptionTier],
+  );
+  const sendPreviewPresentation = useMemo(
+    () => summarizeSendPreview(sendPreviewInput),
+    [sendPreviewInput],
+  );
 
   useEffect(() => {
     loadConversations();
@@ -199,14 +245,7 @@ export default function ChatTabScreen() {
           );
           return false;
         }
-        const modelForSend =
-          activeMode === 'cloud'
-            ? executionModeForSelection(selectedModel, activeMode) === 'cloud'
-              ? selectedModel
-              : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
-            : executionModeForSelection(selectedModel, activeMode) === 'local'
-              ? selectedModel
-              : DEFAULT_LOCAL_MODEL_ID;
+        // Same value the SendPreview disclosure above the composer describes.
         if (!modelForSend) return false;
         const trimmed = text.trim();
         const imageRequest = resolveMobileImageGenerationRequest({
@@ -303,7 +342,7 @@ export default function ChatTabScreen() {
       activeMode,
       createConversation,
       sendMessage,
-      selectedModel,
+      modelForSend,
       subscriptionTier,
       grantedCapabilities,
       imageGenerationEnabled,
@@ -464,13 +503,9 @@ export default function ChatTabScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain',
-          'text/csv',
-        ],
+        // Single source of truth shared with the attach-time validator — the
+        // picker must never advertise a type `isParseableDocument` rejects.
+        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
         copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets.length > 0) {
@@ -549,9 +584,14 @@ export default function ChatTabScreen() {
     setVoiceIntroVisible(false);
   }, []);
 
+  // Compare streams BOTH panes through the managed-cloud gateway, so it only
+  // exists inside the Cloud boundary. Offering `/compare` in Local Mode led
+  // straight into guardedFetch's refusal, rendered verbatim in both panes.
+  // Passing `undefined` is what removes it from the command palette.
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
+  const compareAction = activeMode === 'cloud' ? handleOpenCompare : undefined;
 
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
@@ -723,10 +763,11 @@ export default function ChatTabScreen() {
             onSend={handleSend}
             onOpenModelPicker={handleOpenModelPicker}
             onOpenVoiceMode={handleOpenVoiceMode}
-            onOpenCompare={handleOpenCompare}
+            onOpenCompare={compareAction}
             onOpenAddToChat={handleOpenAddToChat}
             attachRef={chatInputAttachRef}
             attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+            sendPreview={sendPreviewInput}
             draftKey="new-chat"
             draftProvenance={
               activeMode === 'local'

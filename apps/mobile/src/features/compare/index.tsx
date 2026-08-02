@@ -25,6 +25,10 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
+import { EgressBlockedError } from '@/lib/egressGuard';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +57,25 @@ const initialStreamState = (): CompareStreamState => ({
   durationMs: null,
 });
 
+const LOCAL_MODE_COMPARE_NOTICE =
+  'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
+  'Nothing was sent from this device. Switch to AGI Cloud to compare two models.';
+
+/**
+ * The panes render this string verbatim, so it must never be a developer
+ * message. `EgressBlockedError` (lib/egressGuard.ts) carries the internal
+ * refusal text — "egressGuard refused: outbound request to our managed-cloud
+ * host …" — which is correct fail-closed behaviour but is not user-facing
+ * copy. Every other error keeps its own message, which the streaming service
+ * already writes for humans; an empty one falls back to a neutral sentence
+ * instead of rendering blank.
+ */
+function compareErrorMessage(err: unknown): string {
+  if (err instanceof EgressBlockedError) return LOCAL_MODE_COMPARE_NOTICE;
+  const raw = err instanceof Error ? err.message.trim() : '';
+  return raw || 'This model could not respond. Please try again.';
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -74,6 +97,15 @@ export default function CompareScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  // Compare is a Managed-Cloud-only surface: both panes stream through
+  // `streamChat` -> `guardedFetch`, which refuses every our-cloud request while
+  // chat is in Local Mode. Read the boundary here so the screen states that
+  // up front instead of letting two panes fill with the guard's internal
+  // refusal text after the user has already picked models and typed a prompt.
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
+  const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const isCloudMode = appMode === 'cloud';
 
   const [modelA, setModelA] = useState(DEFAULT_MODEL_A);
   const [modelB, setModelB] = useState(DEFAULT_MODEL_B);
@@ -127,9 +159,36 @@ export default function CompareScreen() {
     setStateB(initialStreamState());
   }, [clerkUserId]);
 
+  // Switching boundary is the user's decision, never this screen's: mirror the
+  // chat screens' public-alpha gate — a signed-out user goes to Clerk sign-in
+  // (ClerkTokenBridge flips cloudUnlocked), a signed-in one flips the toggle.
+  const handleSwitchToCloud = useCallback(() => {
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      return;
+    }
+    setAppMode('cloud');
+  }, [cloudUnlocked, router, setAppMode]);
+
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim()) return false;
+
+      // Fail closed at the top: refuse the comparison with a visible
+      // explanation rather than firing two cloud streams that guardedFetch
+      // will refuse. Read the store at CALL time, not the render-time value —
+      // a boundary flip while a captured composer handler is still in hand
+      // must not slip a cloud send through a stale closure.
+      if (useChatAppModeStore.getState().appMode !== 'cloud') {
+        const localModeState: CompareStreamState = {
+          ...initialStreamState(),
+          isDone: true,
+          errorMessage: LOCAL_MODE_COMPARE_NOTICE,
+        };
+        setStateA(localModeState);
+        setStateB(localModeState);
+        return false;
+      }
 
       const accountEpoch = captureCloudAccountEpoch();
       if (!accountEpoch) {
@@ -208,7 +267,7 @@ export default function CompareScreen() {
               ...prev,
               isStreaming: false,
               isDone: true,
-              errorMessage: err.message,
+              errorMessage: compareErrorMessage(err),
             }));
           },
         },
@@ -267,7 +326,7 @@ export default function CompareScreen() {
               ...prev,
               isStreaming: false,
               isDone: true,
-              errorMessage: err.message,
+              errorMessage: compareErrorMessage(err),
             }));
           },
         },
@@ -338,64 +397,87 @@ export default function CompareScreen() {
           <Text className="flex-1 text-[15px] font-semibold text-white">Compare Models</Text>
         </View>
 
-        {/* ---- Model Selector Pills ---- */}
-        <View className="flex-row gap-3 px-4 py-3 border-b border-white/8">
-          <ModelPill
-            slot="A"
-            modelId={modelA}
-            isActive={activePickerSlot === 'A'}
-            winner={winner === 'A' ? 'faster' : winner === 'tie' ? 'tie' : null}
-            onPress={handleOpenPickerA}
-          />
-          <View className="items-center justify-center">
-            <Text className="text-xs text-white/30 font-medium">vs</Text>
-          </View>
-          <ModelPill
-            slot="B"
-            modelId={modelB}
-            isActive={activePickerSlot === 'B'}
-            winner={winner === 'B' ? 'faster' : winner === 'tie' ? 'tie' : null}
-            onPress={handleOpenPickerB}
-          />
-        </View>
-
-        {/* ---- Results Area ---- */}
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16, gap: 12 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Empty state */}
-          {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
-            <View className="flex-1 items-center justify-center py-16 px-8">
-              <Text className="text-white/20 text-center text-sm leading-5">
-                Type a prompt below to send to both models simultaneously and compare the responses.
-              </Text>
+        {/* Local Mode: state the boundary and stop. Rendering the pickers and
+            composer here would invite a send that guardedFetch refuses, and the
+            panes would then show the guard's internal message. */}
+        {!isCloudMode ? (
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ padding: 16 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <CloudSyncBlockedBanner
+              onSwitchToCloud={handleSwitchToCloud}
+              message={LOCAL_MODE_COMPARE_NOTICE}
+            />
+          </ScrollView>
+        ) : (
+          <>
+            {/* ---- Model Selector Pills ---- */}
+            <View className="flex-row gap-3 px-4 py-3 border-b border-white/8">
+              <ModelPill
+                slot="A"
+                modelId={modelA}
+                isActive={activePickerSlot === 'A'}
+                winner={winner === 'A' ? 'faster' : winner === 'tie' ? 'tie' : null}
+                onPress={handleOpenPickerA}
+              />
+              <View className="items-center justify-center">
+                <Text className="text-xs text-white/30 font-medium">vs</Text>
+              </View>
+              <ModelPill
+                slot="B"
+                modelId={modelB}
+                isActive={activePickerSlot === 'B'}
+                winner={winner === 'B' ? 'faster' : winner === 'tie' ? 'tie' : null}
+                onPress={handleOpenPickerB}
+              />
             </View>
-          )}
 
-          {/* Response columns — stacked on narrow screens */}
-          {(lastPrompt ||
-            stateA.isStreaming ||
-            stateB.isStreaming ||
-            stateA.errorMessage ||
-            stateB.errorMessage) && (
-            <>
-              <ResponsePanel slot="A" modelId={modelA} state={stateA} winner={winner === 'A'} />
-              <ResponsePanel slot="B" modelId={modelB} state={stateB} winner={winner === 'B'} />
-            </>
-          )}
-        </ScrollView>
+            {/* ---- Results Area ---- */}
+            <ScrollView
+              className="flex-1"
+              contentContainerStyle={{ padding: 16, gap: 12 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Empty state */}
+              {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
+                <View className="flex-1 items-center justify-center py-16 px-8">
+                  <Text className="text-white/20 text-center text-sm leading-5">
+                    Type a prompt below to send to both models simultaneously and compare the
+                    responses.
+                  </Text>
+                </View>
+              )}
 
-        {/* ---- Input ---- */}
-        <ChatInput onSend={handleSend} isStreaming={isAnyStreaming} onStop={handleStop} />
+              {/* Response columns — stacked on narrow screens */}
+              {(lastPrompt ||
+                stateA.isStreaming ||
+                stateB.isStreaming ||
+                stateA.errorMessage ||
+                stateB.errorMessage) && (
+                <>
+                  <ResponsePanel slot="A" modelId={modelA} state={stateA} winner={winner === 'A'} />
+                  <ResponsePanel slot="B" modelId={modelB} state={stateB} winner={winner === 'B'} />
+                </>
+              )}
+            </ScrollView>
+
+            {/* ---- Input ---- */}
+            <ChatInput onSend={handleSend} isStreaming={isAnyStreaming} onStop={handleStop} />
+          </>
+        )}
       </KeyboardAvoidingView>
 
       {/* ---- Model Picker Sheets ---- */}
       {/* Rendered outside KeyboardAvoidingView so they overlay correctly */}
-      <ModelPickerSheet sheetRef={modelPickerARef} onSelect={handleSelectModelA} />
-      <ModelPickerSheet sheetRef={modelPickerBRef} onSelect={handleSelectModelB} />
+      {isCloudMode ? (
+        <>
+          <ModelPickerSheet sheetRef={modelPickerARef} onSelect={handleSelectModelA} />
+          <ModelPickerSheet sheetRef={modelPickerBRef} onSelect={handleSelectModelB} />
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }

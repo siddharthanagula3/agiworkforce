@@ -19,6 +19,12 @@ interface Command {
   command: ChatCommand;
   description: string;
   Icon: typeof Image;
+  /**
+   * Trust boundary the command leaves the device through. Rendered as a pill
+   * so a command that is only reachable in AGI Cloud says so before it is
+   * tapped, instead of the user discovering it on a refused request.
+   */
+  boundary?: 'cloud';
 }
 
 const COMMANDS: Command[] = [
@@ -39,6 +45,9 @@ const COMMANDS: Command[] = [
     command: '/compare',
     description: 'Compare model responses',
     Icon: GitCompare,
+    // Both panes stream through the managed-cloud gateway; there is no
+    // on-device comparison path. Hosts only offer it in Cloud mode.
+    boundary: 'cloud',
   },
   {
     label: 'export',
@@ -77,7 +86,11 @@ export function CommandPalette({
           style={({ pressed }) => ({
             backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
           })}
-          accessibilityLabel={`Command ${item.command}: ${item.description}`}
+          accessibilityLabel={
+            item.boundary === 'cloud'
+              ? `Command ${item.command}: ${item.description}. Runs on AGI Cloud.`
+              : `Command ${item.command}: ${item.description}`
+          }
           accessibilityRole="button"
         >
           <View
@@ -94,6 +107,31 @@ export function CommandPalette({
               {item.description}
             </Text>
           </View>
+          {item.boundary === 'cloud' ? (
+            <View
+              testID={`command-palette-boundary-${item.label}`}
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 9999,
+                borderWidth: 1,
+                borderColor: colors.accentBorder,
+                backgroundColor: colors.accentSurface,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: '700',
+                  color: colors.teal,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
+                Cloud
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       );
     },

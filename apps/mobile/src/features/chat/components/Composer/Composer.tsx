@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { View } from 'react-native';
+import type { SendPreviewInput } from '@agiworkforce/types';
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
 import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -40,6 +41,10 @@ interface ComposerProps {
   draftKey?: string;
   /** Explicit Local/Cloud owner for the persisted conversation draft. */
   draftProvenance?: DraftProvenance;
+  /** Resolved outbound route for the composer's "what will be sent" disclosure. */
+  sendPreview?: SendPreviewInput;
+  /** Per-file privacy chip on attachment thumbnails, from the same disclosure. */
+  attachmentPrivacyShortLabel?: string;
 }
 
 export function Composer({
@@ -59,6 +64,8 @@ export function Composer({
   initialText,
   draftKey,
   draftProvenance,
+  sendPreview,
+  attachmentPrivacyShortLabel,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
 
@@ -94,6 +101,8 @@ export function Composer({
         initialText={initialText}
         draftKey={draftKey}
         draftProvenance={draftProvenance}
+        sendPreview={sendPreview}
+        attachmentPrivacyShortLabel={attachmentPrivacyShortLabel}
       />
     </View>
   );
