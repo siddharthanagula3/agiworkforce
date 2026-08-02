@@ -1,3 +1,4 @@
+pub mod artifact_sandbox;
 pub mod events;
 pub mod hooks;
 pub mod onboarding;

@@ -19,17 +19,31 @@ vi.mock('../../services/managedCloudBoundary', () => ({
 }));
 
 import {
+  CloudReflectMemoryRequiredError,
+  addCloudTeamMember,
   createCloudApiKey,
   deleteCloudConversation,
+  fetchCloudActiveSessions,
+  fetchCloudReflectRecap,
+  getCloudAccountProfile,
+  getCloudOrganizationOverview,
+  getCloudPreferenceNamespace,
   getCloudTwoFactorStatus,
   listCloudApiKeys,
   listCloudArchivedConversations,
   listCloudSecurityActivity,
   listCloudSharedLinks,
+  listCloudTeamMembers,
+  removeCloudTeamMember,
   requestCloudAccountDeletion,
   restoreCloudArchivedConversation,
+  revokeAllCloudSessions,
   revokeCloudApiKey,
+  revokeCloudSession,
   revokeCloudSharedLink,
+  saveCloudDisplayName,
+  saveCloudPreferenceNamespace,
+  updateCloudTeamMemberRole,
 } from '../cloudAccountSettings';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -306,6 +320,314 @@ describe('cloudAccountSettings', () => {
       const { url, init } = lastRequest();
       expect(url).toBe('https://cloud.agi.example/api/settings/api-keys/key_1');
       expect(init.method).toBe('DELETE');
+    });
+  });
+
+  describe('active sessions', () => {
+    it('reads the session list and the honest current-session flag', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({
+          sessions: [
+            {
+              id: 'sess_1',
+              status: 'active',
+              device: 'iPhone',
+              browser: 'Mobile Safari 19',
+              location: 'Austin, US',
+              createdAt: '2026-07-01T00:00:00.000Z',
+              lastActiveAt: '2026-07-03T00:00:00.000Z',
+              expiresAt: '2026-08-01T00:00:00.000Z',
+              isCurrent: false,
+            },
+          ],
+          totalCount: 1,
+          currentSessionKnown: false,
+        }),
+      );
+
+      const result = await fetchCloudActiveSessions();
+
+      const { url, init } = lastRequest();
+      expect(url).toBe('https://cloud.agi.example/api/settings/sessions');
+      expect(init.method).toBe('GET');
+      expect((init.headers as Record<string, string>)['Authorization']).toBe(
+        'Bearer desktop-device-token',
+      );
+      expect(result.currentSessionKnown).toBe(false);
+      expect(result.sessions).toEqual([
+        {
+          id: 'sess_1',
+          status: 'active',
+          device: 'iPhone',
+          browser: 'Mobile Safari 19',
+          location: 'Austin, US',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastActiveAt: '2026-07-03T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          isCurrent: false,
+        },
+      ]);
+    });
+
+    it('treats a missing currentSessionKnown as "not known" rather than assuming true', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ sessions: [] }));
+
+      await expect(fetchCloudActiveSessions()).resolves.toMatchObject({
+        currentSessionKnown: false,
+      });
+    });
+
+    it('drops session rows without an id instead of rendering a revoke button for nothing', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({ sessions: [{ id: 'sess_ok' }, { device: 'Ghost' }] }),
+      );
+
+      const result = await fetchCloudActiveSessions();
+
+      expect(result.sessions).toHaveLength(1);
+      expect(result.sessions[0]?.device).toBe('Unknown device');
+    });
+
+    it('percent-encodes the session id when revoking one', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ message: 'Session revoked' }));
+
+      await revokeCloudSession('sess/1');
+
+      const { url, init } = lastRequest();
+      expect(url).toBe('https://cloud.agi.example/api/settings/sessions/sess%2F1');
+      expect(init.method).toBe('DELETE');
+    });
+
+    it('reports that the device credential survived revoke-all', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({ revokedCount: 3, currentSessionRevoked: false }),
+      );
+
+      await expect(revokeAllCloudSessions()).resolves.toEqual({
+        revokedCount: 3,
+        currentSessionRevoked: false,
+      });
+      expect(lastRequest().init.method).toBe('DELETE');
+    });
+
+    it('surfaces the server message when revoke-all fails', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({ error: 'Some sessions could not be revoked. Please try again.' }, 502),
+      );
+
+      await expect(revokeAllCloudSessions()).rejects.toThrow('Some sessions could not be revoked');
+    });
+  });
+
+  describe('account preferences', () => {
+    it('reads one namespace and tolerates an empty document', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ settings: {} }));
+
+      await expect(getCloudPreferenceNamespace('safety')).resolves.toEqual({});
+      expect(lastRequest().url).toBe(
+        'https://cloud.agi.example/api/settings/preferences?namespace=safety',
+      );
+    });
+
+    it('returns an empty record when the namespace value is not an object', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ settings: 'nope' }));
+
+      await expect(getCloudPreferenceNamespace('safety')).resolves.toEqual({});
+    });
+
+    it('writes the namespace and its whole value', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ settings: {} }));
+
+      await saveCloudPreferenceNamespace('safety', { reduceSensitiveContent: true });
+
+      const { url, init } = lastRequest();
+      expect(url).toBe('https://cloud.agi.example/api/settings/preferences');
+      expect(init.method).toBe('PUT');
+      expect(JSON.parse(String(init.body))).toEqual({
+        namespace: 'safety',
+        value: { reduceSensitiveContent: true },
+      });
+    });
+  });
+
+  describe('profile identity', () => {
+    it('reads the server-resolved profile and falls back to the top-level name', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({
+          id: 'user_1',
+          email: 'founder@example.com',
+          name: 'Founder Example',
+          profile: { display_name: null, preferred_name: 'Sid', work_description: null },
+        }),
+      );
+
+      await expect(getCloudAccountProfile()).resolves.toEqual({
+        email: 'founder@example.com',
+        displayName: 'Founder Example',
+        preferredName: 'Sid',
+        workDescription: null,
+      });
+      expect(lastRequest().url).toBe('https://cloud.agi.example/api/me');
+    });
+
+    it('writes the full name to the one column that owns it', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ id: 'user_1', display_name: 'Sid N' }));
+
+      await saveCloudDisplayName('Sid N');
+
+      const { url, init } = lastRequest();
+      expect(url).toBe('https://cloud.agi.example/api/me');
+      expect(init.method).toBe('PATCH');
+      expect(JSON.parse(String(init.body))).toEqual({ display_name: 'Sid N' });
+    });
+  });
+
+  describe('reflect', () => {
+    const recap = {
+      range: '30d',
+      generatedAt: '2026-08-01T00:00:00.000Z',
+      period: {
+        start: '2026-07-01T00:00:00.000Z',
+        end: '2026-08-01T00:00:00.000Z',
+        label: 'Past 30 days',
+      },
+      summary: { headline: 'Steady month', body: 'You had a consistent month.' },
+      stats: { totalConversations: 4, activeDays: 2, mostActiveDay: '2026-07-04', peakHour: 9 },
+      dailyActivity: [{ date: '2026-07-04', conversationCount: 3 }],
+      topics: [],
+      insights: [],
+      sampled: false,
+      sampledConversationCount: 0,
+    };
+
+    it('requests the range and timezone and parses with the shared contract', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse(recap));
+
+      const result = await fetchCloudReflectRecap('30d', 'America/Chicago');
+
+      expect(lastRequest().url).toBe(
+        'https://cloud.agi.example/api/reflect?range=30d&timezone=America%2FChicago',
+      );
+      expect(result.stats.totalConversations).toBe(4);
+    });
+
+    it('distinguishes "memory is off" from a failure', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({ error: { code: 'memory_required', message: 'Memory is off' } }, 409),
+      );
+
+      await expect(fetchCloudReflectRecap('30d', 'UTC')).rejects.toBeInstanceOf(
+        CloudReflectMemoryRequiredError,
+      );
+    });
+
+    it('rejects a recap that does not satisfy the contract instead of rendering a partial one', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ ...recap, stats: { activeDays: 1 } }));
+
+      await expect(fetchCloudReflectRecap('30d', 'UTC')).rejects.toThrow();
+    });
+  });
+
+  describe('team', () => {
+    it('reads the workspace and the server admin verdict', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({
+          organization: {
+            id: 'org_1',
+            name: 'Acme',
+            slug: 'acme',
+            plan: 'team',
+            memberCount: 2,
+            maxMembers: null,
+            currentUserRole: 'owner',
+          },
+          access: { plan: 'team', canManageTeam: true, maxMembers: null },
+        }),
+      );
+
+      await expect(getCloudOrganizationOverview()).resolves.toEqual({
+        organization: {
+          id: 'org_1',
+          name: 'Acme',
+          slug: 'acme',
+          memberCount: 2,
+          maxMembers: null,
+          currentUserRole: 'owner',
+        },
+        canManageTeam: true,
+      });
+    });
+
+    it('never infers admin rights when the server did not grant them', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({ organization: null, access: { plan: 'pro', maxMembers: null } }),
+      );
+
+      await expect(getCloudOrganizationOverview()).resolves.toEqual({
+        organization: null,
+        canManageTeam: false,
+      });
+    });
+
+    it('lists members with the composite id the member routes expect', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse({
+          members: [
+            {
+              id: 'org_1:user_2',
+              userId: 'user_2',
+              email: 'teammate@example.com',
+              name: 'Teammate',
+              role: 'member',
+              isCurrentUser: false,
+            },
+            { userId: 'no-id' },
+          ],
+        }),
+      );
+
+      const members = await listCloudTeamMembers('org_1');
+
+      expect(lastRequest().url).toBe(
+        'https://cloud.agi.example/api/settings/team?organizationId=org_1',
+      );
+      expect(members).toHaveLength(1);
+      expect(members[0]?.id).toBe('org_1:user_2');
+    });
+
+    it('adds an existing account by email and changes a role by composite id', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ message: 'ok' }));
+
+      await addCloudTeamMember('org_1', 'teammate@example.com', 'admin');
+      expect(JSON.parse(String(lastRequest().init.body))).toEqual({
+        organizationId: 'org_1',
+        email: 'teammate@example.com',
+        role: 'admin',
+      });
+
+      await updateCloudTeamMemberRole('org_1:user_2', 'viewer');
+      expect(lastRequest().url).toBe('https://cloud.agi.example/api/settings/team/org_1%3Auser_2');
+      expect(lastRequest().init.method).toBe('PATCH');
+
+      await removeCloudTeamMember('org_1:user_2');
+      expect(lastRequest().init.method).toBe('DELETE');
+    });
+
+    it('surfaces the server refusal when the plan cannot administer a team', async () => {
+      mocks.cloudFetch.mockResolvedValue(
+        jsonResponse(
+          {
+            error: {
+              message: 'Team administration requires an active Team or Enterprise subscription.',
+            },
+          },
+          403,
+        ),
+      );
+
+      await expect(addCloudTeamMember('org_1', 'a@b.com', 'member')).rejects.toThrow(
+        /Team or Enterprise subscription/,
+      );
     });
   });
 

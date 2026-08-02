@@ -205,6 +205,15 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_wdio::init());
     }
 
+    // DES-C15: give artifact previews their own origin (`artifact://localhost`,
+    // `http://artifact.localhost` on Windows) serving the SAME renderer web
+    // deploys. A same-document `srcdoc` preview inherits this app's CSP —
+    // `script-src 'self' 'wasm-unsafe-eval'` — so interactive HTML and React
+    // artifacts rendered inert inside the packaged binary. A separate origin does
+    // not inherit that policy. Registered on the Builder (not in `setup`) because
+    // Tauri wires URI scheme handlers when the webview is created.
+    builder = crate::ui::artifact_sandbox::register_artifact_sandbox_protocol(builder);
+
     builder
         // macOS normally keeps the application process alive after its last
         // window closes. Handle the main-window close at the Builder boundary
