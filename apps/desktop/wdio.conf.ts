@@ -3,15 +3,32 @@
 // native window/element checks that Playwright (driving :5175 in a plain
 // browser) cannot — real macOS window chrome, native dialogs, tray, etc.
 //
-// Requires the ISOLATED debug build (com.agiworkforce.desktop.wdio bundle
-// identifier, own app-data directory — never the user's installed-app
+// Requires the ISOLATED BUNDLED-ASSET build (com.agiworkforce.desktop.wdio
+// bundle identifier, own app-data directory — never the user's installed-app
 // database, and no macOS keychain prompt at startup):
 //   pnpm run test:e2e:build
-//   (= cd src-tauri && TAURI_CONFIG="$(cat tauri.conf.wdio.json)" cargo build
-//    — TAURI_CONFIG takes the merge-config JSON CONTENT, not a file path)
-// and the Vite dev server running on the devUrl the binary was built against:
-//   pnpm run dev:vite
-// onPrepare below refuses to start against a production-identifier binary.
+//   (= vite build, then `cargo build --features tauri/custom-protocol` with
+//    TAURI_CONFIG set to the merge JSON that wdio/tauri-config.mjs prints —
+//    TAURI_CONFIG takes the JSON CONTENT, not a file path)
+// NO Vite dev server is involved, and pointing WDIO at one cannot work. Reason
+// (measured against the running binary, 2026-08-01):
+//
+//   The app uses Tauri's `isolation` pattern, so invoke() does not talk to Rust
+//   directly — it queues each message until a hidden iframe served from
+//   `isolation-<uuid>://localhost` posts `__TAURI_ISOLATION_READY__` back to the
+//   main frame. A plain `cargo build` has no `custom-protocol` feature, so the
+//   binary loads the frontend from the devUrl (http://127.0.0.1:5173), and
+//   WKWebView does not deliver that handshake from the isolation frame's opaque
+//   `null` origin to an http:// parent. The queue is never flushed, so every
+//   invoke() promise hangs FOREVER with no resolve and no reject, and the shell
+//   sits on "Opening encrypted local data…" — which is exactly what a spec that
+//   only asserts a non-empty document would happily pass against. The same
+//   handshake IS delivered when the parent is `tauri://localhost`, which is why
+//   the harness drives a bundled-asset build.
+//
+// onPrepare below refuses to start against a production-identifier binary, and
+// `before` refuses to run specs unless the frontend really came from the Tauri
+// asset protocol.
 //
 // IPC mocking: tauri-plugin-wdio (Cargo.toml) + @wdio/tauri-plugin (this
 // package's devDependencies) add browser.tauri.execute()/mock()/restoreAllMocks()
@@ -85,6 +102,29 @@ export const config: WebdriverIO.Config = {
     ]) {
       rmSync(dir, { recursive: true, force: true });
     }
+
+    // The harness build rewrites the product CSP so the isolation iframe is
+    // reachable (see wdio/tauri-config.mjs). That keeps specs runnable, but it
+    // must never let the underlying product defect go quiet: as long as the
+    // shipped config pins `frame-src` while the isolation pattern is on, the
+    // PACKAGED app blocks its own IPC relay and every invoke() hangs forever.
+    const { readFileSync } = await import('node:fs');
+    const productConfigPath = resolve(process.cwd(), 'src-tauri/tauri.conf.json');
+    const productConfig = JSON.parse(readFileSync(productConfigPath, 'utf8')) as {
+      app?: { security?: { csp?: string; pattern?: { use?: string } } };
+    };
+    const productCsp = productConfig.app?.security?.csp ?? '';
+    const pinsFrameSrc = productCsp
+      .split(';')
+      .some((directive) => directive.trim().startsWith('frame-src'));
+    if (productConfig.app?.security?.pattern?.use === 'isolation' && pinsFrameSrc) {
+      console.warn(
+        `\n!! ${productConfigPath} pins \`frame-src\` while app.security.pattern is "isolation".\n` +
+          '!! Tauri only appends the generated isolation schema to `default-src`, so the packaged\n' +
+          '!! app blocks isolation-<uuid>://localhost and EVERY invoke() hangs with no rejection.\n' +
+          '!! These specs pass only because test:e2e:build folds frame-src into default-src.\n',
+      );
+    }
   },
 
   services: [
@@ -117,6 +157,23 @@ export const config: WebdriverIO.Config = {
   waitforTimeout: 10000,
   connectionRetryTimeout: 90000,
   connectionRetryCount: 3,
+
+  // A binary built without `tauri/custom-protocol` loads the frontend from the
+  // devUrl, where the isolation relay's ready handshake is silently dropped and
+  // every invoke() hangs forever (see the header). That failure renders a
+  // plausible-looking loading screen instead of an error, so fail loudly here
+  // rather than let every spec time out on a mystery.
+  before: async () => {
+    const origin = await browser.execute(() => location.protocol);
+    if (origin !== 'tauri:') {
+      throw new Error(
+        `WDIO refuses to run: the webview loaded the frontend over "${origin}" instead of the ` +
+          'Tauri asset protocol, so the app was built without `--features tauri/custom-protocol`. ' +
+          'Under the isolation pattern that build can never complete an IPC call. ' +
+          'Rebuild with `pnpm run test:e2e:build`.',
+      );
+    }
+  },
 
   framework: 'mocha',
   mochaOpts: {

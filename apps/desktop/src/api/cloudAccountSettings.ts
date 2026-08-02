@@ -16,22 +16,28 @@
  * from `./cloudApi` so that module stays the single source of truth, exactly as
  * `./cloudConnectors` does.
  *
- * NOT reachable with a bearer, and deliberately absent from this module:
- *   `GET`/`DELETE /api/settings/sessions` — `apps/web/app/api/settings/sessions/route.ts`
- *   authenticates through `requireBrowserSession()`, which calls Clerk's
- *   `auth()` and additionally requires a `sessionId`. A device bearer resolves
- *   neither, so the active-session list and "log out of all devices" cannot be
- *   served to Desktop without a server change. The UI states that outright
- *   rather than faking a list.
+ * `/api/settings/sessions` used to be the one account control that could not be
+ * served here: it authenticated through a route-local `requireBrowserSession()`
+ * that demanded a Clerk cookie AND a `sessionId`. That route now resolves its
+ * caller through `getClerkAuthUser` as well
+ * (`apps/web/app/api/settings/sessions/session-principal.ts`), so the session
+ * list and "log out of all devices" are real here. The one thing a device token
+ * still cannot express is "which listed row is me" — a device token is not a
+ * Clerk session — so the server answers `currentSessionKnown: false` and the UI
+ * says so instead of inventing a current row.
  */
 
 import { cloudFetch, getAuthHeaders, CLOUD_API_BASE_URL } from './cloudApi';
 import {
+  MANAGED_CLOUD_REFLECT_PATH,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
+  ManagedCloudReflectRecapSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
   normalizeManagedCloudConversation,
+  type ManagedCloudReflectRange,
+  type ManagedCloudReflectRecap,
 } from '@agiworkforce/cloud-contracts';
 import {
   assertManagedCloudBoundary,
@@ -271,6 +277,118 @@ export async function listCloudSecurityActivity(limit = 10): Promise<CloudSecuri
 }
 
 // ============================================================================
+// Active sessions — /api/settings/sessions
+// ============================================================================
+
+/** Mirrors `serializeSession` in apps/web/app/api/settings/sessions/route.ts. */
+export interface CloudAccountSession {
+  id: string;
+  status: string;
+  device: string;
+  browser: string | null;
+  location: string | null;
+  createdAt: string | null;
+  lastActiveAt: string | null;
+  expiresAt: string | null;
+  /**
+   * Always false for this Desktop: the account's sessions are Clerk browser
+   * sessions and this app holds a device token, which is not one of them.
+   * `CloudActiveSessions.currentSessionKnown` carries that distinction.
+   */
+  isCurrent: boolean;
+}
+
+export interface CloudActiveSessions {
+  sessions: CloudAccountSession[];
+  /**
+   * Whether the server could identify the caller's own row. False for a device
+   * token, which is the honest answer — not a sign the list is incomplete.
+   */
+  currentSessionKnown: boolean;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function parseAccountSession(value: unknown): CloudAccountSession | null {
+  if (!isRecord(value)) return null;
+  const id = value['id'];
+  const device = value['device'];
+  if (typeof id !== 'string' || !id) return null;
+  return {
+    id,
+    status: typeof value['status'] === 'string' ? value['status'] : 'active',
+    device: typeof device === 'string' && device ? device : 'Unknown device',
+    browser: optionalString(value['browser']),
+    location: optionalString(value['location']),
+    createdAt: optionalString(value['createdAt']),
+    lastActiveAt: optionalString(value['lastActiveAt']),
+    expiresAt: optionalString(value['expiresAt']),
+    isCurrent: value['isCurrent'] === true,
+  };
+}
+
+export async function fetchCloudActiveSessions(): Promise<CloudActiveSessions> {
+  const boundary = captureManagedCloudBoundary('Cloud active sessions');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw await failure(response, 'Could not load your active sessions');
+  const payload: unknown = await response.json();
+  assertManagedCloudBoundary(boundary);
+  const rows = isRecord(payload) ? payload['sessions'] : null;
+  if (!Array.isArray(rows)) {
+    throw new Error('The Cloud session service returned an invalid response.');
+  }
+  return {
+    sessions: rows
+      .map(parseAccountSession)
+      .filter((row): row is CloudAccountSession => row !== null),
+    currentSessionKnown: isRecord(payload) && payload['currentSessionKnown'] === true,
+  };
+}
+
+export async function revokeCloudSession(sessionId: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud session revocation');
+  const response = await cloudFetch(
+    `${CLOUD_API_BASE_URL}/api/settings/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE', headers: await getAuthHeaders() },
+  );
+  if (!response.ok) throw await failure(response, 'Could not end that session');
+  assertManagedCloudBoundary(boundary);
+}
+
+export interface CloudRevokeAllSessionsResult {
+  revokedCount: number;
+  /**
+   * Whether the caller's own credential was among the revoked sessions. Always
+   * false for a device token, so Desktop must also sign itself out to finish
+   * "log out of all devices" — see `signOut()` in `services/cloudAccountAuth.ts`,
+   * which revokes the device token through `POST /api/auth/logout`.
+   */
+  currentSessionRevoked: boolean;
+}
+
+export async function revokeAllCloudSessions(): Promise<CloudRevokeAllSessionsResult> {
+  const boundary = captureManagedCloudBoundary('Cloud session revoke-all');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
+    method: 'DELETE',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw await failure(response, 'Could not log out of your other devices');
+  const payload: unknown = await response.json().catch(() => null);
+  assertManagedCloudBoundary(boundary);
+  const revokedCount = isRecord(payload) ? payload['revokedCount'] : null;
+  return {
+    revokedCount:
+      typeof revokedCount === 'number' && Number.isFinite(revokedCount) ? revokedCount : 0,
+    currentSessionRevoked: isRecord(payload) && payload['currentSessionRevoked'] === true,
+  };
+}
+
+// ============================================================================
 // API keys — /api/settings/api-keys
 // ============================================================================
 
@@ -373,6 +491,300 @@ export async function revokeCloudApiKey(keyId: string): Promise<void> {
     { method: 'DELETE', headers: await getAuthHeaders() },
   );
   if (!response.ok) throw await failure(response, 'Could not revoke the API key');
+  assertManagedCloudBoundary(boundary);
+}
+
+// ============================================================================
+// Account preferences — /api/settings/preferences
+// ============================================================================
+
+/**
+ * The account settings document is one JSONB column keyed by namespace
+ * (`apps/web/app/api/settings/preferences/route.ts`). A PUT replaces the whole
+ * value of ONE namespace — the SQL merge (`settings || excluded.settings`) is
+ * shallow and only preserves OTHER namespaces. So a client that edits a subset
+ * of a namespace must read it, merge, and write the whole namespace back, or it
+ * silently deletes the keys it does not know about (web writes `chatFont` and
+ * `voice` into `general`, for example). Every caller below does exactly that.
+ */
+export async function getCloudPreferenceNamespace(
+  namespace: string,
+): Promise<Record<string, unknown>> {
+  const boundary = captureManagedCloudBoundary(`Cloud ${namespace} preferences`);
+  const query = new URLSearchParams({ namespace });
+  const response = await cloudFetch(
+    `${CLOUD_API_BASE_URL}/api/settings/preferences?${query.toString()}`,
+    { method: 'GET', headers: await getAuthHeaders() },
+  );
+  if (!response.ok) throw await failure(response, `Could not load your ${namespace} settings`);
+  const payload: unknown = await response.json();
+  assertManagedCloudBoundary(boundary);
+  const settings = isRecord(payload) ? payload['settings'] : null;
+  return isRecord(settings) ? settings : {};
+}
+
+export async function saveCloudPreferenceNamespace(
+  namespace: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const boundary = captureManagedCloudBoundary(`Cloud ${namespace} preference save`);
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/preferences`, {
+    method: 'PUT',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ namespace, value }),
+  });
+  if (!response.ok) throw await failure(response, `Could not save your ${namespace} settings`);
+  assertManagedCloudBoundary(boundary);
+}
+
+// ============================================================================
+// Cloud profile identity — GET/PATCH /api/me
+// ============================================================================
+
+/**
+ * PER-8: the full name's single source of truth is `profiles.display_name`,
+ * written only by `PATCH /api/me`. The preferred name and work description are
+ * resolved by the same server resolver and shipped on `/api/me` as `profile`;
+ * the `general` preferences namespace is where the user's edits are stored.
+ * Desktop reads both and applies web's precedence — a stored value wins only
+ * when it carries information.
+ */
+export interface CloudAccountProfile {
+  email: string | null;
+  displayName: string | null;
+  preferredName: string | null;
+  workDescription: string | null;
+}
+
+export async function getCloudAccountProfile(): Promise<CloudAccountProfile> {
+  const boundary = captureManagedCloudBoundary('Cloud account profile');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/me`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw await failure(response, 'Could not load your Cloud profile');
+  const payload: unknown = await response.json();
+  assertManagedCloudBoundary(boundary);
+  if (!isRecord(payload)) {
+    throw new Error('The Cloud profile service returned an invalid response.');
+  }
+  const profile = isRecord(payload['profile']) ? payload['profile'] : {};
+  const fallbackName = typeof payload['name'] === 'string' ? payload['name'] : null;
+  return {
+    email: optionalString(payload['email']),
+    displayName: optionalString(profile['display_name']) ?? fallbackName,
+    preferredName: optionalString(profile['preferred_name']),
+    workDescription: optionalString(profile['work_description']),
+  };
+}
+
+export async function saveCloudDisplayName(displayName: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud display name save');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/me`, {
+    method: 'PATCH',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  if (!response.ok) throw await failure(response, 'Could not save your name');
+  assertManagedCloudBoundary(boundary);
+}
+
+// ============================================================================
+// Reflect recap — GET /api/reflect
+// ============================================================================
+
+export class CloudReflectMemoryRequiredError extends Error {
+  constructor() {
+    super('Reflect uses the same account chat-history controls as Memory.');
+    this.name = 'CloudReflectMemoryRequiredError';
+  }
+}
+
+/**
+ * The recap is built on read from account conversation activity; the route
+ * returns 409 `memory_required` when the account's memory/history controls are
+ * off. That is a state, not a failure, so it gets its own error type instead of
+ * being flattened into a generic message.
+ */
+export async function fetchCloudReflectRecap(
+  range: ManagedCloudReflectRange,
+  timezone: string,
+): Promise<ManagedCloudReflectRecap> {
+  const boundary = captureManagedCloudBoundary('Cloud reflect recap');
+  const query = new URLSearchParams({ range, timezone });
+  const response = await cloudFetch(
+    `${CLOUD_API_BASE_URL}${MANAGED_CLOUD_REFLECT_PATH}?${query.toString()}`,
+    { method: 'GET', headers: await getAuthHeaders() },
+  );
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    const error = isRecord(body) ? body['error'] : null;
+    if (response.status === 409 && isRecord(error) && error['code'] === 'memory_required') {
+      throw new CloudReflectMemoryRequiredError();
+    }
+    throw new Error(
+      readApiError(body, `Reflect could not load right now (HTTP ${response.status})`),
+    );
+  }
+  const recap = ManagedCloudReflectRecapSchema.parse(await response.json());
+  assertManagedCloudBoundary(boundary);
+  return recap;
+}
+
+// ============================================================================
+// Team / organization — /api/settings/organization, /api/settings/team
+// ============================================================================
+
+export type CloudTeamRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+export const CLOUD_TEAM_ROLES: readonly CloudTeamRole[] = [
+  'owner',
+  'admin',
+  'member',
+  'viewer',
+] as const;
+
+function parseTeamRole(value: unknown): CloudTeamRole {
+  return CLOUD_TEAM_ROLES.includes(value as CloudTeamRole) ? (value as CloudTeamRole) : 'member';
+}
+
+/** Mirrors `buildOrgResponse` in apps/web/app/api/settings/organization/route.ts. */
+export interface CloudOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  memberCount: number;
+  maxMembers: number | null;
+  currentUserRole: CloudTeamRole;
+}
+
+export interface CloudOrganizationOverview {
+  organization: CloudOrganization | null;
+  /** Server's own admin/seat verdict — never re-derived on the client. */
+  canManageTeam: boolean;
+}
+
+function parseOrganization(value: unknown): CloudOrganization | null {
+  if (!isRecord(value)) return null;
+  const id = value['id'];
+  const name = value['name'];
+  if (typeof id !== 'string' || !id || typeof name !== 'string') return null;
+  const memberCount = value['memberCount'];
+  const maxMembers = value['maxMembers'];
+  return {
+    id,
+    name,
+    slug: typeof value['slug'] === 'string' ? value['slug'] : '',
+    memberCount: typeof memberCount === 'number' && Number.isFinite(memberCount) ? memberCount : 0,
+    maxMembers: typeof maxMembers === 'number' && Number.isFinite(maxMembers) ? maxMembers : null,
+    currentUserRole: parseTeamRole(value['currentUserRole']),
+  };
+}
+
+export async function getCloudOrganizationOverview(): Promise<CloudOrganizationOverview> {
+  const boundary = captureManagedCloudBoundary('Cloud organization overview');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/organization`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw await failure(response, 'Could not load your workspace');
+  const payload: unknown = await response.json();
+  assertManagedCloudBoundary(boundary);
+  const access = isRecord(payload) && isRecord(payload['access']) ? payload['access'] : {};
+  return {
+    organization: isRecord(payload) ? parseOrganization(payload['organization']) : null,
+    // `access.canManageTeam` is the server's own verdict (TeamAdminAccess in
+    // apps/web/app/api/settings/team/team-admin-access.ts). Anything but an
+    // explicit true means "cannot manage", so the UI never offers a control
+    // the server would refuse — and it is never re-derived from a plan label.
+    canManageTeam: access['canManageTeam'] === true,
+  };
+}
+
+export interface CloudTeamMember {
+  /** Composite `"<organizationId>:<userId>"` id the member routes expect. */
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: CloudTeamRole;
+  isCurrentUser: boolean;
+}
+
+function parseTeamMember(value: unknown): CloudTeamMember | null {
+  if (!isRecord(value)) return null;
+  const id = value['id'];
+  const userId = value['userId'];
+  if (typeof id !== 'string' || !id || typeof userId !== 'string') return null;
+  return {
+    id,
+    userId,
+    email: typeof value['email'] === 'string' ? value['email'] : '',
+    name: typeof value['name'] === 'string' ? value['name'] : userId,
+    role: parseTeamRole(value['role']),
+    isCurrentUser: value['isCurrentUser'] === true,
+  };
+}
+
+export async function listCloudTeamMembers(organizationId: string): Promise<CloudTeamMember[]> {
+  const boundary = captureManagedCloudBoundary('Cloud team members');
+  const query = new URLSearchParams({ organizationId });
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/team?${query.toString()}`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw await failure(response, 'Could not load your team');
+  const payload: unknown = await response.json();
+  assertManagedCloudBoundary(boundary);
+  const members = isRecord(payload) ? payload['members'] : null;
+  if (!Array.isArray(members)) {
+    throw new Error('The Cloud team service returned an invalid response.');
+  }
+  return members
+    .map(parseTeamMember)
+    .filter((member): member is CloudTeamMember => member !== null);
+}
+
+/**
+ * There is no invitation persistence or email delivery in this repo: the route
+ * adds an EXISTING AGI account by email and fails with an actionable message
+ * for an unknown address. The UI must not call this "send an invite".
+ */
+export async function addCloudTeamMember(
+  organizationId: string,
+  email: string,
+  role: CloudTeamRole,
+): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud team member add');
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/team`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ organizationId, email, role }),
+  });
+  if (!response.ok) throw await failure(response, 'Could not add that person to your workspace');
+  assertManagedCloudBoundary(boundary);
+}
+
+export async function updateCloudTeamMemberRole(
+  memberId: string,
+  role: CloudTeamRole,
+): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud team role update');
+  const response = await cloudFetch(
+    `${CLOUD_API_BASE_URL}/api/settings/team/${encodeURIComponent(memberId)}`,
+    { method: 'PATCH', headers: await getAuthHeaders(), body: JSON.stringify({ role }) },
+  );
+  if (!response.ok) throw await failure(response, 'Could not change that role');
+  assertManagedCloudBoundary(boundary);
+}
+
+export async function removeCloudTeamMember(memberId: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud team member removal');
+  const response = await cloudFetch(
+    `${CLOUD_API_BASE_URL}/api/settings/team/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE', headers: await getAuthHeaders() },
+  );
+  if (!response.ok) throw await failure(response, 'Could not remove that member');
   assertManagedCloudBoundary(boundary);
 }
 
