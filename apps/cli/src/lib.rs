@@ -1317,6 +1317,12 @@ pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
     sandbox::set_sandbox_disabled(cli.no_sandbox);
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
+    // `--no-session-persistence` is a privacy opt-out, so it has to be in force
+    // before ANY session is constructed — including inside the subcommand arms
+    // below, which dispatch ahead of the per-run option resolution. Every
+    // `AgentSession` reads this policy once at construction and refuses to
+    // write managed-session state when it is off.
+    cli_options::set_session_persistence_enabled(normalized_cli_options.session_persistence);
 
     for dir in &normalized_cli_options.additional_dirs {
         crate::path_security::register_additional_workspace_root(dir)
@@ -3172,19 +3178,29 @@ pub async fn run_oneshot(
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
     }
+    // Event-stream correlation id. `--no-session-persistence` suppresses the
+    // managed session entirely, so an explicit `--session-id` has to be read
+    // straight from the flag — otherwise a caller that opted out of disk
+    // persistence would silently lose the id it correlates events by. When
+    // persistence is on this is the same value `override_session_id` just
+    // wrote, so the two paths agree.
+    let event_session_id = session_id_override
+        .clone()
+        .or_else(|| session.managed_session_id().map(str::to_string));
     // Thread json_events mode into the session so ALL turns (continuation,
     // retry, fallback) emit MessageDelta events instead of raw print!.
     if json_events && output_mode != OneShotOutputMode::JsonLine {
         session.json_events = true;
-        session.json_session_id = session.managed_session_id().unwrap_or("exec").to_string();
+        session.json_session_id = event_session_id
+            .clone()
+            .unwrap_or_else(|| "exec".to_string());
     }
     // Wire --max-budget-usd: emit BudgetExhausted only when --json-events is
     // active so stdout is not polluted in text/json-pretty output modes.
     if max_budget_usd.is_some() && json_events && output_mode != OneShotOutputMode::JsonLine {
-        let managed_id = session
-            .managed_session_id()
-            .unwrap_or("(no session)")
-            .to_string();
+        let managed_id = event_session_id
+            .clone()
+            .unwrap_or_else(|| "(no session)".to_string());
         session.on_budget_exhausted =
             Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
                 agent_events::AgentEvent::BudgetExhausted {
@@ -3685,6 +3701,11 @@ mod tests {
     async fn session_id_override_wires_to_managed_session() {
         // Behavioral test: override_session_id() actually mutates the managed
         // session's session_id so managed_session_id() returns the caller value.
+        //
+        // Takes the session-persistence policy lock because this test depends on
+        // the default (persistence on) while the `--no-session-persistence`
+        // tests flip that process-wide policy.
+        let _policy = cli_options::session_persistence_policy_lock();
         let sys_ctx = context::gather_system_context();
         // Source the model ID from the canonical catalog (models.json) rather than
         // a hardcoded literal, per the locked no-hardcoded-model-IDs rule.
