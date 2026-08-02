@@ -302,6 +302,13 @@ Finally, `TODO.md` was deleted in `906fe5cda`, so this Exact Resume Point
 section is now the executable queue — add new work here, not to a new root
 control doc.
 
+Active goal (2026-08-01, latest): **six apps, nothing unwired, zero stubs,
+zero partial** — the completion standard and its four scope decisions are
+recorded in `docs/current/parity-implementation-matrix.md` §2026-08-01
+Completion Standard. Desktop first, then the rest; server contracts get built
+on both sides; `audit/inventory.json` is corrected against verified code at the
+end and the checker then enforces it.
+
 Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
 surfaces (all except Finances; Plugins resolves to Connectors permanently) —
 the full list with external gates is recorded in
