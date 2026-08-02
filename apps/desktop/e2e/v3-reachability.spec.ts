@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
 /**
  * v3 reachability suite (@reachability).
@@ -20,6 +21,13 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * `self-healing.spec.ts` uses) so `hasCloudSession` is true and the
  * production shell is reached.
  *
+ * The session alone was not enough (DES-C14): Cloud admission hydrates the
+ * conversation boundary from `/api/chat/conversations` and `/api/projects`, and
+ * this suite routed neither, so the shell reported a boundary failure and every
+ * "is it queryable" check below passed on an empty page. `mockCloudApi` owns
+ * that route set; `expectCloudShellReady` refuses to continue if the boundary
+ * failed, so the vacuous-green mode is closed.
+ *
  * Beyond that gate, the mock cloud session in `gotoV3` guarantees the shell
  * (and its sub-components below) mount deterministically, so per-surface
  * checks assert directly rather than skip-on-absent — a regression should
@@ -28,9 +36,10 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
 
 async function gotoV3(page: Page) {
   await injectMockCloudAuth(page);
-  await mockCloudAccountEndpoints(page);
+  await mockCloudApi(page);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 30000 });
+  await expectCloudShellReady(page);
 }
 
 test.describe('@reachability v3 surface', () => {
@@ -82,8 +91,15 @@ test.describe('@reachability v3 surface', () => {
     await expect(el.first()).toBeAttached();
   });
 
+  // The mic's accessible name is host-supplied. Cloud passes a controller whose
+  // `idleLabel` is 'Cloud voice' (`useCloudVoiceController`); the browser
+  // fallback in `ChatInput` uses 'Voice input' / 'Voice input unavailable'; both
+  // become 'Stop recording' while listening. This suite runs in Cloud, so the
+  // old `/voice input|stop recording/` pattern could only ever match the Local
+  // fallback — it was never exercised while the shell failed to mount
+  // (DES-C14), and it fails the moment the shell does mount.
   test('composer voice-button reachable by aria-label', async ({ page }) => {
-    const el = page.getByRole('button', { name: /voice input|stop recording/i });
+    const el = page.getByRole('button', { name: /voice input|cloud voice|stop recording/i });
     await expect(el.first()).toBeAttached();
   });
 

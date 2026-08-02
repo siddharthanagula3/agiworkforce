@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
 /**
  * v3 anti-pattern lock suite (@locks).
@@ -17,7 +18,10 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * this same intentional cloud-web sign-in gate. `injectMockCloudAuth` seeds
  * the real `unified-auth-storage` persisted key (the same mechanism
  * `self-healing.spec.ts` already uses) so `hasCloudSession` is true and the
- * production shell is reached.
+ * production shell is reached. The session alone is not enough: Cloud admission
+ * hydrates the conversation boundary from `/api/chat/conversations` and
+ * `/api/projects` (DES-C14), so `mockCloudApi` answers those too and
+ * `expectCloudShellReady` proves the boundary did not fail.
  *
  * Heads-up: these tests rely on the dev server being up on PLAYWRIGHT_BASE_URL.
  * In CI the workflow starts the server before running playwright; locally,
@@ -26,9 +30,10 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
 test.describe('@locks v3 shell anti-patterns', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
-    await mockCloudAccountEndpoints(page);
+    await mockCloudApi(page);
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
+    await expectCloudShellReady(page);
   });
 
   test('production v3 shell mounts', async ({ page }) => {

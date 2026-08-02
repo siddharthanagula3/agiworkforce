@@ -1,14 +1,28 @@
 import { expect, test, type Page } from '@playwright/test';
-import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import {
+  cloudConversationFixture,
+  expectCloudShellReady,
+  mockCloudApi,
+} from './utils/mock-cloud-api';
 
-const conversation = {
-  id: 'conv-agent-activity',
-  user_id: 'e2e-mock-user-id',
+/**
+ * DES-C14: this spec used to mock `**\/api/cloud-chat`, a path that exists
+ * nowhere under `apps/web/app/api`, while leaving the real managed-cloud chat
+ * route (`/api/chat/conversations`, see `MANAGED_CLOUD_CHAT_BASE_PATH`) and
+ * `/api/projects` unrouted. Cloud admission hydrates the conversation boundary
+ * from exactly those two, so the v3 shell never mounted and the composer this
+ * test types into did not exist. `mockCloudApi` owns the shipping route set;
+ * the conversation below is in the real `ManagedCloudConversationWireSchema`
+ * shape rather than the invented snake_case one.
+ */
+const conversation = cloudConversationFixture({
+  id: '9c3a1b52-6d2f-4c8e-9a44-1f0b5c7d2e31',
   title: 'Agent activity check',
   model: 'auto-balanced',
   created_at: '2026-07-17T20:00:00.000Z',
   updated_at: '2026-07-17T20:00:00.000Z',
-};
+});
 
 function agentEvent(sequence: number, event: Record<string, unknown>) {
   return {
@@ -30,25 +44,6 @@ function agentEvent(sequence: number, event: Record<string, unknown>) {
 }
 
 async function mockCloudChat(page: Page): Promise<void> {
-  await page.route('**/api/csrf', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '{"token":"e2e-csrf"}' }),
-  );
-
-  await page.route('**/api/cloud-chat', (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ conversation }),
-      });
-    }
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ conversations: [] }),
-    });
-  });
-
   await page.route('**/api/llm/v1/chat/completions', (route) => {
     const lines = [
       agentEvent(0, { type: 'lifecycle', phase: 'started' }),
@@ -99,20 +94,39 @@ async function mockCloudChat(page: Page): Promise<void> {
 
 test('Desktop Cloud renders one collapsed, progressively expandable canonical activity spine', async ({
   page,
-}) => {
+}, testInfo) => {
+  const appOrigin = new URL(testInfo.project.use.baseURL ?? 'http://127.0.0.1:5175').origin;
   const unexpectedDiagnostics: string[] = [];
+  // `cloudAccountAuth.fetchAccountSnapshot` and `managedCloudSettingsSync` are
+  // the only two callers that use the ABSOLUTE `WEB_APP_URL` instead of the
+  // browser build's same-origin `CLOUD_API_BASE_URL` (''). When the configured
+  // origin is not in the dev server's CSP `connect-src` (vite.config.ts:129 —
+  // e.g. a local `.env.local` pointing VITE_WEB_APP_URL at localhost:3000) the
+  // browser refuses the request before it reaches the network stack, so
+  // `page.route` never sees it and NO Playwright mock can answer it. That is an
+  // environment fact, not a product regression, so a bare
+  // "TypeError: Failed to fetch" from those two is not counted. Everything else
+  // still fails this test: a contract violation, a non-2xx, or any
+  // `analytics_set_privacy_mode` call (which is never a network error).
+  const isUnmockableEgress = (text: string) =>
+    /TypeError: Failed to fetch/.test(text) &&
+    /managedCloudSettingsSync|Failed to refresh Clerk\/Neon/i.test(text);
+
   page.on('console', (message) => {
     const text = message.text();
     if (
       /analytics_set_privacy_mode|managedCloudSettingsSync|Failed to refresh Clerk\/Neon/i.test(
         text,
-      )
+      ) &&
+      !isUnmockableEgress(text)
     ) {
       unexpectedDiagnostics.push(`${message.type()}: ${text}`);
     }
   });
   page.on('requestfailed', (request) => {
-    if (/settings\/sync/i.test(request.url())) {
+    // Same-origin settings/sync IS routable here, so a failure on it is a real
+    // regression. The absolute-origin variant is the CSP case documented above.
+    if (/settings\/sync/i.test(request.url()) && request.url().startsWith(appOrigin)) {
       unexpectedDiagnostics.push(
         `requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`,
       );
@@ -120,11 +134,18 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   });
 
   await injectMockCloudAuth(page, { planTier: 'max' });
-  await mockCloudAccountEndpoints(page, { planTier: 'max' });
+  await mockCloudApi(page, {
+    planTier: 'max',
+    createdConversation: conversation,
+    messagesByConversation: { [conversation.id]: [] },
+  });
+  // Registered after mockCloudApi so the streaming completion wins over the
+  // catch-all.
   await mockCloudChat(page);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
+  await expectCloudShellReady(page);
 
   const composer = page.getByRole('textbox', { name: /chat message input/i });
   await composer.fill('Research the current official documentation');
