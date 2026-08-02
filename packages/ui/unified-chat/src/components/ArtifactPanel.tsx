@@ -17,12 +17,18 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
+import {
+  ARTIFACT_SANDBOX_ATTR,
+  buildSandboxedHtml,
+  getArtifactSandboxOrigin,
+  type ArtifactRenderPayload,
+} from '../lib/artifact-sandbox';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
 import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ReactPreview } from './artifact-components/ReactPreview';
+import { ArtifactSandboxFrame } from './artifact-components/ArtifactSandboxFrame';
 // AUDIT-FIX ART-17 / ART-18: reuse the sibling renderer's audited SVG allowlist
 // and its mermaid renderer instead of re-answering the same questions here.
 import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
@@ -410,6 +416,26 @@ export function ArtifactPanel({
   // interactive HTML artifact renders its markup and then does nothing at all.
   // Measure it instead of guessing, and say so rather than showing a dead box.
   const scriptSupport = useSameDocumentScriptSupport();
+  // DES-C15, second half: when a dedicated artifact ORIGIN exists the preview is
+  // not a same-document frame at all — it is a cross-origin document with its
+  // own CSP, so the inherited-policy restriction simply does not apply and the
+  // warning above would be a lie. `null` on any surface without one (web with
+  // NEXT_PUBLIC_SANDBOX_ORIGIN unset, plain browser dev, jsdom).
+  const artifactSandboxOrigin = getArtifactSandboxOrigin();
+  // Set when the sandbox origin exists but never completed its handshake, so the
+  // preview degraded to the same-document path. From that moment the
+  // same-document truth applies again.
+  const [sandboxDegraded, setSandboxDegraded] = useState(false);
+  const sandboxPreviewActive = artifactSandboxOrigin !== null && !sandboxDegraded;
+  const [htmlPreviewError, setHtmlPreviewError] = useState<string | null>(null);
+  // Stable identity: `ArtifactSandboxFrame` keys its handshake deadline on this
+  // callback, so a fresh closure every render would keep restarting the timer.
+  const handleSandboxDegraded = useCallback(() => setSandboxDegraded(true), []);
+
+  useEffect(() => {
+    setSandboxDegraded(false);
+    setHtmlPreviewError(null);
+  }, [artifact?.id, previewNonce]);
 
   useEffect(() => {
     setIsEditing(false);
@@ -657,6 +683,26 @@ export function ArtifactPanel({
       };
     }
   }, [artifact, htmlPreviewRunning]);
+
+  /**
+   * Wire payload for the cross-origin renderer.
+   *
+   * Deliberately the SAME shape web builds in
+   * `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx`: the fully
+   * wrapped document as `html`, plus `runScripts: true`. The renderer assigns
+   * `html` with `innerHTML`, which never executes `<script>`; `runScripts` is
+   * what makes it re-create the script elements, and without it an interactive
+   * artifact would be just as inert on the sandbox origin as it was in srcdoc.
+   */
+  const htmlSandboxPayload = useMemo<ArtifactRenderPayload>(
+    () => ({
+      type: 'render',
+      kind: 'html',
+      html: htmlPreview.srcDoc,
+      runScripts: true,
+    }),
+    [htmlPreview.srcDoc],
+  );
 
   return (
     <div className="flex h-full flex-col bg-[var(--chat-surface-base)]">
@@ -941,14 +987,31 @@ export function ArtifactPanel({
             {/* DES-C15: markup and CSS still render, but the embedder CSP this
                 srcdoc inherits forbids inline scripts — so an interactive page
                 looks finished and does nothing. Say it out loud; a silently
-                inert preview reads as a broken app. */}
-            {scriptSupport === 'blocked' && (
+                inert preview reads as a broken app.
+
+                Suppressed while the preview runs on its OWN origin (`artifact://`
+                inside the desktop binary, NEXT_PUBLIC_SANDBOX_ORIGIN on web).
+                That document does not inherit this app's policy, so the warning
+                would be false there. It returns the moment the sandbox fails its
+                handshake and the frame degrades back to srcdoc. */}
+            {scriptSupport === 'blocked' && !sandboxPreviewActive && (
               <p
                 role="note"
                 data-testid="artifact-preview-scripts-blocked"
                 className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
               >
                 {SCRIPTS_BLOCKED_NOTICE}
+              </p>
+            )}
+            {/* The renderer reports its own failures over postMessage. Before
+                this the frame just sat blank. */}
+            {htmlPreviewError && (
+              <p
+                role="note"
+                data-testid="artifact-preview-render-error"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+              >
+                {htmlPreviewError}
               </p>
             )}
             {/* AUDIT-FIX ART-16: three distinct states — build failure, running,
@@ -973,13 +1036,20 @@ export function ArtifactPanel({
                 </button>
               </div>
             ) : htmlPreviewRunning ? (
-              <iframe
+              // Prefers the dedicated artifact ORIGIN, which is the only place an
+              // interactive artifact can actually run inside the packaged desktop
+              // app; falls back to the identical srcDoc document (same CSP, same
+              // sandbox attribute) everywhere there is no such origin, so no
+              // surface loses behaviour it already had.
+              <ArtifactSandboxFrame
                 key={previewNonce}
-                srcDoc={htmlPreview.srcDoc}
-                sandbox={ARTIFACT_SANDBOX_ATTR}
-                referrerPolicy="no-referrer"
-                className="flex-1 w-full border-0 bg-white"
+                payload={htmlSandboxPayload}
+                fallbackSrcDoc={htmlPreview.srcDoc}
+                fallbackSandbox={ARTIFACT_SANDBOX_ATTR}
                 title={artifact.title ?? 'Artifact preview'}
+                className="flex-1 w-full border-0 bg-white"
+                onRenderError={setHtmlPreviewError}
+                onFallback={handleSandboxDegraded}
               />
             ) : (
               <div className="flex flex-1 items-center justify-center text-sm text-[var(--chat-text-muted)]">
