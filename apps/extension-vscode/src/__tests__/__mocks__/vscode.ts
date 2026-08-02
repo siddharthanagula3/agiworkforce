@@ -442,12 +442,20 @@ export const window = {
     dispose: vi.fn(),
   })),
   terminals: [] as unknown[],
+  activeTerminal: undefined as unknown,
   onDidCloseTerminal: vi.fn(() => new Disposable()),
   onDidOpenTerminal: vi.fn(() => new Disposable()),
   onDidChangeActiveTerminal: vi.fn(() => new Disposable()),
+  // Shell Integration API (stable since 1.93; `engines.vscode` is ^1.106.0).
+  // Tests capture the registered listener from `mock.calls` and fire it.
+  onDidChangeTerminalShellIntegration: vi.fn(() => new Disposable()),
+  onDidStartTerminalShellExecution: vi.fn(() => new Disposable()),
+  onDidEndTerminalShellExecution: vi.fn(() => new Disposable()),
+  setStatusBarMessage: vi.fn(() => new Disposable()),
   createWebviewPanel: vi.fn(() => ({
     webview: new MockWebview(),
     onDidDispose: vi.fn(),
+    onDidChangeViewState: vi.fn(() => new Disposable()),
     reveal: vi.fn(),
     dispose: vi.fn(),
   })),
@@ -615,6 +623,12 @@ export const ExtensionMode = {
 export const QuickPickItemKind = {
   Separator: -1,
   Default: 0,
+} as const;
+
+export const TerminalShellExecutionCommandLineConfidence = {
+  Low: 0,
+  Medium: 1,
+  High: 2,
 } as const;
 
 export const version = '1.95.0';

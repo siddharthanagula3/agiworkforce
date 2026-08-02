@@ -386,14 +386,19 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
   }
 
-  /** Accept the first active diff in the currently focused editor (for keyboard shortcut). */
-  async acceptCurrentDiff(): Promise<void> {
+  /**
+   * The diff nearest the cursor in the focused editor.
+   *
+   * This is the session a keybinding means when it passes no arguments — a
+   * keybinding cannot supply a session id, so every argument-free entry point
+   * resolves through here instead of looking up `undefined`.
+   */
+  currentSession(): DiffSession | undefined {
     const editor = vscode.window.activeTextEditor;
-    if (editor === undefined) return;
+    if (editor === undefined) return undefined;
     const sessions = this._sessionsForUri(editor.document.uri);
-    if (sessions.length === 0) return;
+    if (sessions.length === 0) return undefined;
 
-    // Find the diff closest to the cursor position
     const cursorLine = editor.selection.active.line;
     let closest: DiffSession | undefined;
     let minDist = Infinity;
@@ -404,31 +409,30 @@ export class DiffDecorationProvider implements vscode.Disposable {
         closest = s;
       }
     }
-    if (closest !== undefined) {
-      await this.acceptDiff(closest.id);
-    }
+    return closest;
   }
 
-  /** Reject the first active diff in the currently focused editor (for keyboard shortcut). */
-  rejectCurrentDiff(): void {
-    const editor = vscode.window.activeTextEditor;
-    if (editor === undefined) return;
-    const sessions = this._sessionsForUri(editor.document.uri);
-    if (sessions.length === 0) return;
+  /**
+   * Accept the diff nearest the cursor in the focused editor (keyboard path).
+   *
+   * Returns false when no diff in the focused editor could be resolved, so the
+   * caller can say so instead of leaving the keypress looking broken.
+   */
+  async acceptCurrentDiff(): Promise<boolean> {
+    const closest = this.currentSession();
+    if (closest === undefined) return false;
+    return this.acceptDiff(closest.id);
+  }
 
-    const cursorLine = editor.selection.active.line;
-    let closest: DiffSession | undefined;
-    let minDist = Infinity;
-    for (const s of sessions) {
-      const dist = Math.abs(s.range.start.line - cursorLine);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = s;
-      }
-    }
-    if (closest !== undefined) {
-      this.rejectDiff(closest.id);
-    }
+  /**
+   * Reject the diff nearest the cursor in the focused editor (keyboard path).
+   * Returns false when there was nothing to reject.
+   */
+  rejectCurrentDiff(): boolean {
+    const closest = this.currentSession();
+    if (closest === undefined) return false;
+    this.rejectDiff(closest.id);
+    return true;
   }
 
   /** Accept all diffs across all open files. */

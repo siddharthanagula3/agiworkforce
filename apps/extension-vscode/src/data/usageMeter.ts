@@ -70,6 +70,41 @@ function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
   };
 }
 
+// ─── Active-model context ─────────────────────────────────────────────────────
+
+/**
+ * The model the next request will actually use, plus whatever the caller already
+ * knows about its trust boundary.
+ *
+ * Callers that dispatch a model other than the persisted `agiWorkforce.model`
+ * setting (the sidebar composer can send a model with the turn) MUST pass it
+ * here — resolving the boundary from the setting would describe a provider the
+ * request is not going to.
+ */
+export interface ActiveModelContext {
+  /** Model id that will be dispatched. Defaults to the `agiWorkforce.model` setting. */
+  modelId?: string;
+  /**
+   * `true` when the workspace-scoped CLI discovery admitted this id as a local
+   * runtime model. Trusted over prefix matching, which only recognises the
+   * `ollama/` / `lmstudio/` / `lms/` / `local/` naming conventions.
+   *
+   * Never pass `true` for a model that has not been proven local: it suppresses
+   * the cloud lookup and makes the surface claim nothing leaves the machine.
+   */
+  isLocalRuntimeModel?: boolean;
+}
+
+function resolveActiveModel(context: ActiveModelContext): {
+  modelId: string;
+  isLocal: boolean;
+} {
+  const modelId =
+    context.modelId ?? vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? '';
+  // Either signal is proof of a local runtime; neither is required to be present.
+  return { modelId, isLocal: context.isLocalRuntimeModel === true || isLocalModel(modelId) };
+}
+
 // ─── Tier resolution ──────────────────────────────────────────────────────────
 
 /**
@@ -77,9 +112,11 @@ function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
  * Uses AGI Cloud tier data when available; otherwise falls back to BYOK because
  * no AGI-managed quota can be proven.
  */
-export async function resolvePlanTier(secrets: vscode.SecretStorage): Promise<UIPlanTier> {
-  const model = vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? '';
-  if (isLocalModel(model)) return 'local';
+export async function resolvePlanTier(
+  secrets: vscode.SecretStorage,
+  context: ActiveModelContext = {},
+): Promise<UIPlanTier> {
+  if (resolveActiveModel(context).isLocal) return 'local';
 
   const tierInfo = await fetchTierInfo(secrets);
   const tier = coercePlanTier(tierInfo?.tier);
@@ -92,13 +129,17 @@ export async function resolvePlanTier(secrets: vscode.SecretStorage): Promise<UI
 
 /**
  * Build a UsageMeter value from the current tier and session token counter.
+ *
+ * `source` is the trust boundary the surface renders, so a local model must
+ * never reach the cloud lookup: returning early keeps the account token off the
+ * wire while a Local-boundary model is selected.
  */
 export async function resolveUsageMeter(
   secrets: vscode.SecretStorage,
   _sessionTokens: number,
+  context: ActiveModelContext = {},
 ): Promise<UsageMeter> {
-  const model = vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? '';
-  if (isLocalModel(model)) {
+  if (resolveActiveModel(context).isLocal) {
     return {
       remaining: null,
       resetsAt: null,
@@ -131,7 +172,12 @@ export function formatManagedUsageLabel(
   return `${fmtK(usedTokens)}/${fmtK(limitTokens)} tokens`;
 }
 
-export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string | null {
+/**
+ * Trust-mode label for a meter with no numeric quota. Exhaustive over
+ * `UsageMeter['source']`, so the caller always gets a real sentence to render
+ * rather than an empty banner.
+ */
+export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string {
   switch (source) {
     case 'unbounded':
       return `${formatPrivacyModeLabel('local')} model - no quota tracking`;

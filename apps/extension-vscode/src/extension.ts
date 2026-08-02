@@ -154,6 +154,9 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.model') ||
         e.affectsConfiguration('agiWorkforce.apiKey')
       ) {
+        if (e.affectsConfiguration('agiWorkforce.model')) {
+          sidebarProvider.syncModelFromConfiguration();
+        }
         sidebarProvider.pushUsageMeter();
       }
 
