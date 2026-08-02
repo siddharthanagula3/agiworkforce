@@ -24,16 +24,28 @@
  *   usage        → DesktopUsageSection     (wraps existing UsageDashboard)
  *   capabilities → DesktopCapabilitiesSection (feature flags + agent mode knobs)
  *
- * Sections that CAN be served to Desktop's device bearer are rendered inline
- * from `api/cloudAccountSettings.ts` (archived chats, shared links, security
- * status). The remainder — profile, safety, notifications, Reflect, time and
- * focus, plugins, team — have no bearer-reachable API, so they open in a
- * Desktop-owned child window through `CloudBridgedSection`, which states the
- * child window's separate web sign-in and always offers an explicit
- * "Sign in again to manage this" recovery instead of a silent /login landing
- * (see that component for the full reasoning). Device-only appearance, voice,
- * and model-key settings remain in Local settings and are never blended into
- * the Cloud boundary.
+ * Every account section here is now served to Desktop's device bearer and
+ * rendered INLINE from `api/cloudAccountSettings.ts`: profile, safety,
+ * notifications, Reflect, time and focus, team, security, archived chats,
+ * shared links, and the account controls (including active sessions). None of
+ * them open a webview gated on a Clerk browser cookie this app never holds,
+ * which is what used to let a section land silently on `/login` while the app
+ * showed the user as signed in.
+ *
+ * Two sections are not inline API renders, for stated reasons rather than
+ * convenience:
+ *   plugins → no plugin contract exists on ANY surface (web renders a static
+ *             catalogue preview with `plugins: []`), and the old bridged path
+ *             `/settings/plugins` does not exist on the web app at all. The
+ *             section says so and links to the public catalogue in the system
+ *             browser — see `cloud/CloudPluginsSection.tsx`.
+ *   security → the READ half (2FA status, recent activity) is inline; only
+ *              Clerk-owned credential enrollment stays bridged, with the
+ *              explicit re-auth affordance.
+ *
+ * `CloudBridgedSection` therefore survives for exactly that one credential
+ * flow. Device-only appearance, voice, and model-key settings remain in Local
+ * settings and are never blended into the Cloud boundary.
  */
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -58,8 +70,6 @@ import {
   type CloudConnectorEntry,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
-import { openDesktopCloudAccountWindow } from '../../services/desktopCloudAccountWindow';
-import { CloudBridgedSection } from './cloud/CloudBridgedSection';
 import { listCloudSkills } from '../../api/cloudSkills';
 import {
   createDefaultWindowPreferences,
@@ -188,6 +198,29 @@ const LazySharedLinks = lazy(() =>
 );
 const LazyCloudSecurity = lazy(() =>
   import('./cloud/CloudSecuritySection').then((m) => ({ default: m.CloudSecuritySection })),
+);
+const LazyCloudProfile = lazy(() =>
+  import('./cloud/CloudProfileSection').then((m) => ({ default: m.CloudProfileSection })),
+);
+const LazyCloudSafety = lazy(() =>
+  import('./cloud/CloudSafetySection').then((m) => ({ default: m.CloudSafetySection })),
+);
+const LazyCloudNotifications = lazy(() =>
+  import('./cloud/CloudNotificationsSection').then((m) => ({
+    default: m.CloudNotificationsSection,
+  })),
+);
+const LazyCloudReflect = lazy(() =>
+  import('./cloud/CloudReflectSection').then((m) => ({ default: m.CloudReflectSection })),
+);
+const LazyCloudTimeFocus = lazy(() =>
+  import('./cloud/CloudTimeFocusSection').then((m) => ({ default: m.CloudTimeFocusSection })),
+);
+const LazyCloudPlugins = lazy(() =>
+  import('./cloud/CloudPluginsSection').then((m) => ({ default: m.CloudPluginsSection })),
+);
+const LazyCloudTeam = lazy(() =>
+  import('./cloud/CloudTeamSection').then((m) => ({ default: m.CloudTeamSection })),
 );
 // ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
@@ -534,84 +567,6 @@ function DesktopCapabilitiesSection() {
         Tool approvals are enforced by the Managed Cloud policy for each task. Local agent and
         auto-approval controls apply only to the Local workspace and remain in Local settings.
       </p>
-    </div>
-  );
-}
-
-function DesktopTeamSection() {
-  const plan = useAuthStore(selectPlan);
-  const canManageTeam = canUseBillingPlanCapability(plan, 'team_admin');
-  const isEnterprise = canUseBillingPlanCapability(plan, 'enterprise_controls');
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const openTeamSettings = () =>
-    openDesktopCloudAccountWindow('/settings/team', 'AGI Cloud team settings');
-  const openSales = () => openExternalUrl(new URL('/contact-sales', WEB_APP_URL).toString());
-  const handleOpenTeamAction = async () => {
-    if (opening || plan === null) return;
-    setOpening(true);
-    setError(null);
-    try {
-      await (canManageTeam ? openTeamSettings() : openSales());
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : canManageTeam
-            ? 'Could not open team settings.'
-            : 'Could not open contact sales.',
-      );
-    } finally {
-      setOpening(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Team &amp; enterprise</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage workspace membership and organization administration in an owned AGI Desktop
-          window.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-border bg-card/40 p-5">
-        <p className="text-xs text-muted-foreground">Current plan</p>
-        <p className="mt-1 text-lg font-semibold text-foreground">
-          {plan ? PLAN_DISPLAY_NAMES[plan] : 'Loading…'}
-        </p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {canManageTeam
-            ? 'Open the protected Cloud team controls to manage owner, admin, and member roles.'
-            : 'Team administration requires a provisioned Team or Enterprise account.'}
-        </p>
-        {error ? (
-          <p role="alert" className="mt-3 text-xs text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className={`mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50 ${SETTINGS_FOCUS_RING}`}
-          onClick={() => void handleOpenTeamAction()}
-          disabled={plan === null || opening}
-          aria-busy={opening || undefined}
-        >
-          {opening ? 'Opening…' : canManageTeam ? 'Manage team' : 'Contact sales'}
-        </button>
-      </div>
-
-      {isEnterprise ? (
-        <div className="rounded-lg border border-border bg-card/40 p-5">
-          <p className="text-sm font-medium text-foreground">Enterprise identity</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            This Desktop build does not expose SSO or SCIM configuration. No identity-provider setup
-            is implied by the Enterprise plan label.
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1012,13 +967,9 @@ export function DesktopCloudSettingsModal({
     () => ({
       general: (
         <div className="flex flex-col gap-8">
-          <CloudBridgedSection
-            sectionKey="general"
-            title="Cloud profile"
-            description="Update your name, preferred form of address, work description, and account-level instructions."
-            path="/settings/general"
-            action="Open profile settings"
-          />
+          <Suspense fallback={<SectionSkeleton />}>
+            <LazyCloudProfile />
+          </Suspense>
           <div className="border-t border-border pt-8">
             <Suspense fallback={<SectionSkeleton />}>
               <LazyGeneralTab
@@ -1039,7 +990,11 @@ export function DesktopCloudSettingsModal({
           <LazyAccountTab scope="cloud" />
         </Suspense>
       ),
-      team: <DesktopTeamSection />,
+      team: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudTeam />
+        </Suspense>
+      ),
       privacy: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyPrivacyTab scope="cloud" />
@@ -1061,17 +1016,12 @@ export function DesktopCloudSettingsModal({
         </Suspense>
       ),
       // Safety is in SETTINGS_NAV_GROUPS_WEB, which this modal maps over to build
-      // its nav — but it had no entry here, so clicking it rendered the shared
-      // modal's developer fallback ("No content for section \"safety\".") to the
-      // user. It bridges to the same account surface as its neighbours.
+      // its nav. It reads and writes the `safety` namespace of
+      // /api/settings/preferences, which authenticates with the device bearer.
       safety: (
-        <CloudBridgedSection
-          sectionKey="safety"
-          title="Safety"
-          description="Choose additional safeguards for Managed Cloud prompts."
-          path="/settings/safety"
-          action="Open safety controls"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudSafety />
+        </Suspense>
       ),
       // Archived chats and shared links are conversation-data surfaces web
       // reaches from its Privacy section rather than from the settings nav.
@@ -1088,41 +1038,30 @@ export function DesktopCloudSettingsModal({
           <LazySharedLinks />
         </Suspense>
       ),
+      // The `notifications`, `time-focus`, and `general` namespaces of
+      // /api/settings/preferences and GET /api/reflect all authenticate through
+      // getClerkAuthUser, so each renders the account's real data here.
       notifications: (
-        <CloudBridgedSection
-          sectionKey="notifications"
-          title="Notifications"
-          description="Manage Cloud reply-ready notifications alongside Desktop’s native notification controls."
-          path="/settings/notifications"
-          action="Open notification settings"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudNotifications />
+        </Suspense>
       ),
       reflect: (
-        <CloudBridgedSection
-          sectionKey="reflect"
-          title="Reflect"
-          description="Review an account-level recap of activity, topics, and memory-backed insights."
-          path="/settings/reflect"
-          action="Open Reflect"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudReflect />
+        </Suspense>
       ),
       'time-focus': (
-        <CloudBridgedSection
-          sectionKey="time-focus"
-          title="Time and focus"
-          description="Configure break reminders and quiet hours for your signed-in Cloud account."
-          path="/settings/time-focus"
-          action="Open time and focus"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudTimeFocus />
+        </Suspense>
       ),
+      // No account plugin contract exists anywhere, and the path this used to
+      // bridge to (/settings/plugins) is not a route on the web app.
       plugins: (
-        <CloudBridgedSection
-          sectionKey="plugins"
-          title="Plugins"
-          description="Discover and manage account-installed Cloud plugins. Local extensions remain isolated in Local settings."
-          path="/settings/plugins"
-          action="Open Cloud plugins"
-        />
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudPlugins onOpenSection={setActiveSection} />
+        </Suspense>
       ),
       memory: (
         <Suspense fallback={<SectionSkeleton />}>

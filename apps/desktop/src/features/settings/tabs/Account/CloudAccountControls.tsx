@@ -1,20 +1,21 @@
 /**
  * Cloud account controls Desktop was missing entirely (DES-C21): the account
- * identifier, API keys, and account deletion — plus an honest statement of the
- * one control that cannot be served to Desktop today.
+ * identifier, active sessions, API keys, and account deletion.
  *
  * Every call here uses the device bearer against a route that authenticates via
  * `getClerkAuthUser` (`apps/web/lib/api-auth.ts` Path 2b) and whose CSRF gate is
  * bypassed for a verifying bearer (`apps/web/lib/csrf.ts` `isBearerTokenValid`).
  *
- * BLOCKED — active sessions / "log out of all devices":
- * `apps/web/app/api/settings/sessions/route.ts` authenticates with
- * `requireBrowserSession()`, which calls Clerk's `auth()` and requires BOTH a
- * `userId` and a `sessionId`. Desktop's first-party HS256 device token resolves
- * neither, so `GET`/`DELETE /api/settings/sessions` return 401 for this app. No
- * bearer-capable equivalent exists. Rather than fake a session table, this
- * section says so and offers the two revocations Desktop CAN perform: sign this
- * device out, and manage the rest on the web.
+ * Active sessions were previously unreachable: the route resolved its caller
+ * through a route-local `requireBrowserSession()` that required a Clerk cookie
+ * and a `sessionId`, which a device token has neither of. That route now
+ * resolves callers through `getClerkAuthUser` too
+ * (`apps/web/app/api/settings/sessions/session-principal.ts`), so the list and
+ * the revocations below are real. The one thing still not expressible with a
+ * device token is "which listed session is me": those rows are Clerk BROWSER
+ * sessions and this app is not one of them. The server says so
+ * (`currentSessionKnown: false`) and this section repeats it rather than
+ * marking an arbitrary row as current.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,14 +23,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CLOUD_API_KEY_SCOPES,
   createCloudApiKey,
+  fetchCloudActiveSessions,
   listCloudApiKeys,
   requestCloudAccountDeletion,
+  revokeAllCloudSessions,
   revokeCloudApiKey,
+  revokeCloudSession,
+  type CloudAccountSession,
   type CloudApiKey,
   type CloudApiKeyScope,
 } from '../../../../api/cloudAccountSettings';
 import { useAccountStore, useAuthStore } from '../../../../stores/auth';
-import { CloudBridgedSection } from '../../cloud/CloudBridgedSection';
 import {
   PRIMARY_BUTTON,
   SECONDARY_BUTTON,
@@ -73,36 +77,186 @@ function AccountIdentifierRow() {
   );
 }
 
-function SessionsRow() {
+function formatSessionTimestamp(value: string | null): string {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function sessionDetail(session: CloudAccountSession): string {
+  return [session.browser, session.location].filter(Boolean).join(' · ');
+}
+
+function ActiveSessionsSection() {
   const signOut = useAuthStore((state) => state.signOut);
+  const [sessions, setSessions] = useState<CloudAccountSession[] | null>(null);
+  const [currentSessionKnown, setCurrentSessionKnown] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const generation = useRef(0);
+
+  const load = useCallback(async () => {
+    const current = ++generation.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await fetchCloudActiveSessions();
+      if (generation.current === current) {
+        setSessions(next.sessions);
+        setCurrentSessionKnown(next.currentSessionKnown);
+      }
+    } catch (caught) {
+      if (generation.current === current) {
+        setError(caught instanceof Error ? caught.message : 'Could not load your active sessions.');
+      }
+    } finally {
+      if (generation.current === current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    return () => {
+      generation.current += 1;
+    };
+  }, [load]);
+
+  const handleRevoke = async (session: CloudAccountSession) => {
+    setRevokingId(session.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await revokeCloudSession(session.id);
+      setSessions((current) => (current ?? []).filter((row) => row.id !== session.id));
+      setNotice(`Ended the ${session.device} session.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not end that session.');
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  // "Log out of all devices" means exactly that, so it is two revocations, not
+  // one: the server ends every Clerk session on the account, and then this app
+  // signs itself out — which revokes the device token and its refresh family
+  // through POST /api/auth/logout. Skipping the second step would leave the
+  // credential that is actually in front of the user still valid.
+  const handleRevokeAll = async () => {
+    setRevokingAll(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await revokeAllCloudSessions();
+      setSessions([]);
+      await signOut();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
+      );
+      setRevokingAll(false);
+    }
+  };
 
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-5">
-      <p className="text-sm font-medium text-foreground">Active sessions</p>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        The account-wide session list and “log out of all devices” are served only to a browser
-        session on agiworkforce.com. This Desktop authenticates with a device token, which that
-        endpoint does not accept, so no session list can be shown here without inventing one.
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
+    <div className="flex flex-col gap-3" data-testid="cloud-active-sessions">
+      <div>
+        <h3 className="text-sm font-medium text-foreground">Active sessions</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          Browser and mobile sessions signed in to this AGI Cloud account.{' '}
+          {currentSessionKnown ? (
+            <>The session marked “This session” is the one you are using right now.</>
+          ) : (
+            <>
+              This Desktop is not one of them: it authenticates with a device token rather than a
+              browser session, so it never appears in this list. Use{' '}
+              <span className="font-medium text-foreground">Sign this device out</span> to end it.
+            </>
+          )}
+        </p>
+      </div>
+
+      {loading ? <SectionLoading label="Loading active sessions…" /> : null}
+      {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {notice ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
+
+      {!loading && sessions !== null && sessions.length > 0 ? (
+        <ul className="overflow-hidden rounded-lg border border-border bg-card/40">
+          {sessions.map((session, index) => (
+            <li
+              key={session.id}
+              className={`flex items-center justify-between gap-4 p-4 ${
+                index > 0 ? 'border-t border-border/60' : ''
+              }`}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm text-foreground">
+                  {session.device}
+                  {currentSessionKnown && session.isCurrent ? (
+                    <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      This session
+                    </span>
+                  ) : null}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {sessionDetail(session) || 'No device details reported'}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Last active {formatSessionTimestamp(session.lastActiveAt)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={`${SMALL_BUTTON} text-destructive`}
+                disabled={revokingId === session.id || revokingAll}
+                aria-busy={revokingId === session.id || undefined}
+                onClick={() => void handleRevoke(session)}
+              >
+                {revokingId === session.id ? 'Ending…' : 'End session'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {!loading && sessions !== null && sessions.length === 0 && error === null ? (
+        <p className="text-xs text-muted-foreground">
+          No other sessions are signed in to this account.
+        </p>
+      ) : null}
+
+      <div className="mt-1 flex flex-wrap gap-2">
         <button
           type="button"
           className={SECONDARY_BUTTON}
           onClick={() => void signOut()}
+          disabled={revokingAll}
           data-testid="cloud-sign-out-this-device"
         >
           Sign this device out
         </button>
+        <button
+          type="button"
+          className={`${SECONDARY_BUTTON} border-destructive/60 text-destructive`}
+          disabled={revokingAll || loading}
+          aria-busy={revokingAll || undefined}
+          onClick={() => void handleRevokeAll()}
+          data-testid="cloud-log-out-everywhere"
+        >
+          {revokingAll ? 'Logging out…' : 'Log out of all devices'}
+        </button>
       </div>
-      <div className="mt-5 border-t border-border pt-5">
-        <CloudBridgedSection
-          sectionKey="sessions"
-          title="Sessions on other devices"
-          description="Review and end sessions on your other devices on agiworkforce.com."
-          path="/settings/security"
-          action="Open session controls"
-        />
-      </div>
+      <p className="text-xs leading-5 text-muted-foreground">
+        Logging out of all devices ends every browser and mobile session on the account and then
+        signs this Desktop out too. Local Mode chats, files, and model keys stay on this device.
+      </p>
     </div>
   );
 }
@@ -348,7 +502,7 @@ export function CloudAccountControls() {
   return (
     <div className="flex flex-col gap-6" data-testid="cloud-account-controls">
       <AccountIdentifierRow />
-      <SessionsRow />
+      <ActiveSessionsSection />
       <ApiKeysSection />
       <DangerZone />
     </div>

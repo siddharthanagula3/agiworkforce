@@ -1,8 +1,8 @@
 /**
- * DES-C08: the sections that CAN be served to Desktop's device bearer must
- * render inline, and the ones that cannot must render the explicit re-auth
- * state — never a bare "Open X" whose child window can land on /login while the
- * app still shows the user as signed in.
+ * DES-C08: every Cloud settings section that has a bearer-reachable contract
+ * must render INLINE from the account, not in a webview gated on a Clerk
+ * browser cookie Desktop never holds — that window could land on `/login`
+ * while the app still showed the user as signed in.
  *
  * This drives the real modal (its nav comes from SETTINGS_NAV_GROUPS_WEB) and
  * mounts the section content it produces, so a section quietly regressing back
@@ -25,14 +25,23 @@ const mocks = vi.hoisted(() => ({
   listCloudArchivedConversations: vi.fn(),
   getCloudTwoFactorStatus: vi.fn(),
   listCloudSecurityActivity: vi.fn(),
+  getCloudAccountProfile: vi.fn(),
+  getCloudPreferenceNamespace: vi.fn(),
+  saveCloudPreferenceNamespace: vi.fn(),
+  saveCloudDisplayName: vi.fn(),
+  fetchCloudReflectRecap: vi.fn(),
+  getCloudOrganizationOverview: vi.fn(),
+  listCloudTeamMembers: vi.fn(),
 }));
 
+// Only the shell is replaced (so the section map can be captured); every other
+// export stays real. Returning a two-key module instead made every other
+// `@agiworkforce/ui` component undefined for the lazily-loaded tabs this modal
+// mounts, which surfaced as "Element type is invalid" once a lazy chunk had
+// been resolved by an earlier test in the file.
 vi.mock('@agiworkforce/ui', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
-  return {
-    SettingsModal: mocks.settingsModal,
-    SETTINGS_NAV_GROUPS_WEB: actual.SETTINGS_NAV_GROUPS_WEB,
-  };
+  return { ...actual, SettingsModal: mocks.settingsModal };
 });
 
 vi.mock('../../../api/cloudConnectors', () => ({
@@ -57,6 +66,13 @@ vi.mock('../../../api/cloudAccountSettings', async () => {
     listCloudArchivedConversations: mocks.listCloudArchivedConversations,
     getCloudTwoFactorStatus: mocks.getCloudTwoFactorStatus,
     listCloudSecurityActivity: mocks.listCloudSecurityActivity,
+    getCloudAccountProfile: mocks.getCloudAccountProfile,
+    getCloudPreferenceNamespace: mocks.getCloudPreferenceNamespace,
+    saveCloudPreferenceNamespace: mocks.saveCloudPreferenceNamespace,
+    saveCloudDisplayName: mocks.saveCloudDisplayName,
+    fetchCloudReflectRecap: mocks.fetchCloudReflectRecap,
+    getCloudOrganizationOverview: mocks.getCloudOrganizationOverview,
+    listCloudTeamMembers: mocks.listCloudTeamMembers,
   };
 });
 
@@ -89,6 +105,32 @@ beforeEach(() => {
   });
   mocks.getCloudTwoFactorStatus.mockResolvedValue({ enabled: false, backupCodesRemaining: 0 });
   mocks.listCloudSecurityActivity.mockResolvedValue([]);
+  mocks.getCloudAccountProfile.mockResolvedValue({
+    email: 'founder@example.com',
+    displayName: 'Founder Example',
+    preferredName: null,
+    workDescription: null,
+  });
+  mocks.getCloudPreferenceNamespace.mockResolvedValue({});
+  mocks.saveCloudPreferenceNamespace.mockResolvedValue(undefined);
+  mocks.saveCloudDisplayName.mockResolvedValue(undefined);
+  mocks.fetchCloudReflectRecap.mockResolvedValue({
+    range: '30d',
+    generatedAt: '2026-08-01T00:00:00.000Z',
+    period: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z', label: 'July' },
+    summary: { headline: 'A quiet month', body: 'No conversations yet.' },
+    stats: { totalConversations: 0, activeDays: 0, mostActiveDay: null, peakHour: null },
+    dailyActivity: [],
+    topics: [],
+    insights: [],
+    sampled: false,
+    sampledConversationCount: 0,
+  });
+  mocks.getCloudOrganizationOverview.mockResolvedValue({
+    organization: null,
+    canManageTeam: false,
+  });
+  mocks.listCloudTeamMembers.mockResolvedValue([]);
 });
 
 describe('DesktopCloudSettingsModal section wiring', () => {
@@ -115,17 +157,33 @@ describe('DesktopCloudSettingsModal section wiring', () => {
   });
 
   it.each([
-    ['general', 'cloud-bridged-general'],
-    ['safety', 'cloud-bridged-safety'],
-    ['notifications', 'cloud-bridged-notifications'],
-    ['reflect', 'cloud-bridged-reflect'],
-    ['time-focus', 'cloud-bridged-time-focus'],
-    ['plugins', 'cloud-bridged-plugins'],
-  ])('section %s offers an explicit re-auth route', async (key, testId) => {
+    ['general', 'cloud-profile'],
+    ['safety', 'cloud-safety'],
+    ['notifications', 'cloud-notifications'],
+    ['reflect', 'cloud-reflect'],
+    ['time-focus', 'cloud-time-focus'],
+    ['plugins', 'cloud-plugins'],
+    ['team', 'cloud-team'],
+  ])('section %s renders inline instead of opening a web child window', async (key, testId) => {
     renderSection(key);
 
     await waitFor(() => expect(screen.getByTestId(testId)).toBeTruthy());
-    expect(screen.getAllByRole('button', { name: 'Sign in again to manage this' }).length).toBe(1);
+    // The bridged window is the thing being removed: no section may still offer
+    // the re-auth escape hatch, because none of them opens a cookie-gated page.
+    expect(screen.queryByRole('button', { name: 'Sign in again to manage this' })).toBeNull();
+  });
+
+  it.each([
+    ['general', mocks.getCloudAccountProfile],
+    ['safety', mocks.getCloudPreferenceNamespace],
+    ['notifications', mocks.getCloudPreferenceNamespace],
+    ['reflect', mocks.fetchCloudReflectRecap],
+    ['time-focus', mocks.getCloudPreferenceNamespace],
+    ['team', mocks.getCloudOrganizationOverview],
+  ])('section %s reads real account data through the device bearer', async (key, reader) => {
+    renderSection(key);
+
+    await waitFor(() => expect(reader).toHaveBeenCalled());
   });
 
   it('no longer claims any settings surface is content-protected', () => {

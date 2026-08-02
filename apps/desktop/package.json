@@ -19,7 +19,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "pnpm run test:e2e:build && wdio run wdio.conf.ts",
-    "test:e2e:build": "cd src-tauri && TAURI_CONFIG=\"$(cat tauri.conf.wdio.json)\" cargo build",
+    "test:e2e:build": "pnpm exec vite build && cd src-tauri && TAURI_CONFIG=\"$(node ../wdio/tauri-config.mjs)\" cargo build --features tauri/custom-protocol",
     "test:e2e:only": "wdio run wdio.conf.ts",
     "test:e2e:dom": "playwright test",
     "test:e2e:dom:ui": "playwright test --ui",

@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   createCloudApiKey: vi.fn(),
   revokeCloudApiKey: vi.fn(),
   requestCloudAccountDeletion: vi.fn(),
+  fetchCloudActiveSessions: vi.fn(),
+  revokeCloudSession: vi.fn(),
+  revokeAllCloudSessions: vi.fn(),
   hasCloudAccountSession: true,
   accountId: 'user_desktop_1' as string | null,
   signOut: vi.fn(),
@@ -47,14 +50,19 @@ vi.mock('../../../api/cloudAccountSettings', async () => {
     createCloudApiKey: mocks.createCloudApiKey,
     revokeCloudApiKey: mocks.revokeCloudApiKey,
     requestCloudAccountDeletion: mocks.requestCloudAccountDeletion,
+    fetchCloudActiveSessions: mocks.fetchCloudActiveSessions,
+    revokeCloudSession: mocks.revokeCloudSession,
+    revokeAllCloudSessions: mocks.revokeAllCloudSessions,
     getCloudTwoFactorStatus: vi.fn(),
     listCloudSecurityActivity: vi.fn(),
   };
 });
 
 vi.mock('../../../stores/auth', () => ({
-  selectHasCloudAccountSession: (state: unknown) => state,
-  useAuthStore: (selector: (state: unknown) => unknown) => selector(mocks.hasCloudAccountSession),
+  selectHasCloudAccountSession: (state: { hasCloudAccountSession: boolean }) =>
+    state.hasCloudAccountSession,
+  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ hasCloudAccountSession: mocks.hasCloudAccountSession, signOut: mocks.signOut }),
   useAccountStore: (selector: (state: { account: { id: string | null } }) => unknown) =>
     selector({ account: { id: mocks.accountId } }),
 }));
@@ -80,6 +88,8 @@ beforeEach(() => {
     nextOffset: 0,
   });
   mocks.listCloudApiKeys.mockResolvedValue([]);
+  mocks.signOut.mockResolvedValue(undefined);
+  mocks.fetchCloudActiveSessions.mockResolvedValue({ sessions: [], currentSessionKnown: false });
 });
 
 describe('CloudBridgedSection', () => {
@@ -238,13 +248,101 @@ describe('CloudAccountControls', () => {
     expect(await screen.findByText('user_desktop_1')).toBeTruthy();
   });
 
-  it('states that the account-wide session list cannot be served to a device token', async () => {
+  it('lists the account sessions the bearer-aware route now serves', async () => {
+    mocks.fetchCloudActiveSessions.mockResolvedValue({
+      sessions: [
+        {
+          id: 'sess_phone',
+          status: 'active',
+          device: 'iPhone',
+          browser: 'Mobile Safari 19',
+          location: 'Austin, US',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastActiveAt: '2026-07-03T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          isCurrent: false,
+        },
+      ],
+      currentSessionKnown: false,
+    });
+
     render(<CloudAccountControls />);
 
-    expect(await screen.findByText(/does not accept/i)).toBeTruthy();
-    expect(screen.getByTestId('cloud-sign-out-this-device')).toBeTruthy();
-    // No fabricated session rows.
-    expect(screen.queryByText(/Chrome on macOS/i)).toBeNull();
+    expect(await screen.findByTestId('cloud-active-sessions')).toBeTruthy();
+    expect(await screen.findByText('iPhone')).toBeTruthy();
+    expect(screen.getByText(/Mobile Safari 19/)).toBeTruthy();
+    // A device token is not a Clerk session, so no row may be badged as this app.
+    expect(screen.queryByText('This session')).toBeNull();
+    expect(screen.getByText(/it never appears in this list/i)).toBeTruthy();
+  });
+
+  it('ends one session through the account API and drops its row', async () => {
+    const user = userEvent.setup();
+    mocks.fetchCloudActiveSessions.mockResolvedValue({
+      sessions: [
+        {
+          id: 'sess_phone',
+          status: 'active',
+          device: 'iPhone',
+          browser: null,
+          location: null,
+          createdAt: null,
+          lastActiveAt: '2026-07-03T00:00:00.000Z',
+          expiresAt: null,
+          isCurrent: false,
+        },
+      ],
+      currentSessionKnown: false,
+    });
+    mocks.revokeCloudSession.mockResolvedValue(undefined);
+
+    render(<CloudAccountControls />);
+
+    await user.click(await screen.findByRole('button', { name: 'End session' }));
+
+    await waitFor(() => expect(mocks.revokeCloudSession).toHaveBeenCalledWith('sess_phone'));
+    await waitFor(() => expect(screen.queryByText('iPhone')).toBeNull());
+  });
+
+  it('logs out everywhere by revoking the account sessions AND signing this device out', async () => {
+    const user = userEvent.setup();
+    mocks.revokeAllCloudSessions.mockResolvedValue({
+      revokedCount: 2,
+      currentSessionRevoked: false,
+    });
+
+    render(<CloudAccountControls />);
+
+    await user.click(await screen.findByTestId('cloud-log-out-everywhere'));
+
+    await waitFor(() => expect(mocks.revokeAllCloudSessions).toHaveBeenCalledOnce());
+    // The device token is not one of the revoked Clerk sessions, so the local
+    // sign-out (which revokes it via POST /api/auth/logout) is required.
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
+  });
+
+  it('does not sign this device out when the account revocation failed', async () => {
+    const user = userEvent.setup();
+    mocks.revokeAllCloudSessions.mockRejectedValue(new Error('upstream unavailable'));
+
+    render(<CloudAccountControls />);
+
+    await user.click(await screen.findByTestId('cloud-log-out-everywhere'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('upstream unavailable'),
+    );
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('reports a session-load failure with a retry instead of an empty list', async () => {
+    mocks.fetchCloudActiveSessions.mockRejectedValue(new Error('HTTP 503'));
+
+    render(<CloudAccountControls />);
+
+    expect((await screen.findByRole('alert')).textContent).toContain('HTTP 503');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(screen.queryByText(/No other sessions are signed in/i)).toBeNull();
   });
 
   it('creates an API key and shows the one-time secret exactly once', async () => {
