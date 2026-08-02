@@ -56,6 +56,25 @@ import {
   SHORTCUT_REPLAY_CLIENT_ID,
   type BackgroundChatDelivery,
 } from './features/background/background-results';
+import {
+  beginScheduledTaskRunJournal,
+  canResumeScheduledTaskRunJournal,
+  loadScheduledTaskRunJournals,
+  removeScheduledTaskRunJournal,
+  updateScheduledTaskRunJournal,
+  type ScheduledTaskRunJournal,
+} from './features/background/scheduled-task-runs';
+import {
+  ScheduledTaskExecutionCoordinator,
+  type ScheduledTaskExecutionLease,
+} from './features/background/scheduled-task-authority';
+import {
+  isScheduledCancellationRetryDue,
+  requestScheduledTaskCancellation,
+  ScheduledTaskCancellationAttemptCoordinator,
+  selectScheduledTaskCancellationCredential,
+} from './features/background/scheduled-task-cancellation';
+import { publishAuthorizedScheduledTaskNotification } from './features/background/scheduled-task-notifications';
 import { getPlatformPrompt } from './platform-prompts';
 // Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
 // extension's existing `RunPageAction` machinery. The package's runtime
@@ -72,12 +91,21 @@ import { migrateAutofillProfile } from './features/content/autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
 import {
+  ComputerUseRunCoordinator,
+  ComputerUseStartCoordinator,
+  type ComputerUseCancellationReason,
+  type ComputerUseRunLease,
+} from './features/computer-use/runOwnership';
+import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   ORIGIN_EXTENSION_PAGE,
   isTrustedExtensionPageSender,
+  normalizeWebMCPToolsUpdate,
+  resolveMessageTargetTabId,
   validateBridgeUrl,
+  type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
 import {
   CONTEXT_HANDOFF_DESTINATION,
@@ -92,15 +120,26 @@ import {
   createChromeManagedApprovalDependencies,
   executeChromeManagedChat,
   executeChromeManagedApproval,
+  normalizeChromeManagedRoutingMetadata,
   type ChromeManagedChatResult,
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   cancelChromeManagedRun,
+  findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
 } from './features/cloud-bridge/managedRunControl';
-import { getFreshClerkToken } from './features/cloud-bridge/clerkAuth';
+import { getManagedCloudAuthContext } from './features/cloud-bridge/freeTrialClient';
+import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
+import {
+  isCurrentManagedCloudOperation,
+  managedCloudOwnerKey,
+  normalizeManagedCloudOwner,
+  selectManagedCloudCancellationCredential,
+  sameManagedCloudOwner,
+  type ManagedCloudOwner,
+} from './features/cloud-bridge/managedCloudAuthority';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -138,21 +177,109 @@ const state: BackgroundState = {
 
 interface ActiveChatStream {
   clientInstanceId: string;
+  owner: ManagedCloudOwner;
+  /** Exact credential captured for this run; never replaced with ambient auth. */
+  token: string;
   controller: AbortController;
   cancelRequested: boolean;
   cancelNotified: boolean;
+  /** Durable Managed Cloud identity for targeted scheduled-run cancellation. */
+  requestId?: string;
   cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
+const scheduledTaskExecutions = new ScheduledTaskExecutionCoordinator();
+interface ActiveScheduledRecovery {
+  taskId: string;
+  requestId: string;
+  owner: ManagedCloudOwner;
+  token: string;
+  controller: AbortController;
+  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+}
+const activeScheduledRecoveries = new Map<string, ActiveScheduledRecovery>();
+const scheduledTaskCancellationAttempts = new ScheduledTaskCancellationAttemptCoordinator();
+const abandonedScheduledTaskRequestIds = new Set<string>();
+const retiredManagedCloudOwners = new Set<string>();
+const SCHEDULED_RECOVERY_MAX_ATTEMPTS = 3;
+const SCHEDULED_HEARTBEAT_INTERVAL_MS = 20_000;
+
+const computerUseRuns = new ComputerUseRunCoordinator();
+const computerUseStarts = new ComputerUseStartCoordinator();
+let computerUseStartGeneration = 0;
+
+function isCurrentComputerUseStart(runId: string, generation: number): boolean {
+  return (
+    computerUseStartGeneration === generation && computerUseStarts.isCurrent(runId, generation)
+  );
+}
+
+function clearPendingComputerUseStart(runId?: string): boolean {
+  return computerUseStarts.cancel(runId) !== null;
+}
+
+function sendComputerUseLifecycle(message: Record<string, unknown>): void {
+  void chrome.runtime.sendMessage(message).catch(() => {
+    // The owning panel may have closed; cancellation still remains authoritative.
+  });
+}
+
+function broadcastComputerUseForCurrentRun(
+  lease: ComputerUseRunLease,
+  message: Record<string, unknown>,
+): void {
+  if (!computerUseRuns.isCurrent(lease)) return;
+  sendComputerUseLifecycle({
+    ...message,
+    runId: lease.runId,
+    runGeneration: lease.generation,
+    tabId: lease.tabId,
+  });
+}
+
+function cancelActiveComputerUseRun(
+  reason: ComputerUseCancellationReason,
+  expectedRunId?: string,
+  broadcast = true,
+): ComputerUseRunLease | null {
+  const lease = computerUseRuns.cancel(reason, expectedRunId);
+  if (lease && broadcast) {
+    sendComputerUseLifecycle({
+      type: 'AGI_CU_STATE',
+      status: 'stopped',
+      reason,
+      runId: lease.runId,
+      runGeneration: lease.generation,
+      tabId: lease.tabId,
+    });
+  }
+  return lease;
+}
+
+function cancelComputerUseIfAuthChanged(owner: ManagedCloudOwner | null): void {
+  const lease = computerUseRuns.getActive();
+  if (!lease) return;
+  if (!owner) {
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('account_changed');
+    return;
+  }
+  if (!sameManagedCloudOwner(lease.authOwner, owner)) {
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('account_changed');
+  }
+}
 
 function broadcastManagedChatChunk(
+  owner: ManagedCloudOwner,
   clientInstanceId: string,
   id: string,
-  input: Omit<import('./types').ChatChunkMessage, 'type' | 'clientInstanceId' | 'id'>,
+  input: Omit<import('./types').ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
 ): void {
   const chunk: import('./types').ChatChunkMessage = {
     type: 'CHAT_CHUNK',
+    owner,
     clientInstanceId,
     id,
     ...input,
@@ -160,6 +287,242 @@ function broadcastManagedChatChunk(
   chrome.runtime.sendMessage(chunk).catch(() => {
     // The extension view may have closed while the server-owned run continues.
   });
+}
+
+function publishManagedChatChunk(
+  streamKey: string,
+  active: ActiveChatStream,
+  id: string,
+  input: Omit<import('./types').ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
+): void {
+  if (!isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), active)) return;
+  broadcastManagedChatChunk(active.owner, active.clientInstanceId, id, input);
+}
+
+async function cancelManagedCloudRunWithCapturedCredential(
+  active: Pick<ActiveChatStream, 'token' | 'cloudRun'>,
+): Promise<boolean> {
+  if (!active.cloudRun) return true;
+  try {
+    const cancellation = await withTimeout(
+      cancelChromeManagedRun(active.cloudRun, {
+        getAuthToken: async () => active.token,
+      }),
+      15_000,
+    );
+    if (cancellation.status === 'success') return true;
+    logger.warn('Managed Cloud run cancellation failed', {
+      runId: active.cloudRun.runId,
+      error: cancellation.message,
+    });
+    return false;
+  } catch (error) {
+    logger.warn('Managed Cloud run cancellation failed', {
+      runId: active.cloudRun.runId,
+      error,
+    });
+    return false;
+  }
+}
+
+async function loadScheduledTaskRunJournalsForTeardown(): Promise<ScheduledTaskRunJournal[]> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await loadScheduledTaskRunJournals();
+    } catch (error) {
+      lastError = error;
+      logger.warn('Failed to read scheduled cancellation journals during owner teardown', {
+        attempt,
+        error,
+      });
+      if (attempt < 3) await sleep(100 * attempt);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Scheduled cancellation journals could not be read.');
+}
+
+async function invalidateManagedCloudOwner(
+  owner: ManagedCloudOwner,
+  includeInactiveJournals = false,
+): Promise<void> {
+  // Abort every admitted operation before the first await. Storage reads can
+  // be delayed; an explicit account transition must become authoritative in
+  // this event-loop turn, not after a journal lookup completes.
+  const admittedStreams: ActiveChatStream[] = [];
+  for (const [streamKey, active] of activeChatStreams) {
+    if (!sameManagedCloudOwner(active.owner, owner)) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+    activeChatStreams.delete(streamKey);
+    admittedStreams.push(active);
+  }
+  const admittedRecoveries: ActiveScheduledRecovery[] = [];
+  for (const [requestId, recovery] of activeScheduledRecoveries) {
+    if (!sameManagedCloudOwner(recovery.owner, owner)) continue;
+    recovery.controller.abort();
+    activeScheduledRecoveries.delete(requestId);
+    admittedRecoveries.push(recovery);
+  }
+
+  // Start captured-handle cancellation independently of storage. Journal I/O
+  // must not prevent a known server run from receiving its cancellation.
+  const immediateCancellations: Array<{
+    requestId?: string;
+    runId: string;
+    result: Promise<boolean>;
+  }> = [];
+  const queuedRunIds = new Set<string>();
+  const queueImmediateCancellation = (
+    active: Pick<ActiveChatStream, 'token' | 'cloudRun' | 'requestId'>,
+  ): void => {
+    if (!active.cloudRun || queuedRunIds.has(active.cloudRun.runId)) return;
+    queuedRunIds.add(active.cloudRun.runId);
+    immediateCancellations.push({
+      ...(active.requestId ? { requestId: active.requestId } : {}),
+      runId: active.cloudRun.runId,
+      result: cancelManagedCloudRunWithCapturedCredential(active),
+    });
+  };
+  for (const active of admittedStreams) queueImmediateCancellation(active);
+  for (const recovery of admittedRecoveries) queueImmediateCancellation(recovery);
+
+  const cancellations: Promise<void>[] = [];
+  let journals: ScheduledTaskRunJournal[];
+  try {
+    journals = await loadScheduledTaskRunJournalsForTeardown();
+  } catch (error) {
+    await Promise.allSettled(immediateCancellations.map((entry) => entry.result));
+    throw error;
+  }
+  const ambientCredential = includeInactiveJournals
+    ? await getManagedCloudAuthContext().catch(() => null)
+    : null;
+  const journalCredential =
+    ambientCredential && sameManagedCloudOwner(ambientCredential.owner, owner)
+      ? ambientCredential
+      : null;
+  const journalsByRequestId = new Map(journals.map((journal) => [journal.requestId, journal]));
+  const scheduledRequests = new Set<string>();
+  for (const active of admittedStreams) {
+    const journal = active.requestId ? journalsByRequestId.get(active.requestId) : undefined;
+    if (journal) {
+      scheduledRequests.add(journal.requestId);
+      cancellations.push(
+        abandonScheduledTaskRun(
+          journal,
+          { token: active.token, owner: active.owner },
+          active.cloudRun,
+        ).then(() => undefined),
+      );
+    }
+  }
+  for (const recovery of admittedRecoveries) {
+    if (scheduledRequests.has(recovery.requestId)) continue;
+    const journal = journalsByRequestId.get(recovery.requestId);
+    if (!journal) continue;
+    scheduledRequests.add(recovery.requestId);
+    cancellations.push(
+      abandonScheduledTaskRun(
+        journal,
+        { token: recovery.token, owner: recovery.owner },
+        recovery.cloudRun,
+      ).then(() => undefined),
+    );
+  }
+  if (includeInactiveJournals) {
+    for (const journal of journals) {
+      if (!sameManagedCloudOwner(journal.owner, owner)) continue;
+      if (scheduledRequests.has(journal.requestId)) continue;
+      scheduledRequests.add(journal.requestId);
+      cancellations.push(
+        abandonScheduledTaskRun(journal, journalCredential, journal.cloudRun).then(() => undefined),
+      );
+    }
+  }
+  const journalResults = await Promise.allSettled(cancellations);
+  const journalFailures = journalResults.filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  const immediateResults = await Promise.allSettled(
+    immediateCancellations.map((entry) => entry.result),
+  );
+  const uncancelledWithoutJournal = immediateResults.flatMap((result, index) => {
+    const entry = immediateCancellations[index];
+    if (!entry || result.status === 'rejected') return entry ? [entry.runId] : [];
+    return !result.value && (!entry.requestId || !scheduledRequests.has(entry.requestId))
+      ? [entry.runId]
+      : [];
+  });
+  if (journalFailures.length > 0 || uncancelledWithoutJournal.length > 0) {
+    logger.error('Managed Cloud owner teardown did not durably cover every run', {
+      journalFailures: journalFailures.map((result) => result.reason),
+      uncancelledWithoutJournal,
+    });
+    throw new Error('Managed Cloud owner teardown could not durably cancel every admitted run.');
+  }
+}
+
+function retireManagedCloudOwner(owner: ManagedCloudOwner): void {
+  retiredManagedCloudOwners.add(managedCloudOwnerKey(owner));
+  while (retiredManagedCloudOwners.size > 100) {
+    const oldest = retiredManagedCloudOwners.values().next().value;
+    if (typeof oldest !== 'string') break;
+    retiredManagedCloudOwners.delete(oldest);
+  }
+}
+
+function isRetiredManagedCloudOwner(owner: ManagedCloudOwner): boolean {
+  return retiredManagedCloudOwners.has(managedCloudOwnerKey(owner));
+}
+
+/**
+ * Reconcile a 401 against the exact credential that received it.
+ *
+ * Rejected A work is always torn down by owner. Clerk sign-out is a second,
+ * compare-and-clear step inside clerkAuth: if B (or a refreshed bearer for A)
+ * became current meanwhile, it is left untouched. Pending computer-use starts
+ * intentionally remain admission-gated because they do not own auth until
+ * getManagedCloudAuthContext() returns.
+ */
+async function invalidateRejectedManagedCloudCredential(
+  rejected: Pick<ActiveChatStream, 'owner' | 'token'>,
+): Promise<void> {
+  const computerUseLease = computerUseRuns.getActive();
+  if (computerUseLease && sameManagedCloudOwner(computerUseLease.authOwner, rejected.owner)) {
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('account_changed', computerUseLease.runId);
+  }
+  const teardownErrors: unknown[] = [];
+  try {
+    await invalidateManagedCloudOwner(rejected.owner);
+  } catch (error) {
+    teardownErrors.push(error);
+  }
+  let cleared = false;
+  try {
+    cleared = await signOutClerkIfCurrent({ owner: rejected.owner, token: rejected.token });
+  } catch (error) {
+    logger.warn('Failed to clear the exact rejected Managed Cloud credential', error);
+    teardownErrors.push(error);
+  }
+  if (cleared) {
+    // The exact rejected incarnation is gone. Retire it synchronously, then
+    // tombstone even inactive scheduled journals so no later worker can resume
+    // work with that rejected authority.
+    retireManagedCloudOwner(rejected.owner);
+    try {
+      await invalidateManagedCloudOwner(rejected.owner, true);
+    } catch (error) {
+      teardownErrors.push(error);
+    }
+  }
+  if (teardownErrors.length > 0) {
+    logger.error('Rejected Managed Cloud credential teardown was incomplete', teardownErrors);
+    throw new Error('Rejected Managed Cloud credential teardown was incomplete.');
+  }
 }
 
 // Pending requests waiting for responses
@@ -182,8 +545,10 @@ const webmcpToolsByTab = new Map<
     tools: import('./types').WebMCPToolInfo[];
     url: string;
     timestamp: number;
+    navigationGeneration: number;
   }
 >();
+const webmcpNavigationGenerationByTab = new Map<number, number>();
 const nlwebByTab = new Map<
   number,
   {
@@ -418,7 +783,9 @@ function initialize(): void {
   setupContextMenu();
   connectToNativeHost();
   checkDesktopConnection();
-  void restoreScheduledTaskAlarms();
+  void restoreScheduledTaskAlarms()
+    .then(recoverScheduledTaskRuns)
+    .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
   // One-shot migration of the autofill profile from chrome.storage.sync (which
   // replicates to Google's servers) into chrome.storage.local (device-only).
   // Idempotent and silent on storage error. See H-04 in audits/2026-05-19.
@@ -430,7 +797,23 @@ function initialize(): void {
 function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   const clientInstanceId = parseManagedChatPortName(port.name);
   if (!clientInstanceId) return;
-  if (port.sender?.id !== chrome.runtime.id || port.sender.tab) {
+  // A Chrome side-panel document may be associated with its host tab. Treat
+  // the sender's extension URL/origin as authoritative instead of requiring a
+  // tabless port; content scripts still fail because their document and tab
+  // URLs are HTTP(S), not the extension origin.
+  if (
+    !isTrustedExtensionPageSender(
+      {
+        id: port.sender?.id,
+        url: port.sender?.url,
+        origin: port.sender?.origin,
+        tabUrl: port.sender?.tab?.url,
+        hasTab: port.sender?.tab != null,
+      },
+      chrome.runtime.id,
+      chrome.runtime.getURL('/').replace(/\/+$/, ''),
+    )
+  ) {
     port.disconnect();
     return;
   }
@@ -450,6 +833,7 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
       active.cancelRequested = true;
       active.controller.abort();
       activeChatStreams.delete(streamKey);
+      void cancelManagedCloudRunWithCapturedCredential(active);
     }
   });
 }
@@ -643,6 +1027,81 @@ function sendNativeRequest(
   });
 }
 
+function currentWebMCPNavigationGeneration(tabId: number): number {
+  return webmcpNavigationGenerationByTab.get(tabId) ?? 0;
+}
+
+function sendAuthenticatedWebMCPNativeUpdate(
+  tabId: number,
+  normalized: NormalizedWebMCPToolsUpdate,
+): void {
+  if (!state.isNativeConnected || !state.nativePort) return;
+  void sendNativeRequest(
+    {
+      type: 'webmcp_tools_update',
+      tab_id: tabId,
+      ...normalized,
+    },
+    {
+      timeoutMs: NATIVE_REQUEST_TIMEOUT_MS,
+      requireAuthenticatedSession: true,
+    },
+  )
+    .then((response) => {
+      if (response.success === false) {
+        logger.warn(
+          'WebMCP authenticated native update was rejected',
+          'error' in response ? response.error : undefined,
+        );
+      }
+    })
+    .catch((error) => {
+      logger.debug('WebMCP authenticated native update failed', error);
+    });
+}
+
+function publishNormalizedWebMCPToolsUpdate(
+  tabId: number,
+  normalized: NormalizedWebMCPToolsUpdate,
+  navigationGeneration = currentWebMCPNavigationGeneration(tabId),
+): boolean {
+  if (navigationGeneration !== currentWebMCPNavigationGeneration(tabId)) return false;
+  webmcpToolsByTab.set(tabId, {
+    ...normalized,
+    timestamp: Date.now(),
+    navigationGeneration,
+  });
+  logger.info(`WebMCP: ${normalized.tools.length} tool(s) on tab ${tabId}`, {
+    tools: normalized.tools.map((tool) => tool.name),
+  });
+  chrome.runtime
+    .sendMessage({ type: 'WEBMCP_TOOLS_CHANGED', tabId, navigationGeneration, ...normalized })
+    .catch(() => {
+      // Side panel may not be open; ignore.
+    });
+  sendAuthenticatedWebMCPNativeUpdate(tabId, normalized);
+  return true;
+}
+
+function invalidateWebMCPToolsForNavigation(tabId: number): number {
+  const navigationGeneration = currentWebMCPNavigationGeneration(tabId) + 1;
+  webmcpNavigationGenerationByTab.set(tabId, navigationGeneration);
+  const previous = webmcpToolsByTab.get(tabId);
+  webmcpToolsByTab.delete(tabId);
+  if (previous) {
+    const cleared: NormalizedWebMCPToolsUpdate = { tools: [], url: previous.url };
+    chrome.runtime
+      .sendMessage({ type: 'WEBMCP_TOOLS_CHANGED', tabId, navigationGeneration, ...cleared })
+      .catch(() => {
+        // Side panel may not be open; ignore.
+      });
+    // Clear the paired Desktop catalog through the same authenticated envelope
+    // before any post-navigation discovery can publish a replacement.
+    sendAuthenticatedWebMCPNativeUpdate(tabId, cleared);
+  }
+  return navigationGeneration;
+}
+
 function handleNativeMessage(message: NativeMessageEnvelope): void {
   logger.debug('Received native message', message);
 
@@ -783,6 +1242,7 @@ function showNotification(
    * click away instead of only discoverable in the History drawer.
    */
   conversationId?: string,
+  conversationOwner?: ManagedCloudOwner,
 ): void {
   if (!chrome.notifications?.create) return;
   // L-12 audit 2026-05-19: crypto.randomUUID prefix instead of Date.now so
@@ -806,8 +1266,8 @@ function showNotification(
   if (tabId) {
     chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
   }
-  if (conversationId) {
-    void linkNotificationToConversation(notifId, conversationId);
+  if (conversationId && conversationOwner) {
+    void linkNotificationToConversation(notifId, conversationOwner, conversationId);
   }
 }
 
@@ -825,16 +1285,45 @@ async function taskNotificationsEnabled(): Promise<boolean> {
   }
 }
 
+async function notifyScheduledTaskRunning(
+  taskName: string,
+  signal: AbortSignal,
+  owner?: ManagedCloudOwner,
+): Promise<void> {
+  await publishAuthorizedScheduledTaskNotification(
+    { signal, ...(owner ? { owner } : {}) },
+    {
+      isEnabled: taskNotificationsEnabled,
+      isOwnerRetired: isRetiredManagedCloudOwner,
+      publish: () => {
+        chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: 'AGI Task Running',
+          message: taskName,
+          priority: 0,
+        });
+      },
+    },
+  );
+}
+
 chrome.notifications?.onClicked?.addListener((notifId: string) => {
   // A completion notification for a background run points at the conversation
   // holding its answer. Park the pointer before the panel opens (a panel that
   // is still booting cannot receive a runtime message) and also broadcast it,
   // for the case where a panel is already open and idle.
-  void takeNotificationConversation(notifId).then(async (conversationId) => {
+  void getManagedCloudAuthContext().then(async (credential) => {
+    if (!credential || isRetiredManagedCloudOwner(credential.owner)) return;
+    const conversationId = await takeNotificationConversation(notifId, credential.owner);
     if (!conversationId) return;
-    await setPendingResultConversation(conversationId);
+    await setPendingResultConversation(credential.owner, conversationId);
     chrome.runtime
-      .sendMessage({ type: OPEN_BROWSER_CONVERSATION_MESSAGE, conversationId })
+      .sendMessage({
+        type: OPEN_BROWSER_CONVERSATION_MESSAGE,
+        owner: credential.owner,
+        conversationId,
+      })
       .catch(() => {
         // No extension view is open yet; the parked pointer covers that case.
       });
@@ -870,6 +1359,8 @@ async function ensureTabGroup(tabId: number): Promise<void> {
 
 async function handleReplayShortcut(
   message: import('./types').ReplayShortcutMessage,
+  expectedOwner?: ManagedCloudOwner,
+  notify = true,
 ): Promise<ExtensionResponse> {
   const shortcuts = await loadShortcuts();
   const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
@@ -912,17 +1403,21 @@ async function handleReplayShortcut(
     // no-ops on the page yet previously still reported "completed" (fake
     // success).
     const safePrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS);
-    const chatMsg: import('./types').ChatMessageMessage = {
+    const chatMsg: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+      owner?: ManagedCloudOwner;
+    } = {
       type: 'CHAT_MESSAGE',
       clientInstanceId: SHORTCUT_REPLAY_CLIENT_ID,
       id: `shortcut_${shortcut.id}_${crypto.randomUUID()}`,
       text: safePrompt,
       timestamp: Date.now(),
       modelSelection: 'auto',
+      ...(expectedOwner ? { owner: expectedOwner } : {}),
     };
     // SIX-04: nothing listens for `shortcut-replay` chunks, so the answer is
     // filed into the conversation store the side panel's History drawer reads.
     let deliveredAnswer = '';
+    let deliveredOwner: ManagedCloudOwner | undefined;
     const delivery = createBackgroundChatDelivery(
       'shortcut',
       shortcut.id,
@@ -930,19 +1425,23 @@ async function handleReplayShortcut(
       safePrompt,
     );
     if (delivery) {
-      delivery.onDelivered = (answer) => {
+      delivery.onDelivered = (answer, owner) => {
         deliveredAnswer = answer;
+        deliveredOwner = owner;
       };
     }
     const chatResult = await handleChatMessage(chatMsg, { id: chrome.runtime.id }, delivery);
     if (chatResult.status === 'success') {
-      const snippet = notificationSnippet(deliveredAnswer);
-      showNotification(
-        'Shortcut Replayed',
-        snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
-        undefined,
-        deliveredAnswer ? delivery?.conversationId : undefined,
-      );
+      if (notify) {
+        const snippet = notificationSnippet(deliveredAnswer);
+        showNotification(
+          'Shortcut Replayed',
+          snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
+          undefined,
+          deliveredAnswer ? delivery?.conversationId : undefined,
+          deliveredOwner,
+        );
+      }
       return { success: true } as ExtensionResponse;
     }
     return {
@@ -961,7 +1460,7 @@ async function handleReplayShortcut(
     taskId,
     actions: shortcut.actions,
   } as ExtensionMessage);
-  if (result.success) {
+  if (result.success && notify) {
     showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
   }
   return result;
@@ -969,84 +1468,1066 @@ async function handleReplayShortcut(
 
 // Scheduled-task storage and alarm mechanics live in background/tasks.ts.
 
-async function executeScheduledTask(task: ScheduledTask): Promise<void> {
-  // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
-  // created from a non-extension-UI origin must verify the originating
-  // origin is still on `agi_site_allowlist`. If not, auto-delete so the
-  // task does not accumulate as a persistent capability.
-  if (
-    task.createdByOrigin &&
-    task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
-    !siteAllowlistCache.has(task.createdByOrigin)
+async function scheduledTaskManagedPrompt(
+  task: Pick<ScheduledTask, 'prompt' | 'shortcutId'>,
+): Promise<string | undefined> {
+  const directPrompt =
+    typeof task.prompt === 'string'
+      ? task.prompt.slice(0, TASK_PROMPT_MAX_CHARS).trim()
+      : undefined;
+  if (directPrompt) return directPrompt;
+  if (!task.shortcutId) return undefined;
+  const shortcut = (await loadShortcuts()).find((candidate) => candidate.id === task.shortcutId);
+  if (!shortcut) return undefined;
+  const plan = planShortcutReplay(shortcut);
+  if (plan.kind !== 'prompt') return undefined;
+  const shortcutPrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS).trim();
+  return shortcutPrompt || undefined;
+}
+
+async function scheduledTaskUsesManagedCloud(
+  task: Pick<ScheduledTask, 'prompt' | 'shortcutId'>,
+): Promise<boolean> {
+  return (await scheduledTaskManagedPrompt(task)) !== undefined;
+}
+
+class ScheduledTaskRecoveryPendingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScheduledTaskRecoveryPendingError';
+  }
+}
+
+class ScheduledTaskAuthorityError extends Error {
+  constructor(
+    message: string,
+    readonly notifyCurrentUser = true,
   ) {
-    logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
-      taskId: task.id,
-      createdByOrigin: task.createdByOrigin,
-    });
-    await handleDeleteScheduledTask({
-      type: 'DELETE_SCHEDULED_TASK',
-      taskId: task.id,
-    } as import('./types').DeleteScheduledTaskMessage);
+    super(message);
+    this.name = 'ScheduledTaskAuthorityError';
+  }
+}
+
+class ScheduledTaskCancelledError extends Error {
+  constructor() {
+    super('The scheduled task was disabled, deleted, or lost its account authority.');
+    this.name = 'ScheduledTaskCancelledError';
+  }
+}
+
+async function requireScheduledTaskCredential(
+  task: ScheduledTask,
+): Promise<NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>>> {
+  const credential = await getManagedCloudAuthContext();
+  if (!credential) {
+    throw new ScheduledTaskAuthorityError('No Managed Cloud account is signed in.');
+  }
+  if (isRetiredManagedCloudOwner(credential.owner)) {
+    throw new ScheduledTaskAuthorityError('The Managed Cloud session changed before this run.');
+  }
+  if (!task.managedCloudAccountId) {
+    throw new ScheduledTaskAuthorityError(
+      'This legacy schedule is not bound to an account. Recreate it while signed in.',
+    );
+  }
+  if (task.managedCloudAccountId !== credential.owner.accountId) {
+    throw new ScheduledTaskAuthorityError(
+      'This Managed Cloud schedule belongs to a different account.',
+      false,
+    );
+  }
+  return credential;
+}
+
+async function getExactScheduledMutationCredential(
+  requestedOwnerValue: unknown,
+): Promise<NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>> | null> {
+  const requestedOwner = normalizeManagedCloudOwner(requestedOwnerValue);
+  if (!requestedOwner || isRetiredManagedCloudOwner(requestedOwner)) return null;
+  const credential = await getManagedCloudAuthContext();
+  if (
+    !credential ||
+    isRetiredManagedCloudOwner(requestedOwner) ||
+    isRetiredManagedCloudOwner(credential.owner) ||
+    !sameManagedCloudOwner(requestedOwner, credential.owner)
+  ) {
+    return null;
+  }
+  return credential;
+}
+
+interface ScheduledTaskExecutionOutcome {
+  result: unknown;
+  answer: string;
+  conversationId?: string;
+  conversationOwner?: ManagedCloudOwner;
+  journal: ScheduledTaskRunJournal;
+}
+
+function beginScheduledTaskHeartbeat(): () => void {
+  const ping = (): void => {
+    try {
+      // Chrome 110+ resets the MV3 idle timer when an extension API is called.
+      // This heartbeat exists only while a user-authorized scheduled operation
+      // is active; durable recovery below remains authoritative if the process
+      // or browser still exits.
+      chrome.runtime.getPlatformInfo(() => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // A terminating worker will be recovered from its persisted journal.
+    }
+  };
+  ping();
+  const timer = setInterval(ping, SCHEDULED_HEARTBEAT_INTERVAL_MS);
+  return () => clearInterval(timer);
+}
+
+function createScheduledTaskRequestId(): string {
+  return `agi.chrome.task.${crypto.randomUUID()}`;
+}
+
+function markScheduledTaskRequestAbandoned(requestId: string): void {
+  abandonedScheduledTaskRequestIds.add(requestId);
+  while (abandonedScheduledTaskRequestIds.size > 100) {
+    const oldest = abandonedScheduledTaskRequestIds.values().next().value;
+    if (typeof oldest !== 'string') break;
+    abandonedScheduledTaskRequestIds.delete(oldest);
+  }
+}
+
+function scheduledTaskError(
+  code: Extract<ChromeManagedChatResult, { status: 'error' }>['code'],
+  message: string,
+): ChromeManagedChatResult {
+  return { status: 'error', code, message };
+}
+
+function createJournalDelivery(
+  initialJournal: ScheduledTaskRunJournal,
+  state: { journal: ScheduledTaskRunJournal; answer: string },
+): BackgroundChatDelivery | undefined {
+  const delivery = createBackgroundChatDelivery(
+    'task',
+    initialJournal.taskId,
+    initialJournal.taskName,
+    initialJournal.prompt,
+  );
+  if (!delivery) return undefined;
+  delivery.requestId = initialJournal.requestId;
+  delivery.deliveryId = initialJournal.requestId;
+  delivery.onDelivered = (answer) => {
+    state.answer = answer;
+  };
+  delivery.onRouting = async (routing) => {
+    const updated = await updateScheduledTaskRunJournal(
+      state.journal.taskId,
+      state.journal.requestId,
+      { routing },
+    );
+    if (updated) state.journal = updated;
+  };
+  delivery.onRunReference = async (cloudRun) => {
+    const updated = await updateScheduledTaskRunJournal(
+      state.journal.taskId,
+      state.journal.requestId,
+      { cloudRun },
+    );
+    if (updated) state.journal = updated;
+    const recovery = activeScheduledRecoveries.get(state.journal.requestId);
+    if (recovery) recovery.cloudRun = { ...cloudRun };
+  };
+  return delivery;
+}
+
+async function resumeScheduledTaskJournal(
+  state: { journal: ScheduledTaskRunJournal; answer: string },
+  delivery: BackgroundChatDelivery,
+  credential: { token: string; owner: ManagedCloudOwner },
+  signal: AbortSignal,
+): Promise<unknown> {
+  const cloudRun = state.journal.cloudRun;
+  if (!cloudRun) return scheduledTaskError('server_error', 'The durable Cloud run is missing.');
+
+  const transcript: string[] = [];
+  const result = await resumeChromeManagedRun(
+    { run: cloudRun, alreadyVisibleText: '', signal },
+    {
+      getAuthToken: async () => credential.token,
+      onText: (text) => {
+        transcript.push(text);
+      },
+      onRunReference: delivery.onRunReference,
+    },
+  );
+  const answer = transcript.join('');
+  state.answer = answer;
+  let deliveryFailure = false;
+  if (answer.trim()) {
+    const stored = await recordBackgroundChatResult(
+      delivery,
+      credential.owner,
+      answer,
+      state.journal.routing
+        ? {
+            selectedModel: 'auto',
+            currentModelKey: state.journal.routing.modelKey,
+            previousTaskType: state.journal.routing.taskType,
+            ...(state.journal.routing.effort ? { effort: state.journal.routing.effort } : {}),
+          }
+        : undefined,
+    );
+    deliveryFailure = !stored;
+  }
+  if (result.status === 'error' && result.code === 'auth_required') {
+    await invalidateRejectedManagedCloudCredential(credential);
+  }
+  if (deliveryFailure) {
+    return scheduledTaskError('server_error', 'The recovered answer could not be proven durable.');
+  }
+  const terminalState = state.journal.cloudRun?.state;
+  if (result.status === 'success' && terminalState === 'awaiting_input') {
+    return scheduledTaskError(
+      'invalid_request',
+      'The scheduled AGI Cloud run requires input and cannot finish unattended.',
+    );
+  }
+  if (result.status === 'success' && terminalState === 'paused') {
+    return scheduledTaskError('invalid_request', 'The scheduled AGI Cloud run is paused.');
+  }
+  return result;
+}
+
+function cancelledScheduledTaskOutcome(
+  journal: ScheduledTaskRunJournal,
+  message: string,
+): ScheduledTaskExecutionOutcome {
+  return {
+    result: scheduledTaskError('cancelled', message),
+    answer: '',
+    journal,
+  };
+}
+
+async function executeScheduledTaskJournal(
+  initialJournal: ScheduledTaskRunJournal,
+  credential: { token: string; owner: ManagedCloudOwner },
+  recover: boolean,
+  admissionSignal?: AbortSignal,
+): Promise<ScheduledTaskExecutionOutcome> {
+  if (!recover) {
+    return executeScheduledTaskJournalWithAuthority(
+      initialJournal,
+      credential,
+      false,
+      admissionSignal,
+    );
+  }
+  if (isRetiredManagedCloudOwner(credential.owner)) {
+    return cancelledScheduledTaskOutcome(
+      initialJournal,
+      'The scheduled task lost account authority.',
+    );
+  }
+
+  const registeredRecovery = activeScheduledRecoveries.get(initialJournal.requestId);
+  if (
+    registeredRecovery &&
+    (!sameManagedCloudOwner(registeredRecovery.owner, credential.owner) ||
+      registeredRecovery.token !== credential.token)
+  ) {
+    return cancelledScheduledTaskOutcome(
+      initialJournal,
+      'The scheduled task recovery credential changed.',
+    );
+  }
+  const recoveryGate: ActiveScheduledRecovery = registeredRecovery ?? {
+    taskId: initialJournal.taskId,
+    requestId: initialJournal.requestId,
+    owner: credential.owner,
+    token: credential.token,
+    controller: new AbortController(),
+    ...(initialJournal.cloudRun ? { cloudRun: initialJournal.cloudRun } : {}),
+  };
+  const abortForAdmission = (): void => recoveryGate.controller.abort();
+  const linkAdmission = admissionSignal && admissionSignal !== recoveryGate.controller.signal;
+  if (linkAdmission) admissionSignal.addEventListener('abort', abortForAdmission, { once: true });
+  if (admissionSignal?.aborted) recoveryGate.controller.abort();
+  if (!registeredRecovery) {
+    activeScheduledRecoveries.set(initialJournal.requestId, recoveryGate);
+  }
+
+  try {
+    if (recoveryGate.controller.signal.aborted || isRetiredManagedCloudOwner(credential.owner)) {
+      return cancelledScheduledTaskOutcome(
+        initialJournal,
+        'The scheduled task lost account authority.',
+      );
+    }
+    return await executeScheduledTaskJournalWithAuthority(
+      initialJournal,
+      credential,
+      true,
+      recoveryGate.controller.signal,
+    );
+  } finally {
+    if (linkAdmission) admissionSignal.removeEventListener('abort', abortForAdmission);
+    if (
+      !registeredRecovery &&
+      activeScheduledRecoveries.get(initialJournal.requestId) === recoveryGate
+    ) {
+      activeScheduledRecoveries.delete(initialJournal.requestId);
+    }
+  }
+}
+
+async function executeScheduledTaskJournalWithAuthority(
+  initialJournal: ScheduledTaskRunJournal,
+  credential: { token: string; owner: ManagedCloudOwner },
+  recover: boolean,
+  admissionSignal?: AbortSignal,
+): Promise<ScheduledTaskExecutionOutcome> {
+  const state = { journal: initialJournal, answer: '' };
+  const delivery = createJournalDelivery(initialJournal, state);
+  if (!delivery) {
+    return {
+      result: scheduledTaskError('invalid_request', 'The scheduled task identity is invalid.'),
+      answer: '',
+      journal: state.journal,
+    };
+  }
+  if (abandonedScheduledTaskRequestIds.has(state.journal.requestId)) {
+    return {
+      result: scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.'),
+      answer: '',
+      journal: state.journal,
+    };
+  }
+  if (admissionSignal?.aborted || state.journal.cancellationPending) {
+    return {
+      result: scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.'),
+      answer: '',
+      journal: state.journal,
+    };
+  }
+
+  if (recover) {
+    const updated = await updateScheduledTaskRunJournal(
+      state.journal.taskId,
+      state.journal.requestId,
+      { recoveryAttempts: state.journal.recoveryAttempts + 1 },
+    );
+    if (updated) state.journal = updated;
+    if (admissionSignal?.aborted) {
+      return {
+        result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
+        answer: '',
+        journal: state.journal,
+      };
+    }
+    if (!state.journal.cloudRun) {
+      const recoveredRun = await findChromeManagedRunByRequestId(
+        state.journal.requestId,
+        {
+          getAuthToken: async () => credential.token,
+        },
+        admissionSignal,
+      );
+      if (admissionSignal?.aborted) {
+        return {
+          result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
+          answer: '',
+          journal: state.journal,
+        };
+      }
+      if (recoveredRun) await delivery.onRunReference?.(recoveredRun);
+      if (admissionSignal?.aborted) {
+        return {
+          result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
+          answer: '',
+          journal: state.journal,
+        };
+      }
+    }
+  }
+
+  const resumeDurableRun = async (): Promise<unknown> => {
+    const registeredRecovery = activeScheduledRecoveries.get(state.journal.requestId);
+    const controller = registeredRecovery?.controller ?? new AbortController();
+    const recovery: ActiveScheduledRecovery =
+      registeredRecovery ??
+      ({
+        taskId: state.journal.taskId,
+        requestId: state.journal.requestId,
+        owner: state.journal.owner,
+        token: credential.token,
+        controller,
+        ...(state.journal.cloudRun ? { cloudRun: state.journal.cloudRun } : {}),
+      } satisfies ActiveScheduledRecovery);
+    const abortForAdmission = (): void => controller.abort();
+    const linkAdmission = admissionSignal && admissionSignal !== controller.signal;
+    if (linkAdmission) admissionSignal.addEventListener('abort', abortForAdmission, { once: true });
+    if (admissionSignal?.aborted) controller.abort();
+    if (!registeredRecovery) activeScheduledRecoveries.set(state.journal.requestId, recovery);
+    try {
+      return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal);
+    } finally {
+      if (linkAdmission) admissionSignal.removeEventListener('abort', abortForAdmission);
+      if (
+        !registeredRecovery &&
+        activeScheduledRecoveries.get(state.journal.requestId) === recovery
+      ) {
+        activeScheduledRecoveries.delete(state.journal.requestId);
+      }
+    }
+  };
+
+  let result: unknown;
+  if (state.journal.cloudRun) {
+    result = await resumeDurableRun();
+  } else {
+    if (abandonedScheduledTaskRequestIds.has(state.journal.requestId)) {
+      result = scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.');
+      return {
+        result,
+        answer: state.answer,
+        conversationId: delivery.conversationId,
+        conversationOwner: credential.owner,
+        journal: state.journal,
+      };
+    }
+    if (state.journal.dispatchStartedAt === undefined) {
+      const updated = await updateScheduledTaskRunJournal(
+        state.journal.taskId,
+        state.journal.requestId,
+        { dispatchStartedAt: Date.now() },
+      );
+      if (!updated) {
+        return {
+          result: scheduledTaskError('cancelled', 'The scheduled task journal was retired.'),
+          answer: state.answer,
+          journal: state.journal,
+        };
+      }
+      state.journal = updated;
+    }
+    if (
+      admissionSignal?.aborted ||
+      isRetiredManagedCloudOwner(credential.owner) ||
+      state.journal.cancellationPending ||
+      abandonedScheduledTaskRequestIds.has(state.journal.requestId)
+    ) {
+      return {
+        result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
+        answer: state.answer,
+        conversationId: delivery.conversationId,
+        conversationOwner: credential.owner,
+        journal: state.journal,
+      };
+    }
+    result = await handleChatMessage(
+      {
+        type: 'CHAT_MESSAGE',
+        clientInstanceId: SCHEDULED_TASK_CLIENT_ID,
+        id: `task_${crypto.randomUUID()}`,
+        text: state.journal.prompt,
+        timestamp: Date.now(),
+        modelSelection: state.journal.routing?.modelKey ?? 'auto',
+        effort: state.journal.routing?.effort,
+        currentModelKey: state.journal.routing?.modelKey,
+        previousTaskType: state.journal.routing?.taskType,
+        owner: state.journal.owner,
+      },
+      { id: chrome.runtime.id },
+      delivery,
+      admissionSignal,
+    );
+    if (
+      result &&
+      typeof result === 'object' &&
+      (result as { status?: unknown }).status !== 'success' &&
+      isRetryableScheduledResult(result) &&
+      state.journal.cloudRun &&
+      !abandonedScheduledTaskRequestIds.has(state.journal.requestId)
+    ) {
+      result = await resumeDurableRun();
+    }
+  }
+
+  return {
+    result,
+    answer: state.answer,
+    conversationId: delivery.conversationId,
+    conversationOwner: credential.owner,
+    journal: state.journal,
+  };
+}
+
+function isRetryableScheduledResult(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return true;
+  const record = result as Record<string, unknown>;
+  return (
+    record['status'] !== 'success' &&
+    (record['code'] === 'server_error' || record['code'] === 'auth_required')
+  );
+}
+
+async function notifyScheduledTaskCompleted(
+  taskName: string,
+  answer = '',
+  conversationId?: string,
+  conversationOwner?: ManagedCloudOwner,
+  signal?: AbortSignal,
+): Promise<void> {
+  await publishAuthorizedScheduledTaskNotification(
+    { ...(conversationOwner ? { owner: conversationOwner } : {}), ...(signal ? { signal } : {}) },
+    {
+      isEnabled: taskNotificationsEnabled,
+      isOwnerRetired: isRetiredManagedCloudOwner,
+      publish: () => {
+        const snippet = notificationSnippet(answer);
+        showNotification(
+          'Task Completed',
+          snippet ? `"${taskName}": ${snippet}` : `Scheduled task "${taskName}" finished`,
+          undefined,
+          answer ? conversationId : undefined,
+          answer ? conversationOwner : undefined,
+        );
+      },
+    },
+  );
+}
+
+async function notifyScheduledTaskFailed(
+  taskName: string,
+  detail: string,
+  owner?: ManagedCloudOwner,
+  signal?: AbortSignal,
+): Promise<void> {
+  await publishAuthorizedScheduledTaskNotification(
+    { ...(owner ? { owner } : {}), ...(signal ? { signal } : {}) },
+    {
+      isEnabled: taskNotificationsEnabled,
+      isOwnerRetired: isRetiredManagedCloudOwner,
+      publish: () =>
+        showNotification('Task Failed', `Scheduled task "${taskName}" failed: ${detail}`),
+    },
+  );
+}
+
+async function completeScheduledTaskRun(
+  taskId: string,
+  taskName: string,
+  outcome: ScheduledTaskExecutionOutcome,
+  signal?: AbortSignal,
+): Promise<void> {
+  const lostAuthority = (): boolean =>
+    Boolean(signal?.aborted) ||
+    isRetiredManagedCloudOwner(outcome.journal.owner) ||
+    abandonedScheduledTaskRequestIds.has(outcome.journal.requestId);
+  if (lostAuthority()) return;
+  const recorded = await recordScheduledTaskRun(taskId, Date.now(), () => !lostAuthority());
+  if (!recorded) return;
+  if (lostAuthority()) return;
+  const latest = (await loadScheduledTaskRunJournals()).find(
+    (journal) => journal.taskId === taskId && journal.requestId === outcome.journal.requestId,
+  );
+  if (lostAuthority() || latest?.cancellationPending) return;
+  await removeScheduledTaskRunJournal(taskId, outcome.journal.requestId);
+  if (lostAuthority()) return;
+  await notifyScheduledTaskCompleted(
+    taskName,
+    outcome.answer,
+    outcome.conversationId,
+    outcome.conversationOwner,
+    signal,
+  );
+}
+
+function abandonScheduledTaskRun(
+  journal: ScheduledTaskRunJournal,
+  currentCredential?: { token: string; owner: ManagedCloudOwner } | null,
+  knownRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference,
+): Promise<boolean> {
+  markScheduledTaskRequestAbandoned(journal.requestId);
+  let cancellationCredential = selectScheduledTaskCancellationCredential(
+    journal.owner,
+    null,
+    currentCredential,
+  );
+  const recovery = activeScheduledRecoveries.get(journal.requestId);
+  recovery?.controller.abort();
+  if (recovery) {
+    activeScheduledRecoveries.delete(journal.requestId);
+    cancellationCredential = selectScheduledTaskCancellationCredential(
+      journal.owner,
+      { token: recovery.token, owner: recovery.owner },
+      cancellationCredential,
+    );
+    knownRun ??= recovery.cloudRun;
+  }
+  for (const [streamKey, active] of activeChatStreams) {
+    if (active.requestId !== journal.requestId) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+    activeChatStreams.delete(streamKey);
+    cancellationCredential = selectScheduledTaskCancellationCredential(
+      journal.owner,
+      { token: active.token, owner: active.owner },
+      cancellationCredential,
+    );
+    knownRun ??= active.cloudRun;
+  }
+  return scheduledTaskCancellationAttempts.run(
+    journal.requestId,
+    { hasCredential: Boolean(cancellationCredential), hasKnownRun: Boolean(knownRun) },
+    () => requestScheduledTaskCancellation(journal, cancellationCredential, knownRun),
+  );
+}
+
+async function recoverScheduledTaskRun(
+  journal: ScheduledTaskRunJournal,
+  expectedGeneration: number,
+): Promise<void> {
+  if (journal.cancellationPending) {
+    const credential = await getManagedCloudAuthContext();
+    if (
+      credential?.owner.accountId === journal.owner.accountId &&
+      isScheduledCancellationRetryDue(journal)
+    ) {
+      await abandonScheduledTaskRun(journal, credential);
+    }
     return;
   }
+  const lease = scheduledTaskExecutions.begin(journal.taskId, expectedGeneration);
+  if (!lease) return;
+  const credential = await getManagedCloudAuthContext();
+  if (!credential) {
+    scheduledTaskExecutions.end(lease);
+    return;
+  }
+  if (isRetiredManagedCloudOwner(credential.owner)) {
+    await abandonScheduledTaskRun(journal, credential);
+    scheduledTaskExecutions.end(lease);
+    return;
+  }
+  if (!sameManagedCloudOwner(journal.owner, credential.owner)) {
+    // A different account must never recover this run. A replacement session
+    // for the same account may cancel, but never resume or render, the old
+    // incarnation's paid work.
+    // A different account cannot inspect or cancel A's server run, but it must
+    // still durably tombstone the journal. Otherwise a missed transition lets A
+    // resume stale paid work when it signs in again later.
+    await abandonScheduledTaskRun(
+      journal,
+      journal.owner.accountId === credential.owner.accountId ? credential : null,
+    );
+    scheduledTaskExecutions.end(lease);
+    return;
+  }
+
+  const recoveryGate: ActiveScheduledRecovery = {
+    taskId: journal.taskId,
+    requestId: journal.requestId,
+    owner: journal.owner,
+    token: credential.token,
+    controller: new AbortController(),
+    ...(journal.cloudRun ? { cloudRun: journal.cloudRun } : {}),
+  };
+  const abortForTaskMutation = (): void => recoveryGate.controller.abort();
+  lease.controller.signal.addEventListener('abort', abortForTaskMutation, { once: true });
+  if (lease.controller.signal.aborted) recoveryGate.controller.abort();
+  activeScheduledRecoveries.set(journal.requestId, recoveryGate);
+  const endHeartbeat = beginScheduledTaskHeartbeat();
+  try {
+    const outcome = await executeScheduledTaskJournal(
+      journal,
+      credential,
+      true,
+      recoveryGate.controller.signal,
+    );
+    if (
+      recoveryGate.controller.signal.aborted ||
+      isRetiredManagedCloudOwner(credential.owner) ||
+      abandonedScheduledTaskRequestIds.has(outcome.journal.requestId)
+    ) {
+      return;
+    }
+    if (
+      outcome.result &&
+      typeof outcome.result === 'object' &&
+      (outcome.result as { status?: unknown }).status === 'success'
+    ) {
+      await completeScheduledTaskRun(
+        journal.taskId,
+        journal.taskName,
+        outcome,
+        recoveryGate.controller.signal,
+      );
+      return;
+    }
+    if (
+      isRetryableScheduledResult(outcome.result) &&
+      outcome.journal.recoveryAttempts < SCHEDULED_RECOVERY_MAX_ATTEMPTS
+    ) {
+      logger.warn('Scheduled Managed Cloud run remains pending recovery', {
+        taskId: journal.taskId,
+        attempt: outcome.journal.recoveryAttempts,
+      });
+      return;
+    }
+    await abandonScheduledTaskRun(outcome.journal, credential);
+    assertScheduledExecutionSucceeded(outcome.result);
+  } catch (error) {
+    if (
+      recoveryGate.controller.signal.aborted ||
+      abandonedScheduledTaskRequestIds.has(journal.requestId)
+    ) {
+      return;
+    }
+    const latest = (await loadScheduledTaskRunJournals()).find(
+      (candidate) =>
+        candidate.taskId === journal.taskId && candidate.requestId === journal.requestId,
+    );
+    if (latest && latest.recoveryAttempts < SCHEDULED_RECOVERY_MAX_ATTEMPTS) {
+      logger.warn('Scheduled Managed Cloud recovery attempt failed', {
+        taskId: journal.taskId,
+        attempt: latest.recoveryAttempts,
+        error,
+      });
+      return;
+    }
+    await abandonScheduledTaskRun(latest ?? journal, credential);
+    const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
+    await notifyScheduledTaskFailed(
+      journal.taskName,
+      `could not be recovered: ${detail}`,
+      journal.owner,
+      lease.controller.signal,
+    );
+  } finally {
+    endHeartbeat();
+    lease.controller.signal.removeEventListener('abort', abortForTaskMutation);
+    if (activeScheduledRecoveries.get(journal.requestId) === recoveryGate) {
+      activeScheduledRecoveries.delete(journal.requestId);
+    }
+    scheduledTaskExecutions.end(lease);
+  }
+}
+
+async function recoverScheduledTaskRuns(): Promise<void> {
+  const journals = await loadScheduledTaskRunJournals();
+  if (journals.length === 0) return;
+  const expectedGenerations = new Map(
+    journals.map((journal) => [journal.taskId, scheduledTaskExecutions.generation(journal.taskId)]),
+  );
+  const tasks = await loadScheduledTasks();
+  const credential = await getManagedCloudAuthContext();
+  for (const journal of journals) {
+    if (journal.cancellationPending) {
+      if (
+        credential?.owner.accountId === journal.owner.accountId &&
+        isScheduledCancellationRetryDue(journal)
+      ) {
+        await abandonScheduledTaskRun(journal, credential);
+      }
+      continue;
+    }
+    const task = tasks.find((candidate) => candidate.id === journal.taskId);
+    const managedPrompt = task ? await scheduledTaskManagedPrompt(task) : undefined;
+    const expectedPrompt = managedPrompt?.slice(0, TASK_PROMPT_MAX_CHARS).trim();
+    if (
+      !task?.enabled ||
+      task.managedCloudAccountId !== journal.owner.accountId ||
+      !expectedPrompt ||
+      expectedPrompt !== journal.prompt
+    ) {
+      await abandonScheduledTaskRun(journal, credential);
+      continue;
+    }
+    await recoverScheduledTaskRun(
+      journal,
+      expectedGenerations.get(journal.taskId) ?? scheduledTaskExecutions.generation(journal.taskId),
+    );
+  }
+}
+
+async function runScheduledManagedPrompt(
+  task: ScheduledTask,
+  safePrompt: string,
+  signal: AbortSignal,
+  credential: NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>>,
+): Promise<ScheduledTaskExecutionOutcome> {
+  if (signal.aborted) throw new ScheduledTaskCancelledError();
+  if (isRetiredManagedCloudOwner(credential.owner)) throw new ScheduledTaskCancelledError();
+  const existing = (await loadScheduledTaskRunJournals()).find(
+    (candidate) => candidate.taskId === task.id,
+  );
+  let journal: ScheduledTaskRunJournal;
+  let recover = false;
+  let journalWasCreated = false;
+  if (existing && canResumeScheduledTaskRunJournal(existing, credential.owner, safePrompt)) {
+    journal = existing;
+    recover = true;
+  } else {
+    if (existing) {
+      if (existing.owner.accountId !== credential.owner.accountId) {
+        throw new ScheduledTaskAuthorityError(
+          'A different account owns the interrupted scheduled run.',
+          false,
+        );
+      }
+      const cancelled = await abandonScheduledTaskRun(existing, credential);
+      if (!cancelled) {
+        throw new ScheduledTaskRecoveryPendingError(
+          'The prior Managed Cloud run is still being cancelled.',
+        );
+      }
+    }
+    const started = await beginScheduledTaskRunJournal({
+      taskId: task.id,
+      taskName: task.name,
+      prompt: safePrompt,
+      requestId: createScheduledTaskRequestId(),
+      owner: credential.owner,
+    });
+    journal = started.journal;
+    journalWasCreated = started.created;
+    if (!started.created) {
+      if (signal.aborted) throw new ScheduledTaskCancelledError();
+      if (canResumeScheduledTaskRunJournal(journal, credential.owner, safePrompt)) {
+        recover = true;
+      } else {
+        if (journal.owner.accountId !== credential.owner.accountId) {
+          throw new ScheduledTaskAuthorityError(
+            'A different account owns the interrupted scheduled run.',
+            false,
+          );
+        }
+        await abandonScheduledTaskRun(journal, credential);
+        throw new ScheduledTaskRecoveryPendingError(
+          'A superseded Managed Cloud run is being cancelled before this schedule can continue.',
+        );
+      }
+    }
+  }
+  if (signal.aborted) {
+    // If another execution won the serialized journal insert, it owns that
+    // request. An aborted stale lease must never cancel the winner's journal.
+    if (journalWasCreated) await abandonScheduledTaskRun(journal, credential);
+    throw new ScheduledTaskCancelledError();
+  }
+  return executeScheduledTaskJournal(journal, credential, recover, signal);
+}
+
+async function finishScheduledManagedPrompt(
+  task: ScheduledTask,
+  outcome: ScheduledTaskExecutionOutcome,
+  lease: ScheduledTaskExecutionLease,
+): Promise<void> {
+  if (
+    lease.controller.signal.aborted ||
+    !scheduledTaskExecutions.isCurrent(lease) ||
+    abandonedScheduledTaskRequestIds.has(outcome.journal.requestId) ||
+    outcome.journal.cancellationPending
+  ) {
+    throw new ScheduledTaskCancelledError();
+  }
+  if (
+    isRetryableScheduledResult(outcome.result) &&
+    outcome.journal.recoveryAttempts < SCHEDULED_RECOVERY_MAX_ATTEMPTS
+  ) {
+    throw new ScheduledTaskRecoveryPendingError(
+      'The Managed Cloud run was interrupted and will resume automatically.',
+    );
+  }
+  if (
+    !outcome.result ||
+    typeof outcome.result !== 'object' ||
+    (outcome.result as { status?: unknown }).status !== 'success'
+  ) {
+    await abandonScheduledTaskRun(outcome.journal, await getManagedCloudAuthContext());
+  }
+  assertScheduledExecutionSucceeded(outcome.result);
+  if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) {
+    throw new ScheduledTaskCancelledError();
+  }
+  await completeScheduledTaskRun(task.id, task.name, outcome, lease.controller.signal);
+}
+
+async function executeScheduledTask(
+  task: ScheduledTask,
+  expectedGeneration: number,
+): Promise<void> {
+  const lease = scheduledTaskExecutions.begin(task.id, expectedGeneration);
+  if (!lease) {
+    logger.info('Skipping overlapping scheduled task invocation', { taskId: task.id });
+    return;
+  }
+  const endHeartbeat = beginScheduledTaskHeartbeat();
+  let managedExecutionOwner: ManagedCloudOwner | undefined;
 
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   try {
-    let result: unknown;
-    // SIX-04: the answer a scheduled run generates is billed like any other
-    // turn, but `scheduled-task` chunks have no listener. Capture what was
-    // filed so the completion notification can quote it.
-    let deliveredAnswer = '';
-    let resultConversationId: string | undefined;
-    if (task.shortcutId) {
-      result = await handleReplayShortcut({
-        type: 'REPLAY_SHORTCUT',
-        shortcutId: task.shortcutId,
-      } as import('./types').ReplayShortcutMessage);
-    } else if (task.prompt) {
-      result = await dispatchScheduledPrompt(task, async (safePrompt) => {
-        const chatMsg: import('./types').ChatMessageMessage = {
-          type: 'CHAT_MESSAGE',
-          clientInstanceId: SCHEDULED_TASK_CLIENT_ID,
-          id: `task_${task.id}_${crypto.randomUUID()}`,
-          text: safePrompt,
-          timestamp: Date.now(),
-          modelSelection: 'auto',
-        };
-        const scheduledTaskSender: chrome.runtime.MessageSender = {
-          id: chrome.runtime.id,
-        };
-        const delivery = createBackgroundChatDelivery('task', task.id, task.name, safePrompt);
-        if (delivery) {
-          delivery.onDelivered = (answer) => {
-            deliveredAnswer = answer;
-            resultConversationId = delivery.conversationId;
-          };
-        }
-        return handleChatMessage(chatMsg, scheduledTaskSender, delivery);
+    // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
+    // created from a non-extension-UI origin must verify the originating
+    // origin is still on `agi_site_allowlist`. If not, auto-delete so the
+    // task does not accumulate as a persistent capability.
+    if (
+      task.createdByOrigin &&
+      task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
+      !siteAllowlistCache.has(task.createdByOrigin)
+    ) {
+      logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
+        taskId: task.id,
+        createdByOrigin: task.createdByOrigin,
       });
+      await handleDeleteScheduledTask(
+        {
+          type: 'DELETE_SCHEDULED_TASK',
+          taskId: task.id,
+        } as import('./types').DeleteScheduledTaskMessage,
+        task.managedCloudAccountId,
+        () => {
+          scheduledTaskExecutions.invalidate(task.id);
+        },
+      );
+      const journal = (await loadScheduledTaskRunJournals()).find(
+        (candidate) => candidate.taskId === task.id,
+      );
+      if (journal) await abandonScheduledTaskRun(journal, await getManagedCloudAuthContext());
+      return;
+    }
+
+    if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) {
+      throw new ScheduledTaskCancelledError();
+    }
+    let managedCredential:
+      | NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>>
+      | undefined;
+    if (task.managedCloudAccountId !== undefined) {
+      managedCredential = await requireScheduledTaskCredential(task);
+      managedExecutionOwner = managedCredential.owner;
+    }
+    const managedPrompt = await scheduledTaskManagedPrompt(task);
+    const hasManagedBoundary =
+      task.managedCloudAccountId !== undefined || managedPrompt !== undefined;
+    if (hasManagedBoundary) {
+      const credential = managedCredential ?? (await requireScheduledTaskCredential(task));
+      managedExecutionOwner = credential.owner;
+      if (!managedPrompt) {
+        throw new Error('The Managed Cloud prompt is unavailable.');
+      }
+      if (
+        lease.controller.signal.aborted ||
+        !scheduledTaskExecutions.isCurrent(lease) ||
+        isRetiredManagedCloudOwner(credential.owner)
+      ) {
+        throw new ScheduledTaskCancelledError();
+      }
+      await notifyScheduledTaskRunning(task.name, lease.controller.signal, credential.owner);
+      if (
+        lease.controller.signal.aborted ||
+        !scheduledTaskExecutions.isCurrent(lease) ||
+        isRetiredManagedCloudOwner(credential.owner)
+      ) {
+        throw new ScheduledTaskCancelledError();
+      }
+      const outcome = await dispatchScheduledPrompt(
+        { ...task, prompt: managedPrompt },
+        (safePrompt) =>
+          runScheduledManagedPrompt(task, safePrompt, lease.controller.signal, credential),
+      );
+      if (!outcome) throw new Error('The scheduled prompt is empty.');
+      await finishScheduledManagedPrompt(task, outcome, lease);
+      return;
+    }
+
+    await notifyScheduledTaskRunning(task.name, lease.controller.signal);
+    if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) {
+      throw new ScheduledTaskCancelledError();
+    }
+    let result: unknown;
+    if (task.shortcutId) {
+      result = await handleReplayShortcut(
+        {
+          type: 'REPLAY_SHORTCUT',
+          shortcutId: task.shortcutId,
+        } as import('./types').ReplayShortcutMessage,
+        undefined,
+        false,
+      );
     }
 
     assertScheduledExecutionSucceeded(result);
-    await recordScheduledTaskRun(task.id);
-    if (await taskNotificationsEnabled()) {
-      const snippet = notificationSnippet(deliveredAnswer);
-      showNotification(
-        'Task Completed',
-        snippet
-          ? `"${task.name}": ${snippet}`
-          : `Scheduled task "${task.name}" finished — open History to see the result`,
-        undefined,
-        resultConversationId,
-      );
-    }
+    const recorded = await recordScheduledTaskRun(task.id, Date.now(), () =>
+      scheduledTaskExecutions.isCurrent(lease),
+    );
+    if (!recorded) throw new ScheduledTaskCancelledError();
+    await notifyScheduledTaskCompleted(
+      task.name,
+      '',
+      undefined,
+      undefined,
+      lease.controller.signal,
+    );
   } catch (error) {
-    const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
-    if (await taskNotificationsEnabled()) {
-      showNotification('Task Failed', `Scheduled task "${task.name}" failed: ${detail}`);
+    if (error instanceof ScheduledTaskCancelledError || lease.controller.signal.aborted) {
+      logger.info('Scheduled task execution lost authority', { taskId: task.id });
+      return;
     }
+    if (error instanceof ScheduledTaskAuthorityError) {
+      logger.warn(error.message, { taskId: task.id });
+      if (error.notifyCurrentUser) {
+        await publishAuthorizedScheduledTaskNotification(
+          {
+            signal: lease.controller.signal,
+            ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
+          },
+          {
+            isEnabled: taskNotificationsEnabled,
+            isOwnerRetired: isRetiredManagedCloudOwner,
+            publish: () =>
+              showNotification(
+                'Task Paused',
+                'A Managed Cloud schedule needs its authorizing account before it can run.',
+              ),
+          },
+        );
+      }
+      return;
+    }
+    if (error instanceof ScheduledTaskRecoveryPendingError) {
+      logger.warn(error.message, { taskId: task.id });
+      await publishAuthorizedScheduledTaskNotification(
+        {
+          signal: lease.controller.signal,
+          ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
+        },
+        {
+          isEnabled: taskNotificationsEnabled,
+          isOwnerRetired: isRetiredManagedCloudOwner,
+          publish: () =>
+            showNotification(
+              'Task Continuing',
+              `Scheduled task "${task.name}" will resume shortly.`,
+            ),
+        },
+      );
+      return;
+    }
+    const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
+    await notifyScheduledTaskFailed(
+      task.name,
+      detail,
+      managedExecutionOwner,
+      lease.controller.signal,
+    );
     throw error;
+  } finally {
+    endHeartbeat();
+    scheduledTaskExecutions.end(lease);
   }
 }
 
@@ -1081,6 +2562,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes['agi_site_allowlist']) return;
   const next = changes['agi_site_allowlist'].newValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
+  const lease = computerUseRuns.getActive();
+  if (!lease) return;
+  try {
+    if (siteAllowlistCache.has(new URL(lease.tabIntentUrl).origin)) return;
+  } catch {
+    // Invalid stored intent is handled by the same fail-closed cancellation.
+  }
+  computerUseStartGeneration += 1;
+  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
 });
 
 // W5-06: persisted side-panel preference. Outgoing turns carry a snapshot so
@@ -1096,6 +2586,90 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes['agi_quick_mode']) return;
   quickModeCache = changes['agi_quick_mode'].newValue === true;
 });
+
+function rejectComputerUseOwnership(
+  lease: ComputerUseRunLease,
+  reason: Extract<ComputerUseCancellationReason, 'account_changed' | 'tab_intent_changed'>,
+): never {
+  computerUseStartGeneration += 1;
+  cancelActiveComputerUseRun(reason, lease.runId);
+  const abortReason = lease.controller.signal.reason;
+  if (abortReason instanceof Error) throw abortReason;
+  throw new Error(`Computer-use ownership lost: ${reason}`);
+}
+
+/** Reassert the account/session and exact foreground-tab intent for one lease. */
+async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<string> {
+  computerUseRuns.assertCurrent(lease);
+
+  const context = await getManagedCloudAuthContext();
+  computerUseRuns.assertCurrent(lease);
+  if (
+    !context ||
+    isRetiredManagedCloudOwner(context.owner) ||
+    !sameManagedCloudOwner(lease.authOwner, context.owner)
+  ) {
+    rejectComputerUseOwnership(lease, 'account_changed');
+  }
+
+  let tab: chrome.tabs.Tab;
+  try {
+    tab = await chrome.tabs.get(lease.tabId);
+  } catch {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+  computerUseRuns.assertCurrent(lease);
+
+  if (!tab.url || (lease.windowId !== undefined && tab.windowId !== lease.windowId)) {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+  let origin: string;
+  try {
+    origin = new URL(tab.url).origin;
+  } catch {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+  if (!siteAllowlistCache.has(origin)) {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+
+  if (!lease.actionInFlight && tab.url !== lease.tabIntentUrl) {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+
+  if (lease.windowId !== undefined) {
+    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
+    computerUseRuns.assertCurrent(lease);
+    if (activeTabs[0]?.id !== lease.tabId) {
+      rejectComputerUseOwnership(lease, 'tab_intent_changed');
+    }
+  }
+
+  return context.token;
+}
+
+async function updateComputerUseActionState(
+  lease: ComputerUseRunLease,
+  active: boolean,
+): Promise<void> {
+  if (!computerUseRuns.isCurrent(lease)) return;
+  if (active) {
+    computerUseRuns.setActionInFlight(lease, true);
+    return;
+  }
+
+  try {
+    const tab = await chrome.tabs.get(lease.tabId);
+    if (!computerUseRuns.isCurrent(lease) || !tab.url) return;
+    computerUseRuns.commitTabIntent(lease, tab.url);
+    computerUseRuns.setActionInFlight(lease, false);
+  } catch {
+    if (computerUseRuns.isCurrent(lease)) {
+      computerUseStartGeneration += 1;
+      cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+    }
+  }
+}
 
 function isAllowlistedSender(
   sender: chrome.runtime.MessageSender,
@@ -1257,7 +2831,19 @@ async function handleMessageAsync(
 ): Promise<ExtensionResponse> {
   logger.debug('Processing message', { type: message.type, sender: sender.url });
 
-  const tabId = sender.tab?.id ?? message.tabId;
+  const tabId = resolveMessageTargetTabId(
+    {
+      id: sender.id,
+      url: sender.url,
+      origin: sender.origin,
+      tabId: sender.tab?.id,
+      tabUrl: sender.tab?.url,
+      hasTab: sender.tab != null,
+    },
+    message.tabId,
+    chrome.runtime.id,
+    chrome.runtime.getURL('/').replace(/\/+$/, ''),
+  );
   const windowId = sender.tab?.windowId;
 
   if (state.rateLimiter.isLimited(tabId || 0, message.type)) {
@@ -1269,11 +2855,34 @@ async function handleMessageAsync(
 
   switch (message.type) {
     case 'GET_CLOUD_AUTH_TOKEN': {
-      const token = await getFreshClerkToken(message.refresh);
+      const candidate = await getManagedCloudAuthContext(message.refresh);
+      const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
+      cancelComputerUseIfAuthChanged(context?.owner ?? null);
       return {
         success: true,
-        ...(token ? { token } : {}),
+        ...(context ? { token: context.token, owner: context.owner } : {}),
       } as ExtensionResponse;
+    }
+
+    case 'MANAGED_CLOUD_AUTH_CHANGED': {
+      const previousOwner = normalizeManagedCloudOwner(
+        (message as import('./types').ManagedCloudAuthChangedMessage).previousOwner,
+      );
+      if (!previousOwner) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      retireManagedCloudOwner(previousOwner);
+      if (computerUseStarts.getPending()) {
+        computerUseStartGeneration += 1;
+        clearPendingComputerUseStart();
+      }
+      const computerUseLease = computerUseRuns.getActive();
+      if (computerUseLease && sameManagedCloudOwner(computerUseLease.authOwner, previousOwner)) {
+        computerUseStartGeneration += 1;
+        cancelActiveComputerUseRun('account_changed', computerUseLease.runId);
+      }
+      await invalidateManagedCloudOwner(previousOwner, true);
+      return { success: true } as ExtensionResponse;
     }
 
     case 'GET_CONNECTION_STATUS':
@@ -1446,39 +3055,54 @@ async function handleMessageAsync(
 
     case 'CHAT_MESSAGE': {
       const chatMsg = message as import('./types').ChatMessageMessage;
+      const owner = normalizeManagedCloudOwner(chatMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
         createChromeManagedStreamKey(chatMsg.clientInstanceId, chatMsg.id);
       } catch {
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
-      void handleChatMessage(chatMsg, sender);
+      void handleChatMessage({ ...chatMsg, owner }, sender);
       return { success: true } as ExtensionResponse;
     }
 
     case 'RESUME_CHAT_RUN': {
       const resumeMsg = message as import('./types').ResumeChatRunMessage;
+      const owner = normalizeManagedCloudOwner(resumeMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
         createChromeManagedStreamKey(resumeMsg.clientInstanceId, resumeMsg.id);
       } catch {
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
-      void handleResumeChatRun(resumeMsg);
+      const routing =
+        resumeMsg.routing === undefined
+          ? undefined
+          : normalizeChromeManagedRoutingMetadata(resumeMsg.routing);
+      if (resumeMsg.routing !== undefined && !routing) {
+        return { success: false, error: 'Invalid Managed Cloud routing metadata' };
+      }
+      void handleResumeChatRun({ ...resumeMsg, owner, ...(routing ? { routing } : {}) });
       return { success: true } as ExtensionResponse;
     }
 
     case 'RESOLVE_CHAT_APPROVAL': {
       const approvalMsg = message as import('./types').ResolveChatApprovalMessage;
+      const owner = normalizeManagedCloudOwner(approvalMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
         createChromeManagedStreamKey(approvalMsg.clientInstanceId, approvalMsg.id);
       } catch {
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
-      void handleResolveChatApproval(approvalMsg);
+      void handleResolveChatApproval({ ...approvalMsg, owner });
       return { success: true } as ExtensionResponse;
     }
 
     case 'CANCEL_STREAM': {
       const cancelMsg = message as import('./types').CancelStreamMessage;
+      const owner = normalizeManagedCloudOwner(cancelMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       let streamKey: string;
       try {
         streamKey = createChromeManagedStreamKey(cancelMsg.clientInstanceId, cancelMsg.id);
@@ -1486,6 +3110,9 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
       const active = activeChatStreams.get(streamKey);
+      if (active && !sameManagedCloudOwner(active.owner, owner)) {
+        return { success: false, error: 'Managed Cloud stream owner changed' };
+      }
       const cloudRun = active?.cloudRun ?? cancelMsg.cloudRun;
       if (!active && !cloudRun) {
         return { success: false, error: 'No active stream for id' } as ExtensionResponse;
@@ -1496,7 +3123,7 @@ async function handleMessageAsync(
       }
       if (!active?.cancelNotified) {
         if (active) active.cancelNotified = true;
-        broadcastManagedChatChunk(cancelMsg.clientInstanceId, cancelMsg.id, {
+        broadcastManagedChatChunk(owner, cancelMsg.clientInstanceId, cancelMsg.id, {
           text: '',
           done: true,
           error: 'Cancelled.',
@@ -1504,7 +3131,18 @@ async function handleMessageAsync(
         });
       }
       if (cloudRun) {
-        const cancellation = await cancelChromeManagedRun(cloudRun);
+        const currentCredential = active ? null : await getManagedCloudAuthContext();
+        const credential = selectManagedCloudCancellationCredential(
+          owner,
+          active ? { token: active.token, owner: active.owner } : null,
+          currentCredential,
+        );
+        if (!credential) {
+          return { success: false, error: 'Managed Cloud stream owner changed' };
+        }
+        const cancellation = await cancelChromeManagedRun(cloudRun, {
+          getAuthToken: async () => credential.token,
+        });
         if (cancellation.status === 'error') {
           logger.warn('Managed Cloud run cancellation failed', {
             runId: cloudRun.runId,
@@ -1670,9 +3308,64 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
-    case 'WEBMCP_DISCOVER_TOOLS':
+    case 'WEBMCP_DISCOVER_TOOLS': {
+      const discoveryRequest = message as import('./types').WebMCPDiscoverToolsMessage;
+      const pageGeneration = discoveryRequest.pageGeneration;
+      if (
+        pageGeneration !== undefined &&
+        (typeof pageGeneration !== 'number' ||
+          !Number.isSafeInteger(pageGeneration) ||
+          pageGeneration < 0)
+      ) {
+        return { success: false, error: 'Invalid WebMCP page generation' };
+      }
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      }
+      const navigationGeneration = currentWebMCPNavigationGeneration(resolvedTabId);
+      const targetBefore = await chrome.tabs.get(resolvedTabId);
+      const targetUrl = targetBefore.url;
+      const response = await forwardToContentScript(resolvedTabId, message);
+      const targetAfter = await chrome.tabs.get(resolvedTabId);
+      if (
+        navigationGeneration !== currentWebMCPNavigationGeneration(resolvedTabId) ||
+        typeof targetUrl !== 'string' ||
+        targetAfter.url !== targetUrl
+      ) {
+        return { success: false, error: 'WebMCP page changed during discovery' };
+      }
+      const discovery = response as unknown as {
+        success?: boolean;
+        supported?: boolean;
+        tools?: unknown;
+        url?: unknown;
+        error?: string;
+      };
+      if (discovery.success !== true) return response;
+      const normalized = normalizeWebMCPToolsUpdate(discovery.tools, discovery.url, targetUrl);
+      if (!normalized) {
+        return { success: false, error: 'Invalid WebMCP discovery response' };
+      }
+      webmcpToolsByTab.set(resolvedTabId, {
+        ...normalized,
+        timestamp: Date.now(),
+        navigationGeneration,
+      });
+      return {
+        success: true,
+        supported: discovery.supported === true,
+        tabId: resolvedTabId,
+        ...(pageGeneration === undefined ? {} : { pageGeneration }),
+        ...normalized,
+      } as ExtensionResponse;
+    }
+
     case 'WEBMCP_CALL_TOOL': {
-      // Forward to content script on the active tab
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1685,42 +3378,29 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_TOOLS_CHANGED': {
-      // Store discovered tools per tab for native messaging bridge
+      // Page-declared tool metadata is untrusted even after the origin
+      // allowlist gate. Validate it again before storage, UI, or native egress.
       const toolsMsg = message as import('./types').WebMCPToolsChangedMessage;
       const toolsTabId = sender?.tab?.id;
-      if (toolsTabId && toolsMsg.tools) {
-        webmcpToolsByTab.set(toolsTabId, {
-          tools: toolsMsg.tools,
-          url: toolsMsg.url || '',
-          timestamp: Date.now(),
-        });
-        logger.info(`WebMCP: ${toolsMsg.tools.length} tool(s) on tab ${toolsTabId}`, {
-          tools: toolsMsg.tools.map((t: import('./types').WebMCPToolInfo) => t.name),
-        });
-        // Forward to side panel so it can display the discovered tools
-        chrome.runtime
-          .sendMessage({
-            type: 'WEBMCP_TOOLS_CHANGED',
-            tools: toolsMsg.tools,
-            url: toolsMsg.url,
-          })
-          .catch(() => {
-            // Side panel may not be open; ignore
-          });
-        // Forward to native messaging if connected
-        if (state.isNativeConnected && state.nativePort) {
-          try {
-            state.nativePort.postMessage({
-              type: 'webmcp_tools_update',
-              tab_id: toolsTabId,
-              tools: toolsMsg.tools,
-              url: toolsMsg.url,
-            });
-          } catch (err) {
-            // Native port may be disconnected
-            logger.debug('WebMCP native port message failed', err);
-          }
-        }
+      if (typeof toolsTabId !== 'number') {
+        return { success: false, error: 'WebMCP discovery requires a sender tab' };
+      }
+      const senderTabUrl = sender.tab?.url;
+      const navigationGeneration = currentWebMCPNavigationGeneration(toolsTabId);
+      const currentTab = await chrome.tabs.get(toolsTabId);
+      if (
+        typeof senderTabUrl !== 'string' ||
+        currentTab.url !== senderTabUrl ||
+        navigationGeneration !== currentWebMCPNavigationGeneration(toolsTabId)
+      ) {
+        return { success: false, error: 'Stale WebMCP sender document' };
+      }
+      const normalized = normalizeWebMCPToolsUpdate(toolsMsg.tools, toolsMsg.url, senderTabUrl);
+      if (!normalized) {
+        return { success: false, error: 'Invalid WebMCP tool metadata' };
+      }
+      if (!publishNormalizedWebMCPToolsUpdate(toolsTabId, normalized, navigationGeneration)) {
+        return { success: false, error: 'WebMCP page changed during publication' };
       }
       return { success: true } as ExtensionResponse;
     }
@@ -1807,17 +3487,157 @@ async function handleMessageAsync(
     case 'REPLAY_SHORTCUT':
       return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
 
-    case 'CREATE_SCHEDULED_TASK':
-      return handleCreateScheduledTask(message as import('./types').CreateScheduledTaskMessage);
+    case 'CREATE_SCHEDULED_TASK': {
+      const createMessage = message as import('./types').CreateScheduledTaskMessage;
+      const requiresManagedCloud = await scheduledTaskUsesManagedCloud(createMessage.task);
+      const requestedOwner = requiresManagedCloud
+        ? normalizeManagedCloudOwner(createMessage.owner)
+        : null;
+      const credential = requiresManagedCloud
+        ? await getExactScheduledMutationCredential(requestedOwner)
+        : null;
+      if (requiresManagedCloud && (!requestedOwner || !credential)) {
+        return {
+          success: false,
+          error: 'The Managed Cloud account changed before this schedule could be authorized.',
+        } as ExtensionResponse;
+      }
+      return handleCreateScheduledTask(
+        createMessage,
+        requestedOwner?.accountId,
+        requiresManagedCloud,
+        requestedOwner ? () => !isRetiredManagedCloudOwner(requestedOwner) : undefined,
+      );
+    }
 
-    case 'LIST_SCHEDULED_TASKS':
-      return handleListScheduledTasks();
+    case 'LIST_SCHEDULED_TASKS': {
+      const listMessage = message as import('./types').ListScheduledTasksMessage;
+      const requestedOwner = normalizeManagedCloudOwner(listMessage.owner);
+      const credential = requestedOwner
+        ? await getExactScheduledMutationCredential(requestedOwner)
+        : null;
+      // A stale A panel must receive no managed rows if ambient Clerk auth is
+      // already B, even before its foreground auth observer catches up.
+      return handleListScheduledTasks(
+        credential && requestedOwner ? requestedOwner.accountId : undefined,
+      );
+    }
 
-    case 'UPDATE_SCHEDULED_TASK':
-      return handleUpdateScheduledTask(message as import('./types').UpdateScheduledTaskMessage);
+    case 'UPDATE_SCHEDULED_TASK': {
+      const updateMessage = message as import('./types').UpdateScheduledTaskMessage;
+      const changesExecution =
+        Object.prototype.hasOwnProperty.call(updateMessage.updates, 'prompt') ||
+        Object.prototype.hasOwnProperty.call(updateMessage.updates, 'shortcutId');
+      const invalidatesExecution =
+        changesExecution || Object.prototype.hasOwnProperty.call(updateMessage.updates, 'enabled');
+      let mutationGeneration: number | undefined;
+      let committedTaskEnabled = false;
+      const existing = (await loadScheduledTasks()).find(
+        (task) => task.id === updateMessage.taskId,
+      );
+      const requiresManagedCloud =
+        changesExecution && existing
+          ? await scheduledTaskUsesManagedCloud({ ...existing, ...updateMessage.updates })
+          : undefined;
+      const touchesManagedCloud =
+        existing?.managedCloudAccountId !== undefined || requiresManagedCloud === true;
+      const requestedOwner = touchesManagedCloud
+        ? normalizeManagedCloudOwner(updateMessage.owner)
+        : null;
+      const credential = touchesManagedCloud
+        ? await getExactScheduledMutationCredential(requestedOwner)
+        : null;
+      if (touchesManagedCloud && (!requestedOwner || !credential)) {
+        return {
+          success: false,
+          error: 'Task not found for the current Managed Cloud account.',
+        } as ExtensionResponse;
+      }
+      let response: ExtensionResponse;
+      try {
+        response = await handleUpdateScheduledTask(
+          updateMessage,
+          requestedOwner?.accountId,
+          requiresManagedCloud,
+          invalidatesExecution
+            ? () => {
+                mutationGeneration = scheduledTaskExecutions.invalidate(updateMessage.taskId);
+              }
+            : undefined,
+          invalidatesExecution
+            ? (updatedTask) => {
+                committedTaskEnabled = updatedTask.enabled;
+              }
+            : undefined,
+          requestedOwner ? () => !isRetiredManagedCloudOwner(requestedOwner) : undefined,
+        );
+      } catch (error) {
+        if (mutationGeneration !== undefined) {
+          scheduledTaskExecutions.activate(updateMessage.taskId, mutationGeneration);
+        }
+        throw error;
+      }
+      if (!response.success && mutationGeneration !== undefined) {
+        scheduledTaskExecutions.activate(updateMessage.taskId, mutationGeneration);
+      }
+      if (response.success && invalidatesExecution) {
+        const journal = (await loadScheduledTaskRunJournals()).find(
+          (candidate) => candidate.taskId === updateMessage.taskId,
+        );
+        if (journal) await abandonScheduledTaskRun(journal, credential);
+        if (committedTaskEnabled && mutationGeneration !== undefined) {
+          scheduledTaskExecutions.activate(updateMessage.taskId, mutationGeneration);
+        }
+      }
+      return response;
+    }
 
-    case 'DELETE_SCHEDULED_TASK':
-      return handleDeleteScheduledTask(message as import('./types').DeleteScheduledTaskMessage);
+    case 'DELETE_SCHEDULED_TASK': {
+      const deleteMessage = message as import('./types').DeleteScheduledTaskMessage;
+      const existing = (await loadScheduledTasks()).find(
+        (task) => task.id === deleteMessage.taskId,
+      );
+      const touchesManagedCloud = existing?.managedCloudAccountId !== undefined;
+      const requestedOwner = touchesManagedCloud
+        ? normalizeManagedCloudOwner(deleteMessage.owner)
+        : null;
+      const credential = touchesManagedCloud
+        ? await getExactScheduledMutationCredential(requestedOwner)
+        : null;
+      if (touchesManagedCloud && (!requestedOwner || !credential)) {
+        return {
+          success: false,
+          error: 'Task not found for the current Managed Cloud account.',
+        } as ExtensionResponse;
+      }
+      let mutationGeneration: number | undefined;
+      let response: ExtensionResponse;
+      try {
+        response = await handleDeleteScheduledTask(
+          deleteMessage,
+          requestedOwner?.accountId,
+          () => {
+            mutationGeneration = scheduledTaskExecutions.invalidate(deleteMessage.taskId);
+          },
+          requestedOwner ? () => !isRetiredManagedCloudOwner(requestedOwner) : undefined,
+        );
+      } catch (error) {
+        if (mutationGeneration !== undefined) {
+          scheduledTaskExecutions.activate(deleteMessage.taskId, mutationGeneration);
+        }
+        throw error;
+      }
+      if (!response.success && mutationGeneration !== undefined) {
+        scheduledTaskExecutions.activate(deleteMessage.taskId, mutationGeneration);
+      }
+      const journal = response.success
+        ? (await loadScheduledTaskRunJournals()).find(
+            (candidate) => candidate.taskId === deleteMessage.taskId,
+          )
+        : undefined;
+      if (response.success && journal) await abandonScheduledTaskRun(journal, credential);
+      return response;
+    }
 
     case 'NLWEB_PROBE' as ExtensionMessage['type']: {
       const probe = message as unknown as { probeUrl?: string; method?: 'GET' | 'HEAD' };
@@ -1988,6 +3808,10 @@ async function handleMessageAsync(
       const cuMsg = message as import('./types').StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.slice(0, 4096) : '';
+      const cuRunId =
+        typeof cuMsg.runId === 'string' && /^cu_run_[A-Za-z0-9_-]{1,128}$/.test(cuMsg.runId)
+          ? cuMsg.runId
+          : null;
 
       if (!cuGoal) {
         return {
@@ -2001,39 +3825,80 @@ async function handleMessageAsync(
           error: 'AGI_START_COMPUTER_USE: tabId is required',
         } as ExtensionResponse;
       }
+      if (!cuRunId) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: valid runId is required',
+        } as ExtensionResponse;
+      }
+
+      const startGeneration = ++computerUseStartGeneration;
+      computerUseStarts.begin(cuRunId, startGeneration);
+      cancelActiveComputerUseRun('superseded');
+
+      const failStart = (error: string): ExtensionResponse => {
+        if (isCurrentComputerUseStart(cuRunId, startGeneration)) {
+          clearPendingComputerUseStart(cuRunId);
+        }
+        return { success: false, error } as ExtensionResponse;
+      };
+
+      const startWasCancelled = (): boolean => !isCurrentComputerUseStart(cuRunId, startGeneration);
 
       // Re-validate the tab's origin against the allowlist (belt-and-suspenders).
       let cuTab: chrome.tabs.Tab | undefined;
       try {
         cuTab = await chrome.tabs.get(cuTabId);
       } catch {
-        return {
-          success: false,
-          error: 'AGI_START_COMPUTER_USE: tab not found',
-        } as ExtensionResponse;
+        return failStart('AGI_START_COMPUTER_USE: tab not found');
+      }
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
       if (!cuTab?.url) {
-        return {
-          success: false,
-          error: 'AGI_START_COMPUTER_USE: tab has no URL',
-        } as ExtensionResponse;
+        return failStart('AGI_START_COMPUTER_USE: tab has no URL');
       }
       let cuOrigin: string;
       try {
         cuOrigin = new URL(cuTab.url).origin;
       } catch {
-        return {
-          success: false,
-          error: 'AGI_START_COMPUTER_USE: invalid tab URL',
-        } as ExtensionResponse;
+        return failStart('AGI_START_COMPUTER_USE: invalid tab URL');
       }
       if (!siteAllowlistCache.has(cuOrigin)) {
-        return {
-          success: false,
-          error:
-            `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
+        return failStart(
+          `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
             'Add it via the extension popup before starting computer use.',
-        } as ExtensionResponse;
+        );
+      }
+
+      if (cuTab.windowId !== undefined) {
+        let activeTab: chrome.tabs.Tab | undefined;
+        try {
+          [activeTab] = await chrome.tabs.query({ active: true, windowId: cuTab.windowId });
+        } catch {
+          return failStart('AGI_START_COMPUTER_USE: active tab could not be verified');
+        }
+        if (startWasCancelled()) {
+          return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+        }
+        if (activeTab?.id !== cuTabId) {
+          return failStart('AGI_START_COMPUTER_USE: target tab is no longer active');
+        }
+      }
+
+      let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
+      try {
+        authContext = await getManagedCloudAuthContext();
+      } catch {
+        return failStart('AGI_START_COMPUTER_USE: Cloud authentication could not be verified');
+      }
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+      if (!authContext || isRetiredManagedCloudOwner(authContext.owner)) {
+        return failStart(
+          'AGI_START_COMPUTER_USE: sign in to AGI Cloud before starting computer use',
+        );
       }
 
       // Read the "ask before acting" preference stored by the side panel.
@@ -2045,8 +3910,29 @@ async function handleMessageAsync(
       // pref means ask-before-acting (default-deny). Allow-all ("autopilot") is
       // an explicit opt-out the user must choose by turning the toggle OFF.
       // Only an explicit stored `false` disables the gate.
-      const askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
+      let askPref: Record<string, unknown>;
+      try {
+        askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
+      } catch {
+        return failStart('AGI_START_COMPUTER_USE: approval preference could not be loaded');
+      }
       const askBeforeActing = askPref['agi_cu_ask_before_acting'] !== false;
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+
+      clearPendingComputerUseStart(cuRunId);
+      const lease = computerUseRuns.begin({
+        runId: cuRunId,
+        // Monotonic enough across MV3 worker restarts for the long-lived side
+        // panel to reject a delayed lifecycle broadcast from an older run.
+        generation: Date.now() * 1_000 + (startGeneration % 1_000),
+        tabId: cuTabId,
+        ...(cuTab.windowId === undefined ? {} : { windowId: cuTab.windowId }),
+        tabIntentUrl: cuTab.url,
+        authOwner: authContext.owner,
+        credential: authContext.token,
+      });
 
       // onBeforeAction wiring:
       //   - When askBeforeActing is false (explicit autopilot opt-out): no gate —
@@ -2058,12 +3944,16 @@ async function handleMessageAsync(
       //     closed/unresponsive panel can never auto-approve an action. Matches
       //     agentLoop's fail-closed contract (commit security review 2026-06-13).
       const onBeforeAction = askBeforeActing
-        ? async (toolName: string, args: Record<string, unknown>): Promise<boolean> => {
+        ? async (
+            toolName: string,
+            args: Record<string, unknown>,
+            signal?: AbortSignal,
+          ): Promise<boolean> => {
             // SECURITY (commit review 2026-06-13): CSPRNG request id, not Math.random,
             // so a prompt-injected page cannot guess an in-flight approval id.
             const requestId = `cu_approve_${crypto.randomUUID()}`;
             // Notify the side panel to show an approval card
-            void chrome.runtime.sendMessage({
+            broadcastComputerUseForCurrentRun(lease, {
               type: 'AGI_CU_APPROVE_REQUEST',
               requestId,
               toolName,
@@ -2072,10 +3962,31 @@ async function handleMessageAsync(
                 .join(', ')})`,
             });
             // Wait for the side panel's response (or timeout after 30 s → DENY)
-            const decision = await new Promise<boolean>((resolve) => {
-              const timeout = setTimeout(() => {
+            const decision = await new Promise<boolean>((resolve, reject) => {
+              let settled = false;
+              const cleanup = (): void => {
+                clearTimeout(timeout);
+                signal?.removeEventListener('abort', onAbort);
                 chrome.runtime.onMessage.removeListener(listener);
-                resolve(false); // fail-CLOSED: deny if no approval arrives in time
+              };
+              const finish = (allowed: boolean): void => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(allowed);
+              };
+              const onAbort = (): void => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(
+                  signal?.reason instanceof Error
+                    ? signal.reason
+                    : new DOMException('Computer-use approval was cancelled', 'AbortError'),
+                );
+              };
+              const timeout = setTimeout(() => {
+                finish(false); // fail-CLOSED: deny if no approval arrives in time
               }, 30_000);
               function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
                 // SECURITY (commit review 2026-06-13): only honor approval responses
@@ -2083,42 +3994,149 @@ async function handleMessageAsync(
                 // have no sender.tab. Reject content-script / external senders so a
                 // prompt-injected page cannot forge an AGI_CU_APPROVE_RESPONSE and
                 // bypass the human approval gate.
-                if (sender.id !== chrome.runtime.id || sender.tab) return;
+                if (
+                  !isTrustedExtensionPageSender(
+                    {
+                      id: sender.id,
+                      url: sender.url,
+                      origin: sender.origin,
+                      tabUrl: sender.tab?.url,
+                      hasTab: sender.tab != null,
+                    },
+                    chrome.runtime.id,
+                    chrome.runtime.getURL('/').replace(/\/+$/, ''),
+                  )
+                ) {
+                  return;
+                }
                 if (
                   typeof msg === 'object' &&
                   msg !== null &&
                   (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
                   (msg as Record<string, unknown>)['requestId'] === requestId
                 ) {
-                  clearTimeout(timeout);
-                  chrome.runtime.onMessage.removeListener(listener);
-                  resolve((msg as Record<string, unknown>)['allowed'] === true);
+                  finish((msg as Record<string, unknown>)['allowed'] === true);
                 }
               }
               chrome.runtime.onMessage.addListener(listener);
+              signal?.addEventListener('abort', onAbort, { once: true });
+              if (signal?.aborted) onAbort();
             });
             return decision;
           }
         : undefined; // allow-all (no gate)
 
-      // Run the agent loop in a detached promise so we can return immediately.
-      // Progress updates are broadcast via AGI_CU_STEP messages so the side
-      // panel's existing listener (side_panel.ts:3781) picks them up.
-      void runAgentLoop(cuGoal, cuTabId, {
+      const completion = runAgentLoop(cuGoal, cuTabId, {
+        signal: lease.controller.signal,
+        assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
+        resolveOwnedCredential: () => assertComputerUseOwnership(lease),
+        onActionStateChange: (active) => updateComputerUseActionState(lease, active),
         onBeforeAction,
         onProgress: (step) => {
-          void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
+          broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STEP', step });
         },
         onUsageUpdate: (usage) => {
-          void chrome.runtime.sendMessage({ type: 'AGI_CU_USAGE', usage });
+          broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_USAGE', usage });
         },
-      }).catch((err) => {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        logger.error('Computer-use agent loop error', err);
-        void chrome.runtime.sendMessage({ type: 'AGI_CU_ESCALATE', reason: errMsg });
+      });
+      computerUseRuns.trackCompletion(lease, completion);
+      void completion.then(
+        () => {
+          if (!computerUseRuns.finish(lease)) return;
+          sendComputerUseLifecycle({
+            type: 'AGI_CU_STATE',
+            status: 'completed',
+            runId: lease.runId,
+            runGeneration: lease.generation,
+            tabId: lease.tabId,
+          });
+        },
+        (err: unknown) => {
+          if (!computerUseRuns.finish(lease)) return;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error('Computer-use agent loop error', err);
+          sendComputerUseLifecycle({
+            type: 'AGI_CU_ESCALATE',
+            reason: errMsg,
+            runId: lease.runId,
+            runGeneration: lease.generation,
+            tabId: lease.tabId,
+          });
+          sendComputerUseLifecycle({
+            type: 'AGI_CU_STATE',
+            status: 'error',
+            reason: errMsg,
+            runId: lease.runId,
+            runGeneration: lease.generation,
+            tabId: lease.tabId,
+          });
+        },
+      );
+
+      broadcastComputerUseForCurrentRun(lease, {
+        type: 'AGI_CU_STATE',
+        status: 'running',
       });
 
-      return { success: true } as ExtensionResponse;
+      return {
+        success: true,
+        running: true,
+        runId: lease.runId,
+        runGeneration: lease.generation,
+      } as ExtensionResponse;
+    }
+
+    case 'CANCEL_COMPUTER_USE' as ExtensionMessage['type']: {
+      const cancelMessage = message as import('./types').CancelComputerUseMessage;
+      const rawExpectedRunId = cancelMessage.runId;
+      if (
+        rawExpectedRunId !== undefined &&
+        (typeof rawExpectedRunId !== 'string' ||
+          !/^cu_run_[A-Za-z0-9_-]{1,128}$/.test(rawExpectedRunId))
+      ) {
+        return {
+          success: false,
+          running: computerUseRuns.getActive() !== null || computerUseStarts.getPending() !== null,
+          error: 'CANCEL_COMPUTER_USE: invalid runId',
+        } as ExtensionResponse;
+      }
+      const expectedRunId = rawExpectedRunId;
+      const requestedReason = cancelMessage.reason;
+      const reason: ComputerUseCancellationReason =
+        requestedReason === 'account_changed' ||
+        requestedReason === 'panel_closed' ||
+        requestedReason === 'user_cleared'
+          ? requestedReason
+          : 'user_stopped';
+
+      const activeRun = computerUseRuns.getActive();
+      if (
+        expectedRunId &&
+        activeRun?.runId !== expectedRunId &&
+        computerUseStarts.getPending()?.runId !== expectedRunId
+      ) {
+        if (activeRun || computerUseStarts.getPending()) {
+          return {
+            success: false,
+            running: true,
+            error: 'CANCEL_COMPUTER_USE: run ownership no longer matches',
+          } as ExtensionResponse;
+        }
+        return { success: true, running: false } as ExtensionResponse;
+      }
+
+      computerUseStartGeneration += 1;
+      const pendingCancelled = clearPendingComputerUseStart(expectedRunId);
+      const cancelled = cancelActiveComputerUseRun(reason, expectedRunId);
+      return {
+        success: true,
+        running: false,
+        ...(cancelled
+          ? { runId: cancelled.runId }
+          : pendingCancelled && expectedRunId
+            ? { runId: expectedRunId }
+            : {}),
+      } as ExtensionResponse;
     }
 
     case 'BRIDGE_URL_CHANGED': {
@@ -2639,25 +4657,42 @@ function setupContextMenu(): void {
           logger.warn('Failed to send GET_ELEMENT_INFO to tab', err);
         });
     } else if (info.menuItemId === 'discover-webmcp-tools') {
+      const discoveryTabId = tab.id;
+      const discoveryTabUrl = tab.url;
+      const navigationGeneration = currentWebMCPNavigationGeneration(discoveryTabId);
       chrome.tabs.sendMessage(
-        tab.id,
+        discoveryTabId,
         { type: 'WEBMCP_DISCOVER_TOOLS' },
-        (response: { tools?: import('./types').WebMCPToolInfo[] } | undefined) => {
+        (response: { tools?: unknown; url?: unknown } | undefined) => {
           if (chrome.runtime.lastError) {
             logger.warn('WebMCP discover failed', chrome.runtime.lastError.message);
             return;
           }
-          const tools = response?.tools ?? [];
-          logger.info(`WebMCP: discovered ${tools.length} tool(s) on tab ${tab!.id}`, {
-            tools: tools.map((t) => t.name),
-          });
-          if (tab!.id != null) {
-            webmcpToolsByTab.set(tab!.id, {
-              tools,
-              url: info.pageUrl ?? '',
-              timestamp: Date.now(),
+          void chrome.tabs
+            .get(discoveryTabId)
+            .then((currentTab) => {
+              if (
+                typeof discoveryTabUrl !== 'string' ||
+                currentTab.url !== discoveryTabUrl ||
+                navigationGeneration !== currentWebMCPNavigationGeneration(discoveryTabId)
+              ) {
+                logger.debug('Discarded stale WebMCP context-menu discovery');
+                return;
+              }
+              const normalized = normalizeWebMCPToolsUpdate(
+                response?.tools,
+                response?.url,
+                discoveryTabUrl,
+              );
+              if (!normalized) {
+                logger.warn('WebMCP context-menu discovery returned invalid metadata');
+                return;
+              }
+              publishNormalizedWebMCPToolsUpdate(discoveryTabId, normalized, navigationGeneration);
+            })
+            .catch((error) => {
+              logger.debug('WebMCP context-menu tab lookup failed', error);
             });
-          }
         },
       );
     } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
@@ -2756,10 +4791,46 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  const lease = computerUseRuns.getActive();
+  if (lease?.tabId === tabId) {
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('tab_removed', lease.runId);
+  }
   state.rateLimiter.reset(tabId);
   webmcpToolsByTab.delete(tabId);
+  webmcpNavigationGenerationByTab.delete(tabId);
   nlwebByTab.delete(tabId);
   logger.debug('Cleaned up rate limit, webmcp tools, and nlweb for tab', { tabId });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  const lease = computerUseRuns.getActive();
+  if (
+    lease?.tabId === tabId &&
+    typeof changeInfo.url === 'string' &&
+    changeInfo.url !== lease.tabIntentUrl &&
+    !lease.actionInFlight
+  ) {
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+  }
+  if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
+  invalidateWebMCPToolsForNavigation(tabId);
+  nlwebByTab.delete(tabId);
+});
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  const lease = computerUseRuns.getActive();
+  if (
+    !lease ||
+    lease.windowId === undefined ||
+    activeInfo.windowId !== lease.windowId ||
+    activeInfo.tabId === lease.tabId
+  ) {
+    return;
+  }
+  computerUseStartGeneration += 1;
+  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
 });
 
 chrome.commands.onCommand.addListener((command) => {
@@ -2861,7 +4932,9 @@ function isAllowedProbeUrl(raw: string): boolean {
 // surfaces (background, side panel, pairing); log at the call site instead.
 
 async function handleChatMessage(
-  message: import('./types').ChatMessageMessage,
+  message: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+    owner?: ManagedCloudOwner;
+  },
   _sender: chrome.runtime.MessageSender,
   /**
    * Present only for background-initiated runs (scheduled tasks, prompt
@@ -2870,7 +4943,12 @@ async function handleChatMessage(
    * store or it is lost. See `features/background/background-results.ts`.
    */
   delivery?: BackgroundChatDelivery,
+  /** Cancels alarm admission while auth or another pre-dispatch await is pending. */
+  admissionSignal?: AbortSignal,
 ): Promise<ChromeManagedChatResult> {
+  if (admissionSignal?.aborted) {
+    return scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.');
+  }
   const { clientInstanceId, id } = message;
   let streamKey: string;
   try {
@@ -2882,6 +4960,50 @@ async function handleChatMessage(
       message: 'Invalid chat stream identifier.',
     };
   }
+  const requestedOwner = message.owner ? normalizeManagedCloudOwner(message.owner) : null;
+  if (requestedOwner && isRetiredManagedCloudOwner(requestedOwner)) {
+    return scheduledTaskError(
+      'auth_required',
+      'The Managed Cloud account changed before this turn.',
+    );
+  }
+  const credential = await getManagedCloudAuthContext();
+  if (admissionSignal?.aborted) {
+    return scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.');
+  }
+  if (
+    !credential ||
+    isRetiredManagedCloudOwner(credential.owner) ||
+    (message.owner && !requestedOwner)
+  ) {
+    const result = {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to use AGI Cloud chat.',
+    } as const;
+    if (requestedOwner) {
+      broadcastManagedChatChunk(requestedOwner, clientInstanceId, id, {
+        text: '',
+        done: true,
+        error: '__AUTH_REQUIRED__',
+      });
+    }
+    return result;
+  }
+  if (requestedOwner && !sameManagedCloudOwner(requestedOwner, credential.owner)) {
+    const result = {
+      status: 'error',
+      code: 'auth_required',
+      message: 'The Managed Cloud account changed before this turn started.',
+    } as const;
+    broadcastManagedChatChunk(requestedOwner, clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: '__AUTH_REQUIRED__',
+    });
+    return result;
+  }
+  const owner = credential.owner;
   const broadcastChunk = (
     text: string,
     done: boolean,
@@ -2892,7 +5014,7 @@ async function handleChatMessage(
       'agentEvent' | 'durableReplay' | 'cloudRun'
     >,
   ): void => {
-    broadcastManagedChatChunk(clientInstanceId, id, {
+    broadcastManagedChatChunk(owner, clientInstanceId, id, {
       text,
       done,
       error,
@@ -2913,20 +5035,32 @@ async function handleChatMessage(
 
   const activeStream: ActiveChatStream = {
     clientInstanceId,
+    owner,
+    token: credential.token,
     controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
+    ...(delivery?.requestId ? { requestId: delivery.requestId } : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
+  const abortForAdmission = (): void => {
+    activeStream.cancelRequested = true;
+    activeStream.controller.abort();
+  };
+  admissionSignal?.addEventListener('abort', abortForAdmission, { once: true });
+  if (admissionSignal?.aborted) abortForAdmission();
 
   // Only accumulated for background runs. An interactive turn is rendered and
   // persisted by the panel that owns the stream, so buffering the whole answer
   // here would just duplicate it in service-worker memory.
   const transcript: string[] = [];
   const onStreamText = (text: string): void => {
+    if (activeChatStreams.get(streamKey) !== activeStream) return;
     if (delivery && text) transcript.push(text);
-    broadcastChunk(text, false);
+    publishManagedChatChunk(streamKey, activeStream, id, { text, done: false });
   };
+  let backgroundDeliveryAttempted = false;
+  let backgroundDeliveryFailure: string | null = null;
   /**
    * File whatever the run produced before returning. Called on every terminal
    * path — success, error and throw — because a stream that failed midway was
@@ -2934,28 +5068,42 @@ async function handleChatMessage(
    */
   const deliverBackgroundResult = async (
     routing?: ChromeManagedChatResult['routing'],
-  ): Promise<void> => {
-    if (!delivery) return;
+  ): Promise<string | null> => {
+    if (backgroundDeliveryAttempted) return backgroundDeliveryFailure;
+    if (!delivery) return null;
     const answer = transcript.join('');
-    if (!answer.trim()) return;
+    if (!answer.trim()) return null;
+    backgroundDeliveryAttempted = true;
     try {
-      await recordBackgroundChatResult(
+      const stored = await recordBackgroundChatResult(
         delivery,
+        owner,
         answer,
         routing ? { selectedModel: 'auto', currentModelKey: routing.modelKey } : undefined,
       );
+      if (!stored) {
+        const message = 'The background answer could not be proven durable.';
+        logger.error(message);
+        backgroundDeliveryFailure = message;
+        return backgroundDeliveryFailure;
+      }
+      return null;
     } catch (error) {
       logger.error('Failed to persist background chat result', error);
+      backgroundDeliveryFailure = 'The background answer could not be persisted.';
+      return backgroundDeliveryFailure;
     }
   };
 
   try {
     let systemPrompt: string | undefined;
-    try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
-    } catch {
-      // Platform context is optional; inference remains Managed Cloud only.
+    if (!delivery) {
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
+      } catch {
+        // Platform context is optional; inference remains Managed Cloud only.
+      }
     }
 
     const result = await executeChromeManagedChat(
@@ -2964,6 +5112,7 @@ async function handleChatMessage(
         text: message.text,
         modelSelection: message.modelSelection,
         quickMode: message.quickMode,
+        effort: message.effort,
         pageContext: message.pageContext,
         systemPrompt,
         conversationHistory: message.conversationHistory,
@@ -2971,26 +5120,52 @@ async function handleChatMessage(
         extendedThinking: message.extendedThinking,
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
+        idempotencyKey: delivery?.requestId,
+        completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
       },
-      createChromeManagedChatDependencies(onStreamText, {
-        onAgentEvent: (chunk) =>
-          broadcastChunk('', false, undefined, undefined, {
-            agentEvent: chunk.envelope,
-            ...(chunk.durableReplay ? { durableReplay: true } : {}),
-          }),
-        onRunReference: (cloudRun) => {
-          activeStream.cloudRun = { ...cloudRun };
-          broadcastChunk('', false, undefined, undefined, { cloudRun });
-        },
-      }),
+      {
+        ...createChromeManagedChatDependencies(onStreamText, {
+          onRouting: async (routing) => {
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              routing,
+            });
+            await delivery?.onRouting?.(routing);
+          },
+          onAgentEvent: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              agentEvent: chunk.envelope,
+              ...(chunk.durableReplay ? { durableReplay: true } : {}),
+            }),
+          onRunReference: async (cloudRun) => {
+            if (activeChatStreams.get(streamKey) !== activeStream) return;
+            activeStream.cloudRun = { ...cloudRun };
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              cloudRun,
+            });
+            await delivery?.onRunReference?.(cloudRun);
+          },
+        }),
+        getAuthToken: async () => credential.token,
+      },
     );
 
     if (result.status === 'success') {
       if (!activeStream.cancelNotified) {
-        broadcastChunk('', true, undefined, result.routing);
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: true,
+          routing: result.routing,
+        });
       }
-      await deliverBackgroundResult(result.routing);
+      const deliveryFailure = await deliverBackgroundResult(result.routing);
+      if (deliveryFailure) return scheduledTaskError('server_error', deliveryFailure);
       return result;
     }
 
@@ -3002,12 +5177,23 @@ async function handleChatMessage(
           : result.code === 'auth_required'
             ? '__AUTH_REQUIRED__'
             : result.message;
-      broadcastChunk('', true, visibleError, result.routing);
+      publishManagedChatChunk(streamKey, activeStream, id, {
+        text: '',
+        done: true,
+        error: visibleError,
+        ...(result.routing ? { routing: result.routing } : {}),
+      });
     }
-    await deliverBackgroundResult(result.routing);
+    const deliveryFailure = await deliverBackgroundResult(result.routing);
+    if (result.code === 'auth_required') {
+      await invalidateRejectedManagedCloudCredential(activeStream);
+    }
+    if (deliveryFailure) return scheduledTaskError('server_error', deliveryFailure);
     return result;
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : 'Managed Cloud chat failed.';
+    const deliveryFailure = await deliverBackgroundResult();
+    const messageText =
+      deliveryFailure ?? (error instanceof Error ? error.message : 'Managed Cloud chat failed.');
     const result = {
       status: 'error',
       code: 'server_error',
@@ -3015,12 +5201,16 @@ async function handleChatMessage(
     } as const;
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
-      broadcastChunk('', true, messageText);
+      publishManagedChatChunk(streamKey, activeStream, id, {
+        text: '',
+        done: true,
+        error: messageText,
+      });
     }
     logger.error('handleChatMessage error', error);
-    await deliverBackgroundResult();
     return result;
   } finally {
+    admissionSignal?.removeEventListener('abort', abortForAdmission);
     // A stale completion must never delete a newer stream that reused the id.
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
   }
@@ -3034,8 +5224,34 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
   } catch {
     return;
   }
+  const routing =
+    message.routing === undefined
+      ? undefined
+      : normalizeChromeManagedRoutingMetadata(message.routing);
+  if (message.routing !== undefined && !routing) {
+    broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: 'Invalid Managed Cloud routing metadata.',
+    });
+    return;
+  }
+  const credential = await getManagedCloudAuthContext();
+  if (
+    !credential ||
+    isRetiredManagedCloudOwner(message.owner) ||
+    isRetiredManagedCloudOwner(credential.owner) ||
+    !sameManagedCloudOwner(credential.owner, message.owner)
+  ) {
+    broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: '__AUTH_REQUIRED__',
+    });
+    return;
+  }
   if (activeChatStreams.has(streamKey)) {
-    broadcastManagedChatChunk(clientInstanceId, id, {
+    broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
       text: '',
       done: true,
       error: 'This AGI Cloud run is already active.',
@@ -3045,6 +5261,8 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
 
   const activeStream: ActiveChatStream = {
     clientInstanceId,
+    owner: credential.owner,
+    token: credential.token,
     controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
@@ -3053,6 +5271,15 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
   activeChatStreams.set(streamKey, activeStream);
 
   try {
+    if (routing) {
+      // Restore the exact route before replay begins so a service-worker or
+      // side-panel restart cannot silently reset Auto to an unrelated model.
+      publishManagedChatChunk(streamKey, activeStream, id, {
+        text: '',
+        done: false,
+        routing,
+      });
+    }
     const result = await resumeChromeManagedRun(
       {
         run: message.cloudRun,
@@ -3060,17 +5287,20 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
         signal: activeStream.controller.signal,
       },
       {
-        onText: (text) => broadcastManagedChatChunk(clientInstanceId, id, { text, done: false }),
+        getAuthToken: async () => credential.token,
+        onText: (text) =>
+          publishManagedChatChunk(streamKey, activeStream, id, { text, done: false }),
         onAgentEvent: (agentEvent) =>
-          broadcastManagedChatChunk(clientInstanceId, id, {
+          publishManagedChatChunk(streamKey, activeStream, id, {
             text: '',
             done: false,
             agentEvent,
             durableReplay: true,
           }),
         onRunReference: (cloudRun) => {
+          if (activeChatStreams.get(streamKey) !== activeStream) return;
           activeStream.cloudRun = { ...cloudRun };
-          broadcastManagedChatChunk(clientInstanceId, id, {
+          publishManagedChatChunk(streamKey, activeStream, id, {
             text: '',
             done: false,
             cloudRun,
@@ -3080,21 +5310,26 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
     );
 
     if (result.status === 'success') {
-      broadcastManagedChatChunk(clientInstanceId, id, {
+      publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
+        ...(routing ? { routing } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
       return;
     }
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
-      broadcastManagedChatChunk(clientInstanceId, id, {
+      publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        ...(routing ? { routing } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
+    }
+    if (result.code === 'auth_required') {
+      await invalidateRejectedManagedCloudCredential(activeStream);
     }
   } finally {
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
@@ -3111,8 +5346,22 @@ async function handleResolveChatApproval(
   } catch {
     return;
   }
+  const credential = await getManagedCloudAuthContext();
+  if (
+    !credential ||
+    isRetiredManagedCloudOwner(message.owner) ||
+    isRetiredManagedCloudOwner(credential.owner) ||
+    !sameManagedCloudOwner(credential.owner, message.owner)
+  ) {
+    broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: '__AUTH_REQUIRED__',
+    });
+    return;
+  }
   if (activeChatStreams.has(streamKey)) {
-    broadcastManagedChatChunk(clientInstanceId, id, {
+    broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
       text: '',
       done: true,
       error: 'This AGI Cloud run is already active.',
@@ -3122,6 +5371,8 @@ async function handleResolveChatApproval(
 
   const activeStream: ActiveChatStream = {
     clientInstanceId,
+    owner: credential.owner,
+    token: credential.token,
     controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
@@ -3137,34 +5388,38 @@ async function handleResolveChatApproval(
         toolApprovals: message.toolApprovals,
         signal: activeStream.controller.signal,
       },
-      createChromeManagedApprovalDependencies(
-        (text) =>
-          broadcastManagedChatChunk(clientInstanceId, id, {
-            text,
-            done: false,
-          }),
-        {
-          onAgentEvent: (chunk) =>
-            broadcastManagedChatChunk(clientInstanceId, id, {
-              text: '',
+      {
+        ...createChromeManagedApprovalDependencies(
+          (text) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text,
               done: false,
-              agentEvent: chunk.envelope,
-              ...(chunk.durableReplay ? { durableReplay: true } : {}),
             }),
-          onRunReference: (cloudRun) => {
-            activeStream.cloudRun = { ...cloudRun };
-            broadcastManagedChatChunk(clientInstanceId, id, {
-              text: '',
-              done: false,
-              cloudRun,
-            });
+          {
+            onAgentEvent: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                agentEvent: chunk.envelope,
+                ...(chunk.durableReplay ? { durableReplay: true } : {}),
+              }),
+            onRunReference: (cloudRun) => {
+              if (activeChatStreams.get(streamKey) !== activeStream) return;
+              activeStream.cloudRun = { ...cloudRun };
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                cloudRun,
+              });
+            },
           },
-        },
-      ),
+        ),
+        getAuthToken: async () => credential.token,
+      },
     );
 
     if (result.status === 'success') {
-      broadcastManagedChatChunk(clientInstanceId, id, {
+      publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
@@ -3173,12 +5428,15 @@ async function handleResolveChatApproval(
     }
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
-      broadcastManagedChatChunk(clientInstanceId, id, {
+      publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
+    }
+    if (result.code === 'auth_required') {
+      await invalidateRejectedManagedCloudCredential(activeStream);
     }
   } finally {
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
@@ -3197,6 +5455,10 @@ async function handleResolveChatApproval(
  * fallback — a failed Managed Cloud turn surfaces its error.
  */
 async function handleInPagePrompt(prompt: string): Promise<string> {
+  const credential = await getManagedCloudAuthContext();
+  if (!credential || isRetiredManagedCloudOwner(credential.owner)) {
+    return 'Sign in to use AGI Cloud chat.';
+  }
   let systemPrompt: string | undefined;
   try {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -3206,17 +5468,49 @@ async function handleInPagePrompt(prompt: string): Promise<string> {
   }
 
   let responseText = '';
-  const result = await executeChromeManagedChat(
-    {
-      id: `in_page:${crypto.randomUUID()}`,
-      text: prompt,
-      modelSelection: 'auto',
-      systemPrompt,
-    },
-    createChromeManagedChatDependencies((chunk) => {
-      responseText += chunk;
-    }),
-  );
+  const id = `in_page:${crypto.randomUUID()}`;
+  const streamKey = createChromeManagedStreamKey('in_page', id);
+  const activeStream: ActiveChatStream = {
+    clientInstanceId: 'in_page',
+    owner: credential.owner,
+    token: credential.token,
+    controller: new AbortController(),
+    cancelRequested: false,
+    cancelNotified: false,
+  };
+  activeChatStreams.set(streamKey, activeStream);
+  let result: ChromeManagedChatResult;
+  try {
+    result = await executeChromeManagedChat(
+      {
+        id,
+        text: prompt,
+        modelSelection: 'auto',
+        systemPrompt,
+        signal: activeStream.controller.signal,
+      },
+      {
+        ...createChromeManagedChatDependencies(
+          (chunk) => {
+            if (activeChatStreams.get(streamKey) === activeStream) responseText += chunk;
+          },
+          {
+            onRunReference: (cloudRun) => {
+              if (activeChatStreams.get(streamKey) === activeStream) {
+                activeStream.cloudRun = { ...cloudRun };
+              }
+            },
+          },
+        ),
+        getAuthToken: async () => credential.token,
+      },
+    );
+    if (result.status === 'error' && result.code === 'auth_required') {
+      await invalidateRejectedManagedCloudCredential(activeStream);
+    }
+  } finally {
+    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+  }
 
   if (result.status === 'success') {
     return responseText || 'AGI Cloud completed the request without a text response.';
@@ -3247,6 +5541,9 @@ chrome.alarms.create('keep-alive', { periodInMinutes: 1.0 }, () => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
+    void recoverScheduledTaskRuns().catch((error) => {
+      logger.warn('Failed to retry scheduled Managed Cloud recovery', error);
+    });
     // Periodic connection check (replaces setInterval which is lost on MV3 suspension)
     if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
       void connectToNativeHost();
@@ -3257,21 +5554,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   // Handle scheduled task alarms (Gap 6 / W5-03)
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
+    // Snapshot authority before the first await. Delete/disable/update commits
+    // invalidate this generation before writing task storage.
+    const expectedGeneration = scheduledTaskExecutions.generation(taskId);
     void loadScheduledTasks()
       .then(async (tasks) => {
         const task = tasks.find((t) => t.id === taskId);
         if (!task?.enabled) return;
-        // Respect the user's "Task notifications" preference (Options page). Defaults to on.
-        if (await taskNotificationsEnabled()) {
-          chrome.notifications.create(`agi_task_notif_${taskId}`, {
-            type: 'basic',
-            iconUrl: 'icons/icon48.png',
-            title: 'AGI Task Running',
-            message: task.name,
-            priority: 0,
-          });
-        }
-        await executeScheduledTask(task);
+        await executeScheduledTask(task, expectedGeneration);
       })
       .catch((err) => {
         logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);

@@ -25,6 +25,7 @@ import {
 } from '../features/permissions/agentModeConsent';
 
 export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
+export type ComposerFollowUpBehavior = 'queue' | 'steer';
 export type ExtensionTier =
   | 'local'
   | 'byok'
@@ -42,6 +43,7 @@ export interface MutableConfigValues {
   model: string;
   cliPath: string;
   streamingEnabled: boolean;
+  'composer.followUpBehavior': ComposerFollowUpBehavior;
   contextLines: number;
   telemetryEnabled: boolean;
   hoverEnabled: boolean;
@@ -83,6 +85,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.mode',
   'agent.effort',
   'agent.thinking',
+  'composer.followUpBehavior',
   'mcp.enabled',
   'desktopBridge.enabled',
   'desktopBridge.port',
@@ -117,6 +120,7 @@ const DEFAULTS = {
   mcpEnabled: false,
   model: 'auto',
   streamingEnabled: true,
+  composerFollowUpBehavior: 'queue',
   contextLines: 50,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
@@ -204,6 +208,10 @@ export const Config = {
   streamingEnabled(): boolean {
     return get<boolean>('streamingEnabled', DEFAULTS.streamingEnabled);
   },
+  composerFollowUpBehavior(): ComposerFollowUpBehavior {
+    const raw = get<string>('composer.followUpBehavior', DEFAULTS.composerFollowUpBehavior);
+    return raw === 'steer' ? 'steer' : 'queue';
+  },
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
@@ -290,6 +298,7 @@ export const Config = {
         model: this.model(),
         cliPath: this.cliPath(),
         streamingEnabled: this.streamingEnabled(),
+        'composer.followUpBehavior': this.composerFollowUpBehavior(),
         contextLines: this.contextLines(),
         telemetryEnabled: this.telemetryEnabled(),
         hoverEnabled: this.hoverEnabled(),

@@ -14,6 +14,7 @@ export {
   DEFAULT_BLENDED_RATE,
   CHARS_PER_TOKEN,
   normalizeConfiguredModelId,
+  normalizeSelectableConfiguredModelId,
   buildGroupedQuickPickItems,
   getModelProviderInfo,
   type ModelPickerOption,

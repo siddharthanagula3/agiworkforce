@@ -350,9 +350,22 @@ const SELECTABLE_MODEL_PICKER_OPTION_IDS = new Set(
   ),
 );
 
+/**
+ * Normalize a configured model only when it resolves to a currently selectable
+ * static picker entry. A `null` result is intentionally distinct from `auto`:
+ * callers that also support CLI-discovered local models must verify the raw id
+ * against the local runtime instead of silently changing its provider boundary.
+ */
+export function normalizeSelectableConfiguredModelId(
+  modelId: string | null | undefined,
+): string | null {
+  const candidate = modelId ?? 'auto';
+  const normalized = normalizeModelId(candidate) ?? candidate;
+  return SELECTABLE_MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : null;
+}
+
 export function normalizeConfiguredModelId(modelId: string | null | undefined): string {
-  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto';
-  return SELECTABLE_MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto';
+  return normalizeSelectableConfiguredModelId(modelId) ?? 'auto';
 }
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {

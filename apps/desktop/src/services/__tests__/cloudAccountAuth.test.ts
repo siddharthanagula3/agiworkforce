@@ -37,6 +37,55 @@ function jwtWithClaims(claims: Record<string, unknown>): string {
   return `${header}.${payload}.signature`;
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  return {
+    promise: new Promise<T>((settle) => {
+      resolve = settle;
+    }),
+    resolve,
+  };
+}
+
+async function waitFor(assertion: () => boolean): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (assertion()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for CloudAccountAuth.');
+}
+
+function meResponse(
+  id: string,
+  tier: 'free' | 'pro',
+  featureFlags: Record<string, boolean>,
+): Response {
+  return new Response(
+    JSON.stringify({
+      id,
+      email: `${id}@example.test`,
+      name: id,
+      avatar_url: null,
+      created_at: null,
+      updated_at: 1_751_712_000,
+      plan: {
+        tier,
+        display_name: tier === 'pro' ? 'Pro' : 'Free',
+        status: tier === 'pro' ? 'active' : 'none',
+        current_period_end: 1_752_278_400,
+      },
+      feature_flags: {
+        advanced_model_access: tier === 'pro',
+        ...featureFlags,
+      },
+      credits: null,
+      routing_preferences: {},
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
 describe('cloudAccountAuth', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
@@ -209,6 +258,277 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.hasFeature('cloud_managed')).toBe(true);
   });
 
+  it('drops account A /api/me results that arrive after account B becomes current', async () => {
+    const accountAToken = jwtWithClaims({
+      sub: 'account-a',
+      email: 'account-a@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const accountBToken = jwtWithClaims({
+      sub: 'account-b',
+      email: 'account-b@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const accountASnapshot = deferred<Response>();
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const authorization = (init?.headers as Record<string, string> | undefined)?.[
+        'Authorization'
+      ];
+      if (url.includes('/api/me') && authorization === `Bearer ${accountAToken}`) {
+        return accountASnapshot.promise;
+      }
+      if (url.includes('/api/me') && authorization === `Bearer ${accountBToken}`) {
+        return meResponse('account-b', 'free', { account_b_only: true });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const accountAResult = cloudAccountAuth.setSession({
+      access_token: accountAToken,
+      refresh_token: 'refresh-a',
+    });
+    await waitFor(() =>
+      vi.mocked(fetch).mock.calls.some(([, init]) => {
+        const headers = init?.headers as Record<string, string> | undefined;
+        return headers?.['Authorization'] === `Bearer ${accountAToken}`;
+      }),
+    );
+
+    await expect(
+      cloudAccountAuth.setSession({
+        access_token: accountBToken,
+        refresh_token: 'refresh-b',
+      }),
+    ).resolves.toEqual({ error: null });
+
+    accountASnapshot.resolve(meResponse('account-a', 'pro', { account_a_only: true }));
+    await accountAResult;
+
+    const current = cloudAccountAuth.getState();
+    expect(current.user?.id).toBe('account-b');
+    expect(current.session?.access_token).toBe(accountBToken);
+    expect(current.profile?.id).toBe('account-b');
+    expect(current.subscription?.plan_tier).toBe('free');
+    expect(current.featureFlags).toMatchObject({
+      advanced_model_access: false,
+      account_b_only: true,
+    });
+  });
+
+  it('serializes native vault writes so account B is always written after a delayed account A', async () => {
+    const accountAToken = jwtWithClaims({
+      sub: 'account-a',
+      email: 'account-a@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const accountBToken = jwtWithClaims({
+      sub: 'account-b',
+      email: 'account-b@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const accountAWrite = deferred<void>();
+    const accessTokenWriteOrder: string[] = [];
+
+    invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'account_store_access_token') {
+        const token = String(args?.['accessToken']);
+        accessTokenWriteOrder.push(token);
+        if (token === accountAToken) await accountAWrite.promise;
+      }
+      return undefined;
+    });
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const authorization = (init?.headers as Record<string, string> | undefined)?.[
+        'Authorization'
+      ];
+      return authorization === `Bearer ${accountBToken}`
+        ? meResponse('account-b', 'free', { account_b_only: true })
+        : meResponse('account-a', 'pro', { account_a_only: true });
+    });
+
+    const accountAResult = cloudAccountAuth.setSession({
+      access_token: accountAToken,
+      refresh_token: 'refresh-a',
+    });
+    await waitFor(() => accessTokenWriteOrder.includes(accountAToken));
+
+    const accountBResult = cloudAccountAuth.setSession({
+      access_token: accountBToken,
+      refresh_token: 'refresh-b',
+    });
+    expect(cloudAccountAuth.getUser()?.id).toBe('account-b');
+    expect(accessTokenWriteOrder).toEqual([accountAToken]);
+
+    accountAWrite.resolve();
+    await Promise.all([accountAResult, accountBResult]);
+
+    expect(accessTokenWriteOrder).toEqual([accountAToken, accountBToken]);
+    expect(cloudAccountAuth.getUser()?.id).toBe('account-b');
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(accountBToken);
+  });
+
+  it('cannot resurrect a signed-out account when an older refresh resolves late', async () => {
+    const expiredAccessToken = jwtWithClaims({
+      sub: 'account-a',
+      email: 'account-a@example.test',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    const refreshedAccessToken = jwtWithClaims({
+      sub: 'account-a',
+      email: 'account-a@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const refreshResponse = deferred<Response>();
+
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (String(input).includes('/api/auth/device/refresh')) {
+        return refreshResponse.promise;
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const refreshResult = cloudAccountAuth.setSession({
+      access_token: expiredAccessToken,
+      refresh_token: 'refresh-a',
+    });
+    await waitFor(() =>
+      vi
+        .mocked(fetch)
+        .mock.calls.some(([input]) => String(input).includes('/api/auth/device/refresh')),
+    );
+
+    await cloudAccountAuth.signOut();
+    refreshResponse.resolve(
+      new Response(
+        JSON.stringify({
+          access_token: refreshedAccessToken,
+          refresh_token: 'refresh-a-rotated',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await refreshResult;
+
+    expect(cloudAccountAuth.isAuthenticated()).toBe(false);
+    expect(cloudAccountAuth.getSession()).toBeNull();
+    expect(invokeMock).not.toHaveBeenCalledWith('account_store_access_token', {
+      accessToken: refreshedAccessToken,
+    });
+  });
+
+  it.each([['success', 200] as const, ['unauthorized', 401] as const])(
+    'does not let a late account A profile %s mutate or invalidate account B',
+    async (_label, patchStatus) => {
+      const accountAToken = jwtWithClaims({
+        sub: 'account-a',
+        email: 'account-a@example.test',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const accountBToken = jwtWithClaims({
+        sub: 'account-b',
+        email: 'account-b@example.test',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const accountAPatch = deferred<Response>();
+
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const authorization = (init?.headers as Record<string, string> | undefined)?.[
+          'Authorization'
+        ];
+        if (String(input).includes('/api/me') && init?.method === 'PATCH') {
+          return accountAPatch.promise;
+        }
+        return authorization === `Bearer ${accountBToken}`
+          ? meResponse('account-b', 'free', { account_b_only: true })
+          : meResponse('account-a', 'pro', { account_a_only: true });
+      });
+
+      await cloudAccountAuth.setSession({
+        access_token: accountAToken,
+        refresh_token: 'refresh-a',
+      });
+      const profileUpdate = cloudAccountAuth.updateProfile({ display_name: 'Changed A' });
+      await waitFor(() => vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'PATCH'));
+
+      await cloudAccountAuth.setSession({
+        access_token: accountBToken,
+        refresh_token: 'refresh-b',
+      });
+      accountAPatch.resolve(
+        new Response(
+          patchStatus === 200
+            ? JSON.stringify({ display_name: 'Changed A', avatar_url: null })
+            : '{}',
+          { status: patchStatus, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      await expect(profileUpdate).resolves.toEqual({
+        error: expect.objectContaining({
+          message: 'The AGI Cloud account changed before the profile was saved.',
+        }),
+      });
+
+      const current = cloudAccountAuth.getState();
+      expect(current.user?.id).toBe('account-b');
+      expect(current.session?.access_token).toBe(accountBToken);
+      expect(current.profile?.display_name).toBe('account-b');
+      expect(current.featureFlags).toMatchObject({ account_b_only: true });
+      expect(cloudAccountAuth.isAuthenticated()).toBe(true);
+    },
+  );
+
+  it('does not let a superseded browser authorization overwrite a newer native sign-in', async () => {
+    const oldBrowserToken = jwtWithClaims({
+      sub: 'account-a',
+      email: 'account-a@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const nativeToken = jwtWithClaims({
+      sub: 'account-b',
+      email: 'account-b@example.test',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const oldWindowClose = deferred<void>();
+    const close = vi.fn(() => oldWindowClose.promise);
+
+    openDesktopCloudSignInWindowMock.mockResolvedValue({ close });
+    authorizeDesktopDeviceMock.mockImplementation(async (options) => {
+      await options.openAuthorization(`${WEB_APP_URL}/auth/device?user_code=OLD-A`);
+      return {
+        accessToken: oldBrowserToken,
+        refreshToken: 'refresh-a',
+        expiresAt: Date.now() + 3_600_000,
+      };
+    });
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const authorization = (init?.headers as Record<string, string> | undefined)?.[
+        'Authorization'
+      ];
+      return authorization === `Bearer ${nativeToken}`
+        ? meResponse('account-b', 'free', { account_b_only: true })
+        : meResponse('account-a', 'pro', { account_a_only: true });
+    });
+
+    const oldBrowserSignIn = cloudAccountAuth.signIn();
+    await waitFor(() => close.mock.calls.length === 1);
+
+    await cloudAccountAuth.adoptNativeCredential({
+      accessToken: nativeToken,
+      refreshToken: 'refresh-b',
+    });
+    oldWindowClose.resolve();
+    const oldResult = await oldBrowserSignIn;
+
+    expect(oldResult.error?.code).toBe('authorization_superseded');
+    const current = cloudAccountAuth.getState();
+    expect(current.user?.id).toBe('account-b');
+    expect(current.session?.access_token).toBe(nativeToken);
+    expect(current.error).toBeNull();
+    expect(current.featureFlags).toMatchObject({ account_b_only: true });
+  });
+
   it('backfills the account email from /api/me when the bearer claim is empty', async () => {
     // /api/auth/device/token mints `email: ''` whenever the browser approval had
     // no email claim, so /api/me is the only authoritative source of the address.
@@ -236,6 +556,37 @@ describe('cloudAccountAuth', () => {
     await cloudAccountAuth.signOut();
 
     expect(window.sessionStorage.getItem('desktop-ui-state')).toBe('keep-me');
+  });
+
+  it('waits for retiring-run cleanup before remotely revoking the bearer', async () => {
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    await cloudAccountAuth.setSession({ access_token: accessToken });
+    vi.mocked(fetch).mockClear();
+    const cleanup = deferred<void>();
+    let cleanupStarted = false;
+
+    const signOut = cloudAccountAuth.signOut({
+      beforeCredentialRevocation: async () => {
+        cleanupStarted = true;
+        await cleanup.promise;
+      },
+    });
+    await waitFor(() => cleanupStarted);
+
+    expect(
+      vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/api/auth/logout')),
+    ).toBe(false);
+
+    cleanup.resolve(undefined);
+    await signOut;
+
+    expect(
+      vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/api/auth/logout')),
+    ).toBe(true);
   });
 
   it('uses an in-app device authorization window for Desktop sign-in', async () => {

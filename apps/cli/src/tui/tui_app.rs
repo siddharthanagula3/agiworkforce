@@ -596,12 +596,7 @@ impl TuiApp {
             .ok()
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
-        let session_id: String = self
-            .session
-            .runtime_session_id
-            .chars()
-            .take(8)
-            .collect();
+        let session_id: String = self.session.runtime_session_id.chars().take(8).collect();
         if let Some(title) = build_terminal_title(
             &self.terminal_title_config,
             &session_id,
@@ -1717,8 +1712,14 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         "Shift+Tab: mode".to_string(),
         Style::default().fg(ui_muted()),
     ));
-    optional.push(Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())));
-    optional.push(Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())));
+    optional.push(Span::styled(
+        "/: commands".to_string(),
+        Style::default().fg(ui_muted()),
+    ));
+    optional.push(Span::styled(
+        "Esc: quit".to_string(),
+        Style::default().fg(ui_muted()),
+    ));
     let avail = area.width as usize;
     let mut used: usize = spans.iter().map(|s| display_width(&s.content)).sum();
     for opt in optional {
@@ -3287,12 +3288,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
                     SlashResult::SendPrompt(prompt)
                 }
-                crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+                crate::claude_parity::ParityCommandResult::DraftPrompt {
+                    prompt,
+                    destination,
+                    provider,
+                } => {
                     app.input = prompt;
                     app.cursor = app.input.len();
-                    SlashResult::SystemMessage(
-                        "Drafted BYOK continuation prompt. Review it before pressing Enter.".into(),
-                    )
+                    SlashResult::SystemMessage(format!(
+                        "Drafted {} continuation for provider `{provider}`. Review the exact payload before pressing Enter; edits require a fresh preview.",
+                        match destination {
+                            crate::agent::PrivacyMode::Byok => "BYOK",
+                            crate::agent::PrivacyMode::Managed => "Managed Cloud",
+                            crate::agent::PrivacyMode::Local => "Local",
+                        }
+                    ))
                 }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
@@ -3416,7 +3426,7 @@ pub async fn run(
                 .iter()
                 .filter(|message| message.role == "user")
                 .count() as u32;
-            session.adopt_managed_session(managed_session, path);
+            session.adopt_managed_session(managed_session, path)?;
         }
         (Some(messages), None) => {
             if !messages.is_empty() {
@@ -3436,7 +3446,7 @@ pub async fn run(
                 .iter()
                 .filter(|message| message.role == "user")
                 .count() as u32;
-            session.adopt_managed_session(managed_session, path);
+            session.adopt_managed_session(managed_session, path)?;
         }
         (None, None) => {
             session.enable_managed_session()?;
@@ -3817,9 +3827,12 @@ async fn run_event_loop(
                                 // the duration and restore it after — the same
                                 // shape as RunLogin above.
                                 restore_terminal(terminal)?;
-                                let result =
-                                    crate::voice::run_voice_mode(&mut app.session, &app.config, &lang)
-                                        .await;
+                                let result = crate::voice::run_voice_mode(
+                                    &mut app.session,
+                                    &app.config,
+                                    &lang,
+                                )
+                                .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
                                 app.chat_messages.push(ChatMessage {
@@ -4956,6 +4969,31 @@ mod tests {
     }
 
     #[test]
+    fn managed_handoff_preloads_tui_composer_with_correct_route_label() {
+        let mut app = minimal_app();
+        app.session.model = crate::model_catalog::cloud_models()[0].id.clone();
+        app.session.provider = crate::models::Provider::ManagedCloud;
+        app.session.set_session_persistence(true);
+        app.session
+            .set_privacy_mode(crate::agent::PrivacyMode::Local);
+        app.session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "tui-source",
+            chrono::Utc::now(),
+        ));
+        app.session.managed_session_path = Some("tui-source.jsonl".into());
+
+        match handle_slash("/continue-with-cloud full", &mut app) {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("Managed Cloud"));
+                assert!(message.contains("managed_cloud"));
+            }
+            _ => panic!("expected Managed Cloud review message"),
+        }
+        assert!(app.input.contains("Local chat in Managed Cloud mode"));
+        assert!(app.input.contains("Destination provider: managed_cloud"));
+    }
+
+    #[test]
     fn overlay_intercepts_keys_before_composer() {
         let mut app = minimal_app();
         let view = Box::new(StubView::new(true /* close_on_enter */));
@@ -4992,7 +5030,9 @@ mod tests {
         use crate::tui::widgets::statusline_setup::StatusLineSetupView;
         let mut app = minimal_app();
         assert!(!app.statusline_config.show_model, "model off by default");
-        app.open_overlay(Box::new(StatusLineSetupView::new(app.statusline_config.clone())));
+        app.open_overlay(Box::new(StatusLineSetupView::new(
+            app.statusline_config.clone(),
+        )));
 
         // Space toggles the field under the cursor (index 0 = "model").
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
@@ -5011,7 +5051,9 @@ mod tests {
         use crate::tui::widgets::statusline_setup::StatusLineSetupView;
         let mut app = minimal_app();
         let before = app.statusline_config.clone();
-        app.open_overlay(Box::new(StatusLineSetupView::new(app.statusline_config.clone())));
+        app.open_overlay(Box::new(StatusLineSetupView::new(
+            app.statusline_config.clone(),
+        )));
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
         assert!(app.active_overlay.is_none());
@@ -5054,7 +5096,10 @@ mod tests {
     fn title_overlay_save_applies_config_to_app() {
         use crate::tui::widgets::terminal_title_setup::TerminalTitleSetupView;
         let mut app = minimal_app();
-        assert!(!app.terminal_title_config.show_session_id, "session-id off by default");
+        assert!(
+            !app.terminal_title_config.show_session_id,
+            "session-id off by default"
+        );
         app.open_overlay(Box::new(TerminalTitleSetupView::new(
             app.terminal_title_config.clone(),
         )));
@@ -5097,9 +5142,7 @@ mod tests {
             .ui
             .keybindings
             .insert("open_palette".to_string(), "ctrl+p".to_string());
-        app.keybindings = crate::keybindings::Keybindings::from_config(
-            &app.config.ui.keybindings,
-        );
+        app.keybindings = crate::keybindings::Keybindings::from_config(&app.config.ui.keybindings);
 
         let action = handle_key_event(&mut app, make_key(KeyCode::Char('/')));
         assert!(matches!(action, InputAction::None));

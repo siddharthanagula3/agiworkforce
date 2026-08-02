@@ -84,6 +84,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Extension Host display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
       - name: Validate extension source
         run: |
           pnpm --filter agi-workforce typecheck
@@ -104,6 +109,11 @@ jobs:
           mkdir -p dist/vscode
           cp "apps/extension-vscode/${VSIX_NAME}" "dist/vscode/${VSIX_NAME}"
           sha256sum "dist/vscode/${VSIX_NAME}" > "dist/vscode/${VSIX_NAME}.sha256"
+
+      - name: Exercise the exact verified VSIX in a clean VS Code profile
+        env:
+          AGI_VSCODE_E2E_VSIX: ${{ github.workspace }}/dist/vscode/${{ steps.metadata.outputs.vsix }}
+        run: xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration:vsix
 
       - name: Upload verified VSIX
         uses: actions/upload-artifact@v7

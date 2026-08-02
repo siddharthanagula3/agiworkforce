@@ -129,7 +129,7 @@ const EXCLUDED_DIRS: &[&str] = &[
 // Helpers
 // ─────────────────────────────────────────────
 
-fn is_excluded_dir(path: &Path) -> bool {
+pub(super) fn is_excluded_dir(path: &Path) -> bool {
     path.components().any(|c| {
         c.as_os_str()
             .to_str()
@@ -336,10 +336,14 @@ fn grep_blocking(
         }
 
         // Skip oversized files.
-        let meta = match std::fs::metadata(path) {
+        // Do not turn a file symlink into searchable project content.
+        let meta = match std::fs::symlink_metadata(path) {
             Ok(m) => m,
             Err(_) => continue,
         };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
         if meta.len() > MAX_FILE_SIZE_BYTES {
             continue;
         }
@@ -558,10 +562,16 @@ fn glob_blocking(
             continue;
         }
 
-        let meta = match std::fs::metadata(path) {
+        // `WalkDir::follow_links(false)` does not make `metadata` safe for a
+        // file symlink: it would still advertise the target as a regular Cloud
+        // handoff candidate. Keep links out of the listing entirely.
+        let meta = match std::fs::symlink_metadata(path) {
             Ok(m) => m,
             Err(_) => continue,
         };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
 
         let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         let modified_secs = modified
@@ -1046,4 +1056,30 @@ fn detect_formatter(ext: &str, root: &Path) -> FormatterInfo {
 /// Check whether a binary exists anywhere in PATH.
 fn which_available(name: &str) -> bool {
     which::which(name).is_ok()
+}
+
+#[cfg(test)]
+mod code_search_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn glob_listing_excludes_file_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("temp root");
+        let outside = tempfile::NamedTempFile::new().expect("outside file");
+        std::fs::write(root.path().join("inside.txt"), b"inside").expect("inside file");
+        symlink(outside.path(), root.path().join("linked.txt")).expect("file symlink");
+
+        let result = glob_blocking(root.path(), "**/*", 100, 0).expect("glob result");
+        assert!(result
+            .matches
+            .iter()
+            .any(|entry| entry.relative_path == "inside.txt"));
+        assert!(!result
+            .matches
+            .iter()
+            .any(|entry| entry.relative_path == "linked.txt"));
+    }
 }

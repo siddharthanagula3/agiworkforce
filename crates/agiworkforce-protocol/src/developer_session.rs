@@ -18,7 +18,11 @@ use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
 
 /// Current wire version for the shared CLI/VS Code developer-session protocol.
-pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 6;
+///
+/// Version 7 adds authoritative trust-mode and provider-route metadata to
+/// thread summaries so clients can resume a session without inferring its data
+/// boundary from a model id.
+pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 7;
 
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
@@ -247,6 +251,21 @@ pub enum DeveloperSessionSource {
     Vscode,
 }
 
+/// Durable trust boundary for a developer session.
+///
+/// `Unknown` is reserved for legacy sessions that predate persisted routing
+/// authority. Clients may list those sessions, but must not silently resume or
+/// send a turn until the user explicitly chooses a new boundary.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperSessionTrustMode {
+    Local,
+    Byok,
+    Managed,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -259,6 +278,13 @@ pub struct ThreadSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cwd: Option<String>,
+    /// Provider route persisted by the CLI host (for example `anthropic`,
+    /// `ollama`, a custom provider name, or `managed_cloud`). This is metadata,
+    /// never authority supplied by a presentation client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<String>,
+    pub trust_mode: DeveloperSessionTrustMode,
     pub created_at: String,
     pub updated_at: String,
     pub created_by: DeveloperSessionSource,
@@ -304,6 +330,9 @@ pub struct DeveloperMessage {
 pub struct ThreadReadResponse {
     pub thread: ThreadSummary,
     pub messages: Vec<DeveloperMessage>,
+    /// Whether `messages` is a bounded newest-message window rather than the
+    /// thread's complete persisted transcript.
+    pub transcript_truncated: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -533,8 +562,8 @@ mod tests {
     };
 
     #[test]
-    fn developer_session_v5_wraps_canonical_agent_events() {
-        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 6);
+    fn developer_session_v7_wraps_canonical_agent_events() {
+        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 7);
 
         let notification = agent_event_notification(
             "thread-1",

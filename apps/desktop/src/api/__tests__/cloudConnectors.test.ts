@@ -3,19 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
   getAuthHeaders: vi.fn(),
-  captureManagedCloudBoundary: vi.fn(),
+  createManagedCloudRequestContext: vi.fn(),
   assertManagedCloudBoundary: vi.fn(),
 }));
 
 vi.mock('../cloudApi', () => ({
-  cloudFetch: mocks.cloudFetch,
-  getAuthHeaders: mocks.getAuthHeaders,
   CLOUD_API_BASE_URL: 'https://cloud.agi.example',
 }));
 
-vi.mock('../../services/managedCloudBoundary', () => ({
-  captureManagedCloudBoundary: mocks.captureManagedCloudBoundary,
-  assertManagedCloudBoundary: mocks.assertManagedCloudBoundary,
+vi.mock('../../services/managedCloudRequestContext', () => ({
+  createManagedCloudRequestContext: mocks.createManagedCloudRequestContext,
 }));
 
 import { createCustomConnector } from '../cloudConnectors';
@@ -27,9 +24,10 @@ describe('cloudConnectors', () => {
       Authorization: 'Bearer desktop-session',
       'Content-Type': 'application/json',
     });
-    mocks.captureManagedCloudBoundary.mockReturnValue({
-      accountId: 'user_1',
-      accessToken: 'desktop-session',
+    mocks.createManagedCloudRequestContext.mockReturnValue({
+      fetch: mocks.cloudFetch,
+      getHeaders: mocks.getAuthHeaders,
+      assertBoundary: mocks.assertManagedCloudBoundary,
     });
     mocks.cloudFetch.mockResolvedValue(new Response(null, { status: 201 }));
   });

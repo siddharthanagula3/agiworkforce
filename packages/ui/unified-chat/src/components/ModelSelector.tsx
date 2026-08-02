@@ -317,9 +317,10 @@ function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProp
 interface BestAutoRowProps {
   isSelected: boolean;
   onSelect: () => void;
+  disabled?: boolean;
 }
 
-function BestAutoRow({ isSelected, onSelect }: BestAutoRowProps) {
+function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProps) {
   const lastDecision = useModelStore(selectLastRoutingDecision);
   const routedModel = lastDecision?.wasRouted ? modelsById[lastDecision.routedModelId] : null;
   const taskLabel = lastDecision?.wasRouted
@@ -330,11 +331,13 @@ function BestAutoRow({ isSelected, onSelect }: BestAutoRowProps) {
     <Popover.Close asChild>
       <button
         type="button"
+        disabled={disabled}
         onClick={onSelect}
         aria-pressed={isSelected}
         className={cn(
           'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
           'border border-transparent',
+          disabled && 'cursor-not-allowed opacity-50',
           isSelected
             ? 'border-[var(--chat-accent-primary)]/30 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
             : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
@@ -408,6 +411,8 @@ export interface ModelSelectorProps {
     currentProvider: string;
     attemptedModelId: string;
   }) => void;
+  /** Prevents model authority changes while the current turn is in flight. */
+  disabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +476,7 @@ export function ModelSelector({
   effort,
   onEffortChange,
   onProPlusRequired,
+  disabled = false,
 }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
   const hostBridge = useHostBridge();
@@ -530,6 +536,7 @@ export function ModelSelector({
   // of switching. The conversation's provider is set by the host once the
   // first message is sent (see tierStore.setCurrentConversationProvider).
   const guardedSelectModel = (modelId: string) => {
+    if (disabled) return;
     const target = displayModels.find((m) => m.id === modelId);
     if (!target || !isChatModelSelectable(target)) return;
     if (!onProPlusRequired) {
@@ -626,12 +633,14 @@ export function ModelSelector({
         <button
           type="button"
           aria-label="Select model"
+          disabled={disabled}
           className={cn(
             'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
             'text-xs text-[var(--chat-text-secondary)] transition-colors duration-150',
             'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
             'data-[state=open]:bg-[var(--chat-surface-hover)] data-[state=open]:text-[var(--chat-text-primary)]',
+            disabled && 'cursor-not-allowed opacity-50',
             className,
           )}
         >
@@ -704,6 +713,7 @@ export function ModelSelector({
                 <BestAutoRow
                   isSelected={isBestAutoSelected}
                   onSelect={() => guardedSelectModel(bestAutoId)}
+                  disabled={disabled}
                 />
                 <div className="mx-2 my-1 border-t border-[var(--chat-border)]" />
               </div>
@@ -756,7 +766,7 @@ export function ModelSelector({
                           <Popover.Close asChild>
                             <button
                               type="button"
-                              disabled={!isSelectable}
+                              disabled={disabled || !isSelectable}
                               onClick={() => guardedSelectModel(m.id)}
                               aria-pressed={isSelected}
                               title={!isSelectable ? m.unavailableReason : undefined}

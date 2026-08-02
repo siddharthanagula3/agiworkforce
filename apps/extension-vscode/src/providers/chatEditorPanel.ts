@@ -113,6 +113,8 @@ export class ChatEditorPanel {
       this.stateManager.meterCollapsed,
       // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
       resolveTierSync(context),
+      false,
+      Config.composerFollowUpBehavior(),
     );
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage(async (message) => {
@@ -143,5 +145,12 @@ export class ChatEditorPanel {
     this.stateManager.cancelInFlight();
     for (const disposable of this.disposables) disposable.dispose();
     this.disposables.length = 0;
+  }
+
+  /** Keep every live editor composer aligned with the user-scoped default. */
+  static pushFollowUpBehavior(): void {
+    for (const instance of ChatEditorPanel.instances) {
+      instance.stateManager.pushFollowUpBehavior();
+    }
   }
 }

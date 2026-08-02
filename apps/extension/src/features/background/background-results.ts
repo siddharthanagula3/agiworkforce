@@ -17,7 +17,14 @@ import {
   type ConversationEntry,
   type ConversationRoutingState,
 } from './conversation-history';
+import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type { ChromeManagedRoutingMetadata } from '../../types';
 import { logger } from '../../utils';
+import {
+  normalizeManagedCloudOwner,
+  sameManagedCloudOwner,
+  type ManagedCloudOwner,
+} from '../cloud-bridge/managedCloudAuthority';
 
 /** Key holding the conversation the side panel should open on its next load. */
 export const PENDING_RESULT_KEY = 'agi_pending_background_result_v1';
@@ -53,12 +60,20 @@ export interface BackgroundChatDelivery {
   label: string;
   /** The prompt that was executed. */
   prompt: string;
+  /** Stable Managed Cloud/billing identity used when this run must be retried. */
+  requestId?: string;
+  /** Stable local write identity used to suppress duplicate recovered turns. */
+  deliveryId?: string;
+  /** Persist concrete routing before streaming starts. */
+  onRouting?: (routing: ChromeManagedRoutingMetadata) => void | Promise<void>;
+  /** Persist the server-owned run as soon as its handle is available. */
+  onRunReference?: (run: ManagedCloudAgentRunReference) => void | Promise<void>;
   /**
    * Invoked once — and only once the answer is safely in the store — with the
    * text that was filed. Lets the dispatching caller quote the result in its
    * completion notification without buffering the stream itself.
    */
-  onDelivered?: (answer: string) => void;
+  onDelivered?: (answer: string, owner: ManagedCloudOwner) => void;
 }
 
 /**
@@ -99,17 +114,26 @@ export function createBackgroundChatDelivery(
  */
 export async function recordBackgroundChatResult(
   delivery: BackgroundChatDelivery,
+  owner: ManagedCloudOwner,
   answer: string,
   routing?: ConversationRoutingState,
 ): Promise<ConversationEntry | undefined> {
   const entry = await appendBackgroundTurn(
+    owner,
     delivery.conversationId,
     delivery.label,
-    { prompt: delivery.prompt, answer },
+    {
+      prompt: delivery.prompt,
+      answer,
+      ...(delivery.deliveryId ? { deliveryId: delivery.deliveryId } : {}),
+    },
     routing,
   );
-  if (entry) delivery.onDelivered?.(answer);
-  return entry;
+  if (!entry) return undefined;
+  if (entry.status !== 'unchanged') {
+    delivery.onDelivered?.(entry.persistedAnswer, owner);
+  }
+  return entry.entry;
 }
 
 /**
@@ -134,6 +158,7 @@ const MAX_NOTIFICATION_LINKS = 20;
 
 interface NotificationLink {
   conversationId: string;
+  owner: ManagedCloudOwner;
   at: number;
 }
 
@@ -152,7 +177,9 @@ function nextLinkStamp(): number {
 function isNotificationLink(value: unknown): value is NotificationLink {
   if (!value || typeof value !== 'object') return false;
   const link = value as Record<string, unknown>;
+  const owner = normalizeManagedCloudOwner(link['owner']);
   return (
+    owner != null &&
     typeof link['conversationId'] === 'string' &&
     link['conversationId'].length > 0 &&
     typeof link['at'] === 'number' &&
@@ -169,12 +196,14 @@ function isNotificationLink(value: unknown): value is NotificationLink {
  */
 export async function linkNotificationToConversation(
   notificationId: string,
+  owner: ManagedCloudOwner,
   conversationId: string,
 ): Promise<void> {
   try {
     await chrome.storage.session.set({
       [`${NOTIFICATION_CONVERSATION_PREFIX}${notificationId}`]: {
         conversationId,
+        owner,
         at: nextLinkStamp(),
       } satisfies NotificationLink,
     });
@@ -200,6 +229,7 @@ async function pruneNotificationLinks(): Promise<void> {
 /** Read and clear the conversation a notification points at. */
 export async function takeNotificationConversation(
   notificationId: string,
+  owner: ManagedCloudOwner,
 ): Promise<string | undefined> {
   const key = `${NOTIFICATION_CONVERSATION_PREFIX}${notificationId}`;
   try {
@@ -207,7 +237,7 @@ export async function takeNotificationConversation(
     const link = stored?.[key];
     if (!isNotificationLink(link)) return undefined;
     await chrome.storage.session.remove(key);
-    return link.conversationId;
+    return sameManagedCloudOwner(link.owner, owner) ? link.conversationId : undefined;
   } catch (error) {
     logger.debug('Failed to read notification background result link', error);
     return undefined;
@@ -221,20 +251,38 @@ export async function takeNotificationConversation(
  * opened by the click is not yet listening for runtime messages, so the
  * pointer goes through session storage and is consumed by the panel on load.
  */
-export async function setPendingResultConversation(conversationId: string): Promise<void> {
+export async function setPendingResultConversation(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<void> {
   try {
-    await chrome.storage.session.set({ [PENDING_RESULT_KEY]: conversationId });
+    await chrome.storage.session.set({
+      [PENDING_RESULT_KEY]: { conversationId, owner },
+    });
   } catch (error) {
     logger.debug('Failed to park pending background result pointer', error);
   }
 }
 
 /** Read and clear the pending pointer. Returns `undefined` when unset. */
-export async function takePendingResultConversation(): Promise<string | undefined> {
+export async function takePendingResultConversation(
+  owner: ManagedCloudOwner,
+): Promise<string | undefined> {
   try {
     const stored = await chrome.storage.session.get(PENDING_RESULT_KEY);
-    const conversationId = stored?.[PENDING_RESULT_KEY];
-    if (typeof conversationId !== 'string' || conversationId.length === 0) return undefined;
+    const pending = stored?.[PENDING_RESULT_KEY];
+    if (!pending || typeof pending !== 'object' || Array.isArray(pending)) return undefined;
+    const record = pending as Record<string, unknown>;
+    const conversationId = record['conversationId'];
+    const pendingOwner = normalizeManagedCloudOwner(record['owner']);
+    if (
+      typeof conversationId !== 'string' ||
+      conversationId.length === 0 ||
+      !sameManagedCloudOwner(pendingOwner, owner)
+    ) {
+      await chrome.storage.session.remove(PENDING_RESULT_KEY);
+      return undefined;
+    }
     await chrome.storage.session.remove(PENDING_RESULT_KEY);
     return conversationId;
   } catch (error) {

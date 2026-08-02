@@ -13,6 +13,63 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain("id: 'sp-history-btn'");
     expect(source).toContain("'aria-label': 'Recent chats'");
     expect(source).toContain('openDrawer(historyBtn)');
+    expect(source).toContain("id: 'sp-drawer-history-search'");
+    expect(source).toContain('filterConversations(entries, drawerHistorySearch.value)');
+  });
+
+  it('invalidates delayed history restores and conditionally rolls back a stale owner claim', () => {
+    const start = source.indexOf('async function restoreHistoryEntry');
+    const end = source.indexOf('// Install the module-scope hook', start);
+    const restoreBody = source.slice(start, end);
+
+    expect(source).toContain('historyRestoreToken += 1');
+    expect(restoreBody).toContain('const restoreToken = ++historyRestoreToken');
+    expect(restoreBody.match(/restoreIsCurrent\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(restoreBody).toContain('restoreConversationOwnerIfCurrent(');
+  });
+
+  it('persists a boot-seeded collision branch before relying on in-memory hydration', () => {
+    const start = source.indexOf('async function loadMessages');
+    const end = source.indexOf('function resumeLatestStoredManagedRun', start);
+    const loadBody = source.slice(start, end);
+
+    expect(loadBody).toMatch(
+      /persistConversationSeed\(\s*ownerAtStart,\s*conversationOwner\.conversationId,\s*active,?\s*\)/,
+    );
+    expect(loadBody).toContain('_ctx.conversationGeneration !== expectedGeneration');
+  });
+
+  it('does not let a delayed delete clear a newer restored conversation', () => {
+    const start = source.indexOf("delBtn.addEventListener('click'");
+    const end = source.indexOf('item.appendChild(delBtn)', start);
+    const deleteBody = source.slice(start, end);
+
+    expect(deleteBody).toContain('const deletionGeneration = _ctx.conversationGeneration');
+    expect(deleteBody).toContain('_ctx.conversationId === entry.id');
+    expect(deleteBody).toContain('_ctx.conversationGeneration === deletionGeneration');
+  });
+
+  it('shows a catalog-driven reasoning slider with an honest unresolved Auto state', () => {
+    expect(source).toContain("id: 'sp-effort-btn'");
+    expect(source).toContain("id: 'sp-effort-slider'");
+    expect(source).toContain('getManagedEffortControlState(');
+    expect(source).toContain("state.status === 'awaiting-route'");
+    expect(source).toContain('getManagedOutboundEffort(');
+    expect(source).toContain('return effort === undefined ? {} : { effort }');
+  });
+
+  it('keeps Quick as a per-turn overlay without erasing durable route state on toggle', () => {
+    const start = source.indexOf("quickModeToggle.addEventListener('click'");
+    const end = source.indexOf('composerBar.appendChild(quickModeToggle)', start);
+    const toggleBody = source.slice(start, end);
+
+    expect(toggleBody).toContain('_ctx.quickMode = next');
+    expect(toggleBody).not.toContain('_ctx.currentModelKey = undefined');
+    expect(toggleBody).not.toContain('_ctx.previousTaskType = undefined');
+    expect(toggleBody).not.toContain('_ctx.reasoningEffort = undefined');
+    expect(toggleBody).not.toContain('saveMessages()');
+    expect(source).toContain('quickModeByStreamId.set(streamId, quickMode)');
+    expect(source).toContain('!streamUsedQuick && applyRoutingContinuation(chunk.routing)');
   });
 
   it('labels the navigation drawer as an AGI menu instead of settings', () => {
@@ -24,6 +81,31 @@ describe('Chrome side-panel demo surface', () => {
   it('does not expose unfinished console or desktop actions in the public drawer', () => {
     expect(source).not.toContain('chatActionsRow.appendChild(drawerConsoleBtn)');
     expect(source).not.toContain('chatActionsRow.appendChild(drawerOpenDesktopBtn)');
+  });
+
+  it('attributes WebMCP tools to the exact active tab and refreshes them on tab changes', () => {
+    expect(source).toContain('selectWebMCPToolsForActivePage(message, activeWebMCPPage)');
+    expect(source).toContain("type: 'WEBMCP_DISCOVER_TOOLS'");
+    expect(source).toContain('pageGeneration: identity.pageGeneration');
+    expect(source).toContain('isWebMCPUpdateHintForActivePage(msg, activeWebMCPPage)');
+    expect(source).toContain('chrome.tabs.onActivated?.addListener');
+    expect(source).toContain('chrome.tabs.onUpdated?.addListener');
+
+    const navigationListenerStart = source.indexOf('chrome.tabs.onUpdated?.addListener');
+    const navigationListenerEnd = source.indexOf(
+      '// Populate hostname chip',
+      navigationListenerStart,
+    );
+    const navigationListener = source.slice(navigationListenerStart, navigationListenerEnd);
+    expect(navigationListener).toContain('if (!activeWebMCPPage)');
+    expect(navigationListener).toContain('refreshPageHostname()');
+    expect(navigationListener).toContain('updateActivePageIdentity(tabId, changeInfo.url, true)');
+    const identityStart = source.indexOf('function updateActivePageIdentity');
+    const identityEnd = source.indexOf('function refreshWebMCPToolsForActivePage', identityStart);
+    const identityBody = source.slice(identityStart, identityEnd);
+    expect(identityBody).toContain('if (forceInvalidate || identityChanged)');
+    expect(identityBody).toContain('webMCPPageGeneration += 1');
+    expect(identityBody).toContain('clearDiscoveredTools()');
   });
 
   it('uses an honest signed-out model picker label', () => {

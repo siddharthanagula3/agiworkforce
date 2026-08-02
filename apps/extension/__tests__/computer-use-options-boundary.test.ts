@@ -21,6 +21,6 @@ describe('computer-use options trust boundary', () => {
 
   it('keeps the disclosure tied to the enforced default and per-action detach lifecycle', () => {
     expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
-    expect(driver).toMatch(/return await fn\(\);[\s\S]*finally \{[\s\S]*await detach\(tabId\)/);
+    expect(driver).toMatch(/await fn\(\);[\s\S]*finally \{[\s\S]*await detach\(tabId\)/);
   });
 });

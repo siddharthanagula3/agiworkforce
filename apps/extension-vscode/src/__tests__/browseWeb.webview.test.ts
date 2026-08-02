@@ -70,6 +70,7 @@ describe('VS Code Browse the web context', () => {
       payload: {
         text: 'What changed in the latest Rust release?',
         browseWeb: true,
+        clientMessageId: expect.stringMatching(/^msg-/),
       },
     });
     expect(document.querySelector('.message.user')?.textContent).toBe(

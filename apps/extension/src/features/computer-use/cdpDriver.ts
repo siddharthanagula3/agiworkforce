@@ -149,7 +149,14 @@ function debuggee(tabId: number): chrome.debugger.Debuggee {
   return { tabId };
 }
 
-async function attach(tabId: number): Promise<void> {
+function throwIfCdpCancelled(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  if (signal.reason instanceof Error) throw signal.reason;
+  throw new DOMException('Computer-use CDP operation was cancelled', 'AbortError');
+}
+
+async function attach(tabId: number, signal?: AbortSignal): Promise<void> {
+  throwIfCdpCancelled(signal);
   return new Promise((resolve, reject) => {
     chrome.debugger.attach(debuggee(tabId), '1.3', () => {
       if (chrome.runtime.lastError) {
@@ -181,11 +188,19 @@ async function sendCommand<T = unknown>(
   tabId: number,
   method: string,
   params?: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  throwIfCdpCancelled(signal);
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(debuggee(tabId), method, params ?? {}, (result) => {
       if (chrome.runtime.lastError) {
         reject(new Error(`CDP ${method} failed: ${chrome.runtime.lastError.message ?? 'unknown'}`));
+      } else if (signal?.aborted) {
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new DOMException('Computer-use CDP operation was cancelled', 'AbortError'),
+        );
       } else {
         resolve(result as T);
       }
@@ -197,10 +212,17 @@ async function sendCommand<T = unknown>(
  * Wrap an action with attach/detach lifecycle. The debugger is always detached
  * after the action completes, whether success or error.
  */
-async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
-  await attach(tabId);
+async function withDebugger<T>(
+  tabId: number,
+  fn: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  await attach(tabId, signal);
   try {
-    return await fn();
+    throwIfCdpCancelled(signal);
+    const result = await fn();
+    throwIfCdpCancelled(signal);
+    return result;
   } finally {
     await detach(tabId);
   }
@@ -215,6 +237,28 @@ export interface WaitForStableOptions {
   pollIntervalMs?: number;
   /** Number of consecutive identical snapshots before declaring stable. Default 2. */
   stableCount?: number;
+  /** Stop polling immediately when the owning computer-use run is cancelled. */
+  signal?: AbortSignal;
+}
+
+async function waitForPollInterval(delayMs: number, signal?: AbortSignal): Promise<void> {
+  throwIfCdpCancelled(signal);
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = (): void => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+      reject(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Computer-use stability wait was cancelled', 'AbortError'),
+      );
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -232,11 +276,16 @@ export interface WaitForStableOptions {
  * Poll the DOM stability hash once, using an ephemeral attach/detach.
  * Returns empty string on any error (including CDP not available).
  */
-async function pollDomHash(tabId: number): Promise<string> {
+async function pollDomHash(tabId: number, signal?: AbortSignal): Promise<string> {
   try {
-    return await withDebugger(tabId, async () => {
-      const result = await sendCommand<CdpObjectResult>(tabId, 'Runtime.evaluate', {
-        expression: `(() => {
+    return await withDebugger(
+      tabId,
+      async () => {
+        const result = await sendCommand<CdpObjectResult>(
+          tabId,
+          'Runtime.evaluate',
+          {
+            expression: `(() => {
           const ready = document.readyState;
           const els = document.querySelectorAll(
             'button,a[href],input,textarea,select,[role="button"],[role="link"],[tabindex]'
@@ -245,12 +294,17 @@ async function pollDomHash(tabId: number): Promise<string> {
             (e.tagName + (e.id || '') + (e.getAttribute('name') || '') + (e.textContent || '').trim().slice(0,20))
           ).join(',').slice(0, 500);
         })()`,
-        returnByValue: true,
-      });
-      const val = result.result.value;
-      return typeof val === 'string' ? val : '';
-    });
+            returnByValue: true,
+          },
+          signal,
+        );
+        const val = result.result.value;
+        return typeof val === 'string' ? val : '';
+      },
+      signal,
+    );
   } catch {
+    throwIfCdpCancelled(signal);
     return '';
   }
 }
@@ -262,13 +316,16 @@ export async function waitForStable(
   const timeoutMs = options.timeoutMs ?? 3_000;
   const pollIntervalMs = options.pollIntervalMs ?? 250;
   const stableCount = options.stableCount ?? 2;
+  const signal = options.signal;
 
   const deadline = Date.now() + timeoutMs;
   let consecutiveStable = 0;
   let lastHash = '';
 
   while (Date.now() < deadline) {
-    const hash = await pollDomHash(tabId);
+    throwIfCdpCancelled(signal);
+    const hash = await pollDomHash(tabId, signal);
+    throwIfCdpCancelled(signal);
     if (hash !== '' && hash === lastHash && hash.startsWith('complete|')) {
       consecutiveStable++;
       if (consecutiveStable >= stableCount) return; // DOM is quiet
@@ -276,7 +333,7 @@ export async function waitForStable(
       consecutiveStable = 0;
       lastHash = hash;
     }
-    await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
+    await waitForPollInterval(pollIntervalMs, signal);
   }
   // Timeout reached — return anyway; caller continues best-effort
 }
@@ -287,12 +344,18 @@ export async function waitForStable(
 async function selectorToCoords(
   tabId: number,
   selector: string,
+  signal?: AbortSignal,
 ): Promise<{ x: number; y: number }> {
   // Resolve the node ID via Runtime.evaluate → DOM.getBoxModel
-  const evalResult = await sendCommand<CdpObjectResult>(tabId, 'Runtime.evaluate', {
-    expression: `document.querySelector(${JSON.stringify(selector)})`,
-    returnByValue: false,
-  });
+  const evalResult = await sendCommand<CdpObjectResult>(
+    tabId,
+    'Runtime.evaluate',
+    {
+      expression: `document.querySelector(${JSON.stringify(selector)})`,
+      returnByValue: false,
+    },
+    signal,
+  );
   if (evalResult.exceptionDetails) {
     throw new Error(`Selector eval error: ${evalResult.exceptionDetails.text}`);
   }
@@ -300,10 +363,20 @@ async function selectorToCoords(
   if (!objectId) {
     throw new Error(`Element not found for selector: ${selector}`);
   }
-  const nodeResult = await sendCommand<{ nodeId: number }>(tabId, 'DOM.requestNode', { objectId });
-  const boxModel = await sendCommand<{ model: CdpBoxModel }>(tabId, 'DOM.getBoxModel', {
-    nodeId: nodeResult.nodeId,
-  });
+  const nodeResult = await sendCommand<{ nodeId: number }>(
+    tabId,
+    'DOM.requestNode',
+    { objectId },
+    signal,
+  );
+  const boxModel = await sendCommand<{ model: CdpBoxModel }>(
+    tabId,
+    'DOM.getBoxModel',
+    {
+      nodeId: nodeResult.nodeId,
+    },
+    signal,
+  );
   const [x1, y1, x2, , , y3] = boxModel.model.content;
   return {
     x: ((x1 ?? 0) + (x2 ?? 0)) / 2,
@@ -311,7 +384,15 @@ async function selectorToCoords(
   };
 }
 
-async function dispatchMouseClick(tabId: number, x: number, y: number): Promise<void> {
+async function dispatchMouseClick(
+  tabId: number,
+  x: number,
+  y: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  // Once mousePressed is accepted, mouseReleased is cleanup for that same
+  // atomic click and must still run to avoid leaving Chrome in a stuck state.
+  throwIfCdpCancelled(signal);
   await sendCommand(tabId, 'Input.dispatchMouseEvent', {
     type: 'mousePressed',
     x,
@@ -334,14 +415,23 @@ async function dispatchMouseClick(tabId: number, x: number, y: number): Promise<
  * Capture a screenshot of the tab.
  * Returns a base64-encoded PNG string (no data: URI prefix).
  */
-export async function screenshot(tabId: number): Promise<string> {
-  return withDebugger(tabId, async () => {
-    const result = await sendCommand<CdpScreenshotResult>(tabId, 'Page.captureScreenshot', {
-      format: 'png',
-      quality: 80,
-    });
-    return result.data;
-  });
+export async function screenshot(tabId: number, signal?: AbortSignal): Promise<string> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const result = await sendCommand<CdpScreenshotResult>(
+        tabId,
+        'Page.captureScreenshot',
+        {
+          format: 'png',
+          quality: 80,
+        },
+        signal,
+      );
+      return result.data;
+    },
+    signal,
+  );
 }
 
 /**
@@ -353,32 +443,37 @@ export async function screenshot(tabId: number): Promise<string> {
 export async function click(
   tabId: number,
   target: string | { x: number; y: number } | { index: number },
+  signal?: AbortSignal,
 ): Promise<void> {
-  return withDebugger(tabId, async () => {
-    let x: number;
-    let y: number;
-    if (typeof target === 'string') {
-      const coords = await selectorToCoords(tabId, target);
-      x = coords.x;
-      y = coords.y;
-    } else if ('index' in target) {
-      // P1-2: index-based targeting
-      const selector = resolveIndexedSelector(tabId, target.index);
-      if (!selector) {
-        throw new Error(
-          `click: index ${target.index} not found in current snapshot — ` +
-            `call read_dom again to rebuild the index map.`,
-        );
+  return withDebugger(
+    tabId,
+    async () => {
+      let x: number;
+      let y: number;
+      if (typeof target === 'string') {
+        const coords = await selectorToCoords(tabId, target, signal);
+        x = coords.x;
+        y = coords.y;
+      } else if ('index' in target) {
+        // P1-2: index-based targeting
+        const selector = resolveIndexedSelector(tabId, target.index);
+        if (!selector) {
+          throw new Error(
+            `click: index ${target.index} not found in current snapshot — ` +
+              `call read_dom again to rebuild the index map.`,
+          );
+        }
+        const coords = await selectorToCoords(tabId, selector, signal);
+        x = coords.x;
+        y = coords.y;
+      } else {
+        x = target.x;
+        y = target.y;
       }
-      const coords = await selectorToCoords(tabId, selector);
-      x = coords.x;
-      y = coords.y;
-    } else {
-      x = target.x;
-      y = target.y;
-    }
-    await dispatchMouseClick(tabId, x, y);
-  });
+      await dispatchMouseClick(tabId, x, y, signal);
+    },
+    signal,
+  );
 }
 
 /**
@@ -387,46 +482,70 @@ export async function click(
 export async function scroll(
   tabId: number,
   target: { dy: number } | { toSelector: string },
+  signal?: AbortSignal,
 ): Promise<void> {
-  return withDebugger(tabId, async () => {
-    if ('toSelector' in target) {
-      await sendCommand<CdpObjectResult>(tabId, 'Runtime.evaluate', {
-        expression: `document.querySelector(${JSON.stringify(target.toSelector)})?.scrollIntoView({ behavior: 'smooth', block: 'center' })`,
-        returnByValue: true,
-      });
-    } else {
-      // Wheel event at viewport center
-      await sendCommand(tabId, 'Input.dispatchMouseEvent', {
-        type: 'mouseWheel',
-        x: 400,
-        y: 300,
-        deltaX: 0,
-        deltaY: target.dy,
-      });
-    }
-  });
+  return withDebugger(
+    tabId,
+    async () => {
+      if ('toSelector' in target) {
+        await sendCommand<CdpObjectResult>(
+          tabId,
+          'Runtime.evaluate',
+          {
+            expression: `document.querySelector(${JSON.stringify(target.toSelector)})?.scrollIntoView({ behavior: 'smooth', block: 'center' })`,
+            returnByValue: true,
+          },
+          signal,
+        );
+      } else {
+        // Wheel event at viewport center
+        await sendCommand(
+          tabId,
+          'Input.dispatchMouseEvent',
+          {
+            type: 'mouseWheel',
+            x: 400,
+            y: 300,
+            deltaX: 0,
+            deltaY: target.dy,
+          },
+          signal,
+        );
+      }
+    },
+    signal,
+  );
 }
 
 /**
  * Type text into an element. Accepts an optional `targetIndex` to click-focus
  * the indexed element before typing (P1-2).
  */
-export async function type(tabId: number, text: string, targetIndex?: number): Promise<void> {
-  return withDebugger(tabId, async () => {
-    if (targetIndex !== undefined) {
-      // Focus the indexed element first via a click
-      const selector = resolveIndexedSelector(tabId, targetIndex);
-      if (!selector) {
-        throw new Error(
-          `type: index ${targetIndex} not found in current snapshot — ` +
-            `call read_dom again to rebuild the index map.`,
-        );
+export async function type(
+  tabId: number,
+  text: string,
+  targetIndex?: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return withDebugger(
+    tabId,
+    async () => {
+      if (targetIndex !== undefined) {
+        // Focus the indexed element first via a click
+        const selector = resolveIndexedSelector(tabId, targetIndex);
+        if (!selector) {
+          throw new Error(
+            `type: index ${targetIndex} not found in current snapshot — ` +
+              `call read_dom again to rebuild the index map.`,
+          );
+        }
+        const coords = await selectorToCoords(tabId, selector, signal);
+        await dispatchMouseClick(tabId, coords.x, coords.y, signal);
       }
-      const coords = await selectorToCoords(tabId, selector);
-      await dispatchMouseClick(tabId, coords.x, coords.y);
-    }
-    await sendCommand(tabId, 'Input.insertText', { text });
-  });
+      await sendCommand(tabId, 'Input.insertText', { text }, signal);
+    },
+    signal,
+  );
 }
 
 /**
@@ -445,10 +564,15 @@ export async function type(tabId: number, text: string, targetIndex?: number): P
  *
  * Returns a plain-text string bounded to DOM_SUMMARY_MAX_CHARS.
  */
-export async function getPageContent(tabId: number): Promise<string> {
-  return withDebugger(tabId, async () => {
-    const evalResult = await sendCommand<CdpObjectResult>(tabId, 'Runtime.evaluate', {
-      expression: `(() => {
+export async function getPageContent(tabId: number, signal?: AbortSignal): Promise<string> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const evalResult = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(() => {
         const MAX = ${DOM_SUMMARY_MAX_CHARS};
         const lines = [];
 
@@ -512,44 +636,48 @@ export async function getPageContent(tabId: number): Promise<string> {
 
         return JSON.stringify({ summary: lines.join('\\n').slice(0, MAX), indexMap });
       })()`,
-      returnByValue: true,
-    });
+          returnByValue: true,
+        },
+        signal,
+      );
 
-    if (evalResult.exceptionDetails) {
-      return `[getPageContent error: ${evalResult.exceptionDetails.text}]`;
-    }
-
-    const val = evalResult.result.value;
-    if (typeof val !== 'string') return '[getPageContent: unexpected result type]';
-
-    // Parse the combined result and update the index map
-    try {
-      const parsed = JSON.parse(val) as { summary: string; indexMap: Record<string, string> };
-      const newMap = new Map<number, string>();
-      for (const [k, v] of Object.entries(parsed.indexMap)) {
-        newMap.set(Number(k), v);
+      if (evalResult.exceptionDetails) {
+        return `[getPageContent error: ${evalResult.exceptionDetails.text}]`;
       }
-      setElementIndexMap(tabId, newMap);
 
-      // SECURITY (HIGH finding, audit 2026-07-19): this summary — element
-      // labels/names/hrefs plus the visible body text — is what agentLoop
-      // sends verbatim to the cloud gateway. Route it through the same
-      // sanitizePageText() every other content-egress path uses (content.ts,
-      // side_panel.ts, context-handoff) BEFORE the injection scan and BEFORE
-      // return, so on-page secrets (session tokens in the DOM, API keys on a
-      // dashboard) never leave the extension.
-      const sanitizedSummary = sanitizePageText(parsed.summary);
+      const val = evalResult.result.value;
+      if (typeof val !== 'string') return '[getPageContent: unexpected result type]';
 
-      // P2-6: Injection heuristic scan on the (now-redacted) summary before returning
-      const injectionWarning = scanForInjection(sanitizedSummary);
-      if (injectionWarning) {
-        return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${sanitizedSummary}`;
+      // Parse the combined result and update the index map
+      try {
+        const parsed = JSON.parse(val) as { summary: string; indexMap: Record<string, string> };
+        const newMap = new Map<number, string>();
+        for (const [k, v] of Object.entries(parsed.indexMap)) {
+          newMap.set(Number(k), v);
+        }
+        setElementIndexMap(tabId, newMap);
+
+        // SECURITY (HIGH finding, audit 2026-07-19): this summary — element
+        // labels/names/hrefs plus the visible body text — is what agentLoop
+        // sends verbatim to the cloud gateway. Route it through the same
+        // sanitizePageText() every other content-egress path uses (content.ts,
+        // side_panel.ts, context-handoff) BEFORE the injection scan and BEFORE
+        // return, so on-page secrets (session tokens in the DOM, API keys on a
+        // dashboard) never leave the extension.
+        const sanitizedSummary = sanitizePageText(parsed.summary);
+
+        // P2-6: Injection heuristic scan on the (now-redacted) summary before returning
+        const injectionWarning = scanForInjection(sanitizedSummary);
+        if (injectionWarning) {
+          return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${sanitizedSummary}`;
+        }
+        return sanitizedSummary;
+      } catch {
+        return val; // fallback: return raw string
       }
-      return sanitizedSummary;
-    } catch {
-      return val; // fallback: return raw string
-    }
-  });
+    },
+    signal,
+  );
 }
 
 // ─── P2-6: Injection heuristic ───────────────────────────────────────────────
@@ -662,12 +790,18 @@ export async function assertDestinationAllowlisted(url: string): Promise<void> {
  * Both checks happen BEFORE the CDP call so the tab never moves to an
  * off-allowlist host. Rejects model-hallucinated or prompt-injected URLs.
  */
-export async function navigate(tabId: number, url: string): Promise<void> {
+export async function navigate(tabId: number, url: string, signal?: AbortSignal): Promise<void> {
   // Will throw if scheme is invalid or origin is off-allowlist
+  throwIfCdpCancelled(signal);
   await assertDestinationAllowlisted(url);
-  return withDebugger(tabId, async () => {
-    await sendCommand(tabId, 'Page.navigate', { url });
-  });
+  throwIfCdpCancelled(signal);
+  return withDebugger(
+    tabId,
+    async () => {
+      await sendCommand(tabId, 'Page.navigate', { url }, signal);
+    },
+    signal,
+  );
 }
 
 /**
@@ -685,10 +819,19 @@ export async function navigate(tabId: number, url: string): Promise<void> {
  *      is still run through sanitizePageText() so a token or API key typed
  *      into a normal text box gets scrubbed before it reaches the model.
  */
-export async function getFieldValue(tabId: number, selector: string): Promise<string | null> {
-  return withDebugger(tabId, async () => {
-    const evalResult = await sendCommand<CdpObjectResult>(tabId, 'Runtime.evaluate', {
-      expression: `(() => {
+export async function getFieldValue(
+  tabId: number,
+  selector: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const evalResult = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(() => {
         const el = document.querySelector(${JSON.stringify(selector)});
         if (!el) return null;
         if (el instanceof HTMLInputElement) {
@@ -700,16 +843,20 @@ export async function getFieldValue(tabId: number, selector: string): Promise<st
         if (el instanceof HTMLSelectElement) return el.value;
         return el.textContent?.trim() ?? null;
       })()`,
-      returnByValue: true,
-    });
-    if (evalResult.exceptionDetails) return null;
-    const val = evalResult.result.value;
-    if (typeof val !== 'string') return null;
-    // Already redacted in-page (password/hidden) — don't double-process, and
-    // don't let redactSecrets' own patterns mangle the placeholder text.
-    if (val === REDACTED_FIELD_PLACEHOLDER) return val;
-    return sanitizePageText(val);
-  });
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (evalResult.exceptionDetails) return null;
+      const val = evalResult.result.value;
+      if (typeof val !== 'string') return null;
+      // Already redacted in-page (password/hidden) — don't double-process, and
+      // don't let redactSecrets' own patterns mangle the placeholder text.
+      if (val === REDACTED_FIELD_PLACEHOLDER) return val;
+      return sanitizePageText(val);
+    },
+    signal,
+  );
 }
 
 /** Alias: readDom is an alias for getPageContent (matches the spec wording). */

@@ -344,7 +344,7 @@ pub async fn stream_completion(
             tools,
             &mut on_chunk,
             None,
-                effort,
+            effort,
         )
         .await?;
         result.via_subscription = true;
@@ -403,11 +403,15 @@ pub async fn stream_completion(
             .await
         }
         Provider::Ollama(OllamaMode::Local) => {
-            let base_url = config
-                .base_url("ollama")
-                .unwrap_or_else(|| "http://localhost:11434".to_string());
-            crate::local_models::ensure_local_model_available(&client, "ollama", &base_url, model)
-                .await?;
+            let configured_base_url =
+                crate::local_models::configured_local_base_url(config, "ollama");
+            let base_url = crate::local_models::ensure_local_model_available(
+                &client,
+                "ollama",
+                &configured_base_url,
+                model,
+            )
+            .await?;
             let effective_tools = if let Some(tool_defs) = tools {
                 if tool_defs.is_empty() {
                     None
@@ -480,15 +484,23 @@ pub async fn stream_completion(
             .await
         }
         Provider::OpenAICompatible { name, base_url, .. } => {
-            if *name == "lmstudio" {
-                crate::local_models::ensure_local_model_available(
-                    &client, "lmstudio", base_url, model,
+            let completion_url = if *name == "lmstudio" {
+                let configured_base_url =
+                    crate::local_models::configured_local_base_url(config, "lmstudio");
+                let verified_base_url = crate::local_models::ensure_local_model_available(
+                    &client,
+                    "lmstudio",
+                    &configured_base_url,
+                    model,
                 )
                 .await?;
-            }
+                crate::local_models::openai_chat_completions_url(&verified_base_url)?
+            } else {
+                (*base_url).to_string()
+            };
             run_spec(
                 &client,
-                &openai_compat_spec(name, base_url, key),
+                &openai_compat_spec(name, &completion_url, key),
                 model,
                 messages,
                 max_tokens,
@@ -521,7 +533,107 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+    use axum::{
+        http::header,
+        response::IntoResponse,
+        routing::{get, post},
+        Json, Router,
+    };
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
+        time::Duration,
+    };
+
+    #[tokio::test]
+    async fn lmstudio_probe_and_stream_use_the_configured_loopback_endpoint() {
+        let model_hits = Arc::new(AtomicUsize::new(0));
+        let chat_hits = Arc::new(AtomicUsize::new(0));
+        let model_hits_for_route = Arc::clone(&model_hits);
+        let chat_hits_for_route = Arc::clone(&chat_hits);
+        let router = Router::new()
+            .route(
+                "/v1/models",
+                get(move || {
+                    let model_hits = Arc::clone(&model_hits_for_route);
+                    async move {
+                        model_hits.fetch_add(1, Ordering::SeqCst);
+                        Json(serde_json::json!({
+                            "object": "list",
+                            "data": [{"id": "agi-e2e-local-fixture"}]
+                        }))
+                    }
+                }),
+            )
+            .route(
+                "/v1/chat/completions",
+                post(move || {
+                    let chat_hits = Arc::clone(&chat_hits_for_route);
+                    async move {
+                        chat_hits.fetch_add(1, Ordering::SeqCst);
+                        (
+                            [(header::CONTENT_TYPE, "text/event-stream")],
+                            concat!(
+                                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"configured-\"},\"finish_reason\":null}]}\n\n",
+                                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"endpoint\"},\"finish_reason\":null}]}\n\n",
+                                "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2}}\n\n",
+                                "data: [DONE]\n\n"
+                            ),
+                        )
+                            .into_response()
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind LM Studio fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("serve LM Studio fixture");
+        });
+
+        let mut config = CliConfig::default();
+        config.providers.insert(
+            "lmstudio".to_string(),
+            crate::config::ProviderConfig {
+                api_key_env: None,
+                base_url: Some(format!("http://{address}/v1")),
+            },
+        );
+        let streamed = Arc::new(Mutex::new(String::new()));
+        let streamed_for_callback = Arc::clone(&streamed);
+        let result = stream_completion(
+            &config,
+            &crate::models::lmstudio_provider(),
+            "agi-e2e-local-fixture",
+            &[Message::text("user", "prove configured endpoint authority")],
+            64,
+            None,
+            Box::new(move |chunk| {
+                streamed_for_callback
+                    .lock()
+                    .expect("stream callback lock")
+                    .push_str(chunk);
+            }),
+            None,
+            None,
+        )
+        .await
+        .expect("configured LM Studio turn");
+        server.abort();
+
+        assert_eq!(result.text, "configured-endpoint");
+        assert_eq!(
+            streamed.lock().expect("streamed text lock").as_str(),
+            "configured-endpoint"
+        );
+        assert_eq!(model_hits.load(Ordering::SeqCst), 1);
+        assert_eq!(chat_hits.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn managed_cloud_spec_uses_the_authenticated_agi_gateway_contract() {

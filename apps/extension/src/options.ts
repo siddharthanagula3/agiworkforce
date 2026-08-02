@@ -12,6 +12,7 @@
 import { getExtensionTokensCssAuto } from './tokens';
 import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
 import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
+import { beginOptionsAccountRefresh } from './features/options/account-state';
 
 const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
@@ -464,7 +465,7 @@ async function saveAllowlist(list: string[]): Promise<void> {
 
 // ── Build page ───────────────────────────────────────────────────────────────
 
-async function buildPage(): Promise<void> {
+function buildPage(): void {
   injectStyles();
 
   const page = el('div', { class: 'opt-page' });
@@ -646,7 +647,7 @@ async function buildPage(): Promise<void> {
   accountHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Account'));
   accountSection.appendChild(accountHeader);
 
-  const renderAccountRow = (signedIn: boolean): void => {
+  const renderAccountRow = (signedIn: boolean, unavailable = false): void => {
     accountSection.querySelector('.opt-row')?.remove();
     const accountRow = el('div', { class: 'opt-row' });
     const accountLeft = el('div');
@@ -657,9 +658,11 @@ async function buildPage(): Promise<void> {
         el(
           'div',
           { class: 'opt-row-hint' },
-          isClerkExtensionAuthConfigured()
-            ? 'Use your AGI account for Managed Cloud chat and models.'
-            : 'AGI account sign-in is not configured in this development build.',
+          unavailable
+            ? 'Account status is temporarily unavailable. Browser-local settings remain available.'
+            : isClerkExtensionAuthConfigured()
+              ? 'Use your AGI account for Managed Cloud chat and models.'
+              : 'AGI account sign-in is not configured in this development build.',
         ),
       );
       accountRow.appendChild(accountLeft);
@@ -719,7 +722,6 @@ async function buildPage(): Promise<void> {
     accountSection.appendChild(accountRow);
   };
 
-  renderAccountRow(Boolean(await getAuthToken()));
   page.appendChild(accountSection);
 
   // ── Section: Autofill Profile ─────────────────────────────────────────────
@@ -951,6 +953,11 @@ async function buildPage(): Promise<void> {
   page.appendChild(el('p', { class: 'opt-version' }, `AGI v${ver}`));
 
   document.body.appendChild(page);
+  void beginOptionsAccountRefresh(
+    getAuthToken,
+    ({ signedIn, unavailable }) => renderAccountRow(signedIn, unavailable),
+    () => console.warn('[Options] AGI account status is temporarily unavailable'),
+  );
 }
 
-void buildPage();
+buildPage();

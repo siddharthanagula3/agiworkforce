@@ -29,7 +29,6 @@ import {
 import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/cloudAccountTypes';
 import { accountApi } from '../api/accountApi';
-import { WEB_APP_URL } from '../api/config';
 import { isTauri, invoke } from '../lib/tauri-mock';
 import { effectivePlanTier } from '@agiworkforce/types';
 
@@ -166,11 +165,84 @@ async function fetchCreditsWithCache(accessToken: string): Promise<CreditBalance
 let isProcessingAuthChange = false;
 let pendingAuthState: AuthState | null = null;
 
+function authSnapshotIsCurrent(authState: AuthState): boolean {
+  const current = useUnifiedAuthStore.getState();
+  return (
+    current.user?.id === authState.user?.id &&
+    current.accessToken === (authState.session?.access_token ?? null)
+  );
+}
+
+/**
+ * Project the security boundary synchronously, before any hashing, network I/O,
+ * or the serialized refresh queue. `setUser` atomically clears account-scoped
+ * capabilities when the id changes; `setAccount` then installs only the new
+ * credential. Same-account token rotation intentionally preserves the stable
+ * plan, feature flags, and credit snapshot.
+ */
+function projectAuthBoundary(authState: AuthState): void {
+  const unifiedAuthStore = useUnifiedAuthStore.getState();
+  const previousUserId = unifiedAuthStore.user?.id ?? null;
+
+  if (!authState.user) {
+    unifiedAuthStore.clearAuth();
+    if (authState.error) {
+      unifiedAuthStore.setError(authState.error);
+    }
+    clearCachedSubscription();
+    cachedUserHash = null;
+    creditsCache = null;
+    credits401Cache = null;
+    // A signed-out state supersedes every queued account snapshot. Leaving a
+    // queued B state here could re-authenticate the store after sign-out when
+    // an older A request eventually settles.
+    pendingAuthState = null;
+    return;
+  }
+
+  unifiedAuthStore.setUser({
+    id: authState.user.id,
+    email: authState.user.email || '',
+    name:
+      authState.profile?.display_name || (authState.user.user_metadata?.['full_name'] as string),
+    avatar:
+      authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
+  });
+  unifiedAuthStore.setAccount({
+    id: authState.user.id,
+    email: authState.user.email || null,
+    accessToken: authState.session?.access_token || null,
+    refreshToken: authState.session?.refresh_token || null,
+    // Clear the synthesized Local device marker in the same synchronous
+    // projection that installs the authenticated Cloud credential.
+    isLocalDeviceAccount: false,
+  });
+
+  if (previousUserId !== authState.user.id) {
+    cachedUserHash = null;
+    creditsCache = null;
+    credits401Cache = null;
+  }
+}
+
 /**
  * Process an auth state change, updating all stores in sequence.
  * This is the core function that coordinates all store updates.
  */
 async function processAuthStateChange(authState: AuthState): Promise<void> {
+  // Skip if still loading - wait for complete state
+  if (authState.isLoading) {
+    return;
+  }
+
+  // This must run before the processing lock. Otherwise account B remains
+  // capable as account A for the entire duration of A's hung credits request.
+  projectAuthBoundary(authState);
+
+  if (!authState.user) {
+    return;
+  }
+
   // BUG-007 fix: guard check and early returns BEFORE the try/finally so that
   // early-returning code paths never set isProcessingAuthChange = true and then
   // skip the finally block that resets it back to false.
@@ -179,12 +251,9 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     return;
   }
 
-  // Skip if still loading - wait for complete state
-  if (authState.isLoading) {
-    return;
-  }
-
-  // Skip if subscription is still being fetched
+  // The boundary above still projects a fetching account synchronously. The
+  // complete plan/flags/credits snapshot lands only after account auth emits a
+  // succeeded or failed terminal state.
   if (authState.subscriptionFetchStatus === 'fetching') {
     return;
   }
@@ -195,54 +264,14 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     // Get the unified auth store
     const unifiedAuthStore = useUnifiedAuthStore.getState();
 
-    // ═══════════════════════════════════════════════════════════════
-    // STEP 1: Update user info in unified store
-    // ═══════════════════════════════════════════════════════════════
-    if (authState.user) {
-      unifiedAuthStore.setUser({
-        id: authState.user.id,
-        email: authState.user.email || '',
-        name:
-          authState.profile?.display_name ||
-          (authState.user.user_metadata?.['full_name'] as string),
-        avatar:
-          authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
-      });
-      // Project the already-validated device credential before any hashing,
-      // subscription, or credits I/O. The shell uses accessToken as the Cloud
-      // admission signal; delaying it until STEP 5 could briefly return a
-      // successfully authorized user to the sign-in screen while credits were
-      // still loading.
-      unifiedAuthStore.setAccount({
-        id: authState.user.id,
-        email: authState.user.email || null,
-        accessToken: authState.session?.access_token || null,
-        refreshToken: authState.session?.refresh_token || null,
-        // Clear the synthesized Local device marker in the SAME update that
-        // projects the credential. `selectHasCloudAccountSession` reads this
-        // flag, so a device that was previously running Local mode is admitted
-        // to Cloud the moment its bearer lands — not after the tier resolves.
-        isLocalDeviceAccount: false,
-      });
-
-      // Scope the subscription cache to this user so account switches
-      // never read another user's cached tier.
-      cachedUserHash = await hashUserId(authState.user.id);
-    } else {
-      // clearAuth() sets sessionValidated: true, unblocking the boot skeleton.
-      // Do NOT call reset() after this — reset() uses getDefaultState() which
-      // sets sessionValidated: false, undoing the clearAuth() call and leaving
-      // local-only users stuck on the loading skeleton forever.
-      unifiedAuthStore.clearAuth();
-      if (authState.error) {
-        unifiedAuthStore.setError(authState.error);
-      }
-      clearCachedSubscription();
-      cachedUserHash = null;
+    // Scope the subscription cache to this user so account switches never
+    // read another user's cached tier. The assignment itself is guarded: an
+    // older account must not reclaim the global cache key after B projected.
+    const userHash = await hashUserId(authState.user.id);
+    if (!authSnapshotIsCurrent(authState)) {
       return;
     }
-
-    // Guarded: authState.user is non-null from here on.
+    cachedUserHash = userHash;
 
     // ═══════════════════════════════════════════════════════════════
     // STEP 2: Determine plan tier with cache fallback
@@ -304,6 +333,13 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       } catch (error) {
         console.warn('[AuthOrchestrator] Credit fetch failed:', error);
       }
+    }
+
+    // Any account or credential update that arrived during the await above has
+    // already projected synchronously. Drop this stale result before it can
+    // write plan, feature, billing, credit, or native-vault state.
+    if (!authSnapshotIsCurrent(authState)) {
+      return;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -421,29 +457,17 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       lastSyncedAt: Date.now(),
     });
 
-    // ═══════════════════════════════════════════════════════════════
-    // STEP 6: Sync to Rust backend (if in Tauri)
-    // ═══════════════════════════════════════════════════════════════
+    // CloudAccountAuth is the single owner of native credential persistence
+    // and writes the session before account/credits refresh begins. Duplicating
+    // token writes here allowed an older A invoke to complete after B/sign-out
+    // and overwrite the newer vault state. This late step only registers the
+    // credential-reading provider; it never writes credentials.
     if (isTauri && authState.session) {
       try {
-        // Sync API base URL
-        await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
-
-        // Sync tokens
-        await invoke('account_store_access_token', {
-          accessToken: authState.session.access_token,
-        });
-
-        if (authState.session.refresh_token) {
-          await invoke('account_store_refresh_token', {
-            refreshToken: authState.session.refresh_token,
-          });
-        }
-
-        // Initialize ManagedCloud provider
+        if (!authSnapshotIsCurrent(authState)) return;
         await invoke('llm_ensure_managed_cloud');
       } catch (error) {
-        console.warn('[AuthOrchestrator] Failed to sync with Rust backend:', error);
+        console.warn('[AuthOrchestrator] Failed to initialize Managed Cloud:', error);
       }
     }
   } finally {

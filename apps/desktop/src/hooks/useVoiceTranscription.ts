@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api/client';
-import { cloudFetch } from '../api/cloudApi';
 import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
-import { cloudAccountAuth } from '../services/cloudAccountAuth';
+import type { ManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
@@ -78,14 +77,11 @@ export interface UseVoiceTranscriptionOptions {
   /** Callback when recording stops */
   onRecordingStop?: () => void;
   /**
-   * Optional host-owned Managed boundary. When supplied, Cloud transcription
-   * uses the captured token and revalidates the same boundary before and after
-   * egress instead of resolving whichever account happens to be current.
+   * Host-owned Managed Cloud request context captured before microphone access.
+   * The context pins account + session authority while resolving the current
+   * bearer only at the final transport boundary.
    */
-  getCloudBoundary?: () => {
-    accessToken: string;
-    assertCurrent: () => void;
-  };
+  getCloudRequestContext?: () => Pick<ManagedCloudRequestContext, 'assertBoundary' | 'fetch'>;
 }
 
 /**
@@ -161,7 +157,7 @@ export function useVoiceTranscription(
     onError,
     onRecordingStart,
     onRecordingStop,
-    getCloudBoundary,
+    getCloudRequestContext,
   } = options;
 
   const [state, setState] = useState<VoiceTranscriptionState>({
@@ -181,28 +177,66 @@ export function useVoiceTranscription(
   const speechLastEmittedRef = useRef<string>('');
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const cloudRequestContextRef = useRef<Pick<
+    ManagedCloudRequestContext,
+    'assertBoundary' | 'fetch'
+  > | null>(null);
+  const transcriptionAbortControllerRef = useRef<AbortController | null>(null);
+  const operationGenerationRef = useRef(0);
   // HKS-005 fix: Track mount state to prevent setState after unmount
   const isMountedRef = useRef(true);
   // BUG-VT-02: Ref mirror of isRecording for stale-closure-safe concurrent session guard
   const isRecordingRef = useRef(false);
 
-  const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
-    let timeoutId: number | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = window.setTimeout(
-        () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      );
-    });
-    try {
-      return await Promise.race([promise, timeout]);
-    } finally {
-      // AUDIT-VOICE-042 fix: Clear timeout handle to prevent timer leak after promise resolution
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-    }
+  const abortActiveTranscription = useCallback((reason: string): void => {
+    const controller = transcriptionAbortControllerRef.current;
+    transcriptionAbortControllerRef.current = null;
+    if (!controller || controller.signal.aborted) return;
+    controller.abort(new DOMException(reason, 'AbortError'));
   }, []);
+
+  const invalidateOperation = useCallback(
+    (reason: string): void => {
+      operationGenerationRef.current += 1;
+      abortActiveTranscription(reason);
+      cloudRequestContextRef.current = null;
+    },
+    [abortActiveTranscription],
+  );
+
+  const fetchWithAbortableTimeout = useCallback(
+    async (
+      request: Promise<Response>,
+      controller: AbortController,
+      timeoutMs: number,
+    ): Promise<Response> => {
+      let rejectForAbort: ((reason?: unknown) => void) | undefined;
+      const aborted = new Promise<never>((_, reject) => {
+        rejectForAbort = reject;
+      });
+      const handleAbort = () => {
+        rejectForAbort?.(
+          controller.signal.reason ??
+            new DOMException('Transcription was cancelled.', 'AbortError'),
+        );
+      };
+      controller.signal.addEventListener('abort', handleAbort, { once: true });
+      const timeoutId = window.setTimeout(() => {
+        controller.abort(
+          new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError'),
+        );
+      }, timeoutMs);
+
+      try {
+        if (controller.signal.aborted) handleAbort();
+        return await Promise.race([request, aborted]);
+      } finally {
+        controller.signal.removeEventListener('abort', handleAbort);
+        window.clearTimeout(timeoutId);
+      }
+    },
+    [],
+  );
 
   /**
    * Check available local Whisper implementations
@@ -249,6 +283,7 @@ export function useVoiceTranscription(
 
   // Check browser support on mount
   useEffect(() => {
+    isMountedRef.current = true;
     // BUG-VT-06: isSupported reflects MediaRecorder OR any SpeechRecognition availability
     const supported =
       typeof MediaRecorder !== 'undefined' ||
@@ -269,6 +304,7 @@ export function useVoiceTranscription(
     return () => {
       // HKS-005 fix: Mark as unmounted to prevent setState calls
       isMountedRef.current = false;
+      invalidateOperation('Voice transcription was cancelled because the view closed.');
       // Cleanup on unmount
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -292,7 +328,7 @@ export function useVoiceTranscription(
         }
       }
     };
-  }, [checkLocalWhisperImpl]);
+  }, [checkLocalWhisperImpl, invalidateOperation]);
 
   // Configure provider when preferWhisperCloud changes (configure backend for Whisper Cloud when enabled)
   useEffect(() => {
@@ -500,7 +536,18 @@ export function useVoiceTranscription(
       return;
     }
 
+    invalidateOperation('Voice transcription was superseded by a new recording.');
+    const operationGeneration = operationGenerationRef.current;
+    let acquiredStream: MediaStream | null = null;
+
     try {
+      if (!getCloudRequestContext) {
+        throw new Error('Managed Cloud transcription requires an account-pinned request context.');
+      }
+      const request = getCloudRequestContext();
+      request.assertBoundary();
+      cloudRequestContextRef.current = request;
+
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -509,6 +556,17 @@ export function useVoiceTranscription(
           sampleRate: 16000, // Whisper prefers 16kHz
         },
       });
+      acquiredStream = stream;
+
+      if (
+        !isMountedRef.current ||
+        operationGeneration !== operationGenerationRef.current ||
+        cloudRequestContextRef.current !== request
+      ) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      request.assertBoundary();
 
       streamRef.current = stream;
       audioChunksRef.current = [];
@@ -520,12 +578,13 @@ export function useVoiceTranscription(
       });
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (operationGeneration === operationGenerationRef.current && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onerror = (event) => {
+        if (operationGeneration !== operationGenerationRef.current) return;
         const errorMessage = `Recording error: ${(event as ErrorEvent).message || 'Unknown error'}`;
         // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = false;
@@ -539,18 +598,26 @@ export function useVoiceTranscription(
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(100); // Collect data every 100ms
+      acquiredStream = null;
 
       // BUG-VT-02: Keep ref in sync
       isRecordingRef.current = true;
       setState((prev) => ({
         ...prev,
         isRecording: true,
+        isTranscribing: false,
         error: null,
         interimTranscript: '',
       }));
 
       onRecordingStart?.();
     } catch (err) {
+      if (acquiredStream) {
+        acquiredStream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === acquiredStream) streamRef.current = null;
+        mediaRecorderRef.current = null;
+      }
+      if (!isMountedRef.current || operationGeneration !== operationGenerationRef.current) return;
       const errorMessage = getMediaErrorMessage(err);
       // BUG-VT-02: Keep ref in sync
       isRecordingRef.current = false;
@@ -570,6 +637,8 @@ export function useVoiceTranscription(
     onRecordingStart,
     onRecordingStop,
     onResult,
+    getCloudRequestContext,
+    invalidateOperation,
   ]);
 
   /**
@@ -606,8 +675,12 @@ export function useVoiceTranscription(
 
     return new Promise((resolve) => {
       const mediaRecorder = mediaRecorderRef.current!;
+      const operationGeneration = operationGenerationRef.current;
+      const request = cloudRequestContextRef.current;
+      isRecordingRef.current = false;
 
       mediaRecorder.onstop = async () => {
+        if (mediaRecorderRef.current === mediaRecorder) mediaRecorderRef.current = null;
         // Stop all tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
@@ -615,6 +688,16 @@ export function useVoiceTranscription(
         }
 
         onRecordingStop?.();
+
+        if (
+          !isMountedRef.current ||
+          operationGeneration !== operationGenerationRef.current ||
+          !request ||
+          cloudRequestContextRef.current !== request
+        ) {
+          resolve('');
+          return;
+        }
 
         // Create blob from chunks
         const mimeType = mediaRecorder.mimeType || 'audio/webm';
@@ -648,13 +731,7 @@ export function useVoiceTranscription(
         }
 
         try {
-          const managedBoundary = getCloudBoundary?.();
-          managedBoundary?.assertCurrent();
-          const session = managedBoundary ? null : await cloudAccountAuth.getValidSession();
-          const accessToken = managedBoundary?.accessToken ?? session?.access_token;
-          if (!accessToken) {
-            throw new Error('Authentication required for Whisper Cloud transcription');
-          }
+          request.assertBoundary();
 
           const transcriptionFile = new File(
             [audioBlob],
@@ -670,29 +747,47 @@ export function useVoiceTranscription(
             formData.append('language', language);
           }
 
-          const response = await withTimeout(
-            cloudFetch(`${API_BASE_URL}/api/voice/transcribe`, {
+          abortActiveTranscription('Voice transcription was superseded.');
+          const controller = new AbortController();
+          transcriptionAbortControllerRef.current = controller;
+          const response = await fetchWithAbortableTimeout(
+            request.fetch(`${API_BASE_URL}/api/voice/transcribe`, {
               method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
               body: formData,
+              signal: controller.signal,
             }),
+            controller,
             15000,
           );
-          managedBoundary?.assertCurrent();
+          request.assertBoundary();
+
+          if (
+            operationGeneration !== operationGenerationRef.current ||
+            cloudRequestContextRef.current !== request
+          ) {
+            resolve('');
+            return;
+          }
 
           const payload = (await response.json().catch(() => null)) as {
             text?: string;
             error?: { message?: string };
           } | null;
+          request.assertBoundary();
+          if (
+            operationGeneration !== operationGenerationRef.current ||
+            cloudRequestContextRef.current !== request
+          ) {
+            resolve('');
+            return;
+          }
           if (!response.ok) {
             throw new Error(payload?.error?.message || 'Whisper Cloud transcription failed');
           }
           const transcript = (payload?.text || '').trim();
 
           // HKS-005 fix: Check if still mounted before setState
-          if (isMountedRef.current) {
+          if (isMountedRef.current && operationGeneration === operationGenerationRef.current) {
             setState((prev) => ({
               ...prev,
               isTranscribing: false,
@@ -704,7 +799,14 @@ export function useVoiceTranscription(
           onResult?.(transcript);
           resolve(transcript);
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (operationGeneration !== operationGenerationRef.current) {
+            resolve('');
+            return;
+          }
+          const errorMessage =
+            err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+              ? err.message
+              : String(err);
           // HKS-005 fix: Check if still mounted before setState
           if (isMountedRef.current) {
             setState((prev) => ({
@@ -715,6 +817,14 @@ export function useVoiceTranscription(
           }
           onError?.(errorMessage);
           resolve('');
+        } finally {
+          const controller = transcriptionAbortControllerRef.current;
+          if (
+            controller?.signal.aborted ||
+            operationGeneration === operationGenerationRef.current
+          ) {
+            transcriptionAbortControllerRef.current = null;
+          }
         }
       };
 
@@ -727,8 +837,8 @@ export function useVoiceTranscription(
     onResult,
     onError,
     onRecordingStop,
-    getCloudBoundary,
-    withTimeout,
+    abortActiveTranscription,
+    fetchWithAbortableTimeout,
   ]);
 
   /**
@@ -736,6 +846,7 @@ export function useVoiceTranscription(
    * a hidden recorder cannot keep the microphone open or upload discarded audio.
    */
   const cancelRecording = useCallback((): void => {
+    invalidateOperation('Voice transcription was cancelled.');
     const recognition = speechRecognitionRef.current;
     speechRecognitionRef.current = null;
     if (recognition) {
@@ -777,7 +888,7 @@ export function useVoiceTranscription(
       }));
     }
     onRecordingStop?.();
-  }, [onRecordingStop]);
+  }, [invalidateOperation, onRecordingStop]);
 
   /**
    * Toggle recording on/off

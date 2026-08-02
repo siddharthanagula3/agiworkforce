@@ -6,7 +6,9 @@
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use tokio::process::Command;
+
+const GIT_WORKTREE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 pub struct WorktreeOptions {
@@ -26,7 +28,7 @@ pub struct Worktree {
 }
 
 #[allow(dead_code)]
-pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
+pub async fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
     let target = opts.target_dir.unwrap_or_else(|| {
         let parent = repo.parent().unwrap_or(repo);
         parent.join(format!(
@@ -65,7 +67,9 @@ pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
     if let Some(base) = opts.base {
         cmd.arg(base);
     }
-    let output = cmd.output().context("invoke git worktree add")?;
+    let output = crate::process_tree::output(cmd, None, Some(GIT_WORKTREE_TIMEOUT))
+        .await
+        .context("invoke git worktree add")?;
     if !output.status.success() {
         anyhow::bail!(
             "git worktree add failed: {}",
@@ -79,13 +83,15 @@ pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
 }
 
 #[allow(dead_code)]
-pub fn exit_worktree(repo: &Path, worktree_path: &Path) -> Result<()> {
-    let output = Command::new("git")
+pub async fn exit_worktree(repo: &Path, worktree_path: &Path) -> Result<()> {
+    let mut command = Command::new("git");
+    command
         .current_dir(repo)
         .arg("worktree")
         .arg("remove")
-        .arg(worktree_path)
-        .output()
+        .arg(worktree_path);
+    let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
+        .await
         .context("invoke git worktree remove")?;
     if !output.status.success() {
         anyhow::bail!(
@@ -97,13 +103,15 @@ pub fn exit_worktree(repo: &Path, worktree_path: &Path) -> Result<()> {
 }
 
 #[allow(dead_code)]
-pub fn list_worktrees(repo: &Path) -> Result<Vec<Worktree>> {
-    let output = Command::new("git")
+pub async fn list_worktrees(repo: &Path) -> Result<Vec<Worktree>> {
+    let mut command = Command::new("git");
+    command
         .current_dir(repo)
         .arg("worktree")
         .arg("list")
-        .arg("--porcelain")
-        .output()
+        .arg("--porcelain");
+    let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
+        .await
         .context("invoke git worktree list")?;
     let text = String::from_utf8_lossy(&output.stdout);
     let mut out = Vec::new();
@@ -160,8 +168,8 @@ mod tests {
             .unwrap();
     }
 
-    #[test]
-    fn worktree_roundtrip() {
+    #[tokio::test]
+    async fn worktree_roundtrip() {
         let tmp = tempfile::tempdir().unwrap();
         init_repo(tmp.path());
         let opts = WorktreeOptions {
@@ -169,12 +177,12 @@ mod tests {
             base: None,
             target_dir: Some(tmp.path().parent().unwrap().join("wt-feature-x")),
         };
-        let wt = enter_worktree(tmp.path(), opts).expect("enter");
+        let wt = enter_worktree(tmp.path(), opts).await.expect("enter");
         assert!(wt.path.exists());
-        let listed = list_worktrees(tmp.path()).expect("list");
+        let listed = list_worktrees(tmp.path()).await.expect("list");
         assert!(listed.iter().any(|w| w.branch == "feature-x"));
-        exit_worktree(tmp.path(), &wt.path).expect("exit");
-        let listed_after = list_worktrees(tmp.path()).expect("list after");
+        exit_worktree(tmp.path(), &wt.path).await.expect("exit");
+        let listed_after = list_worktrees(tmp.path()).await.expect("list after");
         assert!(!listed_after.iter().any(|w| w.branch == "feature-x"));
     }
 }

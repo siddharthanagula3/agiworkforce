@@ -1,0 +1,122 @@
+/**
+ * Non-secret identity for one authenticated Managed Cloud incarnation.
+ *
+ * `accountId` prevents data from crossing users. `authIncarnation` prevents a
+ * durable run or delayed callback from surviving sign-out/sign-in even when
+ * the same account signs back in. Neither field contains a bearer token.
+ */
+export interface ManagedCloudOwner {
+  accountId: string;
+  authIncarnation: string;
+}
+
+export interface ManagedCloudCredential {
+  owner: ManagedCloudOwner;
+  token: string;
+}
+
+const MAX_OWNER_COMPONENT_CHARS = 200;
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function normalizeComponent(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (
+    normalized.length === 0 ||
+    normalized.length > MAX_OWNER_COMPONENT_CHARS ||
+    containsControlCharacter(normalized)
+  ) {
+    return undefined;
+  }
+  return normalized;
+}
+
+/** Runtime-validate identity crossing storage or extension-message boundaries. */
+export function normalizeManagedCloudOwner(value: unknown): ManagedCloudOwner | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const accountId = normalizeComponent(record['accountId']);
+  const authIncarnation = normalizeComponent(record['authIncarnation']);
+  if (!accountId || !authIncarnation) return null;
+  return { accountId, authIncarnation };
+}
+
+export function sameManagedCloudOwner(
+  left: ManagedCloudOwner | null | undefined,
+  right: ManagedCloudOwner | null | undefined,
+): boolean {
+  return (
+    left != null &&
+    right != null &&
+    left.accountId === right.accountId &&
+    left.authIncarnation === right.authIncarnation
+  );
+}
+
+/**
+ * Exact credential equality for compare-and-clear auth transitions.
+ *
+ * Owner equality alone is insufficient: Clerk may rotate a bearer while the
+ * same account/session remains current. A delayed 401 for the retired bearer
+ * must not sign out that still-valid session.
+ */
+export function sameManagedCloudCredential(
+  left: ManagedCloudCredential | null | undefined,
+  right: ManagedCloudCredential | null | undefined,
+): boolean {
+  return (
+    left != null &&
+    right != null &&
+    left.token === right.token &&
+    sameManagedCloudOwner(left.owner, right.owner)
+  );
+}
+
+/** Stable, non-secret comparison key for in-memory maps only. */
+export function managedCloudOwnerKey(owner: ManagedCloudOwner): string {
+  return JSON.stringify([owner.accountId, owner.authIncarnation]);
+}
+
+/**
+ * Choose a cancellation credential without ever substituting another account's
+ * ambient session for an admitted run's captured credential.
+ */
+export function selectManagedCloudCancellationCredential(
+  expectedOwner: ManagedCloudOwner,
+  activeCredential: ManagedCloudCredential | null | undefined,
+  currentCredential: ManagedCloudCredential | null | undefined,
+): ManagedCloudCredential | null {
+  if (activeCredential) {
+    return sameManagedCloudOwner(activeCredential.owner, expectedOwner) ? activeCredential : null;
+  }
+  return currentCredential && sameManagedCloudOwner(currentCredential.owner, expectedOwner)
+    ? currentCredential
+    : null;
+}
+
+/** Identity check used before publishing any delayed operation callback. */
+export function isCurrentManagedCloudOperation<T extends object>(
+  registered: T | undefined,
+  operation: T,
+): boolean {
+  return registered === operation;
+}
+
+/** Renderer gate for delayed stream broadcasts after account/session changes. */
+export function isManagedCloudBroadcastOwnedBy(
+  currentOwner: ManagedCloudOwner | null | undefined,
+  admittedOwner: ManagedCloudOwner | null | undefined,
+  broadcastOwner: ManagedCloudOwner | null | undefined,
+): boolean {
+  return (
+    sameManagedCloudOwner(currentOwner, broadcastOwner) &&
+    sameManagedCloudOwner(admittedOwner, broadcastOwner)
+  );
+}

@@ -20,8 +20,12 @@ import type {
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-const SHUTDOWN_GRACE_MS = 1_000;
-const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 6;
+const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
+const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
+const HARD_KILL_TIMEOUT_MS = 2_000;
+const SUPPORTED_PROTOCOL_VERSION = 7;
+const MINIMUM_SUPPORTED_CLI_VERSION = [1, 7, 1] as const;
+const MINIMUM_SUPPORTED_CLI_VERSION_LABEL = MINIMUM_SUPPORTED_CLI_VERSION.join('.');
 const AGENT_EVENT_SCHEMA_VERSION = 3;
 
 const errorSchema = z.object({
@@ -36,6 +40,8 @@ const responseSchema = z.object({
   result: z.unknown().optional(),
   error: errorSchema.optional(),
 });
+
+const acknowledgedResponseSchema = z.object({ acknowledged: z.literal(true) }).strict();
 
 const notificationSchema = z.object({
   jsonrpc: z.literal('2.0').optional(),
@@ -74,9 +80,23 @@ const legacyInitializeResponseSchema = z.object({
 
 const threadSummarySchema = z.object({
   id: z.string().min(1),
-  title: z.string(),
-  model: z.string().optional(),
-  cwd: z.string().optional(),
+  title: z.string().max(500),
+  model: z.string().min(1).max(200).optional(),
+  cwd: z.string().min(1).max(16_384).optional(),
+  provider: z
+    .string()
+    .min(1)
+    .max(200)
+    .refine(
+      (value) =>
+        Array.from(value).every((character) => {
+          const codePoint = character.codePointAt(0) ?? 0;
+          return codePoint > 0x1f && (codePoint < 0x7f || codePoint > 0x9f);
+        }),
+      { message: 'Provider metadata contains control characters' },
+    )
+    .optional(),
+  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
   createdAt: z.string(),
   updatedAt: z.string(),
   createdBy: z.enum(['cli', 'vscode']),
@@ -90,7 +110,15 @@ const threadListResponseSchema = z.object({
 });
 const threadReadResponseSchema = z.object({
   thread: threadSummarySchema,
-  messages: z.array(z.object({ role: z.string(), text: z.string() })),
+  messages: z
+    .array(
+      z.object({
+        role: z.string().min(1).max(40),
+        text: z.string().max(1_000_000),
+      }),
+    )
+    .max(10_000),
+  transcriptTruncated: z.boolean(),
 });
 const localModelListResponseSchema = z.object({
   models: z.array(
@@ -471,17 +499,23 @@ export type SpawnLocalRuntime = (
   options: Parameters<typeof nodeSpawn>[2],
 ) => ChildProcessWithoutNullStreams;
 
+export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) => Promise<void>;
+
 export interface LocalRuntimeClientOptions {
-  cliPath: string;
+  cliPath: string | (() => string);
   cwd: string;
   clientVersion: string;
   spawn?: SpawnLocalRuntime;
+  terminateProcessTree?: TerminateLocalRuntimeTree;
 }
 
 export class LocalRuntimeClient {
   private child?: ChildProcessWithoutNullStreams;
   private connection?: JsonlConnection;
+  private childExitPromise?: Promise<void>;
   private initializePromise?: Promise<InitializeResponse>;
+  private disposePromise?: Promise<void>;
+  private restartPromise?: Promise<void>;
   private readonly notificationListeners = new Set<(value: AppServerNotification) => void>();
   private readonly eventListeners = new Set<(value: LocalRuntimeEvent) => void>();
   private stderrTail = '';
@@ -570,28 +604,85 @@ export class LocalRuntimeClient {
     return { dispose: () => this.eventListeners.delete(listener) };
   }
 
-  dispose(): void {
-    if (this.disposed) return;
+  restart(): Promise<void> {
+    if (this.restartPromise !== undefined) return this.restartPromise;
+    const restart = (async () => {
+      await this.disposeProcess(true);
+      this.disposed = false;
+      delete this.disposePromise;
+      await this.initialize();
+    })();
+    this.restartPromise = restart;
+    void restart.then(
+      () => {
+        if (this.restartPromise === restart) delete this.restartPromise;
+      },
+      () => {
+        if (this.restartPromise === restart) delete this.restartPromise;
+      },
+    );
+    return restart;
+  }
+
+  dispose(): Promise<void> {
+    return this.disposeProcess(false);
+  }
+
+  private disposeProcess(preserveListeners: boolean): Promise<void> {
+    if (this.disposePromise !== undefined) return this.disposePromise;
     this.disposed = true;
-    this.notificationListeners.clear();
-    const restartError = new Error('AGI local runtime process was restarted');
+    if (!preserveListeners) this.notificationListeners.clear();
+    const restartError = new Error('AGI local runtime process is restarting');
     for (const listener of this.eventListeners) {
       listener({ type: 'runtime_disconnected', error: restartError.message });
     }
-    this.eventListeners.clear();
+    if (!preserveListeners) this.eventListeners.clear();
     const connection = this.connection;
     const child = this.child;
-    if (connection !== undefined) {
-      void connection
-        .request('shutdown', {}, SHUTDOWN_GRACE_MS)
-        .catch(() => undefined)
-        .finally(() => {
-          if (this.connection === connection && this.child === child) {
-            this.resetProcess(restartError, true);
-          }
-        });
-    } else {
+    const childExitPromise = this.childExitPromise;
+    if (connection === undefined || child === undefined || childExitPromise === undefined) {
       this.resetProcess(restartError, true);
+      this.disposePromise = Promise.resolve();
+      return this.disposePromise;
+    }
+
+    this.disposePromise = this.shutdownProcess(connection, child, childExitPromise, restartError);
+    return this.disposePromise;
+  }
+
+  private async shutdownProcess(
+    connection: JsonlConnection,
+    child: ChildProcessWithoutNullStreams,
+    childExitPromise: Promise<void>,
+    restartError: Error,
+  ): Promise<void> {
+    let graceful = false;
+    try {
+      const result = await connection.request('shutdown', {}, SHUTDOWN_ACK_TIMEOUT_MS);
+      acknowledgedResponseSchema.parse(result);
+      await waitWithTimeout(
+        childExitPromise,
+        SHUTDOWN_EXIT_TIMEOUT_MS,
+        'AGI local runtime acknowledged shutdown but did not exit',
+      );
+      graceful = true;
+    } catch {
+      const terminateProcessTree =
+        this.options.terminateProcessTree ?? terminateLocalRuntimeProcessTree;
+      await waitWithTimeout(
+        terminateProcessTree(child),
+        HARD_KILL_TIMEOUT_MS,
+        'AGI local runtime process-tree termination timed out',
+      );
+      await waitWithTimeout(
+        childExitPromise,
+        HARD_KILL_TIMEOUT_MS,
+        'AGI local runtime did not exit after process-tree termination',
+      );
+    } finally {
+      if (this.connection === connection || this.child === child) {
+        this.resetProcess(restartError, !graceful);
+      }
     }
   }
 
@@ -608,15 +699,20 @@ export class LocalRuntimeClient {
     if (!parsedResult.success) {
       if (legacyInitializeResponseSchema.safeParse(rawResult).success) {
         throw new Error(
-          'Installed AGI CLI does not support developer-session protocol 6. Update the AGI CLI or set agiWorkforce.cliPath to a current binary.',
+          `Installed AGI CLI does not support developer-session protocol ${SUPPORTED_PROTOCOL_VERSION}. Update the AGI CLI or set agiWorkforce.cliPath to a current binary.`,
         );
       }
       throw new Error('Installed AGI CLI returned an invalid developer-session handshake');
     }
     const result = parsedResult.data as InitializeResponse;
-    if (result.protocolVersion < MINIMUM_SUPPORTED_PROTOCOL_VERSION) {
+    if (result.protocolVersion !== SUPPORTED_PROTOCOL_VERSION) {
       throw new Error(
-        `Installed AGI CLI uses developer-session protocol ${result.protocolVersion}; version ${MINIMUM_SUPPORTED_PROTOCOL_VERSION} or newer is required`,
+        `Installed AGI CLI uses developer-session protocol ${result.protocolVersion}; this extension requires exactly protocol ${SUPPORTED_PROTOCOL_VERSION}. Install a compatible AGI CLI or update the extension.`,
+      );
+    }
+    if (!isSupportedCliVersion(result.serverInfo.version)) {
+      throw new Error(
+        `Installed AGI CLI reports version ${JSON.stringify(result.serverInfo.version)}; version ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer is required for protocol ${SUPPORTED_PROTOCOL_VERSION}.`,
       );
     }
     if (
@@ -642,16 +738,24 @@ export class LocalRuntimeClient {
     if (this.disposed) throw new Error('AGI local runtime client is disposed');
     if (this.connection !== undefined) return this.connection;
     const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime);
-    const child = spawnRuntime(this.options.cliPath, ['app-server'], {
+    const cliPath =
+      typeof this.options.cliPath === 'function' ? this.options.cliPath() : this.options.cliPath;
+    const child = spawnRuntime(cliPath, ['app-server'], {
       cwd: this.options.cwd,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      detached: process.platform !== 'win32',
     });
     this.stderrTail = '';
     this.child = child;
+    let resolveChildExit!: () => void;
+    const childExitPromise = new Promise<void>((resolve) => {
+      resolveChildExit = resolve;
+    });
+    this.childExitPromise = childExitPromise;
     const connection = new JsonlConnection(child.stdout, child.stdin, (error) => {
-      if (this.child === child) this.resetProcess(error, true);
+      if (this.child === child) this.resetProcess(error, !this.disposed);
     });
     this.connection = connection;
     connection.onNotification((notification) => {
@@ -666,11 +770,13 @@ export class LocalRuntimeClient {
       this.stderrTail = `${this.stderrTail}${chunk}`.slice(-64 * 1024);
     });
     child.once('error', (error) => {
+      if (child.pid === undefined) resolveChildExit();
       if (this.child === child && this.connection === connection) {
         this.resetProcess(error);
       }
     });
     child.once('exit', (code, signal) => {
+      resolveChildExit();
       const detail = this.stderrTail.trim();
       const suffix = detail === '' ? '' : `: ${detail}`;
       if (this.child === child && this.connection === connection) {
@@ -688,16 +794,80 @@ export class LocalRuntimeClient {
     const hadProcess = connection !== undefined || child !== undefined;
     delete this.connection;
     delete this.child;
+    delete this.childExitPromise;
     delete this.initializePromise;
     connection?.close(error);
-    if (terminate) child?.kill();
+    if (terminate && child !== undefined) {
+      const terminateProcessTree =
+        this.options.terminateProcessTree ?? terminateLocalRuntimeProcessTree;
+      void terminateProcessTree(child).catch(() => child.kill('SIGKILL'));
+    }
     if (hadProcess) {
       for (const listener of this.eventListeners) {
         listener({ type: 'runtime_disconnected', error: error.message });
       }
     }
-    if (this.disposed) this.eventListeners.clear();
   }
+}
+
+function isSupportedCliVersion(version: string): boolean {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u);
+  if (match === null) return false;
+  const parts = match.slice(1, 4).map(Number);
+  if (parts.some((part) => !Number.isSafeInteger(part))) return false;
+  for (const [index, minimum] of MINIMUM_SUPPORTED_CLI_VERSION.entries()) {
+    const part = parts[index] ?? 0;
+    if (part > minimum) return true;
+    if (part < minimum) return false;
+  }
+  return match[4] === undefined;
+}
+
+async function waitWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function terminateLocalRuntimeProcessTree(
+  child: ChildProcessWithoutNullStreams,
+): Promise<void> {
+  const processId = child.pid;
+  if (processId === undefined || !Number.isSafeInteger(processId) || processId <= 0) {
+    child.kill('SIGKILL');
+    return;
+  }
+
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-processId, 'SIGKILL');
+      return;
+    } catch {
+      child.kill('SIGKILL');
+      return;
+    }
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const killer = nodeSpawn('taskkill', ['/PID', String(processId), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.once('error', reject);
+    killer.once('exit', () => resolve());
+  });
 }
 
 export type { AppServerCapabilities };

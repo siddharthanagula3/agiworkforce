@@ -18,9 +18,10 @@
  * token — the session is revalidated from the native credential vault on every
  * launch. So this spec mocks the four Tauri commands the device flow actually
  * invokes (`apps/desktop/src/services/cloudAccountAuth.ts` `authorizeCloudAccount`)
- * and answers the app's own `window.fetch` for the managed-cloud origin. No
- * real account, no real network, no reload race: the fetch stub is installed
- * BEFORE sign-in starts, so every request the session makes is already covered.
+ * through the shared Cloud-session helper and answers the app's own
+ * `window.fetch` for the managed-cloud origin. No real account, no real
+ * network, no reload race: the fetch stub is installed BEFORE sign-in starts,
+ * so every request the session makes is already covered.
  *
  * Model ids and reasoning contracts are read from the shared registry at run
  * time — never hardcoded here.
@@ -28,7 +29,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const WEB_ORIGIN = 'https://agiworkforce.com';
+import {
+  completeMockedDeviceSignIn,
+  mockDeviceAuthorization,
+  restoreLocalModeProfile,
+} from '../helpers/cloudSession';
+
 const ACCOUNT_ID = 'wdio-cloud-user';
 
 /**
@@ -47,6 +53,7 @@ const MODELS_JSON_PATH = path.resolve(
 interface CatalogModel {
   id: string;
   name: string;
+  provider: string;
   availability?: string;
   reasoning?: { canDisableThinking?: boolean };
 }
@@ -66,7 +73,7 @@ const alwaysOnModel = (() => {
         `update this spec against ${MODELS_JSON_PATH}.`,
     );
   }
-  return { id: match.id, name: match.name };
+  return { id: match.id, name: match.name, provider: match.provider };
 })();
 
 interface CapturedRequest {
@@ -86,12 +93,13 @@ interface CapturedRequest {
  */
 async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<void> {
   await browser.execute(
-    (origin: string, userId: string, streamMode: string) => {
+    (userId: string, streamMode: string, discoveredModel: CatalogModel) => {
       const win = window as unknown as {
         fetch: typeof fetch;
         __agiRealFetch?: typeof fetch;
         __agiCloudRequests?: CapturedRequest[];
         __agiStreamMode?: string;
+        __agiWdioCloudOrigin?: string;
       };
       win.__agiStreamMode = streamMode;
       win.__agiCloudRequests = win.__agiCloudRequests ?? [];
@@ -127,6 +135,26 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
       const chunk = (text: string) =>
         `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`;
 
+      const conversationWire = (
+        id: unknown,
+        title: unknown = 'New chat',
+        model: unknown = 'auto',
+      ) => {
+        const now = new Date().toISOString();
+        return {
+          id,
+          title,
+          model,
+          project_id: null,
+          pinned: false,
+          starred: false,
+          archived: false,
+          is_temporary: false,
+          created_at: now,
+          updated_at: now,
+        };
+      };
+
       win.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const rawUrl =
           typeof input === 'string'
@@ -135,7 +163,14 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
               ? input.toString()
               : (input as Request).url;
         const url = new URL(rawUrl, window.location.href);
-        if (url.origin !== new URL(origin).origin) {
+        // mockDeviceAuthorization learns the canonical WEB_APP_URL from the
+        // app's real `account_store_api_base_url` call. Match that value at
+        // request time so this test follows Vite env resolution instead of
+        // duplicating a production or localhost origin in Node.
+        if (
+          typeof win.__agiWdioCloudOrigin !== 'string' ||
+          url.origin !== win.__agiWdioCloudOrigin
+        ) {
           return win.__agiRealFetch!(input as RequestInfo, init);
         }
 
@@ -168,23 +203,24 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
           });
         }
 
+        if (path === '/api/models') {
+          return json({
+            models: [
+              {
+                id: discoveredModel.id,
+                name: discoveredModel.name,
+                provider: discoveredModel.provider,
+              },
+            ],
+          });
+        }
+
         if (path.startsWith('/api/chat/conversations')) {
           if (path === '/api/chat/conversations') {
             if ((init?.method ?? 'GET').toUpperCase() === 'POST') {
               const payload = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
               return json({
-                conversation: {
-                  id: payload['id'],
-                  title: payload['title'] ?? 'New chat',
-                  model: payload['model'] ?? 'auto',
-                  projectId: null,
-                  pinned: false,
-                  starred: false,
-                  archived: false,
-                  isTemporary: false,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                },
+                conversation: conversationWire(payload['id'], payload['title'], payload['model']),
               });
             }
             return json({ conversations: [], hasMore: false, nextOffset: 0 });
@@ -197,19 +233,18 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
             const payload = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
             return json({ message: { id: payload['id'] } });
           }
+          if ((init?.method ?? 'GET').toUpperCase() === 'PUT') {
+            const payload = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+            return json({
+              conversation: conversationWire(
+                path.split('/')[4],
+                payload['title'],
+                payload['model'],
+              ),
+            });
+          }
           return json({
-            conversation: {
-              id: path.split('/')[4],
-              title: 'New chat',
-              model: 'auto',
-              projectId: null,
-              pinned: false,
-              starred: false,
-              archived: false,
-              isTemporary: false,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
+            conversation: conversationWire(path.split('/')[4]),
             messages: [],
             total: 0,
             hasMore: false,
@@ -253,9 +288,9 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
         return json({});
       };
     },
-    WEB_ORIGIN,
     ACCOUNT_ID,
     mode,
+    alwaysOnModel,
   );
 }
 
@@ -284,54 +319,6 @@ function completionBodies(requests: CapturedRequest[]): Record<string, unknown>[
     .map((request) => JSON.parse(String(request.body)) as Record<string, unknown>);
 }
 
-/** Mocks the four Tauri commands the in-app device sign-in actually invokes. */
-async function mockApprovedDeviceSignIn(): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  const encode = (value: unknown) =>
-    Buffer.from(JSON.stringify(value))
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/g, '');
-  const accessToken = [
-    encode({ alg: 'none', typ: 'JWT' }),
-    encode({ sub: ACCOUNT_ID, email: '', iat: now, exp: now + 3600 }),
-    'wdio',
-  ].join('.');
-
-  const storeBase = await browser.tauri.mock('account_store_api_base_url');
-  await storeBase.mockReturnValue(null);
-  const storeAccess = await browser.tauri.mock('account_store_access_token');
-  await storeAccess.mockReturnValue(null);
-  const storeRefresh = await browser.tauri.mock('account_store_refresh_token');
-  await storeRefresh.mockReturnValue(null);
-
-  const startAuth = await browser.tauri.mock('account_start_device_authorization');
-  await startAuth.mockReturnValue({
-    status: 200,
-    body: JSON.stringify({
-      device_code: 'wdio-device-code',
-      user_code: 'WDIO-CODE',
-      verification_uri: `${WEB_ORIGIN}/auth/device`,
-      // Same origin as WEB_APP_URL — requestDeviceAuthorization rejects any other.
-      verification_uri_complete: `${WEB_ORIGIN}/auth/device?user_code=WDIO-CODE&surface=desktop`,
-      interval: 1,
-      expires_in: 300,
-    }),
-  });
-
-  const pollAuth = await browser.tauri.mock('account_poll_device_authorization');
-  await pollAuth.mockReturnValue({
-    status: 200,
-    body: JSON.stringify({
-      access_token: accessToken,
-      refresh_token: 'wdio-refresh-token',
-      token_type: 'Bearer',
-      expires_in: 3600,
-    }),
-  });
-}
-
 async function enterCloudModeSignedIn(): Promise<void> {
   await browser.waitUntil(
     async () =>
@@ -340,13 +327,21 @@ async function enterCloudModeSignedIn(): Promise<void> {
     { timeout: 60_000, interval: 500, timeoutMsg: 'Desktop shell never finished loading' },
   );
 
+  // A prior interrupted Cloud journey can leave the isolated profile on the
+  // signed-out Cloud surface. Normalize through the product's own Local-mode
+  // action before looking for the shell tab strip.
+  const useLocalMode = await $('button=Use Local Mode');
+  if (await useLocalMode.isExisting()) {
+    await useLocalMode.click();
+  }
+
   const cloudTab = await $('button[role="tab"]=Cloud');
   await cloudTab.waitForDisplayed({ timeout: 20_000 });
   await cloudTab.click();
 
-  const signIn = await $('button=Sign in to AGI Cloud');
-  await signIn.waitForDisplayed({ timeout: 20_000 });
-  await signIn.click();
+  // Native email/password sign-in is primary. This journey deliberately uses
+  // the explicit browser fallback because its approval boundary is mocked.
+  await completeMockedDeviceSignIn();
 
   // The mocked device flow approves on the first poll (interval clamps to the
   // 3s floor in requestDeviceAuthorization), then /api/me resolves off the stub.
@@ -361,6 +356,11 @@ async function enterCloudModeSignedIn(): Promise<void> {
 async function selectComposerModel(modelName: string): Promise<void> {
   const trigger = await $('button[aria-label="Select model"]');
   await trigger.waitForDisplayed({ timeout: 20_000 });
+  await browser.waitUntil(async () => (await trigger.getText()).trim() !== 'Select model', {
+    timeout: 30_000,
+    interval: 250,
+    timeoutMsg: 'Cloud model discovery never populated the composer picker',
+  });
   await trigger.click();
 
   // Scope every popover query to the portalled Radix content: the trigger
@@ -375,19 +375,47 @@ async function selectComposerModel(modelName: string): Promise<void> {
     if (await header.isDisplayed()) await header.click();
   }
 
-  const option = await popover.$(`button*=${modelName}`);
-  await option.waitForDisplayed({ timeout: 10_000 });
-  await option.click();
+  // The embedded WebKit driver reports portalled Radix descendants as hidden
+  // even while their containing popover is visibly rendered. Resolve the
+  // button inside the already-verified visible popover and dispatch its normal
+  // DOM click so the React selection handler still owns the state change.
+  const selected = await browser.execute(
+    (root: Element, expectedName: string) => {
+      const option = Array.from(root.querySelectorAll('button')).find((button) =>
+        (button.textContent ?? '').includes(expectedName),
+      );
+      if (!option) return false;
+      option.click();
+      return true;
+    },
+    popover,
+    modelName,
+  );
+  if (!selected) {
+    throw new Error(`Cloud model picker did not contain ${modelName}.`);
+  }
 
   await browser.waitUntil(
-    async () => !(await $('[data-radix-popper-content-wrapper]').isExisting()),
+    async () => (await $('button[aria-label="Select model"]').getText()).includes(modelName),
     {
       timeout: 10_000,
       interval: 250,
-      timeoutMsg: 'Model popover did not close after selecting a model',
+      timeoutMsg: `Composer did not select ${modelName}`,
     },
   );
-  expect(await $('button[aria-label="Select model"]').getText()).toContain(modelName);
+
+  // A programmatic click preserves the component's selection handler but the
+  // embedded WebKit provider does not deliver Radix's dismissable-layer event.
+  // Close the still-open popover through its real trigger before interacting
+  // with the composer underneath it.
+  if ((await trigger.getAttribute('data-state')) === 'open') {
+    await trigger.click();
+  }
+  await browser.waitUntil(async () => (await trigger.getAttribute('data-state')) !== 'open', {
+    timeout: 10_000,
+    interval: 250,
+    timeoutMsg: 'Model popover did not close before composing a message',
+  });
 }
 
 async function sendTurn(text: string): Promise<void> {
@@ -398,7 +426,21 @@ async function sendTurn(text: string): Promise<void> {
 
   const send = await $('button[aria-label*="Send message ("]');
   await send.waitForDisplayed({ timeout: 10_000 });
+  try {
+    await send.waitForEnabled({ timeout: 10_000 });
+  } catch {
+    throw new Error(
+      `Cloud composer did not enable Send (draft=${JSON.stringify(
+        await composer.getValue(),
+      )}, model=${JSON.stringify(await $('button[aria-label="Select model"]').getText())}).`,
+    );
+  }
   await send.click();
+  await browser.waitUntil(async () => (await composer.getValue()) === '', {
+    timeout: 10_000,
+    interval: 250,
+    timeoutMsg: 'Cloud composer did not consume the draft after Send',
+  });
 }
 
 describe('AGI Desktop Cloud chat turn', () => {
@@ -406,16 +448,15 @@ describe('AGI Desktop Cloud chat turn', () => {
     this.timeout(180_000);
     await browser.pause(1_500);
     await installCloudFetchStub('ok');
-    await mockApprovedDeviceSignIn();
+    await mockDeviceAuthorization({ subject: ACCOUNT_ID });
     await enterCloudModeSignedIn();
   });
 
   after(async () => {
-    await browser.tauri.restoreAllMocks();
     // Leave the shared wdio profile in Local mode so the next spec file does
-    // not boot into the Cloud auth screen.
-    const localReturn = await $('button[role="tab"]=Local');
-    if (await localReturn.isExisting()) await localReturn.click();
+    // not boot into the Cloud auth screen, even when a before/test assertion
+    // failed while the signed-out Cloud surface was mounted.
+    await restoreLocalModeProfile();
   });
 
   it('sends a body the completions route accepts for an always-on reasoning model', async function () {
@@ -425,14 +466,33 @@ describe('AGI Desktop Cloud chat turn', () => {
     await selectComposerModel(alwaysOnModel.name);
     await sendTurn('Give me one sentence for the demo.');
 
+    try {
+      await browser.waitUntil(
+        async () => completionBodies(await readCapturedRequests()).length > 0,
+        {
+          timeout: 30_000,
+          interval: 250,
+          timeoutMsg: 'No completions request was captured',
+        },
+      );
+    } catch (error) {
+      const requests = await readCapturedRequests();
+      const ui = await browser.execute(() => ({
+        userTurns: document.querySelectorAll('[data-role="user"]').length,
+        assistantTurns: document.querySelectorAll('[data-role="assistant"]').length,
+        alerts: Array.from(document.querySelectorAll('[data-sonner-toast], [role="alert"]'))
+          .map((node) => (node.textContent ?? '').trim())
+          .filter(Boolean),
+      }));
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}; captured ${JSON.stringify(
+          requests.map(({ url, method }) => ({ url, method })),
+        )}; ui ${JSON.stringify(ui)}`,
+      );
+    }
+
     const assistant = await $('[data-role="assistant"]');
     await assistant.waitForDisplayed({ timeout: 60_000 });
-
-    await browser.waitUntil(async () => completionBodies(await readCapturedRequests()).length > 0, {
-      timeout: 30_000,
-      interval: 250,
-      timeoutMsg: 'No completions request was captured',
-    });
 
     const [body] = completionBodies(await readCapturedRequests());
     expect(body).toBeDefined();

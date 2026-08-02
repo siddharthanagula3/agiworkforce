@@ -160,8 +160,8 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
             chunks_cb.lock().unwrap().push(chunk.to_string());
         }),
         None, // Advisor queries don't use extended thinking,
-    None,
-)
+        None,
+    )
     .await?;
 
     // Prefer the accumulated streaming text; fall back to result.text.

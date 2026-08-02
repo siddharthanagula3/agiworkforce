@@ -1,24 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  cloudFetch: vi.fn(),
-  getValidSession: vi.fn(),
+  requestFetch: vi.fn(),
+  requestAssertBoundary: vi.fn(),
+  createManagedCloudRequestContext: vi.fn(),
   refreshUserData: vi.fn(),
   getPlanTier: vi.fn(),
   openExternalUrl: vi.fn(),
   openDesktopBillingWindow: vi.fn(),
 }));
 
-vi.mock('../../api/cloudApi', () => ({
-  cloudFetch: mocks.cloudFetch,
-}));
-
 vi.mock('../../services/cloudAccountAuth', () => ({
   cloudAccountAuth: {
-    getValidSession: mocks.getValidSession,
     refreshUserData: mocks.refreshUserData,
     getPlanTier: mocks.getPlanTier,
   },
+}));
+
+vi.mock('../../services/managedCloudRequestContext', () => ({
+  createManagedCloudRequestContext: mocks.createManagedCloudRequestContext,
 }));
 
 vi.mock('../../utils/navigation', () => ({
@@ -42,12 +42,20 @@ vi.mock('../runtimeEnvironment', async (importOriginal) => ({
   isTauri: false,
 }));
 
-import { applyPlanUpgrade, previewPlanUpgrade, waitForPlanActivation } from '../stripeCheckout';
+import {
+  applyPlanUpgrade,
+  openCheckout,
+  previewPlanUpgrade,
+  waitForPlanActivation,
+} from '../stripeCheckout';
 
 describe('Desktop Stripe upgrade flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getValidSession.mockResolvedValue({ access_token: 'desktop-token' });
+    mocks.createManagedCloudRequestContext.mockReturnValue({
+      fetch: mocks.requestFetch,
+      assertBoundary: mocks.requestAssertBoundary,
+    });
     mocks.refreshUserData.mockResolvedValue(undefined);
     mocks.getPlanTier.mockReturnValue('max');
   });
@@ -57,7 +65,7 @@ describe('Desktop Stripe upgrade flow', () => {
   });
 
   it('parses the exact due-now and recurring amounts for full-price checkout', async () => {
-    mocks.cloudFetch.mockResolvedValue(
+    mocks.requestFetch.mockResolvedValue(
       new Response(
         JSON.stringify({
           error: {
@@ -84,7 +92,7 @@ describe('Desktop Stripe upgrade flow', () => {
   });
 
   it('returns Stripe hosted authentication instead of reporting a failed upgrade', async () => {
-    mocks.cloudFetch.mockResolvedValue(
+    mocks.requestFetch.mockResolvedValue(
       new Response(
         JSON.stringify({
           success: false,
@@ -114,5 +122,35 @@ describe('Desktop Stripe upgrade flow', () => {
 
     await expect(activation).resolves.toBe(true);
     expect(mocks.refreshUserData).toHaveBeenCalledTimes(3);
+  });
+
+  it('captures account authority before checkout and never opens a stale account response', async () => {
+    let resolveCheckout!: (response: Response) => void;
+    mocks.requestFetch.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveCheckout = resolve;
+      }),
+    );
+    let current = true;
+    mocks.requestAssertBoundary.mockImplementation(() => {
+      if (!current) throw new Error('The Managed Cloud account changed');
+    });
+
+    const checkout = openCheckout('pro');
+    expect(mocks.createManagedCloudRequestContext).toHaveBeenCalledWith('Cloud checkout');
+    await vi.waitFor(() => expect(mocks.requestFetch).toHaveBeenCalledOnce());
+    current = false;
+    resolveCheckout(
+      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/c/pay_test' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(checkout).resolves.toBe(
+      'Unable to reach payment service. Check your internet connection.',
+    );
+    expect(mocks.openExternalUrl).not.toHaveBeenCalled();
+    expect(mocks.openDesktopBillingWindow).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,27 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const { PACKAGED_RUNTIME_OUTPUT_ALLOWLIST } = require('./vsce-package.js');
+const { inspectVsixArchive } = require('./vsix-zip.js');
 const sourceManifest = JSON.parse(
   fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'),
 );
 const expectedFilename = `${sourceManifest.name}-${sourceManifest.version}.vsix`;
 const requestedPath = process.argv[2];
+const extractFlagIndex = process.argv.indexOf('--extract');
+const extractTo =
+  extractFlagIndex < 0
+    ? undefined
+    : process.argv[extractFlagIndex + 1] === undefined
+      ? fail('--extract requires a destination directory')
+      : path.resolve(process.cwd(), process.argv[extractFlagIndex + 1]);
 const vsixPath = requestedPath
   ? path.resolve(process.cwd(), requestedPath)
   : path.join(extensionRoot, expectedFilename);
@@ -21,20 +31,6 @@ function fail(message) {
   process.exit(1);
 }
 
-function unzip(args, encoding = 'utf8') {
-  const result = spawnSync('unzip', args, {
-    encoding,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  if (result.error?.code === 'ENOENT') {
-    fail('unzip is required to inspect the VSIX release artifact');
-  }
-  if (result.status !== 0) {
-    fail(result.stderr?.trim() || `unzip ${args[0]} failed`);
-  }
-  return result.stdout;
-}
-
 if (!fs.existsSync(vsixPath) || !fs.statSync(vsixPath).isFile()) {
   fail(`VSIX does not exist: ${vsixPath}`);
 }
@@ -42,16 +38,13 @@ if (path.basename(vsixPath) !== expectedFilename) {
   fail(`expected VSIX filename ${expectedFilename}, got ${path.basename(vsixPath)}`);
 }
 
-const entries = unzip(['-Z1', vsixPath]).split(/\r?\n/u).filter(Boolean);
-if (entries.length === 0) fail('VSIX archive is empty');
-
-const invalidPaths = entries.filter((entry) => {
-  const normalized = entry.replaceAll('\\', '/');
-  return entry !== normalized || normalized.startsWith('/') || normalized.split('/').includes('..');
-});
-if (invalidPaths.length > 0) {
-  fail(`VSIX contains unsafe archive paths:\n${invalidPaths.join('\n')}`);
+let archive;
+try {
+  archive = await inspectVsixArchive(vsixPath, extractTo === undefined ? {} : { extractTo });
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
 }
+const entries = archive.entries;
 
 const forbiddenEntries = entries.filter((entry) => {
   const relative = entry.replace(/^extension\//u, '');
@@ -76,6 +69,27 @@ if (forbiddenEntries.length > 0) {
   fail(`VSIX contains development-only or sensitive files:\n${forbiddenEntries.join('\n')}`);
 }
 
+const runtimeEntries = entries
+  .filter((entry) => entry.startsWith('extension/out/') && !entry.endsWith('/'))
+  .map((entry) => entry.replace(/^extension\//u, ''));
+const allowedRuntimeEntries = new Set(PACKAGED_RUNTIME_OUTPUT_ALLOWLIST);
+const unexpectedRuntimeEntries = runtimeEntries.filter(
+  (entry) => !allowedRuntimeEntries.has(entry),
+);
+const missingRuntimeEntries = PACKAGED_RUNTIME_OUTPUT_ALLOWLIST.filter(
+  (entry) => !runtimeEntries.includes(entry),
+);
+if (unexpectedRuntimeEntries.length > 0 || missingRuntimeEntries.length > 0) {
+  const details = [];
+  if (unexpectedRuntimeEntries.length > 0) {
+    details.push(`unexpected:\n${unexpectedRuntimeEntries.join('\n')}`);
+  }
+  if (missingRuntimeEntries.length > 0) {
+    details.push(`missing:\n${missingRuntimeEntries.join('\n')}`);
+  }
+  fail(`VSIX runtime output does not match the release allowlist:\n${details.join('\n')}`);
+}
+
 const manifestEntries = entries.filter((entry) => entry === 'extension/package.json');
 if (manifestEntries.length !== 1) {
   fail(`expected one extension/package.json, found ${manifestEntries.length}`);
@@ -83,7 +97,7 @@ if (manifestEntries.length !== 1) {
 
 let packagedManifest;
 try {
-  packagedManifest = JSON.parse(unzip(['-p', vsixPath, 'extension/package.json']));
+  packagedManifest = JSON.parse(archive.packagedManifest.toString('utf8'));
 } catch (error) {
   fail(`packaged extension manifest is invalid JSON: ${error.message}`);
 }

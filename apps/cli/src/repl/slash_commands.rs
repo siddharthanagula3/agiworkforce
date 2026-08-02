@@ -24,6 +24,13 @@ pub(super) enum SlashResult {
     Batch(String, String),
     /// Turn the slash command into a first-class prompt.
     Prompt(String),
+    /// Put a reviewed Local→cloud payload into the line editor. The caller
+    /// must not send it until the user explicitly accepts that buffer.
+    ReviewDraft {
+        prompt: String,
+        destination: crate::agent::PrivacyMode,
+        provider: String,
+    },
     /// Resolve and send an MCP prompt command.
     McpPrompt(String),
     /// Run ecosystem scan.
@@ -67,12 +74,16 @@ pub(super) async fn handle_slash_command(
         crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
             return SlashResult::Prompt(prompt);
         }
-        crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
-            eprintln!("{prompt}");
-            output::print_info(
-                "Review this BYOK continuation draft. It was not sent automatically.",
-            );
-            return SlashResult::Handled;
+        crate::claude_parity::ParityCommandResult::DraftPrompt {
+            prompt,
+            destination,
+            provider,
+        } => {
+            return SlashResult::ReviewDraft {
+                prompt,
+                destination,
+                provider,
+            };
         }
         crate::claude_parity::ParityCommandResult::NotHandled => {}
     }
@@ -590,6 +601,8 @@ pub(super) fn print_help() {
 
 #[cfg(test)]
 mod tests {
+    use super::{handle_slash_command, SlashResult};
+
     #[test]
     fn registered_builtin_commands_have_repl_runtime_coverage() {
         let runtime = super::repl_runtime_command_names();
@@ -608,6 +621,52 @@ mod tests {
                     command.name
                 );
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn byok_handoff_returns_an_exact_review_buffer_with_provider_label() {
+        let mut session = crate::agent::AgentSession::new(
+            "llama3",
+            &crate::context::SystemContext {
+                cwd: "/tmp".to_string(),
+                git_branch: None,
+                git_status_summary: None,
+                git_remote_url: None,
+                project_type: None,
+                project_language: None,
+                ci_providers: Vec::new(),
+                monorepo_type: None,
+                package_manager: None,
+                containerization: Vec::new(),
+                editor_configs: Vec::new(),
+                os: "test".to_string(),
+                shell: "test".to_string(),
+            },
+            None,
+        );
+        session.model = crate::model_catalog::models_for("openai")[0].id.clone();
+        session.provider = crate::models::provider_from_name("openai").expect("OpenAI");
+        session.set_session_persistence(true);
+        session.set_privacy_mode(crate::agent::PrivacyMode::Local);
+        session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "repl-source",
+            chrono::Utc::now(),
+        ));
+        session.managed_session_path = Some("repl-source.jsonl".into());
+        let mut config = crate::config::CliConfig::default();
+
+        match handle_slash_command("/continue-with-byok full", &mut session, &mut config).await {
+            SlashResult::ReviewDraft {
+                prompt,
+                destination,
+                provider,
+            } => {
+                assert_eq!(destination, crate::agent::PrivacyMode::Byok);
+                assert_eq!(provider, "openai");
+                assert!(prompt.contains("Destination provider: openai"));
+            }
+            _ => panic!("expected an editable review buffer"),
         }
     }
 }

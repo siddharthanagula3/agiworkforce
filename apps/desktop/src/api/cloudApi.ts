@@ -8,6 +8,12 @@
 import { guardedFetch } from '../lib/egressGuard';
 import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
+import {
+  MANAGED_CLOUD_CONVERSATION_LIMITS,
+  MANAGED_CLOUD_MESSAGE_LIMITS,
+  MANAGED_CLOUD_PAGE_SIZE,
+  createManagedCloudPaginationGuard,
+} from '../services/managedCloudPagination';
 import { WEB_APP_URL } from './config';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
@@ -31,6 +37,14 @@ import {
 // Exported so runtimes can resolve relative wire uris (e.g. the
 // `x_generated_files` `/api/files/{id}` paths) against the same base.
 export const CLOUD_API_BASE_URL = isTauri ? WEB_APP_URL : '';
+
+/** Maximum size of one not-yet-dispatched Managed Cloud SSE event. */
+export const CLOUD_SSE_MAX_EVENT_CHARS = 1_048_576;
+/** Maximum time a successful Managed Cloud stream may remain silent. */
+export const CLOUD_SSE_IDLE_TIMEOUT_MS = 90_000;
+/** Bound the all-history helpers that materialize results in renderer memory. */
+export const CLOUD_MAX_CONVERSATIONS = MANAGED_CLOUD_CONVERSATION_LIMITS.maxItems;
+export const CLOUD_MAX_MESSAGES_PER_CONVERSATION = MANAGED_CLOUD_MESSAGE_LIMITS.maxItems;
 
 // ============================================================================
 // Type Definitions
@@ -85,11 +99,25 @@ export type CloudChatMessageContent =
 /**
  * Retrieves auth headers for API requests.
  *
- * Desktop (Tauri): Uses cloudAccountAuth.getSession() for Bearer token.
+ * Desktop (Tauri): Uses cloudAccountAuth.getValidSession() for Bearer token.
  * Web (cloud): Session is in httpOnly cookies — browser sends them
  * automatically. We fetch a CSRF token for state-changing requests.
  */
-export async function getAuthHeaders(): Promise<Record<string, string>> {
+function captureDesktopCloudAccountId(): string | undefined {
+  return isTauri ? cloudAccountAuth.getSession()?.user?.id : undefined;
+}
+
+async function readAccountBoundSession(expectedAccountId?: string) {
+  const session = await cloudAccountAuth.getValidSession();
+  if (expectedAccountId && session?.user?.id !== expectedAccountId) {
+    throw new Error('The Managed Cloud account changed while this request was in progress.');
+  }
+  return session;
+}
+
+export async function getAuthHeaders(
+  expectedAccountId = captureDesktopCloudAccountId(),
+): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
@@ -97,7 +125,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 
   // Desktop mode: add Bearer token from Tauri auth service
-  const session = await cloudAccountAuth.getValidSession();
+  const session = await readAccountBoundSession(expectedAccountId);
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
@@ -137,12 +165,49 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function cloudFetch(
   input: Parameters<typeof guardedFetch>[0],
   init?: Parameters<typeof guardedFetch>[1],
+  expectedAccountId?: string,
 ): Promise<Response> {
   const response = await guardedFetch(input, init);
+  if (expectedAccountId && cloudAccountAuth.getSession()?.user?.id !== expectedAccountId) {
+    throw new Error('The Managed Cloud account changed while this request was in progress.');
+  }
   if (isTauri && response.status === 401) {
-    await cloudAccountAuth.invalidateSession();
+    // A request may have left with T1 immediately before a same-account refresh
+    // installed T2. A late T1 rejection must not revoke the newer valid
+    // credential. Only the exact bearer that the server rejected may invalidate
+    // the still-current Desktop session; unauthenticated requests never do.
+    const dispatchedAuthorization = new Headers(init?.headers).get('Authorization');
+    const dispatchedToken = dispatchedAuthorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    const currentSession = cloudAccountAuth.getSession();
+    if (dispatchedToken && currentSession?.access_token === dispatchedToken) {
+      await cloudAccountAuth.invalidateSession();
+    }
   }
   return response;
+}
+
+export async function accountBoundCloudFetch(
+  input: Parameters<typeof guardedFetch>[0],
+  init: Parameters<typeof guardedFetch>[1] | undefined,
+  expectedAccountId: string | undefined,
+  assertBoundary?: () => void,
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
+): Promise<Response> {
+  assertBoundary?.();
+  if (!expectedAccountId) return cloudFetch(input, init);
+
+  // Resolve the credential again at the final transport boundary. A token may
+  // rotate for the same account, but an account switch while an earlier auth
+  // lookup was pending must fail before any queued payload reaches fetch.
+  const session = await readAccountBoundSession(expectedAccountId);
+  assertBoundary?.();
+  if (!session?.access_token) {
+    throw new Error('AGI Cloud requires a connected Desktop session.');
+  }
+  const headers = new Headers(init?.headers);
+  headers.set('Authorization', `Bearer ${session.access_token}`);
+  onCredential?.({ accountId: session.user.id, accessToken: session.access_token });
+  return cloudFetch(input, { ...init, headers }, expectedAccountId);
 }
 
 function projectManagedConversation(conversation: ManagedCloudConversation): CloudConversation {
@@ -174,19 +239,26 @@ function projectManagedMessage(message: ManagedCloudMessage): CloudMessage {
   };
 }
 
-export function createCloudChatPersistenceClient() {
+export function createCloudChatPersistenceClient(
+  expectedAccountId = captureDesktopCloudAccountId(),
+) {
   return createManagedCloudChatClient({
     baseUrl: CLOUD_API_BASE_URL,
-    getAuthToken: async () => (await cloudAccountAuth.getValidSession())?.access_token ?? null,
+    getAuthToken: async () =>
+      (await readAccountBoundSession(expectedAccountId))?.access_token ?? null,
     decorateMutationHeaders: async (headers) => ({
-      ...(await getAuthHeaders()),
       ...headers,
+      ...(await getAuthHeaders(expectedAccountId)),
     }),
     fetchImpl: (input, init) =>
-      cloudFetch(input, {
-        ...init,
-        credentials: 'include',
-      }),
+      accountBoundCloudFetch(
+        input,
+        {
+          ...init,
+          credentials: 'include',
+        },
+        expectedAccountId,
+      ),
   });
 }
 
@@ -195,18 +267,68 @@ export function createCloudChatPersistenceClient() {
  * journal. All Desktop Cloud follow/cancel traffic uses the same guarded
  * egress path and Clerk/CSRF headers as the completion request itself.
  */
-export function createDesktopCloudAgentRunClient(): ManagedCloudAgentRunClient {
+export interface DesktopCloudRunCleanupCredential {
+  accountId: string;
+  accessToken: string;
+}
+
+export function createDesktopCloudAgentRunClient(
+  expectedAccountId = captureDesktopCloudAccountId(),
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
+): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
     baseUrl: CLOUD_API_BASE_URL,
-    getAuthToken: async () => (await cloudAccountAuth.getValidSession())?.access_token ?? null,
+    getAuthToken: async () =>
+      (await readAccountBoundSession(expectedAccountId))?.access_token ?? null,
     decorateMutationHeaders: async (headers) => ({
-      ...(await getAuthHeaders()),
       ...headers,
+      ...(await getAuthHeaders(expectedAccountId)),
     }),
     fetchImpl: (input, init) =>
-      cloudFetch(input, {
+      accountBoundCloudFetch(
+        input,
+        {
+          ...init,
+          credentials: 'include',
+        },
+        expectedAccountId,
+        undefined,
+        onCredential,
+      ),
+  });
+}
+
+/**
+ * Cancellation-only client for a runtime that is being torn down.
+ *
+ * Sign-out and A -> B replacement synchronously revoke current authority before
+ * awaiting runtime disposal. The retiring runtime is still allowed to cancel
+ * its own server-owned run, using the exact old credential it captured; it may
+ * not use this client for new work or current-account reads.
+ */
+export function createDesktopCloudAgentRunCleanupClient(
+  credential: DesktopCloudRunCleanupCredential,
+): ManagedCloudAgentRunClient {
+  if (!credential.accountId || !credential.accessToken) {
+    throw new Error('Managed Cloud run cleanup requires its original account credential.');
+  }
+  const fixedHeaders = (headers?: HeadersInit) => {
+    const next = new Headers(headers);
+    next.set('Authorization', `Bearer ${credential.accessToken}`);
+    next.set('Content-Type', 'application/json');
+    next.set('X-Requested-With', 'XMLHttpRequest');
+    next.set('X-AGI-Surface', 'desktop');
+    return next;
+  };
+  return createManagedCloudAgentRunClient({
+    baseUrl: CLOUD_API_BASE_URL,
+    getAuthToken: async () => credential.accessToken,
+    decorateMutationHeaders: async (headers) => Object.fromEntries(fixedHeaders(headers).entries()),
+    fetchImpl: (input, init) =>
+      guardedFetch(input, {
         ...init,
         credentials: 'include',
+        headers: fixedHeaders(init?.headers),
       }),
   });
 }
@@ -221,13 +343,24 @@ export function createDesktopCloudAgentRunClient(): ManagedCloudAgentRunClient {
 export async function listCloudConversations(): Promise<CloudConversation[]> {
   const client = createCloudChatPersistenceClient();
   const conversations: CloudConversation[] = [];
+  const pagination = createManagedCloudPaginationGuard('conversations');
   let offset = 0;
   let hasMore = true;
   while (hasMore) {
-    const page = await client.listConversations({ limit: 100, offset });
+    const page = await client.listConversations({
+      limit: MANAGED_CLOUD_PAGE_SIZE,
+      offset,
+    });
+    const nextOffset = pagination.acceptPage({
+      items: page.conversations,
+      hasMore: page.hasMore,
+      currentOffset: offset,
+      nextOffset: page.nextOffset,
+    });
     conversations.push(...page.conversations.map(projectManagedConversation));
     hasMore = page.hasMore;
-    offset = page.nextOffset;
+    if (!hasMore) break;
+    offset = nextOffset;
   }
   return conversations;
 }
@@ -250,18 +383,25 @@ export async function createCloudConversation(
 export async function getCloudConversation(id: string): Promise<CloudConversation> {
   const client = createCloudChatPersistenceClient();
   const messages: CloudMessage[] = [];
+  const pagination = createManagedCloudPaginationGuard('messages');
   let offset = 0;
   let conversation: ManagedCloudConversation | undefined;
   let hasMore = true;
   while (hasMore) {
-    const page = await client.getConversation(id, { limit: 100, offset });
+    const page = await client.getConversation(id, {
+      limit: MANAGED_CLOUD_PAGE_SIZE,
+      offset,
+    });
     conversation = page.conversation;
+    const nextOffset = pagination.acceptPage({
+      items: page.messages,
+      hasMore: page.hasMore,
+      currentOffset: offset,
+      reportedTotal: page.total,
+    });
     messages.push(...page.messages.map(projectManagedMessage));
     hasMore = page.hasMore;
-    offset += page.messages.length;
-    if (hasMore && page.messages.length === 0) {
-      throw new Error(`Cloud conversation ${id} returned an invalid empty page`);
-    }
+    offset = nextOffset;
   }
   if (!conversation) throw new Error(`Cloud conversation ${id} was not found`);
   return {
@@ -294,13 +434,18 @@ export async function updateCloudConversationTitle(
  * Fetches the current user's cloud API usage summary.
  */
 export async function getCloudUsage(): Promise<CloudUsage> {
-  const headers = await getAuthHeaders();
+  const expectedAccountId = captureDesktopCloudAccountId();
+  const headers = await getAuthHeaders(expectedAccountId);
 
-  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/usage`, {
-    method: 'GET',
-    headers,
-    credentials: 'include',
-  });
+  const res = await accountBoundCloudFetch(
+    `${CLOUD_API_BASE_URL}/api/usage`,
+    {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    },
+    expectedAccountId,
+  );
 
   if (!res.ok) {
     throw new Error(`Failed to fetch cloud usage: HTTP ${res.status}`);
@@ -402,6 +547,7 @@ export async function generateCloudImage(input: {
   idempotencyKey: string;
   signal?: AbortSignal;
 }): Promise<CloudGeneratedImage> {
+  const expectedAccountId = captureDesktopCloudAccountId();
   const request = ManagedMediaImageGenerationRequestSchema.parse({
     prompt: input.prompt,
     provider: input.provider,
@@ -410,16 +556,20 @@ export async function generateCloudImage(input: {
     n: 1,
     quality: 'standard',
   });
-  const headers = await getAuthHeaders();
+  const headers = await getAuthHeaders(expectedAccountId);
   headers['Idempotency-Key'] = input.idempotencyKey;
 
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/media/image/generate`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-    signal: input.signal,
-    credentials: 'include',
-  });
+  const response = await accountBoundCloudFetch(
+    `${CLOUD_API_BASE_URL}/api/media/image/generate`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+      signal: input.signal,
+      credentials: 'include',
+    },
+    expectedAccountId,
+  );
   if (!response.ok) throw await readCloudResponseError(response);
 
   const payload: unknown = await response.json();
@@ -481,6 +631,196 @@ export async function generateCloudImage(input: {
 // ============================================================================
 // SSE Streaming
 // ============================================================================
+
+class CloudSseEventLimitError extends Error {
+  constructor() {
+    super('AGI Cloud returned a stream event that exceeds the safe renderer limit.');
+    this.name = 'CloudSseEventLimitError';
+  }
+}
+
+class CloudSseIdleTimeoutError extends Error {
+  constructor() {
+    super(`AGI Cloud response stream was idle for ${CLOUD_SSE_IDLE_TIMEOUT_MS / 1_000} seconds.`);
+    this.name = 'CloudSseIdleTimeoutError';
+  }
+}
+
+/**
+ * Incremental SSE decoder with a bound over both an unfinished wire line and
+ * the aggregate data fields of the current event. A single network chunk may
+ * contain many small events larger than the cap in total; complete events are
+ * drained before the remaining frame is measured.
+ */
+class BoundedCloudSseDecoder {
+  private buffer = '';
+  private dataLines: string[] = [];
+  private dataLength = 0;
+
+  push(text: string): string[] {
+    this.buffer += text;
+    const events = this.drain(false);
+    this.assertWithinLimit();
+    return events;
+  }
+
+  finish(): string[] {
+    const events = this.drain(true);
+    if (this.dataLines.length > 0) events.push(this.takeEvent());
+    this.buffer = '';
+    this.assertWithinLimit();
+    return events;
+  }
+
+  private assertWithinLimit(): void {
+    if (this.buffer.length + this.dataLength > CLOUD_SSE_MAX_EVENT_CHARS) {
+      throw new CloudSseEventLimitError();
+    }
+  }
+
+  private drain(flush: boolean): string[] {
+    const events: string[] = [];
+    while (this.buffer.length > 0) {
+      const lineEnding = this.findLineEnding();
+      if (lineEnding === -1) break;
+      if (this.buffer[lineEnding] === '\r' && lineEnding === this.buffer.length - 1 && !flush) {
+        break;
+      }
+
+      const line = this.buffer.slice(0, lineEnding);
+      const lineBreakLength =
+        this.buffer[lineEnding] === '\r' && this.buffer[lineEnding + 1] === '\n' ? 2 : 1;
+      this.buffer = this.buffer.slice(lineEnding + lineBreakLength);
+      this.processLine(line, events);
+      this.assertWithinLimit();
+    }
+
+    if (flush && this.buffer.length > 0) {
+      const trailingLine = this.buffer;
+      this.buffer = '';
+      this.processLine(trailingLine, events);
+    }
+    return events;
+  }
+
+  private findLineEnding(): number {
+    const lf = this.buffer.indexOf('\n');
+    const cr = this.buffer.indexOf('\r');
+    if (lf === -1) return cr;
+    if (cr === -1) return lf;
+    return Math.min(lf, cr);
+  }
+
+  private processLine(line: string, events: string[]): void {
+    if (line.length === 0) {
+      if (this.dataLines.length > 0) events.push(this.takeEvent());
+      return;
+    }
+    if (line.startsWith(':')) return;
+
+    const colon = line.indexOf(':');
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? '' : line.slice(colon + 1);
+    if (value.startsWith(' ')) value = value.slice(1);
+    if (field !== 'data') return;
+
+    this.dataLines.push(value);
+    this.dataLength += value.length + (this.dataLines.length > 1 ? 1 : 0);
+  }
+
+  private takeEvent(): string {
+    const event = this.dataLines.join('\n');
+    this.dataLines = [];
+    this.dataLength = 0;
+    return event;
+  }
+}
+
+interface CloudRequestAbortScope {
+  controller: AbortController;
+  dispose: () => void;
+}
+
+function createCloudRequestAbortScope(callerSignal?: AbortSignal): CloudRequestAbortScope {
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  }
+  return {
+    controller,
+    dispose: () => callerSignal?.removeEventListener('abort', abortFromCaller),
+  };
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The Managed Cloud request was aborted.', 'AbortError');
+}
+
+function cancelResponseBody(response: Response, reason: Error): void {
+  if (!response.body) return;
+  try {
+    void response.body.cancel(reason).catch(() => undefined);
+  } catch {
+    // Best-effort cleanup must not mask the protocol error being reported.
+  }
+}
+
+function readCloudStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  abortController: AbortController,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      abortController.signal.removeEventListener('abort', handleAbort);
+    };
+    const settle = (
+      callback: (value: ReadableStreamReadResult<Uint8Array>) => void,
+      value: ReadableStreamReadResult<Uint8Array>,
+    ) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const handleAbort = () => {
+      const error = abortReason(abortController.signal);
+      try {
+        void reader.cancel(error).catch(() => undefined);
+      } catch {
+        // The stream may already be closed or errored.
+      }
+      fail(error);
+    };
+
+    abortController.signal.addEventListener('abort', handleAbort, { once: true });
+    const timer = setTimeout(() => {
+      abortController.abort(new CloudSseIdleTimeoutError());
+    }, CLOUD_SSE_IDLE_TIMEOUT_MS);
+
+    if (abortController.signal.aborted) {
+      handleAbort();
+      return;
+    }
+    reader.read().then(
+      (result) => settle(resolve, result),
+      (error) => fail(error),
+    );
+  });
+}
 
 /**
  * The host's IANA time zone, or null when the runtime cannot resolve one.
@@ -547,11 +887,13 @@ export async function sendCloudMessage(
     assistantMessageId?: string;
   },
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
+  const expectedAccountId = captureDesktopCloudAccountId();
 
   try {
-    headers = await getAuthHeaders();
+    headers = await getAuthHeaders(expectedAccountId);
     if (!idempotencyKey) {
       throw new Error('Managed Cloud chat requires a stable idempotency key');
     }
@@ -596,30 +938,44 @@ export async function sendCloudMessage(
     use_prompt_cache: true,
   };
 
-  let res: Response;
-
+  const abortScope = createCloudRequestAbortScope(signal);
   try {
-    res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(openAiBody),
-      signal,
-      credentials: 'include',
-    });
-  } catch (err) {
-    // Network error or abort
-    onError(err instanceof Error ? err : new Error(String(err)));
-    return;
-  }
+    let res: Response;
+    try {
+      res = await accountBoundCloudFetch(
+        `${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(openAiBody),
+          signal: abortScope.controller.signal,
+          credentials: 'include',
+        },
+        expectedAccountId,
+        undefined,
+        onCredential,
+      );
+    } catch (err) {
+      // Network error or abort
+      onError(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
 
-  try {
-    onRunHandle?.(readManagedCloudAgentRunHandle(res));
-  } catch (err) {
-    onError(err instanceof Error ? err : new Error(String(err)));
-    return;
-  }
+    try {
+      const runHandle = readManagedCloudAgentRunHandle(res);
+      onRunHandle?.(runHandle);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      cancelResponseBody(res, error);
+      abortScope.controller.abort(error);
+      onError(error);
+      return;
+    }
 
-  await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent);
+    await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent, abortScope.controller);
+  } finally {
+    abortScope.dispose();
+  }
 }
 
 // ============================================================================
@@ -644,11 +1000,13 @@ export async function sendCloudApprovalResume(
   signal?: AbortSignal,
   onEvent?: (payload: Record<string, unknown>) => void,
   idempotencyKey?: string,
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
+  const expectedAccountId = captureDesktopCloudAccountId();
 
   try {
-    headers = await getAuthHeaders();
+    headers = await getAuthHeaders(expectedAccountId);
     if (!idempotencyKey) {
       throw new Error('Managed Cloud tool resume requires a stable idempotency key');
     }
@@ -658,21 +1016,32 @@ export async function sendCloudApprovalResume(
     return;
   }
 
-  let res: Response;
+  const abortScope = createCloudRequestAbortScope(signal);
   try {
-    res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ run_id: runId, tool_approvals: toolApprovals }),
-      signal,
-      credentials: 'include',
-    });
-  } catch (err) {
-    onError(err instanceof Error ? err : new Error(String(err)));
-    return;
-  }
+    let res: Response;
+    try {
+      res = await accountBoundCloudFetch(
+        `${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ run_id: runId, tool_approvals: toolApprovals }),
+          signal: abortScope.controller.signal,
+          credentials: 'include',
+        },
+        expectedAccountId,
+        undefined,
+        onCredential,
+      );
+    } catch (err) {
+      onError(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
 
-  await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent);
+    await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent, abortScope.controller);
+  } finally {
+    abortScope.dispose();
+  }
 }
 
 /**
@@ -686,6 +1055,7 @@ async function consumeCloudSseResponse(
   onDone: () => void | Promise<void>,
   onError: (err: Error) => void,
   onEvent?: (payload: Record<string, unknown>) => void,
+  abortController = new AbortController(),
 ): Promise<void> {
   if (!res.ok) {
     onError(await readCloudResponseError(res));
@@ -699,7 +1069,7 @@ async function consumeCloudSseResponse(
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder('utf-8');
-  let buffer = '';
+  const sseDecoder = new BoundedCloudSseDecoder();
   const canonicalCursor: {
     sessionId?: string;
     turnId?: string;
@@ -708,13 +1078,21 @@ async function consumeCloudSseResponse(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await readCloudStreamChunk(reader, abortController);
 
       if (done) {
-        // Flush any remaining buffered line
-        if (buffer.trim().length > 0) {
+        const trailingText = decoder.decode();
+        const events = [
+          ...(trailingText ? sseDecoder.push(trailingText) : []),
+          ...sseDecoder.finish(),
+        ];
+        for (const event of events) {
+          if (event.trim() === '[DONE]') {
+            await onDone();
+            return;
+          }
           const terminalError = parseAndDispatchLine(
-            buffer.trim(),
+            event,
             onChunk,
             onError,
             onEvent,
@@ -726,44 +1104,37 @@ async function consumeCloudSseResponse(
         return;
       }
 
-      buffer += decoder.decode(value, { stream: true });
-
-      // SSE lines are separated by '\n'. Process all complete lines.
-      const lines = buffer.split('\n');
-
-      // The last element may be an incomplete line — keep it in the buffer.
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-
-        if (trimmed === '' || trimmed.startsWith(':')) {
-          // Empty lines and SSE comments — skip.
-          continue;
-        }
-
-        if (trimmed === 'data: [DONE]') {
+      const events = sseDecoder.push(decoder.decode(value, { stream: true }));
+      for (const event of events) {
+        if (event.trim() === '[DONE]') {
           await onDone();
           return;
         }
-
-        if (trimmed.startsWith('data: ')) {
-          const terminalError = parseAndDispatchLine(
-            trimmed,
-            onChunk,
-            onError,
-            onEvent,
-            canonicalCursor,
-          );
-          if (terminalError) return;
-        }
+        const terminalError = parseAndDispatchLine(
+          event,
+          onChunk,
+          onError,
+          onEvent,
+          canonicalCursor,
+        );
+        if (terminalError) return;
       }
     }
   } catch (err) {
     // Propagate read errors (including abort)
     onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
-    reader.releaseLock();
+    try {
+      void reader.cancel().catch(() => undefined);
+    } catch {
+      // The reader may already be closed or errored.
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      // A hostile stream may keep a cancelled read pending; cleanup must not
+      // hide the bounded timeout/contract error already reported to the UI.
+    }
   }
 }
 

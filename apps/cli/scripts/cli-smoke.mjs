@@ -1,28 +1,62 @@
 // Production-binary smoke for the CLI: builds nothing itself — run after
-// `cargo build --bin agi` — and exercises the real, no-API-key command surface of
+// `cargo build --release --bin agi` — and exercises the real, no-API-key command surface of
 // the shipped `agi` binary end to end: --version, --help (documented commands),
 // `doctor` (local preflight diagnostics), `features` (feature flags), and the
 // `app-server` JSON-RPC initialize handshake (the IDE/desktop developer-session
 // interface). Verifies production build + startup + documented run commands.
 //
-// Run: cargo build --bin agi && node apps/cli/scripts/cli-smoke.mjs
+// Run: cargo build --release --bin agi && node apps/cli/scripts/cli-smoke.mjs
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const bin = [resolve(root, '../../target/debug/agi'), resolve(root, 'target/debug/agi')].find((p) =>
-  existsSync(p),
-);
-if (!bin) {
-  console.error('SMOKE FAIL: built binary not found — run `cargo build --bin agi` first');
+const configuredBin = process.env.AGI_CLI_SMOKE_BINARY
+  ? resolve(process.env.AGI_CLI_SMOKE_BINARY)
+  : null;
+if (configuredBin && !existsSync(configuredBin)) {
+  console.error(`SMOKE FAIL: AGI_CLI_SMOKE_BINARY does not exist: ${configuredBin}`);
   process.exit(1);
 }
+const bin = [
+  configuredBin,
+  resolve(root, '../../target/release/agi'),
+  resolve(root, 'target/release/agi'),
+  resolve(root, '../../target/debug/agi'),
+  resolve(root, 'target/debug/agi'),
+].find((candidate) => candidate && existsSync(candidate));
+if (!bin) {
+  console.error('SMOKE FAIL: built binary not found — run `cargo build --release --bin agi` first');
+  process.exit(1);
+}
+console.log('[binary]', bin);
 
-const home = mkdtempSync(resolve(tmpdir(), 'agi-cli-smoke-'));
-const env = { ...process.env, HOME: home };
+const smokeRoot = mkdtempSync(resolve(tmpdir(), 'agi-cli-smoke-'));
+const configRoot = resolve(smokeRoot, 'agiworkforce-home');
+const isolatedOsHome = resolve(smokeRoot, 'os-home');
+const smokeWorkspace = resolve(smokeRoot, 'workspace');
+mkdirSync(configRoot);
+mkdirSync(isolatedOsHome);
+mkdirSync(smokeWorkspace);
+const env = { ...process.env };
+for (const key of Object.keys(env)) {
+  if (
+    key.startsWith('AGIWORKFORCE_') ||
+    key.startsWith('AGI_') ||
+    /(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)(?:_|$)/iu.test(key)
+  ) {
+    delete env[key];
+  }
+}
+Object.assign(env, {
+  AGIWORKFORCE_HOME: configRoot,
+  AGIWORKFORCE_NO_KEYRING: '1',
+  HOME: isolatedOsHome,
+  USERPROFILE: isolatedOsHome,
+  XDG_CONFIG_HOME: resolve(isolatedOsHome, '.config'),
+});
 let failed = false;
 const fail = (m) => {
   console.error('SMOKE FAIL:', m);
@@ -44,7 +78,28 @@ const runSoft = (args, timeout) => {
 // --version
 const version = run(['--version']).trim();
 console.log('[--version]', version);
-if (!/\bagi\s+\d+\.\d+\.\d+/.test(version)) fail('--version did not report a semver');
+const versionMatch = version.match(/\bagi\s+(\d+\.\d+\.\d+)/);
+if (!versionMatch) fail('--version did not report a semver');
+const binaryVersion = versionMatch?.[1];
+
+// Release archives also carry the legacy `agiworkforce` executable as a
+// compatibility alias. Development builds may omit it, but archive smoke can
+// require and validate the sibling explicitly.
+const aliasName = process.platform === 'win32' ? 'agiworkforce.exe' : 'agiworkforce';
+const compatibilityAlias = resolve(dirname(bin), aliasName);
+if (existsSync(compatibilityAlias)) {
+  const aliasVersion = execFileSync(compatibilityAlias, ['--version'], {
+    env,
+    encoding: 'utf8',
+    timeout: 20000,
+  }).trim();
+  console.log('[compatibility alias --version]', aliasVersion);
+  if (binaryVersion === undefined || !aliasVersion.includes(binaryVersion)) {
+    fail(`compatibility alias version does not match CLI ${JSON.stringify(binaryVersion)}`);
+  }
+} else if (process.env.AGI_CLI_SMOKE_REQUIRE_ALIAS === '1') {
+  fail(`release archive is missing compatibility alias ${aliasName}`);
+}
 
 // --help lists the documented command surface
 const help = run(['--help']);
@@ -84,8 +139,25 @@ if (features === null) {
 }
 
 // app-server initialize handshake (the developer-session IPC surface)
-const pv = await new Promise((res) => {
-  const child = spawn(bin, ['app-server'], { cwd: home, env, stdio: ['pipe', 'pipe', 'ignore'] });
+// Headless developer entry points fail closed until the workspace has been
+// explicitly trusted. Exercise the supported trust action rather than giving
+// this smoke a private bypass that production users do not have.
+try {
+  execFileSync(bin, ['init'], {
+    cwd: smokeWorkspace,
+    env,
+    encoding: 'utf8',
+    timeout: 20000,
+  });
+} catch (error) {
+  fail(`could not initialize the trusted app-server smoke workspace: ${String(error)}`);
+}
+const handshake = await new Promise((res) => {
+  const child = spawn(bin, ['app-server'], {
+    cwd: smokeWorkspace,
+    env,
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
   // Swallow async EPIPE when the child is SIGKILL'd with data still buffered.
   child.stdin.on('error', () => {});
   let buf = '';
@@ -109,7 +181,7 @@ const pv = await new Promise((res) => {
       if (msg.id === 1 && msg.result) {
         clearTimeout(t);
         child.kill('SIGKILL');
-        res(msg.result.protocolVersion);
+        res(msg.result);
         return;
       }
     }
@@ -126,9 +198,14 @@ const pv = await new Promise((res) => {
     }) + '\n',
   );
 });
-console.log('[app-server] initialize protocolVersion =', JSON.stringify(pv));
-if (typeof pv !== 'number' || pv < 1)
-  fail('app-server initialize did not return a protocolVersion');
+console.log('[app-server] initialize =', JSON.stringify(handshake));
+if (handshake?.protocolVersion !== 7)
+  fail('app-server initialize did not return developer-session protocol v7');
+if (handshake?.serverInfo?.version !== binaryVersion) {
+  fail(
+    `app-server reported version ${JSON.stringify(handshake?.serverInfo?.version)} for CLI ${JSON.stringify(binaryVersion)}`,
+  );
+}
 
 console.log('\nCLI SMOKE:', failed ? 'FAIL' : 'PASS');
 process.exit(failed ? 1 : 0);

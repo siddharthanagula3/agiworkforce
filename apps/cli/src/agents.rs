@@ -317,7 +317,9 @@ pub fn find_agent(name: &str) -> Option<AgentDefinition> {
 /// Find an agent using an exact, case-sensitive installed name. Model tool
 /// calls use this stricter resolver so the catalog output is authoritative.
 pub fn find_agent_exact(name: &str) -> Option<AgentDefinition> {
-    discover_agents().into_iter().find(|agent| agent.name == name)
+    discover_agents()
+        .into_iter()
+        .find(|agent| agent.name == name)
 }
 
 /// Return bounded metadata for the model-callable `agent` tool. Prompt bodies,
@@ -1325,7 +1327,10 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
         agent.apply_to_subagent_session(&mut session);
 
-        assert_eq!(session.model, original_model, "model override must be ignored");
+        assert_eq!(
+            session.model, original_model,
+            "model override must be ignored"
+        );
         assert_eq!(session.permission_mode, original_permission_mode);
         assert_eq!(
             session.allowed_tools,
@@ -1335,10 +1340,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         assert_eq!(session.max_turns, Some(15), "turn limit cannot be widened");
         assert!(session.disallowed_tools.contains(&"web_fetch".to_string()));
         assert!(session.disallowed_tools.contains(&"write_file".to_string()));
-        assert!(session
-            .messages
-            .iter()
-            .any(|message| message.text_content().contains("Review the requested change.")));
+        assert!(session.messages.iter().any(|message| message
+            .text_content()
+            .contains("Review the requested change.")));
     }
 
     #[test]
@@ -1346,7 +1350,10 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let output = agent_tool_catalog();
         assert!(output.len() <= 20_000);
         let catalog: serde_json::Value = serde_json::from_str(&output).unwrap();
-        assert_eq!(catalog.get("untrusted").and_then(|value| value.as_bool()), Some(true));
+        assert_eq!(
+            catalog.get("untrusted").and_then(|value| value.as_bool()),
+            Some(true)
+        );
         for agent in catalog
             .get("agents")
             .and_then(|value| value.as_array())

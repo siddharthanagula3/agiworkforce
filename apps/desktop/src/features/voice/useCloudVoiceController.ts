@@ -9,15 +9,15 @@ import { toast } from 'sonner';
 
 import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
 import { invoke } from '../../lib/tauri-mock';
+import { subscribeManagedCloudBoundary } from '../../services/managedCloudBoundary';
 import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-  type ManagedCloudBoundary,
-} from '../../services/managedCloudBoundary';
-import { useComputerUseStore } from '../../stores/computerUseStore';
+  createManagedCloudRequestContext,
+  type ManagedCloudRequestContext,
+} from '../../services/managedCloudRequestContext';
+import { formatOpaCompletionReason, useComputerUseStore } from '../../stores/computerUseStore';
 import { rewriteCloudVoiceTranscript, type CloudVoiceDecision } from './cloudVoiceService';
 
-type WorkflowState = 'idle' | 'processing' | 'awaiting_action' | 'executing' | 'error';
+type WorkflowState = 'idle' | 'processing' | 'awaiting_action' | 'executing' | 'stopping' | 'error';
 
 function insertVoiceTextIntoDraft(text: string): void {
   if (!text) return;
@@ -30,33 +30,45 @@ export interface CloudVoiceControllerResult {
   controller: ComposerVoiceController;
   pendingAction: string | null;
   error: string | null;
+  isDesktopActionActive: boolean;
+  isStopping: boolean;
   requiresComputerUseConsent: boolean;
   approveAction: () => Promise<void>;
   useActionAsText: () => void;
-  cancelAction: () => void;
+  cancelAction: () => Promise<void>;
 }
 
 export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerResult {
   const [workflowState, setWorkflowState] = useState<WorkflowState>('idle');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const boundaryRef = useRef<ManagedCloudBoundary | null>(null);
+  const requestContextRef = useRef<ManagedCloudRequestContext | null>(null);
+  const unsubscribeBoundaryRef = useRef<(() => void) | null>(null);
+  const workflowGenerationRef = useRef(0);
+  const opaExecutionIdRef = useRef<string | null>(null);
+  const transcriptionFailureRef = useRef<string | null>(null);
   const wasEnabledRef = useRef(enabled);
   const computerUseEnabled = useComputerUseStore((state) => state.computerUseEnabled);
   const consentAccepted = useComputerUseStore((state) => state.consentAccepted);
+  const cancellingOpaExecutionId = useComputerUseStore((state) => state.cancellingOpaExecutionId);
+  const computerUseError = useComputerUseStore((state) => state.error);
 
-  const getCloudBoundary = useCallback(() => {
-    const boundary = boundaryRef.current;
-    if (!boundary) {
+  const releaseBoundarySubscription = useCallback(() => {
+    unsubscribeBoundaryRef.current?.();
+    unsubscribeBoundaryRef.current = null;
+  }, []);
+
+  const getCloudRequestContext = useCallback(() => {
+    const request = requestContextRef.current;
+    if (!request) {
       throw new Error('Cloud voice lost its authenticated session boundary.');
     }
-    return {
-      accessToken: boundary.accessToken,
-      assertCurrent: () => assertManagedCloudBoundary(boundary),
-    };
+    request.assertBoundary();
+    return request;
   }, []);
 
   const handleTranscriptionError = useCallback((message: string) => {
+    transcriptionFailureRef.current = message;
     setError(message);
     setWorkflowState('error');
   }, []);
@@ -73,9 +85,47 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   } = useVoiceTranscription({
     preferWhisperCloud: enabled,
     language: enabled ? 'en' : undefined,
-    getCloudBoundary,
+    getCloudRequestContext,
     onError: handleTranscriptionError,
   });
+
+  const isCurrentWorkflow = useCallback(
+    (request: ManagedCloudRequestContext, generation: number) =>
+      requestContextRef.current === request && workflowGenerationRef.current === generation,
+    [],
+  );
+
+  const stopDesktopAction = useCallback(async (): Promise<boolean> => {
+    const executionId =
+      opaExecutionIdRef.current ?? useComputerUseStore.getState().cancellingOpaExecutionId;
+    if (!executionId) return true;
+    const stopped = await useComputerUseStore.getState().cancelOpaTask(executionId);
+    if (stopped && opaExecutionIdRef.current === executionId) {
+      opaExecutionIdRef.current = null;
+    }
+    return stopped;
+  }, []);
+
+  const resetVoiceSession = useCallback(() => {
+    workflowGenerationRef.current += 1;
+    void stopDesktopAction();
+    releaseBoundarySubscription();
+    requestContextRef.current = null;
+    transcriptionFailureRef.current = null;
+    cancelRecording();
+    setPendingAction(null);
+    setError(null);
+    setWorkflowState('idle');
+    clearTranscript();
+  }, [cancelRecording, clearTranscript, releaseBoundarySubscription, stopDesktopAction]);
+
+  const closeVoiceBoundary = useCallback(() => {
+    workflowGenerationRef.current += 1;
+    void stopDesktopAction();
+    releaseBoundarySubscription();
+    requestContextRef.current = null;
+    transcriptionFailureRef.current = null;
+  }, [releaseBoundarySubscription, stopDesktopAction]);
 
   useEffect(() => {
     if (enabled) {
@@ -84,67 +134,118 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     }
     if (!wasEnabledRef.current) return;
     wasEnabledRef.current = false;
-    cancelRecording();
-    boundaryRef.current = null;
-    setPendingAction(null);
-    setError(null);
-    setWorkflowState('idle');
-    clearTranscript();
-  }, [cancelRecording, clearTranscript, enabled]);
+    resetVoiceSession();
+  }, [enabled, resetVoiceSession]);
 
-  const handleDecision = useCallback((decision: CloudVoiceDecision) => {
-    if (decision.kind === 'dictation') {
-      insertVoiceTextIntoDraft(decision.text);
-      boundaryRef.current = null;
-      setWorkflowState('idle');
-      return;
-    }
+  useEffect(
+    () => () => {
+      workflowGenerationRef.current += 1;
+      void stopDesktopAction();
+      releaseBoundarySubscription();
+      requestContextRef.current = null;
+      cancelRecording();
+    },
+    [cancelRecording, releaseBoundarySubscription, stopDesktopAction],
+  );
 
-    setPendingAction(decision.text);
-    setWorkflowState('awaiting_action');
-  }, []);
+  const handleDecision = useCallback(
+    (decision: CloudVoiceDecision, request: ManagedCloudRequestContext, generation: number) => {
+      if (!isCurrentWorkflow(request, generation)) return;
+      if (decision.kind === 'dictation') {
+        insertVoiceTextIntoDraft(decision.text);
+        closeVoiceBoundary();
+        setWorkflowState('idle');
+        return;
+      }
+
+      setPendingAction(decision.text);
+      setWorkflowState('awaiting_action');
+    },
+    [closeVoiceBoundary, isCurrentWorkflow],
+  );
 
   const onToggle = useCallback(async () => {
     if (!enabled) return;
 
+    const computerUse = useComputerUseStore.getState();
+    if (
+      opaExecutionIdRef.current !== null ||
+      computerUse.activeOpaExecutionId !== null ||
+      computerUse.cancellingOpaExecutionId !== null
+    ) {
+      const message =
+        computerUse.error ||
+        'A previous desktop-control action must be confirmed stopped before recording another voice action.';
+      setError(message);
+      setWorkflowState('error');
+      toast.error(message);
+      return;
+    }
+
     if (!isRecording) {
+      let request: ManagedCloudRequestContext | null = null;
+      let generation = 0;
       try {
-        boundaryRef.current = captureManagedCloudBoundary('Cloud voice');
+        releaseBoundarySubscription();
+        request = createManagedCloudRequestContext('Cloud voice');
+        generation = workflowGenerationRef.current + 1;
+        workflowGenerationRef.current = generation;
+        requestContextRef.current = request;
+        const unsubscribe = subscribeManagedCloudBoundary(request.boundary, () => {
+          if (requestContextRef.current === request) resetVoiceSession();
+        });
+        if (!isCurrentWorkflow(request, generation)) {
+          unsubscribe();
+          return;
+        }
+        unsubscribeBoundaryRef.current = unsubscribe;
+        transcriptionFailureRef.current = null;
+        setPendingAction(null);
         setError(null);
         setWorkflowState('idle');
         clearTranscript();
         await startRecording();
+        if (!isCurrentWorkflow(request, generation)) return;
       } catch (cause) {
+        if (request && !isCurrentWorkflow(request, generation)) return;
         const message = cause instanceof Error ? cause.message : String(cause);
-        boundaryRef.current = null;
+        closeVoiceBoundary();
         setError(message);
         setWorkflowState('error');
       }
       return;
     }
 
-    const boundary = boundaryRef.current;
+    const request = requestContextRef.current;
+    const generation = workflowGenerationRef.current;
     try {
-      if (!boundary) {
+      if (!request) {
         throw new Error('Cloud voice lost its authenticated session boundary.');
       }
-      assertManagedCloudBoundary(boundary);
+      request.assertBoundary();
       const transcript = (await stopRecording()).trim();
-      assertManagedCloudBoundary(boundary);
+      if (!isCurrentWorkflow(request, generation)) return;
+      request.assertBoundary();
       if (!transcript) {
-        throw new Error(transcriptionError || 'No speech was detected. Please try again.');
+        throw new Error(
+          transcriptionFailureRef.current ||
+            transcriptionError ||
+            'No speech was detected. Please try again.',
+        );
       }
 
       setWorkflowState('processing');
       const decision = await rewriteCloudVoiceTranscript(transcript, {
         invoke: (command, args) => invoke(command, args),
-        assertBoundary: () => assertManagedCloudBoundary(boundary),
+        assertBoundary: () => request.assertBoundary(),
       });
-      assertManagedCloudBoundary(boundary);
-      handleDecision(decision);
+      if (!isCurrentWorkflow(request, generation)) return;
+      request.assertBoundary();
+      handleDecision(decision, request, generation);
     } catch (cause) {
+      if (!request || !isCurrentWorkflow(request, generation)) return;
       const message = cause instanceof Error ? cause.message : String(cause);
-      boundaryRef.current = null;
+      closeVoiceBoundary();
       setError(message);
       setWorkflowState('error');
       toast.error(message);
@@ -157,55 +258,78 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     startRecording,
     stopRecording,
     transcriptionError,
+    closeVoiceBoundary,
+    isCurrentWorkflow,
+    releaseBoundarySubscription,
+    resetVoiceSession,
   ]);
 
   const approveAction = useCallback(async () => {
     const action = pendingAction;
-    const boundary = boundaryRef.current;
-    if (!action || !boundary) return;
+    const request = requestContextRef.current;
+    const generation = workflowGenerationRef.current;
+    if (!action || !request) return;
 
     try {
-      assertManagedCloudBoundary(boundary);
+      request.assertBoundary();
+      const computerUse = useComputerUseStore.getState();
+      if (opaExecutionIdRef.current !== null) {
+        const message =
+          computerUse.error ||
+          'The previous desktop-control action has not been confirmed stopped. Stop it before starting another action.';
+        setError(message);
+        setWorkflowState('error');
+        return;
+      }
       setError(null);
       setWorkflowState('executing');
-
-      const computerUse = useComputerUseStore.getState();
       if (!computerUse.consentAccepted) computerUse.setConsentAccepted(true);
       if (!computerUse.computerUseEnabled) computerUse.setComputerUseEnabled(true);
 
       const model = getRoutingSlotModel('computer_use');
       const provider = getModelMetadataById(model)?.provider;
+      const executionId = crypto.randomUUID();
+      opaExecutionIdRef.current = executionId;
       const result = await computerUse.executeOpaTask(action, {
+        executionId,
         model,
         provider,
       });
-      assertManagedCloudBoundary(boundary);
+      if (
+        opaExecutionIdRef.current === executionId &&
+        useComputerUseStore.getState().cancellingOpaExecutionId !== executionId
+      ) {
+        opaExecutionIdRef.current = null;
+      }
+      if (!isCurrentWorkflow(request, generation)) return;
+      request.assertBoundary();
       if (!result?.success) {
-        const reason =
-          result?.reason ||
-          useComputerUseStore.getState().error ||
-          'Desktop control could not complete this action.';
+        const reason = result?.reason
+          ? formatOpaCompletionReason(result.reason)
+          : useComputerUseStore.getState().error ||
+            'Desktop control could not complete this action.';
         throw new Error(reason);
       }
 
       setPendingAction(null);
-      boundaryRef.current = null;
+      closeVoiceBoundary();
       setWorkflowState('idle');
       toast.success('Voice action completed.');
     } catch (cause) {
+      if (!isCurrentWorkflow(request, generation)) return;
       const message = cause instanceof Error ? cause.message : String(cause);
       setError(message);
       setWorkflowState('error');
       toast.error(message);
     }
-  }, [pendingAction]);
+  }, [closeVoiceBoundary, isCurrentWorkflow, pendingAction]);
 
   const useActionAsText = useCallback(() => {
     if (!pendingAction) return;
-    const boundary = boundaryRef.current;
-    if (!boundary) return;
+    const request = requestContextRef.current;
+    if (!request) return;
     try {
-      assertManagedCloudBoundary(boundary);
+      request.assertBoundary();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       setError(message);
@@ -215,17 +339,35 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     }
     insertVoiceTextIntoDraft(pendingAction);
     setPendingAction(null);
-    boundaryRef.current = null;
+    closeVoiceBoundary();
     setError(null);
     setWorkflowState('idle');
-  }, [pendingAction]);
+  }, [closeVoiceBoundary, pendingAction]);
 
-  const cancelAction = useCallback(() => {
+  const cancelAction = useCallback(async () => {
+    if (opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null) {
+      // Invalidate the approval continuation before awaiting native Stop so a
+      // cancelled execution cannot publish a late success or error into this
+      // voice workflow.
+      workflowGenerationRef.current += 1;
+      setError(null);
+      setWorkflowState('stopping');
+      const stopped = await stopDesktopAction();
+      if (!stopped) {
+        const message =
+          useComputerUseStore.getState().error ||
+          'Native desktop control did not acknowledge Stop. Try again before starting another action.';
+        setError(message);
+        setWorkflowState('error');
+        toast.error(message);
+        return;
+      }
+    }
     setPendingAction(null);
-    boundaryRef.current = null;
+    closeVoiceBoundary();
     setError(null);
     setWorkflowState('idle');
-  }, []);
+  }, [cancellingOpaExecutionId, closeVoiceBoundary, stopDesktopAction]);
 
   let controllerState: ComposerVoiceState = workflowState;
   if (isRecording) controllerState = 'listening';
@@ -244,7 +386,9 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   return {
     controller,
     pendingAction,
-    error,
+    error: error ?? (cancellingOpaExecutionId === null ? null : computerUseError),
+    isDesktopActionActive: opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null,
+    isStopping: workflowState === 'stopping',
     requiresComputerUseConsent: !computerUseEnabled || !consentAccepted,
     approveAction,
     useActionAsText,

@@ -1,13 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
+  CLOUD_MAX_CONVERSATIONS,
+  CLOUD_MAX_MESSAGES_PER_CONVERSATION,
+  CLOUD_SSE_IDLE_TIMEOUT_MS,
+  CLOUD_SSE_MAX_EVENT_CHARS,
   createCloudConversation,
+  createCloudChatPersistenceClient,
   generateCloudImage,
   getCloudConversation,
   listCloudConversations,
   sendCloudApprovalResume,
   sendCloudMessage,
 } from '../cloudApi';
+
+const RAW_CONVERSATION = {
+  id: 'conv_1',
+  user_id: 'user_1',
+  title: 'Test',
+  model: 'claude',
+  project_id: null,
+  pinned: false,
+  starred: false,
+  archived: false,
+  is_temporary: false,
+  created_at: '2026-03-20T00:00:00.000Z',
+  updated_at: '2026-03-20T00:00:00.000Z',
+};
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -29,6 +48,7 @@ describe('cloudApi', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -63,6 +83,109 @@ describe('cloudApi', () => {
 
     expect(conversations).toHaveLength(1);
     expect(conversations[0]?.id).toBe('conv_1');
+  });
+
+  it('rejects a non-advancing conversation page instead of looping forever', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        conversations: [RAW_CONVERSATION],
+        hasMore: true,
+        nextOffset: 0,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listCloudConversations()).rejects.toMatchObject({
+      code: 'managed_cloud_pagination_non_advancing',
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('rejects conversation history that exceeds the aggregate renderer limit', async () => {
+    let pageIndex = 0;
+    const fetchMock = vi.fn(async () => {
+      const isOverflowPage = pageIndex * 100 >= CLOUD_MAX_CONVERSATIONS;
+      const conversations = Array.from({ length: isOverflowPage ? 1 : 100 }, (_, index) => ({
+        ...RAW_CONVERSATION,
+        id: `conversation-${pageIndex}-${index}`,
+      }));
+      pageIndex += 1;
+      return jsonResponse({
+        conversations,
+        hasMore: !isOverflowPage,
+        nextOffset: pageIndex * 100,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listCloudConversations()).rejects.toMatchObject({
+      code: 'managed_cloud_pagination_item_limit',
+      limit: CLOUD_MAX_CONVERSATIONS,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(CLOUD_MAX_CONVERSATIONS / 100);
+  });
+
+  it('allows same-account credential rotation at the final persistence transport boundary', async () => {
+    vi.mocked(cloudAccountAuth.getValidSession)
+      .mockResolvedValueOnce({
+        access_token: 'stale-token',
+        user: { id: 'account-a' },
+      } as never)
+      .mockResolvedValue({
+        access_token: 'rotated-token',
+        user: { id: 'account-a' },
+      } as never);
+    vi.mocked(cloudAccountAuth.getSession).mockReturnValue({
+      access_token: 'rotated-token',
+      user: { id: 'account-a' },
+    } as never);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ conversations: [], hasMore: false, nextOffset: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createCloudChatPersistenceClient('account-a').listConversations();
+
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers);
+    expect(headers.get('Authorization')).toBe('Bearer rotated-token');
+  });
+
+  it('blocks a queued persistence request when auth resolution switches accounts', async () => {
+    vi.mocked(cloudAccountAuth.getValidSession).mockResolvedValue({
+      access_token: 'account-b-token',
+      user: { id: 'account-b' },
+    } as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createCloudChatPersistenceClient('account-a').listConversations()).rejects.toThrow(
+      'account changed',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('discards a persistence response when the account switches in flight', async () => {
+    vi.mocked(cloudAccountAuth.getValidSession).mockResolvedValue({
+      access_token: 'account-a-token',
+      user: { id: 'account-a' },
+    } as never);
+    vi.mocked(cloudAccountAuth.getSession).mockReturnValue({
+      access_token: 'account-a-token',
+      user: { id: 'account-a' },
+    } as never);
+    const fetchMock = vi.fn(async () => {
+      vi.mocked(cloudAccountAuth.getSession).mockReturnValue({
+        access_token: 'account-b-token',
+        user: { id: 'account-b' },
+      } as never);
+      return jsonResponse({ conversations: [], hasMore: false, nextOffset: 0 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createCloudChatPersistenceClient('account-a').listConversations()).rejects.toThrow(
+      'account changed',
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('unwraps create responses', async () => {
@@ -134,6 +257,25 @@ describe('cloudApi', () => {
 
     expect(conversation.id).toBe('conv_1');
     expect(conversation.messages).toHaveLength(1);
+  });
+
+  it('rejects a transcript that exceeds the aggregate renderer limit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          conversation: RAW_CONVERSATION,
+          messages: [],
+          total: CLOUD_MAX_MESSAGES_PER_CONVERSATION + 1,
+          hasMore: true,
+        }),
+      ),
+    );
+
+    await expect(getCloudConversation('conv_1')).rejects.toMatchObject({
+      code: 'managed_cloud_pagination_item_limit',
+      limit: CLOUD_MAX_MESSAGES_PER_CONVERSATION,
+    });
   });
 
   it('generates a durable Cloud image through the managed-media endpoint', async () => {
@@ -293,6 +435,183 @@ describe('cloudApi', () => {
     expect(onRunHandle).toHaveBeenCalledOnce();
   });
 
+  it('cancels an open response body as soon as the DONE sentinel arrives', async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      },
+      cancel,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    await sendCloudMessage(
+      'conv_done',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000070',
+    );
+
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('times out and cancels a half-open successful SSE response', async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({ cancel });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(stream, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    const pending = sendCloudMessage(
+      'conv_idle',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000071',
+    );
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(CLOUD_SSE_IDLE_TIMEOUT_MS);
+    await pending;
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('idle for 90 seconds') }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('rejects and cancels an oversized unfinished SSE line', async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(`data: ${'x'.repeat(CLOUD_SSE_MAX_EVENT_CHARS + 1)}`),
+        );
+      },
+      cancel,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+    const onError = vi.fn();
+
+    await sendCloudMessage(
+      'conv_oversized',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      vi.fn(),
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000072',
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('safe renderer limit') }),
+    );
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('bounds the aggregate data fields of a multi-line SSE event', async () => {
+    const cancel = vi.fn();
+    const half = 'x'.repeat(Math.floor(CLOUD_SSE_MAX_EVENT_CHARS / 2) + 1);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${half}\ndata: ${half}\n`));
+      },
+      cancel,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+    const onError = vi.fn();
+
+    await sendCloudMessage(
+      'conv_aggregate',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      vi.fn(),
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000073',
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('safe renderer limit') }),
+    );
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('cancels the response when managed run headers are invalid', async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({ cancel });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { 'X-AGI-Agent-Run-Id': '019c3330-02b7-7000-8000-000000000001' },
+        }),
+      ),
+    );
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await sendCloudMessage(
+      'conv_bad_run',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000074',
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('headers are incomplete') }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it('dispatches a retried canonical event and its text projection exactly once', async () => {
     const envelope = {
       schemaVersion: 3,
@@ -338,13 +657,13 @@ describe('cloudApi', () => {
   });
 
   it('treats a malformed data event as terminal instead of reporting success', async () => {
+    const cancel = vi.fn();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const encoder = new TextEncoder();
         controller.enqueue(encoder.encode('data: {not-json}\n\n'));
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
       },
+      cancel,
     });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
 
@@ -370,6 +689,7 @@ describe('cloudApi', () => {
       expect.objectContaining({ message: 'AGI Cloud returned a malformed stream event.' }),
     );
     expect(onDone).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it('treats a structured Cloud error event as terminal instead of reporting success', async () => {

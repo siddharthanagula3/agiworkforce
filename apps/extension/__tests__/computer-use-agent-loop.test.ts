@@ -404,6 +404,62 @@ describe('computer-use agent loop — one round-trip', () => {
     // fetch should not have been called
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('Stop aborts the in-flight cloud cycle and emits no delayed progress or actions', async () => {
+    const controller = new AbortController();
+    const progress = vi.fn();
+    fetchMock.mockReset().mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init.signal;
+        signal?.addEventListener(
+          'abort',
+          () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+
+    const run = runAgentLoop('Wait for the cloud', 42, {
+      signal: controller.signal,
+      resolveOwnedCredential: async () => 'credential-a',
+      onProgress: progress,
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce(), { timeout: 3_000 });
+    const cdpCallsAtStop = chromeMock.debugger.sendCommand.mock.calls.length;
+
+    controller.abort(new Error('Computer-use run cancelled: user stopped'));
+
+    await expect(run).rejects.toThrow(/user stopped/);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(chromeMock.debugger.sendCommand).toHaveBeenCalledTimes(cdpCallsAtStop);
+    expect(progress).not.toHaveBeenCalled();
+  });
+
+  it('a deferred A credential resolution cannot egress with B after an auth switch', async () => {
+    const controller = new AbortController();
+    let releaseCredential!: (token: string) => void;
+    const resolveOwnedCredential = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseCredential = resolve;
+        }),
+    );
+    fetchMock.mockReset();
+
+    const run = runAgentLoop('Remain owned by A', 42, {
+      signal: controller.signal,
+      resolveOwnedCredential,
+    });
+    await vi.waitFor(() => expect(resolveOwnedCredential).toHaveBeenCalledOnce(), {
+      timeout: 3_000,
+    });
+
+    controller.abort(new Error('Computer-use run cancelled: account changed'));
+    releaseCredential('credential-b');
+
+    await expect(run).rejects.toThrow(/account changed/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('COMPUTER_USE_MODEL — sourced from models.json catalog', () => {

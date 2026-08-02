@@ -1,6 +1,7 @@
 use agiworkforce_protocol::developer_session::{
-    AppServerClientInfo, AppServerRequest, AppServerResponse, DeveloperSessionSource,
-    InitializeParams, ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
+    AppServerClientInfo, AppServerRequest, AppServerResponse, DeveloperMessage,
+    DeveloperSessionSource, DeveloperSessionTrustMode, InitializeParams, ThreadReadResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
 };
 
 #[test]
@@ -111,6 +112,8 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         title: "Fix the parser".to_string(),
         model: Some("registry/model-key".to_string()),
         cwd: Some("/workspace/project".to_string()),
+        provider: Some("anthropic".to_string()),
+        trust_mode: DeveloperSessionTrustMode::Byok,
         created_at: "2026-07-14T12:00:00Z".to_string(),
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
@@ -127,5 +130,40 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
     let value = serde_json::to_value(response).expect("serialize response");
     assert_eq!(value["id"], 10);
     assert_eq!(value["result"]["thread"]["id"], thread.id);
+    assert_eq!(value["result"]["thread"]["provider"], "anthropic");
+    assert_eq!(value["result"]["thread"]["trustMode"], "byok");
     assert!(value.get("error").is_none());
+}
+
+#[test]
+fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
+    let response = ThreadReadResponse {
+        thread: ThreadSummary {
+            id: "session-large".to_string(),
+            title: "Large session".to_string(),
+            model: None,
+            provider: Some("ollama".to_string()),
+            cwd: Some("/workspace/project".to_string()),
+            trust_mode: DeveloperSessionTrustMode::Local,
+            created_at: "2026-07-14T12:00:00Z".to_string(),
+            updated_at: "2026-07-14T12:01:00Z".to_string(),
+            created_by: DeveloperSessionSource::Cli,
+            status: ThreadStatus::Idle,
+        },
+        messages: vec![DeveloperMessage {
+            role: "assistant".to_string(),
+            text: "newest message".to_string(),
+        }],
+        transcript_truncated: true,
+    };
+
+    let value = serde_json::to_value(response).expect("serialize thread read response");
+    assert_eq!(value["transcriptTruncated"], true);
+
+    let mut missing_flag = value;
+    missing_flag
+        .as_object_mut()
+        .expect("thread read response object")
+        .remove("transcriptTruncated");
+    assert!(serde_json::from_value::<ThreadReadResponse>(missing_flag).is_err());
 }

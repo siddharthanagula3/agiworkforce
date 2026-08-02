@@ -19,6 +19,14 @@ scripts/**
 # Node modules (esbuild bundles dependencies into out/extension.js)
 node_modules/**
 
+# Production output allowlist. The package wrapper and verifier enforce the same
+# four-file contract; all other compiled output is development/test residue.
+out/**
+!out/extension.js
+!out/webview/render.js
+!out/codicons/codicon.css
+!out/codicons/codicon.ttf
+
 # Test output
 coverage/**
 *.test.ts

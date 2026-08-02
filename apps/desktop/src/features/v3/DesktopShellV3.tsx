@@ -42,7 +42,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
-import { selectPlan, useUnifiedAuthStore } from '../../stores/auth';
+import { selectHasCloudAccountSession, selectPlan, useUnifiedAuthStore } from '../../stores/auth';
 import { ActionRecorder } from '@/features/automation/ActionRecorder';
 import { ProjectSettingsDialog } from '@/features/chat/ProjectSettingsDialog';
 import {
@@ -51,6 +51,7 @@ import {
   type SelectedContextHandoff,
 } from '../context-handoff/SelectedContextReview';
 import { CloudFolderAttachSheet } from '../context-handoff/CloudFolderAttachSheet';
+import { revokeCloudHandoffGrant } from '../context-handoff/cloudHandoffGrant';
 import {
   canUseDesktopCloudAgiWork,
   canUseDesktopCloudImageGeneration,
@@ -177,15 +178,19 @@ export function DesktopShellV3({
   const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
   // The folder seam is available in BOTH Local and Managed Cloud, but they mean
   // different things. Local grants the folder as a working scope (a persistent
-  // capability — see useFolderSelection's docstring). Cloud treats it as a
-  // display label and scan root only, and any file that leaves the device does
-  // so through the composer attachment path after an explicit consent ceremony.
+  // capability — see useFolderSelection's docstring). Cloud receives only an
+  // opaque, native-owned grant, and any file that leaves the device does so
+  // through the composer attachment path after an explicit consent ceremony.
   const privacyMode = useAppModeStore(selectPrivacyMode);
   const folderSeamEnabled = privacyMode === 'local' || privacyMode === 'managed';
   const { selectFolder, currentFolderLabel, clearFolder } = useFolderSelection(
     privacyMode === 'managed' ? 'cloud' : 'local',
   );
   const accountPlan = useUnifiedAuthStore(selectPlan);
+  const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
+  const cloudAccountId = useUnifiedAuthStore((state) => state.user?.id ?? null);
+  const cloudSessionEpoch = useUnifiedAuthStore((state) => state.cloudSessionEpoch);
+  const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const isManagedCloud = privacyMode === 'managed';
   const cloudVoice = useCloudVoiceController(isManagedCloud);
   const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
@@ -199,21 +204,109 @@ export function DesktopShellV3({
   // Cloud folder flow: picking a folder opens the consent sheet rather than
   // scoping the session. Approved files are injected into the composer as an
   // ordinary attachment set, keyed so a re-render cannot double-append.
-  const [cloudFolderPath, setCloudFolderPath] = useState<string | null>(null);
+  const [cloudFolderSelection, setCloudFolderSelection] = useState<{
+    path: string;
+    grantId: string;
+    accountId: string;
+    sessionEpoch: number;
+  } | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<{
     id: string;
     files: File[];
+    ownerKey: string;
   } | null>(null);
 
-  const handleSelectFolder = useCallback(async () => {
-    const picked = await selectFolder();
-    if (picked && privacyMode === 'managed') setCloudFolderPath(picked);
-  }, [selectFolder, privacyMode]);
+  const composerTrustBoundaryKey = isManagedCloud
+    ? `managed:${
+        hasCloudAccountSession && cloudAccountId
+          ? `${cloudAccountId}:session-${cloudSessionEpoch}`
+          : `signed-out:session-${cloudSessionEpoch}`
+      }`
+    : `${privacyMode}:device`;
+  const composerAttachmentOwnerKey = `${composerTrustBoundaryKey}:${
+    activeCloudConversationId ?? 'new-conversation'
+  }`;
 
-  const handleFolderFilesApproved = useCallback((files: File[]) => {
-    if (files.length === 0) return;
-    setPendingAttachments({ id: `folder-${Date.now()}-${files.length}`, files });
-  }, []);
+  const handleSelectFolder = useCallback(async () => {
+    const openingPrivacyMode = selectPrivacyMode(useAppModeStore.getState());
+    const openingAuth = useUnifiedAuthStore.getState();
+    const openingAccountId = selectHasCloudAccountSession(openingAuth)
+      ? openingAuth.user?.id
+      : null;
+    const openingSessionEpoch = openingAuth.cloudSessionEpoch;
+    const picked = await selectFolder();
+    if (!picked) return;
+
+    // The native picker can remain open while the user changes workspace or
+    // signs out. Re-read both stores after it resolves so a stale closure never
+    // opens a Cloud consent sheet under a boundary that no longer exists.
+    const livePrivacyMode = selectPrivacyMode(useAppModeStore.getState());
+    const liveAuth = useUnifiedAuthStore.getState();
+    const liveAccountId = selectHasCloudAccountSession(liveAuth) ? liveAuth.user?.id : null;
+    if (
+      openingPrivacyMode === 'managed' &&
+      livePrivacyMode === 'managed' &&
+      openingAccountId &&
+      liveAccountId === openingAccountId &&
+      liveAuth.cloudSessionEpoch === openingSessionEpoch &&
+      picked.cloudGrantId
+    ) {
+      setCloudFolderSelection({
+        path: picked.path,
+        grantId: picked.cloudGrantId,
+        accountId: liveAccountId,
+        sessionEpoch: liveAuth.cloudSessionEpoch,
+      });
+    } else if (picked.cloudGrantId) {
+      // The picker outlived the Cloud/account boundary that opened it.
+      void revokeCloudHandoffGrant(picked.cloudGrantId);
+      clearFolder();
+    }
+  }, [clearFolder, selectFolder]);
+
+  const cloudFolderBoundaryActive = Boolean(
+    cloudFolderSelection &&
+    isManagedCloud &&
+    hasCloudAccountSession &&
+    cloudAccountId === cloudFolderSelection.accountId &&
+    cloudSessionEpoch === cloudFolderSelection.sessionEpoch,
+  );
+
+  useEffect(() => {
+    if (cloudFolderSelection && !cloudFolderBoundaryActive) {
+      setCloudFolderSelection(null);
+      clearFolder();
+    }
+  }, [clearFolder, cloudFolderBoundaryActive, cloudFolderSelection]);
+
+  // A selection owns exactly one native capability. Closing, replacing,
+  // switching mode/account, and unmounting all run this cleanup.
+  useEffect(() => {
+    const grantId = cloudFolderSelection?.grantId;
+    if (!grantId) return;
+    return () => {
+      void revokeCloudHandoffGrant(grantId);
+    };
+  }, [cloudFolderSelection?.grantId]);
+
+  const handleFolderFilesApproved = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      setPendingAttachments({
+        id: `folder-${Date.now()}-${files.length}`,
+        files,
+        ownerKey: composerAttachmentOwnerKey,
+      });
+    },
+    [composerAttachmentOwnerKey],
+  );
+
+  useEffect(() => {
+    setPendingAttachments(null);
+  }, [composerAttachmentOwnerKey]);
+
+  const activePendingAttachments =
+    pendingAttachments?.ownerKey === composerAttachmentOwnerKey ? pendingAttachments : null;
 
   // Evict Local-only panels when the user switches to Cloud, so a device
   // surface never lingers over a cloud session.
@@ -266,7 +359,6 @@ export function DesktopShellV3({
     () => projects.filter((p) => !p.isArchived).map((p) => ({ id: p.id, name: p.name })),
     [projects],
   );
-  const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const activeComposerProjectId = useChatStore(
     (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.projectId ?? null,
   );
@@ -519,6 +611,7 @@ export function DesktopShellV3({
           <div className="relative min-h-0 flex-1 overflow-hidden">
             {activePanel === 'chat' ? (
               <ChatInterface
+                key={composerTrustBoundaryKey}
                 runtime={runtime}
                 className="h-full w-full"
                 externalSendRequest={externalSendRequest}
@@ -526,6 +619,10 @@ export function DesktopShellV3({
                 enableShortcuts={true}
                 hostBridge={hostBridge}
                 onModelSelectorClick={onModelSelectorClick}
+                // Managed Cloud model availability is server-authoritative.
+                // An empty catalog is an error/empty state, never permission to
+                // resurrect the shared component's static fallback roster.
+                allowModelFallbackModels={!isManagedCloud}
                 conversationActions={conversationActions}
                 // DES-C05: Cloud (and Local) answers containing a renderable
                 // fenced block become real artifacts, with the same canonical,
@@ -534,7 +631,8 @@ export function DesktopShellV3({
                 // pre-attached — which, on the managed cloud wire, is never.
                 deriveMessageArtifacts={deriveDesktopMessageArtifacts}
                 onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
-                pendingAttachments={pendingAttachments}
+                pendingAttachments={activePendingAttachments}
+                attachmentContextKey={composerAttachmentOwnerKey}
                 voiceInputController={isManagedCloud ? cloudVoice.controller : undefined}
                 onRecordSkill={
                   privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
@@ -642,9 +740,11 @@ export function DesktopShellV3({
             )}
             <SelectedContextReview onAccept={handleSelectedContextAccept} />
             <CloudFolderAttachSheet
-              folderPath={cloudFolderPath}
+              folderPath={cloudFolderSelection?.path ?? null}
+              folderGrantId={cloudFolderSelection?.grantId ?? null}
               sourceSessionId={activeCloudConversationId ?? 'new-conversation'}
-              onClose={() => setCloudFolderPath(null)}
+              managedBoundaryActive={cloudFolderBoundaryActive}
+              onClose={() => setCloudFolderSelection(null)}
               onApprove={handleFolderFilesApproved}
             />
             <ProjectSettingsDialog
@@ -657,9 +757,16 @@ export function DesktopShellV3({
               }}
             />
             <CloudVoiceActionDialog
-              action={cloudVoice.pendingAction}
+              action={
+                cloudVoice.pendingAction ??
+                (cloudVoice.isDesktopActionActive
+                  ? 'A previous desktop-control action still needs to be confirmed stopped.'
+                  : null)
+              }
               error={cloudVoice.error}
-              isExecuting={cloudVoice.controller.state === 'executing'}
+              isExecuting={cloudVoice.isDesktopActionActive}
+              isStopping={cloudVoice.isStopping}
+              isRecovery={cloudVoice.pendingAction === null && cloudVoice.isDesktopActionActive}
               requiresComputerUseConsent={cloudVoice.requiresComputerUseConsent}
               onApprove={() => void cloudVoice.approveAction()}
               onUseAsText={cloudVoice.useActionAsText}

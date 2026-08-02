@@ -57,10 +57,7 @@ fn store_email_password_encrypted(
     )
     .map_err(|e| Error::Generic(format!("Failed to store encrypted password: {}", e)))?;
 
-    debug!(
-        "Stored encrypted password for email account {}",
-        account_id
-    );
+    debug!("Stored encrypted password for email account {}", account_id);
     Ok(())
 }
 
@@ -957,7 +954,10 @@ mod tests {
         );
 
         // And the upgraded row still round-trips.
-        assert_eq!(original_password, get_email_password(&conn, account_id).unwrap());
+        assert_eq!(
+            original_password,
+            get_email_password(&conn, account_id).unwrap()
+        );
     }
 
     #[test]
@@ -1105,7 +1105,9 @@ mod tests {
         .unwrap();
 
         let account_id = conn.last_insert_rowid();
-        let error = get_email_password(&conn, account_id).unwrap_err().to_string();
+        let error = get_email_password(&conn, account_id)
+            .unwrap_err()
+            .to_string();
 
         assert!(
             error.contains("Re-enter the password"),
@@ -1114,7 +1116,10 @@ mod tests {
 
         // Storing again must clear the marker and leave real ciphertext.
         store_email_password(&conn, account_id, "fresh-password").unwrap();
-        assert_eq!("fresh-password", get_email_password(&conn, account_id).unwrap());
+        assert_eq!(
+            "fresh-password",
+            get_email_password(&conn, account_id).unwrap()
+        );
 
         let stored: String = conn
             .query_row(
@@ -1123,6 +1128,9 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(stored.starts_with('{'), "expected encrypted JSON, got: {stored}");
+        assert!(
+            stored.starts_with('{'),
+            "expected encrypted JSON, got: {stored}"
+        );
     }
 }

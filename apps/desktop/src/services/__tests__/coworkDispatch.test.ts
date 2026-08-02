@@ -10,6 +10,7 @@ vi.mock('../approvalResolution', () => ({
 }));
 
 vi.mock('../../stores/connectionStore', () => ({
+  MOBILE_COMPANION_SESSION_ENDED_EVENT: 'mobile-companion:session-ended',
   sendCompanionControl,
 }));
 
@@ -113,7 +114,9 @@ describe('Cowork Dispatch runtime', () => {
     );
 
     await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalledWith(request.prompt);
+      expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalledWith(request.prompt, {
+        assertCurrent: expect.any(Function),
+      });
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
         expect.objectContaining({
@@ -143,6 +146,59 @@ describe('Cowork Dispatch runtime', () => {
           taskId: 'goal-1',
           status: 'running',
         }),
+      );
+    });
+  });
+
+  it('does not install a deferred task mapping after the companion session ends', async () => {
+    let resolveGoal!: (taskId: string) => void;
+    const pendingGoal = new Promise<string>((resolve) => {
+      resolveGoal = resolve;
+    });
+    useCoworkDispatchStore.setState({ enabled: true });
+    useAgentTaskStore.setState({ submitGoal: vi.fn().mockReturnValue(pendingGoal) });
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: { action: request.action, payload: request },
+      }),
+    );
+    await vi.waitFor(() => expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalledOnce());
+
+    window.dispatchEvent(new Event('mobile-companion:session-ended'));
+    const authority = vi.mocked(useAgentTaskStore.getState().submitGoal).mock.calls[0]?.[1]
+      ?.assertCurrent;
+    expect(authority).toBeTypeOf('function');
+    expect(() => authority?.()).toThrow(expect.objectContaining({ name: 'AbortError' }));
+    resolveGoal('goal-stale');
+    await pendingGoal;
+    await Promise.resolve();
+
+    expect(sendCompanionControl).not.toHaveBeenCalledWith(
+      'dispatch.task.status',
+      expect.objectContaining({ status: 'accepted', taskId: 'goal-stale' }),
+    );
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: {
+          action: 'dispatch.task.cancel',
+          payload: {
+            action: 'dispatch.task.cancel',
+            version: 1,
+            requestId: request.requestId,
+            taskId: 'goal-stale',
+            sentAt: request.sentAt,
+          },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(useAgentTaskStore.getState().cancelTask).not.toHaveBeenCalled();
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'dispatch.task.status',
+        expect.objectContaining({ status: 'rejected', requestId: request.requestId }),
       );
     });
   });

@@ -231,8 +231,8 @@ impl MemoryPipeline {
             None,             // No tools needed
             Box::new(|_| {}), // Discard streaming chunks
             None,             // No extended thinking for memory extraction,
-        None,
-    )
+            None,
+        )
         .await?;
 
         Ok(result.text)
@@ -376,8 +376,8 @@ impl MemoryPipeline {
             None,
             Box::new(|_| {}),
             None, // No extended thinking for memory consolidation,
-        None,
-    )
+            None,
+        )
         .await?;
 
         Ok(result.text)

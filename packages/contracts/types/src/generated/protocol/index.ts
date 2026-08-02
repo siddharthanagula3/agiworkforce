@@ -81,6 +81,7 @@ export * from './DeveloperMessage';
 export * from './DeveloperReasoningEffort';
 export * from './DeveloperRoutingTaskType';
 export * from './DeveloperSessionSource';
+export * from './DeveloperSessionTrustMode';
 export * from './DynamicToolCallOutputContentItem';
 export * from './DynamicToolCallRequest';
 export * from './DynamicToolCallResponseEvent';

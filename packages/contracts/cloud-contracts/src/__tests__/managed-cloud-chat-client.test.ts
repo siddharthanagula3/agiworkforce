@@ -137,4 +137,108 @@ describe('createManagedCloudChatClient', () => {
     ).rejects.toThrow('rate limited');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it('propagates one caller signal through persistence request methods', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(response({ conversations: [], hasMore: false, nextOffset: 0 }))
+      .mockResolvedValueOnce(response({ conversation: rawConversation }, 201))
+      .mockResolvedValueOnce(
+        response({ conversation: rawConversation, messages: [], total: 0, hasMore: false }),
+      )
+      .mockResolvedValueOnce(response({ conversation: rawConversation }))
+      .mockResolvedValueOnce(response({ message: { id: '0190a000-0000-7000-8000-0000000000bb' } }));
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    await client.listConversations({}, { signal: controller.signal });
+    await client.createConversation({ title: 'Cloud chat' }, { signal: controller.signal });
+    await client.getConversation(rawConversation.id, {}, { signal: controller.signal });
+    await client.updateConversation(
+      rawConversation.id,
+      { title: 'Renamed' },
+      { signal: controller.signal },
+    );
+    await client.saveMessage(
+      rawConversation.id,
+      { id: '0190a000-0000-7000-8000-0000000000bb', content: 'Hello' },
+      { signal: controller.signal },
+    );
+
+    for (const [, init] of fetchImpl.mock.calls as Array<[string, RequestInit]>) {
+      expect(init.signal).toBe(controller.signal);
+    }
+  });
+
+  it('does not begin a persistence fetch for an already-aborted request', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    await expect(client.listConversations({}, { signal: controller.signal })).rejects.toMatchObject(
+      { name: 'AbortError' },
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting for half-open auth preflight before persistence fetch', async () => {
+    const controller = new AbortController();
+    const getAuthToken = vi.fn(() => new Promise<string | null>(() => {}));
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudChatClient({ fetchImpl, getAuthToken });
+
+    const pending = client.listConversations({}, { signal: controller.signal });
+    await vi.waitFor(() => expect(getAuthToken).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('passes cancellation into a half-open persistence fetch', async () => {
+    const controller = new AbortController();
+    let transportSignal: AbortSignal | null | undefined;
+    const fetchImpl = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          transportSignal = init?.signal;
+          init?.signal?.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('stopped');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            { once: true },
+          );
+        }),
+    );
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    const pending = client.listConversations({}, { signal: controller.signal });
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(transportSignal).toBe(controller.signal);
+  });
+
+  it('aborts message retry backoff without issuing another write', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => {
+      controller.abort();
+      return response({ error: 'temporarily unavailable' }, 503);
+    });
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    await expect(
+      client.saveMessage(
+        rawConversation.id,
+        { content: 'Hello' },
+        { maxAttempts: 3, retryDelayMs: 10_000, signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
 });

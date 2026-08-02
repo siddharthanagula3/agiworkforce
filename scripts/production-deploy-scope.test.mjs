@@ -122,6 +122,21 @@ test('product-shell paths select their real E2E lane', () => {
     ...expectedBase,
     vscode: true,
   });
+  assert.deepEqual(classifyDeployScope(['apps/cli/src/app_server/developer_host.rs']), {
+    ...expectedBase,
+    native: true,
+    vscode: true,
+  });
+  assert.deepEqual(classifyDeployScope(['crates/agiworkforce-protocol/src/developer_session.rs']), {
+    ...expectedBase,
+    native: true,
+    vscode: true,
+  });
+  assert.deepEqual(classifyDeployScope(['Cargo.lock']), {
+    ...expectedBase,
+    native: true,
+    vscode: true,
+  });
   assert.deepEqual(classifyDeployScope(['apps/mobile/app/index.tsx']), {
     ...expectedBase,
     mobile: true,

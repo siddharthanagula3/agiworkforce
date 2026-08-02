@@ -586,6 +586,10 @@ describe('Chrome inference stays inside the Managed Cloud boundary', () => {
   it('background chat handler uses the managed owner and has no Desktop/Local fallback', () => {
     const body = handleChatMessageBody();
     expect(body).toContain('executeChromeManagedChat');
+    expect(body).toContain('getManagedCloudAuthContext');
+    expect(body).toContain('activeChatStreams.set(streamKey, activeStream)');
+    expect(body).toContain('getAuthToken: async () => credential.token');
+    expect(body).toContain('signal: activeStream.controller.signal');
     expect(body).not.toContain('getAgiBridgeBaseUrl');
     expect(body).not.toContain('/v1/chat/stream');
     expect(body).not.toContain('sendNativeRequest');
@@ -602,6 +606,10 @@ describe('Chrome inference stays inside the Managed Cloud boundary', () => {
         ? backgroundSource.slice(start, afterSignature + endRel + 2)
         : backgroundSource.slice(start);
     expect(body).toContain('executeChromeManagedChat');
+    expect(body).toContain('getManagedCloudAuthContext');
+    expect(body).toContain('activeChatStreams.set(streamKey, activeStream)');
+    expect(body).toContain('getAuthToken: async () => credential.token');
+    expect(body).toContain('signal: activeStream.controller.signal');
     expect(body).not.toContain('getAgiBridgeBaseUrl');
     expect(body).not.toContain('/v1/chat/stream');
     expect(body).not.toContain('sendNativeRequest');

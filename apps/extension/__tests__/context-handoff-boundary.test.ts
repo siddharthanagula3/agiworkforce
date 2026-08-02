@@ -47,10 +47,48 @@ describe('Chrome native-session integrity boundary', () => {
   it('never emits an unsigned native request while the service worker suspends', () => {
     const suspendBranch = backgroundSource.slice(
       backgroundSource.indexOf('chrome.runtime.onSuspend.addListener'),
-      backgroundSource.indexOf('/**\n * Public bridge:', backgroundSource.indexOf('chrome.runtime.onSuspend.addListener')),
+      backgroundSource.indexOf(
+        '/**\n * Public bridge:',
+        backgroundSource.indexOf('chrome.runtime.onSuspend.addListener'),
+      ),
     );
 
     expect(suspendBranch).not.toContain('.postMessage(');
     expect(suspendBranch).toContain('.disconnect()');
+  });
+
+  it('sends WebMCP metadata only through the authenticated native request path', () => {
+    const webmcpBranch = backgroundSource.slice(
+      backgroundSource.indexOf("case 'WEBMCP_TOOLS_CHANGED'"),
+      backgroundSource.indexOf("case 'NLWEB_DETECTED'"),
+    );
+    const nativeStart = backgroundSource.indexOf('function sendAuthenticatedWebMCPNativeUpdate');
+    const nativeEnd = backgroundSource.indexOf('function handleNativeMessage', nativeStart);
+    const nativeBody = backgroundSource.slice(nativeStart, nativeEnd);
+
+    expect(webmcpBranch).toContain('normalizeWebMCPToolsUpdate');
+    expect(webmcpBranch).toContain('publishNormalizedWebMCPToolsUpdate');
+    expect(webmcpBranch).toContain('currentTab.url !== senderTabUrl');
+    expect(webmcpBranch).toContain('navigationGeneration !== currentWebMCPNavigationGeneration');
+    expect(nativeBody).toContain('sendNativeRequest');
+    expect(nativeBody).toContain('requireAuthenticatedSession: true');
+    expect(nativeBody).toContain('tab_id: tabId');
+    expect(nativeBody).toContain('sendAuthenticatedWebMCPNativeUpdate(tabId, cleared)');
+    expect(nativeBody).not.toContain('nativePort.postMessage');
+  });
+
+  it('invalidates cached UI/native WebMCP metadata on every tab URL generation', () => {
+    const discoveryBranch = backgroundSource.slice(
+      backgroundSource.indexOf("case 'WEBMCP_DISCOVER_TOOLS'"),
+      backgroundSource.indexOf("case 'WEBMCP_CALL_TOOL'"),
+    );
+    const tabUpdateBranch = backgroundSource.slice(
+      backgroundSource.indexOf('chrome.tabs.onUpdated.addListener'),
+      backgroundSource.indexOf('chrome.commands.onCommand.addListener'),
+    );
+
+    expect(discoveryBranch).toContain('pageGeneration');
+    expect(discoveryBranch).toContain('targetAfter.url !== targetUrl');
+    expect(tabUpdateBranch).toContain('invalidateWebMCPToolsForNavigation(tabId)');
   });
 });

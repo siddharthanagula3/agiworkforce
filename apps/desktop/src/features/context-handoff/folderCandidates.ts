@@ -31,7 +31,7 @@ import {
 import type { GlobMatch } from '../../api/codeSearch';
 
 export interface FolderCandidate {
-  /** Absolute path — used only for the on-device read. */
+  /** Root-relative native listing path; never an ambient filesystem authority. */
   path: string;
   /**
    * Root-relative path. Doubles as the stable id AND the uploaded file name, so
@@ -47,8 +47,9 @@ export interface FolderCandidate {
  * accept. Directories, empty files, oversized files, and types with no
  * resolvable MIME are dropped up front rather than surfaced and then rejected.
  *
- * Order is preserved from the caller — `glob_search` returns most-recently-
- * modified first, which is the most useful default for "what am I working on".
+ * Order is preserved from the caller — the picker-owned native listing returns
+ * most-recently-modified first, which is the most useful default for "what am
+ * I working on".
  */
 export function toFolderCandidates(matches: readonly GlobMatch[]): FolderCandidate[] {
   const candidates: FolderCandidate[] = [];

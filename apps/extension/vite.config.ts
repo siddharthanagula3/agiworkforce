@@ -4,15 +4,17 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import {
   configureChromeManifest,
-  readChromeBuildConfiguration,
+  resolveChromeBuildConfiguration,
 } from './scripts/manifest-config.mjs';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
-  const clerkPublishableKey =
-    env['CLERK_PUBLISHABLE_KEY'] ?? process.env['CLERK_PUBLISHABLE_KEY'] ?? '';
-  const clerkSyncHost = env['CLERK_SYNC_HOST'] ?? process.env['CLERK_SYNC_HOST'] ?? '';
-  const buildConfiguration = readChromeBuildConfiguration({ ...env, ...process.env });
+  // Explicit process environment is authoritative for CI/release builds. An
+  // empty value in a Vite env file must not shadow protected workflow
+  // configuration and produce a package whose auth cannot boot.
+  const buildConfiguration = resolveChromeBuildConfiguration(env, process.env);
+  const clerkPublishableKey = buildConfiguration.clerkPublishableKey ?? '';
+  const clerkSyncHost = buildConfiguration.clerkSyncHost ?? '';
   const sourceManifest = JSON.parse(
     readFileSync(resolve(__dirname, 'manifest.json'), 'utf8'),
   ) as Record<string, unknown>;

@@ -3,7 +3,10 @@ import 'server-only';
 import { Buffer } from 'node:buffer';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { AgentTaskStateSchema } from '@agiworkforce/cloud-contracts';
+import {
+  AgentTaskStateSchema,
+  ManagedCloudAgentRunRequestIdSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -59,6 +62,10 @@ async function handleGet(request: NextRequest) {
 
   const url = new URL(request.url);
   const rawStates = url.searchParams.getAll('state');
+  const parsedRequestIds = z
+    .array(ManagedCloudAgentRunRequestIdSchema)
+    .max(1)
+    .safeParse(url.searchParams.getAll('requestId'));
   const parsedStates = z
     .array(AgentTaskStateSchema)
     .min(1)
@@ -66,7 +73,7 @@ async function handleGet(request: NextRequest) {
     .safeParse(rawStates.length > 0 ? [...new Set(rawStates)] : DEFAULT_ACTIVE_STATES);
   const rawLimit = url.searchParams.get('limit') ?? '25';
   const parsedLimit = z.coerce.number().int().min(1).max(100).safeParse(rawLimit);
-  if (!parsedStates.success || !parsedLimit.success) {
+  if (!parsedRequestIds.success || !parsedStates.success || !parsedLimit.success) {
     throw createError.validation('Invalid Cloud task list parameters');
   }
 
@@ -74,6 +81,7 @@ async function handleGet(request: NextRequest) {
   const page = await listCloudAgentRuns(db, {
     userId,
     states: parsedStates.data,
+    requestId: parsedRequestIds.data[0],
     before: decodeCursor(url.searchParams.get('cursor')),
     limit: parsedLimit.data,
   });

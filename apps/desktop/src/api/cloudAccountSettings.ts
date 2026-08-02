@@ -13,8 +13,8 @@
  * `getClerkAuthUser()` (`apps/web/lib/api-auth.ts`), whose Path 2b accepts the
  * device bearer, and whose CSRF gate is bypassed for a verifying bearer
  * (`apps/web/lib/csrf.ts` `isBearerTokenValid`). Auth/CSRF plumbing is reused
- * from `./cloudApi` so that module stays the single source of truth, exactly as
- * `./cloudConnectors` does.
+ * through the shared Managed Cloud request context, which pins each operation
+ * to one account/session while still resolving rotated same-account tokens.
  *
  * `/api/settings/sessions` used to be the one account control that could not be
  * served here: it authenticated through a route-local `requireBrowserSession()`
@@ -27,7 +27,7 @@
  * says so instead of inventing a current row.
  */
 
-import { cloudFetch, getAuthHeaders, CLOUD_API_BASE_URL } from './cloudApi';
+import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
   MANAGED_CLOUD_REFLECT_PATH,
   ManagedCloudConversationListResponseSchema,
@@ -40,9 +40,9 @@ import {
   type ManagedCloudReflectRecap,
 } from '@agiworkforce/cloud-contracts';
 import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-} from '../services/managedCloudBoundary';
+  createManagedCloudRequestContext,
+  type ManagedCloudRequestContext,
+} from '../services/managedCloudRequestContext';
 
 // ============================================================================
 // Shared helpers
@@ -61,8 +61,13 @@ function readApiError(body: unknown, fallback: string): string {
   return fallback;
 }
 
-async function failure(response: Response, fallback: string): Promise<Error> {
+async function failure(
+  request: ManagedCloudRequestContext,
+  response: Response,
+  fallback: string,
+): Promise<Error> {
   const body: unknown = await response.json().catch(() => null);
+  request.assertBoundary();
   return new Error(readApiError(body, `${fallback} (HTTP ${response.status})`));
 }
 
@@ -110,14 +115,14 @@ function parseSharedLink(value: unknown): CloudSharedLink | null {
 }
 
 export async function listCloudSharedLinks(): Promise<CloudSharedLink[]> {
-  const boundary = captureManagedCloudBoundary('Cloud shared links');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/share`, {
+  const request = createManagedCloudRequestContext('Cloud shared links');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/share`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not load your shared links');
+  if (!response.ok) throw await failure(request, response, 'Could not load your shared links');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const shares = isRecord(payload) ? payload['shares'] : null;
   if (!Array.isArray(shares)) {
     throw new Error('The Cloud share service returned an invalid response.');
@@ -126,13 +131,13 @@ export async function listCloudSharedLinks(): Promise<CloudSharedLink[]> {
 }
 
 export async function revokeCloudSharedLink(token: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud shared link revocation');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud shared link revocation');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/share/${encodeURIComponent(token)}`,
-    { method: 'DELETE', headers: await getAuthHeaders() },
+    { method: 'DELETE', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not revoke this shared link');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not revoke this shared link');
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -156,19 +161,19 @@ export const CLOUD_ARCHIVED_PAGE_SIZE = 50;
 export async function listCloudArchivedConversations(
   offset = 0,
 ): Promise<CloudArchivedConversationPage> {
-  const boundary = captureManagedCloudBoundary('Cloud archived chats');
+  const request = createManagedCloudRequestContext('Cloud archived chats');
   const query = new URLSearchParams({
     archived: 'only',
     limit: String(CLOUD_ARCHIVED_PAGE_SIZE),
     offset: String(Math.max(0, offset)),
   });
-  const response = await cloudFetch(
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/chat/conversations?${query.toString()}`,
-    { method: 'GET', headers: await getAuthHeaders() },
+    { method: 'GET', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not load your archived chats');
+  if (!response.ok) throw await failure(request, response, 'Could not load your archived chats');
   const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   return {
     conversations: data.conversations.map((wire) => {
       const conversation = normalizeManagedCloudConversation(wire);
@@ -184,29 +189,29 @@ export async function listCloudArchivedConversations(
 }
 
 export async function restoreCloudArchivedConversation(conversationId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud archived chat restore');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud archived chat restore');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}${managedCloudConversationPath(conversationId)}`,
     {
       method: 'PUT',
-      headers: await getAuthHeaders(),
+      headers: await request.getHeaders(),
       body: JSON.stringify({ archived: false }),
     },
   );
-  if (!response.ok) throw await failure(response, 'Could not restore this chat');
+  if (!response.ok) throw await failure(request, response, 'Could not restore this chat');
   ManagedCloudUpdateConversationResponseSchema.parse(await response.json());
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 }
 
 export async function deleteCloudConversation(conversationId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud conversation deletion');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud conversation deletion');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}${managedCloudConversationPath(conversationId)}`,
-    { method: 'DELETE', headers: await getAuthHeaders() },
+    { method: 'DELETE', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not delete this chat');
+  if (!response.ok) throw await failure(request, response, 'Could not delete this chat');
   ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -219,14 +224,14 @@ export interface CloudTwoFactorStatus {
 }
 
 export async function getCloudTwoFactorStatus(): Promise<CloudTwoFactorStatus> {
-  const boundary = captureManagedCloudBoundary('Cloud two-factor status');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/2fa`, {
+  const request = createManagedCloudRequestContext('Cloud two-factor status');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/2fa`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not read two-factor status');
+  if (!response.ok) throw await failure(request, response, 'Could not read two-factor status');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   if (!isRecord(payload)) {
     throw new Error('The Cloud security service returned an invalid response.');
   }
@@ -246,15 +251,16 @@ export interface CloudSecurityActivity {
 }
 
 export async function listCloudSecurityActivity(limit = 10): Promise<CloudSecurityActivity[]> {
-  const boundary = captureManagedCloudBoundary('Cloud security activity');
+  const request = createManagedCloudRequestContext('Cloud security activity');
   const query = new URLSearchParams({ limit: String(Math.max(1, Math.min(100, limit))) });
-  const response = await cloudFetch(
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/activity?${query.toString()}`,
-    { method: 'GET', headers: await getAuthHeaders() },
+    { method: 'GET', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not load recent account activity');
+  if (!response.ok)
+    throw await failure(request, response, 'Could not load recent account activity');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const activities = isRecord(payload) ? payload['activities'] : null;
   if (!Array.isArray(activities)) {
     throw new Error('The Cloud activity service returned an invalid response.');
@@ -330,14 +336,14 @@ function parseAccountSession(value: unknown): CloudAccountSession | null {
 }
 
 export async function fetchCloudActiveSessions(): Promise<CloudActiveSessions> {
-  const boundary = captureManagedCloudBoundary('Cloud active sessions');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
+  const request = createManagedCloudRequestContext('Cloud active sessions');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not load your active sessions');
+  if (!response.ok) throw await failure(request, response, 'Could not load your active sessions');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const rows = isRecord(payload) ? payload['sessions'] : null;
   if (!Array.isArray(rows)) {
     throw new Error('The Cloud session service returned an invalid response.');
@@ -351,13 +357,13 @@ export async function fetchCloudActiveSessions(): Promise<CloudActiveSessions> {
 }
 
 export async function revokeCloudSession(sessionId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud session revocation');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud session revocation');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/sessions/${encodeURIComponent(sessionId)}`,
-    { method: 'DELETE', headers: await getAuthHeaders() },
+    { method: 'DELETE', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not end that session');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not end that session');
+  request.assertBoundary();
 }
 
 export interface CloudRevokeAllSessionsResult {
@@ -372,14 +378,15 @@ export interface CloudRevokeAllSessionsResult {
 }
 
 export async function revokeAllCloudSessions(): Promise<CloudRevokeAllSessionsResult> {
-  const boundary = captureManagedCloudBoundary('Cloud session revoke-all');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
+  const request = createManagedCloudRequestContext('Cloud session revoke-all');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/sessions`, {
     method: 'DELETE',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not log out of your other devices');
+  if (!response.ok)
+    throw await failure(request, response, 'Could not log out of your other devices');
   const payload: unknown = await response.json().catch(() => null);
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const revokedCount = isRecord(payload) ? payload['revokedCount'] : null;
   return {
     revokedCount:
@@ -442,14 +449,14 @@ function parseApiKey(value: unknown): CloudApiKey | null {
 }
 
 export async function listCloudApiKeys(): Promise<CloudApiKey[]> {
-  const boundary = captureManagedCloudBoundary('Cloud API keys');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/api-keys`, {
+  const request = createManagedCloudRequestContext('Cloud API keys');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/api-keys`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not load your API keys');
+  if (!response.ok) throw await failure(request, response, 'Could not load your API keys');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const keys = isRecord(payload) ? payload['api_keys'] : null;
   if (!Array.isArray(keys)) {
     throw new Error('The Cloud API key service returned an invalid response.');
@@ -467,15 +474,15 @@ export async function createCloudApiKey(
   name: string,
   scopes: readonly CloudApiKeyScope[],
 ): Promise<CreatedCloudApiKey> {
-  const boundary = captureManagedCloudBoundary('Cloud API key creation');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/api-keys`, {
+  const request = createManagedCloudRequestContext('Cloud API key creation');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/api-keys`, {
     method: 'POST',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     body: JSON.stringify({ name, scopes }),
   });
-  if (!response.ok) throw await failure(response, 'Could not create the API key');
+  if (!response.ok) throw await failure(request, response, 'Could not create the API key');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const apiKey = isRecord(payload) ? parseApiKey(payload['api_key']) : null;
   const fullKey = isRecord(payload) ? payload['full_key'] : null;
   if (!apiKey || typeof fullKey !== 'string') {
@@ -485,13 +492,13 @@ export async function createCloudApiKey(
 }
 
 export async function revokeCloudApiKey(keyId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud API key revocation');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud API key revocation');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/api-keys/${encodeURIComponent(keyId)}`,
-    { method: 'DELETE', headers: await getAuthHeaders() },
+    { method: 'DELETE', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not revoke the API key');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not revoke the API key');
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -510,15 +517,16 @@ export async function revokeCloudApiKey(keyId: string): Promise<void> {
 export async function getCloudPreferenceNamespace(
   namespace: string,
 ): Promise<Record<string, unknown>> {
-  const boundary = captureManagedCloudBoundary(`Cloud ${namespace} preferences`);
+  const request = createManagedCloudRequestContext(`Cloud ${namespace} preferences`);
   const query = new URLSearchParams({ namespace });
-  const response = await cloudFetch(
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/preferences?${query.toString()}`,
-    { method: 'GET', headers: await getAuthHeaders() },
+    { method: 'GET', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, `Could not load your ${namespace} settings`);
+  if (!response.ok)
+    throw await failure(request, response, `Could not load your ${namespace} settings`);
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const settings = isRecord(payload) ? payload['settings'] : null;
   return isRecord(settings) ? settings : {};
 }
@@ -527,14 +535,15 @@ export async function saveCloudPreferenceNamespace(
   namespace: string,
   value: Record<string, unknown>,
 ): Promise<void> {
-  const boundary = captureManagedCloudBoundary(`Cloud ${namespace} preference save`);
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/preferences`, {
+  const request = createManagedCloudRequestContext(`Cloud ${namespace} preference save`);
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/preferences`, {
     method: 'PUT',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     body: JSON.stringify({ namespace, value }),
   });
-  if (!response.ok) throw await failure(response, `Could not save your ${namespace} settings`);
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok)
+    throw await failure(request, response, `Could not save your ${namespace} settings`);
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -557,14 +566,14 @@ export interface CloudAccountProfile {
 }
 
 export async function getCloudAccountProfile(): Promise<CloudAccountProfile> {
-  const boundary = captureManagedCloudBoundary('Cloud account profile');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/me`, {
+  const request = createManagedCloudRequestContext('Cloud account profile');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/me`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not load your Cloud profile');
+  if (!response.ok) throw await failure(request, response, 'Could not load your Cloud profile');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   if (!isRecord(payload)) {
     throw new Error('The Cloud profile service returned an invalid response.');
   }
@@ -579,14 +588,14 @@ export async function getCloudAccountProfile(): Promise<CloudAccountProfile> {
 }
 
 export async function saveCloudDisplayName(displayName: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud display name save');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/me`, {
+  const request = createManagedCloudRequestContext('Cloud display name save');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/me`, {
     method: 'PATCH',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     body: JSON.stringify({ display_name: displayName }),
   });
-  if (!response.ok) throw await failure(response, 'Could not save your name');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not save your name');
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -610,14 +619,15 @@ export async function fetchCloudReflectRecap(
   range: ManagedCloudReflectRange,
   timezone: string,
 ): Promise<ManagedCloudReflectRecap> {
-  const boundary = captureManagedCloudBoundary('Cloud reflect recap');
+  const request = createManagedCloudRequestContext('Cloud reflect recap');
   const query = new URLSearchParams({ range, timezone });
-  const response = await cloudFetch(
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}${MANAGED_CLOUD_REFLECT_PATH}?${query.toString()}`,
-    { method: 'GET', headers: await getAuthHeaders() },
+    { method: 'GET', headers: await request.getHeaders() },
   );
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
+    request.assertBoundary();
     const error = isRecord(body) ? body['error'] : null;
     if (response.status === 409 && isRecord(error) && error['code'] === 'memory_required') {
       throw new CloudReflectMemoryRequiredError();
@@ -627,7 +637,7 @@ export async function fetchCloudReflectRecap(
     );
   }
   const recap = ManagedCloudReflectRecapSchema.parse(await response.json());
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   return recap;
 }
 
@@ -682,14 +692,14 @@ function parseOrganization(value: unknown): CloudOrganization | null {
 }
 
 export async function getCloudOrganizationOverview(): Promise<CloudOrganizationOverview> {
-  const boundary = captureManagedCloudBoundary('Cloud organization overview');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/organization`, {
+  const request = createManagedCloudRequestContext('Cloud organization overview');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/organization`, {
     method: 'GET',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not load your workspace');
+  if (!response.ok) throw await failure(request, response, 'Could not load your workspace');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const access = isRecord(payload) && isRecord(payload['access']) ? payload['access'] : {};
   return {
     organization: isRecord(payload) ? parseOrganization(payload['organization']) : null,
@@ -727,15 +737,18 @@ function parseTeamMember(value: unknown): CloudTeamMember | null {
 }
 
 export async function listCloudTeamMembers(organizationId: string): Promise<CloudTeamMember[]> {
-  const boundary = captureManagedCloudBoundary('Cloud team members');
+  const request = createManagedCloudRequestContext('Cloud team members');
   const query = new URLSearchParams({ organizationId });
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/team?${query.toString()}`, {
-    method: 'GET',
-    headers: await getAuthHeaders(),
-  });
-  if (!response.ok) throw await failure(response, 'Could not load your team');
+  const response = await request.fetch(
+    `${CLOUD_API_BASE_URL}/api/settings/team?${query.toString()}`,
+    {
+      method: 'GET',
+      headers: await request.getHeaders(),
+    },
+  );
+  if (!response.ok) throw await failure(request, response, 'Could not load your team');
   const payload: unknown = await response.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const members = isRecord(payload) ? payload['members'] : null;
   if (!Array.isArray(members)) {
     throw new Error('The Cloud team service returned an invalid response.');
@@ -755,37 +768,38 @@ export async function addCloudTeamMember(
   email: string,
   role: CloudTeamRole,
 ): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud team member add');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/settings/team`, {
+  const request = createManagedCloudRequestContext('Cloud team member add');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/team`, {
     method: 'POST',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
     body: JSON.stringify({ organizationId, email, role }),
   });
-  if (!response.ok) throw await failure(response, 'Could not add that person to your workspace');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok)
+    throw await failure(request, response, 'Could not add that person to your workspace');
+  request.assertBoundary();
 }
 
 export async function updateCloudTeamMemberRole(
   memberId: string,
   role: CloudTeamRole,
 ): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud team role update');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud team role update');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/team/${encodeURIComponent(memberId)}`,
-    { method: 'PATCH', headers: await getAuthHeaders(), body: JSON.stringify({ role }) },
+    { method: 'PATCH', headers: await request.getHeaders(), body: JSON.stringify({ role }) },
   );
-  if (!response.ok) throw await failure(response, 'Could not change that role');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not change that role');
+  request.assertBoundary();
 }
 
 export async function removeCloudTeamMember(memberId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud team member removal');
-  const response = await cloudFetch(
+  const request = createManagedCloudRequestContext('Cloud team member removal');
+  const response = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/settings/team/${encodeURIComponent(memberId)}`,
-    { method: 'DELETE', headers: await getAuthHeaders() },
+    { method: 'DELETE', headers: await request.getHeaders() },
   );
-  if (!response.ok) throw await failure(response, 'Could not remove that member');
-  assertManagedCloudBoundary(boundary);
+  if (!response.ok) throw await failure(request, response, 'Could not remove that member');
+  request.assertBoundary();
 }
 
 // ============================================================================
@@ -804,14 +818,14 @@ export interface CloudAccountDeletionResult {
  * grace window it cannot verify. Local data is untouched by this call.
  */
 export async function requestCloudAccountDeletion(): Promise<CloudAccountDeletionResult> {
-  const boundary = captureManagedCloudBoundary('Cloud account deletion');
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/user/delete-account`, {
+  const request = createManagedCloudRequestContext('Cloud account deletion');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/user/delete-account`, {
     method: 'DELETE',
-    headers: await getAuthHeaders(),
+    headers: await request.getHeaders(),
   });
-  if (!response.ok) throw await failure(response, 'Could not delete your Cloud account');
+  if (!response.ok) throw await failure(request, response, 'Could not delete your Cloud account');
   const payload: unknown = await response.json().catch(() => null);
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   const message = isRecord(payload) ? payload['message'] : null;
   return { message: typeof message === 'string' ? message : null };
 }

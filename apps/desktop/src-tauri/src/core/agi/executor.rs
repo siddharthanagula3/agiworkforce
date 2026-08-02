@@ -8,6 +8,7 @@ use crate::core::agi::process_reasoning::ProcessReasoning;
 use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::LLMRouter;
 use crate::data::cache::ToolResultCache;
+use crate::sys::account::{current_managed_auth_boundary, scope_managed_auth_boundary};
 use crate::sys::security::ToolExecutionGuard;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use anyhow::{anyhow, Result};
@@ -662,6 +663,7 @@ impl AGIExecutor {
         );
 
         let mut handles = Vec::new();
+        let managed_auth_boundary = current_managed_auth_boundary();
 
         for plan in plans {
             let tool_registry = self.tool_registry.clone();
@@ -676,69 +678,34 @@ impl AGIExecutor {
 
             let app_handle = self.app_handle.clone();
 
-            let handle = tokio::spawn(async move {
-                let start_time = Instant::now();
+            let handle = tokio::spawn(scope_managed_auth_boundary(
+                managed_auth_boundary.clone(),
+                async move {
+                    let start_time = Instant::now();
 
-                let context = ExecutionContext {
-                    goal: goal_clone,
-                    current_state: HashMap::new(),
-                    available_resources: ResourceState {
-                        cpu_usage_percent: 0.0,
-                        memory_usage_mb: 0,
-                        network_usage_mbps: 0.0,
-                        storage_usage_mb: 0,
-                        available_tools: vec![],
-                    },
-                    tool_results: Vec::new(),
-                    context_memory: Vec::new(),
-                };
+                    let context = ExecutionContext {
+                        goal: goal_clone,
+                        current_state: HashMap::new(),
+                        available_resources: ResourceState {
+                            cpu_usage_percent: 0.0,
+                            memory_usage_mb: 0,
+                            network_usage_mbps: 0.0,
+                            storage_usage_mb: 0,
+                            available_tools: vec![],
+                        },
+                        tool_results: Vec::new(),
+                        context_memory: Vec::new(),
+                    };
 
-                let resource_manager = match ResourceManager::new(ResourceLimits {
-                    cpu_percent: 80.0,
-                    memory_mb: 2048,
-                    network_mbps: 100.0,
-                    storage_mb: 10240,
-                }) {
-                    Ok(rm) => rm,
-                    Err(e) => {
-                        tracing::error!("[Executor] Failed to create ResourceManager: {}", e);
-                        return crate::core::agi::ExecutionResult {
-                            plan_id,
-                            sandbox_id,
-                            success: false,
-                            steps_completed: 0,
-                            steps_failed: 1,
-                            output: serde_json::json!({}),
-                            error: Some(format!("Failed to create ResourceManager: {}", e)),
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
-                            cost: None,
-                        };
-                    }
-                };
-
-                let process_reasoning = match ProcessReasoning::new(router.clone()) {
-                    Ok(pr) => pr,
-                    Err(e) => {
-                        tracing::error!("[Executor] Failed to create ProcessReasoning: {}", e);
-                        return crate::core::agi::ExecutionResult {
-                            plan_id,
-                            sandbox_id,
-                            success: false,
-                            steps_completed: 0,
-                            steps_failed: 1,
-                            output: serde_json::json!({}),
-                            error: Some(format!("Failed to create ProcessReasoning: {}", e)),
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
-                            cost: None,
-                        };
-                    }
-                };
-
-                let outcome_tracker =
-                    match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
-                        Ok(ot) => ot,
+                    let resource_manager = match ResourceManager::new(ResourceLimits {
+                        cpu_percent: 80.0,
+                        memory_mb: 2048,
+                        network_mbps: 100.0,
+                        storage_mb: 10240,
+                    }) {
+                        Ok(rm) => rm,
                         Err(e) => {
-                            tracing::error!("[Executor] Failed to create OutcomeTracker: {}", e);
+                            tracing::error!("[Executor] Failed to create ResourceManager: {}", e);
                             return crate::core::agi::ExecutionResult {
                                 plan_id,
                                 sandbox_id,
@@ -746,77 +713,118 @@ impl AGIExecutor {
                                 steps_completed: 0,
                                 steps_failed: 1,
                                 output: serde_json::json!({}),
-                                error: Some(format!("Failed to create OutcomeTracker: {}", e)),
+                                error: Some(format!("Failed to create ResourceManager: {}", e)),
                                 execution_time_ms: start_time.elapsed().as_millis() as u64,
                                 cost: None,
                             };
                         }
                     };
 
-                let mut executor = match AGIExecutor::with_process_reasoning(
-                    tool_registry,
-                    Arc::new(resource_manager),
-                    automation,
-                    router.clone(),
-                    app_handle,
-                    Arc::new(process_reasoning),
-                    Arc::new(outcome_tracker),
-                    None, // No reflection engine for parallel sub-tasks for now
-                    None, // No change tracker for parallel execution
-                ) {
-                    Ok(ex) => ex,
-                    Err(e) => {
-                        tracing::error!("[Executor] Failed to create AGIExecutor: {}", e);
-                        return crate::core::agi::ExecutionResult {
-                            plan_id,
-                            sandbox_id,
-                            success: false,
-                            steps_completed: 0,
-                            steps_failed: 1,
-                            output: serde_json::json!({}),
-                            error: Some(format!("Failed to create AGIExecutor: {}", e)),
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
-                            cost: None,
-                        };
-                    }
-                };
-
-                executor.tool_cache = tool_cache;
-
-                let mut steps_completed = 0;
-                let mut steps_failed = 0;
-                let mut output = serde_json::json!({});
-                let mut error_msg = None;
-
-                for step in &plan.steps {
-                    match executor.execute_step(step, &context).await {
-                        Ok(result) => {
-                            steps_completed += 1;
-                            output = result;
-                        }
+                    let process_reasoning = match ProcessReasoning::new(router.clone()) {
+                        Ok(pr) => pr,
                         Err(e) => {
-                            steps_failed += 1;
-                            error_msg = Some(e.to_string());
-                            break;
+                            tracing::error!("[Executor] Failed to create ProcessReasoning: {}", e);
+                            return crate::core::agi::ExecutionResult {
+                                plan_id,
+                                sandbox_id,
+                                success: false,
+                                steps_completed: 0,
+                                steps_failed: 1,
+                                output: serde_json::json!({}),
+                                error: Some(format!("Failed to create ProcessReasoning: {}", e)),
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                                cost: None,
+                            };
+                        }
+                    };
+
+                    let outcome_tracker =
+                        match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
+                            Ok(ot) => ot,
+                            Err(e) => {
+                                tracing::error!(
+                                    "[Executor] Failed to create OutcomeTracker: {}",
+                                    e
+                                );
+                                return crate::core::agi::ExecutionResult {
+                                    plan_id,
+                                    sandbox_id,
+                                    success: false,
+                                    steps_completed: 0,
+                                    steps_failed: 1,
+                                    output: serde_json::json!({}),
+                                    error: Some(format!("Failed to create OutcomeTracker: {}", e)),
+                                    execution_time_ms: start_time.elapsed().as_millis() as u64,
+                                    cost: None,
+                                };
+                            }
+                        };
+
+                    let mut executor = match AGIExecutor::with_process_reasoning(
+                        tool_registry,
+                        Arc::new(resource_manager),
+                        automation,
+                        router.clone(),
+                        app_handle,
+                        Arc::new(process_reasoning),
+                        Arc::new(outcome_tracker),
+                        None, // No reflection engine for parallel sub-tasks for now
+                        None, // No change tracker for parallel execution
+                    ) {
+                        Ok(ex) => ex,
+                        Err(e) => {
+                            tracing::error!("[Executor] Failed to create AGIExecutor: {}", e);
+                            return crate::core::agi::ExecutionResult {
+                                plan_id,
+                                sandbox_id,
+                                success: false,
+                                steps_completed: 0,
+                                steps_failed: 1,
+                                output: serde_json::json!({}),
+                                error: Some(format!("Failed to create AGIExecutor: {}", e)),
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                                cost: None,
+                            };
+                        }
+                    };
+
+                    executor.tool_cache = tool_cache;
+
+                    let mut steps_completed = 0;
+                    let mut steps_failed = 0;
+                    let mut output = serde_json::json!({});
+                    let mut error_msg = None;
+
+                    for step in &plan.steps {
+                        match executor.execute_step(step, &context).await {
+                            Ok(result) => {
+                                steps_completed += 1;
+                                output = result;
+                            }
+                            Err(e) => {
+                                steps_failed += 1;
+                                error_msg = Some(e.to_string());
+                                break;
+                            }
                         }
                     }
-                }
 
-                let execution_time_ms = start_time.elapsed().as_millis() as u64;
-                let success = steps_failed == 0 && steps_completed > 0;
+                    let execution_time_ms = start_time.elapsed().as_millis() as u64;
+                    let success = steps_failed == 0 && steps_completed > 0;
 
-                crate::core::agi::ExecutionResult {
-                    plan_id,
-                    sandbox_id,
-                    success,
-                    output,
-                    execution_time_ms,
-                    steps_completed,
-                    steps_failed,
-                    error: error_msg,
-                    cost: None,
-                }
-            });
+                    crate::core::agi::ExecutionResult {
+                        plan_id,
+                        sandbox_id,
+                        success,
+                        output,
+                        execution_time_ms,
+                        steps_completed,
+                        steps_failed,
+                        error: error_msg,
+                        cost: None,
+                    }
+                },
+            ));
 
             handles.push(handle);
         }

@@ -21,6 +21,35 @@ const MAX_LIVE_TASK_ENTRIES = 100;
  */
 const activeTrustMode = (): PrivacyMode => selectPrivacyMode(useAppModeStore.getState());
 
+export interface GoalSubmissionAuthority {
+  /**
+   * Re-checks caller-owned authority at the final native side-effect boundary.
+   * Mobile Companion uses this to prevent an authenticated request from an
+   * expired session launching work after AGI initialization completes.
+   */
+  assertCurrent?: () => void;
+}
+
+function captureGoalSubmissionAuthority(authority?: GoalSubmissionAuthority) {
+  const trustMode = activeTrustMode();
+  return {
+    trustMode,
+    assertCurrent() {
+      authority?.assertCurrent?.();
+      if (activeTrustMode() !== trustMode) {
+        throw new DOMException(
+          'The execution boundary changed before goal submission.',
+          'AbortError',
+        );
+      }
+    },
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 /** Engine-authored lifecycle shared by every AGI surface. */
 export type AgentTaskStatus = CanonicalAgentTaskState;
 
@@ -76,15 +105,23 @@ interface AgentTaskStoreState {
   liveProgressByTask: Record<string, AgentTaskLiveProgress>;
   submitGoal: (
     goal: string,
-    options?: { maxIterations?: number; parallel?: boolean },
+    options?: { maxIterations?: number; parallel?: boolean } & GoalSubmissionAuthority,
   ) => Promise<string>;
   submitGoalSwarm: (
     goal: string,
-    options?: { priority?: string; deadline?: number; successCriteria?: string[] },
+    options?: {
+      priority?: string;
+      deadline?: number;
+      successCriteria?: string[];
+    } & GoalSubmissionAuthority,
   ) => Promise<string>;
   submitGoalAuto: (
     goal: string,
-    options?: { priority?: string; deadline?: number; successCriteria?: string[] },
+    options?: {
+      priority?: string;
+      deadline?: number;
+      successCriteria?: string[];
+    } & GoalSubmissionAuthority,
   ) => Promise<string>;
   shouldUseSwarm: (description: string) => Promise<boolean>;
   fetchTasks: () => Promise<void>;
@@ -216,14 +253,16 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
 
         submitGoal: async (goal, options = {}) => {
           try {
+            const authority = captureGoalSubmissionAuthority(options);
             await ensureAgiInitialized();
+            authority.assertCurrent();
             if (options.parallel) {
               const result = await invoke<SubmitParallelGoalResponse>('agi_submit_goal_parallel', {
                 request: {
                   description: goal,
                   priority: 'medium',
                   numAgents: options.maxIterations ?? 4,
-                  trustMode: activeTrustMode(),
+                  trustMode: authority.trustMode,
                 },
               });
               const taskId = result.goalId;
@@ -245,7 +284,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
               request: {
                 description: goal,
                 priority: 'medium',
-                trustMode: activeTrustMode(),
+                trustMode: authority.trustMode,
               },
             });
 
@@ -263,23 +302,27 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
 
             return taskId;
           } catch (error) {
-            toast.error(
-              `Failed to submit goal: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            );
+            if (!isAbortError(error)) {
+              toast.error(
+                `Failed to submit goal: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              );
+            }
             throw error;
           }
         },
 
         submitGoalSwarm: async (goal, options = {}) => {
           try {
+            const authority = captureGoalSubmissionAuthority(options);
             await ensureAgiInitialized();
+            authority.assertCurrent();
             const result = await invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
               request: {
                 description: goal,
                 priority: options.priority ?? 'medium',
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
-                trustMode: activeTrustMode(),
+                trustMode: authority.trustMode,
               },
             });
 
@@ -306,21 +349,23 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             return taskId;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            toast.error('Swarm execution failed: ' + msg);
+            if (!isAbortError(err)) toast.error('Swarm execution failed: ' + msg);
             throw err;
           }
         },
 
         submitGoalAuto: async (goal, options = {}) => {
           try {
+            const authority = captureGoalSubmissionAuthority(options);
             await ensureAgiInitialized();
+            authority.assertCurrent();
             const result = await invoke<SubmitGoalResponse>('agi_submit_goal_auto', {
               request: {
                 description: goal,
                 priority: options.priority ?? 'medium',
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
-                trustMode: activeTrustMode(),
+                trustMode: authority.trustMode,
               },
             });
 
@@ -337,7 +382,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             return taskId;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            toast.error('Auto goal submission failed: ' + msg);
+            if (!isAbortError(err)) toast.error('Auto goal submission failed: ' + msg);
             throw err;
           }
         },

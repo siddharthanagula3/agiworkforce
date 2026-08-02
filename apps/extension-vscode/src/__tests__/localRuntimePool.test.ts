@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocalRuntimePool } from '../integrations/localRuntimePool';
 
 describe('LocalRuntimePool', () => {
-  it('owns exactly one local app-server client per workspace root', () => {
-    const dispose = vi.fn();
-    const factory = vi.fn((cwd: string) => ({ cwd, dispose }));
+  it('owns exactly one local app-server client per workspace root', async () => {
+    const dispose = vi.fn(async () => undefined);
+    const factory = vi.fn((cwd: string) => ({
+      cwd,
+      restart: vi.fn(async () => undefined),
+      dispose,
+    }));
     const pool = new LocalRuntimePool(factory);
 
     const first = pool.forWorkspace('/workspace/a');
@@ -14,29 +18,71 @@ describe('LocalRuntimePool', () => {
     expect(first).toBe(same);
     expect(second).not.toBe(first);
     expect(factory).toHaveBeenCalledTimes(2);
-    pool.dispose();
+    await pool.shutdownAll();
     expect(dispose).toHaveBeenCalledTimes(2);
   });
 
-  it('restarts every workspace client when runtime configuration changes', () => {
-    const clients: Array<{ cwd: string; dispose: ReturnType<typeof vi.fn> }> = [];
+  it('restarts every workspace process while preserving stable client ownership', async () => {
+    const clients: Array<{
+      cwd: string;
+      restart: ReturnType<typeof vi.fn>;
+      dispose: ReturnType<typeof vi.fn>;
+    }> = [];
     const pool = new LocalRuntimePool((cwd) => {
-      const client = { cwd, dispose: vi.fn() };
+      const client = {
+        cwd,
+        restart: vi.fn(async () => undefined),
+        dispose: vi.fn(async () => undefined),
+      };
       clients.push(client);
       return client;
     });
 
     const before = pool.forWorkspace('/workspace/a');
-    pool.restartAll();
+    const result = await pool.restartAll();
     const after = pool.forWorkspace('/workspace/a');
 
-    expect(before.dispose).toHaveBeenCalledOnce();
-    expect(after).not.toBe(before);
-    expect(clients).toHaveLength(2);
+    expect(before.restart).toHaveBeenCalledOnce();
+    expect(after).toBe(before);
+    expect(clients).toHaveLength(1);
+    expect(result).toEqual({ restartedWorkspaces: 1 });
+    await pool.shutdownAll();
   });
 
-  it('reuses one process for syntactic aliases of the same workspace root', () => {
-    const factory = vi.fn((cwd: string) => ({ cwd, dispose: vi.fn() }));
+  it('does not resolve restart until the fresh runtime is ready', async () => {
+    let resolveRestart!: () => void;
+    const restartGate = new Promise<void>((resolve) => {
+      resolveRestart = resolve;
+    });
+    const pool = new LocalRuntimePool((cwd) => {
+      return {
+        cwd,
+        restart: vi.fn(() => restartGate),
+        dispose: vi.fn(async () => undefined),
+      };
+    });
+    pool.forWorkspace('/workspace/a');
+    let settled = false;
+
+    const restart = pool.restartAll().then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(settled).toBe(false);
+    expect(() => pool.forWorkspace('/workspace/a')).toThrow('is restarting');
+    resolveRestart();
+    await expect(restart).resolves.toEqual({ restartedWorkspaces: 1 });
+    await pool.shutdownAll();
+  });
+
+  it('reuses one process for syntactic aliases of the same workspace root', async () => {
+    const factory = vi.fn((cwd: string) => ({
+      cwd,
+      restart: vi.fn(async () => undefined),
+      dispose: vi.fn(async () => undefined),
+    }));
     const pool = new LocalRuntimePool(factory);
 
     const canonical = pool.forWorkspace('/workspace/project');
@@ -44,6 +90,6 @@ describe('LocalRuntimePool', () => {
 
     expect(trailingSeparator).toBe(canonical);
     expect(factory).toHaveBeenCalledOnce();
-    pool.dispose();
+    await pool.shutdownAll();
   });
 });

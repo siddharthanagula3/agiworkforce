@@ -107,7 +107,7 @@ pub async fn run_repl(
     match (resume_messages, resume_managed_session) {
         (Some(messages), Some((managed_session, path))) => {
             load_messages_into_session(&mut session, messages);
-            session.adopt_managed_session(managed_session, path);
+            session.adopt_managed_session(managed_session, path)?;
         }
         (Some(messages), None) => {
             load_messages_into_session(&mut session, messages);
@@ -115,7 +115,7 @@ pub async fn run_repl(
         }
         (None, Some((managed_session, path))) => {
             load_messages_into_session(&mut session, managed_session.messages.clone());
-            session.adopt_managed_session(managed_session, path);
+            session.adopt_managed_session(managed_session, path)?;
         }
         (None, None) => {
             session.enable_managed_session()?;
@@ -175,12 +175,12 @@ pub async fn run_repl(
     )
     .await;
 
-    let edit_mode = if crate::keybindings::resolved_edit_mode(config.ui.edit_mode.as_deref()) == "vi"
-    {
-        EditMode::Vi
-    } else {
-        EditMode::Emacs
-    };
+    let edit_mode =
+        if crate::keybindings::resolved_edit_mode(config.ui.edit_mode.as_deref()) == "vi" {
+            EditMode::Vi
+        } else {
+            EditMode::Emacs
+        };
     let rl_config = Config::builder()
         .edit_mode(edit_mode)
         .auto_add_history(false)
@@ -433,6 +433,38 @@ pub async fn run_repl(
                         }
                         SlashResult::Prompt(prompt) => {
                             run_prompt_turn(&mut session, config, prompt).await;
+                        }
+                        SlashResult::ReviewDraft {
+                            prompt,
+                            destination,
+                            provider,
+                        } => {
+                            output::print_info(&format!(
+                                "Review the exact {} payload for provider `{provider}`. Enter sends it; editing, Ctrl-C, or EOF cancels and requires a fresh preview.",
+                                match destination {
+                                    crate::agent::PrivacyMode::Byok => "BYOK",
+                                    crate::agent::PrivacyMode::Managed => "Managed Cloud",
+                                    crate::agent::PrivacyMode::Local => "Local",
+                                }
+                            ));
+                            match editor.readline_with_initial("", (&prompt, "")) {
+                                Ok(reviewed) if !reviewed.trim().is_empty() => {
+                                    let _ = editor.add_history_entry(reviewed.as_str());
+                                    run_prompt_turn(&mut session, config, reviewed).await;
+                                }
+                                Ok(_) | Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                                    session.cancel_pending_privacy_handoff();
+                                    output::print_info(
+                                        "Continuation cancelled; Local source unchanged.",
+                                    );
+                                }
+                                Err(error) => {
+                                    session.cancel_pending_privacy_handoff();
+                                    output::print_error(&format!(
+                                        "Continuation review failed: {error}"
+                                    ));
+                                }
+                            }
                         }
                         SlashResult::McpPrompt(invocation) => {
                             match session.expand_mcp_prompt_invocation(&invocation).await {

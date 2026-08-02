@@ -202,7 +202,10 @@ pub fn resolved_edit_mode(configured: Option<&str>) -> &'static str {
                 .rsplit('/')
                 .next()
                 .is_some_and(|name| name.to_ascii_lowercase().contains("vi"))
-        }) => "vi",
+        }) =>
+        {
+            "vi"
+        }
         _ => "emacs",
     }
 }

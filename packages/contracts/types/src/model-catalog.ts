@@ -1053,6 +1053,9 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     // Enterprise voice: unlimited.
     allowVoice: true,
     voiceMinutesPerMonth: null,
+    // Enterprise includes every Max workflow capability; commercial limits are
+    // negotiated separately, not represented as a feature denial.
+    allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     // Enterprise is uncapped at the policy level (custom contracts handle billing).

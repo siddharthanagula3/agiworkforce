@@ -12,6 +12,7 @@ const initialState: SettingsPanelState = {
     model: 'auto',
     cliPath: 'agi',
     streamingEnabled: true,
+    'composer.followUpBehavior': 'queue',
     contextLines: 50,
     telemetryEnabled: false,
     hoverEnabled: false,

@@ -1,16 +1,19 @@
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::State;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
 use xcap::Monitor;
 
 use crate::automation::computer_use::{
     zoom_region, AppPermission, AppPermissionManager, ComputerUseAgent, ComputerUseConfig,
-    ComputerUseTask, InterpolationMethod, PermissionStatus, Region, ZoomAction, ZoomLevel,
-    ALWAYS_BLOCKED_BUNDLE_IDS,
+    ComputerUseTask, ExecutionState, InterpolationMethod, PermissionStatus, Region, TaskOutcome,
+    ZoomAction, ZoomLevel, ALWAYS_BLOCKED_BUNDLE_IDS,
 };
 use crate::core::llm::Provider;
 use crate::sys::commands::llm::LLMState;
@@ -105,6 +108,24 @@ pub struct ComputerUseSession {
 pub struct ComputerUseState {
     pub sessions: Arc<Mutex<Vec<ComputerUseSession>>>,
     pub current_session: Arc<Mutex<Option<String>>>,
+    opa_executions: HashMap<String, OpaExecutionControl>,
+    opa_cancelled_before_start: HashSet<String>,
+    opa_completed_executions: VecDeque<String>,
+}
+
+#[derive(Clone)]
+struct OpaExecutionControl {
+    cancellation: CancellationToken,
+    finished: CancellationToken,
+}
+
+impl OpaExecutionControl {
+    fn new() -> Self {
+        Self {
+            cancellation: CancellationToken::new(),
+            finished: CancellationToken::new(),
+        }
+    }
 }
 
 impl ComputerUseState {
@@ -112,6 +133,9 @@ impl ComputerUseState {
         Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
             current_session: Arc::new(Mutex::new(None)),
+            opa_executions: HashMap::new(),
+            opa_cancelled_before_start: HashSet::new(),
+            opa_completed_executions: VecDeque::new(),
         }
     }
 }
@@ -812,6 +836,164 @@ fn validate_opa_execution_boundary(
     }
 }
 
+const OPA_CANCELLATION_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_OPA_PRE_CANCELLED_EXECUTIONS: usize = 128;
+// Bound replay memory in the long-lived native process. UUID entropy remains the
+// primary uniqueness guarantee once an old completion ages out of this cache.
+const MAX_OPA_COMPLETED_EXECUTIONS: usize = 256;
+
+enum OpaExecutionRegistration {
+    Active(OpaExecutionControl),
+    CancelledBeforeStart,
+}
+
+fn validate_opa_execution_id(execution_id: &str) -> Result<(), String> {
+    uuid::Uuid::parse_str(execution_id)
+        .map(|_| ())
+        .map_err(|_| "computer-use execution_id must be a UUID".to_string())
+}
+
+fn remember_completed_opa_execution(state: &mut ComputerUseState, execution_id: &str) {
+    if state
+        .opa_completed_executions
+        .iter()
+        .any(|completed| completed == execution_id)
+    {
+        return;
+    }
+    if state.opa_completed_executions.len() >= MAX_OPA_COMPLETED_EXECUTIONS {
+        state.opa_completed_executions.pop_front();
+    }
+    state
+        .opa_completed_executions
+        .push_back(execution_id.to_string());
+}
+
+async fn register_opa_execution(
+    state: &Arc<Mutex<ComputerUseState>>,
+    execution_id: &str,
+) -> Result<OpaExecutionRegistration, String> {
+    validate_opa_execution_id(execution_id)?;
+    let mut computer_state = state.lock().await;
+    if computer_state
+        .opa_completed_executions
+        .iter()
+        .any(|completed| completed == execution_id)
+    {
+        return Err(format!(
+            "computer-use execution '{execution_id}' has already completed and cannot be reused"
+        ));
+    }
+    if computer_state
+        .opa_cancelled_before_start
+        .remove(execution_id)
+    {
+        remember_completed_opa_execution(&mut computer_state, execution_id);
+        return Ok(OpaExecutionRegistration::CancelledBeforeStart);
+    }
+    if computer_state.opa_executions.contains_key(execution_id) {
+        return Err(format!(
+            "computer-use execution '{execution_id}' is already active"
+        ));
+    }
+    if let Some(active_execution_id) = computer_state.opa_executions.keys().next() {
+        return Err(format!(
+            "computer-use execution '{active_execution_id}' already owns desktop control"
+        ));
+    }
+
+    let control = OpaExecutionControl::new();
+    computer_state
+        .opa_executions
+        .insert(execution_id.to_string(), control.clone());
+    Ok(OpaExecutionRegistration::Active(control))
+}
+
+async fn finish_opa_execution(
+    state: &Arc<Mutex<ComputerUseState>>,
+    execution_id: &str,
+    control: &OpaExecutionControl,
+) {
+    let mut computer_state = state.lock().await;
+    computer_state.opa_executions.remove(execution_id);
+    remember_completed_opa_execution(&mut computer_state, execution_id);
+    control.finished.cancel();
+}
+
+async fn cancel_opa_execution(
+    state: &Arc<Mutex<ComputerUseState>>,
+    execution_id: &str,
+) -> Result<bool, String> {
+    validate_opa_execution_id(execution_id)?;
+    let control = {
+        let mut computer_state = state.lock().await;
+        let control = computer_state.opa_executions.get(execution_id).cloned();
+        if control.is_none() {
+            if computer_state
+                .opa_completed_executions
+                .iter()
+                .any(|completed| completed == execution_id)
+            {
+                return Ok(true);
+            }
+            if computer_state
+                .opa_cancelled_before_start
+                .contains(execution_id)
+            {
+                return Ok(true);
+            }
+            if computer_state.opa_cancelled_before_start.len() >= MAX_OPA_PRE_CANCELLED_EXECUTIONS {
+                return Err(
+                    "too many computer-use executions are awaiting start cancellation".to_string(),
+                );
+            }
+            // Tauri dispatches async commands independently. Stop can therefore
+            // arrive before the earlier execute invoke registers. Reserve this
+            // UUID as revoked so a late execute consumes the reservation and
+            // returns a cancelled result without taking any OS action.
+            computer_state
+                .opa_cancelled_before_start
+                .insert(execution_id.to_string());
+            return Ok(true);
+        }
+        control
+    };
+    let control = control.expect("active execution control checked while holding the state lock");
+
+    control.cancellation.cancel();
+    tokio::time::timeout(OPA_CANCELLATION_ACK_TIMEOUT, control.finished.cancelled())
+        .await
+        .map_err(|_| {
+            format!("timed out waiting for computer-use execution '{execution_id}' to stop")
+        })?;
+    Ok(true)
+}
+
+async fn await_opa_or_cancellation<T>(
+    cancellation: &CancellationToken,
+    execution: impl Future<Output = T>,
+) -> Option<T> {
+    tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => None,
+        result = execution => Some(result),
+    }
+}
+
+fn cancelled_opa_result() -> serde_json::Value {
+    serde_json::json!({
+        "success": false,
+        "reason": { "type": "user_cancelled" },
+        "state": ExecutionState::default(),
+        "outcome": TaskOutcome::failure(
+            0,
+            0,
+            "Computer-use action was cancelled.".to_string(),
+            Vec::new(),
+        ),
+    })
+}
+
 /// Executes an OPA (Observe-Plan-Act) computer use task.
 ///
 /// Stream 2 params:
@@ -823,6 +1005,7 @@ fn validate_opa_execution_boundary(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn computer_use_execute_opa_task(
+    execution_id: String,
     description: String,
     timeout_ms: Option<u64>,
     max_actions: Option<u32>,
@@ -836,7 +1019,7 @@ pub async fn computer_use_execute_opa_task(
     // than silently reaching whatever `provider` above names.
     execution_mode: Option<crate::sys::commands::chat::types::ChatExecutionMode>,
     app: tauri::AppHandle,
-    _state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    state: State<'_, Arc<Mutex<ComputerUseState>>>,
     llm_state: State<'_, LLMState>,
     permissions_state: State<'_, Arc<AppPermissionManager>>,
 ) -> Result<serde_json::Value, String> {
@@ -867,6 +1050,7 @@ pub async fn computer_use_execute_opa_task(
             .with_app_handle(app);
 
     let task = ComputerUseTask {
+        id: execution_id.clone(),
         description,
         timeout_ms: timeout_ms.unwrap_or(300_000),
         max_actions: max_actions.unwrap_or(100),
@@ -875,10 +1059,19 @@ pub async fn computer_use_execute_opa_task(
         ..ComputerUseTask::default()
     };
 
-    let result = agent
-        .execute_task(task)
-        .await
-        .map_err(|e| format!("OPA task execution failed: {}", e))?;
+    let control = match register_opa_execution(state.inner(), &execution_id).await? {
+        OpaExecutionRegistration::Active(control) => control,
+        OpaExecutionRegistration::CancelledBeforeStart => {
+            return Ok(cancelled_opa_result());
+        }
+    };
+    let result = await_opa_or_cancellation(&control.cancellation, agent.execute_task(task)).await;
+    finish_opa_execution(state.inner(), &execution_id, &control).await;
+
+    let Some(result) = result else {
+        return Ok(cancelled_opa_result());
+    };
+    let result = result.map_err(|e| format!("OPA task execution failed: {}", e))?;
 
     let value = serde_json::json!({
         "success": result.success,
@@ -888,6 +1081,17 @@ pub async fn computer_use_execute_opa_task(
     });
 
     Ok(value)
+}
+
+/// Cancels one exact OPA execution and does not acknowledge until the native
+/// execution future has been dropped. The UUID is the caller's ownership
+/// handle; stale UI sessions cannot cancel a newer run by using ambient state.
+#[tauri::command]
+pub async fn computer_use_cancel_opa_task(
+    execution_id: String,
+    state: State<'_, Arc<Mutex<ComputerUseState>>>,
+) -> Result<bool, String> {
+    cancel_opa_execution(state.inner(), &execution_id).await
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,6 +1222,7 @@ pub async fn computer_use_stop_session(
 mod tests {
     use super::*;
     use crate::sys::commands::chat::types::ChatExecutionMode;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn absent_execution_mode_or_provider_passes() {
@@ -1080,5 +1285,176 @@ mod tests {
             Some(Provider::ManagedCloud)
         )
         .is_ok());
+    }
+
+    #[tokio::test]
+    async fn recently_completed_opa_execution_ids_cannot_be_reused() {
+        let state = Arc::new(Mutex::new(ComputerUseState::new()));
+        let execution_id = uuid::Uuid::new_v4().to_string();
+        let OpaExecutionRegistration::Active(control) =
+            register_opa_execution(&state, &execution_id)
+                .await
+                .expect("first owner should register")
+        else {
+            panic!("fresh execution must not be pre-cancelled");
+        };
+
+        let duplicate = register_opa_execution(&state, &execution_id)
+            .await
+            .err()
+            .expect("duplicate owner must be rejected");
+        assert!(duplicate.contains("already active"));
+
+        finish_opa_execution(&state, &execution_id, &control).await;
+        let reuse = register_opa_execution(&state, &execution_id)
+            .await
+            .err()
+            .expect("a retained completed UUID must not acquire desktop control again");
+        assert!(reuse.contains("already completed"));
+    }
+
+    #[tokio::test]
+    async fn distinct_opa_executions_cannot_control_the_desktop_concurrently() {
+        let state = Arc::new(Mutex::new(ComputerUseState::new()));
+        let first_id = uuid::Uuid::new_v4().to_string();
+        let second_id = uuid::Uuid::new_v4().to_string();
+        let OpaExecutionRegistration::Active(first) = register_opa_execution(&state, &first_id)
+            .await
+            .expect("first execution should register")
+        else {
+            panic!("fresh execution must not be pre-cancelled");
+        };
+
+        let overlap = register_opa_execution(&state, &second_id)
+            .await
+            .err()
+            .expect("a second desktop-control owner must be rejected");
+        assert!(overlap.contains("already owns desktop control"));
+
+        finish_opa_execution(&state, &first_id, &first).await;
+        let OpaExecutionRegistration::Active(second) = register_opa_execution(&state, &second_id)
+            .await
+            .expect("the next owner may start after shutdown")
+        else {
+            panic!("second execution was not pre-cancelled");
+        };
+        finish_opa_execution(&state, &second_id, &second).await;
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_registration_revokes_a_late_execution() {
+        let state = Arc::new(Mutex::new(ComputerUseState::new()));
+        let execution_id = uuid::Uuid::new_v4().to_string();
+
+        assert_eq!(
+            cancel_opa_execution(&state, &execution_id).await,
+            Ok(true),
+            "Stop must reserve an unknown valid UUID as revoked"
+        );
+        assert!(matches!(
+            register_opa_execution(&state, &execution_id)
+                .await
+                .expect("late registration should consume the cancellation reservation"),
+            OpaExecutionRegistration::CancelledBeforeStart
+        ));
+        assert!(state.lock().await.opa_executions.is_empty());
+        assert_eq!(
+            cancel_opa_execution(&state, &execution_id).await,
+            Ok(true),
+            "a consumed pre-cancellation remains idempotent"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_completion_does_not_consume_pre_start_capacity() {
+        let state = Arc::new(Mutex::new(ComputerUseState::new()));
+
+        for _ in 0..=MAX_OPA_PRE_CANCELLED_EXECUTIONS {
+            let execution_id = uuid::Uuid::new_v4().to_string();
+            let OpaExecutionRegistration::Active(control) =
+                register_opa_execution(&state, &execution_id)
+                    .await
+                    .expect("fresh execution should register")
+            else {
+                panic!("fresh execution must not be pre-cancelled");
+            };
+            finish_opa_execution(&state, &execution_id, &control).await;
+            assert_eq!(cancel_opa_execution(&state, &execution_id).await, Ok(true));
+        }
+
+        assert!(state.lock().await.opa_cancelled_before_start.is_empty());
+        let future_execution_id = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            cancel_opa_execution(&state, &future_execution_id).await,
+            Ok(true),
+            "post-completion retries must not exhaust legitimate stop-before-start reservations"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_waits_for_native_execution_shutdown() {
+        let state = Arc::new(Mutex::new(ComputerUseState::new()));
+        let execution_id = uuid::Uuid::new_v4().to_string();
+        let OpaExecutionRegistration::Active(control) =
+            register_opa_execution(&state, &execution_id)
+                .await
+                .expect("execution should register")
+        else {
+            panic!("fresh execution must not be pre-cancelled");
+        };
+
+        let cancel_state = Arc::clone(&state);
+        let cancel_id = execution_id.clone();
+        let cancellation =
+            tokio::spawn(async move { cancel_opa_execution(&cancel_state, &cancel_id).await });
+        tokio::task::yield_now().await;
+
+        assert!(control.cancellation.is_cancelled());
+        assert!(
+            !cancellation.is_finished(),
+            "cancellation must not acknowledge before the executor finishes"
+        );
+
+        finish_opa_execution(&state, &execution_id, &control).await;
+        assert_eq!(
+            cancellation.await.expect("cancel task should join"),
+            Ok(true)
+        );
+        assert_eq!(
+            cancel_opa_execution(&state, &execution_id).await,
+            Ok(true),
+            "repeated cancellation should keep the execution UUID revoked"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_drops_the_in_flight_opa_future() {
+        struct DropProbe(Arc<AtomicBool>);
+        impl Drop for DropProbe {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let cancellation = CancellationToken::new();
+        let dropped = Arc::new(AtomicBool::new(false));
+        let probe = DropProbe(Arc::clone(&dropped));
+        let execution = async move {
+            let _probe = probe;
+            std::future::pending::<()>().await;
+        };
+
+        cancellation.cancel();
+        assert!(await_opa_or_cancellation(&cancellation, execution)
+            .await
+            .is_none());
+        assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn opa_execution_id_must_be_a_uuid() {
+        let error = validate_opa_execution_id("account-a-current-task")
+            .expect_err("unbounded caller labels must be rejected");
+        assert!(error.contains("UUID"));
     }
 }

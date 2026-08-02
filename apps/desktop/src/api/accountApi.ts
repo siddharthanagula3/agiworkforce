@@ -1,6 +1,5 @@
-import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import type { UserProfile } from '../types/account';
-import { isTauri } from '../lib/tauri-mock';
+import { invoke, isTauri } from '../lib/tauri-mock';
 
 // Default timeout for API requests (30 seconds)
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -29,13 +28,6 @@ const withTimeout = <T>(
   ]);
 };
 
-const getInvoke = async () => {
-  if (!isTauri) {
-    throw new Error('Tauri is not available in web development mode');
-  }
-  return tauriInvoke;
-};
-
 export const accountApi = {
   fetchUserProfile: async (accessToken: string): Promise<UserProfile> => {
     if (!isTauri) {
@@ -46,7 +38,9 @@ export const accountApi = {
         credits: null,
       };
     }
-    const invoke = await getInvoke();
-    return withTimeout(invoke('fetch_user_profile', { accessToken }), 'fetch_user_profile');
+    return withTimeout(
+      invoke<UserProfile>('fetch_user_profile', { accessToken }),
+      'fetch_user_profile',
+    );
   },
 };

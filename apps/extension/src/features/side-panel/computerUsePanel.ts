@@ -7,7 +7,7 @@
  *   - Show screenshot thumbnails of what the agent sees after each screenshot action
  *   - Show a handoff banner when escalation fires ("Autofill stalled — switching
  *     to computer use")
- *   - Surface the "Ask before acting" gate toggle (default-allow)
+ *   - Surface the "Ask before acting" gate toggle (default-on)
  *   - Accept structured AgentLoopStep events and append them incrementally
  *
  * DESIGN TOKENS ONLY — no hex colours. All colours reference var(--agi-ext-*)
@@ -161,6 +161,37 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-run-btn:hover {
     background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+  }
+
+  .sp-cu-run-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .sp-cu-stop-btn {
+    display: none;
+    background: var(--agi-ext-danger-bg);
+    color: var(--agi-ext-danger);
+    border: 1px solid var(--agi-ext-danger-border);
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sp-cu-stop-btn.visible {
+    display: inline-flex;
+  }
+
+  .sp-cu-stop-btn:hover {
+    border-color: var(--agi-ext-danger);
+  }
+
+  .sp-cu-stop-btn:disabled {
+    cursor: wait;
+    opacity: 0.65;
   }
 
   /* Action log */
@@ -503,6 +534,10 @@ export interface ComputerUsePanelAPI {
    * so the chip reflects the latest Clerk session state.
    */
   refreshAuthChip(): void;
+  /** Reflect the authoritative background run lifecycle in visible controls. */
+  setRunState(running: boolean, runId?: string, generation?: number): void;
+  /** True only for events belonging to the panel's current run. */
+  ownsRun(runId: unknown): boolean;
 }
 
 /**
@@ -587,7 +622,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const clearBtn = document.createElement('button');
   clearBtn.className = 'sp-cu-clear-btn';
   clearBtn.textContent = 'Clear';
-  clearBtn.addEventListener('click', () => clearLog());
 
   // "Run Autofill" trigger button.
   // Clicking it fires the registered onRunAutofill handler (wired by side_panel.ts).
@@ -601,6 +635,79 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   let _runAutofillHandler: (() => void) | null = null;
   runAutofillBtn.addEventListener('click', () => {
     if (_runAutofillHandler) _runAutofillHandler();
+  });
+
+  const stopBtn = document.createElement('button');
+  stopBtn.className = 'sp-cu-stop-btn';
+  stopBtn.textContent = 'Stop';
+  stopBtn.title = 'Stop the active computer-use run';
+  stopBtn.setAttribute('aria-label', 'Stop computer use');
+
+  let activeRunId: string | null = null;
+  let activeRunGeneration = 0;
+
+  function setRunState(running: boolean, runId?: string, generation?: number): void {
+    if (
+      running &&
+      generation !== undefined &&
+      Number.isSafeInteger(generation) &&
+      generation < activeRunGeneration
+    ) {
+      return;
+    }
+    if (!running && runId && activeRunId && activeRunId !== runId) return;
+    activeRunId = running && runId ? runId : running ? activeRunId : null;
+    if (running && generation !== undefined && Number.isSafeInteger(generation)) {
+      activeRunGeneration = Math.max(activeRunGeneration, generation);
+    }
+    runAutofillBtn.disabled = running;
+    stopBtn.disabled = false;
+    stopBtn.textContent = 'Stop';
+    stopBtn.classList.toggle('visible', running);
+    controlsLabel.textContent = running
+      ? 'AGI Cloud • agent running'
+      : 'AGI Cloud • powered by AGI';
+  }
+
+  function ownsRun(runId: unknown): boolean {
+    return typeof runId === 'string' && activeRunId === runId;
+  }
+
+  async function requestCancellation(
+    reason: 'panel_closed' | 'user_cleared' | 'user_stopped',
+  ): Promise<void> {
+    const runId = activeRunId;
+    if (!runId) return;
+    // Tombstone locally before awaiting the worker. Any already-queued step or
+    // completion for this run is ignored from the instant the user clicks Stop.
+    setRunState(false, runId);
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'CANCEL_COMPUTER_USE',
+        runId,
+        reason,
+      });
+    } catch {
+      // A service-worker restart has no surviving in-memory run.
+    }
+  }
+
+  stopBtn.addEventListener('click', () => {
+    void requestCancellation('user_stopped');
+  });
+  clearBtn.addEventListener('click', () => {
+    void requestCancellation('user_cleared');
+    clearLog();
+  });
+  window.addEventListener('pagehide', () => {
+    const runId = activeRunId;
+    if (!runId) return;
+    activeRunId = null;
+    void chrome.runtime.sendMessage({
+      type: 'CANCEL_COMPUTER_USE',
+      runId,
+      reason: 'panel_closed',
+    });
   });
 
   // Auth-status chip — green "Signed in" or amber "Sign in required".
@@ -639,6 +746,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   refreshAuthChip();
 
   controls.appendChild(runAutofillBtn);
+  controls.appendChild(stopBtn);
   controls.appendChild(authChip);
   controls.appendChild(controlsLabel);
   controls.appendChild(askLabel);
@@ -941,5 +1049,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     onRunAutofill,
     updateUsageMeter,
     refreshAuthChip,
+    setRunState,
+    ownsRun,
   };
 }

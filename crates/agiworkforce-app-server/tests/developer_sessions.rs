@@ -4,17 +4,17 @@ use agiworkforce_app_server::{
 use agiworkforce_protocol::developer_session::{
     method, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
     AppServerNotification, AppServerRequest, ApprovalResponseParams, DeveloperSessionSource,
-    InitializeParams, InitializeResponse, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
-    ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
-    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
-    TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    DeveloperSessionTrustMode, InitializeParams, InitializeResponse, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus,
+    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus,
+    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, oneshot, Mutex};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
@@ -31,11 +31,13 @@ enum Call {
     SteerTurn(TurnSteerParams),
     Interrupt(TurnInterruptParams),
     Approval(ApprovalResponseParams),
+    Shutdown,
 }
 
 struct FakeHost {
     calls: Mutex<Vec<Call>>,
     notifications: broadcast::Sender<AppServerNotification>,
+    shutdown_gate: Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl FakeHost {
@@ -44,6 +46,7 @@ impl FakeHost {
         Self {
             calls: Mutex::new(Vec::new()),
             notifications,
+            shutdown_gate: Mutex::new(None),
         }
     }
 }
@@ -54,6 +57,8 @@ fn thread(id: &str) -> ThreadSummary {
         title: "Shared developer thread".to_string(),
         model: None,
         cwd: Some("/workspace".to_string()),
+        provider: Some("ollama".to_string()),
+        trust_mode: DeveloperSessionTrustMode::Local,
         created_at: "2026-07-14T12:00:00Z".to_string(),
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
@@ -116,6 +121,7 @@ impl DeveloperSessionHost for FakeHost {
         Ok(ThreadReadResponse {
             thread: thread("thread-1"),
             messages: Vec::new(),
+            transcript_truncated: false,
         })
     }
 
@@ -165,6 +171,14 @@ impl DeveloperSessionHost for FakeHost {
         params: ApprovalResponseParams,
     ) -> Result<(), DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Approval(params));
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::Shutdown);
+        if let Some(gate) = self.shutdown_gate.lock().await.take() {
+            let _ = gate.await;
+        }
         Ok(())
     }
 
@@ -228,6 +242,74 @@ async fn requires_a_valid_one_time_initialize_handshake() {
 
     let repeated = processor.process(initialize()).await;
     assert_eq!(repeated.error.expect("repeat must fail").code, -32003);
+}
+
+#[tokio::test]
+async fn shutdown_is_runtime_validated_and_acknowledged_only_after_the_host_is_quiet() {
+    let host = Arc::new(FakeHost::new());
+    let (release_shutdown, shutdown_gate) = oneshot::channel();
+    *host.shutdown_gate.lock().await = Some(shutdown_gate);
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+
+    let shutdown_task = tokio::spawn(async move {
+        processor
+            .process(request(2, method::SHUTDOWN, serde_json::json!({})))
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        loop {
+            if host.calls.lock().await.contains(&Call::Shutdown) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("shutdown reaches host");
+    assert!(
+        !shutdown_task.is_finished(),
+        "transport acknowledged shutdown before the host released quiescence"
+    );
+
+    release_shutdown.send(()).expect("release host shutdown");
+    let response = shutdown_task.await.expect("shutdown processor task");
+    let acknowledged: AcknowledgedResponse =
+        serde_json::from_value(response.result.expect("shutdown response"))
+            .expect("typed shutdown acknowledgment");
+    assert!(acknowledged.acknowledged);
+
+    let other_host = Arc::new(FakeHost::new());
+    let mut other_processor = DeveloperSessionProcessor::new(other_host.clone(), capabilities());
+    other_processor.process(initialize()).await;
+    let invalid = other_processor
+        .process(request(
+            3,
+            method::SHUTDOWN,
+            serde_json::json!({ "unexpected": true }),
+        ))
+        .await;
+    assert_eq!(invalid.error.expect("invalid shutdown params").code, -32602);
+    assert!(!other_host.calls.lock().await.contains(&Call::Shutdown));
+}
+
+#[tokio::test]
+async fn stdio_eof_quiesces_the_host_even_without_an_explicit_shutdown_request() {
+    let host = Arc::new(FakeHost::new());
+    let (request_writer, request_reader) = tokio::io::duplex(1024);
+    let (_response_reader, response_writer) = tokio::io::duplex(1024);
+    drop(request_writer);
+
+    agiworkforce_app_server::serve_developer_session_io(
+        request_reader,
+        response_writer,
+        host.clone(),
+        capabilities(),
+    )
+    .await
+    .expect("stdio server exits cleanly on EOF");
+
+    assert_eq!(host.calls.lock().await.as_slice(), &[Call::Shutdown]);
 }
 
 #[tokio::test]

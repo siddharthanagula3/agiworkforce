@@ -363,8 +363,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                 Ok(ToolResult {
                     tool_name: "agent".to_string(),
                     success: false,
-                    output: "Named-agent runs must be handled by the foreground subagent orchestrator."
-                        .to_string(),
+                    output:
+                        "Named-agent runs must be handled by the foreground subagent orchestrator."
+                            .to_string(),
                 })
             } else {
                 Ok(ToolResult {
@@ -788,10 +789,8 @@ async fn execute_powershell(
         safe_mode,
     };
 
-    let result =
-        tokio::task::spawn_blocking(move || crate::powershell_tool::execute(&request)).await;
-    match result {
-        Ok(Ok(output)) => {
+    match crate::powershell_tool::execute(&request).await {
+        Ok(output) => {
             let mut combined = String::new();
             if !output.stdout.is_empty() {
                 combined.push_str(&output.stdout);
@@ -819,15 +818,10 @@ async fn execute_powershell(
                 ),
             })
         }
-        Ok(Err(e)) => Ok(ToolResult {
-            tool_name: "powershell".into(),
-            success: false,
-            output: format!("PowerShell command failed: {}", e),
-        }),
         Err(e) => Ok(ToolResult {
             tool_name: "powershell".into(),
             success: false,
-            output: format!("PowerShell task failed: {}", e),
+            output: format!("PowerShell command failed: {}", e),
         }),
     }
 }

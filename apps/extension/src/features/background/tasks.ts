@@ -18,7 +18,51 @@ const TASK_ALARM_PREFIX = 'agi_task_';
 export const TASK_PROMPT_MAX_CHARS = 10_000;
 let taskMutationQueue: Promise<void> = Promise.resolve();
 
+export type AuthorizedScheduledTaskMutation = (task: ScheduledTask) => void | Promise<void>;
+export type ScheduledTaskCommitAuthority = (task: ScheduledTask) => boolean;
+
 export { TASK_ALARM_PREFIX };
+
+function validateScheduledTaskPrompt(
+  value: unknown,
+): { success: true; prompt: string | undefined } | { success: false; error: string } {
+  if (value === undefined) return { success: true, prompt: undefined };
+  if (typeof value !== 'string') {
+    return { success: false, error: 'Scheduled task prompt must be a string.' };
+  }
+  if (value.length > TASK_PROMPT_MAX_CHARS) {
+    return {
+      success: false,
+      error: `Scheduled task prompt must be at most ${TASK_PROMPT_MAX_CHARS} characters.`,
+    };
+  }
+  const prompt = value.trim();
+  if (!prompt) {
+    return { success: false, error: 'Scheduled task prompt cannot be empty.' };
+  }
+  return { success: true, prompt };
+}
+
+function isSafeManagedCloudAccountId(value: unknown): value is string {
+  return (
+    typeof value === 'string' && value.length > 0 && value.length <= 200 && !/\p{C}/u.test(value)
+  );
+}
+
+function canAccessScheduledTask(task: ScheduledTask, managedCloudAccountId?: string): boolean {
+  if (!task.prompt && task.managedCloudAccountId === undefined) return true;
+  return (
+    isSafeManagedCloudAccountId(task.managedCloudAccountId) &&
+    task.managedCloudAccountId === managedCloudAccountId
+  );
+}
+
+function visibleScheduledTasks(
+  tasks: ScheduledTask[],
+  managedCloudAccountId?: string,
+): ScheduledTask[] {
+  return tasks.filter((task) => canAccessScheduledTask(task, managedCloudAccountId));
+}
 
 function scheduledExecutionError(result: Record<string, unknown>): string {
   const candidate =
@@ -49,10 +93,14 @@ export function assertScheduledExecutionSucceeded(result: unknown): void {
 }
 
 export async function loadScheduledTasks(): Promise<ScheduledTask[]> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get(TASKS_STORAGE_KEY, (result) => {
       if (chrome.runtime.lastError) {
-        resolve([]);
+        reject(
+          new Error(
+            `Scheduled task storage could not be read: ${chrome.runtime.lastError.message}`,
+          ),
+        );
         return;
       }
       resolve((result[TASKS_STORAGE_KEY] as ScheduledTask[] | undefined) ?? []);
@@ -112,14 +160,15 @@ export async function dispatchScheduledPrompt<T>(
   dispatch: (prompt: string) => Promise<T>,
 ): Promise<T | undefined> {
   if (!task.prompt) return undefined;
-  const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
-  if (safePrompt.length < task.prompt.length) {
+  const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS).trim();
+  if (task.prompt.length > TASK_PROMPT_MAX_CHARS) {
     logger.warn('Scheduled task prompt truncated', {
       taskId: task.id,
       originalLength: task.prompt.length,
       truncatedTo: TASK_PROMPT_MAX_CHARS,
     });
   }
+  if (!safePrompt) return undefined;
   return dispatch(safePrompt);
 }
 
@@ -129,40 +178,89 @@ export async function unregisterTaskAlarm(taskId: string): Promise<void> {
 
 export async function handleCreateScheduledTask(
   message: CreateScheduledTaskMessage,
+  managedCloudAccountId?: string,
+  requiresManagedCloud = Boolean(message.task.prompt),
+  isCommitAuthorized?: ScheduledTaskCommitAuthority,
 ): Promise<ExtensionResponse> {
   return mutateScheduledTasks(async (tasks) => {
     if (tasks.length >= MAX_TASKS) {
       return { success: false, error: `Maximum ${MAX_TASKS} tasks reached` } as ExtensionResponse;
     }
+    const safeTask = { ...(message.task as Record<string, unknown>) };
+    delete safeTask['managedCloudAccountId'];
+    if (Object.prototype.hasOwnProperty.call(safeTask, 'prompt')) {
+      const validation = validateScheduledTaskPrompt(safeTask['prompt']);
+      if (!validation.success) {
+        return { success: false, error: validation.error } as ExtensionResponse;
+      }
+      safeTask['prompt'] = validation.prompt;
+    }
+    const requiresManagedBoundary = requiresManagedCloud || Boolean(safeTask['prompt']);
+    if (requiresManagedBoundary && !isSafeManagedCloudAccountId(managedCloudAccountId)) {
+      return {
+        success: false,
+        error: 'Sign in to bind this Managed Cloud schedule to your account.',
+      } as ExtensionResponse;
+    }
     const task: ScheduledTask = {
-      ...message.task,
+      ...(safeTask as unknown as CreateScheduledTaskMessage['task']),
       id: generateRecordId('task'),
       createdAt: Date.now(),
       createdByOrigin: ORIGIN_EXTENSION_PAGE,
+      ...(requiresManagedBoundary ? { managedCloudAccountId } : {}),
     };
+    if (isCommitAuthorized && !isCommitAuthorized(task)) {
+      return {
+        success: false,
+        error: 'The Managed Cloud account changed before this schedule was saved.',
+      } as ExtensionResponse;
+    }
     tasks.push(task);
     await saveScheduledTasks(tasks);
     await registerTaskAlarm(task);
-    return { success: true, tasks } as ExtensionResponse;
+    return {
+      success: true,
+      tasks: visibleScheduledTasks(tasks, managedCloudAccountId),
+    } as ExtensionResponse;
   });
 }
 
-export async function handleListScheduledTasks(): Promise<ExtensionResponse> {
+export async function handleListScheduledTasks(
+  managedCloudAccountId?: string,
+): Promise<ExtensionResponse> {
   const tasks = await loadScheduledTasks();
-  return { success: true, tasks } as ExtensionResponse;
+  return {
+    success: true,
+    tasks: visibleScheduledTasks(tasks, managedCloudAccountId),
+  } as ExtensionResponse;
 }
 
 export async function handleUpdateScheduledTask(
   message: UpdateScheduledTaskMessage,
+  managedCloudAccountId?: string,
+  requiresManagedCloud?: boolean,
+  beforeAuthorizedCommit?: AuthorizedScheduledTaskMutation,
+  afterAuthorizedCommit?: AuthorizedScheduledTaskMutation,
+  isCommitAuthorized?: ScheduledTaskCommitAuthority,
 ): Promise<ExtensionResponse> {
   return mutateScheduledTasks(async (tasks) => {
     const idx = tasks.findIndex((t) => t.id === message.taskId);
     if (idx === -1) {
       return { success: false, error: 'Task not found' } as ExtensionResponse;
     }
+    if (!canAccessScheduledTask(tasks[idx]!, managedCloudAccountId)) {
+      return { success: false, error: 'Task not found for this account' } as ExtensionResponse;
+    }
     const safeUpdates: Record<string, unknown> = {
       ...(message.updates as Record<string, unknown>),
     };
+    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'prompt')) {
+      const validation = validateScheduledTaskPrompt(safeUpdates['prompt']);
+      if (!validation.success) {
+        return { success: false, error: validation.error } as ExtensionResponse;
+      }
+      safeUpdates['prompt'] = validation.prompt;
+    }
     if (
       'actions' in safeUpdates &&
       !validateShortcutActions(
@@ -173,32 +271,89 @@ export async function handleUpdateScheduledTask(
     }
     delete safeUpdates['id'];
     delete safeUpdates['createdByOrigin'];
+    delete safeUpdates['managedCloudAccountId'];
     const updated = { ...tasks[idx]!, ...safeUpdates } as (typeof tasks)[number];
+    if (requiresManagedCloud === true || updated.prompt) {
+      if (!isSafeManagedCloudAccountId(managedCloudAccountId)) {
+        return {
+          success: false,
+          error: 'Sign in to authorize changes to this Managed Cloud schedule.',
+        } as ExtensionResponse;
+      }
+      updated.managedCloudAccountId = managedCloudAccountId;
+    } else if (requiresManagedCloud === false && !updated.prompt) {
+      delete updated.managedCloudAccountId;
+    }
+    if (isCommitAuthorized && !isCommitAuthorized(tasks[idx]!)) {
+      return {
+        success: false,
+        error: 'The Managed Cloud account changed before this schedule was saved.',
+      } as ExtensionResponse;
+    }
+    await beforeAuthorizedCommit?.(tasks[idx]!);
+    if (isCommitAuthorized && !isCommitAuthorized(tasks[idx]!)) {
+      return {
+        success: false,
+        error: 'The Managed Cloud account changed before this schedule was saved.',
+      } as ExtensionResponse;
+    }
     tasks[idx] = updated;
     await saveScheduledTasks(tasks);
     await unregisterTaskAlarm(message.taskId);
     await registerTaskAlarm(updated);
-    return { success: true, tasks } as ExtensionResponse;
+    await afterAuthorizedCommit?.(updated);
+    return {
+      success: true,
+      tasks: visibleScheduledTasks(tasks, managedCloudAccountId),
+    } as ExtensionResponse;
   });
 }
 
 export async function handleDeleteScheduledTask(
   message: DeleteScheduledTaskMessage,
+  managedCloudAccountId?: string,
+  beforeAuthorizedCommit?: AuthorizedScheduledTaskMutation,
+  isCommitAuthorized?: ScheduledTaskCommitAuthority,
 ): Promise<ExtensionResponse> {
   return mutateScheduledTasks(async (tasks) => {
+    const target = tasks.find((task) => task.id === message.taskId);
+    if (!target || !canAccessScheduledTask(target, managedCloudAccountId)) {
+      return { success: false, error: 'Task not found for this account' } as ExtensionResponse;
+    }
+    if (isCommitAuthorized && !isCommitAuthorized(target)) {
+      return {
+        success: false,
+        error: 'The Managed Cloud account changed before this schedule was deleted.',
+      } as ExtensionResponse;
+    }
+    await beforeAuthorizedCommit?.(target);
+    if (isCommitAuthorized && !isCommitAuthorized(target)) {
+      return {
+        success: false,
+        error: 'The Managed Cloud account changed before this schedule was deleted.',
+      } as ExtensionResponse;
+    }
     const updated = tasks.filter((t) => t.id !== message.taskId);
     await saveScheduledTasks(updated);
     await unregisterTaskAlarm(message.taskId);
-    return { success: true, tasks: updated } as ExtensionResponse;
+    return {
+      success: true,
+      tasks: visibleScheduledTasks(updated, managedCloudAccountId),
+    } as ExtensionResponse;
   });
 }
 
-export async function recordScheduledTaskRun(taskId: string, ranAt = Date.now()): Promise<void> {
-  await mutateScheduledTasks(async (tasks) => {
+export async function recordScheduledTaskRun(
+  taskId: string,
+  ranAt = Date.now(),
+  isCommitAuthorized?: ScheduledTaskCommitAuthority,
+): Promise<boolean> {
+  return mutateScheduledTasks(async (tasks) => {
     const task = tasks.find((candidate) => candidate.id === taskId);
-    if (!task) return;
+    if (!task || (isCommitAuthorized && !isCommitAuthorized(task))) return false;
     task.lastRun = ranAt;
     await saveScheduledTasks(tasks);
+    return true;
   });
 }
 

@@ -304,6 +304,57 @@ describe('resetDispatchSession', () => {
     expect(isDispatchSessionActive()).toBe(false);
   });
 
+  it('revokes renderer authority before native key cleanup resolves', async () => {
+    await setupSession();
+    let resolveReset!: () => void;
+    mockInvoke.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveReset = resolve;
+      }),
+    );
+
+    const resetPromise = resetDispatchSession();
+
+    expect(isDispatchSessionActive()).toBe(false);
+    await expect(signOutbound({ action: 'ping' }, 'ping')).rejects.toThrow(
+      'session not initialised',
+    );
+    resolveReset();
+    await resetPromise;
+  });
+
+  it('orders reset after an in-flight setup and never activates the stale key', async () => {
+    let resolveSetup!: (key: string) => void;
+    const pendingSetup = new Promise<string>((resolve) => {
+      resolveSetup = resolve;
+    });
+    mockInvoke.mockImplementation((command) => {
+      if (command === 'dispatch_hmac_init') return pendingSetup;
+      if (command === 'dispatch_hmac_reset') return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+
+    const setupPromise = initDispatchSession('ABCD1234', 'stale-salt');
+    await vi.waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
+        pairingCode: 'ABCD1234',
+        sessionSalt: 'stale-salt',
+      }),
+    );
+    const resetPromise = resetDispatchSession();
+
+    expect(isDispatchSessionActive()).toBe(false);
+    resolveSetup('stale-key');
+    await expect(setupPromise).rejects.toThrow('session setup superseded');
+    await resetPromise;
+
+    expect(isDispatchSessionActive()).toBe(false);
+    expect(mockInvoke.mock.calls.map(([command]) => command)).toEqual([
+      'dispatch_hmac_init',
+      'dispatch_hmac_reset',
+    ]);
+  });
+
   it('is a no-op when session is already inactive', async () => {
     await resetDispatchSession();
     expect(isDispatchSessionActive()).toBe(false);

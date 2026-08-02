@@ -27,10 +27,14 @@
 
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees';
-import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import { normalizeSelectableConfiguredModelId } from '../model-picker/modelConstants';
 import { getWorkspaceDisplayName } from '../../platform/workspaceFolders';
 import { Config } from '../../platform/config';
-import { type LocalRuntimeEvent } from '../../integrations/localRuntimeClient';
+import {
+  type LocalRuntimeClient,
+  type LocalRuntimeEvent,
+} from '../../integrations/localRuntimeClient';
+import type { LocalModelSummary, ThreadSummary } from '@agiworkforce/types';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
@@ -39,6 +43,7 @@ import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { buildCustomInstructionInput } from '../instructions';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
+import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -143,6 +148,154 @@ function localThreadIdFromHistory(context: vscode.ChatContext): string | undefin
   return undefined;
 }
 
+type VerifiedTrustMode = Exclude<ThreadSummary['trustMode'], 'unknown'>;
+
+interface LocalThreadAuthorityMetadata {
+  id: string;
+  model: string;
+  provider?: string;
+  trustMode: VerifiedTrustMode;
+}
+
+interface ResolvedParticipantModel {
+  model: string;
+  provider?: LocalModelSummary['provider'];
+}
+
+const LOCAL_MODEL_NOT_FOUND_MESSAGE =
+  'The configured model is neither a selectable catalog model nor a CLI-discovered local model. Run `agi models scan`, then select an available model in AGI Workforce settings.';
+const LOCAL_MODEL_DISCOVERY_FAILED_MESSAGE =
+  'The AGI CLI could not verify the configured local model. Check the AGI CLI path in Settings, run `agi models scan`, then select an available model.';
+
+/**
+ * Resolve the configured model without erasing a CLI-owned local provider
+ * boundary. Known static picker ids are resolved without probing the CLI; only
+ * otherwise-unknown ids may acquire Local authority through exact discovery.
+ */
+async function resolveParticipantModel(
+  runtime: Pick<LocalRuntimeClient, 'listLocalModels'>,
+  configuredModel: string | null | undefined,
+): Promise<ResolvedParticipantModel> {
+  const staticModel = normalizeSelectableConfiguredModelId(configuredModel);
+  if (staticModel !== null) return { model: staticModel };
+
+  try {
+    const localModel = (await runtime.listLocalModels()).models.find(
+      (candidate) => candidate.id === configuredModel,
+    );
+    if (localModel !== undefined) {
+      return { model: localModel.id, provider: localModel.provider };
+    }
+  } catch {
+    throw new Error(LOCAL_MODEL_DISCOVERY_FAILED_MESSAGE);
+  }
+
+  throw new Error(LOCAL_MODEL_NOT_FOUND_MESSAGE);
+}
+
+/**
+ * Read the last response turn as one authority record. Older complete metadata
+ * must never fill holes in a newer legacy/partial turn, because that could join
+ * two different persisted threads into one transcript boundary.
+ */
+function localThreadAuthorityFromHistory(
+  context: vscode.ChatContext,
+): LocalThreadAuthorityMetadata | undefined {
+  for (let index = context.history.length - 1; index >= 0; index--) {
+    const turn = context.history[index];
+    if (!(turn instanceof vscode.ChatResponseTurn)) continue;
+    const metadata = turn.result.metadata;
+    const id = metadata?.localThreadId;
+    if (typeof id !== 'string' || id === '') continue;
+    const model = metadata?.localThreadModel;
+    const provider = metadata?.localThreadProvider;
+    const trustMode = metadata?.localThreadTrustMode;
+    if (
+      typeof model !== 'string' ||
+      model === '' ||
+      (provider !== undefined && (typeof provider !== 'string' || provider === '')) ||
+      (trustMode !== 'local' && trustMode !== 'byok' && trustMode !== 'managed')
+    ) {
+      return undefined;
+    }
+    return {
+      id,
+      model,
+      ...(provider === undefined ? {} : { provider }),
+      trustMode,
+    };
+  }
+  return undefined;
+}
+
+function authorityFromThread(
+  thread: ThreadSummary & { trustMode: VerifiedTrustMode },
+): LocalThreadAuthorityMetadata {
+  if (thread.model === undefined || thread.model === '') {
+    throw new Error('The local runtime did not return the developer session model authority.');
+  }
+  return {
+    id: thread.id,
+    model: thread.model,
+    ...(thread.provider === undefined ? {} : { provider: thread.provider }),
+    trustMode: thread.trustMode,
+  };
+}
+
+function sameThreadAuthority(
+  expected: LocalThreadAuthorityMetadata,
+  actual: LocalThreadAuthorityMetadata,
+): boolean {
+  return (
+    actual.id === expected.id &&
+    actual.model === expected.model &&
+    actual.provider === expected.provider &&
+    actual.trustMode === expected.trustMode
+  );
+}
+
+function requestedAuthorityDiffers(
+  historical: LocalThreadAuthorityMetadata,
+  requested: ResolvedParticipantModel,
+): boolean {
+  return (
+    historical.model !== requested.model ||
+    (requested.provider !== undefined && historical.provider !== requested.provider)
+  );
+}
+
+function assertRequestedThreadAuthority(
+  requested: ResolvedParticipantModel,
+  actual: LocalThreadAuthorityMetadata,
+): void {
+  if (
+    actual.model !== requested.model ||
+    (requested.provider !== undefined && actual.provider !== requested.provider)
+  ) {
+    throw new Error(
+      'The local runtime returned different model or provider authority than the participant requested.',
+    );
+  }
+}
+
+function threadResultMetadata(
+  command: string,
+  authority: LocalThreadAuthorityMetadata | undefined,
+): Record<string, unknown> {
+  return {
+    command,
+    usedFallback: false,
+    ...(authority === undefined
+      ? {}
+      : {
+          localThreadId: authority.id,
+          localThreadModel: authority.model,
+          ...(authority.provider === undefined ? {} : { localThreadProvider: authority.provider }),
+          localThreadTrustMode: authority.trustMode,
+        }),
+  };
+}
+
 function buildRuntimeTurnInput(request: vscode.ChatRequest, ctx: EditorContext): string {
   const parts = [buildUserMessage(request, ctx)];
   if (ctx.fileName !== '') {
@@ -209,7 +362,16 @@ export function createChatHandler(
     }
     const cwd = workspace.uri.fsPath;
     const runtime = localRuntimes.forWorkspace(cwd);
-    const model = normalizeConfiguredModelId(Config.model());
+    let requestedModel: ResolvedParticipantModel;
+    try {
+      requestedModel = await resolveParticipantModel(runtime, Config.model());
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'The configured model could not be verified.';
+      stream.markdown(`> **AGI Workforce**: ${message}`);
+      return { errorDetails: { message } };
+    }
+    const { model, provider } = requestedModel;
     const userMessage = buildRuntimeTurnInput(request, editorCtx);
     const customInstructionInput =
       globalState === undefined || workspaceState === undefined
@@ -217,10 +379,18 @@ export function createChatHandler(
         : buildCustomInstructionInput({ globalState, workspaceState });
     const memoryInput =
       globalState === undefined ? undefined : buildMemoryContextInput(globalState);
-    let threadId = localThreadIdFromHistory(context);
+    const historicalAuthority = localThreadAuthorityFromHistory(context);
+    let threadId = historicalAuthority?.id;
+    let threadAuthority: LocalThreadAuthorityMetadata | undefined;
+    let boundaryChanged =
+      historicalAuthority !== undefined &&
+      requestedAuthorityDiffers(historicalAuthority, requestedModel);
+    if (boundaryChanged) threadId = undefined;
     let turnId: string | undefined;
     let terminal = false;
     let cancelled = token.isCancellationRequested;
+    let cancellationError: string | undefined;
+    let cancellationTask: Promise<void> | undefined;
     let resolveCompletion!: () => void;
     const completion = new Promise<void>((resolve) => {
       resolveCompletion = resolve;
@@ -229,6 +399,32 @@ export function createChatHandler(
       if (terminal) return;
       terminal = true;
       resolveCompletion();
+    };
+    const interruptCancelledTurn = (): Promise<void> => {
+      cancelled = true;
+      if (cancellationTask !== undefined) return cancellationTask;
+      if (threadId === undefined || turnId === undefined) return Promise.resolve();
+
+      const cancelledThreadId = threadId;
+      const cancelledTurnId = turnId;
+      cancellationTask = (async () => {
+        try {
+          // Keep the event subscription alive until the CLI acknowledges this
+          // exact turn interruption. Otherwise Stop can make VS Code look idle
+          // while the local process continues executing in the workspace.
+          await runtime.interruptTurn({
+            threadId: cancelledThreadId,
+            turnId: cancelledTurnId,
+          });
+        } catch (error) {
+          cancellationError =
+            error instanceof Error ? error.message : 'The local turn did not acknowledge Stop.';
+          stream.markdown(`\n\n> **Cancellation error**: ${cancellationError}`);
+        } finally {
+          finish();
+        }
+      })();
+      return cancellationTask;
     };
     const eventSubscription = runtime.onEvent((event: LocalRuntimeEvent) => {
       if (event.type === 'runtime_disconnected') {
@@ -271,6 +467,15 @@ export function createChatHandler(
               'Deny',
               'Abort turn',
             );
+            if (
+              cancelled ||
+              token.isCancellationRequested ||
+              terminal ||
+              threadId !== event.threadId ||
+              turnId !== event.turnId
+            ) {
+              return;
+            }
             if (choice === 'Abort turn') {
               await runtime.interruptTurn({ threadId: event.threadId, turnId: event.turnId });
               finish();
@@ -289,6 +494,15 @@ export function createChatHandler(
               decision,
             });
           } catch (error) {
+            if (
+              cancelled ||
+              token.isCancellationRequested ||
+              terminal ||
+              threadId !== event.threadId ||
+              turnId !== event.turnId
+            ) {
+              return;
+            }
             const message =
               error instanceof Error ? error.message : 'The approval response failed.';
             stream.markdown(`\n\n> **Error**: ${message}`);
@@ -316,17 +530,24 @@ export function createChatHandler(
       }
     });
     const cancellationSubscription = token.onCancellationRequested(() => {
-      cancelled = true;
-      if (threadId !== undefined && turnId !== undefined) {
-        void runtime.interruptTurn({ threadId, turnId });
-      }
-      finish();
+      void interruptCancelledTurn();
     });
 
     try {
       if (threadId !== undefined) {
         try {
-          await runtime.resumeThread(threadId);
+          const resumed = await runtime.resumeThread(threadId);
+          assertRunnableStartedThread(resumed, cwd);
+          const resumedAuthority = authorityFromThread(resumed);
+          if (
+            historicalAuthority === undefined ||
+            !sameThreadAuthority(historicalAuthority, resumedAuthority)
+          ) {
+            boundaryChanged = true;
+            threadId = undefined;
+          } else {
+            threadAuthority = resumedAuthority;
+          }
         } catch {
           threadId = undefined;
         }
@@ -336,16 +557,21 @@ export function createChatHandler(
           cwd,
           title: request.prompt.trim().slice(0, 80) || 'Developer session',
           model,
+          ...(provider === undefined ? {} : { provider }),
         });
+        assertRunnableStartedThread(thread, cwd, provider === undefined ? undefined : 'local');
         threadId = thread.id;
+        threadAuthority = authorityFromThread(thread);
+        assertRequestedThreadAuthority(requestedModel, threadAuthority);
+        if (boundaryChanged) {
+          stream.markdown(
+            '> **AGI Workforce**: Provider or model boundary changed. A new developer session was started without forwarding the earlier transcript.\n\n',
+          );
+        }
       }
       if (cancelled || token.isCancellationRequested) {
         return {
-          metadata: {
-            command: request.command ?? 'chat',
-            usedFallback: false,
-            localThreadId: threadId,
-          },
+          metadata: threadResultMetadata(request.command ?? 'chat', threadAuthority),
         };
       }
       const turn = await runtime.startTurn({
@@ -365,7 +591,14 @@ export function createChatHandler(
           : { model }),
       });
       turnId = turn.id;
+      if (cancelled || token.isCancellationRequested) {
+        await interruptCancelledTurn();
+      }
       await completion;
+      if (cancellationTask !== undefined) await cancellationTask;
+      if (cancellationError !== undefined) {
+        return { errorDetails: { message: cancellationError } };
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The AGI local runtime failed.';
       stream.markdown(`\n\n> **Error**: ${message}`);
@@ -384,11 +617,7 @@ export function createChatHandler(
     }
 
     return {
-      metadata: {
-        command: request.command ?? 'chat',
-        usedFallback: false,
-        localThreadId: threadId,
-      },
+      metadata: threadResultMetadata(request.command ?? 'chat', threadAuthority),
     };
   };
 }
@@ -476,6 +705,8 @@ export {
   buildUserMessage,
   gatherEditorContext,
   isExecutionConfirmation,
+  localThreadAuthorityFromHistory,
   localThreadIdFromHistory,
+  resolveParticipantModel,
 };
-export type { EditorContext };
+export type { EditorContext, ResolvedParticipantModel };

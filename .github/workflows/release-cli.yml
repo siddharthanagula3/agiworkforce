@@ -36,15 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Require npm publication credentials
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "ERROR: NPM_TOKEN is required before a CLI release" >&2
-            exit 1
-          fi
-
       - name: Require tag and package versions to match
         id: release-metadata
         env:
@@ -120,27 +111,33 @@ jobs:
             os: macos-latest
             platform: darwin-arm64
             archive: tar.gz
+            smoke: true
           - target: x86_64-apple-darwin
             os: macos-latest
             platform: darwin-x64
             archive: tar.gz
+            smoke: false
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-x64
             archive: tar.gz
+            smoke: true
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-arm64
             archive: tar.gz
             cross: true
+            smoke: false
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             platform: win32-arm64
             archive: zip
+            smoke: false
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             platform: win32-x64
             archive: zip
+            smoke: true
 
     steps:
       - uses: actions/checkout@v6
@@ -150,6 +147,12 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
+
+      - name: Install Node for native release smoke
+        if: matrix.smoke
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       # Linux-only: install ALSA + udev dev headers so cpal (voice) and any
       # other linux-system-lib crate can compile. Required because the cli
@@ -215,6 +218,27 @@ jobs:
           $archivePlatform = "${{ matrix.platform }}".Replace("win32-", "windows-")
           cd dist/cli/${{ matrix.platform }}/bin
           7z a "../../../../agiworkforce-$archivePlatform.zip" *
+
+      - name: Smoke exact release archive (Unix)
+        if: matrix.smoke && matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          SMOKE_ROOT="$RUNNER_TEMP/agi-cli-release-smoke"
+          mkdir -p "$SMOKE_ROOT"
+          tar -xzf "agiworkforce-${{ matrix.platform }}.tar.gz" -C "$SMOKE_ROOT"
+          AGI_CLI_SMOKE_BINARY="$SMOKE_ROOT/agi" \
+            AGI_CLI_SMOKE_REQUIRE_ALIAS=1 \
+            node apps/cli/scripts/cli-smoke.mjs
+
+      - name: Smoke exact release archive (Windows)
+        if: matrix.smoke && matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "agi-cli-release-smoke"
+          Expand-Archive -Path "agiworkforce-windows-x64.zip" -DestinationPath $smokeRoot
+          $env:AGI_CLI_SMOKE_BINARY = Join-Path $smokeRoot "agi.exe"
+          $env:AGI_CLI_SMOKE_REQUIRE_ALIAS = "1"
+          node apps/cli/scripts/cli-smoke.mjs
 
       - name: Upload binary artifact (npm)
         uses: actions/upload-artifact@v5
@@ -283,6 +307,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
+
+      - name: Require npm publication credentials
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "ERROR: NPM_TOKEN is required for npm publication" >&2
+            exit 1
+          fi
 
       - name: Download all binary artifacts
         uses: actions/download-artifact@v6

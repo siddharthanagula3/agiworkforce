@@ -113,10 +113,7 @@ async fn code_execute_routes_through_network_denied_sandbox() {
 
     assert!(result.success, "{:?}", result.error);
     assert_eq!(result.data["networkAccess"], false);
-    assert_eq!(
-        result.data["stdout"].as_str().map(str::trim),
-        Some("1")
-    );
+    assert_eq!(result.data["stdout"].as_str().map(str::trim), Some("1"));
 }
 
 #[test]

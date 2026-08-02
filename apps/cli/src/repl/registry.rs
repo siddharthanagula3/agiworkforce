@@ -61,32 +61,27 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
             Ok(managed_session) => {
                 let session_id = managed_session.session_id.clone();
                 let message_count = managed_session.messages.len();
-                super::load_messages_into_session(session, managed_session.messages.clone());
-                session.adopt_managed_session(managed_session, resolved.path);
-                output::print_info(&format!(
-                    "Loaded managed session {} ({} messages)",
-                    session_id, message_count
-                ));
+                match session.adopt_managed_session(managed_session.clone(), resolved.path) {
+                    Ok(()) => {
+                        super::load_messages_into_session(session, managed_session.messages);
+                        output::print_info(&format!(
+                            "Loaded managed session {} ({} messages)",
+                            session_id, message_count
+                        ));
+                    }
+                    Err(error) => output::print_error(&format!(
+                        "Refusing to load managed session with unknown or incompatible routing authority: {error:#}"
+                    )),
+                }
             }
             Err(error) => {
                 output::print_error(&format!("Failed to load managed session: {error:#}"));
             }
         },
         Err(_) => match conversations::load_conversation(arg) {
-            Ok(conv) => {
-                let msg_count = conv.messages.len();
-                let model = conv.model.clone();
-                conversations::restore_into_session(session, &conv);
-                if let Err(error) = session.enable_managed_session() {
-                    output::print_warn(&format!(
-                        "Loaded legacy conversation, but managed session setup failed: {error:#}"
-                    ));
-                }
-                output::print_info(&format!(
-                    "Loaded conversation {} ({} messages, model: {})",
-                    arg, msg_count, model
-                ));
-            }
+            Ok(_) => output::print_error(
+                "Refusing to resume this legacy conversation because it has no persisted privacy/provider authority. Start a new session with an explicit route.",
+            ),
             Err(e) => {
                 output::print_error(&format!("Failed to load: {:#}", e));
             }

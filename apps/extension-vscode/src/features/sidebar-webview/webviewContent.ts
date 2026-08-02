@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
+import type { ComposerFollowUpBehavior } from '../../platform/config';
 
 // ─── HTML helpers ─────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export function getWebviewContent(
    */
   tier?: string,
   showOnboarding = false,
+  initialFollowUpBehavior: ComposerFollowUpBehavior = 'queue',
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
@@ -75,6 +77,7 @@ export function getWebviewContent(
   const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
   const effortHidden = supportsEffort ? '' : ' style="display:none"';
+  const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   // Codicon font — copied to out/codicons/ by esbuild.js so it's included in the VSIX.
   const codiconCssUri = webview.asWebviewUri(
@@ -572,6 +575,25 @@ export function getWebviewContent(
       color: var(--text-primary);
       border: 1px solid var(--border);
     }
+    .message.user[data-delivery-state] { border-style: dashed; }
+    .message.user[data-delivery-state]::after {
+      display: block;
+      margin-top: 3px;
+      color: var(--text-secondary);
+      font-size: 9px;
+      text-align: right;
+    }
+    .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message.user[data-delivery-state='running']::after { content: 'Running'; }
+    .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
+    .message.user[data-delivery-state='failed'] {
+      border-color: var(--vscode-inputValidation-errorBorder, var(--agi-vscode-danger));
+    }
+    .message.user[data-delivery-state='failed']::after {
+      content: 'Not sent';
+      color: var(--vscode-errorForeground, var(--agi-vscode-danger));
+    }
+    .message.user[data-delivery-state='cancelled']::after { content: 'Cancelled'; }
 
     .message.assistant {
       background: transparent;
@@ -732,23 +754,57 @@ export function getWebviewContent(
       flex-shrink: 0;
       margin-left: auto;
       transition: opacity 0.15s var(--transition),
-                  transform 0.1s var(--transition);
+                  transform 0.1s var(--transition),
+                  width 0.15s var(--transition);
     }
     #sendBtn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
     #sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
-    #sendBtn.streaming { background: var(--bg-overlay); border: 1px solid var(--border); }
-
-    /* Stop square icon when streaming */
-    #sendBtn.streaming::before {
-      content: '■';
-      font-size: 10px;
-    }
-    /* Arrow icon when idle */
-    #sendBtn:not(.streaming)::before {
+    #sendBtn::before {
       content: '↑';
       font-size: 14px;
       font-weight: 700;
     }
+    #sendBtn.follow-up {
+      width: auto;
+      min-width: 58px;
+      padding: 0 9px;
+      border-radius: 13px;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    #sendBtn.follow-up::before { content: '+'; font-size: 13px; }
+    #sendBtn .send-action-label { display: none; }
+    #sendBtn.follow-up .send-action-label { display: inline; }
+
+    #stopBtn {
+      display: none;
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      color: var(--text-primary);
+      background: var(--bg-overlay);
+      cursor: pointer;
+    }
+    #stopBtn.visible { display: inline-flex; }
+    #stopBtn::before { content: '■'; font-size: 9px; }
+    #stopBtn:hover { border-color: var(--vscode-focusBorder); }
+
+    .follow-up-status {
+      display: none;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text-secondary);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .follow-up-status.visible { display: inline; }
+    .follow-up-status.error { color: var(--vscode-errorForeground); }
 
     /* ── Plus-menu popover ── */
     .plus-menu {
@@ -1417,6 +1473,7 @@ export function getWebviewContent(
       text-overflow: ellipsis;
     }
     .attachment-chip.uploading { opacity: 0.65; }
+    .attachment-chip.queued { opacity: 0.72; border-style: dashed; }
     .attachment-chip.failed {
       color: var(--agi-vscode-danger);
       border-color: var(--agi-vscode-danger-border);
@@ -1733,7 +1790,9 @@ export function getWebviewContent(
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">Model · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">Mode · ${modeLabel}</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>Effort · ${effortLabel}</button>
-        <button id="sendBtn" title="Send (Enter)" aria-label="Send"></button>
+        <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
+        <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
+        <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
       </div>
     </div>
   </div>
@@ -1749,6 +1808,10 @@ export function getWebviewContent(
     const messagesEl = document.getElementById('messages');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const sendActionLabel = document.getElementById('sendActionLabel');
+    const followUpStatus = document.getElementById('followUpStatus');
+    const composerHint = document.getElementById('composerHint');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
@@ -2068,6 +2131,10 @@ export function getWebviewContent(
     let accumulatedContent = '';
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
+    let followUpBehavior = '${followUpBehaviorLiteral}';
+    let followUpStatusTimer = null;
+    let clientMessageSeq = 0;
+    let activeQueuedClientMessageId = null;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function addMessage(role, text) {
@@ -2077,6 +2144,22 @@ export function getWebviewContent(
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return div;
+    }
+
+    function userMessageById(id) {
+      if (!id) return null;
+      var messages = messagesEl.querySelectorAll('.message.user[data-client-message-id]');
+      for (var i = 0; i < messages.length; i++) {
+        if (messages[i].getAttribute('data-client-message-id') === id) return messages[i];
+      }
+      return null;
+    }
+
+    function setUserMessageState(id, state) {
+      var message = userMessageById(id);
+      if (!message) return;
+      if (state) message.setAttribute('data-delivery-state', state);
+      else message.removeAttribute('data-delivery-state');
     }
 
     function setBrowseWebEnabled(enabled) {
@@ -2110,10 +2193,38 @@ export function getWebviewContent(
     function setStreaming(value) {
       streaming = value;
       sendBtn.disabled = false;
-      sendBtn.classList.toggle('streaming', value);
-      sendBtn.setAttribute('aria-label', value ? 'Stop response' : 'Send');
-      sendBtn.setAttribute('title', value ? 'Stop response' : 'Send (Enter)');
-      userInput.disabled = value;
+      sendBtn.classList.toggle('follow-up', value);
+      var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
+      if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
+      sendBtn.setAttribute('aria-label', value ? actionLabel + ' follow-up' : 'Send');
+      sendBtn.setAttribute(
+        'title',
+        value
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          : 'Send (Enter)'
+      );
+      if (stopBtn) stopBtn.classList.toggle('visible', value);
+      userInput.disabled = false;
+      if (composerHint) {
+        composerHint.innerHTML = value
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+              (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
+          : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
+      }
+    }
+
+    function showFollowUpStatus(message, kind, sticky) {
+      if (!followUpStatus) return;
+      window.clearTimeout(followUpStatusTimer);
+      followUpStatus.textContent = message || '';
+      followUpStatus.classList.toggle('visible', Boolean(message));
+      followUpStatus.classList.toggle('error', kind === 'error');
+      if (message && !sticky) {
+        followUpStatusTimer = window.setTimeout(function() {
+          followUpStatus.textContent = '';
+          followUpStatus.classList.remove('visible', 'error');
+        }, 2600);
+      }
     }
 
     function autoResize() {
@@ -2317,13 +2428,8 @@ export function getWebviewContent(
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
-    function sendMessage() {
-      if (streaming) {
-        // Stop button — signal cancellation
-        vscode.postMessage({ type: 'cancel' });
-        return;
-      }
-
+    function sendMessage(oneTurnBehavior) {
+      const isFollowUp = streaming;
       const typedText = userInput.value.trim();
       const text = typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
@@ -2333,28 +2439,48 @@ export function getWebviewContent(
       if (!text) return;
 
       hideEmptyState();
-      addMessage('user', text);
+      var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
+      var userMessageEl = addMessage('user', text);
+      userMessageEl.setAttribute('data-client-message-id', clientMessageId);
+      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
 
-      showTyping();
-      setStreaming(true);
-      currentAssistantEl = null;
-      accumulatedContent = '';
-      activePlanCard = null;
+      if (!isFollowUp) {
+        showTyping();
+        setStreaming(true);
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
+      }
 
       var activeFileReferences = pendingFileReferences
         .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
         .map(function(ref) { return ref.reference; });
-      var sendPayload = { text: text, browseWeb: browseWebEnabled };
+      var sendPayload = {
+        text: text,
+        browseWeb: browseWebEnabled,
+        clientMessageId: clientMessageId
+      };
       if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
+      if (isFollowUp) {
+        sendPayload.followUpBehavior =
+          oneTurnBehavior === 'queue' || oneTurnBehavior === 'steer'
+            ? oneTurnBehavior
+            : followUpBehavior;
+      }
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
 
     // ── Event listeners ───────────────────────────────────────────────────────
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('click', function() { sendMessage(); });
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'cancel' });
+      });
+    }
 
     userInput.addEventListener('keydown', (e) => {
       // @mention dropdown navigation
@@ -2392,7 +2518,10 @@ export function getWebviewContent(
       }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        var oneTurnBehavior = streaming && (e.metaKey || e.ctrlKey)
+          ? (followUpBehavior === 'steer' ? 'queue' : 'steer')
+          : undefined;
+        sendMessage(oneTurnBehavior);
       }
     });
 
@@ -2416,6 +2545,7 @@ export function getWebviewContent(
 
     if (newChatBtn) {
       newChatBtn.addEventListener('click', () => {
+        invalidateAttachmentBatches();
         vscode.postMessage({ type: 'newChat' });
       });
     }
@@ -2589,8 +2719,22 @@ export function getWebviewContent(
     // visual confirmation that the drop/paste was received.
     var pendingAttachmentChips = {};
     var attachmentBatchSeq = 0;
+    var attachmentGeneration = 0;
 
     var MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // matches host Zod cap
+
+    function invalidateAttachmentBatches() {
+      attachmentGeneration++;
+      var batches = Object.keys(pendingAttachmentChips);
+      for (var batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        var entries = pendingAttachmentChips[batches[batchIndex]] || [];
+        for (var entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+          entries[entryIndex].chip.remove();
+        }
+      }
+      pendingAttachmentChips = {};
+      renderAttachmentStrip();
+    }
 
     function renderAttachmentStrip() {
       if (!attachmentStrip) return;
@@ -2598,6 +2742,47 @@ export function getWebviewContent(
         'visible',
         attachmentStrip.children.length > 0,
       );
+    }
+
+    function attachmentChipById(id) {
+      if (!attachmentStrip || !id) return null;
+      var chips = attachmentStrip.querySelectorAll('[data-attachment-id]');
+      for (var i = 0; i < chips.length; i++) {
+        if (chips[i].getAttribute('data-attachment-id') === id) return chips[i];
+      }
+      return null;
+    }
+
+    function markAttachmentsQueued(ids) {
+      for (var i = 0; i < ids.length; i++) {
+        var chip = attachmentChipById(ids[i]);
+        if (!chip || chip.getAttribute('data-queued') === '1') continue;
+        chip.setAttribute('data-queued', '1');
+        chip.classList.add('queued');
+        if (pendingAttachmentCount > 0) pendingAttachmentCount--;
+      }
+    }
+
+    function releaseAttachments(ids) {
+      for (var i = 0; i < ids.length; i++) {
+        var chip = attachmentChipById(ids[i]);
+        if (!chip || chip.getAttribute('data-queued') !== '1') continue;
+        chip.removeAttribute('data-queued');
+        chip.classList.remove('queued');
+        pendingAttachmentCount++;
+      }
+    }
+
+    function consumeAttachments(ids) {
+      for (var i = 0; i < ids.length; i++) {
+        var chip = attachmentChipById(ids[i]);
+        if (!chip) continue;
+        if (chip.getAttribute('data-queued') !== '1' && pendingAttachmentCount > 0) {
+          pendingAttachmentCount--;
+        }
+        chip.remove();
+      }
+      renderAttachmentStrip();
     }
 
     function makeAttachmentChip(name, state) {
@@ -2623,7 +2808,9 @@ export function getWebviewContent(
         if (attachId) {
           // Host owns the pending file: removal must delete it there too.
           vscode.postMessage({ type: 'removePendingAttachment', payload: { id: attachId } });
-          if (pendingAttachmentCount > 0) pendingAttachmentCount--;
+          if (chip.getAttribute('data-queued') !== '1' && pendingAttachmentCount > 0) {
+            pendingAttachmentCount--;
+          }
         } else if (chip.classList.contains('uploading')) {
           // No host id yet — defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
@@ -2654,6 +2841,7 @@ export function getWebviewContent(
 
       // Render uploading chips immediately so the user sees the drop landed.
       var batchKey = 'batch_' + (++attachmentBatchSeq);
+      var batchGeneration = attachmentGeneration;
       pendingAttachmentChips[batchKey] = [];
       for (var i = 0; i < files.length; i++) {
         var f = files[i];
@@ -2681,6 +2869,15 @@ export function getWebviewContent(
           };
         }).catch(function() { return null; });
       })).then(function(results) {
+        if (batchGeneration !== attachmentGeneration) {
+          var staleEntries = pendingAttachmentChips[batchKey] || [];
+          for (var staleIndex = 0; staleIndex < staleEntries.length; staleIndex++) {
+            staleEntries[staleIndex].chip.remove();
+          }
+          delete pendingAttachmentChips[batchKey];
+          renderAttachmentStrip();
+          return;
+        }
         var payload = results.filter(function(entry) { return entry !== null; });
         if (payload.length === 0) {
           // Mark every uploading chip in this batch as failed.
@@ -2741,7 +2938,29 @@ export function getWebviewContent(
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
-      if (msg.type === 'token') {
+      if (msg.type === 'turnStarted') {
+        removeTyping();
+        showTyping();
+        setStreaming(true);
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
+        activeQueuedClientMessageId = msg.payload.clientMessageId;
+        if (!userMessageById(activeQueuedClientMessageId)) {
+          var restoredQueuedUser = addMessage('user', msg.payload.text || 'Queued follow-up');
+          restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
+        }
+        setUserMessageState(activeQueuedClientMessageId, 'running');
+        showFollowUpStatus(
+          msg.payload.queueRemaining > 0
+            ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
+            : 'Starting queued follow-up',
+          'queued',
+          msg.payload.queueRemaining > 0
+        );
+      }
+
+      else if (msg.type === 'token') {
         removeTyping();
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
@@ -2769,6 +2988,10 @@ export function getWebviewContent(
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
         }
         setStreaming(false);
+        if (activeQueuedClientMessageId) {
+          setUserMessageState(activeQueuedClientMessageId, '');
+          activeQueuedClientMessageId = null;
+        }
         currentAssistantEl = null;
         accumulatedContent = '';
       }
@@ -2824,11 +3047,55 @@ export function getWebviewContent(
         removeTyping();
         addMessage('error', msg.payload.message);
         setStreaming(false);
+        if (activeQueuedClientMessageId) {
+          setUserMessageState(activeQueuedClientMessageId, 'failed');
+          activeQueuedClientMessageId = null;
+        }
         currentAssistantEl = null;
       }
 
       else if (msg.type === 'sessionNotice') {
         addMessage('system', msg.payload.message);
+      }
+
+      else if (msg.type === 'conversationBoundaryChanged') {
+        var boundaryUser = userMessageById(msg.payload.clientMessageId);
+        messagesEl.replaceChildren();
+        addMessage('system', msg.payload.message);
+        if (boundaryUser) {
+          messagesEl.appendChild(boundaryUser);
+        } else {
+          boundaryUser = addMessage('user', msg.payload.text || 'Continue in the new session');
+          boundaryUser.setAttribute('data-client-message-id', msg.payload.clientMessageId);
+        }
+        emptyStateEl = null;
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
+        if (streaming) showTyping();
+      }
+
+      else if (msg.type === 'followUpStatus') {
+        markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind === 'steered') {
+          setUserMessageState(msg.payload.clientMessageId, 'steered');
+        } else if (msg.payload.kind === 'cancelled') {
+          setUserMessageState(msg.payload.clientMessageId, 'cancelled');
+        } else if (msg.payload.kind === 'error') {
+          setUserMessageState(msg.payload.clientMessageId, 'failed');
+        } else {
+          setUserMessageState(msg.payload.clientMessageId, 'queued');
+        }
+        showFollowUpStatus(
+          msg.payload.message,
+          msg.payload.kind,
+          msg.payload.kind === 'queued' || msg.payload.kind === 'queue-fallback'
+        );
+      }
+
+      else if (msg.type === 'followUpBehavior') {
+        followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        setStreaming(streaming);
       }
 
       else if (msg.type === 'model') {
@@ -2854,6 +3121,19 @@ export function getWebviewContent(
 
       else if (msg.type === 'providerBadge') {
         updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
+      else if (msg.type === 'sessionBoundary') {
+        var boundarySource = msg.payload.trustMode === 'local'
+          ? 'unbounded'
+          : msg.payload.trustMode === 'byok'
+            ? 'user-api-key'
+            : 'managed-plan';
+        updateRuntimePill(boundarySource);
+        var boundaryPill = document.getElementById('runtimePill');
+        if (boundaryPill && msg.payload.provider) {
+          boundaryPill.title += ' · Provider: ' + msg.payload.provider;
+        }
       }
 
       else if (msg.type === 'runtimeStatus') {
@@ -2916,7 +3196,48 @@ export function getWebviewContent(
         userInput.focus();
       }
 
+      else if (msg.type === 'conversationLoaded') {
+        invalidateAttachmentBatches();
+        messagesEl.innerHTML = '';
+        activePlanCard = null;
+        toolCallStack = null;
+        toolCallMap = {};
+        currentAssistantEl = null;
+        activeQueuedClientMessageId = null;
+        accumulatedContent = '';
+        removeTyping();
+        setStreaming(false);
+        showFollowUpStatus('', '', false);
+        pendingAttachmentCount = 0;
+        if (attachmentStrip) attachmentStrip.replaceChildren();
+        renderAttachmentStrip();
+        var boundaryLabel = msg.payload.trustMode === 'local'
+          ? 'Local'
+          : msg.payload.trustMode === 'byok'
+            ? 'BYOK'
+            : 'Managed Cloud';
+        addMessage(
+          'system',
+          'Resumed developer session · ' + boundaryLabel +
+            (msg.payload.provider ? ' · ' + msg.payload.provider : '')
+        );
+        for (var historyIndex = 0; historyIndex < msg.payload.messages.length; historyIndex++) {
+          var historyMessage = msg.payload.messages[historyIndex];
+          if (!historyMessage) continue;
+          if (historyMessage.role === 'assistant') {
+            var assistantHistoryEl = addMessage('assistant', '');
+            assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+            bindCodeBlockActions(assistantHistoryEl);
+          } else if (historyMessage.role === 'user') {
+            addMessage('user', historyMessage.text || '');
+          }
+        }
+        emptyStateEl = null;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
       else if (msg.type === 'conversationCleared') {
+        invalidateAttachmentBatches();
         messagesEl.innerHTML = '';
         activePlanCard = null;
         var freshEmpty = document.createElement('div');
@@ -2941,9 +3262,11 @@ export function getWebviewContent(
         emptyStateEl = freshEmpty;
         streaming = false;
         currentAssistantEl = null;
+        activeQueuedClientMessageId = null;
         toolCallStack = null;
         toolCallMap = {};
         setStreaming(false);
+        showFollowUpStatus('', '', false);
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
@@ -3023,9 +3346,11 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'attachmentsConsumed') {
-        pendingAttachmentCount = 0;
-        if (attachmentStrip) attachmentStrip.replaceChildren();
-        renderAttachmentStrip();
+        consumeAttachments(msg.payload.ids || []);
+      }
+
+      else if (msg.type === 'attachmentsReleased') {
+        releaseAttachments(msg.payload.ids || []);
       }
 
       else if (msg.type === 'rewindComplete') {

@@ -59,5 +59,11 @@ export function getDesktopCloudChatPersistenceClient(): ManagedCloudChatClient {
         'Local and BYOK route to the Rust runtime.',
     );
   }
-  return createCloudChatPersistenceClient();
+  const accountId = useAuthStore.getState().user?.id;
+  if (!accountId) {
+    throw new Error(
+      '[cloud-chat] managed-cloud persistence is unavailable: the authenticated account has no owner id.',
+    );
+  }
+  return createCloudChatPersistenceClient(accountId);
 }
