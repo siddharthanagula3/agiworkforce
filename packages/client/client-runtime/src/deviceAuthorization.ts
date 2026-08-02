@@ -118,9 +118,22 @@ export async function pollDeviceAuthorization(
     return { kind: 'expired' };
   }
   if (response.status < 200 || response.status >= 300) {
+    // A 5xx is the SERVER failing, not the account being refused. The old
+    // message said "AGI Cloud rejected the device sign-in request" for every
+    // non-2xx, so a backend fault was reported to the user as their account
+    // being turned away — and re-running sign-in could never fix it. Name the
+    // fault honestly and keep the retry advice accurate.
+    if (response.status >= 500) {
+      return {
+        kind: 'rejected',
+        message:
+          `AGI Cloud's sign-in service failed (HTTP ${response.status}). ` +
+          'This is a service fault, not a rejection of your account. Try again shortly.',
+      };
+    }
     return {
       kind: 'rejected',
-      message: 'AGI Cloud rejected the device sign-in request. Start again.',
+      message: `AGI Cloud could not complete the device sign-in request (HTTP ${response.status}). Start again.`,
     };
   }
 
