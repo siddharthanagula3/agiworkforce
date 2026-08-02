@@ -53,6 +53,52 @@ pre-existing on `main` unless noted.
   removing either alone turns the guardrail red. Drop the entry from both in
   one change, or restore neither.
 
+## 2026-08-01 desktop IPC deadlock (isolation pattern vs CSP)
+
+- **Resolved — `DESKTOP-ISOLATION-FRAME-SRC-IPC-DEADLOCK-01` (was: the shipped
+  desktop app could not work at all):** `aa4fbcb5a` "feat(desktop): isolate
+  renderer ipc" (2026-07-31, on `main` as well as this branch) enabled
+  `app.security.pattern.use = "isolation"` while `app.security.csp` pinned an
+  explicit `frame-src`. Tauri 2.11.1 appends the generated
+  `isolation-<uuid>:` schema to `default-src` only, so the pinned `frame-src`
+  shadowed it and WebKit blocked the relay iframe —
+  `blockedURI=isolation-…://localhost violatedDirective=frame-src`, captured
+  from the running app. `__TAURI_ISOLATION_READY__` never arrived,
+  `__TAURI_INTERNALS__.ipc` queued every message forever, and EVERY `invoke()`
+  hung with no resolve, no reject and no error; the shell sat on "Opening
+  encrypted local data…" indefinitely. IPC transport itself was never broken
+  (a raw `postMessage` to the same command returned a real Rust reply). No
+  static `frame-src` value can fix it — the uuid is per-build — so `frame-src`
+  is deleted and its sources folded into `default-src`. Measured on the real
+  binary: first interactive control **31,124 ms → 510 ms**.
+  `apps/desktop/src/__tests__/tauriIsolationCsp.test.ts` guards it and was
+  verified to fail on a reintroduced `frame-src`.
+- **`DESKTOP-ISOLATION-DEVURL-IPC-DEADLOCK-01` (open, developer loop):** the
+  same deadlock hits `pnpm dev` and any build without
+  `--features tauri/custom-protocol`, because the frontend is served from
+  `http://127.0.0.1:5173` and WKWebView does not deliver the isolation frame's
+  `postMessage` (origin `null`) to an http parent. Control measurement: the
+  identical frame delivered `__TAURI_ISOLATION_READY__` with a
+  `tauri://localhost` parent and delivered nothing from the Vite origin. So
+  while the isolation pattern is on, the dev loop cannot complete a single IPC
+  call. Needs a config decision (serve dev over the custom protocol, or scope
+  the isolation pattern to release builds). `apps/desktop/wdio.conf.ts` hard-
+  fails unless `location.protocol === 'tauri:'` so the harness cannot silently
+  mask it.
+- **`DESKTOP-NATIVE-E2E-NEVER-RAN-01` (resolved as a capability, findings
+  open):** no desktop e2e had ever driven the real binary — the Playwright
+  suites drive the Vite dev server in a plain browser, and the wdio suite hung
+  at startup on a macOS Keychain prompt (fixed by the `*.wdio`-only
+  `AGI_DESKTOP_WDIO_DATABASE_KEY` seam) and then on the deadlock above. The
+  first honest native run executed all 32 spec files: 3 passed, 29 failed with
+  real assertion errors. Notable product findings from it, each still open:
+  raw i18n keys rendering as visible UI text (`sidebar.noConversations`,
+  `sidebar.showArchived`); cold start exceeding the harness's own
+  `SHELL_STARTUP_BUDGET_MS = 30_000` before this fix; the project-memory store
+  failing to open under a non-default database key ("file is not a database")
+  while the main DB opens fine; and onboarding being one-shot per profile, so
+  at most one onboarding-dependent spec can pass per run.
+
 ## 2026-08-01 mobile parity P0 wave
 
 Follow-ups and supersessions from the parity remediation (backlog:
