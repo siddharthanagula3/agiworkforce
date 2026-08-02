@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   ActivityIndicator,
@@ -56,9 +56,15 @@ import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryCha
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import {
+  summarizeSendPreview,
+  type ProviderMode,
+  type SendPreviewInput,
+} from '@agiworkforce/types';
+import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
+  getShortDisplayName,
 } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import {
@@ -77,6 +83,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
+import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
@@ -192,6 +199,30 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+
+  /**
+   * Route half of the "what will be sent" disclosure (SIX-20). The boundary is
+   * the CONVERSATION's, not the app toggle's — a Local thread stays Local even
+   * while the app mode says Cloud, and `handleSend` dispatches on exactly this
+   * value. `sendMessage` is called with `selectedModel`, so that is the model
+   * named here; `getShortDisplayName` keeps it a human name rather than the
+   * raw wire id. The composer completes the payload half (draft length,
+   * staged attachments) and renders the compact card above the input.
+   */
+  const sendPreviewInput = useMemo<SendPreviewInput>(
+    () => ({
+      providerMode: (conversationExecutionMode === 'cloud'
+        ? 'ManagedGateway'
+        : 'Local') satisfies ProviderMode,
+      modelLabel: getShortDisplayName(selectedModel, subscriptionTier),
+      modelId: selectedModel,
+    }),
+    [conversationExecutionMode, selectedModel, subscriptionTier],
+  );
+  const sendPreviewPresentation = useMemo(
+    () => summarizeSendPreview(sendPreviewInput),
+    [sendPreviewInput],
+  );
 
   const isConversationActionCurrent = useCallback(
     (action: ConversationUiActionScope | null | undefined) => {
@@ -673,13 +704,9 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain',
-          'text/csv',
-        ],
+        // Single source of truth shared with the attach-time validator — the
+        // picker must never advertise a type `isParseableDocument` rejects.
+        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
         copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets.length > 0) {
@@ -823,9 +850,14 @@ export default function ChatScreen() {
     handleOpenAddToChat();
   }, [handleOpenAddToChat]);
 
+  // Compare streams BOTH panes through the managed-cloud gateway, so it only
+  // exists inside the Cloud boundary. Offering `/compare` from a Local
+  // conversation led straight into guardedFetch's refusal, rendered verbatim
+  // in both panes. Passing `undefined` removes it from the command palette.
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
+  const compareAction = conversationExecutionMode === 'cloud' ? handleOpenCompare : undefined;
 
   const handleOpenExport = useCallback(() => {
     setExportSheetVisible(true);
@@ -1269,12 +1301,14 @@ export default function ChatScreen() {
             onStop={handleStop}
             onOpenModelPicker={handleOpenModelPicker}
             onOpenVoiceMode={handleOpenVoiceMode}
-            onOpenCompare={handleOpenCompare}
+            onOpenCompare={compareAction}
             onOpenExport={handleOpenExport}
             onOpenAddToChat={handleOpenAddToChat}
             isOnline={conversationExecutionMode === 'local' || isOnline}
             queueSize={queueSize}
             attachRef={chatInputAttachRef}
+            sendPreview={sendPreviewInput}
+            attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
             showChips={conversationMessages.length === 0}
             initialText={initialPrompt || undefined}
             draftKey={id}

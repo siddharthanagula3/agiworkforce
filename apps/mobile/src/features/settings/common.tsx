@@ -186,11 +186,22 @@ export function CloudAccountRequired({
  * with no explanation reads as "stuck loading" or "wrong plan" rather than
  * "blocked by an unrelated toggle" — this banner makes that visible and
  * actionable instead of silent.
+ *
+ * `message` lets a non-settings Cloud-only surface (e.g. the Compare screen)
+ * reuse the same shape and switch affordance while stating what IS blocked
+ * there; it defaults to the plan/usage copy the settings screens rely on.
  */
-export function CloudSyncBlockedBanner({ onSwitchToCloud }: { onSwitchToCloud: () => void }) {
+export function CloudSyncBlockedBanner({
+  onSwitchToCloud,
+  message,
+}: {
+  onSwitchToCloud: () => void;
+  message?: string;
+}) {
   const colors = useThemeColors();
   return (
     <View
+      testID="cloud-sync-blocked-banner"
       style={{
         borderRadius: cardRadius,
         backgroundColor: colors.dangerSurface,
@@ -208,8 +219,8 @@ export function CloudSyncBlockedBanner({ onSwitchToCloud }: { onSwitchToCloud: (
         </Text>
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
-        This can&apos;t sync with your real plan and usage while chat is in Local Mode. Switch to
-        AGI Cloud to see up-to-date info.
+        {message ??
+          "This can't sync with your real plan and usage while chat is in Local Mode. Switch to AGI Cloud to see up-to-date info."}
       </Text>
       <Pressable
         onPress={onSwitchToCloud}

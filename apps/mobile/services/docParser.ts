@@ -116,6 +116,26 @@ export function isParseableDocument(uri: string, mimeType?: string): boolean {
   }
 }
 
+/**
+ * The ONLY MIME allowlist the chat document pickers may advertise.
+ *
+ * Invariant: every entry must satisfy `isParseableDocument`, because the
+ * attach-time validator (`src/features/chat/utils/attachmentValidation.ts`)
+ * rejects anything it cannot parse. The two chat screens used to hardcode
+ * their own arrays that additionally offered `application/msword` and the
+ * OOXML wordprocessingml type — neither is recognised by `detectDocType`, so
+ * picking a Word document was a guaranteed dead end: the picker advertised it
+ * and the validator immediately answered "isn't a supported file type".
+ * Deriving both pickers from this constant makes that class of mismatch
+ * impossible, and `__tests__/document-picker-mime-parity.test.ts` asserts the
+ * invariant. Do not add a type here before the parser can extract its text.
+ */
+export const PICKABLE_DOCUMENT_MIME_TYPES: readonly string[] = [
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+];
+
 async function readFileText(uri: string): Promise<string> {
   try {
     const content = await readAsStringAsync(uri, { encoding: 'utf8' });
