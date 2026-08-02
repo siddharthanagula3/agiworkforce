@@ -127,9 +127,10 @@ import {
 } from '@features/billing/components/UpgradeConfirmDialog';
 import {
   buildAcceptedHandoffSystemMessage,
-  buildHandoffContextCandidates,
   buildWebLocalToByokPreview,
-  shouldForkLocalToByok,
+  getByokTargetProviderLabel,
+  resolveRegenerateBoundaryRefusal,
+  routeLocalToByokSend,
   type WebHandoffContextCandidate,
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
@@ -1685,39 +1686,41 @@ export default function WebChatPage() {
         }
       }
 
-      const sourceConversationId = displayedConversationId;
-      const conversation = displayedConversation;
+      // Local → BYOK trust boundary. `routeLocalToByokSend` owns the branch:
+      // when the active on-device conversation is about to continue onto a
+      // direct BYOK provider it opens the consent ceremony and `send` is never
+      // reached. There is deliberately no feature flag here — a literal that
+      // skips the ceremony would send on-device context to a third-party
+      // provider with no context selection, secret scan, payload preview or
+      // provider label, which the locked critical rule forbids.
+      const decision = routeLocalToByokSend({
+        sourceConversationId: displayedConversationId,
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+        outgoingContent: content,
+        startCeremony: (request) => {
+          setPendingByokHandoff({
+            sourceConversationId: request.sourceConversationId,
+            conversationTitle: request.conversationTitle,
+            content,
+            attachments,
+            meta: resolvedMeta,
+            candidates: request.candidates,
+          });
+          setSelectedHandoffContextIds(request.candidates.map((candidate) => candidate.id));
+          setHandoffPreview(null);
+          setHandoffError(null);
+        },
+        send: () => {
+          void sendContent(content, { attachments, meta: resolvedMeta });
+        },
+      });
 
-      const webLocalToByokHandoffEnabled = false;
-      if (
-        webLocalToByokHandoffEnabled &&
-        sourceConversationId &&
-        shouldForkLocalToByok({
-          conversation,
-          messages: displayedMessages,
-          targetModelId: activeModelId,
-        })
-      ) {
-        const candidates = buildHandoffContextCandidates({
-          conversationId: sourceConversationId,
-          messages: displayedMessages,
-          outgoingContent: content,
-        });
-        setPendingByokHandoff({
-          sourceConversationId,
-          conversationTitle: conversation?.title ?? 'Local conversation',
-          content,
-          attachments,
-          meta: resolvedMeta,
-          candidates,
-        });
-        setSelectedHandoffContextIds(candidates.map((candidate) => candidate.id));
-        setHandoffPreview(null);
-        setHandoffError(null);
-        return false;
-      }
-
-      void sendContent(content, { attachments, meta: resolvedMeta });
+      // `false` keeps the composer's draft intact while the ceremony is open —
+      // the outgoing prompt is part of the context the user is reviewing, and
+      // cancelling must not lose it.
+      if (decision === 'ceremony') return false;
     },
     [
       displayedConversation,
@@ -1803,6 +1806,27 @@ export default function WebChatPage() {
       );
       if (!fork) throw new Error('Could not create BYOK fork conversation.');
 
+      // A temporary source chat means the user explicitly asked for this
+      // transcript not to be kept. `createConversation` always creates a
+      // persisted row, and `saveSystemMessage` writes the redacted payload to
+      // the server unconditionally, so the fork must inherit the flag BEFORE
+      // anything is written. If that write fails we refuse the fork with a
+      // visible reason rather than silently persisting an on-device transcript
+      // the user asked us not to keep.
+      const sourceIsTemporary = isTemporaryConversationById(
+        conversations,
+        pendingByokHandoff.sourceConversationId,
+      );
+      if (sourceIsTemporary) {
+        const marked = await updateConversation(fork.id, { isTemporary: true });
+        if (!marked) {
+          await deleteConversation(fork.id);
+          throw new Error(
+            'This is a temporary chat, and the BYOK fork could not be marked temporary. Nothing was sent.',
+          );
+        }
+      }
+
       const metadata: MessageMetadata = {
         privacyMode: 'byok',
         providerMode: 'DirectByok',
@@ -1810,15 +1834,28 @@ export default function WebChatPage() {
         handoffPreviewHashSha256: handoffPreview.draft.previewHashSha256,
         handoffSourceConversationId: pendingByokHandoff.sourceConversationId,
       };
-      const systemMessage = await saveSystemMessage({
-        conversationId: fork.id,
-        content: buildAcceptedHandoffSystemMessage(handoffPreview),
-        metadata,
-        authToken: await getToken().then((token) => {
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        }),
-      });
+      const handoffSystemContent = buildAcceptedHandoffSystemMessage(handoffPreview);
+      // Temporary forks keep the consent record client-side only: the provider
+      // history sent to the model is built from the store (useChatStream's
+      // `readConversationMessages`), so the ceremony's redacted payload still
+      // reaches the BYOK provider without a server row the user opted out of.
+      const systemMessage: Message = sourceIsTemporary
+        ? {
+            id: crypto.randomUUID(),
+            role: 'system',
+            content: handoffSystemContent,
+            createdAt: new Date().toISOString(),
+            metadata,
+          }
+        : await saveSystemMessage({
+            conversationId: fork.id,
+            content: handoffSystemContent,
+            metadata,
+            authToken: await getToken().then((token) => {
+              if (!token) throw new Error('Not authenticated');
+              return token;
+            }),
+          });
 
       // AUDIT-FIX ROOT-CAUSE: the handoff system message belongs to the FORK.
       // `saveSystemMessage` above is awaited, so "whatever is active now" is not
@@ -1848,7 +1885,9 @@ export default function WebChatPage() {
     }
   }, [
     addMessage,
+    conversations,
     createConversation,
+    deleteConversation,
     getToken,
     handoffPreview,
     pendingByokHandoff,
@@ -1856,6 +1895,7 @@ export default function WebChatPage() {
     activeModelId,
     sendContent,
     claimSendWindow,
+    updateConversation,
   ]);
 
   const handleNewChat = useCallback(() => {
@@ -2361,6 +2401,22 @@ export default function WebChatPage() {
         setChatError(replayDecision.message, displayedConversationId);
         return;
       }
+      // Same trust boundary as `handleSend`, reached by a different control:
+      // Regenerate resends the whole on-device transcript under
+      // `activeModelId`, so a user who switched to a BYOK model and pressed
+      // Regenerate would cross Local → BYOK with no ceremony. Fails closed with
+      // a visible reason (see resolveRegenerateBoundaryRefusal for why this
+      // path refuses instead of forking).
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, displayedConversationId);
+        return;
+      }
+
       const replayOptions = replayToSendOptions(replayDecision.replay);
       // Replace the regenerated turn data-loss-safely: the old rows are deleted only
       // AFTER the resend commits, and the transcript is restored if it bails pre-commit
@@ -2380,6 +2436,7 @@ export default function WebChatPage() {
       );
     },
     [
+      displayedConversation,
       displayedConversationId,
       displayedMessages,
       isStreaming,
@@ -3148,6 +3205,7 @@ export default function WebChatPage() {
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}
+          targetProviderLabel={getByokTargetProviderLabel(activeModelId)}
           candidates={pendingByokHandoff.candidates}
           selectedContextIds={selectedHandoffContextIds}
           preview={handoffPreview}

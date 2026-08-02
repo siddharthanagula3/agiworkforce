@@ -1,6 +1,16 @@
+/**
+ * GET    /api/settings/sessions · list this account's active Clerk sessions
+ * DELETE /api/settings/sessions · end every active session ("log out everywhere")
+ *
+ * Callers: the web Account section (Clerk cookie), Mobile (Clerk session JWT),
+ * and Desktop (first-party HS256 device bearer). Identity and the
+ * current-session marker are resolved in `./session-principal`; read that file
+ * for why a device-token caller is honestly told no listed row is itself
+ * instead of having one guessed for it.
+ */
 import 'server-only';
 
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -8,6 +18,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { resolveSessionsPrincipal } from './session-principal';
 
 const PAGE_SIZE = 100;
 const MAX_SESSION_PAGES = 20;
@@ -15,14 +26,6 @@ const REVOKE_BATCH_SIZE = 10;
 
 type ClerkClient = Awaited<ReturnType<typeof clerkClient>>;
 type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
-
-async function requireBrowserSession(): Promise<{ userId: string; sessionId: string }> {
-  const result = await auth();
-  if (!result.userId || !result.sessionId) {
-    throw createError.unauthorized('Authentication required');
-  }
-  return { userId: result.userId, sessionId: result.sessionId };
-}
 
 export async function listActiveClerkSessions(
   client: ClerkClient,
@@ -54,7 +57,7 @@ function toIsoTimestamp(timestamp: number): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function serializeSession(session: ClerkSession, currentSessionId: string) {
+function serializeSession(session: ClerkSession, currentSessionId: string | null) {
   const activity = session.latestActivity;
   const device = activity?.deviceType?.trim() || (activity?.isMobile ? 'Mobile device' : 'Browser');
   const browser = [activity?.browserName?.trim(), activity?.browserVersion?.trim()]
@@ -71,7 +74,10 @@ function serializeSession(session: ClerkSession, currentSessionId: string) {
     createdAt: toIsoTimestamp(session.createdAt),
     lastActiveAt: toIsoTimestamp(session.lastActiveAt),
     expiresAt: toIsoTimestamp(session.expireAt),
-    isCurrent: session.id === currentSessionId,
+    // `currentSessionId === null` means the caller holds a credential that is
+    // not a Clerk session (Desktop's device token), so nothing here is "this
+    // device" and nothing may claim to be.
+    isCurrent: currentSessionId !== null && session.id === currentSessionId,
   };
 }
 
@@ -102,30 +108,46 @@ async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-sessions-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId, sessionId } = await requireBrowserSession();
+  const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
   const sessions = await listActiveClerkSessions(await clerkClient(), userId);
   const projected = sessions
-    .map((session) => serializeSession(session, sessionId))
+    .map((session) => serializeSession(session, currentSessionId))
     .sort((left, right) => {
       if (left.isCurrent !== right.isCurrent) return left.isCurrent ? -1 : 1;
       return (right.lastActiveAt ?? '').localeCompare(left.lastActiveAt ?? '');
     });
 
-  return NextResponse.json({ sessions: projected, totalCount: projected.length });
+  return NextResponse.json({
+    sessions: projected,
+    totalCount: projected.length,
+    // Lets a client distinguish "none of these is you" from "we could not tell".
+    // The browser and Mobile always get true; Desktop's device token gets false
+    // and renders an explanation instead of a missing-row mystery.
+    currentSessionKnown: currentSessionId !== null,
+  });
 }
 
 async function handleRevokeAll(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
+  // Credential verification runs BEFORE the CSRF helper is allowed to treat a
+  // Bearer request as safe — the ordering `lib/csrf.ts` documents as required.
+  const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId, sessionId } = await requireBrowserSession();
   const client = await clerkClient();
   const sessions = await listActiveClerkSessions(client, userId);
-  const currentSession = sessions.find((session) => session.id === sessionId);
-  const otherSessions = sessions.filter((session) => session.id !== sessionId);
+  // When the caller has no Clerk session of its own (Desktop device token),
+  // every listed session is "another device" and all of them are revoked. The
+  // caller's own credential is a developer token, revoked separately through
+  // POST /api/auth/logout when the client signs itself out.
+  const currentSession = currentSessionId
+    ? sessions.find((session) => session.id === currentSessionId)
+    : undefined;
+  const otherSessions = sessions.filter((session) => session.id !== currentSession?.id);
   const result = await revokeInBatches(client, otherSessions);
 
   if (result.failed.length > 0) {
@@ -135,7 +157,9 @@ async function handleRevokeAll(request: NextRequest) {
     );
     return NextResponse.json(
       {
-        error: 'Some sessions could not be revoked. Your current session remains active.',
+        error: currentSession
+          ? 'Some sessions could not be revoked. Your current session remains active.'
+          : 'Some sessions could not be revoked. Please try again.',
         revokedCount: result.revoked.length,
         failedCount: result.failed.length,
       },
@@ -152,6 +176,9 @@ async function handleRevokeAll(request: NextRequest) {
   return NextResponse.json({
     message: 'All active sessions revoked',
     revokedCount: result.revoked.length,
+    // false ⇒ the caller's own credential was not one of the revoked sessions
+    // and the client still has to end its own session locally.
+    currentSessionRevoked: currentSession !== undefined,
   });
 }
 

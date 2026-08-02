@@ -1,28 +1,9 @@
 import { MetadataRoute } from 'next';
 
-import { SITE_URL } from '@/lib/seo/site';
+import { DISALLOW_APP, SITE_URL } from '@/lib/seo/site';
 
-/**
- * Paths kept out of every crawler's index: API surface, admin, auth flows, and
- * the authenticated app itself (chat, settings, billing, projects, user,
- * customize). These carry per-user state and must never appear in search or
- * AI-answer-engine results. Keep in lockstep with sitemap.ts — nothing here may
- * appear there.
- */
-const DISALLOW_APP = [
-  '/api/',
-  '/admin/',
-  '/auth/',
-  '/dashboard/',
-  '/account/',
-  '/chat',
-  '/chat/schedules',
-  '/settings',
-  '/billing',
-  '/chat/projects',
-  '/user',
-  '/chat/customize',
-];
+/** Mutable copy: `MetadataRoute.Robots` wants `string[]`, not a readonly tuple. */
+const disallow = [...DISALLOW_APP];
 
 /**
  * AI answer-engine / training crawlers we intentionally ALLOW so AGI can be
@@ -47,19 +28,19 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       // Default rule for all bots
-      { userAgent: '*', allow: '/', disallow: DISALLOW_APP, crawlDelay: 1 },
+      { userAgent: '*', allow: '/', disallow, crawlDelay: 1 },
 
       // AI answer-engine / training crawlers — explicitly allowed
       ...AI_CRAWLERS.map((userAgent) => ({
         userAgent,
         allow: '/',
-        disallow: DISALLOW_APP,
+        disallow,
       })),
 
       // Traditional search engines
-      { userAgent: 'Googlebot', allow: '/', disallow: DISALLOW_APP, crawlDelay: 0.5 },
-      { userAgent: 'bingbot', allow: '/', disallow: DISALLOW_APP },
-      { userAgent: 'Applebot', allow: '/', disallow: DISALLOW_APP },
+      { userAgent: 'Googlebot', allow: '/', disallow, crawlDelay: 0.5 },
+      { userAgent: 'bingbot', allow: '/', disallow },
+      { userAgent: 'Applebot', allow: '/', disallow },
 
       // Common Crawl: blocked (it feeds many third-party training sets we do
       // not want a blanket opt-in to).

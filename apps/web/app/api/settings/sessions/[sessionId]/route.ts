@@ -1,6 +1,13 @@
+/**
+ * DELETE /api/settings/sessions/[sessionId] · end one active Clerk session.
+ *
+ * Reachable by the same three first-party callers as the collection route (web
+ * cookie, Mobile Clerk JWT, Desktop device bearer) — see `../session-principal`
+ * for how each one's "is this my own session" answer is resolved.
+ */
 import 'server-only';
 
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -8,6 +15,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { resolveSessionsPrincipal } from '../session-principal';
 
 const CLERK_SESSION_ID = /^sess_[A-Za-z0-9]+$/;
 
@@ -18,13 +26,11 @@ async function handleRevoke(
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
+  // Auth before CSRF, per the ordering invariant documented in lib/csrf.ts.
+  const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
-
-  const authResult = await auth();
-  if (!authResult.userId || !authResult.sessionId) {
-    throw createError.unauthorized('Authentication required');
-  }
 
   const { sessionId } = await context.params;
   if (!CLERK_SESSION_ID.test(sessionId) || sessionId.length > 128) {
@@ -38,7 +44,7 @@ async function handleRevoke(
   } catch {
     throw createError.notFound('Session not found');
   }
-  if (target.userId !== authResult.userId) {
+  if (target.userId !== userId) {
     throw createError.notFound('Session not found');
   }
 
@@ -46,11 +52,10 @@ async function handleRevoke(
     await client.sessions.revokeSession(target.id);
   }
 
-  const isCurrent = target.id === authResult.sessionId;
-  logger.info(
-    { userId: authResult.userId, sessionId: target.id, isCurrent },
-    'Account session revoked',
-  );
+  // A device-token caller has no Clerk session, so it can never be revoking its
+  // own: `isCurrent` stays false and the client is not told to sign itself out.
+  const isCurrent = currentSessionId !== null && target.id === currentSessionId;
+  logger.info({ userId, sessionId: target.id, isCurrent }, 'Account session revoked');
   return NextResponse.json({
     message: target.status === 'active' ? 'Session revoked' : 'Session was already inactive',
     isCurrent,

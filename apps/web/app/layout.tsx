@@ -4,7 +4,8 @@ import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google'
 import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
-import { GoogleAnalytics } from '@shared/components/GoogleAnalytics';
+import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
+import { CookieConsent } from '@shared/components/CookieConsent';
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { OG_IMAGE } from '@/lib/seo/site';
@@ -181,8 +182,18 @@ export default async function RootLayout({
           <div id="main-content" role="main" tabIndex={-1}>
             <Providers nonce={nonce}>{children}</Providers>
           </div>
-          {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
-          {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
+          {/*
+           * SIX-25 — cookie consent.
+           *
+           * The banner is the only thing that can turn analytics on, and
+           * `AnalyticsConsentGate` is the only thing that may mount GA4. GA4
+           * used to load for every visitor whenever NEXT_PUBLIC_GA_TRACKING_ID
+           * was set, contradicting the /cookies policy ("Analytics is opt-in").
+           * The single switch for that position is
+           * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
+           */}
+          <CookieConsent />
+          {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
         </ClerkProvider>
       </body>
     </html>
