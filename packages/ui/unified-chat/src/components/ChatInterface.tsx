@@ -13,7 +13,12 @@ import {
 import { Search, X } from 'lucide-react';
 import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
-import type { Artifact, ChatMessage } from '../lib/types';
+import type {
+  Artifact,
+  ChatMessage,
+  DeriveMessageArtifacts,
+  MessageArtifactProjection,
+} from '../lib/types';
 import type { ChipType, QuickChipAvailability } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
@@ -33,6 +38,7 @@ import { useChat } from '../hooks/useChat';
 import { useTheme } from '../hooks/useTheme';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useArtifact } from '../hooks/useArtifact';
+import { useArtifactStore } from '../stores/artifactStore';
 import type { WritingStyle } from '../lib/writingStyle';
 import { syncPackageStoreFromHost, useHostBridgeSync } from '../hooks/useHostBridgeSync';
 import { SettingsModal } from './SettingsModal';
@@ -347,6 +353,21 @@ export interface ChatInterfaceProps {
    */
   conversationActions?: ConversationHeaderProps;
   /**
+   * Host capability that derives renderable artifacts from an assistant
+   * message's markdown (see {@link DeriveMessageArtifacts}).
+   *
+   * Wire it and a model answer containing a fenced ```html / ```jsx / ```svg /
+   * ```mermaid block becomes a real artifact card in the transcript, a
+   * conversation-scoped entry in the artifact store, and an openable panel —
+   * the behaviour web has had since `extractArtifacts` landed in its
+   * `MessageBubble`. Omit it and nothing changes: only artifacts the runtime
+   * pre-attached to `message.artifacts` render.
+   *
+   * MUST be referentially stable — it is a `useMemo` dependency for the whole
+   * transcript.
+   */
+  deriveMessageArtifacts?: DeriveMessageArtifacts;
+  /**
    * When true (default), assistant messages render a `ProvenanceFooter`
    * below them showing model id + latency + token counts. Pass `false` to
    * suppress on hosts that don't want the footer.
@@ -382,6 +403,7 @@ export function ChatInterface({
   composerSlot,
   artifactMode = 'split',
   conversationActions,
+  deriveMessageArtifacts,
   showProvenanceFooter = true,
 }: ChatInterfaceProps) {
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
@@ -407,6 +429,7 @@ export function ChatInterface({
     sendMessage,
     stopGeneration,
     continueGeneration,
+    regenerate,
     resolveToolApproval,
     isStreaming,
     isApprovalTurnLive,
@@ -612,6 +635,55 @@ export function ChatInterface({
     [openArtifact],
   );
 
+  // ---------------------------------------------------------------------------
+  // Artifact derivation (host capability) — DES-C05
+  // ---------------------------------------------------------------------------
+  // Computed ONCE here for the whole transcript rather than per bubble, then
+  // handed to MessageList by message id. The same pass feeds the conversation
+  // artifact store (which previously had no production writer at all) so the
+  // header toggle has a real count and the panel has something to open.
+  const artifactProjections = useMemo(() => {
+    if (!deriveMessageArtifacts || !activeConversationId) return null;
+    const projections = new Map<string, MessageArtifactProjection>();
+    for (const message of messages) {
+      if (message.role !== 'assistant') continue;
+      const projection = deriveMessageArtifacts(message, { conversationId: activeConversationId });
+      if (projection) projections.set(message.id, projection);
+    }
+    return projections;
+  }, [messages, deriveMessageArtifacts, activeConversationId]);
+
+  const conversationArtifacts = useMemo(() => {
+    const seen = new Set<string>();
+    const collected: Artifact[] = [];
+    for (const message of messages) {
+      const fromMessage = artifactProjections?.get(message.id)?.artifacts ?? message.artifacts;
+      for (const artifact of fromMessage ?? []) {
+        if (seen.has(artifact.id)) continue;
+        seen.add(artifact.id);
+        collected.push(artifact);
+      }
+    }
+    return collected;
+  }, [messages, artifactProjections]);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    useArtifactStore.getState().setArtifacts(activeConversationId, conversationArtifacts);
+  }, [activeConversationId, conversationArtifacts]);
+
+  // Header artifacts toggle: opens the most recent artifact of the conversation
+  // (closing an already-open panel). Only synthesized when the conversation has
+  // an artifact, so the control never appears with nothing behind it.
+  const handleToggleArtifacts = useCallback(() => {
+    if (artifactOpen) {
+      closeArtifact();
+      return;
+    }
+    const latest = conversationArtifacts[conversationArtifacts.length - 1];
+    if (latest) openArtifact(latest);
+  }, [artifactOpen, closeArtifact, conversationArtifacts, openArtifact]);
+
   // Version history for the panel's version stepper. Keyed on the real
   // artifact id (stripping any `::v<n>` pseudo-suffix — see
   // ChatRuntime.getArtifactVersions) so this only refetches when the user
@@ -764,7 +836,12 @@ export function ChatInterface({
         {hasMessages && activeConversationId && (
           <ConversationHeader
             {...conversationActions}
+            onToggleArtifacts={
+              conversationActions?.onToggleArtifacts ??
+              (conversationArtifacts.length > 0 ? handleToggleArtifacts : undefined)
+            }
             artifactsOpen={conversationActions?.artifactsOpen ?? artifactOpen}
+            artifactCount={conversationActions?.artifactCount ?? conversationArtifacts.length}
           />
         )}
 
@@ -798,10 +875,17 @@ export function ChatInterface({
             <MessageList
               conversationId={activeConversationId}
               onArtifactClick={handleArtifactClick}
+              artifactProjections={artifactProjections}
               showProvenanceFooter={showProvenanceFooter}
               onContinueGeneration={
                 runtime?.supportsContinueGeneration ? continueGeneration : undefined
               }
+              // Regenerate needs to REPLACE the old exchange, which means the
+              // runtime must be able to drop the superseded durable rows.
+              // Without `deleteMessages` a retry would leave a duplicated user
+              // turn and a stale answer behind on reload, so the affordance is
+              // omitted rather than faked.
+              onRegenerateMessage={runtime?.deleteMessages ? regenerate : undefined}
               onToolApprove={runtime?.resolveToolApproval ? handleToolApprove : undefined}
               onToolReject={runtime?.resolveToolApproval ? handleToolReject : undefined}
               approvalTurnExpired={runtime?.resolveToolApproval ? !isApprovalTurnLive : undefined}

@@ -69,6 +69,7 @@ import {
   createManagedMediaIdempotencyKey,
 } from '@agiworkforce/utils';
 import {
+  CloudApiError,
   createDesktopCloudAgentRunClient,
   generateCloudImage,
   sendCloudMessage,
@@ -81,6 +82,7 @@ import {
   hasRenderableCloudMessageOutput,
   type CloudStreamMessageProjection,
 } from './cloudStreamDeltas';
+import { buildBoundedCloudMessageMetadata } from './cloudMessageMetadata';
 import { CloudToolApprovalRegistry, toPersistedCloudApprovalProjection } from './cloudToolApproval';
 import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
 import {
@@ -128,6 +130,31 @@ function failedMessageProjection(
     ...projection,
     finishReason: 'error',
     streamError: { message },
+  };
+}
+
+/**
+ * Project a transport failure into the shared error event, preserving the
+ * server's classification when there is one.
+ *
+ * A managed quota / rate-limit refusal must reach the UI as a CODE, not just a
+ * sentence: the shared layer classifies it (`classifyManagedQuotaErrorCode`)
+ * into an in-transcript card with the reason, the reset time the server
+ * actually reported, and any upgrade path. Network throws carry neither field
+ * and degrade to the plain failure they are.
+ */
+function cloudErrorEvent(err: Error): {
+  type: 'error';
+  error: string;
+  code?: string;
+  resetAt?: string;
+} {
+  const classified = err instanceof CloudApiError ? err : undefined;
+  return {
+    type: 'error',
+    error: err.message,
+    ...(classified?.code ? { code: classified.code } : {}),
+    ...(classified?.resetAt ? { resetAt: classified.resetAt } : {}),
   };
 }
 
@@ -339,19 +366,27 @@ export class CloudRuntime implements ChatRuntime {
     ) {
       return;
     }
-    const metadata = {
+    const rawMetadata: Record<string, unknown> = {
       ...(agentActivity ? { agentActivity } : {}),
       ...(cloudAgentRun ? { cloudAgentRun } : {}),
       ...(cloudApproval !== undefined ? { cloudApproval } : {}),
       ...(messageProjection ?? {}),
     };
+    // DES-C06: the server hard-caps serialized metadata at 32 000 chars and
+    // 400s the WHOLE message on overflow — which used to lose the entire
+    // assistant turn because one artifact's content did not fit. Drop the
+    // re-derivable artifact bytes (DES-C05 rebuilds them from `content` with
+    // the same deterministic id) and, if still over, sacrifice optional
+    // projections with a persisted note rather than the answer itself.
+    const bounded = buildBoundedCloudMessageMetadata(rawMetadata, content);
+    const metadata = bounded.metadata;
     try {
       await getDesktopCloudChatPersistenceClient().saveMessage(conversationId, {
         id: assistantMessageId,
         role: 'assistant',
         content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
         model,
-        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+        ...(metadata ? { metadata } : {}),
       });
       this.assertBoundary(boundary);
     } catch (err) {
@@ -733,7 +768,10 @@ export class CloudRuntime implements ChatRuntime {
     // Persist ordinary user turns before streaming. Continue Generation's
     // instruction is request-only and must never appear in conversation
     // history as a user message.
-    const userMessageId = uuidv7();
+    // Same identity rule as the assistant row below: persist under the id the
+    // transcript already renders so Regenerate can delete the exact server rows
+    // it just removed from the view.
+    const userMessageId = options?.userMessageId ?? uuidv7();
     if (!isContinuation) {
       try {
         await client.saveMessage(conversationId, {
@@ -778,7 +816,13 @@ export class CloudRuntime implements ChatRuntime {
       (event) => this.emitForConversation(conversationId, event),
       CLOUD_API_BASE_URL,
     );
-    const assistantMessageId = options?.continuationMessageId ?? uuidv7();
+    // Prefer the caller's minted id so the RENDERED assistant row, our durable
+    // row, and the server's own `assistant_message_id` persistence are all one
+    // identity — otherwise nothing in the UI (regenerate, delete) can address
+    // the server row it is looking at. Falls back to a runtime-minted uuid for
+    // callers that do not supply one.
+    const assistantMessageId =
+      options?.continuationMessageId ?? options?.assistantMessageId ?? uuidv7();
     const continuationPrefix =
       isContinuation &&
       messageHistory.length >= 2 &&
@@ -982,7 +1026,7 @@ export class CloudRuntime implements ChatRuntime {
               }`,
             });
           });
-          this.emitForConversation(conversationId, { type: 'error', error: err.message });
+          this.emitForConversation(conversationId, cloudErrorEvent(err));
         },
         controller.signal,
         (payload) => this.onLiveEvent(activeTurn, payload),
@@ -995,14 +1039,16 @@ export class CloudRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: userMessageId,
         }),
-        options?.research || options?.workMode || options?.skillName || options?.effort
-          ? {
-              ...(options.research ? { research: true } : {}),
-              ...(options.workMode ? { workMode: options.workMode } : {}),
-              ...(options.skillName ? { skillName: options.skillName } : {}),
-              ...(options.effort ? { effort: options.effort } : {}),
-            }
-          : undefined,
+        {
+          ...(options?.research ? { research: true } : {}),
+          ...(options?.workMode ? { workMode: options.workMode } : {}),
+          ...(options?.skillName ? { skillName: options.skillName } : {}),
+          ...(options?.effort ? { effort: options.effort } : {}),
+          // Always sent: the server persists the assistant turn under THIS id,
+          // collapsing its write and our own `saveMessage` into one row and
+          // covering a crash/quit after generation (which is already billed).
+          assistantMessageId,
+        },
         (handle: ManagedCloudAgentRunHandle | null) => {
           activeTurn.runReference = handle
             ? {
@@ -1070,7 +1116,7 @@ export class CloudRuntime implements ChatRuntime {
         decision,
         (event) => this.emitForConversation(conversationId, event),
         CLOUD_API_BASE_URL,
-        (err) => this.emitForConversation(conversationId, { type: 'error', error: err.message }),
+        (err) => this.emitForConversation(conversationId, cloudErrorEvent(err)),
         controller.signal,
       );
       this.assertBoundary(boundary);
@@ -1338,6 +1384,25 @@ export class CloudRuntime implements ChatRuntime {
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
     return this.getMessages(conversationId);
+  }
+
+  /**
+   * Drop durable rows a replacement turn superseded (Regenerate).
+   *
+   * Ids are the transcript's own ids — `sendMessage` persists the user and
+   * assistant rows under the caller-minted ids for exactly this reason. Rows
+   * are deleted oldest-first and one at a time so a partial failure still
+   * leaves a consistent prefix; the boundary is asserted between calls so a
+   * sign-out mid-delete cannot keep issuing authenticated writes.
+   */
+  async deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    const boundary = this.requireBoundary();
+    const client = getDesktopCloudChatPersistenceClient();
+    for (const messageId of messageIds) {
+      await client.deleteMessage(conversationId, messageId);
+      this.assertBoundary(boundary);
+    }
   }
 
   // -------------------------------------------------------------------------

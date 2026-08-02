@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { Copy, Check, Download, FileText, Image as ImageIcon, Wrench } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  AlertTriangle,
+  Wrench,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
@@ -10,8 +18,16 @@ import { DownloadCard } from './DownloadCard';
 import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
 import { ToolCallCard } from './ToolCallCard';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
+import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
+import { getStreamErrorMessage } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
-import type { ChatMessage, Artifact, Attachment, ToolCall } from '../lib/types';
+import type {
+  ChatMessage,
+  Artifact,
+  Attachment,
+  MessageArtifactProjection,
+  ToolCall,
+} from '../lib/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface MessageBubbleProps {
@@ -41,7 +57,35 @@ interface MessageBubbleProps {
   approvalTurnExpired?: boolean;
   /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
   onResendApproval?: (messageId: string) => void;
+  /**
+   * Host-derived artifacts for this message plus the body with their fenced
+   * blocks stripped (see {@link MessageArtifactProjection}). When absent the
+   * bubble falls back to `message.artifacts` / `message.content` exactly as
+   * before, so hosts without the derivation capability are unaffected.
+   */
+  artifactProjection?: MessageArtifactProjection | null;
 }
+
+/**
+ * Optional projections the runtime dropped to stay inside the managed-cloud
+ * message-metadata budget (see `MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH`).
+ * Persisted by `CloudRuntime.persistAssistantTurn` so the note survives a
+ * reopen — the reply itself is intact, only these side-panels are missing.
+ */
+function readTrimmedMetadataFields(message: ChatMessage): string[] {
+  const raw = message.metadata?.['metadataTrimmed'];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+const TRIMMED_FIELD_LABELS: Record<string, string> = {
+  artifacts: 'artifacts',
+  thinking: 'the thinking trace',
+  toolCalls: 'tool call details',
+  webSearchResults: 'web search results',
+  generatedFiles: 'generated file references',
+  agentActivity: 'the activity timeline',
+};
 
 export function StreamingThinkingStatus() {
   return (
@@ -574,11 +618,31 @@ export function MessageBubble({
   onToolReject,
   approvalTurnExpired,
   onResendApproval,
+  artifactProjection,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
   const [copied, setCopied] = useState(false);
+  // Derived artifacts (host capability) win over the pre-attached list because
+  // the projection already merged `message.artifacts` into itself on id.
+  const renderedArtifacts = artifactProjection?.artifacts ?? message.artifacts;
+  // Body text only. Copy/ActionBar keep `message.content` so the user can still
+  // copy the code the artifact card lifted out (web parity).
+  const bodyContent = artifactProjection?.displayContent ?? message.content;
+  const trimmedMetadataFields = isUser ? [] : readTrimmedMetadataFields(message);
+  const hostBridge = useHostBridge();
+  // Managed quota / rate-limit refusal (see MessageLimitCard + useChat's
+  // `error` stream case). Takes precedence over the generic failure block.
+  const paywallBlock = isUser ? null : readMessagePaywall(message.metadata);
+  // A failed turn used to render a completely blank bubble: `message.error`
+  // was written and never read, and the list-level notice only covers the LAST
+  // message, so a mid-transcript failure was invisible. Fall back to the
+  // PERSISTED `metadata.streamError` so the failure survives a reload too.
+  const failureMessage =
+    isUser || isStreaming || paywallBlock
+      ? undefined
+      : (message.error ?? getStreamErrorMessage(message));
 
   async function handleCopy() {
     try {
@@ -700,7 +764,7 @@ export function MessageBubble({
           <StreamingThinkingStatus />
         ) : (
           <>
-            {renderContent(message.content)}
+            {renderContent(bodyContent)}
             {isStreaming && (
               <span
                 aria-hidden
@@ -746,9 +810,9 @@ export function MessageBubble({
         </div>
       )}
 
-      {message.artifacts && message.artifacts.length > 0 && (
-        <div className="mt-2">
-          {message.artifacts.map((artifact) => (
+      {renderedArtifacts && renderedArtifacts.length > 0 && (
+        <div className="mt-2" data-testid="message-artifacts">
+          {renderedArtifacts.map((artifact) => (
             <DownloadCard
               key={artifact.id}
               artifact={artifact}
@@ -771,6 +835,73 @@ export function MessageBubble({
           Copy (self-contained); retry/feedback appear only when their handlers
           are wired (honest omission on desktop today). `isLast` no longer gates
           the row. */}
+      {/* The reply saved, but one or more optional side-panels were too large
+          for the managed-cloud metadata budget and were dropped on save. Say so
+          instead of letting the user find an empty Thinking/Artifacts panel
+          after a reload and assume the app lost the answer. */}
+      {trimmedMetadataFields.length > 0 && (
+        <p
+          role="note"
+          data-testid="message-metadata-trimmed"
+          className="mt-2 text-xs text-[var(--chat-text-muted)]"
+        >
+          {`This reply was saved, but ${trimmedMetadataFields
+            .map((field) => TRIMMED_FIELD_LABELS[field] ?? field)
+            .join(
+              ', ',
+            )} ${trimmedMetadataFields.length === 1 ? 'was' : 'were'} too large to store with it.`}
+        </p>
+      )}
+
+      {/* Managed quota / rate-limit refusal — the reason, the reset time the
+          server actually reported, and (only when the host exposes checkout)
+          the upgrade that lifts it. Replaces a vanishing toast over an empty
+          bubble. */}
+      {paywallBlock && (
+        <MessageLimitCard
+          block={paywallBlock}
+          {...(onRetry ? { onRetry: () => onRetry(message.id) } : {})}
+          {...(hostBridge?.openUpgrade
+            ? { onUpgrade: () => hostBridge.openUpgrade?.(paywallBlock.requiredTier) }
+            : {})}
+        />
+      )}
+
+      {/* Failed turn — render the failure IN the transcript next to a Retry
+          instead of leaving a blank bubble whose only signal was a toast that
+          has already disappeared. */}
+      {failureMessage && (
+        <div
+          role="alert"
+          data-testid="message-error"
+          className="mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
+          style={{
+            background: 'var(--chat-surface-elevated)',
+            borderColor: 'var(--chat-destructive)',
+            color: 'var(--chat-text-secondary)',
+          }}
+        >
+          <AlertTriangle
+            size={14}
+            aria-hidden="true"
+            className="mt-px shrink-0"
+            style={{ color: 'var(--chat-destructive)' }}
+          />
+          <span className="min-w-0 flex-1 break-words">{failureMessage}</span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={() => onRetry(message.id)}
+              aria-label="Retry this response"
+              className="shrink-0 rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--chat-surface-hover)]"
+              style={{ color: 'var(--chat-destructive)' }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
       {!isStreaming && (
         <ActionBar messageId={message.id} content={message.content} onRetry={onRetry} />
       )}
