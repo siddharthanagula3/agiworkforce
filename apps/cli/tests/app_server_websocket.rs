@@ -1,3 +1,4 @@
+use agiworkforce_protocol::developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::process::Stdio;
@@ -11,6 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 async fn cli_websocket_uses_the_full_typed_developer_session() {
     let workspace = tempdir().expect("workspace");
     let home = tempdir().expect("home");
+    trust_workspace(workspace.path(), home.path()).await;
     let port = available_loopback_port();
     let token = "app-server-test-secret";
     let mut child = Command::new(env!("CARGO_BIN_EXE_agi"))
@@ -47,7 +49,14 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
         .await
         .expect("send initialize");
     let initialized = next_json(&mut websocket).await;
-    assert_eq!(initialized["result"]["protocolVersion"], 6);
+    assert_eq!(
+        initialized["result"]["protocolVersion"],
+        DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+    assert_eq!(
+        initialized["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
     assert_eq!(initialized["result"]["capabilities"]["tools"], true);
     assert_eq!(initialized["result"]["capabilities"]["approvals"], true);
 
@@ -75,6 +84,7 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
 async fn cli_websocket_requires_an_explicit_token_instead_of_printing_one() {
     let workspace = tempdir().expect("workspace");
     let home = tempdir().expect("home");
+    trust_workspace(workspace.path(), home.path()).await;
     let output = Command::new(env!("CARGO_BIN_EXE_agi"))
         .arg("app-server")
         .arg("--listen")
@@ -90,6 +100,24 @@ async fn cli_websocket_requires_an_explicit_token_instead_of_printing_one() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("requires --auth-token or AGI_APP_SERVER_TOKEN"));
     assert!(!stderr.contains("Generated app-server auth token"));
+}
+
+async fn trust_workspace(workspace: &std::path::Path, home: &std::path::Path) {
+    // WebSocket is a headless developer entry point just like stdio. Reach the
+    // transport assertions only after exercising the supported explicit trust
+    // action; never weaken the production gate in a test fixture.
+    let output = Command::new(env!("CARGO_BIN_EXE_agi"))
+        .arg("init")
+        .current_dir(workspace)
+        .env("HOME", home)
+        .output()
+        .await
+        .expect("initialize trusted WebSocket test project");
+    assert!(
+        output.status.success(),
+        "agi init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn available_loopback_port() -> u16 {

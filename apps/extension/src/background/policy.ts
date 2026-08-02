@@ -23,7 +23,7 @@
  *     Add it to EXTENSION_PAGE_ONLY_MESSAGE_TYPES below.
  */
 
-import type { RunPageAction, ScheduledTask } from '../types';
+import type { RunPageAction, ScheduledTask, WebMCPToolInfo } from '../types';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 
 // ─── Declarative message policy (Arch #1, audit 2026-05-19) ────────────────
@@ -102,6 +102,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESUME_CHAT_RUN: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESOLVE_CHAT_APPROVAL: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  MANAGED_CLOUD_AUTH_CHANGED: { senderClass: 'extension-page-only', allowsCrossTab: true },
   APPROVE_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
   // ── Computer-use loop start — side panel / popup only. ─────────────────
@@ -110,6 +111,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   // Cloud gateway. A content script on any allowlisted site must NOT be able
   // to trigger this — only the trusted extension UI can.
   AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CANCEL_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   // ── Privileged tab / cookie / chat operations — side panel / popup / options
   // only. These have background handlers but NO content-script or side-panel-DOM
@@ -123,6 +125,8 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   // current design decision, see the policy.test.ts carve-out; tightening it is a
   // separate security-review call, tracked in known-flaws.)
   CHAT_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  WEBMCP_DISCOVER_TOOLS: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  WEBMCP_CALL_TOOL: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_ALL_TABS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -148,6 +152,7 @@ export interface ExtensionPageSenderIdentity {
   id?: string;
   url?: string;
   origin?: string;
+  tabId?: number;
   tabUrl?: string;
   hasTab?: boolean;
 }
@@ -176,6 +181,26 @@ export function isTrustedExtensionPageSender(
   return candidates.some(
     (value) => value === normalizedOrigin || value.startsWith(`${normalizedOrigin}/`),
   );
+}
+
+/**
+ * Resolve the tab a message may target without confusing a tab-associated
+ * extension document for a content script. Trusted extension UI may name an
+ * explicit target; web content remains pinned to its sender tab.
+ */
+export function resolveMessageTargetTabId(
+  sender: ExtensionPageSenderIdentity,
+  requestedTabId: unknown,
+  extensionId: string,
+  extensionOrigin: string,
+): number | undefined {
+  const validTabId = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  const senderTabId = validTabId(sender.tabId) ? sender.tabId : undefined;
+  const explicitTabId = validTabId(requestedTabId) ? requestedTabId : undefined;
+  return isTrustedExtensionPageSender(sender, extensionId, extensionOrigin)
+    ? (explicitTabId ?? senderTabId)
+    : (senderTabId ?? explicitTabId);
 }
 
 // ─── Backwards-compatible Set exports (derived from MESSAGE_POLICY) ─────────
@@ -239,6 +264,11 @@ export const MAX_CONTEXT_HTML_CHARS = 100_000;
 export const MAX_JSON_LD_BYTES = 256 * 1024; // 256 KB per <script type="application/ld+json"> block
 export const MAX_WEBMCP_SCHEMA_BYTES = 64 * 1024; // 64 KB per tool inputSchema
 export const MAX_NLWEB_PROBE_BYTES = 256 * 1024; // 256 KB total NLWeb probe body
+export const MAX_WEBMCP_TOOLS = 64;
+const MAX_WEBMCP_TOOL_NAME_CHARS = 64;
+const MAX_WEBMCP_TOOL_DESCRIPTION_CHARS = 500;
+const MAX_WEBMCP_PAGE_URL_CHARS = 2_048;
+const WEBMCP_TOOL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_. -]{0,63}$/;
 
 /**
  * Bounded JSON.parse helper. Returns the parsed value or `undefined` if the
@@ -256,6 +286,100 @@ export function safeJsonParse<T = unknown>(
   } catch {
     return undefined;
   }
+}
+
+export interface NormalizedWebMCPToolsUpdate {
+  tools: WebMCPToolInfo[];
+  /** Sender-authoritative HTTP(S) origin + path; credentials/query/fragment removed. */
+  url: string;
+}
+
+export function normalizeWebMCPPageUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_WEBMCP_PAGE_URL_CHARS) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
+    const normalized = `${parsed.origin}${parsed.pathname}`;
+    return normalized.length <= MAX_WEBMCP_PAGE_URL_CHARS ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
+function cloneBoundedWebMCPInputSchema(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  try {
+    const serialized = JSON.stringify(value);
+    if (
+      typeof serialized !== 'string' ||
+      new TextEncoder().encode(serialized).byteLength > MAX_WEBMCP_SCHEMA_BYTES
+    ) {
+      return null;
+    }
+    const cloned = JSON.parse(serialized) as unknown;
+    return cloned && typeof cloned === 'object' && !Array.isArray(cloned)
+      ? (cloned as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate the content-script WebMCP discovery event at the privileged
+ * background boundary. The sender tab URL is authoritative; the page-reported
+ * URL may only confirm the same origin/path.
+ */
+export function normalizeWebMCPToolsUpdate(
+  value: unknown,
+  reportedUrl: unknown,
+  senderTabUrl: unknown,
+): NormalizedWebMCPToolsUpdate | null {
+  if (!Array.isArray(value) || value.length > MAX_WEBMCP_TOOLS) return null;
+  const url = normalizeWebMCPPageUrl(senderTabUrl);
+  if (!url) return null;
+  if (reportedUrl !== undefined) {
+    const normalizedReportedUrl = normalizeWebMCPPageUrl(reportedUrl);
+    if (!normalizedReportedUrl || normalizedReportedUrl !== url) return null;
+  }
+
+  const names = new Set<string>();
+  const tools: WebMCPToolInfo[] = [];
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+    const record = candidate as Record<string, unknown>;
+    const name = typeof record['name'] === 'string' ? record['name'].trim() : '';
+    const rawDescription = record['description'];
+    const source = record['source'];
+    if (
+      name.length === 0 ||
+      name.length > MAX_WEBMCP_TOOL_NAME_CHARS ||
+      !WEBMCP_TOOL_NAME_PATTERN.test(name) ||
+      names.has(name) ||
+      typeof rawDescription !== 'string' ||
+      rawDescription.length > MAX_WEBMCP_TOOL_DESCRIPTION_CHARS ||
+      (source !== 'imperative' && source !== 'declarative')
+    ) {
+      return null;
+    }
+    names.add(name);
+    const description = sanitizePageText(rawDescription).trim();
+    const inputSchema =
+      record['inputSchema'] === undefined
+        ? undefined
+        : cloneBoundedWebMCPInputSchema(record['inputSchema']);
+    if (record['inputSchema'] !== undefined && !inputSchema) return null;
+    tools.push({
+      name,
+      description,
+      source,
+      ...(inputSchema ? { inputSchema } : {}),
+    });
+  }
+  return { tools, url };
 }
 
 // ─── Bridge URL validation ──────────────────────────────────────────────────

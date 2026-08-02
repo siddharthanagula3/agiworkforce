@@ -119,6 +119,14 @@ jobs:
           node apps/extension/scripts/verify-package.mjs "dist/chrome/${ARCHIVE_NAME}"
           sha256sum "dist/chrome/${ARCHIVE_NAME}" > "dist/chrome/${ARCHIVE_NAME}.sha256"
 
+      - name: Install Chromium for packaged-byte smoke
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Exercise the exact store ZIP in Chromium
+        env:
+          ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
+        run: node apps/extension/e2e/smoke.mjs "dist/chrome/${ARCHIVE_NAME}"
+
       - name: Upload verified Chrome package
         uses: actions/upload-artifact@v7
         with:

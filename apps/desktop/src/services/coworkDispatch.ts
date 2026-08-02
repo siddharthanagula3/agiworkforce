@@ -13,7 +13,10 @@ import { resolveApprovalRequest } from './approvalResolution';
 import { type AgentTask, type AgentTaskStatus, useAgentTaskStore } from '../stores/agentTaskStore';
 import { type ApprovalRequest, useToolStore } from '../stores/chat/toolStore';
 import { useCoworkDispatchStore } from '../stores/coworkDispatchStore';
-import { sendCompanionControl } from '../stores/connectionStore';
+import {
+  MOBILE_COMPANION_SESSION_ENDED_EVENT,
+  sendCompanionControl,
+} from '../stores/connectionStore';
 
 const MAX_REQUEST_ID_LENGTH = 128;
 const MAX_PROMPT_LENGTH = 20_000;
@@ -408,7 +411,9 @@ async function publishAgentSnapshot(): Promise<void> {
 
 async function createTask(
   request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.create' }>,
+  isCurrentSession: () => boolean,
 ) {
+  if (!isCurrentSession()) return;
   if (!useCoworkDispatchStore.getState().enabled) {
     await sendTaskStatus(request.requestId, 'rejected', {
       error: 'Dispatch is disabled in Desktop Settings → Cowork.',
@@ -430,7 +435,17 @@ async function createTask(
   }
 
   try {
-    const taskId = await useAgentTaskStore.getState().submitGoal(request.prompt);
+    const taskId = await useAgentTaskStore.getState().submitGoal(request.prompt, {
+      assertCurrent: () => {
+        if (!isCurrentSession()) {
+          throw new DOMException(
+            'The Mobile Companion session ended before dispatch.',
+            'AbortError',
+          );
+        }
+      },
+    });
+    if (!isCurrentSession()) return;
     const dispatch: ActiveDispatch = {
       requestId: request.requestId,
       taskId,
@@ -445,6 +460,7 @@ async function createTask(
         : 'Task accepted by Desktop.',
     });
   } catch (error) {
+    if (!isCurrentSession()) return;
     await sendTaskStatus(request.requestId, 'failed', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -453,7 +469,9 @@ async function createTask(
 
 async function cancelTask(
   request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.cancel' }>,
+  isCurrentSession: () => boolean,
 ) {
+  if (!isCurrentSession()) return;
   const dispatch = dispatchesByRequest.get(request.requestId);
   const taskId = dispatch?.taskId;
   if (!taskId || (request.taskId !== undefined && request.taskId !== taskId)) {
@@ -464,6 +482,7 @@ async function cancelTask(
   }
 
   await useAgentTaskStore.getState().cancelTask(taskId);
+  if (!isCurrentSession()) return;
   dispatch.lastStatus = 'cancelled';
   requestIdByTask.set(taskId, request.requestId);
   await sendTaskStatus(request.requestId, 'cancelled', {
@@ -487,7 +506,11 @@ async function handleLegacyAgentCommand(payload: Record<string, unknown>): Promi
   return true;
 }
 
-async function handleCompanionControl(event: Event): Promise<void> {
+async function handleCompanionControl(
+  event: Event,
+  isCurrentSession: () => boolean,
+): Promise<void> {
+  if (!isCurrentSession()) return;
   const detail = (event as CustomEvent<MobileCompanionControlDetail>).detail;
   if (!detail || typeof detail.action !== 'string' || !isRecord(detail.payload)) return;
 
@@ -497,6 +520,7 @@ async function handleCompanionControl(event: Event): Promise<void> {
   ) {
     return;
   }
+  if (!isCurrentSession()) return;
   if (detail.action === 'sync_request') {
     await Promise.all([publishAgentSnapshot(), publishPendingApprovals(true)]);
     return;
@@ -509,8 +533,16 @@ async function handleCompanionControl(event: Event): Promise<void> {
 
   const request = parseDispatchTaskControl(detail.action, detail.payload);
   if (!request) return;
-  if (request.action === 'dispatch.task.create') await createTask(request);
-  else await cancelTask(request);
+  if (request.action === 'dispatch.task.create') await createTask(request, isCurrentSession);
+  else await cancelTask(request, isCurrentSession);
+}
+
+function resetCoworkDispatchSession(): void {
+  dispatchesByRequest.clear();
+  requestIdByTask.clear();
+  relayedApprovalIds.clear();
+  relayingApprovalIds.clear();
+  resolvingApprovalIds.clear();
 }
 
 /**
@@ -520,12 +552,21 @@ async function handleCompanionControl(event: Event): Promise<void> {
 export function initializeCoworkDispatchRuntime(): () => void {
   if (typeof window === 'undefined') return () => undefined;
 
+  let sessionGeneration = 0;
   const onControl = (event: Event) => {
-    void handleCompanionControl(event).catch((error) => {
-      console.warn('[cowork-dispatch] control handling failed:', error);
-    });
+    const eventGeneration = sessionGeneration;
+    void handleCompanionControl(event, () => eventGeneration === sessionGeneration).catch(
+      (error) => {
+        console.warn('[cowork-dispatch] control handling failed:', error);
+      },
+    );
+  };
+  const onSessionEnded = () => {
+    sessionGeneration += 1;
+    resetCoworkDispatchSession();
   };
   window.addEventListener('mobile-companion:control', onControl);
+  window.addEventListener(MOBILE_COMPANION_SESSION_ENDED_EVENT, onSessionEnded);
 
   const unsubscribeTasks = useAgentTaskStore.subscribe((state, previous) => {
     if (
@@ -576,16 +617,15 @@ export function initializeCoworkDispatchRuntime(): () => void {
   });
 
   return () => {
+    sessionGeneration += 1;
+    resetCoworkDispatchSession();
     window.removeEventListener('mobile-companion:control', onControl);
+    window.removeEventListener(MOBILE_COMPANION_SESSION_ENDED_EVENT, onSessionEnded);
     unsubscribeTasks();
     unsubscribeApprovals();
   };
 }
 
 export function resetCoworkDispatchRuntimeForTests(): void {
-  dispatchesByRequest.clear();
-  requestIdByTask.clear();
-  relayedApprovalIds.clear();
-  relayingApprovalIds.clear();
-  resolvingApprovalIds.clear();
+  resetCoworkDispatchSession();
 }

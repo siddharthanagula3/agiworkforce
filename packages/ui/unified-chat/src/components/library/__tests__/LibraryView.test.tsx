@@ -100,4 +100,37 @@ describe('shared LibraryView', () => {
 
     expect(await screen.findByTestId('library-empty-state')).toBeTruthy();
   });
+
+  it('only exposes a protected image URI to the renderer when the host explicitly opts in', async () => {
+    const imageItem = {
+      ...ITEM,
+      file_name: 'chart.png',
+      mime_type: 'image/png',
+      previewable: true,
+    };
+    const withoutDirectUri = makeTransport({
+      listPage: vi.fn(async () =>
+        jsonResponse({ items: [imageItem], has_more: false, next_offset: null }),
+      ),
+    });
+    const first = render(<LibraryView transport={withoutDirectUri} />);
+
+    await screen.findByText('chart.png');
+    expect(screen.queryByAltText('chart.png preview')).toBeNull();
+    first.unmount();
+
+    const inlinePreviewUri = vi.fn((uri: string) => uri);
+    const withDirectUri = makeTransport({
+      inlinePreviewUri,
+      listPage: vi.fn(async () =>
+        jsonResponse({ items: [imageItem], has_more: false, next_offset: null }),
+      ),
+    });
+    render(<LibraryView transport={withDirectUri} />);
+
+    expect((await screen.findByAltText('chart.png preview')).getAttribute('src')).toBe(
+      '/api/files/asset-1',
+    );
+    expect(inlinePreviewUri).toHaveBeenCalledWith('/api/files/asset-1');
+  });
 });

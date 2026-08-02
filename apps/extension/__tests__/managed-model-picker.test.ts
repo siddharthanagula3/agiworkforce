@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getModelEffortOptions,
+  getPickerModels,
+  getRoutingSlotModel,
+  resolveModelEffort,
+} from '@agiworkforce/types';
 import {
   formatManagedTierLabel,
+  getManagedEffortControlState,
   getManagedModelBadgeLabel,
   getManagedModelPickerOptions,
+  getManagedOutboundEffort,
   isFreeManagedTier,
   reconcileManagedModelSelection,
 } from '../src/features/cloud-bridge/managedModelPicker';
@@ -47,5 +54,43 @@ describe('managed model picker', () => {
     expect(isFreeManagedTier('hobby')).toBe(false);
     expect(isFreeManagedTier('pro')).toBe(false);
     expect(formatManagedTierLabel('enterprise')).toBe('Enterprise plan');
+  });
+
+  it('keeps Auto effort explicitly unresolved until a concrete route exists', () => {
+    expect(getManagedEffortControlState('auto', undefined, undefined)).toEqual({
+      status: 'awaiting-route',
+      options: [],
+      description: 'Auto chooses reasoning effort after routing to a model.',
+    });
+  });
+
+  it('derives the exact effort ladder and default from routed model metadata', () => {
+    const model = getPickerModels().find((candidate) => getModelEffortOptions(candidate.id).length);
+    expect(model).toBeDefined();
+    const modelId = model!.id;
+    const options = getModelEffortOptions(modelId);
+    const state = getManagedEffortControlState('auto', modelId, 'not-supported');
+
+    expect(state).toMatchObject({
+      status: 'ready',
+      modelId,
+      options,
+      effort: resolveModelEffort(modelId, 'not-supported'),
+    });
+  });
+
+  it('omits latent effort for unresolved Auto and reconciles it after a concrete route', () => {
+    const model = getPickerModels().find((candidate) => getModelEffortOptions(candidate.id).length);
+    expect(model).toBeDefined();
+    const modelId = model!.id;
+
+    expect(getManagedOutboundEffort('auto', undefined, 'high')).toBeUndefined();
+    expect(getManagedOutboundEffort('auto-economy', undefined, 'high')).toBeUndefined();
+    expect(getManagedOutboundEffort('auto', modelId, 'not-supported')).toBe(
+      resolveModelEffort(modelId, 'not-supported'),
+    );
+    expect(getManagedOutboundEffort(modelId, undefined, 'not-supported')).toBe(
+      resolveModelEffort(modelId, 'not-supported'),
+    );
   });
 });

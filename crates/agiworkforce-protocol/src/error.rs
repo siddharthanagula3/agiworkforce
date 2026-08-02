@@ -34,9 +34,7 @@ pub enum SandboxErr {
         "sandbox denied exec error, exit code: {}, stdout: {}, stderr: {}",
         .output.exit_code, .output.stdout.text, .output.stderr.text
     )]
-    Denied {
-        output: Box<ExecToolCallOutput>,
-    },
+    Denied { output: Box<ExecToolCallOutput> },
 
     /// Error from linux seccomp filter setup
     #[cfg(target_os = "linux")]

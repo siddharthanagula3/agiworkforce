@@ -215,18 +215,28 @@ fn delete_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<()> {
 /// Restore a saved conversation into an AgentSession.
 /// Replaces the session's messages, model, and token counts.
 pub fn restore_into_session(session: &mut AgentSession, conv: &SavedConversation) {
+    let original_model = session.model.clone();
+    let original_provider = session.provider.clone();
+    let original_privacy = session.privacy_mode;
+    if let Err(err) = session
+        .switch_model(&conv.model)
+        .and_then(|()| session.validate_privacy_boundary())
+    {
+        session.model = original_model;
+        session.provider = original_provider;
+        session.set_privacy_mode(original_privacy);
+        eprintln!(
+            "Saved conversation model `{}` cannot be restored into this trust boundary; keeping the current session unchanged. {}",
+            conv.model, err
+        );
+        return;
+    }
+
     session.messages = conv
         .messages
         .iter()
         .map(|m| Message::text(&m.role, &m.content))
         .collect();
-
-    if let Err(err) = session.switch_model(&conv.model) {
-        eprintln!(
-            "Saved conversation model `{}` is no longer recognized; keeping current model. {}",
-            conv.model, err
-        );
-    }
     session.total_input_tokens = conv.total_input_tokens;
     session.total_output_tokens = conv.total_output_tokens;
 
@@ -776,5 +786,41 @@ mod tests {
         assert_eq!(session.messages.len(), 4);
         assert_eq!(session.messages[0].text_content(), "Question one");
         assert_eq!(session.messages[3].text_content(), "Answer two");
+    }
+
+    #[test]
+    fn legacy_restore_cannot_replace_a_local_session_with_cloud_history() {
+        let conv = SavedConversation {
+            id: "legacy-cloud".to_string(),
+            title: "Legacy cloud conversation".to_string(),
+            model: "claude-sonnet-5".to_string(),
+            created_at: "2026-03-17T12:00:00Z".to_string(),
+            updated_at: "2026-03-17T12:00:00Z".to_string(),
+            messages: vec![SavedMessage {
+                role: "user".to_string(),
+                content: "legacy cloud secret".to_string(),
+                timestamp: "2026-03-17T12:00:00Z".to_string(),
+            }],
+            total_input_tokens: 100,
+            total_output_tokens: 200,
+        };
+        let mut session = AgentSession::new("llama3", &test_ctx(), None);
+        session
+            .messages
+            .push(Message::text("user", "existing local transcript"));
+        let messages_before = serde_json::to_value(&session.messages).expect("serialize messages");
+
+        restore_into_session(&mut session, &conv);
+
+        assert_eq!(session.model, "llama3");
+        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
+        assert_eq!(
+            serde_json::to_value(&session.messages).expect("serialize messages"),
+            messages_before
+        );
+        assert!(!session
+            .messages
+            .iter()
+            .any(|message| message.text_content().contains("legacy cloud secret")));
     }
 }

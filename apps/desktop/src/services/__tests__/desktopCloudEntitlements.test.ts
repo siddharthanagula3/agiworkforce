@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { getModelsForTierAndSurface } from '@agiworkforce/types';
+import {
+  getAutoRoutingProfiles,
+  getModelMetadataById,
+  getModelsForTierAndSurface,
+} from '@agiworkforce/types';
 
 import {
   canUseDesktopCloudAgiWork,
   canUseDesktopCloudCodeExecution,
   canUseDesktopCloudImageGeneration,
+  canUseDesktopCloudResearch,
   resolveDesktopCloudPickerModels,
 } from '../desktopCloudEntitlements';
 
@@ -39,6 +44,7 @@ describe('Desktop Cloud entitlement projection', () => {
     expect(canUseDesktopCloudAgiWork(null)).toBe(false);
     expect(canUseDesktopCloudImageGeneration(null)).toBe(false);
     expect(canUseDesktopCloudCodeExecution(null, true)).toBe(false);
+    expect(canUseDesktopCloudResearch(null, 'auto')).toBe(false);
   });
 
   it('prepends canonical Auto and intersects discovery with the hydrated tier and Desktop runtime', () => {
@@ -60,6 +66,10 @@ describe('Desktop Cloud entitlement projection', () => {
     expect(max.length).toBeGreaterThan(basic.length);
   });
 
+  it('does not advertise Auto without a live admitted backing model', () => {
+    expect(resolveDesktopCloudPickerModels([], 'basic')).toEqual([]);
+  });
+
   it('matches the server billing gates for AGI Work, images, and managed sandboxes', () => {
     expect(canUseDesktopCloudAgiWork('basic')).toBe(false);
     expect(canUseDesktopCloudAgiWork('pro')).toBe(true);
@@ -69,5 +79,32 @@ describe('Desktop Cloud entitlement projection', () => {
     expect(canUseDesktopCloudCodeExecution('free', true)).toBe(false);
     expect(canUseDesktopCloudCodeExecution('basic', true)).toBe(true);
     expect(canUseDesktopCloudCodeExecution('pro', false)).toBe(false);
+  });
+
+  it('does not advertise Deep Research below the canonical tier policy', () => {
+    const auto = getAutoRoutingProfiles()[0]?.id;
+    expect(auto).toBeTruthy();
+    expect(canUseDesktopCloudResearch('free', auto)).toBe(false);
+    expect(canUseDesktopCloudResearch('basic', auto)).toBe(false);
+    expect(canUseDesktopCloudResearch('pro', auto)).toBe(false);
+    expect(canUseDesktopCloudResearch('max', auto)).toBe(true);
+    expect(canUseDesktopCloudResearch('enterprise', auto)).toBe(true);
+  });
+
+  it('combines tier admission with the selected model capability and fails closed on unknown', () => {
+    const discovered = discoveredMaxCatalog();
+    const researchModel = discovered.find(
+      (model) => getModelMetadataById(model.id)?.capabilities.research === true,
+    );
+    const nonResearchModel = discovered.find(
+      (model) => getModelMetadataById(model.id)?.capabilities.research !== true,
+    );
+    expect(researchModel).toBeTruthy();
+    expect(nonResearchModel).toBeTruthy();
+
+    expect(canUseDesktopCloudResearch('max', researchModel?.id)).toBe(true);
+    expect(canUseDesktopCloudResearch('max', nonResearchModel?.id)).toBe(false);
+    expect(canUseDesktopCloudResearch('max', 'unknown-model')).toBe(false);
+    expect(canUseDesktopCloudResearch('max', null)).toBe(false);
   });
 });

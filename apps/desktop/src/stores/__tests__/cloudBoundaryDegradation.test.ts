@@ -126,4 +126,17 @@ describe('DES-C10: a project-list failure stays scoped to projects', () => {
     expect(app).toContain('setConversationBoundaryRetry');
     expect(app).toContain('Dismiss conversation loading error');
   });
+
+  it('seeds an explicit conversation boundary before mounting an empty or degraded shell', () => {
+    const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+    const finalizerStart = app.indexOf('.finally(() => {');
+    const finalizerEnd = app.indexOf('return () => {', finalizerStart);
+    const finalizer = app.slice(finalizerStart, finalizerEnd);
+
+    expect(finalizerStart).toBeGreaterThan(-1);
+    expect(finalizer).toContain('useDesktopChatStore.getState().ensureActiveConversation()');
+    expect(finalizer.indexOf('ensureActiveConversation()')).toBeLessThan(
+      finalizer.indexOf('setConversationBoundaryReady(boundaryIsCurrent)'),
+    );
+  });
 });

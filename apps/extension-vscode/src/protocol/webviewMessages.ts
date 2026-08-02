@@ -31,6 +31,29 @@ const sendMessage = z.object({
     text: z.string().min(1).max(100_000),
     model: z.string().min(1).max(200).optional(),
     browseWeb: z.boolean().optional(),
+    followUpBehavior: z.enum(['queue', 'steer']).optional(),
+    clientMessageId: z
+      .string()
+      .min(1)
+      .max(100)
+      .regex(/^[A-Za-z0-9._-]+$/u)
+      .optional(),
+    references: z
+      .array(
+        z.object({
+          path: z.string().min(1).max(4096),
+          range: z
+            .object({
+              startLine: z.number().int().nonnegative(),
+              startCharacter: z.number().int().nonnegative(),
+              endLine: z.number().int().nonnegative(),
+              endCharacter: z.number().int().nonnegative(),
+            })
+            .optional(),
+        }),
+      )
+      .max(50)
+      .optional(),
   }),
 });
 

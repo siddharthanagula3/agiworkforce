@@ -54,6 +54,13 @@ const embeddedPort = process.env.TAURI_WEBDRIVER_PORT
   ? Number(process.env.TAURI_WEBDRIVER_PORT)
   : 40000 + Math.floor(Math.random() * 5000);
 
+// @wdio/tauri-service's embedded DirectEvalClient does not read the service
+// option above; it independently resolves TAURI_WEBDRIVER_PORT and otherwise
+// falls back to 4445. Publish the chosen random port so browser.tauri.execute()
+// and focus detection address this run's native host instead of a stale app
+// still listening on the default port.
+process.env['TAURI_WEBDRIVER_PORT'] = String(embeddedPort);
+
 // Reading the SQLCipher key from the OS Keychain blocks on a GUI approval
 // dialog whenever the requesting binary's signature is unknown — and every
 // `cargo build` re-signs the debug binary. Nobody can click Allow under WDIO,
@@ -103,11 +110,10 @@ export const config: WebdriverIO.Config = {
       rmSync(dir, { recursive: true, force: true });
     }
 
-    // The harness build rewrites the product CSP so the isolation iframe is
-    // reachable (see wdio/tauri-config.mjs). That keeps specs runnable, but it
-    // must never let the underlying product defect go quiet: as long as the
-    // shipped config pins `frame-src` while the isolation pattern is on, the
-    // PACKAGED app blocks its own IPC relay and every invoke() hangs forever.
+    // If the product CSP ever regresses to an explicit frame-src, the harness
+    // merge keeps specs runnable (see wdio/tauri-config.mjs). Never let that
+    // compensation hide the product defect: a packaged isolation build would
+    // block its own IPC relay and every invoke() would hang forever.
     const { readFileSync } = await import('node:fs');
     const productConfigPath = resolve(process.cwd(), 'src-tauri/tauri.conf.json');
     const productConfig = JSON.parse(readFileSync(productConfigPath, 'utf8')) as {
@@ -160,19 +166,74 @@ export const config: WebdriverIO.Config = {
 
   // A binary built without `tauri/custom-protocol` loads the frontend from the
   // devUrl, where the isolation relay's ready handshake is silently dropped and
-  // every invoke() hangs forever (see the header). That failure renders a
-  // plausible-looking loading screen instead of an error, so fail loudly here
-  // rather than let every spec time out on a mystery.
+  // every invoke() hangs forever (see the header). The WDIO frontend plugin also
+  // requires the harness-only `app.withGlobalTauri=true` merge so its direct-eval
+  // channel can reach window.__TAURI__.core.invoke. Both failures render
+  // plausible-looking UI, so fail loudly here rather than let every command pay
+  // the plugin's 5s timeout.
   before: async () => {
-    const origin = await browser.execute(() => location.protocol);
-    if (origin !== 'tauri:') {
+    // WDIO runs service and config `before` hooks concurrently. The embedded
+    // driver can therefore attach while WebKit still exposes its initial
+    // about:blank document. Poll the renderer instead of misdiagnosing that
+    // transient document as a missing custom-protocol feature.
+    let runtime = {
+      protocol: 'unavailable',
+      hasGlobalInvoke: false,
+      hasWdioPlugin: false,
+    };
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      try {
+        runtime = await browser.execute(() => {
+          const harnessWindow = window as typeof window & {
+            __TAURI__?: { core?: { invoke?: unknown } };
+            wdioTauri?: { waitForInit?: unknown };
+          };
+          return {
+            protocol: location.protocol,
+            hasGlobalInvoke: typeof harnessWindow.__TAURI__?.core?.invoke === 'function',
+            hasWdioPlugin: typeof harnessWindow.wdioTauri?.waitForInit === 'function',
+          };
+        });
+      } catch {
+        // The initial browsing context may disappear between navigation and
+        // executeScript. Retry against the next renderer document.
+      }
+      if (runtime.protocol === 'tauri:' && runtime.hasGlobalInvoke && runtime.hasWdioPlugin) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (runtime.protocol !== 'tauri:') {
       throw new Error(
-        `WDIO refuses to run: the webview loaded the frontend over "${origin}" instead of the ` +
+        `WDIO refuses to run: the webview loaded the frontend over "${runtime.protocol}" instead of the ` +
           'Tauri asset protocol, so the app was built without `--features tauri/custom-protocol`. ' +
           'Under the isolation pattern that build can never complete an IPC call. ' +
           'Rebuild with `pnpm run test:e2e:build`.',
       );
     }
+    if (!runtime.hasGlobalInvoke) {
+      throw new Error(
+        'WDIO refuses to run: window.__TAURI__.core.invoke is unavailable. ' +
+          'The @wdio/tauri-plugin bridge requires the isolated harness config to set ' +
+          '`app.withGlobalTauri=true`. Rebuild with `pnpm run test:e2e:build`.',
+      );
+    }
+    if (!runtime.hasWdioPlugin) {
+      throw new Error(
+        'WDIO refuses to run: the frontend @wdio/tauri-plugin did not initialize. ' +
+          'The bundled harness must be built with `VITE_WDIO_E2E=1`; rebuild with ' +
+          '`pnpm run test:e2e:build`.',
+      );
+    }
+
+    // Mark the single `main` webview as an explicit selection. The service's
+    // generic auto-focus hook otherwise compares the native window title
+    // ("AGI Workforce") with document.title ("AGI") before every selector,
+    // repeatedly tries to switch back to the already-active handle, and turns
+    // ordinary waits into a command storm. Explicit selection is the service's
+    // supported way to keep focus management from undoing the caller's target.
+    await browser.tauri.switchWindow('main');
   },
 
   framework: 'mocha',

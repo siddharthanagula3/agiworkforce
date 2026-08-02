@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
 import {
   ChatStateManager,
   type ExtToWebviewMessage,
@@ -9,8 +10,13 @@ import {
   buildGroupedQuickPickItems,
   getModelProviderInfo,
 } from '../features/model-picker/modelConstants';
-import type { LocalRuntimeClient, LocalRuntimeEvent } from '../integrations/localRuntimeClient';
+import {
+  LocalRuntimeProtocolError,
+  type LocalRuntimeClient,
+  type LocalRuntimeEvent,
+} from '../integrations/localRuntimeClient';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
+import type { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
 import {
   setContextPanelInstance,
   type ContextPanelProvider,
@@ -22,23 +28,81 @@ import {
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
 
+function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
+  return {
+    id: 'thread-1',
+    title: 'Developer session',
+    model: 'auto',
+    cwd: '/workspace',
+    provider: 'anthropic',
+    trustMode: 'byok',
+    createdAt: '2026-08-02T12:00:00.000Z',
+    updatedAt: '2026-08-02T12:00:00.000Z',
+    createdBy: 'vscode',
+    status: 'idle',
+    ...overrides,
+  };
+}
+
 function makeHarness(
   options: {
     approvalFailure?: Error;
     startTurn?: Promise<{ id: string }>;
     localModels?: Array<{ id: string; provider: 'ollama' | 'lmstudio' }>;
     localModelError?: Error;
+    resolvedConversation?: ThreadReadResponse;
+    resumedThread?: ThreadSummary | Error;
+    steerFailure?: Error;
+    steerTurn?: Promise<{ id: string }>;
+    interruptTurn?: Promise<void>;
   } = {},
 ) {
   const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+  const startedThreads = new Map<string, ThreadSummary>();
   const runtime = {
-    startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+    startThread: vi
+      .fn()
+      .mockImplementation(async (params: { model?: string; provider?: 'ollama' | 'lmstudio' }) => {
+        const model = params.model ?? 'auto';
+        const thread = threadSummary({
+          model,
+          provider: params.provider ?? getModelProviderInfo(model).providerId ?? 'anthropic',
+          trustMode: params.provider === undefined ? 'byok' : 'local',
+        });
+        startedThreads.set(thread.id, thread);
+        return thread;
+      }),
+    resumeThread:
+      options.resumedThread instanceof Error
+        ? vi.fn().mockRejectedValue(options.resumedThread)
+        : vi
+            .fn()
+            .mockImplementation(
+              async (threadId: string) =>
+                options.resumedThread ??
+                (options.resolvedConversation?.thread.id === threadId
+                  ? options.resolvedConversation.thread
+                  : threadSummary({ id: threadId })),
+            ),
+    readThread: vi.fn().mockImplementation(async (threadId: string) =>
+      options.resolvedConversation?.thread.id === threadId
+        ? options.resolvedConversation
+        : {
+            thread: startedThreads.get(threadId) ?? threadSummary({ id: threadId }),
+            messages: [],
+            transcriptTruncated: false,
+          },
+    ),
     listLocalModels:
       options.localModelError === undefined
         ? vi.fn().mockResolvedValue({ models: options.localModels ?? [] })
         : vi.fn().mockRejectedValue(options.localModelError),
     startTurn: vi.fn(() => options.startTurn ?? Promise.resolve({ id: 'turn-1' })),
-    interruptTurn: vi.fn().mockResolvedValue(undefined),
+    steerTurn:
+      options.steerFailure === undefined
+        ? vi.fn(() => options.steerTurn ?? Promise.resolve({ id: 'turn-1' }))
+        : vi.fn().mockRejectedValue(options.steerFailure),
+    interruptTurn: vi.fn(() => options.interruptTurn ?? Promise.resolve()),
     respondToApproval:
       options.approvalFailure === undefined
         ? vi.fn().mockResolvedValue(undefined)
@@ -53,11 +117,22 @@ function makeHarness(
   } as unknown as LocalRuntimePool;
   const context = new vscode.ExtensionContext();
   const posted: ExtToWebviewMessage[] = [];
+  const conversationTreeProvider =
+    options.resolvedConversation === undefined
+      ? undefined
+      : ({
+          resolveThread: vi.fn().mockResolvedValue({
+            response: options.resolvedConversation,
+            runtime,
+            cwd: options.resolvedConversation.thread.cwd ?? '/workspace',
+          }),
+          refresh: vi.fn(),
+        } as unknown as ConversationTreeProvider);
   const manager = new ChatStateManager(
     context.secrets,
     context,
     (message) => posted.push(message),
-    undefined,
+    conversationTreeProvider,
     context.workspaceState,
     pool,
   );
@@ -65,6 +140,7 @@ function makeHarness(
     context,
     manager,
     runtime,
+    conversationTreeProvider,
     posted,
     emit(event: LocalRuntimeEvent) {
       for (const listener of listeners) listener(event);
@@ -109,6 +185,76 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({
       type: 'error',
       payload: { message: 'Trust this workspace before starting a local developer session.' },
+    });
+  });
+
+  it.each([
+    [
+      'a relative cwd',
+      threadSummary({ cwd: 'workspace' }),
+      'workspace metadata that does not match',
+    ],
+    [
+      'a non-runnable status',
+      threadSummary({ status: 'running' }),
+      'non-runnable status "running"',
+    ],
+  ] as const)('rejects a new thread with %s before prompt egress', async (_case, thread, error) => {
+    const harness = makeHarness();
+    harness.runtime.startThread.mockResolvedValueOnce(thread);
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'SECRET_PROMPT', clientMessageId: 'msg-invalid-thread' },
+    });
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining(error) },
+    });
+  });
+
+  it('rejects a non-Local start response before prompt and attachment egress', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+    });
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: 'gemma4:e4b' },
+    });
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'secret.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 6,
+            dataUrl: 'data:text/plain;base64,U0VDUkVU',
+          },
+        ],
+      },
+    });
+    harness.runtime.startThread.mockResolvedValueOnce(
+      threadSummary({ model: 'gemma4:e4b', provider: 'anthropic', trustMode: 'byok' }),
+    );
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'SECRET_PROMPT', clientMessageId: 'msg-local-mismatch' },
+    });
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({
+        type: 'attachmentsConsumed',
+      }),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining('when local was requested') },
     });
   });
 
@@ -195,14 +341,1092 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
-  it('announces the unavoidable context reset when switching local provider boundaries', async () => {
+  it.each(['idle', 'failed'] as const)(
+    'resumes a %s runtime session into live chat, replays it after ready, and appends on the same id',
+    async (status) => {
+      const persisted = {
+        thread: threadSummary({
+          id: 'history-1',
+          title: 'Persisted work',
+          status,
+        }),
+        messages: [
+          { role: 'system', text: 'internal runtime metadata' },
+          { role: 'user', text: 'Inspect this workspace' },
+          { role: 'assistant', text: 'I found the owner module.' },
+        ],
+        transcriptTruncated: false,
+      } satisfies ThreadReadResponse;
+      const harness = makeHarness({ resolvedConversation: persisted });
+
+      await expect(harness.manager.resumeConversation('history-1')).resolves.toBe(true);
+      expect(harness.runtime.resumeThread).toHaveBeenCalledWith('history-1');
+      expect(harness.posted).toContainEqual({
+        type: 'conversationLoaded',
+        payload: {
+          threadId: 'history-1',
+          title: 'Persisted work',
+          model: 'auto',
+          trustMode: 'byok',
+          provider: 'anthropic',
+          messages: [
+            { role: 'user', text: 'Inspect this workspace' },
+            { role: 'assistant', text: 'I found the owner module.' },
+          ],
+          transcriptTruncated: false,
+        },
+      });
+
+      harness.posted.length = 0;
+      await harness.manager.handleMessage({ type: 'ready' });
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'conversationLoaded',
+          payload: expect.objectContaining({ threadId: 'history-1' }),
+        }),
+      );
+
+      harness.runtime.readThread.mockResolvedValueOnce({
+        thread: threadSummary({ id: 'history-1', title: 'Persisted work' }),
+        messages: [
+          ...persisted.messages,
+          { role: 'user', text: 'Make the narrow fix' },
+          { role: 'assistant', text: 'The fix is complete.' },
+        ],
+        transcriptTruncated: false,
+      });
+      const send = harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: 'Make the narrow fix', clientMessageId: 'msg-resumed' },
+      });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      expect(harness.runtime.startThread).not.toHaveBeenCalled();
+      expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ threadId: 'history-1' }),
+      );
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'history-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'The fix is complete.',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      await send;
+
+      harness.posted.length = 0;
+      await harness.manager.handleMessage({ type: 'ready' });
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'conversationLoaded',
+          payload: expect.objectContaining({
+            threadId: 'history-1',
+            messages: expect.arrayContaining([
+              { role: 'user', text: 'Make the narrow fix' },
+              { role: 'assistant', text: 'The fix is complete.' },
+            ]),
+          }),
+        }),
+      );
+    },
+  );
+
+  it('warns when resumed history is only the bounded newest-message window', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'truncated-1' }),
+        messages: [{ role: 'user', text: 'Newest persisted prompt' }],
+        transcriptTruncated: true,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('truncated-1')).resolves.toBe(true);
+
+    expect(harness.posted).toContainEqual({
+      type: 'conversationLoaded',
+      payload: expect.objectContaining({
+        threadId: 'truncated-1',
+        transcriptTruncated: true,
+      }),
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'sessionNotice',
+      payload: {
+        message: expect.stringContaining('bounded newest-message window'),
+      },
+    });
+  });
+
+  it.each(['running', 'awaiting_approval', 'archived'] as const)(
+    'refuses to resume a %s session owned by another lifecycle',
+    async (status) => {
+      const harness = makeHarness({
+        resolvedConversation: {
+          thread: threadSummary({ id: 'blocked-1', status }),
+          messages: [],
+          transcriptTruncated: false,
+        },
+      });
+
+      await expect(harness.manager.resumeConversation('blocked-1')).resolves.toBe(false);
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).toContainEqual(expect.objectContaining({ type: 'error' }));
+    },
+  );
+
+  it('refuses legacy sessions whose persisted trust boundary is unknown', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'legacy-1', trustMode: 'unknown', provider: undefined }),
+        messages: [{ role: 'user', text: 'Legacy prompt' }],
+        transcriptTruncated: false,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('legacy-1')).resolves.toBe(false);
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining('no verified Local, BYOK, or Managed boundary') },
+    });
+  });
+
+  it('retains a resumed transcript when a follow-up is rejected before dispatch', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'history-1' }),
+        messages: [{ role: 'user', text: 'Keep this visible' }],
+        transcriptTruncated: false,
+      },
+    });
+    await harness.manager.resumeConversation('history-1');
+    vscode.workspace.isTrusted = false;
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Rejected follow-up', clientMessageId: 'msg-rejected' },
+    });
+    vscode.workspace.isTrusted = true;
+    harness.posted.length = 0;
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'conversationLoaded',
+        payload: expect.objectContaining({
+          threadId: 'history-1',
+          messages: [{ role: 'user', text: 'Keep this visible' }],
+        }),
+      }),
+    );
+  });
+
+  it('lets New Chat invalidate a delayed history selection without stale UI effects', async () => {
+    const persisted = {
+      thread: threadSummary({ id: 'delayed-1' }),
+      messages: [{ role: 'user', text: 'Do not resurrect this' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted });
+    let resolveHistory!: (value: {
+      response: ThreadReadResponse;
+      runtime: LocalRuntimeClient;
+      cwd: string;
+    }) => void;
+    vi.mocked(harness.conversationTreeProvider!.resolveThread).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHistory = resolve;
+      }),
+    );
+    const resume = harness.manager.resumeConversation('delayed-1');
+
+    await harness.manager.handleMessage({ type: 'newChat' });
+    resolveHistory({
+      response: persisted,
+      runtime: harness.runtime as unknown as LocalRuntimeClient,
+      cwd: '/workspace',
+    });
+
+    await expect(resume).resolves.toBe(false);
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationLoaded' }),
+    );
+  });
+
+  it('lets a newly-started send invalidate a delayed history selection', async () => {
+    const persisted = {
+      thread: threadSummary({ id: 'delayed-1' }),
+      messages: [{ role: 'user', text: 'Old history' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted });
+    let resolveHistory!: (value: {
+      response: ThreadReadResponse;
+      runtime: LocalRuntimeClient;
+      cwd: string;
+    }) => void;
+    vi.mocked(harness.conversationTreeProvider!.resolveThread).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHistory = resolve;
+      }),
+    );
+    const resume = harness.manager.resumeConversation('delayed-1');
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Newest intent', clientMessageId: 'msg-newest-intent' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    resolveHistory({
+      response: persisted,
+      runtime: harness.runtime as unknown as LocalRuntimeClient,
+      cwd: '/workspace',
+    });
+
+    await expect(resume).resolves.toBe(false);
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('gives the latest of two out-of-order history selections sole ownership', async () => {
+    const secondConversation = {
+      thread: threadSummary({ id: 'history-new', title: 'Newest history' }),
+      messages: [{ role: 'user', text: 'Newest persisted prompt' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const firstConversation = {
+      thread: threadSummary({ id: 'history-old', title: 'Older history' }),
+      messages: [{ role: 'user', text: 'Stale persisted prompt' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: secondConversation });
+    let resolveFirst!: (value: {
+      response: ThreadReadResponse;
+      runtime: LocalRuntimeClient;
+      cwd: string;
+    }) => void;
+    let resolveSecond!: (value: {
+      response: ThreadReadResponse;
+      runtime: LocalRuntimeClient;
+      cwd: string;
+    }) => void;
+    vi.mocked(harness.conversationTreeProvider!.resolveThread)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const first = harness.manager.resumeConversation('history-old');
+    const second = harness.manager.resumeConversation('history-new');
+    resolveSecond({
+      response: secondConversation,
+      runtime: harness.runtime as unknown as LocalRuntimeClient,
+      cwd: '/workspace',
+    });
+    await expect(second).resolves.toBe(true);
+    resolveFirst({
+      response: firstConversation,
+      runtime: harness.runtime as unknown as LocalRuntimeClient,
+      cwd: '/workspace',
+    });
+
+    await expect(first).resolves.toBe(false);
+    expect(harness.runtime.resumeThread).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.resumeThread).toHaveBeenCalledWith('history-new');
+    const loaded = harness.posted.filter((message) => message.type === 'conversationLoaded');
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]).toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          threadId: 'history-new',
+          messages: [{ role: 'user', text: 'Newest persisted prompt' }],
+        }),
+      }),
+    );
+  });
+
+  it('rejects a resumed runtime response owned by another workspace', async () => {
+    const persisted = {
+      thread: threadSummary({ id: 'wrong-cwd-1' }),
+      messages: [],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({
+      resolvedConversation: persisted,
+      resumedThread: threadSummary({ id: 'wrong-cwd-1', cwd: '/another-workspace' }),
+    });
+
+    await expect(harness.manager.resumeConversation('wrong-cwd-1')).resolves.toBe(false);
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining('workspace does not match') },
+    });
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationLoaded' }),
+    );
+  });
+
+  it('rejects an unavailable persisted model instead of silently changing its route', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'unknown-model-1', model: 'removed-provider-model' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('unknown-model-1')).resolves.toBe(false);
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining('not available') },
+    });
+  });
+
+  it('continues an authoritative Local Auto session without treating Auto as a cloud handoff', async () => {
+    const persisted = {
+      thread: threadSummary({
+        id: 'local-auto-1',
+        model: 'auto',
+        provider: 'ollama',
+        trustMode: 'local',
+      }),
+      messages: [],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted, localModels: [] });
+
+    await expect(harness.manager.resumeConversation('local-auto-1')).resolves.toBe(true);
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue the same Local Auto route', clientMessageId: 'msg-local-auto' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    expect(harness.runtime.startThread).not.toHaveBeenCalled();
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'local-auto-1', model: 'auto' }),
+    );
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({
+        type: 'followUpStatus',
+        payload: expect.objectContaining({ clientMessageId: 'msg-local-auto', kind: 'error' }),
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'local-auto-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('continues an authoritative Local custom model even when discovery omits it', async () => {
+    const persisted = {
+      thread: threadSummary({
+        id: 'local-custom-1',
+        model: 'localhost/custom-coder',
+        provider: 'lmstudio',
+        trustMode: 'local',
+      }),
+      messages: [],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted, localModels: [] });
+
+    await expect(harness.manager.resumeConversation('local-custom-1')).resolves.toBe(true);
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue the same custom model', clientMessageId: 'msg-local-custom' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    expect(harness.runtime.startThread).not.toHaveBeenCalled();
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'local-custom-1',
+        model: 'localhost/custom-coder',
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'local-custom-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('drains active-turn follow-ups in controller-local FIFO order', async () => {
+    const harness = makeHarness();
+    harness.runtime.startTurn
+      .mockResolvedValueOnce({ id: 'turn-1' })
+      .mockResolvedValueOnce({ id: 'turn-2' })
+      .mockResolvedValueOnce({ id: 'turn-3' });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'First', clientMessageId: 'msg-first' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Second',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-second',
+      },
+    });
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Third',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-third',
+      },
+    });
+    expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1);
+
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'one',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(harness.posted).toContainEqual({
+      type: 'turnStarted',
+      payload: {
+        queued: true,
+        queueRemaining: 1,
+        clientMessageId: 'msg-second',
+        text: 'Second',
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'two',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(3));
+    expect(harness.posted).toContainEqual({
+      type: 'turnStarted',
+      payload: {
+        queued: true,
+        queueRemaining: 0,
+        clientMessageId: 'msg-third',
+        text: 'Third',
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-3',
+      status: 'completed',
+      response: 'three',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    const dispatchedText = harness.runtime.startTurn.mock.calls.map(
+      ([params]) => params.input.find((input: { type: string }) => input.type === 'text')?.text,
+    );
+    expect(dispatchedText).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('caps the volatile follow-up FIFO at 20 and preserves accepted order and rejected attachments', async () => {
+    const harness = makeHarness();
+    let turnSequence = 0;
+    harness.runtime.startTurn.mockImplementation(async () => ({ id: `turn-${++turnSequence}` }));
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Active turn', clientMessageId: 'msg-active' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    for (let index = 1; index <= 20; index++) {
+      await harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: {
+          text: `Queued ${index}`,
+          followUpBehavior: 'queue',
+          clientMessageId: `msg-queued-${index}`,
+        },
+      });
+    }
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'overflow.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+    const attachmentAck = [...harness.posted]
+      .reverse()
+      .find((message) => message.type === 'attachFilesAck') as
+      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
+      | undefined;
+    const attachmentId = attachmentAck?.payload.added[0]?.id;
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Rejected overflow',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-overflow',
+      },
+    });
+
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: {
+        kind: 'error',
+        message:
+          'Follow-up capacity is full (20 pending). Try again after the active turn finishes.',
+        queueDepth: 20,
+        attachmentIds: [attachmentId],
+        clientMessageId: 'msg-overflow',
+      },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsReleased',
+      payload: { ids: [attachmentId] },
+    });
+
+    for (let index = 0; index <= 20; index++) {
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: `turn-${index + 1}`,
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      if (index < 20) {
+        await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(index + 2));
+      }
+    }
+    await first;
+
+    const dispatchedText = harness.runtime.startTurn.mock.calls.map(
+      ([params]) => params.input.find((input: { type: string }) => input.type === 'text')?.text,
+    );
+    expect(dispatchedText).toEqual([
+      'Active turn',
+      ...Array.from({ length: 20 }, (_, index) => `Queued ${index + 1}`),
+    ]);
+    expect(dispatchedText).not.toContain('Rejected overflow');
+
+    const retry = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Retry after capacity frees', clientMessageId: 'msg-retry' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(22));
+    expect(harness.runtime.startTurn.mock.calls[21]?.[0].input).toContainEqual({
+      type: 'image',
+      image_url: 'data:image/png;base64,AQID',
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-22',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await retry;
+  });
+
+  it('ignores a stale prior terminal while the next queued turn is still starting', async () => {
+    let resolveSecondTurn!: (turn: { id: string }) => void;
+    const delayedSecondTurn = new Promise<{ id: string }>((resolve) => {
+      resolveSecondTurn = resolve;
+    });
+    const harness = makeHarness();
+    harness.runtime.startTurn
+      .mockResolvedValueOnce({ id: 'turn-1' })
+      .mockReturnValueOnce(delayedSecondTurn)
+      .mockResolvedValueOnce({ id: 'turn-3' });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'First', clientMessageId: 'msg-buffer-first' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Second',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-buffer-second',
+      },
+    });
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Third',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-buffer-third',
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'first done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'stale duplicate',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    resolveSecondTurn({ id: 'turn-2' });
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'turnStarted',
+        payload: {
+          queued: true,
+          queueRemaining: 1,
+          clientMessageId: 'msg-buffer-second',
+          text: 'Second',
+        },
+      }),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2);
+
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'second done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(3));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-3',
+      status: 'completed',
+      response: 'third done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+  });
+
+  it('steers the active turn with the expected turn id', async () => {
+    const harness = makeHarness();
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Initial', clientMessageId: 'msg-initial' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Adjust course',
+        followUpBehavior: 'steer',
+        clientMessageId: 'msg-steer',
+      },
+    });
+
+    expect(harness.runtime.steerTurn).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      expectedTurnId: 'turn-1',
+      input: [{ type: 'text', text: 'Adjust course', text_elements: [] }],
+    });
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({ kind: 'steered', clientMessageId: 'msg-steer' }),
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+  });
+
+  it('falls back to FIFO when the active turn changes before steering', async () => {
+    const harness = makeHarness({
+      steerFailure: new LocalRuntimeProtocolError('active turn changed', -32009),
+    });
+    harness.runtime.startTurn
+      .mockResolvedValueOnce({ id: 'turn-1' })
+      .mockResolvedValueOnce({ id: 'turn-2' });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Initial', clientMessageId: 'msg-initial' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Race-safe follow-up',
+        followUpBehavior: 'steer',
+        clientMessageId: 'msg-fallback',
+      },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({ kind: 'queue-fallback', clientMessageId: 'msg-fallback' }),
+    });
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+  });
+
+  it('cancels an in-progress steer exactly when New Chat wins the race', async () => {
+    let resolveSteer!: (turn: { id: string }) => void;
+    const delayedSteer = new Promise<{ id: string }>((resolve) => {
+      resolveSteer = resolve;
+    });
+    const harness = makeHarness({ steerTurn: delayedSteer });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Initial', clientMessageId: 'msg-steer-race-initial' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'steer.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+    const attachmentAck = harness.posted.find((message) => message.type === 'attachFilesAck') as
+      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
+      | undefined;
+    const attachmentId = attachmentAck?.payload.added[0]?.id;
+    const steer = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Delayed steer',
+        followUpBehavior: 'steer',
+        clientMessageId: 'msg-delayed-steer',
+      },
+    });
+    await vi.waitFor(() => expect(harness.runtime.steerTurn).toHaveBeenCalledOnce());
+
+    await harness.manager.handleMessage({ type: 'newChat' });
+    resolveSteer({ id: 'turn-1' });
+    await steer;
+    await first;
+
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsReleased',
+      payload: { ids: [attachmentId] },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'cancelled',
+        clientMessageId: 'msg-delayed-steer',
+      }),
+    });
+    expect(harness.posted).not.toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'steered',
+        clientMessageId: 'msg-delayed-steer',
+      }),
+    });
+  });
+
+  it('cancels an awaiting steer exactly when Stop wins the RPC race', async () => {
+    let resolveSteer!: (turn: { id: string }) => void;
+    const delayedSteer = new Promise<{ id: string }>((resolve) => {
+      resolveSteer = resolve;
+    });
+    const harness = makeHarness({ steerTurn: delayedSteer });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Initial', clientMessageId: 'msg-stop-steer-initial' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'stop-steer.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+    const attachmentAck = [...harness.posted]
+      .reverse()
+      .find((message) => message.type === 'attachFilesAck') as
+      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
+      | undefined;
+    const attachmentId = attachmentAck?.payload.added[0]?.id;
+    const steer = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Delayed steer stopped by the user',
+        followUpBehavior: 'steer',
+        clientMessageId: 'msg-stop-delayed-steer',
+      },
+    });
+    await vi.waitFor(() => expect(harness.runtime.steerTurn).toHaveBeenCalledOnce());
+
+    await harness.manager.handleMessage({ type: 'cancel' });
+    resolveSteer({ id: 'turn-1' });
+    await steer;
+    await first;
+
+    expect(harness.runtime.interruptTurn).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsReleased',
+      payload: { ids: [attachmentId] },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'cancelled',
+        clientMessageId: 'msg-stop-delayed-steer',
+      }),
+    });
+    expect(harness.posted).not.toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'steered',
+        clientMessageId: 'msg-stop-delayed-steer',
+      }),
+    });
+  });
+
+  it('cancels queued ownership exactly and never leaks its attachment into a new chat', async () => {
+    const harness = makeHarness();
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Initial', clientMessageId: 'msg-initial' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'queued.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+    const attachmentAck = harness.posted.find((message) => message.type === 'attachFilesAck') as
+      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
+      | undefined;
+    const attachmentId = attachmentAck?.payload.added[0]?.id;
+    expect(attachmentId).toMatch(/^att-/);
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Queued with image',
+        followUpBehavior: 'queue',
+        clientMessageId: 'msg-queued-image',
+      },
+    });
+
+    await harness.manager.handleMessage({ type: 'newChat' });
+    await first;
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsReleased',
+      payload: { ids: [attachmentId] },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'cancelled',
+        clientMessageId: 'msg-queued-image',
+      }),
+    });
+
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fresh message', clientMessageId: 'msg-fresh' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(harness.runtime.startTurn.mock.calls[1]?.[0].input).not.toContainEqual(
+      expect.objectContaining({ type: 'image' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'fresh',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await next;
+  });
+
+  it('hands an immediate post-New Chat send to the new epoch exactly once', async () => {
+    let resolveInterrupt!: () => void;
+    const delayedInterrupt = new Promise<void>((resolve) => {
+      resolveInterrupt = resolve;
+    });
+    const harness = makeHarness({ interruptTurn: delayedInterrupt });
+    harness.runtime.startTurn
+      .mockResolvedValueOnce({ id: 'turn-1' })
+      .mockResolvedValueOnce({ id: 'turn-2' });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Old epoch', clientMessageId: 'msg-old-epoch' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    const reset = harness.manager.handleMessage({ type: 'newChat' });
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'New epoch prompt',
+        followUpBehavior: 'steer',
+        clientMessageId: 'msg-new-epoch',
+      },
+    });
+    expect(harness.runtime.steerTurn).not.toHaveBeenCalled();
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+
+    resolveInterrupt();
+    await reset;
+    await first;
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(harness.runtime.startTurn.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          { type: 'text', text: 'New epoch prompt', text_elements: [] },
+        ]),
+      }),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'turnStarted',
+      payload: {
+        queued: true,
+        queueRemaining: 0,
+        clientMessageId: 'msg-new-epoch',
+        text: 'New epoch prompt',
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'new epoch done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await vi.waitFor(() => {
+      expect(
+        harness.posted.filter(
+          (message) =>
+            message.type === 'turnStarted' && message.payload.clientMessageId === 'msg-new-epoch',
+        ),
+      ).toHaveLength(1);
+    });
+  });
+
+  it('fails closed when a Local session is aimed at catalog or Auto routing', async () => {
     const harness = makeHarness({
       localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
     });
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    harness.runtime.startThread
-      .mockResolvedValueOnce({ id: 'thread-1' })
-      .mockResolvedValueOnce({ id: 'thread-2' });
     await harness.manager.handleMessage({ type: 'openModelPopover' });
     await harness.manager.handleMessage({
       type: 'selectModel',
@@ -224,35 +1448,100 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
     await first;
 
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'local-context.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+    const attachmentAck = [...harness.posted]
+      .reverse()
+      .find((message) => message.type === 'attachFilesAck') as
+      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
+      | undefined;
+    const attachmentId = attachmentAck?.payload.added[0]?.id;
     const catalogModel = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!;
     await harness.manager.handleMessage({
       type: 'selectModel',
       payload: { modelId: catalogModel.id },
     });
-    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
-    const second = harness.manager.handleMessage({
+    await harness.manager.handleMessage({
       type: 'sendMessage',
-      payload: { text: 'Continue with the cloud-capable model' },
-    });
-    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
-
-    expect(harness.posted).toContainEqual({
-      type: 'sessionNotice',
       payload: {
-        message:
-          'Provider boundary changed. AGI started a new developer session; earlier transcript context was not forwarded.',
+        text: 'Continue with the cloud-capable model',
+        clientMessageId: 'msg-local-to-catalog',
       },
     });
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Auto must not forward it either',
+        model: 'auto',
+        clientMessageId: 'msg-local-to-auto',
+      },
+    });
+
+    expect(harness.runtime.startThread).toHaveBeenCalledOnce();
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationBoundaryChanged' }),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'error',
+        message: expect.stringContaining('without a reviewed handoff'),
+        clientMessageId: 'msg-local-to-catalog',
+      }),
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'followUpStatus',
+      payload: expect.objectContaining({
+        kind: 'error',
+        message: expect.stringContaining('without a reviewed handoff'),
+        clientMessageId: 'msg-local-to-auto',
+      }),
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsReleased',
+      payload: { ids: [attachmentId] },
+    });
+
+    await harness.manager.handleMessage({
+      type: 'removePendingAttachment',
+      payload: { id: attachmentId! },
+    });
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: 'gemma4:e4b' },
+    });
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const localFollowUp = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue in the original Local session' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(harness.runtime.startThread).toHaveBeenCalledOnce();
+    expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', model: 'gemma4:e4b' }),
+    );
     harness.emit({
       type: 'turn_completed',
-      threadId: 'thread-2',
+      threadId: 'thread-1',
       turnId: 'turn-2',
       status: 'completed',
       response: 'done',
       inputTokens: 1,
       outputTokens: 1,
     });
-    await second;
+    await localFollowUp;
   });
 
   it('shows CLI-discovered local models in the inline picker', async () => {
@@ -632,9 +1921,32 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
     expect(firstModel).toBeDefined();
     expect(secondModel).toBeDefined();
+    const firstThread = threadSummary({
+      id: 'thread-1',
+      model: firstModel!.id,
+      provider: getModelProviderInfo(firstModel!.id).providerId!,
+      trustMode: 'byok',
+    });
+    const secondThread = threadSummary({
+      id: 'thread-2',
+      model: secondModel!.id,
+      provider: getModelProviderInfo(secondModel!.id).providerId!,
+      trustMode: 'byok',
+    });
     harness.runtime.startThread
-      .mockResolvedValueOnce({ id: 'thread-1' })
-      .mockResolvedValueOnce({ id: 'thread-2' });
+      .mockResolvedValueOnce(firstThread)
+      .mockResolvedValueOnce(secondThread);
+    harness.runtime.readThread
+      .mockResolvedValueOnce({
+        thread: firstThread,
+        messages: [],
+        transcriptTruncated: false,
+      })
+      .mockResolvedValueOnce({
+        thread: secondThread,
+        messages: [],
+        transcriptTruncated: false,
+      });
 
     const first = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -663,11 +1975,18 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
       expect.objectContaining({ threadId: 'thread-2', model: secondModel!.id }),
     );
+    expect(
+      harness.runtime.startTurn.mock.calls[1]?.[0].input.some(
+        (input: { type: string; text?: string }) => input.text?.includes('Inspect this project'),
+      ),
+    ).toBe(false);
     expect(harness.posted).toContainEqual({
-      type: 'sessionNotice',
+      type: 'conversationBoundaryChanged',
       payload: {
         message:
           'Provider boundary changed. AGI started a new developer session; earlier transcript context was not forwarded.',
+        clientMessageId: expect.any(String),
+        text: 'Continue with another provider',
       },
     });
 
@@ -775,7 +2094,10 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
 
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
-    expect(harness.posted).toContainEqual({ type: 'attachmentsConsumed' });
+    expect(harness.posted).toContainEqual({
+      type: 'attachmentsConsumed',
+      payload: { ids: [expect.stringMatching(/^att-/)] },
+    });
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         input: expect.arrayContaining([{ type: 'image', image_url: 'data:image/png;base64,AQID' }]),
@@ -1002,6 +2324,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await vi.waitFor(() => expect(settled).toBe(true));
 
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual({ type: 'done' });
     await send;
   });
 
@@ -1024,6 +2347,97 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     await vi.waitFor(() => expect(settled).toBe(true));
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
+    await send;
+  });
+
+  it('settles visibly and interrupts when the pre-start event buffer overflows', async () => {
+    const startTurn = new Promise<{ id: string }>(() => undefined);
+    const harness = makeHarness({ startTurn });
+    let settled = false;
+    const send = harness.manager
+      .handleMessage({ type: 'sendMessage', payload: { text: 'Generate lots of output' } })
+      .then(() => {
+        settled = true;
+      });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    for (let index = 0; index <= 1_024; index += 1) {
+      harness.emit({
+        type: 'output_delta',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        delta: `${index}`,
+      });
+    }
+
+    await vi.waitFor(() => expect(settled).toBe(true));
+    expect(harness.runtime.interruptTurn).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: { message: expect.stringContaining('too many events') },
+    });
+    await send;
+  });
+
+  it('stops before turn dispatch when cancellation arrives during thread startup', async () => {
+    const harness = makeHarness();
+    let resolveThread!: (thread: ThreadSummary) => void;
+    harness.runtime.startThread.mockReturnValueOnce(
+      new Promise<ThreadSummary>((resolve) => {
+        resolveThread = resolve;
+      }),
+    );
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Do not dispatch this turn', clientMessageId: 'msg-stop-early' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startThread).toHaveBeenCalledOnce());
+
+    await harness.manager.handleMessage({ type: 'cancel' });
+    resolveThread(threadSummary());
+    await send;
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({ type: 'done' });
+  });
+
+  it('drops unseen pending attachments when a chat surface closes', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'stale.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            dataUrl: 'data:image/png;base64,AQID',
+          },
+        ],
+      },
+    });
+
+    harness.manager.cancelInFlight();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fresh view', clientMessageId: 'msg-fresh-view' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn.mock.calls[0]?.[0].input).not.toContainEqual(
+      expect.objectContaining({ type: 'image' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
     await send;
   });
 
@@ -1085,6 +2499,37 @@ describe('ChatStateManager local turn lifecycle', () => {
       turnId: 'turn-1',
     });
     expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+  });
+
+  it('does not approve a stale sidebar modal after New Chat retires its turn', async () => {
+    let resolveApproval!: (choice: string | undefined) => void;
+    vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveApproval = resolve)),
+    );
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-1',
+      kind: 'shell',
+      summary: 'Run tests',
+      detail: 'pnpm test',
+    });
+    await vi.waitFor(() => expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce());
+
+    await harness.manager.handleMessage({ type: 'newChat' });
+    await send;
+    resolveApproval('Approve once');
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+
+    expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'error' }));
   });
 
   it('surfaces unavailable MCP integrations as a non-terminal warning', async () => {

@@ -2,19 +2,23 @@ import {
   createManagedCloudProjectsClient,
   type ManagedCloudProject,
   type ManagedCloudProjectCreateRequest,
+  type ManagedCloudProjectsClient,
   type ManagedCloudProjectUpdateRequest,
 } from '@agiworkforce/cloud-contracts';
 import { WEB_APP_URL } from '../api/config';
-import { cloudFetch, getAuthHeaders } from '../api/cloudApi';
 import type { Project } from '../stores/projectStore';
-import { assertManagedCloudBoundary, captureManagedCloudBoundary } from './managedCloudBoundary';
+import { createManagedCloudRequestContext } from './managedCloudRequestContext';
 
-const client = createManagedCloudProjectsClient({
-  baseUrl: WEB_APP_URL,
-  credentials: 'include',
-  fetchImpl: cloudFetch,
-  getHeaders: async () => getAuthHeaders(),
-});
+function createProjectsClient(label: string) {
+  const request = createManagedCloudRequestContext(label);
+  const client: ManagedCloudProjectsClient = createManagedCloudProjectsClient({
+    baseUrl: WEB_APP_URL,
+    credentials: 'include',
+    fetchImpl: request.fetch,
+    getHeaders: () => request.getHeaders(),
+  });
+  return { client, request };
+}
 
 function toDesktopProject(project: ManagedCloudProject): Project {
   return {
@@ -74,12 +78,12 @@ function updateInput(updates: Partial<Project>): ManagedCloudProjectUpdateReques
 
 export const desktopCloudProjects = {
   async listProjects(): Promise<Project[]> {
-    const boundary = captureManagedCloudBoundary('Managed Cloud projects');
+    const { client, request } = createProjectsClient('Managed Cloud projects');
     const projects: Project[] = [];
     let offset = 0;
     while (offset <= 10_000) {
       const page = await client.listProjects({ limit: 100, offset });
-      assertManagedCloudBoundary(boundary);
+      request.assertBoundary();
       projects.push(...page.map(toDesktopProject));
       if (page.length < 100) return projects;
       offset += page.length;
@@ -88,9 +92,9 @@ export const desktopCloudProjects = {
   },
 
   async createProject(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
-    const boundary = captureManagedCloudBoundary('Managed Cloud project creation');
+    const { client, request } = createProjectsClient('Managed Cloud project creation');
     const created = await client.createProject(createInput(project));
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
     return {
       ...toDesktopProject(created),
       conversationIds: Array.from(new Set(project.conversationIds)),
@@ -99,9 +103,9 @@ export const desktopCloudProjects = {
   },
 
   async updateProject(id: string, updates: Partial<Project>): Promise<Project> {
-    const boundary = captureManagedCloudBoundary('Managed Cloud project update');
+    const { client, request } = createProjectsClient('Managed Cloud project update');
     const response = await client.updateProject(id, updateInput(updates));
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
     const updated = toDesktopProject(response);
     return updates.conversationIds
       ? {
@@ -113,8 +117,8 @@ export const desktopCloudProjects = {
   },
 
   async deleteProject(id: string): Promise<void> {
-    const boundary = captureManagedCloudBoundary('Managed Cloud project deletion');
+    const { client, request } = createProjectsClient('Managed Cloud project deletion');
     await client.deleteProject(id);
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
   },
 };

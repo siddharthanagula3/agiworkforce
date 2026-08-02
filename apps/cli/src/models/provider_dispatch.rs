@@ -411,6 +411,16 @@ pub fn provider_name(provider: &Provider) -> &'static str {
     }
 }
 
+/// Canonical provider identity suitable for durable session metadata.
+/// Unlike `provider_name`, this retains the configured name of a custom
+/// provider so a restart cannot silently bind the session to another route.
+pub fn provider_persistence_name(provider: &Provider) -> String {
+    match provider {
+        Provider::Custom { name, .. } => name.clone(),
+        _ => provider_name(provider).to_string(),
+    }
+}
+
 /// Custom provider lookup helper used by `provider_from_name` to resolve names
 /// loaded from `[providers.*]` blocks in `~/.agiworkforce/config.toml`.
 fn lookup_custom_provider(name: &str) -> Option<Provider> {
@@ -521,28 +531,53 @@ pub fn register_custom_providers(config: &CliConfig) {
 /// Returns true if the URL is acceptable as a custom-provider base URL.
 /// Allows `https://` to any host, and `http://` only to loopback hosts.
 pub(crate) fn is_safe_provider_base_url(url: &str) -> bool {
-    if url.starts_with("https://") {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return false;
+    }
+    is_local_provider_base_url(url) || (parsed.scheme() == "https" && parsed.host_str().is_some())
+}
+
+/// Classify only parsed HTTP(S) URLs whose authority is exactly localhost,
+/// an IP loopback, or an explicitly supported unspecified bind address.
+/// Credentials are rejected even for local hosts so authority confusion can
+/// never influence the Local privacy boundary.
+pub(crate) fn is_local_provider_base_url(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if !matches!(parsed.scheme(), "http" | "https")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    // `Url::host_str()` preserves brackets around IPv6 literals in the
+    // reqwest/url version used by this workspace. Strip only a matching pair
+    // before parsing the address; ordinary hostnames remain unchanged.
+    let host = host
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .unwrap_or(host);
+    if host.eq_ignore_ascii_case("localhost") {
         return true;
     }
-    if let Some(rest) = url.strip_prefix("http://") {
-        // IPv6 hosts arrive bracketed: `http://[::1]:8000/v1`. Splitting on
-        // ':' would chop the host to just `[`, mis-classifying loopback as
-        // public. Detect the bracketed form explicitly and extract the
-        // entire `[...]` segment as the host.
-        let host = if rest.starts_with('[') {
-            match rest.find(']') {
-                Some(end) => rest[..=end].to_ascii_lowercase(),
-                None => return false, // malformed — refuse rather than guess
-            }
-        } else {
-            rest.split(['/', ':', '?', '#'])
-                .next()
-                .unwrap_or("")
-                .to_ascii_lowercase()
-        };
-        return host == "localhost" || host == "127.0.0.1" || host == "[::1]";
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(address)) => address.is_loopback() || address.is_unspecified(),
+        Ok(std::net::IpAddr::V6(address)) => {
+            address.is_loopback()
+                || address.is_unspecified()
+                || address
+                    .to_ipv4_mapped()
+                    .is_some_and(|mapped| mapped.is_loopback() || mapped.is_unspecified())
+        }
+        Err(_) => false,
     }
-    false
 }
 
 // ---------------------------------------------------------------------------
@@ -606,7 +641,7 @@ pub(crate) fn default_subscription_url(name: &str) -> String {
 
 #[cfg(test)]
 mod safe_provider_url_tests {
-    use super::is_safe_provider_base_url;
+    use super::{is_local_provider_base_url, is_safe_provider_base_url};
 
     #[test]
     fn https_anywhere_is_allowed() {
@@ -619,6 +654,7 @@ mod safe_provider_url_tests {
         assert!(is_safe_provider_base_url("http://localhost:11434/v1"));
         assert!(is_safe_provider_base_url("http://127.0.0.1:1234"));
         assert!(is_safe_provider_base_url("http://[::1]:8000/v1"));
+        assert!(is_safe_provider_base_url("http://0.0.0.0:8080"));
     }
 
     #[test]
@@ -628,7 +664,7 @@ mod safe_provider_url_tests {
             "http://169.254.169.254/latest/meta-data"
         ));
         assert!(!is_safe_provider_base_url("http://192.168.1.1"));
-        assert!(!is_safe_provider_base_url("http://0.0.0.0:8080"));
+        assert!(!is_safe_provider_base_url("http://localhost.evil.com"));
     }
 
     #[test]
@@ -638,6 +674,47 @@ mod safe_provider_url_tests {
         assert!(!is_safe_provider_base_url("gopher://internal"));
         assert!(!is_safe_provider_base_url(""));
         assert!(!is_safe_provider_base_url("localhost:8080"));
+    }
+
+    #[test]
+    fn local_classifier_uses_parsed_exact_hosts() {
+        for local in [
+            "http://localhost:11434/v1",
+            "HTTPS://LOCALHOST:8443/v1",
+            "http://127.0.0.1:1234",
+            "http://127.42.0.9/v1",
+            "http://[::1]:8000/v1",
+            "http://0.0.0.0:8080/v1",
+            "http://[::]:8080/v1",
+            "http://[::ffff:127.0.0.1]:8080/v1",
+        ] {
+            assert!(
+                is_local_provider_base_url(local),
+                "local URL rejected: {local}"
+            );
+        }
+    }
+
+    #[test]
+    fn local_classifier_rejects_deceptive_credentials_and_remote_hosts() {
+        for remote in [
+            "http://localhost.evil.com/v1",
+            "http://127.evil.com/v1",
+            "http://0.0.0.0.evil/v1",
+            "http://localhost@evil.com/v1",
+            "http://user@localhost/v1",
+            "http://user:pass@127.0.0.1/v1",
+            "http://192.168.1.20/v1",
+            "https://example.com/v1",
+            "file://localhost/tmp/model",
+            "http://[::1",
+            "not a url",
+        ] {
+            assert!(
+                !is_local_provider_base_url(remote),
+                "remote URL classified Local: {remote}"
+            );
+        }
     }
 }
 

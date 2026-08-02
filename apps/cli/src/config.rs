@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -273,23 +273,18 @@ impl Default for CliConfig {
 }
 
 impl CliConfig {
-    /// Returns the path to the config directory: ~/.agiworkforce/
+    /// Returns the path to the config directory.
+    ///
+    /// `AGIWORKFORCE_HOME` may select an explicit config root. When unset, the
+    /// default remains `~/.agiworkforce/`.
     /// Creates the directory with mode 0o700 (owner-only) if it doesn't exist.
     pub fn config_dir() -> Result<PathBuf> {
-        let home = dirs::home_dir().context("Could not determine home directory")?;
-        let dir = home.join(".agiworkforce");
-        if !dir.exists() {
-            std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-            }
-        }
+        let dir = resolve_config_dir(std::env::var_os("AGIWORKFORCE_HOME"), dirs::home_dir())?;
+        ensure_config_dir(&dir)?;
         Ok(dir)
     }
 
-    /// Returns the path to the config file: ~/.agiworkforce/config.toml
+    /// Returns `config.toml` inside the resolved config root.
     pub fn config_path() -> Result<PathBuf> {
         Ok(Self::config_dir()?.join("config.toml"))
     }
@@ -516,6 +511,18 @@ impl CliConfig {
         Ok(config)
     }
 
+    /// Load global configuration plus explicit environment overrides without
+    /// reading repository-controlled project configuration.
+    ///
+    /// Callers use this for commands that do not require project trust and for
+    /// untrusted/headless workspaces. This keeps `.agiworkforce/config.toml`
+    /// outside the process until the project trust boundary has been crossed.
+    pub fn load_without_project() -> Result<Self> {
+        let mut config = Self::load()?;
+        config.merge_env_overrides();
+        Ok(config)
+    }
+
     /// Merge values from another config, using `other`'s non-default values as overrides.
     #[allow(dead_code)]
     pub fn merge_from(&mut self, other: &CliConfig) {
@@ -573,9 +580,7 @@ impl CliConfig {
             self.ui.edit_mode = other.ui.edit_mode.clone();
         }
         for (action, binding) in &other.ui.keybindings {
-            self.ui
-                .keybindings
-                .insert(action.clone(), binding.clone());
+            self.ui.keybindings.insert(action.clone(), binding.clone());
         }
         // Merge providers: other's entries override self's for matching keys
         for (key, value) in &other.providers {
@@ -817,12 +822,14 @@ impl CliConfig {
             }
         }
         if let Some(edit_mode) = self.ui.edit_mode.as_deref() {
-            if !matches!(edit_mode.trim().to_ascii_lowercase().as_str(), "emacs" | "vi") {
+            if !matches!(
+                edit_mode.trim().to_ascii_lowercase().as_str(),
+                "emacs" | "vi"
+            ) {
                 bail!("ui.edit_mode must be one of: emacs, vi");
             }
         }
-        crate::keybindings::validate_config(&self.ui.keybindings)
-            .map_err(anyhow::Error::msg)?;
+        crate::keybindings::validate_config(&self.ui.keybindings).map_err(anyhow::Error::msg)?;
         Ok(())
     }
 
@@ -928,8 +935,7 @@ impl CliConfig {
                 {
                     let mut candidate = self.ui.keybindings.clone();
                     candidate.insert(action.to_string(), value.trim().to_string());
-                    crate::keybindings::validate_config(&candidate)
-                        .map_err(anyhow::Error::msg)?;
+                    crate::keybindings::validate_config(&candidate).map_err(anyhow::Error::msg)?;
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
@@ -974,6 +980,48 @@ impl CliConfig {
             }
         }
     }
+}
+
+fn resolve_config_dir(
+    configured_home: Option<std::ffi::OsString>,
+    system_home: Option<PathBuf>,
+) -> Result<PathBuf> {
+    if let Some(configured_home) = configured_home {
+        if configured_home.to_string_lossy().trim().is_empty() {
+            bail!("AGIWORKFORCE_HOME must be a non-empty absolute path");
+        }
+
+        let configured_home = PathBuf::from(configured_home);
+        if !configured_home.is_absolute() {
+            bail!(
+                "AGIWORKFORCE_HOME must be an absolute path, got {}",
+                configured_home.display()
+            );
+        }
+        return Ok(configured_home);
+    }
+
+    let system_home = system_home.context("Could not determine home directory")?;
+    Ok(system_home.join(".agiworkforce"))
+}
+
+fn ensure_config_dir(dir: &std::path::Path) -> Result<()> {
+    if dir.exists() && !dir.is_dir() {
+        bail!(
+            "Resolved AGIWORKFORCE_HOME {} is not a directory",
+            dir.display()
+        );
+    }
+    if !dir.exists() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create config directory {}", dir.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        }
+    }
+    Ok(())
 }
 
 fn is_valid_privacy_mode(mode: &str) -> bool {
@@ -1061,7 +1109,11 @@ mod tests {
         assert!(config.validate().is_ok());
 
         config.ui.edit_mode = Some("nano".to_string());
-        assert!(config.validate().unwrap_err().to_string().contains("edit_mode"));
+        assert!(config
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("edit_mode"));
 
         config.ui.edit_mode = Some("emacs".to_string());
         config
@@ -1207,14 +1259,66 @@ mod tests {
     // --- config_dir / config_path ---
 
     #[test]
-    fn test_config_dir_is_inside_home() {
-        let dir = CliConfig::config_dir().unwrap();
+    fn config_dir_resolver_uses_explicit_absolute_override_as_root() {
+        let override_root = tempfile::tempdir().unwrap();
+        let default_home = PathBuf::from("/unused/default/home");
+
+        let resolved = resolve_config_dir(
+            Some(override_root.path().as_os_str().to_owned()),
+            Some(default_home),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, override_root.path());
+        assert!(!resolved.ends_with(".agiworkforce"));
+    }
+
+    #[test]
+    fn config_dir_resolver_rejects_empty_override() {
+        let error = resolve_config_dir(Some(std::ffi::OsString::new()), None).unwrap_err();
+
         assert!(
-            dir.ends_with(".agiworkforce"),
-            "config_dir should end with .agiworkforce, got: {:?}",
-            dir
+            error
+                .to_string()
+                .contains("AGIWORKFORCE_HOME must be a non-empty absolute path"),
+            "{error:#}"
         );
-        // Must be an absolute path
+    }
+
+    #[test]
+    fn config_dir_resolver_rejects_relative_override() {
+        let error = resolve_config_dir(Some("relative/config-root".into()), None).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("AGIWORKFORCE_HOME must be an absolute path"),
+            "{error:#}"
+        );
+    }
+
+    #[test]
+    fn config_dir_resolver_preserves_default_home_layout() {
+        let default_home = tempfile::tempdir().unwrap();
+
+        let resolved = resolve_config_dir(None, Some(default_home.path().to_path_buf())).unwrap();
+
+        assert_eq!(resolved, default_home.path().join(".agiworkforce"));
+    }
+
+    #[test]
+    fn config_dir_rejects_override_that_is_an_existing_file() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let error = ensure_config_dir(file.path()).unwrap_err();
+        assert!(
+            error.to_string().contains("is not a directory"),
+            "{error:#}"
+        );
+    }
+
+    #[test]
+    fn test_config_dir_is_absolute() {
+        let dir = CliConfig::config_dir().unwrap();
         assert!(dir.is_absolute());
     }
 
@@ -1545,18 +1649,14 @@ privacy_mode = "local"
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
-        assert!(
-            config
-                .source
-                .env_overrides
-                .contains(&"AGIWORKFORCE_MODEL".to_string())
-        );
-        assert!(
-            config
-                .source
-                .env_overrides
-                .contains(&"AGIWORKFORCE_PROVIDER".to_string())
-        );
+        assert!(config
+            .source
+            .env_overrides
+            .contains(&"AGIWORKFORCE_MODEL".to_string()));
+        assert!(config
+            .source
+            .env_overrides
+            .contains(&"AGIWORKFORCE_PROVIDER".to_string()));
         assert_eq!(config.source.env_overrides.len(), 2);
 
         std::env::remove_var("AGIWORKFORCE_MODEL");
@@ -1808,9 +1908,7 @@ base_url = "http://localhost:11434"
     #[test]
     fn test_set_get_fast_model() {
         let mut config = CliConfig::default();
-        config
-            .set_value("fast-model", "claude-sonnet-5")
-            .unwrap();
+        config.set_value("fast-model", "claude-sonnet-5").unwrap();
         assert_eq!(
             config.get_value("fast-model"),
             Some("claude-sonnet-5".to_string())

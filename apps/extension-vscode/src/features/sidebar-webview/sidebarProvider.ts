@@ -90,6 +90,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
       resolveTierSync(this._extensionContext),
       shouldShowOnboarding(this._extensionContext.globalState),
+      Config.composerFollowUpBehavior(),
     );
 
     this._messageListener?.dispose();
@@ -158,6 +159,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Replay the persisted first-run experience in an already-open sidebar. */
   public showOnboarding(): void {
     this._stateManager.showOnboarding();
+  }
+
+  /** Load a persisted idle/failed developer session into this live chat controller. */
+  public resumeConversation(threadId: string): Promise<boolean> {
+    return this._stateManager.resumeConversation(threadId);
+  }
+
+  /** Keep an already-open composer aligned with the user-scoped active-turn default. */
+  public pushFollowUpBehavior(): void {
+    this._stateManager.pushFollowUpBehavior();
   }
 
   /** Clear conversation history and notify the webview. */

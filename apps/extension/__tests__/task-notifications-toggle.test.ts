@@ -22,16 +22,13 @@ describe('agi_task_notifications gates all task notifications', () => {
     expect(background).toMatch(/agi_task_notifications: true/);
   });
 
-  it('gates Task Completed and Task Failed on the toggle', () => {
-    // SIX-04 moved the result snippet into the guarded block, so the call is no
-    // longer the first statement after the brace. The contract under test is
-    // unchanged: neither notification may be reachable outside the guard, and
-    // `[^}]*` keeps the match inside the same block.
+  it('gates Task Completed and Task Failed through the authority-aware toggle helper', () => {
+    expect(background).toContain('publishAuthorizedScheduledTaskNotification(');
     expect(background).toMatch(
-      /if \(await taskNotificationsEnabled\(\)\) \{[^}]*showNotification\(\s*'Task Completed'/,
+      /publishAuthorizedScheduledTaskNotification\([\s\S]{0,700}isEnabled: taskNotificationsEnabled[\s\S]{0,700}'Task Completed'/,
     );
     expect(background).toMatch(
-      /if \(await taskNotificationsEnabled\(\)\) \{[^}]*showNotification\(\s*'Task Failed'/,
+      /publishAuthorizedScheduledTaskNotification\([\s\S]{0,700}isEnabled: taskNotificationsEnabled[\s\S]{0,700}'Task Failed'/,
     );
     // No ungated call site for either notification.
     const completedCalls = background.match(/showNotification\(\s*'Task Completed'/g) ?? [];
@@ -44,5 +41,20 @@ describe('agi_task_notifications gates all task notifications', () => {
     // The pre-run alarm reminder was refactored onto the same helper.
     const inlineReads = background.match(/agi_task_notifications: notificationsEnabled/g) ?? [];
     expect(inlineReads.length).toBe(0);
+  });
+
+  it('threads cancellation signals through every task terminal notification', () => {
+    expect(background).toMatch(
+      /notifyScheduledTaskCompleted\([\s\S]*?signal\?: AbortSignal[\s\S]*?publishAuthorizedScheduledTaskNotification\([\s\S]*?signal/,
+    );
+    expect(background).toMatch(
+      /notifyScheduledTaskFailed\([\s\S]*?signal\?: AbortSignal[\s\S]*?publishAuthorizedScheduledTaskNotification\([\s\S]*?signal/,
+    );
+    expect(background).toMatch(
+      /'Task Paused'[\s\S]{0,1200}signal: lease\.controller\.signal|signal: lease\.controller\.signal[\s\S]{0,1200}'Task Paused'/,
+    );
+    expect(background).toMatch(
+      /'Task Continuing'[\s\S]{0,1200}signal: lease\.controller\.signal|signal: lease\.controller\.signal[\s\S]{0,1200}'Task Continuing'/,
+    );
   });
 });

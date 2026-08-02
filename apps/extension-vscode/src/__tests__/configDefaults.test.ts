@@ -58,6 +58,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   mcpEnabled: 'agiWorkforce.mcp.enabled',
   model: 'agiWorkforce.model',
   streamingEnabled: 'agiWorkforce.streamingEnabled',
+  composerFollowUpBehavior: 'agiWorkforce.composer.followUpBehavior',
   contextLines: 'agiWorkforce.contextLines',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',

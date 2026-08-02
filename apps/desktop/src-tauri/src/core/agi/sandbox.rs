@@ -23,8 +23,7 @@ const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
 /// Seatbelt's deny rule blocks inbound and outbound sockets for the complete
 /// child process tree.
 #[cfg(target_os = "macos")]
-const MACOS_NETWORK_DENY_PROFILE: &str =
-    "(version 1)\n(allow default)\n(deny network*)\n";
+const MACOS_NETWORK_DENY_PROFILE: &str = "(version 1)\n(allow default)\n(deny network*)\n";
 
 /// Result of code execution in a sandbox
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -359,10 +358,7 @@ impl Sandbox {
         // Restrict PATH to essential directories only
         #[cfg(not(windows))]
         {
-            cmd.env(
-                "PATH",
-                "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
-            );
+            cmd.env("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
         }
 
         // Add custom environment variables.
@@ -1108,7 +1104,10 @@ mod tests {
         assert_eq!(args[0], "-p");
         assert_eq!(args[1], MACOS_NETWORK_DENY_PROFILE);
         assert_eq!(args[2], "python3");
-        assert_eq!(args.last().map(String::as_str), Some("/tmp/agi-sandbox/script.py"));
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("/tmp/agi-sandbox/script.py")
+        );
     }
 
     #[cfg(target_os = "linux")]
@@ -1138,8 +1137,7 @@ mod tests {
         let manager = SandboxManager::new().unwrap();
         let config = ExecutionConfig {
             language: "python".to_string(),
-            code: "import socket; print(socket.socket().connect_ex(('127.0.0.1', 9)))"
-                .to_string(),
+            code: "import socket; print(socket.socket().connect_ex(('127.0.0.1', 9)))".to_string(),
             ..Default::default()
         };
 

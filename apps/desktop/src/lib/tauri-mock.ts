@@ -245,6 +245,20 @@ async function handleCloudWebCommand<T>(
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
+    // @wdio/tauri-plugin 1.2 registers browser.tauri.mock() handlers here, but
+    // its window.__TAURI__.core wrapper does not intercept the official Tauri
+    // 2 API's non-writable window.__TAURI_INTERNALS__.invoke primitive. Route
+    // through the registry at this existing shared command boundary only in
+    // the isolated WDIO build. Release bundles never set VITE_WDIO_E2E and
+    // always call the official API directly.
+    if (import.meta.env.VITE_WDIO_E2E === '1' && typeof window !== 'undefined') {
+      const mocks = (window as unknown as { __wdio_mocks__?: Record<string, unknown> })
+        .__wdio_mocks__;
+      const mock = mocks?.[command];
+      if (typeof mock === 'function') {
+        return (await (mock as (mockArgs?: Record<string, unknown>) => unknown)(args)) as T;
+      }
+    }
     return tauriInvoke<T>(command, args);
   }
 
@@ -2222,6 +2236,10 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       }
       return null as T;
     }
+
+    case 'computer_use_cancel_opa_task':
+      // The browser mock never owns a native OPA executor.
+      return false as T;
 
     // ── Misc/catch-all for remaining newly registered commands ──────
     case 'auth_store_session':

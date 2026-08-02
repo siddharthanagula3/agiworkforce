@@ -113,9 +113,9 @@ export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
  * Everything this view cannot do for itself.
  *
  * Auth differs per host (Clerk session cookies on web, a bearer token on
- * desktop) and so does "open a preview" (a new tab vs. the OS browser). Passing
- * `Response` objects rather than parsed data keeps the status/parse handling —
- * and its error copy — in one place here.
+ * desktop) and so does "open a preview". Passing `Response` objects rather
+ * than parsed data keeps the status/parse handling — and its error copy — in
+ * one place here.
  */
 export interface LibraryTransport {
   /** Whether an authenticated session exists. Gates the first fetch so a
@@ -129,6 +129,10 @@ export interface LibraryTransport {
   restoreItem(id: string): Promise<Response>;
   /** Show the asset to the user however this host does that. */
   openPreview(uri: string): void;
+  /** Resolve an image URI that the renderer may request directly. Cookie-based
+   *  hosts can opt in; explicit-bearer hosts must omit this and load bytes via
+   *  fetchAsset instead. */
+  inlinePreviewUri?: (uri: string) => string;
   /** Optional way out of the empty state: start a new chat. Hosts that have no
    *  such action (or have a composer already on screen) omit it. */
   startChat?: () => void;
@@ -392,7 +396,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                   // previewable images; other kinds keep the icon tile.
                   previewUri:
                     item.previewable && item.mime_type.toLowerCase().startsWith('image/')
-                      ? item.uri
+                      ? transport.inlinePreviewUri?.(item.uri)
                       : undefined,
                   canPreview: item.previewable,
                 }}

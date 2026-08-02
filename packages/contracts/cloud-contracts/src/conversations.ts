@@ -37,6 +37,12 @@ export const ManagedCloudMessageMetadataSchema = z
   });
 export const MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE = 50;
 export const MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE = 100;
+/**
+ * The conversation-detail route accepts at most 500 messages per response.
+ * Keep the response contract bounded to that deployed wire maximum even when
+ * a caller chooses a smaller page size.
+ */
+export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE = 500;
 export const MANAGED_CLOUD_REFLECT_PATH = '/api/reflect';
 
 export const ManagedCloudConversationTopicSchema = z.enum([
@@ -74,13 +80,13 @@ export type ManagedCloudMessageRole = z.infer<typeof ManagedCloudMessageRoleSche
 export const ManagedCloudMessageWireSchema = z.object({
   id: z.string().min(1),
   role: ManagedCloudMessageRoleSchema,
-  content: z.string(),
+  content: z.string().max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH),
   model: z.string().nullable(),
   provider: z.string().nullable(),
   input_tokens: z.coerce.number(),
   output_tokens: z.coerce.number(),
   created_at: z.string().min(1),
-  metadata: z.record(z.string(), z.unknown()).nullable(),
+  metadata: ManagedCloudMessageMetadataSchema.nullable(),
 });
 export type ManagedCloudMessageWire = z.infer<typeof ManagedCloudMessageWireSchema>;
 
@@ -152,7 +158,7 @@ export type ManagedCloudConversationHistoryStats = z.infer<
 >;
 
 export const ManagedCloudConversationListResponseSchema = z.object({
-  conversations: z.array(ManagedCloudConversationWireSchema),
+  conversations: z.array(ManagedCloudConversationWireSchema).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE),
   hasMore: z.boolean(),
   nextOffset: z.number().int().nonnegative(),
   /**
@@ -173,7 +179,7 @@ export const ManagedCloudUpdateConversationResponseSchema =
 
 export const ManagedCloudConversationResponseSchema = z.object({
   conversation: ManagedCloudConversationWireSchema,
-  messages: z.array(ManagedCloudMessageWireSchema),
+  messages: z.array(ManagedCloudMessageWireSchema).max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE),
   total: z.number().int().nonnegative(),
   hasMore: z.boolean(),
 });

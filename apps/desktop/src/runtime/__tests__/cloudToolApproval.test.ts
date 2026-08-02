@@ -122,6 +122,7 @@ describe('CloudToolApprovalRegistry', () => {
       undefined,
       expect.any(Function),
       expect.stringContaining('agi.chat.desktop.tool-resume.'),
+      undefined,
     );
   });
 
@@ -246,5 +247,57 @@ describe('CloudToolApprovalRegistry', () => {
       ),
     ).rejects.toThrow('network failed');
     expect(registry.hasLiveTurn('conv-1')).toBe(true);
+  });
+
+  it('reuses the same idempotency key when the same checkpoint is retried', async () => {
+    const registry = new CloudToolApprovalRegistry();
+    registry.recordTurnOutcome(
+      'conv-1',
+      RUN_ID,
+      'gpt-5',
+      suspendedSink([{ toolCallId: 'call_1', name: 'write_file', args: {} }]),
+    );
+    sendCloudApprovalResume
+      .mockImplementationOnce(
+        async (
+          _runId: string,
+          _approvals: unknown,
+          _onChunk: (text: string) => void,
+          _onDone: () => void,
+          onError: (error: Error) => void,
+        ) => onError(new Error('response lost')),
+      )
+      .mockImplementationOnce(
+        async (
+          _runId: string,
+          _approvals: unknown,
+          _onChunk: (text: string) => void,
+          onDone: () => void,
+        ) => onDone(),
+      );
+
+    await expect(
+      registry.resolve(
+        'conv-1',
+        'call_1',
+        'approved',
+        () => {},
+        'https://example.test',
+        () => {},
+      ),
+    ).rejects.toThrow('response lost');
+    await registry.resolve(
+      'conv-1',
+      'call_1',
+      'approved',
+      () => {},
+      'https://example.test',
+      () => {},
+    );
+
+    const firstKey = sendCloudApprovalResume.mock.calls[0]?.[7];
+    const retryKey = sendCloudApprovalResume.mock.calls[1]?.[7];
+    expect(firstKey).toMatch(/^agi\.chat\.desktop\.tool-resume\.resume-[a-f0-9]{48}$/);
+    expect(retryKey).toBe(firstKey);
   });
 });

@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,16 +128,8 @@ pub fn safety_check(command: &str) -> Vec<String> {
 /// Locate a PowerShell interpreter on PATH. Returns the first match.
 pub fn find_interpreter() -> Option<String> {
     for candidate in ["pwsh", "powershell.exe", "powershell"] {
-        if let Ok(out) = std::process::Command::new("which").arg(candidate).output() {
-            if out.status.success() {
-                return Some(candidate.to_string());
-            }
-        }
-        // Windows: try `where` instead.
-        if let Ok(out) = std::process::Command::new("where").arg(candidate).output() {
-            if out.status.success() {
-                return Some(candidate.to_string());
-            }
+        if crate::process_tree::executable_exists(candidate) {
+            return Some(candidate.to_string());
         }
     }
     None
@@ -154,7 +146,7 @@ pub fn find_interpreter() -> Option<String> {
 /// Both gates must be open. An LLM/agent that constructs a request with
 /// `safe_mode: false` from prompt-injected JSON still hits the env-var
 /// gate, which is operator-controlled and never set on user machines.
-pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
+pub async fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
     let warnings = safety_check(&req.command);
     if !warnings.is_empty() {
         let env_allow_unsafe = std::env::var("AGI_POWERSHELL_ALLOW_UNSAFE")
@@ -174,71 +166,33 @@ pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
             "no PowerShell interpreter found on PATH (tried: pwsh, powershell.exe, powershell)"
         )
     })?;
-    let mut cmd = std::process::Command::new(&interpreter);
+    let mut cmd = tokio::process::Command::new(&interpreter);
     cmd.arg("-NoProfile")
         .arg("-NonInteractive")
         .arg("-Command")
-        .arg(&req.command)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .arg(&req.command);
     if let Some(wd) = &req.working_dir {
         cmd.current_dir(wd);
     }
 
-    let mut child = cmd
-        .spawn()
-        .with_context(|| format!("invoke {interpreter}"))?;
-
-    // Drain stdout/stderr on background threads so large output cannot fill the
-    // pipe buffer and deadlock while we poll for the timeout.
-    let stdout_reader = child.stdout.take().map(|mut s| {
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut buf = Vec::new();
-            let _ = s.read_to_end(&mut buf);
-            buf
-        })
-    });
-    let stderr_reader = child.stderr.take().map(|mut s| {
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut buf = Vec::new();
-            let _ = s.read_to_end(&mut buf);
-            buf
-        })
-    });
-
-    // Enforce the documented `timeout_sec`: kill the child if it overruns
-    // instead of blocking the calling thread indefinitely.
     let timeout = std::time::Duration::from_secs(req.timeout_sec.max(1));
-    let start = std::time::Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().context("wait on PowerShell child")? {
-            break status;
-        }
-        if start.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            anyhow::bail!(
-                "PowerShell command timed out after {}s (timeout_sec)",
-                req.timeout_sec
-            );
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    };
-
-    let stdout = stdout_reader
-        .and_then(|h| h.join().ok())
-        .unwrap_or_default();
-    let stderr = stderr_reader
-        .and_then(|h| h.join().ok())
-        .unwrap_or_default();
+    let output = crate::process_tree::output(cmd, None, Some(timeout))
+        .await
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::TimedOut {
+                anyhow::anyhow!(
+                    "PowerShell command timed out after {}s (timeout_sec)",
+                    req.timeout_sec
+                )
+            } else {
+                anyhow::anyhow!("invoke {interpreter}: {error}")
+            }
+        })?;
 
     Ok(PowerShellResult {
-        exit_code: status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         interpreter,
         warnings,
     })
@@ -281,15 +235,15 @@ mod tests {
             .any(|w| w.contains("ExecutionPolicy Bypass")));
     }
 
-    #[test]
-    fn safe_mode_blocks_destructive_command() {
+    #[tokio::test]
+    async fn safe_mode_blocks_destructive_command() {
         let req = PowerShellRequest {
             command: "Remove-Item C:\\test".into(),
             working_dir: None,
             timeout_sec: 30,
             safe_mode: true,
         };
-        let result = execute(&req);
+        let result = execute(&req).await;
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("safe_mode") || err.contains("blocked"));
@@ -355,8 +309,8 @@ mod hardening_tests {
         assert!(warnings.iter().any(|w| w.contains("Remove-")));
     }
 
-    #[test]
-    fn execute_default_safe_mode_blocks_iex() {
+    #[tokio::test]
+    async fn execute_default_safe_mode_blocks_iex() {
         // With the default (safe_mode=true), execute must hard-block
         // any command that triggers safety_check warnings. This is the
         // default code path users hit — no env-var poking required.
@@ -366,7 +320,7 @@ mod hardening_tests {
             timeout_sec: 30,
             safe_mode: true,
         };
-        let result = execute(&req);
+        let result = execute(&req).await;
         assert!(
             result.is_err(),
             "execute must hard-block IEX in default safe_mode"
@@ -378,25 +332,25 @@ mod hardening_tests {
         );
     }
 
-    #[test]
-    fn execute_default_safe_mode_blocks_invoke_command_scriptblock() {
+    #[tokio::test]
+    async fn execute_default_safe_mode_blocks_invoke_command_scriptblock() {
         let req = PowerShellRequest {
             command: "Invoke-Command -ScriptBlock { whoami }".into(),
             working_dir: None,
             timeout_sec: 30,
             safe_mode: true,
         };
-        assert!(execute(&req).is_err());
+        assert!(execute(&req).await.is_err());
     }
 
-    #[test]
-    fn execute_default_safe_mode_blocks_scriptblock_create() {
+    #[tokio::test]
+    async fn execute_default_safe_mode_blocks_scriptblock_create() {
         let req = PowerShellRequest {
             command: "[ScriptBlock]::Create($x).Invoke()".into(),
             working_dir: None,
             timeout_sec: 30,
             safe_mode: true,
         };
-        assert!(execute(&req).is_err());
+        assert!(execute(&req).await.is_err());
     }
 }

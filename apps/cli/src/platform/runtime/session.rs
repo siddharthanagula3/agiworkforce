@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cli_options::PermissionMode;
@@ -36,10 +36,136 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
 /// v3: adds title, model, workspace_root, and created_by metadata shared by
 ///     terminal and IDE clients (all optional for v1/v2 compatibility).
 /// v4: adds persisted Auto-routing selection/model/task/trust continuity.
-pub const MANAGED_SESSION_VERSION: u32 = 4;
+/// v5: adds canonical provider + privacy routing authority. Older sessions
+///     remain listable, but callers must not resume them without an explicit
+///     authority migration.
+pub const MANAGED_SESSION_VERSION: u32 = 5;
+
+pub const MANAGED_SESSION_ID_MAX_ENCODED_UNITS: usize = 200;
+pub const MANAGED_SESSION_TITLE_MAX_UTF16: usize = 500;
+pub const MANAGED_SESSION_MODEL_MAX_UTF16: usize = 200;
+pub const MANAGED_SESSION_CWD_MAX_UTF16: usize = 16_384;
+pub const MANAGED_SESSION_MAX_MESSAGES: usize = 10_000;
+pub const MANAGED_SESSION_MESSAGE_ROLE_MAX_UTF16: usize = 40;
+pub const MANAGED_SESSION_MESSAGE_TEXT_MAX_UTF16: usize = 1_000_000;
+pub const MANAGED_SESSION_FILE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 /// Default JSONL extension for managed session files.
 pub const MANAGED_SESSION_JSONL_EXTENSION: &str = "jsonl";
+
+/// Durable privacy boundary for a CLI developer session.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyMode {
+    Local,
+    Byok,
+    Managed,
+}
+
+impl PrivacyMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Byok => "byok",
+            Self::Managed => "managed",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Local => "no prompt, chat, or file context should leave this device",
+            Self::Byok => {
+                "selected context may be sent directly to the user's configured provider key"
+            }
+            Self::Managed => "selected context may be sent through AGI managed cloud",
+        }
+    }
+
+    pub fn from_arg(arg: &str) -> Option<Self> {
+        match arg.trim().to_ascii_lowercase().as_str() {
+            "local" | "offline" | "device" => Some(Self::Local),
+            "byok" | "cloud-byok" | "provider" => Some(Self::Byok),
+            "managed" | "agi" | "agi-cloud" | "cloud" => Some(Self::Managed),
+            _ => None,
+        }
+    }
+}
+
+/// Persisted routing authority. Keeping the provider and privacy boundary in
+/// one record prevents a partial legacy record from being treated as safe.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSessionRoutingAuthority {
+    pub privacy_mode: PrivacyMode,
+    pub provider: String,
+}
+
+impl ManagedSessionRoutingAuthority {
+    /// Return a provider value that is safe to use as routing authority or to
+    /// expose through the developer-session protocol. Persisted files are
+    /// user-editable, so their strings cannot be trusted merely because serde
+    /// accepted them.
+    pub fn validated_provider(&self) -> Result<&str> {
+        if self.provider.trim().is_empty() {
+            bail!("persisted provider authority must be non-empty");
+        }
+        if self.provider.encode_utf16().count() > 200 {
+            bail!("persisted provider authority exceeds 200 UTF-16 code units");
+        }
+        if contains_protocol_control(&self.provider) {
+            bail!("persisted provider authority contains a prohibited control character");
+        }
+        Ok(&self.provider)
+    }
+}
+
+fn contains_protocol_control(value: &str) -> bool {
+    value
+        .chars()
+        .any(|character| matches!(character, '\u{0000}'..='\u{001f}' | '\u{007f}'..='\u{009f}'))
+}
+
+pub(crate) fn validate_summary_text(value: &str, field: &str, max_utf16: usize) -> Result<()> {
+    if value.trim().is_empty() {
+        bail!("Managed session {field} must be non-empty when present");
+    }
+    if value.encode_utf16().count() > max_utf16 {
+        bail!("Managed session {field} exceeds {max_utf16} UTF-16 code units");
+    }
+    if contains_protocol_control(value) {
+        bail!("Managed session {field} contains a prohibited control character");
+    }
+    Ok(())
+}
+
+/// Validate an ID before it can become either protocol metadata or a filename.
+/// Explicit CLI path references use `ManagedSessionReference::Path` and do not
+/// pass through this identifier validator.
+pub fn validate_managed_session_id(session_id: &str) -> Result<&str> {
+    if session_id.trim().is_empty() {
+        bail!("Managed session is missing a session_id");
+    }
+    if session_id.as_bytes().len() > MANAGED_SESSION_ID_MAX_ENCODED_UNITS
+        || session_id.encode_utf16().count() > MANAGED_SESSION_ID_MAX_ENCODED_UNITS
+    {
+        bail!(
+            "Managed session_id exceeds {} encoded units",
+            MANAGED_SESSION_ID_MAX_ENCODED_UNITS
+        );
+    }
+    if matches!(session_id, "." | "..") {
+        bail!("Managed session_id cannot be a dot segment");
+    }
+    if contains_protocol_control(session_id) {
+        bail!("Managed session_id contains a prohibited control character");
+    }
+    if session_id
+        .chars()
+        .any(|character| !(character.is_alphanumeric() || matches!(character, '-' | '_' | '.')))
+    {
+        bail!("Managed session_id may contain only letters, numbers, '.', '-', and '_'");
+    }
+    Ok(session_id)
+}
 
 /// Optional fork metadata stored alongside a managed session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -103,6 +229,8 @@ pub struct ManagedSession {
     pub fallback_model_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_routing: Option<ManagedSessionAutoRouting>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_authority: Option<ManagedSessionRoutingAuthority>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,6 +269,8 @@ enum ManagedSessionJsonlRecord {
         fallback_model_ids: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         auto_routing: Option<Box<ManagedSessionAutoRouting>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        routing_authority: Option<Box<ManagedSessionRoutingAuthority>>,
     },
     Message {
         message: Message,
@@ -170,6 +300,7 @@ impl ManagedSession {
             output_style: None,
             fallback_model_ids: None,
             auto_routing: None,
+            routing_authority: None,
         }
     }
 
@@ -192,12 +323,46 @@ impl ManagedSession {
         forked_at: DateTime<Utc>,
         source_session_path: Option<PathBuf>,
     ) -> Self {
+        Self::fork_with_messages(
+            source,
+            session_id,
+            forked_at,
+            source_session_path,
+            source.messages.clone(),
+        )
+    }
+
+    /// Create a fork that retains ancestry metadata but inherits no source
+    /// messages. Local→cloud continuation uses this constructor so unselected
+    /// Local context is never written into the destination file, even briefly.
+    pub fn redacted_continuation_from(
+        source: &ManagedSession,
+        session_id: impl Into<String>,
+        forked_at: DateTime<Utc>,
+        source_session_path: Option<PathBuf>,
+    ) -> Self {
+        Self::fork_with_messages(
+            source,
+            session_id,
+            forked_at,
+            source_session_path,
+            Vec::new(),
+        )
+    }
+
+    fn fork_with_messages(
+        source: &ManagedSession,
+        session_id: impl Into<String>,
+        forked_at: DateTime<Utc>,
+        source_session_path: Option<PathBuf>,
+        messages: Vec<Message>,
+    ) -> Self {
         Self {
             version: MANAGED_SESSION_VERSION,
             session_id: session_id.into(),
             created_at: forked_at,
             updated_at: forked_at,
-            messages: source.messages.clone(),
+            messages,
             fork: Some(ManagedSessionForkMetadata {
                 source_session_id: source.session_id.clone(),
                 source_session_path,
@@ -218,7 +383,43 @@ impl ManagedSession {
             output_style: None,
             fallback_model_ids: None,
             auto_routing: source.auto_routing.clone(),
+            routing_authority: source.routing_authority.clone(),
         }
+    }
+
+    /// Return the routing authority required to resume or run this session.
+    /// Absence is expected for legacy v1-v4 files, which remain listable but
+    /// must be explicitly migrated before execution.
+    pub fn require_routing_authority(&self) -> Result<&ManagedSessionRoutingAuthority> {
+        let authority = self.routing_authority.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Managed session '{}' has unknown routing authority; choose an explicit privacy mode and provider before resuming",
+                self.session_id
+            )
+        })?;
+        authority.validated_provider().with_context(|| {
+            format!(
+                "Managed session '{}' has invalid routing authority",
+                self.session_id
+            )
+        })?;
+        Ok(authority)
+    }
+
+    pub fn require_model(&self) -> Result<&str> {
+        let model = self
+            .model
+            .as_deref()
+            .filter(|model| !model.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Managed session '{}' has no persisted model and cannot be resumed safely",
+                    self.session_id
+                )
+            })?;
+        validate_summary_text(model, "model", MANAGED_SESSION_MODEL_MAX_UTF16)
+            .with_context(|| format!("Managed session '{}' has invalid model", self.session_id))?;
+        Ok(model)
     }
 
     /// Add a message and refresh the session timestamp.
@@ -237,6 +438,7 @@ impl ManagedSession {
     /// JSONL is used for `.jsonl` paths; `.json` paths use pretty JSON.
     pub fn save_to_path(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
+        self.validate_for_write()?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
@@ -266,6 +468,14 @@ impl ManagedSession {
                 .with_context(|| format!("Failed to flush session buffer {}", path.display()))?;
         }
 
+        if buf.len() > MANAGED_SESSION_FILE_MAX_BYTES {
+            bail!(
+                "Managed session file {} would exceed the {} byte limit",
+                path.display(),
+                MANAGED_SESSION_FILE_MAX_BYTES
+            );
+        }
+
         atomic_write_session(path, &buf)
             .with_context(|| format!("Failed to write session file {}", path.display()))
     }
@@ -273,8 +483,29 @@ impl ManagedSession {
     /// Load a managed session from a JSONL or JSON file.
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let contents = fs::read_to_string(path)
+        let metadata = fs::metadata(path).with_context(|| {
+            format!("Failed to inspect managed session file {}", path.display())
+        })?;
+        if metadata.len() > MANAGED_SESSION_FILE_MAX_BYTES as u64 {
+            bail!(
+                "Managed session file {} exceeds the {} byte limit",
+                path.display(),
+                MANAGED_SESSION_FILE_MAX_BYTES
+            );
+        }
+        let file = fs::File::open(path)
+            .with_context(|| format!("Failed to open managed session file {}", path.display()))?;
+        let mut contents = String::new();
+        file.take((MANAGED_SESSION_FILE_MAX_BYTES + 1) as u64)
+            .read_to_string(&mut contents)
             .with_context(|| format!("Failed to read managed session file {}", path.display()))?;
+        if contents.len() > MANAGED_SESSION_FILE_MAX_BYTES {
+            bail!(
+                "Managed session file {} exceeds the {} byte limit",
+                path.display(),
+                MANAGED_SESSION_FILE_MAX_BYTES
+            );
+        }
         Self::from_serialized_str(&contents)
             .with_context(|| format!("Failed to parse managed session file {}", path.display()))
     }
@@ -328,6 +559,7 @@ impl ManagedSession {
                     output_style,
                     fallback_model_ids,
                     auto_routing,
+                    routing_authority,
                 } => {
                     if header.is_some() {
                         bail!("Managed session JSONL file contains more than one header record");
@@ -352,6 +584,7 @@ impl ManagedSession {
                         output_style,
                         fallback_model_ids,
                         auto_routing: auto_routing.map(|routing| *routing),
+                        routing_authority: routing_authority.map(|authority| *authority),
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -378,14 +611,56 @@ impl ManagedSession {
             );
         }
 
-        if self.session_id.trim().is_empty() {
-            bail!("Managed session is missing a session_id");
+        validate_managed_session_id(&self.session_id)?;
+
+        if let Some(title) = self.title.as_deref() {
+            validate_summary_text(title, "title", MANAGED_SESSION_TITLE_MAX_UTF16)?;
+        }
+        if let Some(model) = self.model.as_deref() {
+            validate_summary_text(model, "model", MANAGED_SESSION_MODEL_MAX_UTF16)?;
+        }
+        if let Some(workspace_root) = self.workspace_root.as_ref() {
+            validate_summary_text(
+                &workspace_root.to_string_lossy(),
+                "workspace_root",
+                MANAGED_SESSION_CWD_MAX_UTF16,
+            )?;
+        }
+
+        if self.messages.len() > MANAGED_SESSION_MAX_MESSAGES {
+            bail!("Managed session contains more than {MANAGED_SESSION_MAX_MESSAGES} messages");
+        }
+        for message in &self.messages {
+            validate_summary_text(
+                &message.role,
+                "message role",
+                MANAGED_SESSION_MESSAGE_ROLE_MAX_UTF16,
+            )?;
+            let text = message.text_content();
+            if text.encode_utf16().count() > MANAGED_SESSION_MESSAGE_TEXT_MAX_UTF16 {
+                bail!(
+                    "Managed session message text exceeds {MANAGED_SESSION_MESSAGE_TEXT_MAX_UTF16} UTF-16 code units"
+                );
+            }
         }
 
         if self.updated_at < self.created_at {
             bail!("Managed session updated_at is earlier than created_at");
         }
 
+        Ok(())
+    }
+
+    fn validate_for_write(&self) -> Result<()> {
+        self.validate()?;
+        if let Some(authority) = self.routing_authority.as_ref() {
+            authority.validated_provider().with_context(|| {
+                format!(
+                    "Managed session '{}' has invalid routing authority",
+                    self.session_id
+                )
+            })?;
+        }
         Ok(())
     }
 
@@ -409,6 +684,7 @@ impl ManagedSession {
             output_style: self.output_style.clone(),
             fallback_model_ids: self.fallback_model_ids.clone(),
             auto_routing: self.auto_routing.clone().map(Box::new),
+            routing_authority: self.routing_authority.clone().map(Box::new),
         };
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -434,9 +710,12 @@ impl ManagedSession {
 #[cfg(test)]
 mod tests {
     use super::ManagedSessionForkMetadata;
-    use super::{ManagedSession, ManagedSessionAutoRouting};
+    use super::{
+        ManagedSession, ManagedSessionAutoRouting, ManagedSessionRoutingAuthority, PrivacyMode,
+    };
     use crate::models::{ContentBlock, Message};
     use chrono::{TimeZone, Utc};
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     fn sample_messages() -> Vec<Message> {
@@ -462,11 +741,17 @@ mod tests {
             task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
         });
+        session.model = Some("claude-sonnet-5".to_string());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "anthropic".to_string(),
+        });
 
         session.save_to_path(&path).expect("save Auto session");
         let restored = ManagedSession::load_from_path(&path).expect("load Auto session");
 
         assert_eq!(restored.auto_routing, session.auto_routing);
+        assert_eq!(restored.routing_authority, session.routing_authority);
     }
 
     fn null_state_fields() -> (
@@ -521,6 +806,7 @@ mod tests {
             output_style,
             fallback_model_ids,
             auto_routing: None,
+            routing_authority: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -565,6 +851,7 @@ mod tests {
             output_style,
             fallback_model_ids,
             auto_routing: None,
+            routing_authority: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -591,5 +878,160 @@ mod tests {
         assert!(session.workspace_root.is_none());
         assert!(session.created_by.is_none());
         assert!(session.archived_at.is_none());
+        assert!(session.require_routing_authority().is_err());
+    }
+
+    #[test]
+    fn redacted_continuation_keeps_ancestry_without_inheriting_messages() {
+        let source = ManagedSession::with_messages(
+            "source",
+            Utc::now(),
+            vec![Message::text("user", "local-only secret")],
+        );
+        let continuation =
+            ManagedSession::redacted_continuation_from(&source, "destination", Utc::now(), None);
+
+        assert!(continuation.messages.is_empty());
+        let fork = continuation.fork.expect("fork ancestry");
+        assert_eq!(fork.source_session_id, "source");
+        assert_eq!(fork.source_message_count, 1);
+    }
+
+    #[test]
+    fn persisted_provider_authority_enforces_protocol_string_bounds() {
+        let valid = ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "p".repeat(200),
+        };
+        assert_eq!(valid.validated_provider().unwrap().len(), 200);
+
+        for invalid in [
+            String::new(),
+            "   ".to_string(),
+            "p".repeat(201),
+            "bad\u{0000}provider".to_string(),
+            "bad\u{001f}provider".to_string(),
+            "bad\u{007f}provider".to_string(),
+            "bad\u{009f}provider".to_string(),
+        ] {
+            let authority = ManagedSessionRoutingAuthority {
+                privacy_mode: PrivacyMode::Byok,
+                provider: invalid,
+            };
+            assert!(authority.validated_provider().is_err());
+        }
+    }
+
+    #[test]
+    fn malformed_provider_authority_is_rejected_before_persistence() {
+        let temp_dir = tempdir().unwrap();
+        let mut session = ManagedSession::new("invalid-provider", Utc::now());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "bad\u{0085}provider".to_string(),
+        });
+
+        let error = session
+            .save_to_path(temp_dir.path().join("invalid-provider.jsonl"))
+            .unwrap_err();
+
+        assert!(error.to_string().contains("invalid routing authority"));
+    }
+
+    #[test]
+    fn durable_session_ids_reject_traversal_separators_controls_and_oversize_values() {
+        for valid in ["session-123", "fork_name", "release.2026"] {
+            assert_eq!(super::validate_managed_session_id(valid).unwrap(), valid);
+        }
+        for invalid in [
+            "",
+            ".",
+            "..",
+            "../../escape",
+            "folder\\escape",
+            "bad\nidentifier",
+            "bad identifier",
+        ] {
+            assert!(
+                super::validate_managed_session_id(invalid).is_err(),
+                "unsafe id accepted: {invalid:?}"
+            );
+        }
+        assert!(super::validate_managed_session_id(&"x".repeat(201)).is_err());
+    }
+
+    #[test]
+    fn tampered_protocol_summary_fields_are_rejected_on_load() {
+        let assert_rejected = |session: ManagedSession, field: &str| {
+            let serialized = serde_json::to_string(&session).expect("serialize tampered session");
+            let error = ManagedSession::from_serialized_str(&serialized)
+                .expect_err("tampered summary field must be rejected");
+            assert!(error.to_string().contains(field), "{error:#}");
+        };
+
+        let mut bad_id = ManagedSession::new("valid-id", Utc::now());
+        bad_id.session_id = "../../escape".to_string();
+        assert_rejected(bad_id, "session_id");
+
+        let mut bad_title = ManagedSession::new("bad-title", Utc::now());
+        bad_title.title = Some("t".repeat(super::MANAGED_SESSION_TITLE_MAX_UTF16 + 1));
+        assert_rejected(bad_title, "title");
+
+        let mut bad_model = ManagedSession::new("bad-model", Utc::now());
+        bad_model.model = Some("model\u{0085}injection".to_string());
+        assert_rejected(bad_model, "model");
+
+        let mut bad_cwd = ManagedSession::new("bad-cwd", Utc::now());
+        bad_cwd.workspace_root = Some(PathBuf::from(format!(
+            "/{}",
+            "w".repeat(super::MANAGED_SESSION_CWD_MAX_UTF16 + 1)
+        )));
+        assert_rejected(bad_cwd, "workspace_root");
+    }
+
+    #[test]
+    fn tampered_message_projection_bounds_are_rejected() {
+        let mut too_many = ManagedSession::new("too-many-messages", Utc::now());
+        too_many.messages =
+            vec![Message::text("user", "x"); super::MANAGED_SESSION_MAX_MESSAGES + 1];
+        assert!(too_many
+            .validate()
+            .expect_err("message count must be bounded")
+            .to_string()
+            .contains("messages"));
+
+        let mut bad_role = ManagedSession::new("bad-message-role", Utc::now());
+        bad_role
+            .messages
+            .push(Message::text("assistant\u{0085}injected", "x"));
+        assert!(bad_role
+            .validate()
+            .expect_err("message role controls must be rejected")
+            .to_string()
+            .contains("message role"));
+
+        let mut long_text = ManagedSession::new("long-message-text", Utc::now());
+        long_text.messages.push(Message::text(
+            "user",
+            "x".repeat(super::MANAGED_SESSION_MESSAGE_TEXT_MAX_UTF16 + 1),
+        ));
+        assert!(long_text
+            .validate()
+            .expect_err("message text must be bounded")
+            .to_string()
+            .contains("message text"));
+    }
+
+    #[test]
+    fn oversized_session_file_is_rejected_before_parsing() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("oversized.jsonl");
+        let file = std::fs::File::create(&path).expect("create sparse session file");
+        file.set_len((super::MANAGED_SESSION_FILE_MAX_BYTES + 1) as u64)
+            .expect("extend sparse session file");
+
+        let error = ManagedSession::load_from_path(&path)
+            .expect_err("oversized session must be rejected before parsing");
+        assert!(error.to_string().contains("exceeds"), "{error:#}");
     }
 }

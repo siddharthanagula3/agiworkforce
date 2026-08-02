@@ -83,6 +83,7 @@ const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
 const NATIVE_SESSION_RESTORE_TIMEOUT_MS = 8_000;
 const SESSION_REFRESH_SKEW_SECONDS = 5 * 60;
+const REMOTE_LOGOUT_TIMEOUT_MS = 5_000;
 
 interface CachedAuthData<T> {
   data: T;
@@ -295,7 +296,61 @@ class CloudAccountAuthService {
   private deviceAuthorizationController: AbortController | null = null;
   private invalidSessionCleanup: Promise<void> | null = null;
   private sessionRefreshPromise: Promise<{ error: AuthError | null }> | null = null;
+  private sessionRefreshGeneration: number | null = null;
+  private sessionRefreshToken: string | null = null;
+  private sessionRefreshController: AbortController | null = null;
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private sessionGeneration = 0;
+  private nativeCredentialQueue: Promise<void> = Promise.resolve();
+
+  private advanceSessionGeneration(): number {
+    this.sessionGeneration += 1;
+    this.sessionRefreshController?.abort();
+    return this.sessionGeneration;
+  }
+
+  private sessionSnapshotIsCurrent(
+    generation: number,
+    userId: string,
+    accessToken: string,
+  ): boolean {
+    return (
+      this.sessionGeneration === generation &&
+      this.currentState.user?.id === userId &&
+      this.currentState.session?.access_token === accessToken
+    );
+  }
+
+  private enqueueNativeCredentialOperation(operation: () => Promise<void>): Promise<void> {
+    const queued = this.nativeCredentialQueue.catch(() => undefined).then(operation);
+    this.nativeCredentialQueue = queued.catch(() => undefined);
+    return queued;
+  }
+
+  private persistNativeSession(session: Session, generation: number): Promise<void> {
+    return this.enqueueNativeCredentialOperation(async () => {
+      if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) return;
+      await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
+
+      if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) return;
+      await invoke('account_store_access_token', { accessToken: session.access_token });
+
+      if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) return;
+      if (session.refresh_token) {
+        await invoke('account_store_refresh_token', { refreshToken: session.refresh_token });
+      }
+    });
+  }
+
+  private clearNativeSession(): Promise<void> {
+    // Clears share the same queue as writes. If A is already inside an
+    // irreversible keyring write, sign-out's clear runs after it; a later B
+    // write then runs after the clear. Native credential order therefore
+    // matches session-generation order even when individual invokes hang.
+    return this.enqueueNativeCredentialOperation(async () => {
+      await invoke('account_clear_tokens');
+    });
+  }
 
   static getInstance(): CloudAccountAuthService {
     if (!CloudAccountAuthService.instance) {
@@ -305,8 +360,10 @@ class CloudAccountAuthService {
   }
 
   async checkSession(): Promise<void> {
+    const generation = this.sessionGeneration;
     const devBrowserSeed = readDevBrowserSessionSeed();
     if (devBrowserSeed && !this.currentState.session) {
+      if (this.sessionGeneration !== generation) return;
       await this.setSession(devBrowserSeed);
       return;
     }
@@ -315,6 +372,7 @@ class CloudAccountAuthService {
       this.updateState({ isLoading: true, error: null });
       try {
         const seed = await restoreNativeSessionSeed();
+        if (this.sessionGeneration !== generation) return;
         if (seed.access_token) {
           await this.setSession({
             access_token: seed.access_token,
@@ -327,6 +385,7 @@ class CloudAccountAuthService {
           return;
         }
       } catch (error) {
+        if (this.sessionGeneration !== generation) return;
         const message = error instanceof Error ? error.message : String(error);
         console.warn('[Auth] Failed to restore the encrypted Cloud session:', message);
         this.updateState({
@@ -337,6 +396,7 @@ class CloudAccountAuthService {
       }
     }
 
+    if (this.sessionGeneration !== generation) return;
     this.updateState({ isLoading: false, error: null });
   }
 
@@ -346,6 +406,8 @@ class CloudAccountAuthService {
     this.deviceAuthorizationController = controller;
     this.updateState({ isLoading: true, error: null });
     const signInWindow: { current: DesktopCloudSignInWindowSession | null } = { current: null };
+    const attemptIsCurrent = () =>
+      this.deviceAuthorizationController === controller && !controller.signal.aborted;
 
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
@@ -355,6 +417,9 @@ class CloudAccountAuthService {
         // Set it before requesting a code so a fresh install cannot fall back
         // to a stale API-gateway override.
         await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
+      }
+      if (!attemptIsCurrent()) {
+        throw new AuthError('AGI Cloud sign-in was superseded.', 499, 'authorization_superseded');
       }
       const credential = await authorizeDesktopDevice({
         origin: WEB_APP_URL,
@@ -427,11 +492,14 @@ class CloudAccountAuthService {
         },
       });
 
-      if (controller.signal.aborted) {
+      if (!attemptIsCurrent()) {
         throw new AuthError('AGI Cloud sign-in was cancelled.', 499, 'authorization_cancelled');
       }
       await signInWindow.current?.close();
       signInWindow.current = null;
+      if (!attemptIsCurrent()) {
+        throw new AuthError('AGI Cloud sign-in was superseded.', 499, 'authorization_superseded');
+      }
       return await this.finishDeviceAuthorization(credential);
     } catch (error) {
       const authError =
@@ -442,7 +510,9 @@ class CloudAccountAuthService {
               400,
               'device_authorization_failed',
             );
-      this.updateState({ isLoading: false, error: authError.message });
+      if (this.deviceAuthorizationController === controller) {
+        this.updateState({ isLoading: false, error: authError.message });
+      }
       return { data: { user: null, session: null }, error: authError };
     } finally {
       await signInWindow.current?.close();
@@ -462,6 +532,12 @@ class CloudAccountAuthService {
     });
     if (result.error) {
       return { data: { user: null, session: null }, error: result.error };
+    }
+    if (this.currentState.session?.access_token !== credential.accessToken) {
+      return {
+        data: { user: null, session: null },
+        error: new AuthError('AGI Cloud sign-in was superseded.', 499, 'authorization_superseded'),
+      };
     }
     return {
       data: { user: this.currentState.user, session: this.currentState.session },
@@ -493,58 +569,84 @@ class CloudAccountAuthService {
     return this.finishDeviceAuthorization(credential);
   }
 
-  async signOut(): Promise<void> {
+  async signOut(options: { beforeCredentialRevocation?: () => Promise<void> } = {}): Promise<void> {
     this.deviceAuthorizationController?.abort();
     this.deviceAuthorizationController = null;
-    this.updateState({ isLoading: true });
     const accessToken = this.currentState.session?.access_token;
-    try {
-      if (accessToken) {
-        try {
-          const { guardedFetch } = await import('../lib/egressGuard');
-          await guardedFetch(`${WEB_APP_URL}/api/auth/logout`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest',
-              'X-AGI-Surface': 'desktop',
-            },
-            body: '{}',
-          });
-        } catch (error) {
-          // Local credential removal must still complete when the network is
-          // unavailable. The server-side developer token is short-lived and
-          // will expire even if this best-effort revocation cannot be sent.
-          console.warn('[Auth] Could not revoke the Cloud session remotely:', error);
-        }
-      }
-      if (isTauri) {
-        await invoke('account_clear_tokens').catch((error) => {
-          console.warn('[Auth] Failed to clear cloud account tokens:', error);
-        });
-      }
-      if (typeof window !== 'undefined') {
-        // Cloud sign-out must not erase unrelated session-scoped Desktop UI
-        // state. Only the development-browser credential seed belongs here;
-        // Tauri credentials live in the native encrypted account store.
-        window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
-      }
-    } finally {
-      this.clearSessionExpiryTimer();
-      clearAuthCache();
-      this.updateState({
-        user: null,
-        session: null,
-        profile: null,
-        subscription: null,
-        featureFlags: {},
-        isLoading: false,
-        error: null,
-        subscriptionFetchStatus: 'idle',
-      });
+    const signOutGeneration = this.advanceSessionGeneration();
+    this.clearSessionExpiryTimer();
+    clearAuthCache();
+
+    // Local authority is revoked synchronously. Remote logout and native-vault
+    // cleanup are best-effort teardown, never prerequisites for denying a new
+    // Managed Cloud operation.
+    this.updateState({
+      user: null,
+      session: null,
+      profile: null,
+      subscription: null,
+      featureFlags: {},
+      isLoading: false,
+      error: null,
+      subscriptionFetchStatus: 'idle',
+    });
+
+    if (typeof window !== 'undefined') {
+      // Cloud sign-out must not erase unrelated session-scoped Desktop UI
+      // state. Only the development-browser credential seed belongs here;
+      // Tauri credentials live in the native encrypted account store.
+      window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
     }
+
+    // In-flight durable runs must be cancelled while the retiring bearer is
+    // still accepted by the server. Local authority and refresh work were
+    // already revoked above, so this hook cannot admit new Managed operations.
+    try {
+      await options.beforeCredentialRevocation?.();
+    } catch (error) {
+      console.warn('[Auth] Failed to cancel every retiring Cloud operation:', error);
+    }
+
+    // A newer sign-in supersedes this teardown. Never let account A's delayed
+    // native clear or remote logout erase/revoke account B's replacement.
+    if (this.sessionGeneration !== signOutGeneration || this.currentState.session !== null) return;
+
+    const nativeClear = isTauri
+      ? this.clearNativeSession().catch((error) => {
+          console.warn('[Auth] Failed to clear cloud account tokens:', error);
+        })
+      : Promise.resolve();
+
+    const remoteRevoke = accessToken
+      ? (async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), REMOTE_LOGOUT_TIMEOUT_MS);
+          try {
+            const { guardedFetch } = await import('../lib/egressGuard');
+            await guardedFetch(`${WEB_APP_URL}/api/auth/logout`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-AGI-Surface': 'desktop',
+              },
+              body: '{}',
+              signal: controller.signal,
+            });
+          } catch (error) {
+            // Local credential removal must still complete when the network is
+            // unavailable. The server-side developer token is short-lived and
+            // will expire even if this best-effort revocation cannot be sent.
+            console.warn('[Auth] Could not revoke the Cloud session remotely:', error);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        })()
+      : Promise.resolve();
+
+    await Promise.all([nativeClear, remoteRevoke]);
   }
 
   async openAccountManagement(): Promise<void> {
@@ -555,9 +657,12 @@ class CloudAccountAuthService {
     updates: Partial<Pick<Profile, 'display_name' | 'avatar_url'>>,
   ): Promise<{ error: Error | null }> {
     const currentProfile = this.currentState.profile;
-    if (!this.currentState.user || !currentProfile) {
+    const user = this.currentState.user;
+    const session = this.currentState.session;
+    if (!user || !session || !currentProfile) {
       return { error: new Error('Not authenticated') };
     }
+    const generation = this.sessionGeneration;
 
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
@@ -565,13 +670,16 @@ class CloudAccountAuthService {
         method: 'PATCH',
         credentials: 'include',
         headers: {
-          Authorization: `Bearer ${this.currentState.session?.access_token ?? ''}`,
+          Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-AGI-Surface': 'desktop',
         },
         body: JSON.stringify(updates),
       });
+      if (!this.sessionSnapshotIsCurrent(generation, user.id, session.access_token)) {
+        return { error: new Error('The AGI Cloud account changed before the profile was saved.') };
+      }
       if (!response.ok) {
         if (response.status === 401) {
           await this.invalidateSession();
@@ -580,6 +688,9 @@ class CloudAccountAuthService {
       }
 
       const payload: unknown = await response.json();
+      if (!this.sessionSnapshotIsCurrent(generation, user.id, session.access_token)) {
+        return { error: new Error('The AGI Cloud account changed before the profile was saved.') };
+      }
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         throw new Error('AGI Cloud returned an invalid profile update response.');
       }
@@ -678,7 +789,7 @@ class CloudAccountAuthService {
 
     const session = buildSession(tokens.access_token, tokens.refresh_token);
     if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
-      if (session.refresh_token && !this.sessionRefreshPromise) {
+      if (session.refresh_token) {
         return this.refreshSession(session.refresh_token);
       }
       const error = new AuthError(
@@ -690,9 +801,19 @@ class CloudAccountAuthService {
       return { error };
     }
 
+    const previousUserId = this.currentState.user?.id ?? null;
+    const identityChanged = previousUserId !== session.user.id;
+    const generation = this.advanceSessionGeneration();
     this.updateState({
       user: session.user,
       session,
+      ...(identityChanged
+        ? {
+            profile: null,
+            subscription: null,
+            featureFlags: {},
+          }
+        : {}),
       isLoading: false,
       error: null,
       subscriptionFetchStatus: 'fetching',
@@ -701,11 +822,7 @@ class CloudAccountAuthService {
 
     if (isTauri) {
       try {
-        await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
-        await invoke('account_store_access_token', { accessToken: session.access_token });
-        if (session.refresh_token) {
-          await invoke('account_store_refresh_token', { refreshToken: session.refresh_token });
-        }
+        await this.persistNativeSession(session, generation);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const authError = new AuthError(
@@ -716,12 +833,20 @@ class CloudAccountAuthService {
         // The native vault may have accepted one token before a later write
         // failed. Clear both native and in-memory state so the UI can never
         // appear authenticated with a session that cannot be restored safely.
-        await this.invalidateSession(authError.message);
+        if (this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) {
+          await this.invalidateSession(authError.message);
+        }
         return { error: authError };
       }
     }
 
+    if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) {
+      return { error: null };
+    }
     const accountValidated = await this.refreshUserData();
+    if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) {
+      return { error: null };
+    }
     if (!accountValidated) {
       const error = new AuthError(
         'Your AGI Cloud session has expired or was revoked. Please connect again.',
@@ -755,6 +880,7 @@ class CloudAccountAuthService {
     const session = this.currentState.session;
     const user = this.currentState.user;
     if (!session || !user) return false;
+    const generation = this.sessionGeneration;
 
     const cachedProfile = getCachedData<Profile>('profile', user.id);
     const cachedSubscription = getCachedData<Subscription>('subscription', user.id);
@@ -771,6 +897,11 @@ class CloudAccountAuthService {
 
     try {
       const snapshot = await this.fetchAccountSnapshot(session.access_token);
+      if (!this.sessionSnapshotIsCurrent(generation, user.id, session.access_token)) {
+        // A newer account/session owns currentState. This stale request is not
+        // an authorization failure and must neither publish nor invalidate it.
+        return true;
+      }
       if (snapshot.profile) setCachedData('profile', user.id, snapshot.profile);
       if (snapshot.subscription) setCachedData('subscription', user.id, snapshot.subscription);
       setCachedData('flags', user.id, snapshot.featureFlags);
@@ -794,6 +925,9 @@ class CloudAccountAuthService {
       });
       return true;
     } catch (error) {
+      if (!this.sessionSnapshotIsCurrent(generation, user.id, session.access_token)) {
+        return true;
+      }
       console.warn('[Auth] Failed to refresh Clerk/Neon account data:', error);
       const authorizationRejected =
         error instanceof AuthError && (error.status === 401 || error.status === 403);
@@ -812,15 +946,8 @@ class CloudAccountAuthService {
   }
 
   private async clearInvalidSession(message: string): Promise<void> {
+    this.advanceSessionGeneration();
     this.clearSessionExpiryTimer();
-    if (isTauri) {
-      await invoke('account_clear_tokens').catch((error) => {
-        console.warn('[Auth] Failed to clear an invalid Cloud session:', error);
-      });
-    }
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
-    }
     clearAuthCache();
     this.updateState({
       user: null,
@@ -832,6 +959,14 @@ class CloudAccountAuthService {
       error: message,
       subscriptionFetchStatus: 'idle',
     });
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
+    }
+    if (isTauri) {
+      await this.clearNativeSession().catch((error) => {
+        console.warn('[Auth] Failed to clear an invalid Cloud session:', error);
+      });
+    }
   }
 
   private clearSessionExpiryTimer(): void {
@@ -854,11 +989,33 @@ class CloudAccountAuthService {
   }
 
   private async refreshSession(refreshToken: string): Promise<{ error: AuthError | null }> {
-    if (this.sessionRefreshPromise) return this.sessionRefreshPromise;
+    const generation = this.sessionGeneration;
+    if (
+      this.sessionRefreshPromise &&
+      this.sessionRefreshGeneration === generation &&
+      this.sessionRefreshToken === refreshToken
+    ) {
+      return this.sessionRefreshPromise;
+    }
 
-    this.sessionRefreshPromise = (async () => {
+    this.sessionRefreshController?.abort();
+    const controller = new AbortController();
+    this.sessionRefreshController = controller;
+    this.sessionRefreshGeneration = generation;
+    this.sessionRefreshToken = refreshToken;
+
+    const refreshPromise = (async () => {
       try {
-        const tokens = await this.requestDeviceTokenRefresh(refreshToken);
+        const tokens = await this.requestDeviceTokenRefresh(refreshToken, controller.signal);
+        if (controller.signal.aborted || this.sessionGeneration !== generation) {
+          return {
+            error: new AuthError(
+              'The AGI Cloud session refresh was superseded.',
+              499,
+              'refresh_superseded',
+            ),
+          };
+        }
         return await this.setSession(tokens);
       } catch (error) {
         const authError =
@@ -869,21 +1026,35 @@ class CloudAccountAuthService {
                 401,
                 'refresh_failed',
               );
+        if (controller.signal.aborted || this.sessionGeneration !== generation) {
+          return { error: authError };
+        }
         await this.invalidateSession(
           'Your AGI Cloud session could not be renewed. Please connect again.',
         );
         return { error: authError };
       }
     })();
+    this.sessionRefreshPromise = refreshPromise;
 
     try {
-      return await this.sessionRefreshPromise;
+      return await refreshPromise;
     } finally {
-      this.sessionRefreshPromise = null;
+      if (this.sessionRefreshPromise === refreshPromise) {
+        this.sessionRefreshPromise = null;
+        this.sessionRefreshGeneration = null;
+        this.sessionRefreshToken = null;
+      }
+      if (this.sessionRefreshController === controller) {
+        this.sessionRefreshController = null;
+      }
     }
   }
 
-  private async requestDeviceTokenRefresh(refreshToken: string): Promise<{
+  private async requestDeviceTokenRefresh(
+    refreshToken: string,
+    signal?: AbortSignal,
+  ): Promise<{
     access_token: string;
     refresh_token: string;
   }> {
@@ -897,6 +1068,7 @@ class CloudAccountAuthService {
         'X-AGI-Surface': 'desktop',
       },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal,
     });
 
     if (!response.ok) {

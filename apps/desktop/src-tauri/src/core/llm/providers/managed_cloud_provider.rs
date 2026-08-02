@@ -3,7 +3,7 @@ use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, LLMProvider, LLMRequest, LLMResponse,
 };
-use crate::sys::account::{get_access_token, get_api_base_url};
+use crate::sys::account::{get_access_token_for_active_managed_boundary, get_api_base_url};
 use async_trait::async_trait;
 use base64::Engine;
 use futures_util::Stream;
@@ -496,8 +496,9 @@ impl LLMProvider for ManagedCloudProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
-        // Get access token from keyring
-        let token = get_access_token()
+        // Atomically select the current bearer inside any native goal's
+        // captured account/session boundary before constructing the request.
+        let token = get_access_token_for_active_managed_boundary()
             .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
         let url = managed_cloud_llm_url();
@@ -699,8 +700,9 @@ impl LLMProvider for ManagedCloudProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
-        // Get access token from keyring
-        let token = get_access_token()
+        // Atomically select the current bearer inside any native goal's
+        // captured account/session boundary before constructing the request.
+        let token = get_access_token_for_active_managed_boundary()
             .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
         let url = managed_cloud_llm_url();
@@ -801,7 +803,7 @@ impl LLMProvider for ManagedCloudProvider {
 
     fn is_configured(&self) -> bool {
         // Check if we have an access token
-        get_access_token().is_ok()
+        get_access_token_for_active_managed_boundary().is_ok()
     }
 
     fn name(&self) -> &str {
@@ -823,6 +825,97 @@ impl LLMProvider for ManagedCloudProvider {
 mod tests {
     use super::*;
     use crate::core::llm::{ToolChoice, ToolDefinition};
+    use crate::sys::account::{
+        capture_managed_auth_boundary, get_access_token,
+        replace_access_token_for_managed_boundary_test, scope_managed_auth_boundary,
+    };
+    use base64::Engine;
+
+    static MANAGED_BOUNDARY_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    fn managed_test_token(subject: &str, session_id: &str, nonce: &str) -> String {
+        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+            serde_json::json!({ "sub": subject, "sid": session_id, "jti": nonce }).to_string(),
+        );
+        format!("{header}.{payload}.test-signature")
+    }
+
+    #[tokio::test]
+    async fn managed_goal_cannot_use_a_replacement_accounts_bearer() {
+        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let account_a_token = managed_test_token("account-a", "session-a", "token-a");
+        let account_b_token = managed_test_token("account-b", "session-b", "token-b");
+        replace_access_token_for_managed_boundary_test(Some(account_a_token));
+        let account_a_boundary =
+            capture_managed_auth_boundary().expect("account A boundary should be captured");
+
+        // This is the reviewer race: the old native goal remains alive while
+        // the ambient credential is replaced by account B.
+        replace_access_token_for_managed_boundary_test(Some(account_b_token));
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
+        let request = LLMRequest::new(
+            vec![ChatMessage {
+                role: "user".to_string(),
+                content: "continue the old account A goal".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            "managed-cloud-auto".to_string(),
+        );
+
+        let result = scope_managed_auth_boundary(Some(account_a_boundary), async {
+            provider.send_message(&request).await
+        })
+        .await;
+        replace_access_token_for_managed_boundary_test(None);
+
+        let error = result.expect_err("the old goal must fail before any account B request");
+        assert!(
+            error.to_string().contains("account session changed"),
+            "unexpected managed ownership error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn managed_goal_accepts_a_rotated_token_from_the_same_account_session() {
+        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let original = managed_test_token("account-a", "session-a", "token-a1");
+        let rotated = managed_test_token("account-a", "session-a", "token-a2");
+        replace_access_token_for_managed_boundary_test(Some(original));
+        let boundary =
+            capture_managed_auth_boundary().expect("account A boundary should be captured");
+        replace_access_token_for_managed_boundary_test(Some(rotated.clone()));
+
+        let selected =
+            scope_managed_auth_boundary(Some(boundary), async { get_access_token() }).await;
+        replace_access_token_for_managed_boundary_test(None);
+
+        assert_eq!(
+            selected.expect("same-session refresh should remain authorized"),
+            rotated
+        );
+    }
+
+    #[tokio::test]
+    async fn managed_goal_rejects_a_new_session_for_the_same_account() {
+        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let old_session = managed_test_token("account-a", "session-a1", "token-a1");
+        let new_session = managed_test_token("account-a", "session-a2", "token-a2");
+        replace_access_token_for_managed_boundary_test(Some(old_session));
+        let boundary =
+            capture_managed_auth_boundary().expect("old account A boundary should be captured");
+        replace_access_token_for_managed_boundary_test(Some(new_session));
+
+        let result =
+            scope_managed_auth_boundary(Some(boundary), async { get_access_token() }).await;
+        replace_access_token_for_managed_boundary_test(None);
+
+        assert!(result
+            .expect_err("new account session must revoke the old goal")
+            .contains("account session changed"));
+    }
 
     #[test]
     fn transform_request_adds_items_for_array_tool_params() {

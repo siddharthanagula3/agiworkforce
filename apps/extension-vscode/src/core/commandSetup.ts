@@ -253,12 +253,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
       }
     }),
-    register('agi-workforce.restartLocalRuntime', () => {
-      localRuntimes.restartAll();
-      conversationTreeProvider.refresh();
-      vscode.window.showInformationMessage(
-        'AGI Workforce: Local runtime restarted. The next developer turn will use the current configuration.',
-      );
+    register('agi-workforce.restartLocalRuntime', async () => {
+      try {
+        const result = await localRuntimes.restartAll();
+        conversationTreeProvider.refresh();
+        const message =
+          result.restartedWorkspaces === 0
+            ? 'AGI Workforce: Runtime configuration reloaded. No active workspace runtime needed restarting.'
+            : `AGI Workforce: Local runtime restarted and ready in ${result.restartedWorkspaces} workspace${result.restartedWorkspaces === 1 ? '' : 's'}.`;
+        vscode.window.showInformationMessage(message);
+        return { ok: true as const, restartedWorkspaces: result.restartedWorkspaces };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed — ${message}`);
+        return { ok: false as const, error: message };
+      }
     }),
 
     // ── context panel commands ──────────────────────────────────────────────────
@@ -606,33 +615,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // ── conversation commands ───────────────────────────────────────────────────
     register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
       const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
-      const session = await conversationTreeProvider.readThread(id);
-      if (session === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
-        return;
-      }
-
-      const lines: string[] = [
-        `# ${session.thread.title}`,
-        '',
-        `*Model: ${session.thread.model ?? 'configured model'} · ${session.messages.length} messages*`,
-        '',
-      ];
-      for (const msg of session.messages) {
-        if (msg.role === 'system') continue;
-        const heading = msg.role === 'user' ? '**You**' : '**AGI Workforce**';
-        lines.push(`${heading}`, '', msg.text, '');
-      }
-
-      try {
-        const doc = await vscode.workspace.openTextDocument({
-          content: lines.join('\n'),
-          language: 'markdown',
-        });
-        await vscode.window.showTextDocument(doc, { preview: true });
-      } catch {
-        vscode.window.showErrorMessage('AGI Workforce: Failed to open conversation.');
-      }
+      await revealFirstPartyChat();
+      await sidebarProvider.resumeConversation(id);
     }),
 
     register('agi-workforce.deleteConversation', async (item: ConversationTreeItem) => {

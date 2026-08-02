@@ -53,6 +53,12 @@ export function classifyDeployScope(files, { all = false } = {}) {
 
     const sharedBuildFile = SHARED_BUILD_FILES.has(file);
     const sharedPackage = isWithin(file, 'packages');
+    const developerRuntime =
+      file === 'Cargo.lock' ||
+      file === 'Cargo.toml' ||
+      isWithin(file, 'apps/cli') ||
+      isWithin(file, 'crates/agiworkforce-app-server') ||
+      isWithin(file, 'crates/agiworkforce-protocol');
     const deployContract =
       file === '.github/workflows/deploy-production.yml' ||
       file === '.github/workflows/deploy-signaling-server.yml' ||
@@ -115,6 +121,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
       sharedBuildFile ||
       sharedPackage ||
       deployContract ||
+      developerRuntime ||
       isWithin(file, 'apps/extension-vscode')
     ) {
       scope.vscode = true;

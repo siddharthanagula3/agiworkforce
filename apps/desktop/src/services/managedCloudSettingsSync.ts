@@ -13,7 +13,6 @@ import {
 } from '@agiworkforce/sync';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
-import { cloudFetch, getAuthHeaders } from '../api/cloudApi';
 import { storageFallback } from '../lib/storageFallback';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
 import {
@@ -25,6 +24,7 @@ import {
 import { cloudAccountAuth } from './cloudAccountAuth';
 import { configureMemoryInjection } from '../api/memory';
 import { ErrorSeverity, errorTracking } from './errorTracking';
+import { createManagedCloudRequestContext } from './managedCloudRequestContext';
 
 const DEVICE_BACKUP_KEY = 'agi-desktop-managed-settings-device-backup-v1';
 const USER_STATE_PREFIX = 'agi-desktop-managed-settings-sync-v1:';
@@ -556,15 +556,35 @@ export function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void
   }
 }
 
+function createSettingsOperationClient(operation: 'pull' | 'push'): ManagedCloudSettingsClient {
+  const request = createManagedCloudRequestContext(`Managed Cloud settings ${operation}`);
+  return createManagedCloudSettingsClient({
+    baseUrl: WEB_APP_URL,
+    getHeaders: () => request.getHeaders(),
+    fetchImpl: (input, init) =>
+      request.fetch(input, {
+        ...init,
+        credentials: 'include',
+      }),
+  });
+}
+
+/**
+ * Construct a fresh account-pinned transport for every pull/push operation.
+ * Retries within that operation may resolve a rotated token for the same
+ * account, but an account/session/mode transition fails before later egress.
+ */
+export function createDesktopManagedCloudSettingsClient(): ManagedCloudSettingsClient {
+  return {
+    pull: (cursor, options) => createSettingsOperationClient('pull').pull(cursor, options),
+    push: (input, options) => createSettingsOperationClient('push').push(input, options),
+  };
+}
+
 /** Bootstrap the Desktop adapter for authenticated Managed Cloud sessions. */
 export function initManagedCloudSettingsSync(): () => void {
-  const client = createManagedCloudSettingsClient({
-    baseUrl: WEB_APP_URL,
-    fetchImpl: cloudFetch,
-    getHeaders: () => getAuthHeaders(),
-  });
   const coordinator = createManagedCloudSettingsSyncCoordinator({
-    client,
+    client: createDesktopManagedCloudSettingsClient(),
     mode: {
       getPrivacyMode: () => selectPrivacyMode(useAppModeStore.getState()),
       subscribe: (listener) => useAppModeStore.subscribe(listener),

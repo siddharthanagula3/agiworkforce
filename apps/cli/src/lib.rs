@@ -42,12 +42,14 @@ pub mod output;
 pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
+pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
 pub use features::plan::plan_mode;
 pub mod provider;
 pub mod repl;
 pub mod safety;
+pub mod secret_redaction;
 pub mod sessions;
 pub mod skills;
 pub mod subagent;
@@ -100,8 +102,8 @@ pub mod tool_search;
 pub mod marketplace;
 #[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
 pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
-// policy lives at platform::policy; re-exported here so callers using
-// `crate::policy::*` continue to resolve unchanged.
+                // policy lives at platform::policy; re-exported here so callers using
+                // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
 // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
@@ -503,6 +505,20 @@ fn generate_shell_completion(shell: ShellType, bin_name: &str, out: &mut impl st
     clap_complete::generate(shell.to_clap_shell(), &mut cmd, bin_name, out);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FirstRunLaunchDecision {
+    Continue,
+    Exit,
+}
+
+fn first_run_launch_decision(onboarding_completed: bool) -> FirstRunLaunchDecision {
+    if onboarding_completed {
+        FirstRunLaunchDecision::Continue
+    } else {
+        FirstRunLaunchDecision::Exit
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Subcommands
 // ---------------------------------------------------------------------------
@@ -659,6 +675,25 @@ enum Command {
     Init,
     /// Run the first-run onboarding wizard again.
     Onboarding,
+}
+
+fn invocation_requires_project_trust(cli: &Cli) -> bool {
+    if cli.dump_system_prompt {
+        return false;
+    }
+
+    matches!(
+        cli.command.as_ref(),
+        None | Some(
+            Command::Exec { .. }
+                | Command::Review { .. }
+                | Command::Apply { .. }
+                | Command::AppServer { .. }
+                | Command::Resume { .. }
+                | Command::Fork { .. }
+                | Command::Onboarding
+        )
+    )
 }
 
 #[derive(Subcommand, Debug)]
@@ -819,6 +854,8 @@ fn managed_resume_payload_from_resolved(
     resolved: runtime::session_control::ResolvedManagedSessionReference,
 ) -> Result<ResumePayload> {
     let managed_session = runtime::session::ManagedSession::load_from_path(&resolved.path)?;
+    managed_session.require_model()?;
+    managed_session.require_routing_authority()?;
     let messages = managed_session.messages.clone();
     Ok((messages, Some((managed_session, resolved.path))))
 }
@@ -852,19 +889,30 @@ fn latest_legacy_session_messages() -> Result<Option<(String, Vec<crate::models:
 }
 
 fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> {
-    let managed_attempt = if fork {
-        runtime::session_control::fork_managed_session(reference)
-    } else {
-        runtime::session_control::resolve_managed_session_reference(reference)
-    };
-
-    match managed_attempt {
-        Ok(resolved) => managed_resume_payload_from_resolved(resolved),
-        Err(managed_error) => load_legacy_session_messages(reference).with_context(|| {
-            format!(
-                "Managed session resolution failed ({managed_error:#}); legacy JSON conversation fallback also failed"
-            )
-        }).map(|messages| (messages, None)),
+    match runtime::session_control::resolve_managed_session_reference(reference) {
+        Ok(source) => {
+            // Validate the source before creating a fork so unknown legacy
+            // authority cannot be copied into an executable session.
+            managed_resume_payload_from_resolved(source.clone())?;
+            if fork {
+                managed_resume_payload_from_resolved(
+                    runtime::session_control::fork_managed_session(reference)?,
+                )
+            } else {
+                managed_resume_payload_from_resolved(source)
+            }
+        }
+        Err(managed_error) => match load_legacy_session_messages(reference) {
+            Ok(_) => anyhow::bail!(
+                "Legacy conversation '{}' has no persisted privacy/provider authority and cannot be resumed safely; start a new session with an explicit route",
+                reference
+            ),
+            Err(legacy_error) => Err(managed_error).with_context(|| {
+                format!(
+                    "Legacy JSON conversation fallback also failed: {legacy_error:#}"
+                )
+            }),
+        },
     }
 }
 
@@ -877,8 +925,11 @@ fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
         )));
     }
 
-    if let Some((session_id, messages)) = latest_legacy_session_messages()? {
-        return Ok(Some((session_id, (messages, None))));
+    if let Some((session_id, _)) = latest_legacy_session_messages()? {
+        anyhow::bail!(
+            "Latest conversation '{}' is a legacy session with no persisted privacy/provider authority and cannot be resumed safely",
+            session_id
+        );
     }
 
     Ok(None)
@@ -1147,7 +1198,15 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             Ok(())
         }
         SessionAction::Show { session_id } => {
-            let (messages, _) = resolve_resume_payload(&session_id, false)?;
+            // Inspection remains available for legacy/unknown sessions even
+            // though executing them is fail-closed.
+            let messages =
+                match runtime::session_control::resolve_managed_session_reference(&session_id) {
+                    Ok(resolved) => {
+                        runtime::session::ManagedSession::load_from_path(resolved.path)?.messages
+                    }
+                    Err(_) => load_legacy_session_messages(&session_id)?,
+                };
             println!(
                 "{}: {} messages",
                 ts::accent_header(session_id),
@@ -1165,9 +1224,12 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             as_name,
             force,
         } => {
-            // Load source session without creating a fork copy (fork=false avoids
-            // the UUID-named phantom copy that the old path wrote).
-            let (mut messages, _) = resolve_resume_payload(&session_id, false)?;
+            let source_resolved =
+                runtime::session_control::resolve_managed_session_reference(&session_id)?;
+            let source = runtime::session::ManagedSession::load_from_path(&source_resolved.path)?;
+            source.require_model()?;
+            source.require_routing_authority()?;
+            let mut messages = source.messages.clone();
             if let Some(turn) = at_turn {
                 // Truncate to the first `turn` user→assistant pairs.
                 let mut user_seen = 0usize;
@@ -1221,13 +1283,18 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     "session '{new_id}' already exists — use --force to overwrite it or choose a different --as name",
                 );
             }
-            // Persist the forked (and optionally truncated) session to disk under
-            // the user-chosen ID so `agi --resume <as_name>` works immediately.
-            let resolved = runtime::session_control::create_managed_session_with_id(
+            // Preserve ancestry and routing authority instead of recreating a
+            // provider-less session from message bytes.
+            let mut forked = runtime::session::ManagedSession::forked_from(
+                &source,
                 new_id.clone(),
-                messages.clone(),
-            )?;
-            let saved_id = resolved.summary.session_id.clone();
+                chrono::Utc::now(),
+                Some(source_resolved.path),
+            );
+            forked.messages = messages.clone();
+            let store = runtime::session_control::ManagedSessionStore::user_config()?;
+            store.save(&forked)?;
+            let saved_id = forked.session_id;
             println!(
                 "{} Forked '{}' → '{}' ({} messages{}).",
                 ts::success_header("fork:"),
@@ -1329,15 +1396,6 @@ pub async fn run_main() -> Result<()> {
             .map_err(|e| anyhow::anyhow!("--add-dir {}: {}", dir, e))?;
     }
 
-    // Load configuration (global + project + env overrides merged)
-    let mut app_config = config::CliConfig::load_merged()?;
-
-    // Pull any user-defined `[providers.<name>]` blocks into the runtime
-    // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
-    // Fireworks, etc.). Reserved provider names are ignored — see
-    // `models::register_custom_providers`.
-    models::register_custom_providers(&app_config);
-
     // --debug: enable verbose logging
     if cli.debug.is_some() {
         // Setting verbose mode so debug info is visible
@@ -1355,15 +1413,11 @@ pub async fn run_main() -> Result<()> {
     // --fork-session: noted for session loading (handled below)
     let _fork_session = cli.fork_session;
 
-    // Validate configuration — warn but continue with defaults on failure
-    if let Err(e) = app_config.validate() {
-        eprintln!(
-            "Warning: config validation failed: {}. Continuing with defaults.",
-            e
-        );
-    }
-
     // --- First-run: initialize home directory and run onboarding if needed ---
+    // This must happen before loading merged configuration. Project config is
+    // repository-controlled input and must not be read or applied until the
+    // user accepts this directory's trust prompt.
+    let mut trusted_during_first_run = false;
     if let Ok(home) = config::CliConfig::config_dir() {
         // Always ensure the directory structure exists (idempotent)
         if let Err(e) = init::init_home_dir(&home) {
@@ -1377,22 +1431,70 @@ pub async fn run_main() -> Result<()> {
             && cli.prompt.is_none()
             && !cli.dump_system_prompt
             && io::stdin().is_terminal()
+            && io::stderr().is_terminal()
             && !onboarding::is_setup_complete()
         {
             match onboarding::run_onboarding().await {
-                Ok(true) => {
-                    // Reload config after onboarding may have changed it
-                    app_config = config::CliConfig::load_merged()?;
-                    models::register_custom_providers(&app_config);
-                }
-                Ok(false) => {
-                    // User skipped or interrupted — continue with defaults
-                }
+                Ok(completed) => match first_run_launch_decision(completed) {
+                    FirstRunLaunchDecision::Continue => trusted_during_first_run = true,
+                    FirstRunLaunchDecision::Exit => return Ok(()),
+                },
                 Err(e) => {
-                    eprintln!("Warning: onboarding error: {}. Continuing.", e);
+                    eprintln!("Warning: onboarding error: {}. Exiting.", e);
+                    return Ok(());
                 }
             }
         }
+    }
+
+    // Trust is project-scoped, not just a one-time install decision. Every
+    // developer execution must either inherit the trust accepted moments ago,
+    // prompt on a real terminal, or fail closed in headless use. This check
+    // deliberately precedes project config, memory, hook, and tool discovery.
+    let mut project_trusted = trusted_during_first_run;
+    if invocation_requires_project_trust(&cli) {
+        if !project_trusted {
+            if io::stdin().is_terminal() && io::stderr().is_terminal() {
+                match onboarding::ensure_current_directory_trusted() {
+                    Ok(true) => project_trusted = true,
+                    Ok(false) => return Ok(()),
+                    Err(error) => {
+                        eprintln!("Warning: project trust check failed: {error}. Exiting.");
+                        return Ok(());
+                    }
+                }
+            } else if onboarding::is_current_directory_trusted()? {
+                project_trusted = true;
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Current project is not trusted. Run `agi` interactively and accept the directory trust prompt, or run `agi init` as an explicit trust action before headless use."
+                ));
+            }
+        }
+    } else if onboarding::is_current_directory_trusted().unwrap_or(false) {
+        project_trusted = true;
+    }
+
+    // Commands outside a trusted project still get global config and explicit
+    // environment overrides, but repository-controlled config remains unread.
+    let mut app_config = if project_trusted {
+        config::CliConfig::load_merged()?
+    } else {
+        config::CliConfig::load_without_project()?
+    };
+
+    // Pull any user-defined `[providers.<name>]` blocks into the runtime
+    // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
+    // Fireworks, etc.). Reserved provider names are ignored — see
+    // `models::register_custom_providers`.
+    models::register_custom_providers(&app_config);
+
+    // Validate configuration — warn but continue with defaults on failure
+    if let Err(e) = app_config.validate() {
+        eprintln!(
+            "Warning: config validation failed: {}. Continuing with defaults.",
+            e
+        );
     }
 
     // --- Subcommand dispatch ---
@@ -3456,6 +3558,40 @@ pub async fn run_oneshot(
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn declined_first_run_trust_exits_before_launching_the_cli() {
+        assert_eq!(
+            first_run_launch_decision(false),
+            FirstRunLaunchDecision::Exit
+        );
+        assert_eq!(
+            first_run_launch_decision(true),
+            FirstRunLaunchDecision::Continue
+        );
+    }
+
+    #[test]
+    fn developer_invocations_require_project_trust_before_loading_context() {
+        for args in [
+            vec!["agi"],
+            vec!["agi", "exec", "inspect this project"],
+            vec!["agi", "review"],
+            vec!["agi", "app-server"],
+            vec!["agi", "onboarding"],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("developer invocation should parse");
+            assert!(invocation_requires_project_trust(&cli));
+        }
+
+        let doctor = Cli::try_parse_from(["agi", "doctor"])
+            .expect("project-independent command should parse");
+        assert!(!invocation_requires_project_trust(&doctor));
+
+        let system_prompt = Cli::try_parse_from(["agi", "--dump-system-prompt"])
+            .expect("read-only system prompt flag should parse");
+        assert!(!invocation_requires_project_trust(&system_prompt));
+    }
 
     #[test]
     fn cli_does_not_advertise_an_unimplemented_cloud_task_surface() {

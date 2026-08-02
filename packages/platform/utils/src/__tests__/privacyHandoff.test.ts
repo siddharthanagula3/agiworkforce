@@ -56,6 +56,110 @@ describe('privacy handoff utilities', () => {
     expect(result.redactedPayload).not.toContain('abcdefghijklmnopqrstuvwxyz123456');
   });
 
+  it('binds a descriptor preview to caller-supplied source-byte evidence', async () => {
+    const sourceChecksum = 'ab'.repeat(32);
+    const result = await buildLocalToByokHandoffDraft({
+      sourceSessionId: 'desktop-session-2',
+      sourceSurface: 'desktop',
+      targetSurface: 'desktop',
+      target: 'managed',
+      createdAt: '2026-05-21T00:00:00.000Z',
+      expiresAt: '2026-05-21T01:00:00.000Z',
+      selectedContext: [
+        {
+          id: 'logo.png',
+          kind: 'file',
+          label: 'logo.png',
+          sourceUri: 'logo.png',
+          byteCount: 4,
+          checksumSha256: sourceChecksum,
+          content: '[image/png · 4 bytes]',
+        },
+      ],
+    });
+
+    expect(result.draft.selectedContext[0]).toMatchObject({
+      byteCount: 4,
+      checksumSha256: sourceChecksum,
+    });
+    expect(result.redactedPayload).toContain(`"checksumSha256": "${sourceChecksum}"`);
+  });
+
+  it('changes the approved preview hash when binary source bytes change', async () => {
+    const base = {
+      sourceSessionId: 'desktop-session-binary',
+      sourceSurface: 'desktop' as const,
+      targetSurface: 'desktop' as const,
+      target: 'managed' as const,
+      createdAt: '2026-05-21T00:00:00.000Z',
+      expiresAt: '2026-05-21T01:00:00.000Z',
+      selectedContext: [
+        {
+          id: 'logo.png',
+          kind: 'file' as const,
+          label: 'logo.png',
+          sourceUri: 'logo.png',
+          byteCount: 4,
+          checksumSha256: 'ab'.repeat(32),
+          content: '[image/png · 4 bytes]',
+        },
+      ],
+    };
+
+    const first = await buildLocalToByokHandoffDraft(base);
+    const second = await buildLocalToByokHandoffDraft({
+      ...base,
+      selectedContext: [{ ...base.selectedContext[0]!, checksumSha256: 'cd'.repeat(32) }],
+    });
+
+    expect(first.draft.previewHashSha256).not.toBe(second.draft.previewHashSha256);
+  });
+
+  it('refuses malformed caller-supplied source-byte evidence', async () => {
+    await expect(
+      buildLocalToByokHandoffDraft({
+        sourceSessionId: 'desktop-session-3',
+        sourceSurface: 'desktop',
+        targetSurface: 'desktop',
+        target: 'managed',
+        expiresAt: '2026-05-21T01:00:00.000Z',
+        selectedContext: [
+          {
+            id: 'bad.bin',
+            kind: 'file',
+            label: 'bad.bin',
+            byteCount: 3,
+            checksumSha256: 'not-a-checksum',
+            content: '[application/octet-stream · 3 bytes]',
+          },
+        ],
+      }),
+    ).rejects.toThrow('Invalid SHA-256 checksum for handoff context bad.bin.');
+  });
+
+  it('requires source byte count and checksum evidence as a pair', async () => {
+    await expect(
+      buildLocalToByokHandoffDraft({
+        sourceSessionId: 'desktop-session-4',
+        sourceSurface: 'desktop',
+        targetSurface: 'desktop',
+        target: 'managed',
+        expiresAt: '2026-05-21T01:00:00.000Z',
+        selectedContext: [
+          {
+            id: 'partial.bin',
+            kind: 'file',
+            label: 'partial.bin',
+            byteCount: 3,
+            content: '[application/octet-stream · 3 bytes]',
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'Handoff context partial.bin must provide byteCount and checksumSha256 together.',
+    );
+  });
+
   it('exposes secret-scan findings from the same redaction patterns used by logging', () => {
     const report = redactSecretsWithReport('Authorization: Bearer abcDEF1234567890abcdef');
 

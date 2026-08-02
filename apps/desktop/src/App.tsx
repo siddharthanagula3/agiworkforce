@@ -1,9 +1,19 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
 import {
   createChatModelInfo,
   parseDiscoveredChatModels,
+  useChatModelStore,
   useChatSettingsStore,
   useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
@@ -12,9 +22,9 @@ import { useUnifiedAuthStore } from './stores/auth';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
-import { API_BASE_URL } from './api/client';
+import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
-import { cloudFetch, getAuthHeaders, getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
+import { getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { clearSessionToolApprovals } from './api/toolConfirmation';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import {
@@ -201,6 +211,7 @@ import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offline
 import { initCloudSyncScheduler, triggerCloudSync } from './lib/cloudSyncTrigger';
 import { resetCloudConversationCoordinator } from './services/cloudChat';
 import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSync';
+import { createManagedCloudRequestContext } from './services/managedCloudRequestContext';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
@@ -303,6 +314,7 @@ const DesktopShell = () => {
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const authenticatedUserId = useAuthStore((state) => state.user?.id ?? null);
+  const cloudSessionEpoch = useAuthStore((state) => state.cloudSessionEpoch);
   const accountPlan = useAuthStore((state) => state.plan);
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
@@ -311,16 +323,17 @@ const DesktopShell = () => {
   const [conversationBoundaryReady, setConversationBoundaryReady] = useState(false);
   const [conversationBoundaryError, setConversationBoundaryError] = useState<string | null>(null);
   const [conversationBoundaryRetry, setConversationBoundaryRetry] = useState(0);
+  const [modelCatalogError, setModelCatalogError] = useState<string | null>(null);
+  const [modelCatalogRetry, setModelCatalogRetry] = useState(0);
   const expectedConversationBoundaryKey = `${appMode}:${
     appMode === 'cloud'
       ? `${authenticatedUserId ?? 'signed-out'}:${hasCloudSession ? 'connected' : 'disconnected'}`
       : 'device'
   }`;
 
-  // Project the canonical Local/Cloud product boundary into the legacy native
-  // storage flag, then hydrate the matching conversation set. This closes the
-  // startup gap where the mode was persisted as Cloud but the Rust sync gate
-  // still read its default "local" value and the sidebar was never loaded.
+  // Hydrate the conversation set owned by the active execution boundary.
+  // `chatStorageMode` is a separate, explicit synchronization preference and
+  // must never be rewritten as a side effect of switching Local/Cloud mode.
   useEffect(() => {
     let cancelled = false;
     const boundaryKey = expectedConversationBoundaryKey;
@@ -328,22 +341,6 @@ const DesktopShell = () => {
     setConversationBoundaryError(null);
 
     const hydrateBoundary = async () => {
-      await waitForSettingsHydration();
-      if (cancelled) return;
-
-      const desiredStorageMode = appMode === 'cloud' ? 'cloud' : 'local';
-      const settings = useSettingsStore.getState();
-      if (settings.chatPreferences.chatStorageMode !== desiredStorageMode) {
-        useSettingsStore.setState((state) => ({
-          chatPreferences: {
-            ...state.chatPreferences,
-            chatStorageMode: desiredStorageMode,
-          },
-        }));
-        await useSettingsStore.getState().saveSettings();
-        if (cancelled) return;
-      }
-
       if (conversationBoundaryRef.current !== boundaryKey) {
         resetCloudConversationCoordinator();
         useDesktopChatStore.setState({
@@ -411,13 +408,27 @@ const DesktopShell = () => {
       })
       .finally(() => {
         if (!cancelled) {
+          const boundaryIsCurrent = conversationBoundaryRef.current === boundaryKey;
+          const boundaryCanCompose =
+            appMode !== 'cloud' || (hasCloudSession && Boolean(authenticatedUserId));
+
+          // Loading an empty conversation list leaves activeConversationId
+          // null. The shared picker can still project the persisted Cloud mode,
+          // but useChat deliberately requires an explicit conversation
+          // executionMode before sending. Seed one boundary-owned draft before
+          // mounting the shell so an empty or degraded boundary never exposes
+          // a composer whose Send action only produces a fail-closed toast.
+          if (boundaryIsCurrent && boundaryCanCompose) {
+            useDesktopChatStore.getState().ensureActiveConversation();
+          }
+
           // A failed hydration must NOT strand the app on the boot skeleton or
           // a full-screen alert. Once the boundary itself has been established
           // (stores reset + ref claimed) the shell mounts and the failure is
           // reported inline, so composer, sidebar and ChatInterface stay usable
           // (web precedent: `useConversations` only calls setError and the chat
           // page keeps rendering).
-          setConversationBoundaryReady(conversationBoundaryRef.current === boundaryKey);
+          setConversationBoundaryReady(boundaryIsCurrent);
         }
       });
     return () => {
@@ -730,18 +741,17 @@ const DesktopShell = () => {
         });
         if (disposed) return;
 
-        // Sync managed-cloud access token to keyring if user is already authenticated.
+        // Register the Managed Cloud provider if a validated session already
+        // exists. CloudAccountAuth is the sole owner of native credential/base
+        // URL persistence and completes that work before auth becomes ready;
+        // duplicating token writes here could let an older account overwrite a
+        // newer session after an account switch.
         if (isTauri) {
           await runStartupStep(
-            'Managed cloud credential sync',
+            'Managed cloud provider initialization',
             async () => {
-              // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
-              await invoke('account_store_api_base_url', {
-                apiBaseUrl: CLOUD_API_BASE_URL || API_BASE_URL,
-              });
-
-              // Forward cloud credentials only in Managed Cloud mode. Local and
-              // BYOK chat must not wait on or hydrate managed auth.
+              // Initialize only in Managed Cloud mode. Local and BYOK chat must
+              // not wait on or hydrate managed auth.
               if (selectPrivacyMode(useAppModeStore.getState()) !== 'managed') {
                 return;
               }
@@ -756,16 +766,6 @@ const DesktopShell = () => {
                 return;
               }
 
-              await invoke('account_store_access_token', {
-                accessToken: authState.session.access_token,
-              });
-              if (disposed) return;
-              if (authState.session.refresh_token) {
-                await invoke('account_store_refresh_token', {
-                  refreshToken: authState.session.refresh_token,
-                });
-              }
-              if (disposed) return;
               await invoke('llm_ensure_managed_cloud');
 
               // Start surface heartbeat — fires immediately then every 60 s
@@ -809,13 +809,19 @@ const DesktopShell = () => {
   }, [restoreSession, ensureActiveConversation]);
 
   // Initialize providers + load mode-appropriate models into the chat package's model store.
-  useEffect(() => {
+  useLayoutEffect(() => {
     let cancelled = false;
+    // Clear the previous execution plane synchronously. Model discovery is
+    // asynchronous, so retaining the old list would temporarily present a
+    // Local/BYOK model as Cloud-capable (or a managed model as Local-capable).
+    const initialModelStore = useChatModelStore.getState();
+    initialModelStore.setModels([]);
+    initialModelStore.selectModel('');
+    setModelCatalogError(null);
 
     async function initModels() {
       const currentMode = appMode;
       try {
-        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
         if (cancelled) return;
 
         if (currentMode === 'cloud' && !hasCloudSession) {
@@ -978,23 +984,29 @@ const DesktopShell = () => {
         if (cancelled) return;
         // Reachability is unknown. Never turn static catalog membership into a
         // fake Local/BYOK/Managed availability claim.
-        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-        if (cancelled) return;
         const modelStore = useChatModelStore.getState();
         modelStore.setModels([]);
         modelStore.selectModel('');
-        toast.error(
+        const message =
           currentMode === 'local'
             ? 'No verified local or BYOK model is reachable. Start a local runtime or configure a provider in Settings.'
-            : 'The managed model catalog is unavailable. Retry after the connection recovers.',
-        );
+            : 'The managed model catalog is unavailable. Retry after the connection recovers.';
+        setModelCatalogError(message);
+        toast.error(message);
       }
     }
     void initModels();
     return () => {
       cancelled = true;
     };
-  }, [accountPlan, appMode, hasCloudSession, subscriptionFetchStatus]);
+  }, [
+    accountPlan,
+    appMode,
+    authenticatedUserId,
+    hasCloudSession,
+    modelCatalogRetry,
+    subscriptionFetchStatus,
+  ]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -1433,9 +1445,24 @@ const DesktopShell = () => {
   }, []);
 
   const runtimeAppMode = isTauri && appMode === 'cloud' && !hasCloudSession ? 'local' : appMode;
+  // Credential refreshes keep the same runtime, but a different Cloud account
+  // must receive a fresh boundary-scoped runtime. Otherwise the long-lived
+  // CloudRuntime correctly rejects account B forever using account A's cached
+  // boundary, even though the shell has already rehydrated B's conversations.
+  const runtimeAccountId = runtimeAppMode === 'cloud' ? authenticatedUserId : null;
+  const runtimeResearchEnabled = useDesktopCloudResearchCapability(
+    accountPlan,
+    runtimeAppMode === 'cloud',
+  );
   const chatRuntime = useMemo(
-    () => createDesktopChatRuntimeWithLabeling({ isTauriHost: isTauri, appMode: runtimeAppMode }),
-    [runtimeAppMode],
+    () =>
+      createDesktopChatRuntimeWithLabeling({
+        isTauriHost: isTauri,
+        appMode: runtimeAppMode,
+        managedAccountId: runtimeAccountId,
+        managedResearchEnabled: runtimeResearchEnabled,
+      }),
+    [runtimeAccountId, runtimeAppMode, runtimeResearchEnabled],
   );
   useEffect(() => registerActiveDesktopChatRuntime(chatRuntime), [chatRuntime]);
 
@@ -1534,17 +1561,22 @@ const DesktopShell = () => {
           ? uri.startsWith(`${CLOUD_API_BASE_URL}/`)
           : uri.startsWith('/');
         const headers: Record<string, string> = {};
-        if (isOurCloudUri) {
-          const auth = await getAuthHeaders();
+        const request = isOurCloudUri
+          ? createManagedCloudRequestContext('Managed Cloud generated file')
+          : null;
+        if (request) {
+          const auth = await request.getHeaders();
           if (auth['Authorization']) headers['Authorization'] = auth['Authorization'];
         }
-        const res = isOurCloudUri
-          ? await cloudFetch(uri, { headers, credentials: 'include' })
+        const res = request
+          ? await request.fetch(uri, { headers, credentials: 'include' })
           : await guardedFetch(uri, { headers, credentials: 'include' });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
-        return res.blob();
+        const blob = await res.blob();
+        request?.assertBoundary();
+        return blob;
       },
       fetchCodingCheckpoints: async () => {
         const checkpoints = await useCodingCheckpointStore.getState().listCheckpoints();
@@ -1760,6 +1792,36 @@ const DesktopShell = () => {
                 </div>
               </div>
             )}
+          {modelCatalogError && (
+            <div
+              role="alert"
+              data-testid="model-catalog-error"
+              className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 flex items-center justify-between gap-3 text-sm text-[var(--chat-warning-fg)]"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span className="truncate">{modelCatalogError}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModelCatalogRetry((attempt) => attempt + 1)}
+                  className="inline-flex items-center gap-1.5 text-xs underline hover:opacity-80"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModelCatalogError(null)}
+                  aria-label="Dismiss model catalog error"
+                  className="text-xs underline hover:opacity-80"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
           {isCloudMode && subscriptionFetchFailed && (
             <div className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 flex items-center justify-between text-sm text-[var(--chat-warning-fg)]">
               <div className="flex items-center gap-2">
@@ -1820,6 +1882,11 @@ const DesktopShell = () => {
               )}
             >
               <DesktopShellV3
+                key={
+                  isCloudMode
+                    ? `managed:${authenticatedUserId ?? 'signed-out'}:${cloudSessionEpoch}`
+                    : 'local'
+                }
                 runtime={chatRuntime}
                 className="h-full w-full"
                 externalSendRequest={externalSendRequest}
@@ -1860,6 +1927,7 @@ const DesktopShell = () => {
         <Suspense fallback={null}>
           {isCloudMode ? (
             <DesktopCloudSettingsModal
+              key={`${authenticatedUserId ?? 'signed-out'}:${cloudSessionEpoch}`}
               open={settingsPanelOpen}
               onClose={closeSettingsDialog}
               initialTab={settingsInitialTab}

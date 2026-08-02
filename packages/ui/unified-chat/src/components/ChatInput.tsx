@@ -89,6 +89,7 @@ export type ComposerVoiceState =
   | 'processing'
   | 'awaiting_action'
   | 'executing'
+  | 'stopping'
   | 'error'
   | 'unsupported';
 
@@ -221,6 +222,12 @@ export interface ChatInputProps {
    * would have two different definitions of an acceptable attachment.
    */
   pendingAttachments?: { id: string; files: File[] } | null;
+  /**
+   * Host-defined destination identity for unsent file bytes. Change this when
+   * an account, tenant, or other trust boundary changes; the composer purges
+   * its local File state before the new destination can send it.
+   */
+  attachmentContextKey?: string;
   /** Replaces the browser speech mic when a host owns a richer voice workflow. */
   voiceInputController?: ComposerVoiceController;
   /** Host actions exposed through the package-owned slash-command registry. */
@@ -253,10 +260,17 @@ export function ChatInput({
   supportsResearch = false,
   attachmentPolicy,
   pendingAttachments = null,
+  attachmentContextKey,
   voiceInputController,
   slashCommandHost,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentDestinationKey = `${attachmentContextKey ?? 'default'}:${
+    conversationId ?? 'no-conversation'
+  }`;
+  const liveAttachmentDestinationRef = useRef(attachmentDestinationKey);
+  liveAttachmentDestinationRef.current = attachmentDestinationKey;
+  const attachedFilesDestinationRef = useRef<string | null>(null);
   const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
   const isStreaming = isStreamingOverride ?? aggregateIsStreaming;
   const draftContent = useChatStore((s) => s.draftContent);
@@ -265,6 +279,8 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const attachedFilesRef = useRef<File[]>(attachedFiles);
+  attachedFilesRef.current = attachedFiles;
   const hasTextContent = draftContent.trim().length > 0;
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
@@ -444,9 +460,13 @@ export function ChatInput({
   });
   const voiceState = voiceInputController?.state ?? browserVoiceState;
   const startVoice = voiceInputController?.onToggle ?? startBrowserVoice;
-  const voiceIsBusy = ['transcribing', 'processing', 'awaiting_action', 'executing'].includes(
-    voiceState,
-  );
+  const voiceIsBusy = [
+    'transcribing',
+    'processing',
+    'awaiting_action',
+    'executing',
+    'stopping',
+  ].includes(voiceState);
   const voiceIsDisabled = voiceIsBusy || voiceState === 'unsupported';
   const voiceLabel =
     voiceState === 'listening'
@@ -459,9 +479,11 @@ export function ChatInput({
             ? 'Voice action awaiting approval'
             : voiceState === 'executing'
               ? 'Running voice action'
-              : voiceState === 'unsupported'
-                ? 'Voice input unavailable'
-                : (voiceInputController?.idleLabel ?? 'Voice input');
+              : voiceState === 'stopping'
+                ? 'Stopping voice action'
+                : voiceState === 'unsupported'
+                  ? 'Voice input unavailable'
+                  : (voiceInputController?.idleLabel ?? 'Voice input');
 
   // Auto-focus on mount
   useEffect(() => {
@@ -564,6 +586,15 @@ export function ChatInput({
   const appendFiles = useCallback(
     (candidates: File[]) => {
       if (candidates.length === 0) return;
+      // Async producers (notably screenshot capture) retain the callback from
+      // the destination where they started. If account/conversation changed
+      // before they completed, discard those bytes instead of attaching them
+      // to the new destination or replacing its files.
+      if (liveAttachmentDestinationRef.current !== attachmentDestinationKey) return;
+      const existingAttachedFiles =
+        attachedFilesDestinationRef.current === attachmentDestinationKey
+          ? attachedFilesRef.current
+          : [];
       const accepted: File[] = [];
       const rejections: string[] = [];
       for (const file of candidates) {
@@ -582,9 +613,9 @@ export function ChatInput({
       if (accepted.length > 0) {
         const maxFiles = attachmentPolicy?.maxFiles ?? Number.POSITIVE_INFINITY;
         const maxBytes = attachmentPolicy?.maxTotalBytes ?? Number.POSITIVE_INFINITY;
-        const availableCount = Math.max(0, maxFiles - attachedFiles.length);
+        const availableCount = Math.max(0, maxFiles - existingAttachedFiles.length);
         const bounded: File[] = [];
-        let totalBytes = attachedFiles.reduce((sum, file) => sum + file.size, 0);
+        let totalBytes = existingAttachedFiles.reduce((sum, file) => sum + file.size, 0);
         for (const file of accepted.slice(0, availableCount)) {
           if (totalBytes + file.size > maxBytes) {
             rejections.push(
@@ -598,15 +629,25 @@ export function ChatInput({
         if (accepted.length > availableCount) {
           rejections.push(`Attach at most ${maxFiles} files per message.`);
         }
-        setAttachedFiles((previous) => [...previous, ...bounded]);
+        attachedFilesDestinationRef.current = attachmentDestinationKey;
+        const nextFiles = [...existingAttachedFiles, ...bounded];
+        attachedFilesRef.current = nextFiles;
+        setAttachedFiles(nextFiles);
       }
       setAttachmentError(rejections[0] ?? null);
     },
-    [attachedFiles, attachmentPolicy],
+    [attachmentDestinationKey, attachmentPolicy],
   );
 
   // Consume an external one-shot injection exactly once per id.
   const consumedAttachmentIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    attachedFilesDestinationRef.current = null;
+    attachedFilesRef.current = [];
+    setAttachedFiles([]);
+    setAttachmentError(null);
+  }, [attachmentDestinationKey]);
+
   useEffect(() => {
     if (!pendingAttachments || consumedAttachmentIdRef.current === pendingAttachments.id) return;
     consumedAttachmentIdRef.current = pendingAttachments.id;
@@ -695,7 +736,9 @@ export function ChatInput({
     const el = textareaRef.current;
     if (!el) return;
     const typedContent = draftContent.trim();
-    if ((!typedContent && attachedFiles.length === 0) || isStreaming) return;
+    const destinationAttachedFiles =
+      attachedFilesDestinationRef.current === attachmentDestinationKey ? attachedFiles : [];
+    if ((!typedContent && destinationAttachedFiles.length === 0) || isStreaming) return;
 
     // Attachment-only turns are intentionally enabled by SendButton. Previously
     // the button became active as soon as a file was attached, but this handler
@@ -704,7 +747,7 @@ export function ChatInput({
     // the untrusted file name into the instruction channel.
     const content =
       typedContent ||
-      (attachedFiles.length === 1
+      (destinationAttachedFiles.length === 1
         ? 'Please analyze the attached file.'
         : 'Please analyze the attached files.');
 
@@ -717,7 +760,7 @@ export function ChatInput({
       effort = resolveModelEffort(selectedModelId, agentState.effort);
     }
 
-    const attachments = attachedFiles.length > 0 ? attachedFiles : undefined;
+    const attachments = destinationAttachedFiles.length > 0 ? destinationAttachedFiles : undefined;
     const research = supportsResearch && researchEnabled;
     if (projectPicker) {
       // Hosts feeding the picker get the scope stamped into the send; the
@@ -734,6 +777,8 @@ export function ChatInput({
     clearDraftContent(conversationId);
     el.style.height = 'auto';
     setAttachedFiles([]);
+    attachedFilesRef.current = [];
+    attachedFilesDestinationRef.current = null;
     setAttachmentError(null);
   }, [
     disabled,
@@ -746,6 +791,7 @@ export function ChatInput({
     resolveAgentControl,
     selectedModelId,
     attachedFiles,
+    attachmentDestinationKey,
     clearDraftContent,
     researchEnabled,
     supportsResearch,
@@ -948,7 +994,7 @@ export function ChatInput({
                   onCodeExecutionToggle={supportsCodeExecution ? toggleCodeExecution : undefined}
                   activeStyle={activeStyle}
                   onStyleChange={setActiveStyle}
-                  onScreenshot={(file) => setAttachedFiles((prev) => [...prev, file])}
+                  onScreenshot={(file) => appendFiles([file])}
                 >
                   <button
                     ref={plusButtonRef}
@@ -1047,6 +1093,7 @@ export function ChatInput({
               <ModelSelector
                 onSettingsClick={onModelSelectorClick}
                 allowFallbackModels={allowModelFallbackModels}
+                disabled={disabled || isStreaming}
                 className="min-w-0 max-w-[12rem]"
               />
 

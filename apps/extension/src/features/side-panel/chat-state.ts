@@ -16,6 +16,8 @@ export interface SidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   /** Retryable, display-only failure from the most recent approval continuation. */
   cloudApprovalError?: string;
+  /** True when the turn used the request-only Quick overlay. */
+  managedQuickMode?: boolean;
   /**
    * Why the stream failed, kept out of `content`.
    *
@@ -26,6 +28,18 @@ export interface SidePanelChatMessage {
    */
   errorText?: string;
   timestamp: number;
+}
+
+/** Persisted subset accepted by the side-panel history hydrator. */
+export interface StoredSidePanelChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  agentEvents?: AgentEventEnvelope[];
+  cloudAgentRun?: ManagedCloudAgentRunReference;
+  cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
+  cloudApprovalError?: string;
+  managedQuickMode?: boolean;
 }
 
 const MAX_PERSISTED_ACTIVITY_EVENTS = 1_000;
@@ -65,6 +79,40 @@ export function projectCanonicalAgentActivity(
     activity = applyAgentActivityEvent(activity, envelope);
   }
   return activity;
+}
+
+/**
+ * Hydrate one validated browser-history message into the richer renderer
+ * shape. Boot restore and History restore intentionally share this function so
+ * durable agent activity, run cursors, and approval state cannot drift.
+ */
+export function hydrateStoredChatMessage(
+  message: StoredSidePanelChatMessage,
+  id: string,
+): SidePanelChatMessage {
+  const agentEvents = message.agentEvents?.map((event) => ({
+    ...event,
+    event: { ...event.event },
+  })) as AgentEventEnvelope[] | undefined;
+
+  return {
+    id,
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+    ...(agentEvents
+      ? {
+          agentEvents,
+          agentActivity: projectCanonicalAgentActivity(agentEvents),
+        }
+      : {}),
+    ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
+    ...(message.cloudApprovalDecisions
+      ? { cloudApprovalDecisions: { ...message.cloudApprovalDecisions } }
+      : {}),
+    ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
+    ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
+  };
 }
 
 /**

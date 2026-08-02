@@ -1,0 +1,246 @@
+# Chrome Extension Threat Model
+
+Status: Current
+Owner role: Extension lead, with security/privacy review for boundary changes
+Last reviewed: 2026-08-02
+Applies to: `apps/extension` source and the configured Manifest V3 build
+
+This document describes the behavior implemented in this repository. It is not
+a claim that the extension, a visited page, AGI Managed Cloud, Chrome, or the
+Desktop host is compromise-proof. When this document and code disagree, code is
+the evidence and this document must be corrected.
+
+## Security objectives
+
+- Keep Chrome conversations, prompt text, and captured page content
+  browser-local unless a user takes an explicit action that names a
+  destination. The separate automatic WebMCP metadata bridge is limited to the
+  bounded tool declarations documented below.
+- Keep Chrome chat Managed-Cloud-only. A failed cloud turn must not silently
+  fall back to Desktop, Local, or BYOK inference.
+- Treat page text, page schemas, tool output, and model output as untrusted data.
+- Restrict browser automation to user-approved origins and default every
+  computer-use action to human approval.
+- Authenticate privileged extension messages and native-messaging envelopes at
+  their respective boundaries.
+- Bound and runtime-validate data before persistence, network transmission, DOM
+  mutation, or native handoff.
+
+## Trust boundaries
+
+| Boundary                                | Trust treatment                                                                                                                                              | Current enforcement                                                                                                                                                                                                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visited HTTP(S) page and content script | The page DOM and page-supplied metadata are untrusted. A content script is installed broadly, but that does not grant the page privileged background access. | [`background/policy.ts`](src/background/policy.ts) gates tab-originated messages by the device-local origin allowlist. DOM mutations are restricted to the sender's own tab. Extension-page-only operations reject content-script senders.                                                    |
+| Side panel and options page             | Trusted extension UI, but all user, storage, page, model, and network data remains untrusted input.                                                          | The background authenticates the extension id and exact `chrome-extension://` document origin; id equality alone is insufficient.                                                                                                                                                             |
+| Background service worker               | Privileged Chrome owner for tabs, cookies, scripting, debugger, alarms, network, and native messaging.                                                       | [`background.ts`](src/background.ts) validates message shape, sender class, tab ownership, origins, request bounds, and action plans before dispatch.                                                                                                                                         |
+| AGI Managed Cloud                       | External service receiving an authenticated request only after the user sends a chat turn or starts computer use.                                            | Chat uses fixed AGI Web endpoints in [`freeTrialClient.ts`](src/features/cloud-bridge/freeTrialClient.ts). Computer use uses an exact HTTPS gateway allowlist from [`background/policy.ts`](src/background/policy.ts). Server admission, plan, usage, and model routing remain authoritative. |
+| Local Desktop bridge                    | Separate native process; pairing or process locality alone is not treated as message integrity.                                                              | A native connect handshake must negotiate a 32-byte session secret. Subsequent request and response envelopes use HMAC-SHA256, and missing MACs after negotiation are rejected as a downgrade.                                                                                                |
+| Chrome storage                          | Browser-profile storage, not an encrypted secrets vault. `local`, `session`, and `sync` have different disclosure lifetimes.                                 | Only the boolean allowlist in [`synced-preferences.ts`](src/features/background/synced-preferences.ts) is mirrored to Chrome Sync. Other current application data is local/session scoped as described below.                                                                                 |
+
+## Manifest capability inventory
+
+The source manifest is [`manifest.json`](manifest.json). Production builds add
+only the configured exact Clerk Frontend API and Sync Host origins to host
+permissions and `connect-src`; [`scripts/manifest-config.mjs`](scripts/manifest-config.mjs)
+validates those origins.
+
+| Capability                                | Why it exists                                                                                   | Principal exposure                                                                                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `activeTab`, `tabs`, `scripting`          | Read explicitly requested page context; inspect and operate tabs; inject bounded scripts.       | Page text, URL/title metadata, or DOM changes on the active/target page.                                                                |
+| `debugger`                                | Bounded Chrome DevTools Protocol computer-use actions.                                          | High privilege over an attached tab. Use is restricted to an approved origin and the driver detaches after the bounded action/run path. |
+| `cookies`                                 | Explicit extension-UI cookie tools.                                                             | Cookie confidentiality and integrity. Cookie messages are extension-page-only.                                                          |
+| `nativeMessaging`                         | Pair and exchange approved messages with AGI Desktop.                                           | Local-process boundary and native host installation/trust.                                                                              |
+| `storage`                                 | Conversations, allowlist, tasks, shortcuts, preferences, profiles, and transient session state. | Browser-profile persistence and Chrome Sync for the explicit boolean preference set.                                                    |
+| `alarms`, `notifications`, `contextMenus` | Scheduled tasks, completion notices, and user-invoked page actions.                             | Work can occur while the side panel is closed; task origin is checked again at fire time.                                               |
+| `sidePanel`, `tabGroups`                  | Primary UI and explicit tab organization features.                                              | Tab metadata and grouping state.                                                                                                        |
+
+Source host permissions cover loopback (`localhost`, `127.0.0.1`) and the
+documented AGI Web/API origins. The content script matches all ordinary
+`http://*/*` and `https://*/*` top-level frames. Incognito use is disabled. The
+broad content-script match is a material attack-surface choice: it enables page
+discovery/context features, but every visited page can observe the content
+script's page-world effects and can attempt to exercise its message handlers.
+
+Extension pages use a restrictive CSP for scripts and objects and disallow
+framing. The current source CSP permits inline styles and `data:` images; code
+review must not assume those two classes are blocked.
+
+## Data flows
+
+### Managed Cloud chat
+
+1. The user enters a prompt and may explicitly attach captured page text or
+   image data in the side panel.
+2. Page text is stripped of hidden Unicode control characters, passed through
+   the shared secret redactor, bounded, and fenced as untrusted data. This is a
+   mitigation, not proof that every sensitive value or prompt injection is
+   removed.
+3. The background accepts `CHAT_MESSAGE` only from a trusted extension page,
+   validates the request, verifies a fresh Clerk session and authenticated model
+   admission, and resolves Auto/Quick to a concrete catalog model. The Clerk
+   account id plus session id form a non-secret owner boundary carried through
+   chat, resume, approval, cancellation, and stream broadcasts. A request whose
+   owner no longer matches the fresh session is rejected before network egress.
+4. A requested reasoning effort is validated as a known value and reconciled
+   against the concrete model's catalog-supported values. Unsupported or
+   effort-less models never receive an invented effort.
+   Quick is a per-request routing overlay: its resolved economy route is marked
+   on that assistant turn and cannot replace the conversation's durable Auto or
+   manually selected route/effort.
+5. The request is sent to `https://agiworkforce.com/api/llm/v1/chat/completions`
+   with the Chrome surface label. Model access and usage are read from the AGI
+   Web model/usage endpoints. There is no Local, BYOK, or native-chat fallback.
+6. Public answer text, validated durable run references, and display-safe agent
+   events are stored in browser-local conversation history under that exact
+   account/session owner. Active-conversation and notification pointers carry
+   the same owner, and legacy unowned records are discarded rather than adopted
+   after sign-in. Private reasoning deltas are not persisted into the visible
+   activity log.
+7. Each admitted stream captures its bearer credential. Sign-out or an owner
+   change aborts the old operation; any best-effort server cancellation uses the
+   captured credential rather than the newly ambient account token. Delayed
+   chunks and result notifications are ignored unless their owner still matches.
+
+Pixel screenshots and pasted images are not text-redacted. They can contain
+credentials, health information, private messages, or other sensitive pixels.
+The onboarding copy warns users not to use screenshot-capable flows on
+sensitive sites. A user clicking **Take a screenshot**, or starting a
+screenshot-using computer-use run, remains a disclosure decision.
+
+### Browser automation and computer use
+
+- A site must be present in `chrome.storage.local.agi_site_allowlist` before its
+  content script can invoke privileged background behavior. Computer use also
+  re-reads the target tab and revalidates its origin before starting.
+- `AGI_START_COMPUTER_USE` is extension-page-only. Allowlisted page JavaScript
+  cannot start the paid CDP loop through the message router.
+- Ask-before-acting defaults on. Only an explicit stored `false` enables full
+  access. Approval requests use random ids, accept responses only from trusted
+  extension pages, and deny after 30 seconds without a response.
+- The background owns at most one tracked computer-use lease. The lease binds a
+  random run id, a monotonic run generation, the target tab/window/exact URL
+  intent, and the Managed Cloud account plus auth-session incarnation. Those
+  values are reasserted before every cloud and CDP cycle; a replacement account,
+  sign-out, superseding run, panel close/clear/Stop, target-tab removal, active-tab
+  switch, or non-agent URL change aborts the lease.
+- The trusted panel generates that run id before asking the worker for admission
+  and shows Stop immediately. A matching Stop, Clear, or panel teardown therefore
+  invalidates a deferred tab/auth/storage admission before it can become a lease;
+  a stale panel id cannot cancel a newer pending or active run.
+- The same AbortSignal reaches DOM-stability waits, approval waits, and streaming
+  Managed Cloud fetches. Progress events carry the run id/generation and are
+  published only while that lease is current; the side panel independently drops
+  stale events. Cloud sends use a credential resolved only after confirming it
+  still belongs to the captured account/session. There is no invented server-side
+  computer-use cancellation API; client abort is the available cleanup boundary.
+- DOM-mutating message types are same-tab-only. Navigation URLs are bounded,
+  HTTP(S)-only, and reject executable/local schemes. Action plans and fields
+  are allowlisted and size-bounded.
+- Recorded workflows capture selectors only by default. Optional value capture
+  omits password values, replaces declared card/password/OTP fields, and runs
+  remaining values through secret redaction before local persistence.
+- Scheduled tasks created from a page origin are rechecked against the allowlist
+  at fire time and removed if that origin is no longer allowed. Extension-UI
+  tasks use a distinct origin sentinel.
+
+An allowlisted page is still untrusted content. The allowlist grants a bounded
+automation capability; it does not make page instructions safe or accurate.
+
+### WebMCP metadata to Desktop
+
+An allowlisted page may publish WebMCP tool declarations. The content script
+reports changes to the background, which treats the page-controlled names,
+descriptions, input schemas, and URL as untrusted. The background accepts at
+most 64 uniquely named tools, bounds names/descriptions and each serialized
+schema, requires declared sources, and derives a credential/query/fragment-free
+HTTP(S) origin+path from the authenticated sender tab. A conflicting
+page-reported URL is rejected.
+
+When an authenticated AGI Desktop native session is already connected, the
+normalized metadata is sent automatically in the same HMAC-authenticated
+request envelope used by other post-handshake native traffic. It is also shown
+in the side panel only when the sender-derived tab id and normalized URL match
+that panel window's active tab. A side-panel navigation epoch and a background
+per-tab generation invalidate delayed results even when only a query or fragment
+changes and the redacted origin+path remains identical. Activation and
+navigation clear and refresh the catalog; Desktop receives an authenticated
+empty update for the prior catalog before a replacement is eligible.
+Background discovery and tool-call requests are extension-page-only,
+so an allowlisted page cannot use the message router to invoke a tool in another
+tab. This flow does not include prompt text, conversation history, selected
+text, general page text, cookies, tool arguments, tool results, or an automatic
+tool invocation. The metadata can still disclose which page path is open and
+which capabilities the page advertises; there is no per-update prompt after the
+user has allowlisted the origin and paired Desktop.
+
+### Explicit Chrome to Desktop context handoff
+
+The only current user-content handoff is selected text:
+
+1. The user selects visible text and requests a handoff.
+2. Chrome removes hidden Unicode, applies secret redaction, limits text to 2,000
+   characters, strips URL credentials/query/fragment by retaining only
+   origin+path, and stores a five-minute session-only preview.
+3. The side panel names **AGI Desktop**, shows the exact payload, and requires
+   **Send redacted context**. Implicit `SYNC_PAGE_CONTEXT` is rejected.
+4. The background consumes the exact pending id and requires an authenticated
+   native session before sending it.
+5. Desktop rejects unknown fields, invalid/stale timestamps, hidden Unicode,
+   oversized text, and unsafe URLs. It stages rather than inserts the context.
+   The Desktop UI displays a second review and permits acceptance only while
+   Desktop is in Local privacy mode.
+
+The HMAC envelope provides per-session integrity and request/response binding;
+it does not make a compromised Desktop process trustworthy. The five-minute TTL
+limits stale reuse but does not prevent disclosure after both user approvals.
+
+## Storage and retention
+
+| Area                     | Current data                                                                                                                                                                                                                                                                                                                                                          | Boundary                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome.storage.local`   | Browser conversations (`agi_browser_conversations_v2`, capped by age/count plus a 4 MiB aggregate serialized budget), site allowlist, autofill profile, memories, shortcuts, scheduled tasks, recorded actions, statistics, bridge/gateway configuration, onboarding state, local preference mirrors, and a manual `agi_dev_bearer_token` only in development builds. | Device/browser-profile scoped. Conversation entries and their active pointer are partitioned by exact Managed Cloud account/session owner; legacy unowned entries fail closed. The extension does not encrypt these records itself. Autofill profile writes are local; a one-time migration removes any legacy sync copy. Production builds neither expose nor read the manual development token. |
+| `chrome.storage.session` | Pairing token/fingerprint, pending context handoff, owner-bound notification/result pointers, owner-bound panel conversation ownership, and pending context-menu chat.                                                                                                                                                                                                | Cleared with the browser session/service lifetime according to Chrome semantics; not a durable vault. Managed Cloud pointers require an exact account/session match before use.                                                                                                                                                                                                                   |
+| `chrome.storage.sync`    | Only `agi_task_notifications`, `agi_thinking_enabled`, `agi_quick_mode`, `agi_cu_ask_before_acting`, and `agi_in_page_panel_enabled`.                                                                                                                                                                                                                                 | Boolean preferences can leave the device through the user's Chrome Sync account. Conversation text, allowlists, autofill profile, memories, task payloads, native tokens, and handoff previews are not current sync writes.                                                                                                                                                                       |
+
+Managed Cloud request retention, provider handling, account deletion, and server
+logs are controlled by server-side policy and are outside this extension-only
+document. This file makes no retention promise for those systems.
+
+## Threats, mitigations, and residual risk
+
+| Threat                                                                      | Implemented mitigation                                                                                                                                                                                                                                           | Residual risk                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A hostile page invokes privileged extension operations.                     | Origin allowlist, explicit sender classes, extension-page authentication, and same-tab mutation checks.                                                                                                                                                          | Broad content-script injection remains observable; an allowlisted compromised origin has the bounded capabilities the user granted.                                                                                                               |
+| Prompt injection in captured page content controls the model.               | Sanitization, secret redaction, size bounds, unpredictable untrusted-content fencing, and explicit page attachment.                                                                                                                                              | Semantic prompt injection can survive text sanitization; generated actions still require policy and, by default, user approval.                                                                                                                   |
+| Cross-tab screenshot or DOM exfiltration.                                   | Content-script screenshots bind to the sender tab; DOM mutations reject a different target tab; extension-page captures resolve an explicit/active tab.                                                                                                          | Screenshots contain raw pixels and extension pages hold broad tab privileges. UI/source confusion is still possible if the user changes tabs.                                                                                                     |
+| Model/effort UI claims unsupported capability.                              | Authenticated admission is intersected with bundled model metadata; Auto waits for a route; the background reconciles effort after concrete routing.                                                                                                             | Catalog or server admission can become stale between extension releases; unknown models remain hidden/fail closed in this build.                                                                                                                  |
+| Sign-out or account switching exposes or controls an earlier account's run. | Conversation/session records, active pointers, stream broadcasts, durable resume/approval, and result pointers require an exact account plus auth-incarnation match. Owner changes abort old operations; cancellation uses the credential captured at admission. | A compromised extension process or Chrome profile can still read local records and bearer credentials while they are live. Old account-scoped history remains on device until normal expiry/deletion even though another owner cannot hydrate it. |
+| Native response shuffling or unsigned downgrade.                            | Per-session HMAC over id, timestamp, and body; strict MAC requirement after negotiation; secret reset on disconnect.                                                                                                                                             | A compromised native host participates in the handshake and remains trusted as the local endpoint.                                                                                                                                                |
+| A page forges, floods, or misattributes WebMCP metadata.                    | Allowlisted sender gate, sender-authoritative tab/safe URL, tool/count/string/schema bounds, active-tab UI matching/refresh, normalized clone, and authenticated tab-scoped native request.                                                                      | An allowlisted page can advertise misleading capabilities within those bounds, and paired Desktop receives metadata changes without a per-update prompt.                                                                                          |
+| Persistent sensitive browser data leaks.                                    | Sensitive categories stay out of Chrome Sync, values are bounded/redacted where implemented, and conversations expire/cap.                                                                                                                                       | Local Chrome profile compromise, extension compromise, backups, screenshots, and redaction false negatives can expose data.                                                                                                                       |
+| Autonomous action proceeds without review.                                  | Ask-before-acting defaults on and times out to deny; permissive mode is visibly labeled and requires explicit opt-out.                                                                                                                                           | A user can choose Full access; model mistakes and page-driven deception are then acted on within the approved origin and action set.                                                                                                              |
+| A delayed computer-use run continues after Stop or as another account/tab.  | One tracked run lease, captured account/session ownership, exact foreground-tab intent, AbortSignal propagation, exact-run cancellation, and stale run-generation filtering.                                                                                     | A CDP command already accepted by Chrome at the instant of cancellation cannot be recalled; cleanup prevents subsequent commands, captures, cloud cycles, and UI events.                                                                          |
+
+## Verification and change control
+
+Relevant executable checks include message-policy/security tests, privacy and
+context-handoff tests, conversation-history tests, computer-use approval tests,
+computer-use cancellation/ownership and Stop-UI tests, native pairing tests,
+manifest contract tests, `check:no-cloud-ipc`, the
+extension unit suite, typecheck, lint, build, and the unpacked-extension UI
+smoke in [`e2e/smoke.mjs`](e2e/smoke.mjs).
+
+The offline Chromium smoke proves that signed-out or owner-mismatched history
+stays hidden and cannot emit Managed Cloud work. The authenticated release gate
+must use production-configured Clerk test accounts: start history and a durable
+run as account A, sign out, sign in as account B, verify that A's history and
+chunks never render, and verify that cancellation uses A's credential captured
+at admission. The offline harness cannot mint or rotate real Clerk sessions and
+does not claim to prove this live-auth transition.
+
+Any change to permissions, host matches, content-script reach, capture,
+cookies, debugger/CDP, native messaging, storage/sync, Clerk origins, Managed
+Cloud endpoints, automation approvals, or context handoff must update this file
+and receive the path-required security/privacy review. A build passing alone is
+not review evidence; inspect the configured `dist/manifest.json`, the relevant
+source diff, and the real extension UI.

@@ -40,8 +40,25 @@ const LOCAL_MODEL = 'gemma4:e4b';
 
 function makeHarness(localModels: Array<{ id: string; provider: 'ollama' | 'lmstudio' }> = []) {
   const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+  const thread = {
+    id: 'thread-1',
+    title: 'Usage boundary test',
+    model: CATALOG_MODEL,
+    cwd: '/workspace',
+    provider: CATALOG_PROVIDER_ID ?? 'catalog-provider',
+    trustMode: 'byok' as const,
+    createdAt: '2026-08-02T12:00:00.000Z',
+    updatedAt: '2026-08-02T12:00:00.000Z',
+    createdBy: 'vscode' as const,
+    status: 'idle' as const,
+  };
   const runtime = {
-    startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+    startThread: vi.fn().mockResolvedValue(thread),
+    readThread: vi.fn().mockResolvedValue({
+      thread,
+      messages: [],
+      transcriptTruncated: false,
+    }),
     listLocalModels: vi.fn().mockResolvedValue({ models: localModels }),
     startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
     interruptTurn: vi.fn().mockResolvedValue(undefined),

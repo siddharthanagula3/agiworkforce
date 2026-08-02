@@ -23,6 +23,7 @@ use crate::config::CliConfig;
 use crate::context;
 use crate::hooks::{self, HookEvent, HookInput, HooksConfig, TriggerConfig, TriggerType};
 use crate::models::{provider_from_name, OllamaMode, Provider};
+use crate::secret_redaction::redact_secrets;
 use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
@@ -1123,58 +1124,6 @@ async fn wait_for_shutdown_signal() {
             .await
             .expect("Failed to register Ctrl-C handler");
     }
-}
-
-// ---------------------------------------------------------------------------
-// CLI-3 (audit 2026-05-03): minimal secret redactor used before writing
-// trigger prompts + responses to log files on disk. Same pattern set as
-// `apps/desktop/src-tauri/src/sys/security/log_redaction.rs` and
-// `packages/platform/utils/src/logger.ts`. Kept inline so daemon.rs has no
-// cross-crate dep on agiworkforce-secrets (which is workspace-excluded).
-// ---------------------------------------------------------------------------
-
-fn redact_secrets(input: &str) -> String {
-    use std::sync::OnceLock;
-    static PATTERNS: OnceLock<Vec<(regex::Regex, &'static str)>> = OnceLock::new();
-    let patterns = PATTERNS.get_or_init(|| {
-        vec![
-            // Order matters — more specific patterns first.
-            (regex::Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").unwrap(), "[REDACTED_ANTHROPIC_KEY]"),
-            (regex::Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").unwrap(), "[REDACTED_API_KEY]"),
-            (regex::Regex::new(r"AIzaSy[a-zA-Z0-9_-]{33}").unwrap(), "[REDACTED_GOOGLE_KEY]"),
-            (regex::Regex::new(r"gsk_[a-zA-Z0-9]{48,}").unwrap(), "[REDACTED_GROQ_KEY]"),
-            (
-                regex::Regex::new(r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}").unwrap(),
-                "[REDACTED_STRIPE_KEY]",
-            ),
-            (regex::Regex::new(r"AKIA[A-Z0-9]{16}").unwrap(), "[REDACTED_AWS_KEY]"),
-            (regex::Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(), "[REDACTED_GITHUB_TOKEN]"),
-            (
-                regex::Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").unwrap(),
-                "[REDACTED_GITHUB_TOKEN]",
-            ),
-            (regex::Regex::new(r"xai-[a-zA-Z0-9]{20,}").unwrap(), "[REDACTED_XAI_KEY]"),
-            (
-                regex::Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").unwrap(),
-                "Bearer [REDACTED_TOKEN]",
-            ),
-            (
-                regex::Regex::new(
-                    r#"(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#,
-                ).unwrap(),
-                "$1=[REDACTED]",
-            ),
-            (
-                regex::Regex::new(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@").unwrap(),
-                "$1://[CREDENTIALS_REDACTED]@",
-            ),
-        ]
-    });
-    let mut text = input.to_string();
-    for (pattern, replacement) in patterns {
-        text = pattern.replace_all(&text, *replacement).into_owned();
-    }
-    text
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,5 @@
 import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
-import { cloudFetch } from '../api/cloudApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { openExternalUrl } from '../utils/navigation';
 import { isTauri } from './runtimeEnvironment';
@@ -9,12 +8,7 @@ import {
   assertManagedCloudBoundary,
   captureManagedCloudBoundary,
 } from '../services/managedCloudBoundary';
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = (await cloudAccountAuth.getValidSession())?.access_token;
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
-}
+import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -76,27 +70,28 @@ export async function openCheckout(
   interval: BillingInterval = 'monthly',
   onClosed?: () => void | Promise<void>,
 ): Promise<string | null> {
-  const authHeaders = await getAuthHeaders();
-
-  if (!authHeaders['Authorization']) {
+  let request: ReturnType<typeof createManagedCloudRequestContext>;
+  try {
+    request = createManagedCloudRequestContext('Cloud checkout');
+  } catch {
     return 'Please sign in to upgrade your plan.';
   }
-  const boundary = captureManagedCloudBoundary('Cloud checkout');
 
   let url: string;
   try {
-    const res = await cloudFetch(`${WEB_APP_URL}/api/checkout`, {
+    const res = await request.fetch(`${WEB_APP_URL}/api/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Idempotency-Key': `agi.checkout.desktop.${crypto.randomUUID()}`,
-        ...authHeaders,
       },
       body: JSON.stringify({ plan: tierId, billingInterval: interval }),
     });
+    request.assertBoundary();
 
     if (!res.ok) {
       const msg = await readBillingError(res, `Checkout failed (${res.status})`);
+      request.assertBoundary();
       if (res.status === 503) {
         return 'Stripe is not configured. Please contact support.';
       }
@@ -104,6 +99,7 @@ export async function openCheckout(
     }
 
     const payload: unknown = await res.json();
+    request.assertBoundary();
     if (!isRecord(payload) || typeof payload['url'] !== 'string') {
       return 'No checkout URL returned from server.';
     }
@@ -112,7 +108,6 @@ export async function openCheckout(
     return 'Unable to reach payment service. Check your internet connection.';
   }
 
-  assertManagedCloudBoundary(boundary);
   await openBillingUrl(url, 'Complete your AGI plan purchase', onClosed);
   return null;
 }
@@ -124,25 +119,26 @@ export async function openCheckout(
 export async function openBillingPortal(
   onClosed?: () => void | Promise<void>,
 ): Promise<string | null> {
-  const authHeaders = await getAuthHeaders();
-
-  if (!authHeaders['Authorization']) {
+  let request: ReturnType<typeof createManagedCloudRequestContext>;
+  try {
+    request = createManagedCloudRequestContext('Cloud billing portal');
+  } catch {
     return 'Please sign in to manage your subscription.';
   }
-  const boundary = captureManagedCloudBoundary('Cloud billing portal');
 
   let url: string;
   try {
-    const res = await cloudFetch(`${WEB_APP_URL}/api/portal`, {
+    const res = await request.fetch(`${WEB_APP_URL}/api/portal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...authHeaders,
       },
     });
+    request.assertBoundary();
 
     if (!res.ok) {
       const msg = await readBillingError(res, `Portal error (${res.status})`);
+      request.assertBoundary();
       if (res.status === 503) {
         return 'Stripe is not configured. Please contact support.';
       }
@@ -150,6 +146,7 @@ export async function openBillingPortal(
     }
 
     const payload: unknown = await res.json();
+    request.assertBoundary();
     if (!isRecord(payload) || typeof payload['url'] !== 'string') {
       return 'No portal URL returned from server.';
     }
@@ -158,7 +155,6 @@ export async function openBillingPortal(
     return 'Unable to reach billing portal. Check your internet connection.';
   }
 
-  assertManagedCloudBoundary(boundary);
   await openBillingUrl(url, 'Manage AGI billing', onClosed);
   return null;
 }
@@ -183,20 +179,17 @@ export async function previewPlanUpgrade(
   tierId: BillingPlanTier,
   interval: BillingInterval = 'monthly',
 ): Promise<UpgradePreview> {
-  const boundary = captureManagedCloudBoundary('Cloud plan upgrade preview');
-  const authHeaders = await getAuthHeaders();
-  if (!authHeaders['Authorization']) throw new Error('Please sign in to upgrade your plan.');
+  const request = createManagedCloudRequestContext('Cloud plan upgrade preview');
 
-  const response = await cloudFetch(`${WEB_APP_URL}/api/upgrade/preview`, {
+  const response = await request.fetch(`${WEB_APP_URL}/api/upgrade/preview`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders,
     },
     body: JSON.stringify({ plan: tierId, billingInterval: interval }),
   });
   const payload = await readBillingPayload(response);
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 
   if (response.status === 409 && readBillingErrorCode(payload) === 'checkout_required') {
     const checkout = isRecord(payload['checkout']) ? payload['checkout'] : {};
@@ -251,15 +244,12 @@ export async function applyPlanUpgrade(
   previewToken: string,
   interval: BillingInterval = 'monthly',
 ): Promise<{ kind: 'webhook-pending' } | { kind: 'payment-action-required'; paymentUrl: string }> {
-  const boundary = captureManagedCloudBoundary('Cloud plan upgrade');
-  const authHeaders = await getAuthHeaders();
-  if (!authHeaders['Authorization']) throw new Error('Please sign in to upgrade your plan.');
+  const request = createManagedCloudRequestContext('Cloud plan upgrade');
 
-  const response = await cloudFetch(`${WEB_APP_URL}/api/upgrade`, {
+  const response = await request.fetch(`${WEB_APP_URL}/api/upgrade`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders,
     },
     body: JSON.stringify({
       plan: tierId,
@@ -268,7 +258,7 @@ export async function applyPlanUpgrade(
     }),
   });
   const payload = await readBillingPayload(response);
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   if (response.status === 402 && payload['paymentActionRequired'] === true) {
     const paymentUrl = payload['paymentUrl'];
     if (typeof paymentUrl === 'string' && paymentUrl) {

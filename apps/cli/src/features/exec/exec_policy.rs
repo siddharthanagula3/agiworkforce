@@ -64,7 +64,12 @@ fn load_policy_from_dir(rules_dir: &Path) -> Result<Policy> {
     }
 
     let mut paths = std::fs::read_dir(rules_dir)
-        .with_context(|| format!("failed to read exec policy directory {}", rules_dir.display()))?
+        .with_context(|| {
+            format!(
+                "failed to read exec policy directory {}",
+                rules_dir.display()
+            )
+        })?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<std::io::Result<Vec<_>>>()
         .with_context(|| {
@@ -74,7 +79,10 @@ fn load_policy_from_dir(rules_dir: &Path) -> Result<Policy> {
             )
         })?
         .into_iter()
-        .filter(|path| path.extension().is_some_and(|extension| extension == "rules"))
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "rules")
+        })
         .collect::<Vec<_>>();
     paths.sort();
 
@@ -354,11 +362,8 @@ mod tests {
     #[test]
     fn untranslatable_legacy_regex_fails_closed() {
         let temp = tempdir().expect("tempdir");
-        std::fs::write(
-            temp.path().join("legacy.rules"),
-            "allow regex cargo .*\n",
-        )
-        .expect("legacy rule");
+        std::fs::write(temp.path().join("legacy.rules"), "allow regex cargo .*\n")
+            .expect("legacy rule");
 
         let error = load_policy_from_dir(temp.path()).expect_err("regex must be rejected");
         assert!(error.to_string().contains("cannot be represented"));
@@ -375,9 +380,6 @@ mod tests {
         let contents = std::fs::read_to_string(&policy_path).expect("rule contents");
         assert!(contents.contains(r#"pattern=["cargo", "test", "--workspace"]"#));
         let policy = load_policy_from_dir(temp.path()).expect("load policy");
-        assert_eq!(
-            evaluate(&policy, "cargo test --workspace"),
-            Decision::Allow
-        );
+        assert_eq!(evaluate(&policy, "cargo test --workspace"), Decision::Allow);
     }
 }

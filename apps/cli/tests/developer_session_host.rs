@@ -1,7 +1,7 @@
 use agiworkforce_app_server::DeveloperSessionHost;
 use agiworkforce_cli::app_server::CliDeveloperSessionHost;
 use agiworkforce_cli::config::CliConfig;
-use agiworkforce_cli::runtime::session_control::ManagedSessionStore;
+use agiworkforce_cli::runtime::session_control::{ManagedSessionReference, ManagedSessionStore};
 use agiworkforce_protocol::developer_session::{
     AppServerClientInfo, DeveloperSessionSource, ThreadForkParams, ThreadIdParams,
     ThreadListParams, ThreadStartParams, ThreadStatus, TurnStartParams,
@@ -120,18 +120,21 @@ async fn cli_and_vscode_share_one_persisted_thread_store() {
 
 #[tokio::test]
 async fn auto_model_selection_is_resolved_before_a_thread_is_persisted() {
+    const REQUESTED_MODEL: &str = "auto-balanced";
+
     let temp = tempdir().expect("temp store");
     let workspace = std::env::current_dir().expect("workspace");
     let store = ManagedSessionStore::new(temp.path().to_path_buf());
     let mut config = CliConfig::default();
     config.default.provider = "anthropic".to_string();
-    let host = CliDeveloperSessionHost::new_with_store(config, workspace.clone(), store, false)
-        .expect("host");
+    let host =
+        CliDeveloperSessionHost::new_with_store(config, workspace.clone(), store.clone(), false)
+            .expect("host");
 
     let started = host
         .start_thread(
             ThreadStartParams {
-                model: Some("auto-balanced".to_string()),
+                model: Some(REQUESTED_MODEL.to_string()),
                 provider: None,
                 cwd: Some(workspace.display().to_string()),
                 title: Some("Resolve Auto".to_string()),
@@ -145,8 +148,29 @@ async fn auto_model_selection_is_resolved_before_a_thread_is_persisted() {
         .await
         .expect("start auto thread");
 
-    let model = started.model.expect("resolved model");
-    assert!(!model.starts_with("auto-"));
+    // Presentation clients retain the user's Auto selection so subsequent
+    // turns keep routing through the same policy instead of pinning the first
+    // concrete route. Execution authority is persisted separately below.
+    assert_eq!(started.model.as_deref(), Some(REQUESTED_MODEL));
+
+    let expected = agiworkforce_cli::model_catalog::resolve_auto_model(
+        REQUESTED_MODEL,
+        agiworkforce_model_registry::RoutingTaskType::Coding,
+        "byok",
+        agiworkforce_model_registry::TrustMode::Byok,
+    )
+    .expect("catalog-backed BYOK coding route");
+    let persisted = store
+        .load(ManagedSessionReference::SessionId(started.id))
+        .expect("persisted auto thread");
+    let persisted_model = persisted.model.expect("concrete persisted model");
+    assert_eq!(persisted_model, expected.provider_model_id);
+    assert!(!agiworkforce_model_registry::is_auto_routing_selection(
+        &persisted_model
+    ));
+    let auto_routing = persisted.auto_routing.expect("persisted Auto metadata");
+    assert_eq!(auto_routing.selection, REQUESTED_MODEL);
+    assert_eq!(auto_routing.model_key, expected.model_key);
 }
 
 #[tokio::test]

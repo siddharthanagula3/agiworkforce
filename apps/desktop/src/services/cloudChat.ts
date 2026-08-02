@@ -9,6 +9,10 @@ import {
   captureManagedCloudBoundary,
   type ManagedCloudBoundary,
 } from './managedCloudBoundary';
+import {
+  MANAGED_CLOUD_PAGE_SIZE,
+  createManagedCloudPaginationGuard,
+} from './managedCloudPagination';
 
 /**
  * Compatibility projection consumed by Desktop's mature host chat store.
@@ -53,7 +57,14 @@ export interface CloudMessage {
 }
 
 const readyConversationIds = new Set<string>();
-const pendingConversationCreates = new Map<string, Promise<CloudConversation>>();
+
+interface PendingConversationCreate {
+  promise: Promise<CloudConversation>;
+  controller: AbortController;
+  activeWaiters: number;
+}
+
+const pendingConversationCreates = new Map<string, PendingConversationCreate>();
 let coordinatorGeneration = 0;
 
 export interface CloudConversationBoundary extends ManagedCloudBoundary {
@@ -85,7 +96,67 @@ function coordinatorKey(
 export function resetCloudConversationCoordinator(): void {
   coordinatorGeneration += 1;
   readyConversationIds.clear();
+  for (const pending of pendingConversationCreates.values()) {
+    pending.controller.abort();
+  }
   pendingConversationCreates.clear();
+}
+
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error('Managed Cloud conversation request was stopped.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError(signal);
+}
+
+/**
+ * Give every caller an independently cancellable view of a shared idempotent
+ * create. The transport is cancelled only after all current waiters stop, so
+ * stopping one overlapping turn cannot break another turn joining the same
+ * optimistic conversation create.
+ */
+function joinPendingConversationCreate(
+  pending: PendingConversationCreate,
+  signal?: AbortSignal,
+): Promise<CloudConversation> {
+  throwIfAborted(signal);
+  pending.activeWaiters += 1;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (cancelled: boolean) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      pending.activeWaiters -= 1;
+      if (cancelled && pending.activeWaiters === 0) {
+        pending.controller.abort();
+      }
+    };
+    const onAbort = () => {
+      finish(true);
+      reject(abortError(signal!));
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    pending.promise.then(
+      (conversation) => {
+        if (settled) return;
+        finish(false);
+        resolve(conversation);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        finish(false);
+        reject(error);
+      },
+    );
+  });
 }
 
 function projectConversation(
@@ -141,11 +212,14 @@ export function markCloudConversationReady(
 export async function waitForCloudConversationReady(
   conversationId: string,
   boundary = captureCloudConversationBoundary(),
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfAborted(signal);
   const pending = pendingConversationCreates.get(
     coordinatorKey(conversationId, boundary.accountId),
   );
-  if (pending) await pending;
+  if (pending) await joinPendingConversationCreate(pending, signal);
+  throwIfAborted(signal);
   assertCloudConversationBoundary(boundary);
 }
 
@@ -158,7 +232,9 @@ export async function ensureCloudConversation(
   title = 'New chat',
   model?: string,
   projectId?: string | null,
+  signal?: AbortSignal,
 ): Promise<CloudConversation> {
+  throwIfAborted(signal);
   const boundary = captureCloudConversationBoundary();
   const key = coordinatorKey(conversationId, boundary.accountId);
   if (readyConversationIds.has(key)) {
@@ -184,48 +260,69 @@ export async function ensureCloudConversation(
   }
 
   const existing = pendingConversationCreates.get(key);
-  if (existing) return existing;
+  if (existing && !existing.controller.signal.aborted) {
+    return joinPendingConversationCreate(existing, signal);
+  }
+  if (existing) {
+    // The last prior waiter stopped, but the transport may not have observed
+    // its abort and settled yet. Do not make a new turn join that doomed
+    // operation; controller identity keeps its eventual cleanup from deleting
+    // the replacement entry below.
+    pendingConversationCreates.delete(key);
+  }
 
-  const pending = getDesktopCloudChatPersistenceClient()
-    .createConversation({
-      id: conversationId,
-      title,
-      ...(model ? { model } : {}),
-      ...(projectId !== undefined ? { projectId } : {}),
-    })
+  const controller = new AbortController();
+  const promise = getDesktopCloudChatPersistenceClient()
+    .createConversation(
+      {
+        id: conversationId,
+        title,
+        ...(model ? { model } : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+      },
+      { signal: controller.signal },
+    )
     .then((conversation) => {
       assertCloudConversationBoundary(boundary);
       readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
       return projectConversation(conversation, 0);
     })
     .finally(() => {
-      if (pendingConversationCreates.get(key) === pending) {
+      if (pendingConversationCreates.get(key)?.controller === controller) {
         pendingConversationCreates.delete(key);
       }
     });
+  const pending = { controller, activeWaiters: 0, promise };
   pendingConversationCreates.set(key, pending);
-  return pending;
+  return joinPendingConversationCreate(pending, signal);
 }
 
-export async function getCloudConversations(): Promise<CloudConversation[]> {
+export async function getCloudConversations(signal?: AbortSignal): Promise<CloudConversation[]> {
   const boundary = captureCloudConversationBoundary();
   const client = getDesktopCloudChatPersistenceClient();
   const result: CloudConversation[] = [];
+  const pagination = createManagedCloudPaginationGuard('conversations');
   let offset = 0;
   let hasMore = true;
   while (hasMore) {
-    const page = await client.listConversations({ limit: 100, offset });
+    const query = { limit: MANAGED_CLOUD_PAGE_SIZE, offset };
+    const page = signal
+      ? await client.listConversations(query, { signal })
+      : await client.listConversations(query);
     assertCloudConversationBoundary(boundary);
+    const nextOffset = pagination.acceptPage({
+      items: page.conversations,
+      hasMore: page.hasMore,
+      currentOffset: offset,
+      nextOffset: page.nextOffset,
+    });
     for (const conversation of page.conversations) {
       readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
       result.push(projectConversation(conversation));
     }
     hasMore = page.hasMore;
     if (!hasMore) break;
-    if (page.conversations.length === 0) {
-      throw new Error('AGI Cloud returned an invalid empty conversation page.');
-    }
-    offset = page.nextOffset;
+    offset = nextOffset;
   }
   return result;
 }
@@ -235,14 +332,23 @@ export async function createCloudConversation(
   model?: string,
   _provider?: string,
   conversationId = crypto.randomUUID(),
+  signal?: AbortSignal,
 ): Promise<CloudConversation> {
-  return ensureCloudConversation(conversationId, title ?? 'New chat', model);
+  return ensureCloudConversation(conversationId, title ?? 'New chat', model, undefined, signal);
 }
 
-export async function deleteCloudConversation(conversationId: string): Promise<void> {
+export async function deleteCloudConversation(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const boundary = captureCloudConversationBoundary();
-  await waitForCloudConversationReady(conversationId, boundary);
-  await getDesktopCloudChatPersistenceClient().deleteConversation(conversationId);
+  await waitForCloudConversationReady(conversationId, boundary, signal);
+  const client = getDesktopCloudChatPersistenceClient();
+  if (signal) {
+    await client.deleteConversation(conversationId, { signal });
+  } else {
+    await client.deleteConversation(conversationId);
+  }
   assertCloudConversationBoundary(boundary);
   const key = coordinatorKey(conversationId, boundary.accountId);
   readyConversationIds.delete(key);
@@ -252,21 +358,23 @@ export async function deleteCloudConversation(conversationId: string): Promise<v
 export async function updateCloudConversation(
   conversationId: string,
   updates: ManagedCloudUpdateConversationRequest,
+  signal?: AbortSignal,
 ): Promise<CloudConversation> {
   const boundary = captureCloudConversationBoundary();
-  await waitForCloudConversationReady(conversationId, boundary);
+  await waitForCloudConversationReady(conversationId, boundary, signal);
   if (!readyConversationIds.has(coordinatorKey(conversationId, boundary.accountId))) {
     await ensureCloudConversation(
       conversationId,
       typeof updates.title === 'string' ? updates.title : 'New chat',
       typeof updates.model === 'string' ? updates.model : undefined,
       updates.projectId,
+      signal,
     );
   }
-  const conversation = await getDesktopCloudChatPersistenceClient().updateConversation(
-    conversationId,
-    updates,
-  );
+  const client = getDesktopCloudChatPersistenceClient();
+  const conversation = signal
+    ? await client.updateConversation(conversationId, updates, { signal })
+    : await client.updateConversation(conversationId, updates);
   assertCloudConversationBoundary(boundary);
   readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
   return projectConversation(conversation);
@@ -275,28 +383,39 @@ export async function updateCloudConversation(
 export async function updateCloudConversationTitle(
   conversationId: string,
   title: string,
+  signal?: AbortSignal,
 ): Promise<void> {
-  await updateCloudConversation(conversationId, { title });
+  await updateCloudConversation(conversationId, { title }, signal);
 }
 
-export async function getCloudMessages(conversationId: string): Promise<CloudMessage[]> {
+export async function getCloudMessages(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<CloudMessage[]> {
   const boundary = captureCloudConversationBoundary();
-  await waitForCloudConversationReady(conversationId, boundary);
+  await waitForCloudConversationReady(conversationId, boundary, signal);
   const client = getDesktopCloudChatPersistenceClient();
   const messages: CloudMessage[] = [];
+  const pagination = createManagedCloudPaginationGuard('messages');
   let offset = 0;
   let hasMore = true;
   while (hasMore) {
-    const page = await client.getConversation(conversationId, { limit: 100, offset });
+    const query = { limit: MANAGED_CLOUD_PAGE_SIZE, offset };
+    const page = signal
+      ? await client.getConversation(conversationId, query, { signal })
+      : await client.getConversation(conversationId, query);
     assertCloudConversationBoundary(boundary);
+    const nextOffset = pagination.acceptPage({
+      items: page.messages,
+      hasMore: page.hasMore,
+      currentOffset: offset,
+      reportedTotal: page.total,
+    });
     readyConversationIds.add(coordinatorKey(page.conversation.id, boundary.accountId));
     messages.push(...page.messages.map(projectMessage));
     hasMore = page.hasMore;
     if (!hasMore) break;
-    if (page.messages.length === 0) {
-      throw new Error(`AGI Cloud conversation ${conversationId} returned an invalid empty page.`);
-    }
-    offset += page.messages.length;
+    offset = nextOffset;
   }
   return messages;
 }
@@ -313,12 +432,15 @@ export interface CreateCloudMessageParams {
   toolResults?: unknown;
 }
 
-export async function createCloudMessage(params: CreateCloudMessageParams): Promise<CloudMessage> {
+export async function createCloudMessage(
+  params: CreateCloudMessageParams,
+  signal?: AbortSignal,
+): Promise<CloudMessage> {
   const boundary = captureCloudConversationBoundary();
-  const role =
-    params.role === 'assistant' || params.role === 'system' ? params.role : ('user' as const);
+  const role: 'assistant' | 'system' | 'user' =
+    params.role === 'assistant' || params.role === 'system' ? params.role : 'user';
   const id = crypto.randomUUID();
-  await getDesktopCloudChatPersistenceClient().saveMessage(params.conversationId, {
+  const input = {
     id,
     role,
     content: params.content,
@@ -330,7 +452,13 @@ export async function createCloudMessage(params: CreateCloudMessageParams): Prom
       ...(params.toolCalls !== undefined ? { toolCalls: params.toolCalls } : {}),
       ...(params.toolResults !== undefined ? { toolResults: params.toolResults } : {}),
     },
-  });
+  };
+  const client = getDesktopCloudChatPersistenceClient();
+  if (signal) {
+    await client.saveMessage(params.conversationId, input, { signal });
+  } else {
+    await client.saveMessage(params.conversationId, input);
+  }
   assertCloudConversationBoundary(boundary);
   const now = new Date().toISOString();
   return {

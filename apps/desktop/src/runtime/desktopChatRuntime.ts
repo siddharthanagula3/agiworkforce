@@ -13,20 +13,25 @@ export interface DesktopChatRuntimeEnvironment {
    * matching runtime.
    */
   appMode: AppMode;
+  /** Account that owns a Managed runtime. Token refresh does not change it. */
+  managedAccountId?: string | null;
+  /** Server/tier projection for the Deep Research composer capability. */
+  managedResearchEnabled?: boolean;
 }
 
 export interface DesktopChatRuntimeFactories {
   /** Local workspace runtime. Local-only and BYOK conversations both live here. */
   local: () => ChatRuntime;
   /** Managed Cloud runtime backed by the shared Web/Mobile/Desktop services. */
-  managed: () => ChatRuntime;
+  managed: (expectedAccountId?: string | null, researchEnabled?: boolean) => ChatRuntime;
   /** Non-Tauri embedded build runtime. */
   web: () => ChatRuntime;
 }
 
 const defaultFactories: DesktopChatRuntimeFactories = {
   local: () => new TauriRuntime(),
-  managed: () => new CloudRuntime(),
+  managed: (expectedAccountId, researchEnabled = false) =>
+    new CloudRuntime(expectedAccountId, researchEnabled),
   web: () => new WebRuntime(),
 };
 
@@ -80,6 +85,8 @@ export function createDesktopChatRuntime(
   factories: DesktopChatRuntimeFactories = defaultFactories,
 ): ChatRuntime {
   if (!environment.isTauriHost) return factories.web();
-  if (environment.appMode === 'cloud') return factories.managed();
+  if (environment.appMode === 'cloud') {
+    return factories.managed(environment.managedAccountId, environment.managedResearchEnabled);
+  }
   return factories.local();
 }

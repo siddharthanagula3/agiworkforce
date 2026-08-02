@@ -13,6 +13,11 @@ const SCANNER_VERSION = 'agi-utils/privacy-handoff@1';
 const encoder = new TextEncoder();
 
 export interface HandoffPreviewContextItem extends HandoffContextItem {
+  /**
+   * Text rendered in the payload preview and passed through the secret scanner.
+   * Binary callers may provide a bounded descriptor here while binding the
+   * exact source bytes through the inherited `byteCount` + `checksumSha256`.
+   */
   content: string;
 }
 
@@ -59,6 +64,38 @@ function byteCount(value: string): number {
   return encoder.encode(value).byteLength;
 }
 
+const SHA_256_HEX = /^[a-f0-9]{64}$/;
+
+function validateSourceEvidence(item: HandoffPreviewContextItem): void {
+  const hasByteCount = item.byteCount !== undefined;
+  const hasChecksum = item.checksumSha256 !== undefined;
+  if (hasByteCount !== hasChecksum) {
+    throw new Error(
+      `Handoff context ${item.id} must provide byteCount and checksumSha256 together.`,
+    );
+  }
+}
+
+function sourceByteCount(item: HandoffPreviewContextItem, redactedContent: string): number {
+  if (item.byteCount === undefined) return byteCount(redactedContent);
+  if (!Number.isSafeInteger(item.byteCount) || item.byteCount < 0) {
+    throw new Error(`Invalid byte count for handoff context ${item.id}.`);
+  }
+  return item.byteCount;
+}
+
+async function sourceChecksum(
+  item: HandoffPreviewContextItem,
+  redactedContent: string,
+  hash: (value: string) => Promise<string>,
+): Promise<string> {
+  if (item.checksumSha256 === undefined) return hash(redactedContent);
+  if (!SHA_256_HEX.test(item.checksumSha256)) {
+    throw new Error(`Invalid SHA-256 checksum for handoff context ${item.id}.`);
+  }
+  return item.checksumSha256;
+}
+
 function mergeFindings(findings: SecretScanFinding[][]): SecretScanFinding[] {
   return findings.flat().map((finding, index) => ({
     ...finding,
@@ -71,6 +108,7 @@ export async function buildLocalToByokHandoffDraft(
 ): Promise<LocalToByokHandoffPreview> {
   const createdAt = params.createdAt ?? new Date().toISOString();
   const hash = params.hash ?? sha256;
+  params.selectedContext.forEach(validateSourceEvidence);
   const redactionResults = params.selectedContext.map((item) =>
     redactSecretsWithReport(item.content, { location: item.sourceUri ?? item.label }),
   );
@@ -84,8 +122,11 @@ export async function buildLocalToByokHandoffDraft(
         kind: item.kind,
         label: item.label,
         sourceUri: item.sourceUri,
-        byteCount: byteCount(redactedContent),
-        checksumSha256: await hash(redactedContent),
+        // Callers transferring non-text bytes can bind the preview to the
+        // immutable source object by supplying its byte count and checksum.
+        // Text-only callers retain the original redacted-content evidence.
+        byteCount: sourceByteCount(item, redactedContent),
+        checksumSha256: await sourceChecksum(item, redactedContent, hash),
         redactedContent,
       };
     }),

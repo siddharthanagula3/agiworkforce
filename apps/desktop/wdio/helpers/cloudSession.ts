@@ -47,6 +47,10 @@ export interface CloudApiStubOptions {
 
 const APP_MODE_STORAGE_KEY = 'app-mode-store';
 
+/** Selectors for the current native-first Cloud sign-in surface. */
+export const CLOUD_SIGN_IN_HEADING_SELECTOR = 'h1=Sign in to AGI Cloud';
+export const CLOUD_BROWSER_FALLBACK_SELECTOR = 'button=Sign in through your browser instead';
+
 /**
  * Replaces `window.fetch` with a stub for the Managed Cloud API surface.
  *
@@ -241,16 +245,6 @@ export interface DeviceAuthorizationMockOptions {
 }
 
 /**
- * The origin `apps/desktop/src/api/config.ts` resolves `WEB_APP_URL` to.
- *
- * `requestDeviceAuthorization` refuses a `verification_uri_complete` whose
- * origin differs from the client's trusted origin, so a drift here fails the
- * spec loudly ("AGI Cloud returned an untrusted verification URL") instead of
- * silently exercising the wrong boundary. Mirrors config.ts's own default.
- */
-const CLOUD_ORIGIN = process.env['VITE_WEB_APP_URL'] ?? 'https://agiworkforce.com';
-
-/**
  * Mocks the native half of the device authorization flow so "Sign in to AGI
  * Cloud" completes without a real browser approval.
  *
@@ -265,19 +259,50 @@ export async function mockDeviceAuthorization(
   const lifetimeSeconds = options.lifetimeSeconds ?? 3600;
   const accessToken = fakeDeviceJwt(subject, lifetimeSeconds);
   const refreshToken = `wdio-refresh-${subject}`;
-  const verificationOrigin = new URL(CLOUD_ORIGIN).origin;
+
+  // The app stores its canonical WEB_APP_URL immediately before requesting a
+  // device code. Learn the origin from that production call instead of
+  // duplicating Vite's env resolution in the Node-side WDIO process. In
+  // particular, Vite loads `.env.local` for the bundled renderer while WDIO
+  // does not, which previously made this helper fabricate an
+  // `https://agiworkforce.com` verification URL for an app configured with
+  // `http://localhost:3000`; the product correctly rejected it as untrusted
+  // before an owned sign-in window could open.
+  const apiBaseUrlMock = await browser.tauri.mock('account_store_api_base_url');
+  await apiBaseUrlMock.mockImplementation(function rememberCloudOrigin(args) {
+    const apiBaseUrl = args?.['apiBaseUrl'];
+    if (typeof apiBaseUrl !== 'string' || apiBaseUrl.length === 0) {
+      throw new Error('WDIO expected Desktop to store its Cloud API base URL before sign-in.');
+    }
+    (
+      globalThis as typeof globalThis & {
+        __agiWdioCloudOrigin?: string;
+      }
+    ).__agiWdioCloudOrigin = new URL(apiBaseUrl).origin;
+    return null;
+  });
 
   const startMock = await browser.tauri.mock('account_start_device_authorization');
-  await startMock.mockReturnValue({
-    status: 200,
-    body: JSON.stringify({
-      device_code: 'wdio-device-code',
-      user_code: 'WDIO-CODE',
-      verification_uri: `${verificationOrigin}/auth/device`,
-      verification_uri_complete: `${verificationOrigin}/auth/device?user_code=WDIO-CODE&surface=desktop`,
-      interval: 1,
-      expires_in: 600,
-    }),
+  await startMock.mockImplementation(function startDeviceAuthorization() {
+    const verificationOrigin = (
+      globalThis as typeof globalThis & {
+        __agiWdioCloudOrigin?: string;
+      }
+    ).__agiWdioCloudOrigin;
+    if (typeof verificationOrigin !== 'string') {
+      throw new Error('WDIO did not observe Desktop storing its canonical Cloud origin.');
+    }
+    return {
+      status: 200,
+      body: JSON.stringify({
+        device_code: 'wdio-device-code',
+        user_code: 'WDIO-CODE',
+        verification_uri: `${verificationOrigin}/auth/device`,
+        verification_uri_complete: `${verificationOrigin}/auth/device?user_code=WDIO-CODE&surface=desktop`,
+        interval: 1,
+        expires_in: 600,
+      }),
+    };
   });
 
   const pollMock = await browser.tauri.mock('account_poll_device_authorization');
@@ -293,7 +318,6 @@ export async function mockDeviceAuthorization(
 
   // Native credential-vault writes: succeed silently, store nothing real.
   for (const command of [
-    'account_store_api_base_url',
     'account_store_access_token',
     'account_store_refresh_token',
     'account_clear_tokens',
@@ -321,11 +345,27 @@ export async function mockDeviceAuthorization(
   }
 }
 
-/** Clicks the device sign-in button and waits for the owned window to close. */
+/**
+ * Chooses the explicit browser/device fallback and waits for its owned window
+ * to close after the mocked approval. Native email/password sign-in remains
+ * the product's primary Cloud authentication path.
+ */
 export async function completeMockedDeviceSignIn(): Promise<void> {
-  const signInButton = await $('button=Sign in to AGI Cloud');
+  const signInButton = await $(CLOUD_BROWSER_FALLBACK_SELECTOR);
   await signInButton.waitForDisplayed({ timeout: 20_000 });
   await signInButton.click();
+
+  // Observe creation before waiting for destruction. Without this first gate,
+  // a fast handles read can see only `main` and falsely report completion
+  // before the async device-code request has opened its owned webview.
+  await browser.waitUntil(
+    async () => (await browser.getWindowHandles()).includes('cloud-sign-in'),
+    {
+      timeout: 20_000,
+      interval: 250,
+      timeoutMsg: 'The mocked Cloud sign-in never opened its owned authorization window',
+    },
+  );
 
   // `authorizeDesktopDevice` opens the authorization window, then waits one
   // clamped poll interval (>= 3 s) before the first — already approved — poll.
@@ -340,6 +380,34 @@ export async function completeMockedDeviceSignIn(): Promise<void> {
       timeoutMsg: 'The owned Cloud sign-in window never closed after a mocked approval',
     },
   );
+}
+
+/**
+ * Closes an owned Tauri webview without using WebDriver's generic
+ * `closeWindow()`. The embedded WebDriver provider can terminate the whole
+ * native window session when that command targets a child webview.
+ */
+export async function closeOwnedTauriWindow(label: string): Promise<boolean> {
+  await browser.switchToWindow('main');
+  return browser.execute(async (ownedWindowLabel: string) => {
+    const tauri = (
+      window as unknown as {
+        __TAURI__?: {
+          webviewWindow?: {
+            WebviewWindow?: {
+              getByLabel(label: string): Promise<{ close(): Promise<void> } | null>;
+            };
+          };
+        };
+      }
+    ).__TAURI__;
+    const WebviewWindow = tauri?.webviewWindow?.WebviewWindow;
+    if (!WebviewWindow) return false;
+    const ownedWindow = await WebviewWindow.getByLabel(ownedWindowLabel);
+    if (!ownedWindow) return false;
+    await ownedWindow.close();
+    return true;
+  }, label) as Promise<boolean>;
 }
 
 /** Reads the persisted app mode without depending on any product test hook. */
@@ -413,10 +481,15 @@ export async function restoreLocalModeProfile(): Promise<void> {
   await composer.waitForDisplayed({ timeout: 60_000 });
 }
 
-/** True when the Cloud device sign-in card is on screen. */
+/**
+ * True when the Cloud sign-in screen is mounted. The legacy function name is
+ * retained because several Cloud journey specs import it.
+ */
 export async function deviceSignInCardVisible(): Promise<boolean> {
   return browser.execute(() => {
-    const buttons = Array.from(document.querySelectorAll('button'));
-    return buttons.some((button) => (button.textContent ?? '').trim() === 'Sign in to AGI Cloud');
+    const headings = Array.from(document.querySelectorAll('h1'));
+    return headings.some(
+      (heading) => (heading.textContent ?? '').trim() === 'Sign in to AGI Cloud',
+    );
   }) as Promise<boolean>;
 }

@@ -71,9 +71,11 @@ import {
 import {
   CloudApiError,
   createDesktopCloudAgentRunClient,
+  createDesktopCloudAgentRunCleanupClient,
   generateCloudImage,
   sendCloudMessage,
   CLOUD_API_BASE_URL,
+  type DesktopCloudRunCleanupCredential,
 } from '../api/cloudApi';
 import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistence';
 import { normalizeModelId } from '../constants/llm';
@@ -96,6 +98,10 @@ import {
   type CloudConversationBoundary,
 } from '../services/cloudChat';
 import { uploadDesktopCloudAttachments } from '../services/desktopCloudAttachments';
+import {
+  MANAGED_CLOUD_PAGE_SIZE,
+  createManagedCloudPaginationGuard,
+} from '../services/managedCloudPagination';
 import type { CloudChatMessageContent } from '../api/cloudApi';
 import {
   EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
@@ -109,6 +115,8 @@ interface ActiveCloudTurn {
   sink: ReturnType<typeof createCloudStreamDeltaSink>;
   settled: boolean;
   runReference?: ManagedCloudAgentRunReference;
+  /** Exact bearer/account used at the final transport boundary for this run. */
+  cleanupCredential?: DesktopCloudRunCleanupCredential;
   replayPromise?: Promise<void>;
   /** Public chunks rendered before their matching canonical event arrived. */
   unacknowledgedPublicText: string;
@@ -228,14 +236,24 @@ export class CloudRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
   private readonly _activeTurns = new Map<string, ActiveCloudTurn>();
+  private readonly _resolvingApprovals = new Map<
+    string,
+    { runId: string; cleanupCredential?: DesktopCloudRunCleanupCredential }
+  >();
   private readonly _approvals = new CloudToolApprovalRegistry();
   private readonly _attachmentAssetIds = new Map<string, string>();
 
+  readonly supportsResearch: boolean;
+
+  constructor(
+    private readonly expectedAccountId: string | null = null,
+    supportsResearch = false,
+  ) {
+    this.supportsResearch = supportsResearch;
+  }
+
   /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
   readonly supportsCodeExecution = true;
-
-  /** The managed cloud wire forwards the exact `research` request field. */
-  readonly supportsResearch = true;
 
   /** Managed Cloud has a dedicated durable image-generation dispatch. */
   readonly supportsImageGeneration = true;
@@ -292,6 +310,10 @@ export class CloudRuntime implements ChatRuntime {
     }
     if (!this._boundary) {
       this._boundary = captureCloudConversationBoundary();
+      if (this.expectedAccountId && this._boundary.accountId !== this.expectedAccountId) {
+        this._boundary = null;
+        throw new Error('The Managed Cloud account changed before this runtime became active.');
+      }
     } else {
       assertCloudConversationBoundary(this._boundary);
     }
@@ -308,6 +330,15 @@ export class CloudRuntime implements ChatRuntime {
     assertCloudConversationBoundary(boundary);
   }
 
+  private clearAbortController(conversationId: string, controller: AbortController): void {
+    // A stopped turn can finish after a newer turn has installed its own
+    // controller for the same conversation. The old cleanup must never make
+    // that newer turn impossible to stop.
+    if (this._abortControllers.get(conversationId) === controller) {
+      this._abortControllers.delete(conversationId);
+    }
+  }
+
   /**
    * Ends every request owned by this authenticated runtime without persisting
    * a synthetic failure into the account that is being signed out. Server-run
@@ -316,14 +347,23 @@ export class CloudRuntime implements ChatRuntime {
    */
   async dispose(): Promise<void> {
     if (this._disposed) return;
+    const cleanupBoundary = this._boundary;
     this._disposed = true;
 
-    const runIds = new Set<string>();
+    const runsToCancel = new Map<string, DesktopCloudRunCleanupCredential>();
     for (const turn of this._activeTurns.values()) {
       turn.settled = true;
-      if (turn.runReference) runIds.add(turn.runReference.runId);
+      if (turn.runReference && cleanupBoundary) {
+        runsToCancel.set(turn.runReference.runId, turn.cleanupCredential ?? cleanupBoundary);
+      }
+    }
+    for (const approval of this._resolvingApprovals.values()) {
+      if (cleanupBoundary) {
+        runsToCancel.set(approval.runId, approval.cleanupCredential ?? cleanupBoundary);
+      }
     }
     this._activeTurns.clear();
+    this._resolvingApprovals.clear();
 
     for (const controller of this._abortControllers.values()) {
       controller.abort();
@@ -331,14 +371,17 @@ export class CloudRuntime implements ChatRuntime {
     this._abortControllers.clear();
     this._streamCallbacks.clear();
 
-    if (runIds.size === 0) return;
+    if (runsToCancel.size === 0) return;
 
     const cancelController = new AbortController();
     const timeoutId = setTimeout(() => cancelController.abort(), 3_000);
     try {
-      const client = createDesktopCloudAgentRunClient();
       await Promise.allSettled(
-        [...runIds].map((runId) => client.cancelRun(runId, { signal: cancelController.signal })),
+        [...runsToCancel].map(([runId, credential]) =>
+          createDesktopCloudAgentRunCleanupClient(credential).cancelRun(runId, {
+            signal: cancelController.signal,
+          }),
+        ),
       );
     } finally {
       clearTimeout(timeoutId);
@@ -586,7 +629,12 @@ export class CloudRuntime implements ChatRuntime {
     }
 
     let replayFinishReason: string | undefined;
-    const client = createDesktopCloudAgentRunClient();
+    const client = createDesktopCloudAgentRunClient(
+      this.requireBoundary().accountId,
+      (credential) => {
+        turn.cleanupCredential = credential;
+      },
+    );
     const followed = await client.followRun(runReference.runId, {
       afterSequence: Math.max(
         runReference.lastSequence,
@@ -738,65 +786,104 @@ export class CloudRuntime implements ChatRuntime {
     options?: SendMessageOptions,
   ): Promise<void> {
     const boundary = this.requireBoundary();
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort();
+    if (options?.signal?.aborted) {
+      controller.abort();
+    } else {
+      options?.signal?.addEventListener('abort', abortFromCaller, { once: true });
+    }
+    this._abortControllers.set(conversationId, controller);
+    const clearController = () => {
+      options?.signal?.removeEventListener('abort', abortFromCaller);
+      this.clearAbortController(conversationId, controller);
+    };
+    const shouldStopBeforeDispatch = () => {
+      const superseded = this._abortControllers.get(conversationId) !== controller;
+      if (!controller.signal.aborted && !superseded) return false;
+      if (superseded) controller.abort();
+      clearController();
+      return true;
+    };
+
+    if (shouldStopBeforeDispatch()) return;
+
     const model = normalizeModelId(options?.model ?? '') ?? 'auto';
     const client = getDesktopCloudChatPersistenceClient();
     const isContinuation = options?.isContinuation === true;
     const messageHistory = options?.messageHistory ?? [];
-
-    // The host creates optimistically with this exact UUID. Joining the
-    // coordinator here guarantees the server row exists before the first
-    // message is written, even when the user sends immediately.
-    await ensureCloudConversation(conversationId, 'New chat', model, options?.projectId);
-    this.assertBoundary(boundary);
-    await updateCloudConversation(conversationId, {
-      model,
-      ...(options?.projectId !== undefined ? { projectId: options.projectId } : {}),
-    });
-    this.assertBoundary(boundary);
-
-    const uploadedAttachments =
-      !isContinuation && options?.attachments?.length
-        ? await uploadDesktopCloudAttachments(options.attachments)
-        : [];
-    this.assertBoundary(boundary);
-    const currentHistoryAttachments = messageHistory[messageHistory.length - 1]?.attachments ?? [];
-    for (const [index, attachment] of currentHistoryAttachments.entries()) {
-      const uploaded = uploadedAttachments[index];
-      if (uploaded) this._attachmentAssetIds.set(attachment.id, uploaded.id);
-    }
-
-    // Persist ordinary user turns before streaming. Continue Generation's
-    // instruction is request-only and must never appear in conversation
-    // history as a user message.
-    // Same identity rule as the assistant row below: persist under the id the
-    // transcript already renders so Regenerate can delete the exact server rows
-    // it just removed from the view.
     const userMessageId = options?.userMessageId ?? uuidv7();
-    if (!isContinuation) {
-      try {
-        await client.saveMessage(conversationId, {
-          id: userMessageId,
-          role: 'user',
-          content: content.trim() || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+    let uploadedAttachments: Awaited<ReturnType<typeof uploadDesktopCloudAttachments>> = [];
+
+    try {
+      // The host creates optimistically with this exact UUID. Joining the
+      // coordinator here guarantees the server row exists before the first
+      // message is written, even when the user sends immediately.
+      await ensureCloudConversation(
+        conversationId,
+        'New chat',
+        model,
+        options?.projectId,
+        controller.signal,
+      );
+      if (shouldStopBeforeDispatch()) return;
+      this.assertBoundary(boundary);
+      await updateCloudConversation(
+        conversationId,
+        {
           model,
-          ...(uploadedAttachments.length
-            ? { metadata: { attachments: persistedAttachmentMetadata(uploadedAttachments) } }
-            : {}),
-        });
+          ...(options?.projectId !== undefined ? { projectId: options.projectId } : {}),
+        },
+        controller.signal,
+      );
+      if (shouldStopBeforeDispatch()) return;
+      this.assertBoundary(boundary);
+
+      uploadedAttachments =
+        !isContinuation && options?.attachments?.length
+          ? await uploadDesktopCloudAttachments(options.attachments, controller.signal)
+          : [];
+      if (shouldStopBeforeDispatch()) return;
+      this.assertBoundary(boundary);
+      const currentHistoryAttachments =
+        messageHistory[messageHistory.length - 1]?.attachments ?? [];
+      for (const [index, attachment] of currentHistoryAttachments.entries()) {
+        const uploaded = uploadedAttachments[index];
+        if (uploaded) this._attachmentAssetIds.set(attachment.id, uploaded.id);
+      }
+
+      // Persist ordinary user turns before streaming. Continue Generation's
+      // instruction is request-only and must never appear in conversation
+      // history as a user message.
+      // Same identity rule as the assistant row below: persist under the id the
+      // transcript already renders so Regenerate can delete the exact server rows
+      // it just removed from the view.
+      if (!isContinuation) {
+        await client.saveMessage(
+          conversationId,
+          {
+            id: userMessageId,
+            role: 'user',
+            content: content.trim() || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model,
+            ...(uploadedAttachments.length
+              ? { metadata: { attachments: persistedAttachmentMetadata(uploadedAttachments) } }
+              : {}),
+          },
+          { signal: controller.signal },
+        );
+        if (shouldStopBeforeDispatch()) return;
         this.assertBoundary(boundary);
-      } catch (err) {
+      }
+    } catch (err) {
+      clearController();
+      if (!controller.signal.aborted) {
         this.emitForConversation(conversationId, {
           type: 'error',
           error: err instanceof Error ? err.message : String(err),
         });
-        return;
       }
-    }
-
-    const controller = new AbortController();
-    this._abortControllers.set(conversationId, controller);
-    if (options?.signal) {
-      options.signal.addEventListener('abort', () => controller.abort());
+      return;
     }
 
     const shouldGenerateImage =
@@ -807,7 +894,7 @@ export class CloudRuntime implements ChatRuntime {
       try {
         await this.sendManagedImageTurn(conversationId, content, userMessageId, controller);
       } finally {
-        this._abortControllers.delete(conversationId);
+        clearController();
       }
       return;
     }
@@ -1064,6 +1151,9 @@ export class CloudRuntime implements ChatRuntime {
             });
           }
         },
+        (credential) => {
+          activeTurn.cleanupCredential = credential;
+        },
       );
       if (activeTurn.replayPromise) await activeTurn.replayPromise;
     } catch (err) {
@@ -1093,7 +1183,7 @@ export class CloudRuntime implements ChatRuntime {
         }
       }
     } finally {
-      this._abortControllers.delete(conversationId);
+      clearController();
     }
   }
 
@@ -1109,6 +1199,22 @@ export class CloudRuntime implements ChatRuntime {
     const boundary = this.requireBoundary();
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
+    const projection = this._approvals.getTurnProjection(conversationId);
+    const willDispatch =
+      projection?.calls.some((call) => call.toolCallId === toolCallId) === true &&
+      projection.calls.every(
+        (call) => call.toolCallId === toolCallId || call.decision !== undefined,
+      );
+    const resolvingApproval: {
+      runId: string;
+      cleanupCredential?: DesktopCloudRunCleanupCredential;
+    } | null =
+      willDispatch && projection
+        ? {
+            runId: projection.runId,
+          }
+        : null;
+    if (resolvingApproval) this._resolvingApprovals.set(conversationId, resolvingApproval);
     try {
       const outcome = await this._approvals.resolve(
         conversationId,
@@ -1118,6 +1224,11 @@ export class CloudRuntime implements ChatRuntime {
         CLOUD_API_BASE_URL,
         (err) => this.emitForConversation(conversationId, cloudErrorEvent(err)),
         controller.signal,
+        (credential) => {
+          if (this._resolvingApprovals.get(conversationId) === resolvingApproval) {
+            resolvingApproval!.cleanupCredential = credential;
+          }
+        },
       );
       this.assertBoundary(boundary);
       if (!outcome) {
@@ -1177,7 +1288,10 @@ export class CloudRuntime implements ChatRuntime {
         });
       }
     } finally {
-      this._abortControllers.delete(conversationId);
+      if (this._resolvingApprovals.get(conversationId) === resolvingApproval) {
+        this._resolvingApprovals.delete(conversationId);
+      }
+      this.clearAbortController(conversationId, controller);
     }
   }
 
@@ -1190,6 +1304,7 @@ export class CloudRuntime implements ChatRuntime {
   // -------------------------------------------------------------------------
 
   stopGeneration(conversationId: string): void {
+    const resolvingApproval = this._resolvingApprovals.get(conversationId);
     const controller = this._abortControllers.get(conversationId);
     if (controller) {
       controller.abort();
@@ -1200,16 +1315,19 @@ export class CloudRuntime implements ChatRuntime {
       activeTurn.settled = true;
       this._activeTurns.delete(conversationId);
       if (activeTurn.runReference) {
-        void createDesktopCloudAgentRunClient()
-          .cancelRun(activeTurn.runReference.runId)
-          .catch((err: unknown) => {
-            this.emitForConversation(conversationId, {
-              type: 'error',
-              error: `Could not stop the Cloud task: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
+        const boundary = this._boundary;
+        if (boundary) {
+          void createDesktopCloudAgentRunClient(boundary.accountId)
+            .cancelRun(activeTurn.runReference.runId)
+            .catch((err: unknown) => {
+              this.emitForConversation(conversationId, {
+                type: 'error',
+                error: `Could not stop the Cloud task: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              });
             });
-          });
+        }
       }
       const activity = activeTurn.sink.getAgentActivity();
       void this.persistAssistantTurn(
@@ -1237,6 +1355,22 @@ export class CloudRuntime implements ChatRuntime {
           }`,
         });
       });
+    }
+    if (resolvingApproval) {
+      this._resolvingApprovals.delete(conversationId);
+      const credential = resolvingApproval.cleanupCredential ?? this._boundary;
+      if (credential) {
+        void createDesktopCloudAgentRunCleanupClient(credential)
+          .cancelRun(resolvingApproval.runId)
+          .catch((err: unknown) => {
+            this.emitForConversation(conversationId, {
+              type: 'error',
+              error: `Could not stop the approved Cloud task: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            });
+          });
+      }
     }
   }
 
@@ -1321,21 +1455,26 @@ export class CloudRuntime implements ChatRuntime {
     const boundary = this.requireBoundary();
     const client = getDesktopCloudChatPersistenceClient();
     const conversations: ManagedCloudConversation[] = [];
+    const pagination = createManagedCloudPaginationGuard('conversations');
     let offset = 0;
     let hasMore = true;
 
     while (hasMore) {
-      const page = await client.listConversations({ limit: 100, offset });
+      const page = await client.listConversations({ limit: MANAGED_CLOUD_PAGE_SIZE, offset });
       assertCloudConversationBoundary(boundary);
+      const nextOffset = pagination.acceptPage({
+        items: page.conversations,
+        hasMore: page.hasMore,
+        currentOffset: offset,
+        nextOffset: page.nextOffset,
+      });
       conversations.push(...page.conversations);
       for (const conversation of page.conversations) {
         markCloudConversationReady(conversation.id, boundary);
       }
       hasMore = page.hasMore;
-      offset = page.nextOffset;
-      if (hasMore && page.conversations.length === 0) {
-        throw new Error('AGI Cloud returned an invalid empty conversation page.');
-      }
+      if (!hasMore) break;
+      offset = nextOffset;
     }
 
     return conversations;
@@ -1364,19 +1503,27 @@ export class CloudRuntime implements ChatRuntime {
     await waitForCloudConversationReady(conversationId, boundary);
     const client = getDesktopCloudChatPersistenceClient();
     const messages: ManagedCloudMessage[] = [];
+    const pagination = createManagedCloudPaginationGuard('messages');
     let offset = 0;
     let hasMore = true;
 
     while (hasMore) {
-      const page = await client.getConversation(conversationId, { limit: 100, offset });
+      const page = await client.getConversation(conversationId, {
+        limit: MANAGED_CLOUD_PAGE_SIZE,
+        offset,
+      });
       assertCloudConversationBoundary(boundary);
+      const nextOffset = pagination.acceptPage({
+        items: page.messages,
+        hasMore: page.hasMore,
+        currentOffset: offset,
+        reportedTotal: page.total,
+      });
       markCloudConversationReady(page.conversation.id, boundary);
       messages.push(...page.messages);
       hasMore = page.hasMore;
-      offset += page.messages.length;
-      if (hasMore && page.messages.length === 0) {
-        throw new Error(`AGI Cloud conversation ${conversationId} returned an invalid empty page.`);
-      }
+      if (!hasMore) break;
+      offset = nextOffset;
     }
 
     return messages.map((m) => mapMessage(conversationId, m));

@@ -1,4 +1,7 @@
 import {
+  CLOUD_BROWSER_FALLBACK_SELECTOR,
+  CLOUD_SIGN_IN_HEADING_SELECTOR,
+  closeOwnedTauriWindow,
   completeMockedDeviceSignIn,
   deviceSignInCardVisible,
   installCloudApiStubs,
@@ -41,9 +44,13 @@ describe('AGI Desktop Cloud mode entry', () => {
     await cloudTab.waitForDisplayed({ timeout: 20_000 });
     await cloudTab.click();
 
-    const continueButton = await $('button=Sign in to AGI Cloud');
-    await continueButton.waitForDisplayed({ timeout: 20_000 });
-    await expect(continueButton).toBeDisplayed();
+    const signInHeading = await $(CLOUD_SIGN_IN_HEADING_SELECTOR);
+    await signInHeading.waitForDisplayed({ timeout: 20_000 });
+    await expect(signInHeading).toBeDisplayed();
+
+    const browserFallbackButton = await $(CLOUD_BROWSER_FALLBACK_SELECTOR);
+    await browserFallbackButton.waitForDisplayed({ timeout: 20_000 });
+    await expect(browserFallbackButton).toBeDisplayed();
     await browser.pause(1_000);
 
     const blockedAncestor = await browser.execute((button) => {
@@ -65,7 +72,7 @@ describe('AGI Desktop Cloud mode entry', () => {
         current = current.parentElement;
       }
       return null;
-    }, continueButton);
+    }, browserFallbackButton);
     expect(blockedAncestor).toBeNull();
 
     const hitTargetIsButton = await browser.execute((button) => {
@@ -75,16 +82,20 @@ describe('AGI Desktop Cloud mode entry', () => {
         rect.top + rect.height / 2,
       );
       return hitTarget === button || button.contains(hitTarget);
-    }, continueButton);
+    }, browserFallbackButton);
     expect(hitTargetIsButton).toBe(true);
 
+    const emailInputs = await $$('input[type="email"]');
     const passwordInputs = await $$('input[type="password"]');
-    expect(passwordInputs).toHaveLength(0);
-    expect(await $('body').getText()).toContain('Private in-app sign-in');
+    expect(emailInputs).toHaveLength(1);
+    expect(passwordInputs).toHaveLength(1);
+    expect(await $('body').getText()).toContain(
+      'Sign in right here. Local Mode keeps working without an account.',
+    );
 
     await browser.saveScreenshot('/tmp/agi-desktop-cloud-auth.png');
 
-    await continueButton.click();
+    await browserFallbackButton.click();
     await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 2, {
       timeout: 20_000,
       interval: 250,
@@ -101,8 +112,7 @@ describe('AGI Desktop Cloud mode entry', () => {
     });
     expect(await browser.getUrl()).toContain('surface=desktop');
     await browser.saveScreenshot('/tmp/agi-desktop-cloud-sign-in-window.png');
-    await browser.closeWindow();
-    await browser.switchToWindow('main');
+    expect(await closeOwnedTauriWindow('cloud-sign-in')).toBe(true);
     await browser.saveScreenshot('/tmp/agi-desktop-cloud-return.png');
 
     // Closing the owned authorization window aborts the pending device flow.
@@ -151,10 +161,10 @@ describe('AGI Desktop Cloud mode entry', () => {
     });
     expect(footerClicked).toBe('clicked');
 
-    // The shell must render the device sign-in card…
-    const signInButton = await $('button=Sign in to AGI Cloud');
-    await signInButton.waitForDisplayed({ timeout: 30_000 });
-    await expect(signInButton).toBeDisplayed();
+    // The shell must render the native-first Cloud sign-in screen…
+    const signInHeading = await $(CLOUD_SIGN_IN_HEADING_SELECTOR);
+    await signInHeading.waitForDisplayed({ timeout: 30_000 });
+    await expect(signInHeading).toBeDisplayed();
     expect(await persistedAppMode()).toBe('cloud');
 
     // …and NOT the settings dialog (which is what 'account' → 'general' did).

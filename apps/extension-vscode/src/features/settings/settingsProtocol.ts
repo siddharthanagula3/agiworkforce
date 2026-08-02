@@ -60,6 +60,7 @@ const settingValueSchemas = {
   model: z.string().trim().min(1).max(200),
   cliPath: z.string().trim().min(1).max(4096),
   streamingEnabled: z.boolean(),
+  'composer.followUpBehavior': z.enum(['queue', 'steer']),
   contextLines: z.number().int().min(0).max(500),
   telemetryEnabled: z.boolean(),
   hoverEnabled: z.boolean(),

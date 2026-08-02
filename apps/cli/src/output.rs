@@ -944,7 +944,7 @@ mod tests {
         let result = format_table(headers, &rows);
         let lines: Vec<&str> = result.lines().collect();
         assert_eq!(lines.len(), 3); // header + sep + 1 row
-        // Row should contain "1" and two blank-padded cells
+                                    // Row should contain "1" and two blank-padded cells
         assert!(lines[2].starts_with('1'));
     }
 }

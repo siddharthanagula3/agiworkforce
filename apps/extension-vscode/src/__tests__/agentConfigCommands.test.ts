@@ -57,11 +57,42 @@ describe('agent configuration commands', () => {
   });
 
   it('restarts every pooled workspace runtime', async () => {
-    await handlers.get('agi-workforce.restartLocalRuntime')!();
+    const result = await handlers.get('agi-workforce.restartLocalRuntime')!();
 
     expect(restartAll).toHaveBeenCalledOnce();
+    expect(result).toEqual({ ok: true, restartedWorkspaces: 0 });
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('next developer turn'),
+      expect.stringContaining('configuration reloaded'),
+    );
+  });
+
+  it('reports a restart only after the replacement process is ready', async () => {
+    let resolveRestart!: (value: { restartedWorkspaces: number }) => void;
+    restartAll.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRestart = resolve;
+      }),
+    );
+
+    const command = Promise.resolve(handlers.get('agi-workforce.restartLocalRuntime')!());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    resolveRestart({ restartedWorkspaces: 1 });
+    await command;
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('restarted and ready'),
+    );
+  });
+
+  it('returns a structured failure after preserving the visible restart error', async () => {
+    restartAll.mockRejectedValueOnce(new Error('protocol handshake failed'));
+
+    const result = await handlers.get('agi-workforce.restartLocalRuntime')!();
+
+    expect(result).toEqual({ ok: false, error: 'protocol handshake failed' });
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      'AGI Workforce: Local runtime restart failed — protocol handshake failed',
     );
   });
 });

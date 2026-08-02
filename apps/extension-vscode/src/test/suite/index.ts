@@ -18,7 +18,13 @@ export function run(): Promise<void> {
     glob: (pattern: string, opts: unknown) => Promise<string[]>;
   };
 
-  const mocha = new Mocha({ ui: 'tdd', color: true, timeout: 60_000 });
+  const grep = process.env.AGI_VSCODE_E2E_GREP;
+  const mocha = new Mocha({
+    ui: 'tdd',
+    color: true,
+    timeout: 60_000,
+    ...(grep === undefined ? {} : { grep: new RegExp(grep, 'u') }),
+  });
   const testsRoot = path.resolve(__dirname, '..');
 
   return new Promise((resolve, reject) => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
+  hydrateStoredChatMessage,
   projectCanonicalAgentActivity,
   resolveComposerPrompt,
   selectModelHistory,
@@ -104,6 +105,52 @@ describe('side-panel chat state', () => {
     const assistant = applyCanonicalAgentEvent(messages, 'stream-1', envelope);
 
     expect(projectCanonicalAgentActivity(assistant.agentEvents)).toEqual(assistant.agentActivity);
+  });
+
+  it('faithfully hydrates durable activity, run, and approval metadata from history', () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const event = {
+      schemaVersion: 3,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'progress-update',
+        progressId: 'history-restore',
+        summary: 'Restoring durable work',
+        status: 'running',
+      },
+    } as const;
+
+    const hydrated = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Partial durable answer',
+        timestamp: 1_001,
+        agentEvents: [event],
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 2,
+          state: 'running',
+        },
+        cloudApprovalDecisions: { 'tool-1': 'approved' },
+        cloudApprovalError: 'Continuation interrupted.',
+        managedQuickMode: true,
+      },
+      'history-message-1',
+    );
+
+    expect(hydrated).toMatchObject({
+      id: 'history-message-1',
+      agentActivity: { lastSequence: 2, status: 'running' },
+      cloudAgentRun: { runId, lastSequence: 2 },
+      cloudApprovalDecisions: { 'tool-1': 'approved' },
+      cloudApprovalError: 'Continuation interrupted.',
+      managedQuickMode: true,
+    });
+    expect(hydrated.agentEvents).toEqual([event]);
   });
 
   it('creates a visible prompt for attachment-only turns', () => {

@@ -46,13 +46,11 @@ describe('Chrome side-panel surface ownership', () => {
     expect(blockedStateSource).toContain("if (blocked) {\n    blockedEl.classList.add('visible')");
     expect(sidePanelSource).toContain("role: 'status'");
     expect(sidePanelSource).toContain('You can still chat');
-    expect(sidePanelSource).toContain(
-      "chips.classList.toggle('hidden', restrictedPage)",
-    );
+    expect(sidePanelSource).toContain("chips.classList.toggle('hidden', restrictedPage)");
   });
 
-  it('cancels active cloud work before new-chat, current-delete, and clear transitions', () => {
-    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(3);
+  it('cancels active cloud work before owner, new-chat, current-delete, and clear transitions', () => {
+    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(4);
     expect(sidePanelSource).toContain('requestStreamCancellation(streamId)');
   });
 

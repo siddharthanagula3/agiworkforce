@@ -26,22 +26,36 @@
  * disk, and leave it in place after switching back to Local — a permission
  * escalation with no consent step.
  *
- * So in `'cloud'` mode this hook picks a folder as a DISPLAY LABEL and SCAN
- * ROOT only, and performs no `invoke` at all. Files leave the device solely
- * through the composer's attachment upload, after the explicit
- * context-selection / secret-scan / preview / consent ceremony.
+ * So in `'cloud'` mode the native process owns the picker and retains a
+ * short-lived directory capability. The renderer receives an opaque grant id,
+ * never an ambient root it can nominate. Files leave the device solely through
+ * the composer's attachment upload, after the explicit context-selection /
+ * secret-scan / preview / consent ceremony.
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../stores/projectStore';
+import {
+  selectCloudHandoffFolder,
+  revokeCloudHandoffGrant,
+  type CloudHandoffFolderGrant,
+} from '../features/context-handoff/cloudHandoffGrant';
+import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
+import { selectHasCloudAccountSession, useAuthStore } from '../stores/auth';
 
 /**
  * `'local'` grants the folder as a working scope (persistent capability).
  * `'cloud'` treats it as a display label and scan root only.
  */
 export type FolderSelectionMode = 'local' | 'cloud';
+
+export interface SelectedFolder {
+  path: string;
+  /** Present only for Managed Cloud; all reads require this opaque capability. */
+  cloudGrantId: string | null;
+}
 
 export interface UseFolderSelectionResult {
   /**
@@ -50,7 +64,7 @@ export interface UseFolderSelectionResult {
    * cancelled or the app is not running under Tauri — callers chain the cloud
    * attachment sheet off this without re-reading the store.
    */
-  selectFolder: () => Promise<string | null>;
+  selectFolder: () => Promise<SelectedFolder | null>;
   /** Formatted display label for the currently scoped folder, or null. */
   currentFolderLabel: string | null;
   /** Clears the folder. In local mode this also resets the backend scope. */
@@ -60,21 +74,67 @@ export interface UseFolderSelectionResult {
 export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFolderSelectionResult {
   const currentFolder = useProjectStore(selectCurrentFolder);
   const setCurrentFolder = useProjectStore((s) => s.setCurrentFolder);
+  const pickerGeneration = useRef(0);
 
-  const selectFolder = useCallback(async (): Promise<string | null> => {
+  useEffect(() => {
+    pickerGeneration.current += 1;
+  }, [mode]);
+  useEffect(
+    () => () => {
+      pickerGeneration.current += 1;
+    },
+    [],
+  );
+
+  const selectFolder = useCallback(async (): Promise<SelectedFolder | null> => {
     if (!isTauri) {
       toast.info('Folder selection requires the desktop app');
       return null;
     }
 
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        // Cloud reads the tree to build an attachment candidate list.
-        recursive: mode === 'cloud',
-        title: mode === 'cloud' ? 'Select a folder to attach from' : 'Select Project Folder',
-      });
+      const generation = ++pickerGeneration.current;
+      const openingAuth = mode === 'cloud' ? useAuthStore.getState() : null;
+      const openingCloudOwner =
+        openingAuth && selectHasCloudAccountSession(openingAuth)
+          ? {
+              accountId: openingAuth.user?.id ?? '',
+              sessionEpoch: openingAuth.cloudSessionEpoch,
+            }
+          : null;
+      if (mode === 'cloud' && !openingCloudOwner) {
+        toast.error('Sign in to AGI Cloud before selecting files to attach.');
+        return null;
+      }
+      const cloudGrant: CloudHandoffFolderGrant | null =
+        mode === 'cloud' ? await selectCloudHandoffFolder() : null;
+      const selected =
+        mode === 'cloud'
+          ? cloudGrant?.path
+          : await open({
+              directory: true,
+              multiple: false,
+              recursive: true,
+              title: 'Select Project Folder',
+            });
+
+      const expectedPrivacyMode = mode === 'cloud' ? 'managed' : 'local';
+      const liveAuth = mode === 'cloud' ? useAuthStore.getState() : null;
+      const cloudOwnerChanged =
+        mode === 'cloud' &&
+        (openingCloudOwner === null ||
+          liveAuth === null ||
+          !selectHasCloudAccountSession(liveAuth) ||
+          liveAuth.user?.id !== openingCloudOwner.accountId ||
+          liveAuth.cloudSessionEpoch !== openingCloudOwner.sessionEpoch);
+      if (
+        generation !== pickerGeneration.current ||
+        selectPrivacyMode(useAppModeStore.getState()) !== expectedPrivacyMode ||
+        cloudOwnerChanged
+      ) {
+        if (cloudGrant) await revokeCloudHandoffGrant(cloudGrant.grantId);
+        return null;
+      }
 
       if (selected && typeof selected === 'string') {
         if (mode === 'local') {
@@ -88,7 +148,10 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
           );
         }
         setCurrentFolder(selected);
-        return selected;
+        return {
+          path: selected,
+          cloudGrantId: cloudGrant?.grantId ?? null,
+        };
       }
       return null;
     } catch (error) {
@@ -101,7 +164,8 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
 
   const clearFolder = useCallback(() => {
     if (mode === 'cloud') {
-      // Nothing was granted, so nothing needs revoking.
+      // The parent owns and revokes the opaque grant when its consent sheet
+      // closes. This hook owns only the display label.
       setCurrentFolder(null);
       return;
     }

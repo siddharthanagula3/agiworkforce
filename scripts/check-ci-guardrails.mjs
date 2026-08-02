@@ -35,6 +35,29 @@ function requireNotIncludes(relativePath, forbidden) {
   }
 }
 
+function requireOnlyAfter(relativePath, anchor, expected) {
+  if (!exists(relativePath)) {
+    errors.push(`Missing required CI file: ${relativePath}`);
+    return;
+  }
+  const body = readText(relativePath);
+  const anchorIndex = body.indexOf(anchor);
+  if (anchorIndex === -1) {
+    errors.push(`${relativePath} must include anchor ${JSON.stringify(anchor)}`);
+    return;
+  }
+  if (body.slice(0, anchorIndex).includes(expected)) {
+    errors.push(
+      `${relativePath} must keep ${JSON.stringify(expected)} inside or after ${JSON.stringify(anchor)}`,
+    );
+  }
+  if (!body.slice(anchorIndex).includes(expected)) {
+    errors.push(
+      `${relativePath} must include ${JSON.stringify(expected)} after ${JSON.stringify(anchor)}`,
+    );
+  }
+}
+
 requireIncludes('.github/workflows/repo-operability.yml', 'pull_request:');
 requireIncludes('.github/workflows/repo-operability.yml', 'bash scripts/check-node-version.sh');
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm install --frozen-lockfile');
@@ -261,7 +284,15 @@ requireIncludes(
 requireIncludes('.github/workflows/release-cli.yml', 'needs: [validate-version, validate]');
 requireIncludes('.github/workflows/release-cli.yml', 'npm_dist_tag:');
 requireIncludes('.github/workflows/release-cli.yml', 'NPM_DIST_TAG:');
-requireIncludes('.github/workflows/release-cli.yml', 'NPM_TOKEN is required before a CLI release');
+requireIncludes('.github/workflows/release-cli.yml', 'NPM_TOKEN is required for npm publication');
+requireOnlyAfter(
+  '.github/workflows/release-cli.yml',
+  '  publish-npm:',
+  'NPM_TOKEN is required for npm publication',
+);
+requireIncludes('.github/workflows/release-cli.yml', 'Smoke exact release archive (Unix)');
+requireIncludes('.github/workflows/release-cli.yml', 'Smoke exact release archive (Windows)');
+requireIncludes('.github/workflows/release-cli.yml', 'AGI_CLI_SMOKE_BINARY');
 requireIncludes(
   '.github/workflows/release-cli.yml',
   'prerelease: ${{ needs.validate-version.outputs.prerelease }}',
@@ -469,6 +500,12 @@ requireIncludes(
 requireIncludes(
   '.github/workflows/release-vscode-extension.yml',
   'pnpm --dir apps/extension-vscode verify:package',
+);
+requireIncludes('.github/workflows/ci.yml', 'name: VS Code + CLI clean-profile E2E');
+requireIncludes('.github/workflows/ci.yml', 'cargo build --locked -p agiworkforce-cli --bin agi');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'AGI_VSCODE_E2E_CLI: ${{ github.workspace }}/target/debug/agi',
 );
 requireIncludes('.github/workflows/release-vscode-extension.yml', 'sha256sum --check');
 requireIncludes('.github/workflows/release-vscode-extension.yml', 'name: vscode-marketplace');

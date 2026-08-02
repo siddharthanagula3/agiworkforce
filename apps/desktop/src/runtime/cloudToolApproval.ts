@@ -26,14 +26,14 @@ import {
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import { sendCloudApprovalResume } from '../api/cloudApi';
+import type { DesktopCloudRunCleanupCredential } from '../api/cloudApi';
 import {
   createCloudStreamDeltaSink,
   mergeCloudStreamMessageProjections,
   type CloudStreamDeltaSink,
   type CloudStreamMessageProjection,
 } from './cloudStreamDeltas';
-import { uuidv7 } from '@agiworkforce/utils/uuidv7';
-import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
+import { createManagedChatIdempotencyKey, sha256 } from '@agiworkforce/utils';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface PendingApprovalCall {
@@ -254,6 +254,7 @@ export class CloudToolApprovalRegistry {
     apiBaseUrl: string,
     onError: (err: Error) => void,
     signal?: AbortSignal,
+    onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
   ): Promise<ResolveApprovalOutcome | null> {
     const turn = this.turns.get(conversationId);
     if (!turn || turn.resolving) return null;
@@ -267,6 +268,21 @@ export class CloudToolApprovalRegistry {
       tool_call_id: c.toolCallId,
       decision: turn.decisions.get(c.toolCallId) ?? ('rejected' as const),
     }));
+
+    let resumeOperationId: string;
+    try {
+      // A transport retry of this exact checkpoint must reuse its billable
+      // operation identity, including after a Desktop restart. The run id and
+      // ordered, complete decision set are durable inputs, while a fresh UUID
+      // here would turn every response-loss retry into a new server operation.
+      const digest = await sha256(JSON.stringify({ runId: turn.runId, toolApprovals }));
+      resumeOperationId = `resume-${digest.slice(0, 48)}`;
+    } catch (error) {
+      turn.resolving = false;
+      const failure = error instanceof Error ? error : new Error(String(error));
+      onError(failure);
+      throw failure;
+    }
 
     const sink = createCloudStreamDeltaSink(emit, apiBaseUrl, turn.agentActivity);
 
@@ -340,8 +356,9 @@ export class CloudToolApprovalRegistry {
         createManagedChatIdempotencyKey({
           surface: 'desktop',
           purpose: 'tool-resume',
-          operationId: uuidv7(),
+          operationId: resumeOperationId,
         }),
+        onCredential,
       );
     });
   }

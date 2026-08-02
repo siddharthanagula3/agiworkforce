@@ -21,7 +21,7 @@ export interface ManagedCloudChatAttachmentsClientConfig {
 }
 
 export interface ManagedCloudChatAttachmentsClient {
-  upload(files: File[]): Promise<ManagedCloudChatAttachment[]>;
+  upload(files: File[], options?: { signal?: AbortSignal }): Promise<ManagedCloudChatAttachment[]>;
 }
 
 export class ManagedCloudChatAttachmentHttpError extends Error {
@@ -32,6 +32,13 @@ export class ManagedCloudChatAttachmentHttpError extends Error {
     super(message);
     this.name = 'ManagedCloudChatAttachmentHttpError';
   }
+}
+
+function assertNotAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error('Managed Cloud attachment upload was cancelled.');
+  error.name = 'AbortError';
+  throw error;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -70,17 +77,23 @@ export function createManagedCloudChatAttachmentsClient(
       : Object.fromEntries(headers.entries());
   }
 
-  async function post(path: string, body: unknown): Promise<Response> {
+  async function post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+    assertNotAborted(signal);
+    const headers = await mutationHeaders();
+    assertNotAborted(signal);
     return fetchImpl(`${baseUrl}${path}`, {
       method: 'POST',
-      headers: await mutationHeaders(),
+      headers,
       credentials: 'include',
       body: JSON.stringify(body),
+      signal,
     });
   }
 
   return {
-    async upload(files) {
+    async upload(files, options = {}) {
+      const { signal } = options;
+      assertNotAborted(signal);
       if (files.length > MAX_CHAT_ATTACHMENT_COUNT) {
         throw new Error(`Attach at most ${MAX_CHAT_ATTACHMENT_COUNT} files per message.`);
       }
@@ -91,6 +104,7 @@ export function createManagedCloudChatAttachmentsClient(
 
       const uploaded: ManagedCloudChatAttachment[] = [];
       for (const file of files) {
+        assertNotAborted(signal);
         const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
         if (!mimeType || !isSupportedChatAttachment(file.name, mimeType)) {
           throw new Error(
@@ -107,6 +121,7 @@ export function createManagedCloudChatAttachmentsClient(
         const presignResponse = await post(
           MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
           presignRequest,
+          signal,
         );
         if (!presignResponse.ok) {
           throw await responseError(presignResponse, `Could not upload ${file.name}.`);
@@ -123,6 +138,7 @@ export function createManagedCloudChatAttachmentsClient(
           method: presign.uploadMethod,
           headers: presign.uploadHeaders,
           body: file,
+          signal,
         });
         if (!putResponse.ok) {
           throw new ManagedCloudChatAttachmentHttpError(
@@ -140,6 +156,7 @@ export function createManagedCloudChatAttachmentsClient(
         const completionResponse = await post(
           MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
           completeRequest,
+          signal,
         );
         if (!completionResponse.ok) {
           throw await responseError(completionResponse, `Could not verify ${file.name}.`);

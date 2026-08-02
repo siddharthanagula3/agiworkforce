@@ -37,22 +37,19 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
 
     print_tool_status("search_files", &format!("Search({}, {})", pattern, path));
 
-    let result = tokio::time::timeout(
-        COMMAND_TIMEOUT,
-        Command::new("grep")
-            .arg("-rn")
-            .arg("--include=*")
-            .arg("-m")
-            .arg("200")
-            .arg("--")
-            .arg(pattern)
-            .arg(&validated_path)
-            .output(),
-    )
-    .await;
+    let mut command = Command::new("grep");
+    command
+        .arg("-rn")
+        .arg("--include=*")
+        .arg("-m")
+        .arg("200")
+        .arg("--")
+        .arg(pattern)
+        .arg(&validated_path);
+    let result = crate::process_tree::output(command, None, Some(COMMAND_TIMEOUT)).await;
 
     match result {
-        Ok(Ok(output)) => {
+        Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -78,7 +75,7 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
                 output: result_text,
             })
         }
-        Ok(Err(e)) => Ok(ToolResult {
+        Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
             tool_name: "search_files".to_string(),
             success: false,
             output: format!("Failed to execute search: {}", e),
@@ -239,8 +236,8 @@ pub(super) async fn execute_grep_files(
         cmd.arg("--glob").arg(g);
     }
     cmd.arg("--").arg(pattern).arg(&validated_path);
-    match tokio::time::timeout(COMMAND_TIMEOUT, cmd.output()).await {
-        Ok(Ok(o)) => {
+    match crate::process_tree::output(cmd, None, Some(COMMAND_TIMEOUT)).await {
+        Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
             let output = if stdout.is_empty() {
                 format!("No matches for: {}", pattern)
@@ -253,14 +250,14 @@ pub(super) async fn execute_grep_files(
                 output,
             })
         }
-        Ok(Err(_)) => {
+        Err(error) if error.kind() != std::io::ErrorKind::TimedOut => {
             let mut fb = Command::new("grep");
             fb.arg("-rn")
                 .arg("--max-count=100")
                 .arg("--")
                 .arg(pattern)
                 .arg(&validated_path);
-            match fb.output().await {
+            match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
                 Ok(o) => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: true,
@@ -269,10 +266,18 @@ pub(super) async fn execute_grep_files(
                         String::from_utf8_lossy(&o.stdout).to_string(),
                     ),
                 }),
-                Err(e) => Ok(ToolResult {
+                Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: false,
                     output: format!("{}", e),
+                }),
+                Err(_) => Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: false,
+                    output: format!(
+                        "Search timed out after {} seconds",
+                        COMMAND_TIMEOUT.as_secs()
+                    ),
                 }),
             }
         }

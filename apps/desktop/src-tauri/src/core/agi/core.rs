@@ -3,6 +3,10 @@ use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
 use crate::core::agi::planner::Plan;
 use crate::core::llm::LLMRouter;
+use crate::sys::account::{
+    capture_managed_auth_boundary, current_managed_auth_boundary, scope_managed_auth_boundary,
+    ManagedAuthBoundary,
+};
 use agiworkforce_protocol::task_state::{AgentTaskState, AgentTaskStateChanged};
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -50,6 +54,20 @@ fn goal_iteration_limit(goal: &Goal) -> usize {
             _ => None,
         })
         .unwrap_or(DEFAULT_MAX_ITERATIONS)
+}
+
+fn managed_auth_boundary_for_goal(goal: &Goal) -> Result<Option<ManagedAuthBoundary>> {
+    if goal.trust_mode != Some(agiworkforce_model_registry::TrustMode::ManagedCloud) {
+        return Ok(None);
+    }
+
+    if let Some(inherited) = current_managed_auth_boundary() {
+        return Ok(Some(inherited));
+    }
+
+    capture_managed_auth_boundary()
+        .map(Some)
+        .map_err(|error| anyhow!(error))
 }
 
 // === MEDIUM-006 fix: Context memory limits ===
@@ -462,6 +480,10 @@ impl AGICore {
     }
 
     pub async fn submit_goal(&self, goal: Goal) -> Result<String> {
+        // Capture native ownership before the first await. The spawned worker
+        // carries this boundary for its full lifetime, so a later account or
+        // session replacement cannot lend the old goal a new bearer token.
+        let managed_auth_boundary = managed_auth_boundary_for_goal(&goal)?;
         tracing::info!("[AGI] New goal submitted: {}", goal.description);
 
         self.transition_task_state(
@@ -507,23 +529,26 @@ impl AGICore {
         // FIX-031: keep the JoinHandle so cancel_goal can abort the worker
         // even if it's mid-LLM-call (the polling flag inside achieve_goal
         // only fires at loop boundaries, which can be 30s+ apart).
-        let handle = tokio::spawn(async move {
-            if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn.clone()).await {
-                tracing::error!("[AGI] Goal execution failed: {}", e);
-                core_with_app.transition_task_state(
-                    &goal_id_for_spawn,
-                    AgentTaskState::Failed,
-                    format!("Agent work ended with an error: {e}"),
-                );
-                core_with_app.emit_event(
-                    "agi:goal:error",
-                    json!({
-                        "goal_id": goal_id_for_spawn,
-                        "error": e.to_string(),
-                    }),
-                );
-            }
-        });
+        let handle = tokio::spawn(scope_managed_auth_boundary(
+            managed_auth_boundary,
+            async move {
+                if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn.clone()).await {
+                    tracing::error!("[AGI] Goal execution failed: {}", e);
+                    core_with_app.transition_task_state(
+                        &goal_id_for_spawn,
+                        AgentTaskState::Failed,
+                        format!("Agent work ended with an error: {e}"),
+                    );
+                    core_with_app.emit_event(
+                        "agi:goal:error",
+                        json!({
+                            "goal_id": goal_id_for_spawn,
+                            "error": e.to_string(),
+                        }),
+                    );
+                }
+            },
+        ));
         if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "submit_goal:goal_handles")
         {
             handles.insert(goal_id.clone(), handle);
@@ -533,6 +558,19 @@ impl AGICore {
     }
 
     pub async fn submit_goal_parallel(
+        &self,
+        goal: Goal,
+        num_agents: usize,
+    ) -> Result<crate::core::agi::ScoredResult> {
+        let managed_auth_boundary = managed_auth_boundary_for_goal(&goal)?;
+        scope_managed_auth_boundary(
+            managed_auth_boundary,
+            self.submit_goal_parallel_scoped(goal, num_agents),
+        )
+        .await
+    }
+
+    async fn submit_goal_parallel_scoped(
         &self,
         goal: Goal,
         num_agents: usize,
@@ -705,6 +743,15 @@ impl AGICore {
     /// # Returns
     /// * `SwarmResult` containing aggregated results, metrics, and speedup ratio
     pub async fn submit_goal_swarm(&self, goal: Goal) -> Result<crate::core::swarm::SwarmResult> {
+        let managed_auth_boundary = managed_auth_boundary_for_goal(&goal)?;
+        scope_managed_auth_boundary(managed_auth_boundary, self.submit_goal_swarm_scoped(goal))
+            .await
+    }
+
+    async fn submit_goal_swarm_scoped(
+        &self,
+        goal: Goal,
+    ) -> Result<crate::core::swarm::SwarmResult> {
         use crate::core::swarm::{SwarmConfig, SwarmOrchestrator};
 
         tracing::info!("[AGI] Swarm goal submitted: {}", goal.description);
@@ -877,6 +924,11 @@ impl AGICore {
     /// This is the recommended entry point for goal submission when you want
     /// the AGI to automatically optimize execution strategy.
     pub async fn submit_goal_auto(&self, goal: Goal) -> Result<String> {
+        let managed_auth_boundary = managed_auth_boundary_for_goal(&goal)?;
+        scope_managed_auth_boundary(managed_auth_boundary, self.submit_goal_auto_scoped(goal)).await
+    }
+
+    async fn submit_goal_auto_scoped(&self, goal: Goal) -> Result<String> {
         if self.should_use_swarm(&goal) {
             tracing::info!(
                 "[AGI] Auto-selected swarm execution for goal: {}",
@@ -885,20 +937,24 @@ impl AGICore {
             let goal_id = goal.id.clone();
             let core_clone = self.clone_for_execution();
             let goal_clone = goal.clone();
+            let managed_auth_boundary = current_managed_auth_boundary();
 
-            tokio::spawn(async move {
-                match core_clone.submit_goal_swarm(goal_clone).await {
-                    Ok(result) => {
-                        tracing::info!(
-                            "[AGI] Swarm goal completed with speedup: {:.2}x",
-                            result.speedup_ratio
-                        );
+            tokio::spawn(scope_managed_auth_boundary(
+                managed_auth_boundary,
+                async move {
+                    match core_clone.submit_goal_swarm(goal_clone).await {
+                        Ok(result) => {
+                            tracing::info!(
+                                "[AGI] Swarm goal completed with speedup: {:.2}x",
+                                result.speedup_ratio
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!("[AGI] Swarm goal failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!("[AGI] Swarm goal failed: {}", e);
-                    }
-                }
-            });
+                },
+            ));
 
             Ok(goal_id)
         } else {

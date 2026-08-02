@@ -66,6 +66,16 @@ describe('ChatInput draft ownership', () => {
     expect(screen.queryByRole('button', { name: 'Stop generation' })).toBeNull();
   });
 
+  it('prevents model changes while the active turn is streaming', () => {
+    useChatStore.setState({ isStreaming: true });
+
+    renderComposer();
+
+    expect(
+      (screen.getByRole('button', { name: 'Select model' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('uses a host-provided Cloud voice controller instead of the browser speech mic', () => {
     const onToggle = vi.fn();
 
@@ -217,6 +227,43 @@ describe('ChatInput draft ownership', () => {
       [attachment],
       false,
     );
+  });
+
+  it('purges unsent file bytes when their conversation or trust destination changes', () => {
+    const onSend = vi.fn();
+    const baseProps = {
+      onSend,
+      onStop: vi.fn(),
+      onModelSelectorClick: vi.fn(),
+      hasMessages: false,
+    };
+    const attachment = new File(['private account A bytes'], 'account-a.txt', {
+      type: 'text/plain',
+    });
+    const { rerender } = render(
+      <ChatInput
+        {...baseProps}
+        conversationId="conv-a"
+        attachmentContextKey="managed:account-a:conv-a"
+      />,
+    );
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(fileInput!, { target: { files: [attachment] } });
+    expect(screen.getByText('account-a.txt')).toBeTruthy();
+
+    rerender(
+      <ChatInput
+        {...baseProps}
+        conversationId="conv-b"
+        attachmentContextKey="managed:account-b:conv-b"
+      />,
+    );
+
+    expect(screen.queryByText('account-a.txt')).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: 'Send message (Enter)' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it('uses a typographic ellipsis in the reply placeholder', () => {

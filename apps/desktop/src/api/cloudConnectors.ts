@@ -6,21 +6,16 @@
  * so the CLOUD-mode connectors panel reflects server truth instead of driving
  * local Tauri MCP connector state.
  *
- * Auth/CSRF plumbing mirrors apps/desktop/src/api/cloudApi.ts — this module
- * imports its exported `getAuthHeaders`/`CLOUD_API_BASE_URL` rather than
- * duplicating them, so that file stays the single source of truth for how
- * desktop attaches the Bearer session token (and, in the cookie-session
- * fallback, an X-CSRF-Token). A valid Bearer JWT is enough on its own: the web
+ * Auth/CSRF plumbing comes through the shared Managed Cloud request context,
+ * which pins each operation to one account/session while resolving the live
+ * same-account Bearer token. A valid Bearer JWT is enough on its own: the web
  * route's `requireCsrfToken` bypasses CSRF for any request whose Bearer token
  * verifies against Clerk (apps/web/lib/csrf.ts, `isBearerTokenValid`), which is
  * the case for every authenticated desktop cloud-mode request.
  */
 
-import { cloudFetch, getAuthHeaders, CLOUD_API_BASE_URL } from './cloudApi';
-import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-} from '../services/managedCloudBoundary';
+import { CLOUD_API_BASE_URL } from './cloudApi';
+import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
 // ============================================================================
 // Type Definitions
@@ -107,10 +102,10 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
  * instead of static catalog data.
  */
 export async function listConnectors(): Promise<ListConnectorsResult> {
-  const boundary = captureManagedCloudBoundary('Cloud connectors');
-  const headers = await getAuthHeaders();
+  const request = createManagedCloudRequestContext('Cloud connectors');
+  const headers = await request.getHeaders();
 
-  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
     method: 'GET',
     headers,
   });
@@ -120,7 +115,7 @@ export async function listConnectors(): Promise<ListConnectorsResult> {
   }
 
   const data = await res.json();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('The cloud connector service returned an invalid response.');
   }
@@ -144,10 +139,10 @@ export async function connectConnector(
   connectorId: string,
   authType?: string,
 ): Promise<ConnectConnectorResult> {
-  const boundary = captureManagedCloudBoundary('Cloud connector connection');
-  const headers = await getAuthHeaders();
+  const request = createManagedCloudRequestContext('Cloud connector connection');
+  const headers = await request.getHeaders();
 
-  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ connectorId, ...(authType ? { authType } : {}) }),
@@ -155,7 +150,7 @@ export async function connectConnector(
 
   if (res.status === 201) {
     const payload: unknown = await res.json();
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       throw new Error('The cloud connector service returned an invalid connection.');
     }
@@ -169,7 +164,7 @@ export async function connectConnector(
 
   if (res.status === 409) {
     const payload: unknown = await res.json().catch(() => null);
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
     const installStartPath =
       payload && typeof payload === 'object' && !Array.isArray(payload)
         ? (payload as Record<string, unknown>)['installStartPath']
@@ -187,7 +182,7 @@ export async function connectConnector(
 
   if (res.status === 501) {
     const payload: unknown = await res.json().catch(() => null);
-    assertManagedCloudBoundary(boundary);
+    request.assertBoundary();
     return {
       status: 'unsupported',
       message: readApiError(payload, 'This connector is not available yet.'),
@@ -195,15 +190,16 @@ export async function connectConnector(
   }
 
   const body = await res.json().catch(() => null);
+  request.assertBoundary();
   throw new Error(readApiError(body, `Failed to connect connector: HTTP ${res.status}`));
 }
 
 /** Disconnects a connector server-side (soft-delete / unlink). */
 export async function disconnectConnector(connectorId: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Cloud connector disconnection');
-  const headers = await getAuthHeaders();
+  const request = createManagedCloudRequestContext('Cloud connector disconnection');
+  const headers = await request.getHeaders();
 
-  const res = await cloudFetch(
+  const res = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/connectors?connectorId=${encodeURIComponent(connectorId)}`,
     {
       method: 'DELETE',
@@ -213,16 +209,17 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
+    request.assertBoundary();
     throw new Error(readApiError(body, `Failed to disconnect connector: HTTP ${res.status}`));
   }
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 }
 
 export async function createCustomConnector(input: CreateCustomConnectorInput): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Custom Cloud connector creation');
-  const headers = await getAuthHeaders();
+  const request = createManagedCloudRequestContext('Custom Cloud connector creation');
+  const headers = await request.getHeaders();
   const authToken = input.authToken?.trim();
-  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -233,15 +230,16 @@ export async function createCustomConnector(input: CreateCustomConnectorInput): 
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
+    request.assertBoundary();
     throw new Error(readApiError(body, `Failed to add connector: HTTP ${res.status}`));
   }
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 }
 
 export async function deleteCustomConnector(id: string): Promise<void> {
-  const boundary = captureManagedCloudBoundary('Custom Cloud connector deletion');
-  const headers = await getAuthHeaders();
-  const res = await cloudFetch(
+  const request = createManagedCloudRequestContext('Custom Cloud connector deletion');
+  const headers = await request.getHeaders();
+  const res = await request.fetch(
     `${CLOUD_API_BASE_URL}/api/connectors/custom?id=${encodeURIComponent(id)}`,
     {
       method: 'DELETE',
@@ -250,7 +248,8 @@ export async function deleteCustomConnector(id: string): Promise<void> {
   );
   if (!res.ok) {
     const body = await res.json().catch(() => null);
+    request.assertBoundary();
     throw new Error(readApiError(body, `Failed to remove connector: HTTP ${res.status}`));
   }
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
 }

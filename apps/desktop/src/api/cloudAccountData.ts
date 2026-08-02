@@ -1,9 +1,5 @@
-import { cloudFetch, getAuthHeaders } from './cloudApi';
 import { WEB_APP_URL } from './config';
-import {
-  assertManagedCloudBoundary,
-  captureManagedCloudBoundary,
-} from '../services/managedCloudBoundary';
+import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
 /**
  * Downloads the reviewed, tenant-scoped Cloud account export. Local chats,
@@ -11,11 +7,11 @@ import {
  * part of this payload.
  */
 export async function exportCloudAccountData(): Promise<string> {
-  const boundary = captureManagedCloudBoundary('Cloud account export');
-  const response = await cloudFetch(`${WEB_APP_URL}/api/user/export?download=true`, {
+  const request = createManagedCloudRequestContext('Cloud account export');
+  const response = await request.fetch(`${WEB_APP_URL}/api/user/export?download=true`, {
     method: 'GET',
     headers: {
-      ...(await getAuthHeaders()),
+      ...(await request.getHeaders()),
       Accept: 'application/octet-stream',
     },
     credentials: 'include',
@@ -23,6 +19,7 @@ export async function exportCloudAccountData(): Promise<string> {
 
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null);
+    request.assertBoundary();
     const rawError =
       payload && typeof payload === 'object' && 'error' in payload ? payload.error : null;
     const message =
@@ -38,6 +35,6 @@ export async function exportCloudAccountData(): Promise<string> {
   }
 
   const exported = await response.text();
-  assertManagedCloudBoundary(boundary);
+  request.assertBoundary();
   return exported;
 }

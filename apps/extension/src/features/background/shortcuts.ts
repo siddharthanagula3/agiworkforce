@@ -34,10 +34,12 @@ export function planShortcutReplay(
 }
 
 export async function loadShortcuts(): Promise<SavedShortcut[]> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (result) => {
       if (chrome.runtime.lastError) {
-        resolve([]);
+        reject(
+          new Error(`Shortcut storage could not be read: ${chrome.runtime.lastError.message}`),
+        );
         return;
       }
       resolve((result[SHORTCUTS_STORAGE_KEY] as SavedShortcut[] | undefined) ?? []);

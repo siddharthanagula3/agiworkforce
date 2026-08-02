@@ -3,20 +3,25 @@ import {
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleTask,
+  type ManagedCloudSchedulesClient,
   type ManagedCloudSchedulesPageInput,
 } from '@agiworkforce/cloud-contracts';
-import { CLOUD_API_BASE_URL, cloudFetch } from '../api/cloudApi';
-import { assertManagedCloudBoundary, captureManagedCloudBoundary } from './managedCloudBoundary';
+import { CLOUD_API_BASE_URL } from '../api/cloudApi';
+import { createManagedCloudRequestContext } from './managedCloudRequestContext';
 
-const client = createManagedCloudSchedulesClient({
-  baseUrl: CLOUD_API_BASE_URL,
-  fetchImpl: cloudFetch,
-});
-
-async function withinManagedBoundary<T>(label: string, operation: () => Promise<T>): Promise<T> {
-  const boundary = captureManagedCloudBoundary(label);
-  const result = await operation();
-  assertManagedCloudBoundary(boundary);
+async function withSchedulesClient<T>(
+  label: string,
+  operation: (client: ManagedCloudSchedulesClient) => Promise<T>,
+): Promise<T> {
+  const request = createManagedCloudRequestContext(label);
+  const client = createManagedCloudSchedulesClient({
+    baseUrl: CLOUD_API_BASE_URL,
+    credentials: 'include',
+    getHeaders: () => request.getHeaders(),
+    fetchImpl: request.fetch,
+  });
+  const result = await operation(client);
+  request.assertBoundary();
   return result;
 }
 
@@ -28,11 +33,13 @@ async function withinManagedBoundary<T>(label: string, operation: () => Promise<
  */
 export const desktopCloudSchedules = {
   listSchedules(input: ManagedCloudSchedulesPageInput) {
-    return withinManagedBoundary('Managed Cloud schedule list', () => client.listSchedules(input));
+    return withSchedulesClient('Managed Cloud schedule list', (client) =>
+      client.listSchedules(input),
+    );
   },
 
   getSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleTask> {
-    return withinManagedBoundary('Managed Cloud schedule refresh', () =>
+    return withSchedulesClient('Managed Cloud schedule refresh', (client) =>
       client.getSchedule(scheduleId, signal),
     );
   },
@@ -41,7 +48,7 @@ export const desktopCloudSchedules = {
     input: ManagedCloudScheduleMutation,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleTask> {
-    return withinManagedBoundary('Managed Cloud schedule creation', () =>
+    return withSchedulesClient('Managed Cloud schedule creation', (client) =>
       client.createSchedule(input, signal),
     );
   },
@@ -51,7 +58,7 @@ export const desktopCloudSchedules = {
     input: ManagedCloudScheduleMutation,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleTask> {
-    return withinManagedBoundary('Managed Cloud schedule update', () =>
+    return withSchedulesClient('Managed Cloud schedule update', (client) =>
       client.updateSchedule(scheduleId, input, signal),
     );
   },
@@ -61,19 +68,19 @@ export const desktopCloudSchedules = {
     isActive: boolean,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleTask> {
-    return withinManagedBoundary('Managed Cloud schedule status update', () =>
+    return withSchedulesClient('Managed Cloud schedule status update', (client) =>
       client.setScheduleEnabled(scheduleId, isActive, signal),
     );
   },
 
   deleteSchedule(scheduleId: string, signal?: AbortSignal): Promise<void> {
-    return withinManagedBoundary('Managed Cloud schedule deletion', () =>
+    return withSchedulesClient('Managed Cloud schedule deletion', (client) =>
       client.deleteSchedule(scheduleId, signal),
     );
   },
 
   listRuns(scheduleId: string, input: ManagedCloudSchedulesPageInput) {
-    return withinManagedBoundary('Managed Cloud schedule run history', () =>
+    return withSchedulesClient('Managed Cloud schedule run history', (client) =>
       client.listRuns(scheduleId, input),
     );
   },
@@ -83,7 +90,7 @@ export const desktopCloudSchedules = {
     idempotencyKey: string,
     signal?: AbortSignal,
   ): Promise<{ run: ManagedCloudScheduleRun; replay: boolean }> {
-    return withinManagedBoundary('Managed Cloud schedule manual run', () =>
+    return withSchedulesClient('Managed Cloud schedule manual run', (client) =>
       client.runNow(scheduleId, idempotencyKey, signal),
     );
   },

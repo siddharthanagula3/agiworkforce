@@ -277,6 +277,7 @@ pub fn run() {
             app.manage(AppDirs {
                 data_dir: app_data_dir.clone(),
             });
+            app.manage(crate::sys::commands::CloudHandoffGrantState::default());
 
             let db_path = app_data_dir.join("agiworkforce.db");
             let startup_recovery = crate::sys::startup_recovery::StartupRecoveryState::new(
@@ -304,13 +305,27 @@ pub fn run() {
                 }
             }
 
-            // Install native messaging manifest for packaged production IDs.
-            // Dev/unpacked extension IDs are added during the HTTP /pair handshake.
-            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(None)
-            {
-                tracing::warn!("Failed to install native messaging manifest: {}", e);
-            } else {
-                tracing::info!("Native messaging manifest installed/updated");
+            // Install native messaging manifests only for normal app bundles.
+            // The isolated WDIO bundle shares Chrome/Edge's user-global host
+            // registration paths, so it must never replace the production
+            // manifest with a repository debug binary.
+            use crate::integrations::native_messaging::manifest::ManifestInstallOutcome;
+            match crate::integrations::native_messaging::manifest::install_manifests_for_bundle_identifier(
+                &app.config().identifier,
+                None,
+            ) {
+                Ok(ManifestInstallOutcome::Installed(_)) => {
+                    tracing::info!("Native messaging manifest installed/updated");
+                }
+                Ok(ManifestInstallOutcome::SkippedTestHarness) => {
+                    tracing::info!(
+                        "Skipped browser-global native messaging manifest installation for test harness bundle {}",
+                        app.config().identifier
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to install native messaging manifest: {}", e);
+                }
             }
 
             tracing::info!("Database path: {:?}", db_path);
@@ -1769,6 +1784,10 @@ pub fn run() {
             // Code search (Grep + Glob + Formatter pipeline)
             crate::sys::commands::grep_search,
             crate::sys::commands::glob_search,
+            crate::sys::commands::select_cloud_handoff_folder,
+            crate::sys::commands::list_cloud_handoff_files,
+            crate::sys::commands::read_cloud_handoff_file,
+            crate::sys::commands::revoke_cloud_handoff_grant,
             crate::sys::commands::format_file,
             crate::sys::commands::format_detect,
 
@@ -2499,6 +2518,7 @@ pub fn run() {
             crate::sys::commands::composer_apply_session,
             crate::sys::commands::composer_get_session,
             crate::sys::commands::composer_start_session,
+            crate::sys::commands::computer_use_cancel_opa_task,
             crate::sys::commands::computer_use_execute_opa_task,
             crate::sys::commands::computer_use_execute_tool,
             crate::sys::commands::computer_use_get_session,

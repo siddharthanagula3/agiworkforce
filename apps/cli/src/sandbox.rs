@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 pub use agiworkforce_sandbox_policy::SandboxPolicy;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,13 +22,13 @@ impl SandboxType {
     pub fn detect() -> Self {
         #[cfg(target_os = "macos")]
         {
-            if which_exists("sandbox-exec") {
+            if crate::process_tree::executable_exists("sandbox-exec") {
                 return Self::MacosSeatbelt;
             }
         }
         #[cfg(target_os = "linux")]
         {
-            if which_exists("bwrap") {
+            if crate::process_tree::executable_exists("bwrap") {
                 return Self::LinuxBubblewrap;
             }
         }
@@ -161,7 +161,11 @@ pub fn sandbox_disabled() -> bool {
 pub fn shell_quote(arg: &str) -> String {
     let safe = !arg.is_empty()
         && arg.bytes().all(|b| {
-            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b'=' | b':' | b',' | b'@' | b'+')
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b'_' | b'-' | b'.' | b'/' | b'=' | b':' | b',' | b'@' | b'+'
+                )
         });
     if safe {
         return arg.to_string();
@@ -176,7 +180,6 @@ pub fn shell_join(args: &[String]) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-
 
 ///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
@@ -271,17 +274,15 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
                 anyhow::anyhow!("read-only Seatbelt execution requires a private scratch directory")
             })?;
             let scratch_dir = validate_and_escape_seatbelt_path(scratch_dir)?;
-            scratch_read_rules.push_str(&format!(
-                "(allow file-read* (subpath \"{scratch_dir}\"))\n"
-            ));
+            scratch_read_rules
+                .push_str(&format!("(allow file-read* (subpath \"{scratch_dir}\"))\n"));
             write_rules.push_str(&format!(
                 "(allow file-write* (subpath \"{scratch_dir}\"))\n"
             ));
         }
         SandboxPolicy::WorkspaceWrite { .. } => {
-            write_rules.push_str(
-                "(allow file-write* (subpath \"/tmp\") (subpath \"/private/tmp\"))\n",
-            );
+            write_rules
+                .push_str("(allow file-write* (subpath \"/tmp\") (subpath \"/private/tmp\"))\n");
             for root in writable_roots(manager)? {
                 let root = validate_and_escape_seatbelt_path(&root)?;
                 write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
@@ -385,16 +386,25 @@ pub async fn execute_sandboxed(
     command: &str,
     cwd: Option<&Path>,
 ) -> Result<std::process::Output> {
+    execute_sandboxed_with_timeout(manager, command, cwd, None).await
+}
+
+pub(crate) async fn execute_sandboxed_with_timeout(
+    manager: &SandboxManager,
+    command: &str,
+    cwd: Option<&Path>,
+    timeout: Option<std::time::Duration>,
+) -> Result<std::process::Output> {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.arg("-c").arg(command);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
     if matches!(manager.policy, SandboxPolicy::DangerFullAccess) {
-        return cmd
-            .output()
+        return crate::process_tree::output(cmd, None, timeout)
             .await
-            .map_err(|e| anyhow::anyhow!("unsandboxed exec failed: {}", e));
+            .map_err(anyhow::Error::new)
+            .context("unsandboxed exec failed");
     }
     match manager.sandbox_type {
         SandboxType::MacosSeatbelt => {
@@ -430,9 +440,10 @@ pub async fn execute_sandboxed(
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
-            scmd.output()
+            crate::process_tree::output(scmd, None, timeout)
                 .await
-                .map_err(|e| anyhow::anyhow!("Seatbelt exec failed: {}", e))
+                .map_err(anyhow::Error::new)
+                .context("Seatbelt exec failed")
         }
         SandboxType::LinuxBubblewrap => {
             let mut bcmd = tokio::process::Command::new("bwrap");
@@ -441,9 +452,10 @@ pub async fn execute_sandboxed(
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
             }
-            bcmd.output()
+            crate::process_tree::output(bcmd, None, timeout)
                 .await
-                .map_err(|e| anyhow::anyhow!("Bubblewrap exec failed: {}", e))
+                .map_err(anyhow::Error::new)
+                .context("Bubblewrap exec failed")
         }
         // Refuse loudly on Windows + any other OS without a supported sandbox,
         // instead of silently running unsandboxed. Marketing claim of "sandboxed
@@ -466,22 +478,18 @@ pub async fn execute_sandboxed(
     }
 }
 
-fn which_exists(binary: &str) -> bool {
-    std::process::Command::new("which")
-        .arg(binary)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
 #[cfg(test)]
 mod tests {
 
     #[test]
     fn shell_quote_leaves_plain_arguments_alone() {
-        for arg in ["echo", "hello", "/tmp/file.txt", "--flag=value", "a,b:c@d+e"] {
+        for arg in [
+            "echo",
+            "hello",
+            "/tmp/file.txt",
+            "--flag=value",
+            "a,b:c@d+e",
+        ] {
             assert_eq!(shell_quote(arg), arg, "should not quote {arg}");
         }
     }
@@ -728,16 +736,12 @@ mod tests {
             SandboxPolicy::ReadOnly,
             PathBuf::from("/tmp/developer-workspace"),
         );
-        let profile = seatbelt_profile(
-            &mgr,
-            Some(Path::new("/private/tmp/agi-read-only-scratch")),
-        )
-        .expect("profile");
+        let profile = seatbelt_profile(&mgr, Some(Path::new("/private/tmp/agi-read-only-scratch")))
+            .expect("profile");
         assert!(profile.contains("(allow file-read* (subpath \"/tmp/developer-workspace\"))"));
         assert!(!profile.contains("(allow file-write* (subpath \"/tmp/developer-workspace\"))"));
-        assert!(profile.contains(
-            "(allow file-write* (subpath \"/private/tmp/agi-read-only-scratch\"))"
-        ));
+        assert!(profile
+            .contains("(allow file-write* (subpath \"/private/tmp/agi-read-only-scratch\"))"));
         assert!(!profile.contains("(allow file-write* (subpath \"/tmp\")"));
     }
 

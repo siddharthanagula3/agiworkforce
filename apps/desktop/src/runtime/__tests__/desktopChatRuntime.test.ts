@@ -76,11 +76,29 @@ describe('desktop chat runtime composition root', () => {
     expect(cloud).toBeInstanceOf(CloudRuntime);
     expect(web).toBeInstanceOf(WebRuntime);
     expect(local.supportsResearch).not.toBe(true);
-    expect(cloud.supportsResearch).toBe(true);
+    expect(cloud.supportsResearch).toBe(false);
     expect(web.supportsResearch).toBe(true);
     expect(local.supportsManagedWebSearch).not.toBe(true);
     expect(cloud.supportsManagedWebSearch).toBe(true);
     expect(web.supportsManagedWebSearch).toBe(true);
+  });
+
+  it('projects the account research entitlement into the managed runtime', () => {
+    const denied = createDesktopChatRuntime({
+      isTauriHost: true,
+      appMode: 'cloud',
+      managedAccountId: 'account-free',
+      managedResearchEnabled: false,
+    });
+    const admitted = createDesktopChatRuntime({
+      isTauriHost: true,
+      appMode: 'cloud',
+      managedAccountId: 'account-max',
+      managedResearchEnabled: true,
+    });
+
+    expect(denied.supportsResearch).toBe(false);
+    expect(admitted.supportsResearch).toBe(true);
   });
 
   it('keeps the Local workspace, including BYOK conversations, on the Tauri runtime', () => {
@@ -97,10 +115,14 @@ describe('desktop chat runtime composition root', () => {
   it('selects managed Cloud only after the existing mode gate has admitted cloud', () => {
     const { factories, managedRuntime } = runtimeFactories();
 
-    const selected = createDesktopChatRuntime({ isTauriHost: true, appMode: 'cloud' }, factories);
+    const selected = createDesktopChatRuntime(
+      { isTauriHost: true, appMode: 'cloud', managedAccountId: 'account-a' },
+      factories,
+    );
 
     expect(selected).toBe(managedRuntime);
     expect(factories.managed).toHaveBeenCalledOnce();
+    expect(factories.managed).toHaveBeenCalledWith('account-a', undefined);
     expect(factories.local).not.toHaveBeenCalled();
     expect(factories.web).not.toHaveBeenCalled();
   });

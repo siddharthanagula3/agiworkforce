@@ -29,6 +29,13 @@ const SERVER_TITLE: &str = "AGI Workforce App Server";
 /// interrupts and approval responses.
 #[async_trait]
 pub trait DeveloperSessionHost: Send + Sync {
+    /// Version of the executable that owns this host. The transport crate has
+    /// its own package version, but clients need the shipped runtime version
+    /// when deciding whether the installed CLI is compatible.
+    fn server_version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
+
     async fn start_thread(
         &self,
         params: ThreadStartParams,
@@ -81,8 +88,17 @@ pub trait DeveloperSessionHost: Send + Sync {
         params: ApprovalResponseParams,
     ) -> Result<(), DeveloperSessionHostError>;
 
+    /// Stop accepting work, cancel every active host operation, and wait until
+    /// owned resources are quiescent. A transport must not acknowledge
+    /// `shutdown` before this resolves successfully.
+    async fn shutdown(&self) -> Result<(), DeveloperSessionHostError>;
+
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification>;
 }
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ShutdownParams {}
 
 /// Error categories that survive the local app-server boundary without
 /// leaking internal error chains to editor clients.
@@ -189,7 +205,7 @@ impl DeveloperSessionProcessor {
                             request.id,
                             -32603,
                             "Initialized app-server connection is missing client identity",
-                        )
+                        );
                     }
                 };
                 self.host
@@ -244,7 +260,7 @@ impl DeveloperSessionProcessor {
                             request.id,
                             -32603,
                             "Initialized app-server connection is missing client identity",
-                        )
+                        );
                     }
                 };
                 self.host
@@ -302,15 +318,21 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
-            method::SHUTDOWN => Ok(serde_json::to_value(AcknowledgedResponse {
-                acknowledged: true,
-            })),
+            method::SHUTDOWN => {
+                if let Err(response) = parse_params::<ShutdownParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .shutdown()
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
             _ => {
                 return AppServerResponse::failure(
                     request.id,
                     -32601,
                     format!("Method not found: {}", request.method),
-                )
+                );
             }
         };
 
@@ -339,7 +361,7 @@ impl DeveloperSessionProcessor {
                 server_info: AppServerClientInfo {
                     name: SERVER_NAME.to_string(),
                     title: SERVER_TITLE.to_string(),
-                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    version: self.host.server_version().to_string(),
                 },
                 protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION,
                 capabilities: self.capabilities.clone(),
@@ -367,6 +389,7 @@ where
     let mut notifications = processor.subscribe();
     let mut lines = BufReader::new(reader).lines();
     let mut initialized = false;
+    let mut host_shutdown = false;
 
     loop {
         tokio::select! {
@@ -401,6 +424,7 @@ where
                 }
                 write_json_line(&mut writer, &response).await?;
                 if is_shutdown && response.error.is_none() {
+                    host_shutdown = true;
                     break;
                 }
             }
@@ -423,6 +447,13 @@ where
         }
     }
 
+    if !host_shutdown {
+        processor
+            .host
+            .shutdown()
+            .await
+            .map_err(anyhow::Error::new)?;
+    }
     writer.shutdown().await?;
     Ok(())
 }

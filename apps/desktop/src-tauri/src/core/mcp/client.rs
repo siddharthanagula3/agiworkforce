@@ -91,9 +91,7 @@ impl McpClient {
         let sessions = self.sessions.read();
         let mut collected: Vec<(String, String)> = sessions
             .iter()
-            .filter_map(|(name, session)| {
-                session.instructions().map(|text| (name.clone(), text))
-            })
+            .filter_map(|(name, session)| session.instructions().map(|text| (name.clone(), text)))
             .collect();
         collected.sort_by(|a, b| a.0.cmp(&b.0));
         collected

@@ -148,10 +148,10 @@ pub async fn probe_openai_compatible_local(
     provider: &str,
     base_url: &str,
 ) -> LocalProviderProbe {
-    let safe_base = normalize_openai_base_url(base_url);
-    if !is_safe_local_base_url(&safe_base) {
-        return blocked_probe(provider, safe_base);
-    }
+    let safe_base = match validated_openai_local_base_url(base_url) {
+        Ok(base_url) => base_url,
+        Err(_) => return blocked_probe(provider, normalize_openai_base_url(base_url)),
+    };
 
     let url = openai_models_url(&safe_base);
     match client.get(url).send().await {
@@ -201,11 +201,11 @@ pub async fn ensure_local_model_available(
     provider: &str,
     base_url: &str,
     model: &str,
-) -> Result<()> {
+) -> Result<String> {
     let probe = match provider {
         "ollama" => probe_ollama(client, base_url).await,
         "lmstudio" => probe_openai_compatible_local(client, provider, base_url).await,
-        _ => return Ok(()),
+        _ => bail!("unsupported local model provider: {provider}"),
     };
 
     if !probe.running {
@@ -220,7 +220,7 @@ pub async fn ensure_local_model_available(
     }
 
     if probe.models.iter().any(|candidate| candidate.id == model) {
-        return Ok(());
+        return Ok(probe.base_url);
     }
 
     let installed = if probe.models.is_empty() {
@@ -349,6 +349,22 @@ fn normalize_openai_base_url(base_url: &str) -> String {
     }
 }
 
+fn validated_openai_local_base_url(base_url: &str) -> Result<String> {
+    let normalized = normalize_openai_base_url(base_url);
+    if !is_safe_local_base_url(&normalized) {
+        bail!("blocked unsafe local OpenAI-compatible URL: {}", normalized);
+    }
+    let parsed = reqwest::Url::parse(&normalized)
+        .with_context(|| format!("invalid local OpenAI-compatible URL: {normalized}"))?;
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        bail!(
+            "local OpenAI-compatible URL must not contain a query or fragment: {}",
+            normalized
+        );
+    }
+    Ok(normalized)
+}
+
 fn strip_chat_completions(base_url: &str) -> &str {
     base_url
         .strip_suffix("/chat/completions")
@@ -361,6 +377,22 @@ fn openai_models_url(base_url: &str) -> String {
         format!("{base}/models")
     } else {
         format!("{base}/v1/models")
+    }
+}
+
+/// Build the chat-completions endpoint for a loopback OpenAI-compatible server.
+///
+/// The input may be a server root, a `/v1` base, or an existing full
+/// `/chat/completions` URL. The returned endpoint always derives from the same
+/// normalized and validated local base used by discovery and availability
+/// checks.
+pub fn openai_chat_completions_url(base_url: &str) -> Result<String> {
+    let safe_base = validated_openai_local_base_url(base_url)?;
+    let base = safe_base.trim_end_matches('/');
+    if base.ends_with("/v1") {
+        Ok(format!("{base}/chat/completions"))
+    } else {
+        Ok(format!("{base}/v1/chat/completions"))
     }
 }
 
@@ -390,7 +422,7 @@ fn failed_probe(provider: &str, base_url: String, error: String) -> LocalProvide
 
 #[cfg(test)]
 mod tests {
-    use super::ollama_capabilities_support_tools;
+    use super::{ollama_capabilities_support_tools, openai_chat_completions_url};
 
     #[test]
     fn ollama_capabilities_detect_tool_support() {
@@ -407,5 +439,29 @@ mod tests {
         let capabilities = vec!["completion".to_string(), "vision".to_string()];
         assert!(!ollama_capabilities_support_tools(&capabilities));
         assert!(!ollama_capabilities_support_tools(&[]));
+    }
+
+    #[test]
+    fn openai_chat_endpoint_normalizes_custom_loopback_bases() {
+        assert_eq!(
+            openai_chat_completions_url("http://127.0.0.1:43123/v1")
+                .expect("custom loopback /v1 base"),
+            "http://127.0.0.1:43123/v1/chat/completions"
+        );
+        assert_eq!(
+            openai_chat_completions_url("http://127.0.0.1:43123/v1/chat/completions")
+                .expect("existing chat-completions endpoint"),
+            "http://127.0.0.1:43123/v1/chat/completions"
+        );
+        assert_eq!(
+            openai_chat_completions_url("http://localhost:43123").expect("custom loopback root"),
+            "http://localhost:43123/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openai_chat_endpoint_rejects_non_loopback_or_ambiguous_urls() {
+        assert!(openai_chat_completions_url("https://example.com/v1").is_err());
+        assert!(openai_chat_completions_url("http://127.0.0.1:43123/v1?tenant=other").is_err());
     }
 }

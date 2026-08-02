@@ -4,13 +4,13 @@ use agiworkforce_protocol::agent_events::{
     AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
-    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource,
-    LocalModelListResponse, LocalModelProvider, LocalModelSummary, ThreadForkParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
-    ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary,
+    AppServerCapabilities, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
+    DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
+    DeveloperSessionSource, DeveloperSessionTrustMode, LocalModelListResponse, LocalModelProvider,
+    LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
+    ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams,
+    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary, agent_event_notification,
+    task_state_notification,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -19,8 +19,9 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{Mutex, broadcast, oneshot};
+use tokio::sync::{Mutex, RwLock, RwLockReadGuard, broadcast, oneshot};
 use uuid::Uuid;
 
 use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
@@ -44,9 +45,24 @@ const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
+const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
+const MAX_USER_INPUT_TEXT_CHARS: usize =
+    agiworkforce_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
+const MAX_USER_INPUT_TEXT_BYTES: usize = MAX_USER_INPUT_TEXT_CHARS * 4;
+const MAX_IMAGE_INPUTS_PER_TURN: usize = 8;
 const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
+const MAX_TOTAL_IMAGE_INPUT_BYTES: usize = 20_000_000;
+const MAX_IMAGE_DATA_URL_HEADER_BYTES: usize = 256;
+const MAX_IMAGE_MIME_BYTES: usize = 127;
+const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = (MAX_IMAGE_INPUT_BYTES + 2) / 3 * 4;
+const MAX_STEER_QUEUE_DEPTH: usize = 20;
+// The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
+// headroom for the JSON-RPC envelope and thread summary while measuring the
+// exact serialized message objects included in `thread/read`.
+const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
+const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct PreparedInput {
     text: String,
     images: Vec<ContentBlock>,
@@ -117,6 +133,50 @@ struct RunningTurn {
     turn_id: String,
     handle: tokio::task::JoinHandle<()>,
     partial: Arc<StdMutex<String>>,
+    process_owner: crate::process_tree::ProcessTreeOwner,
+}
+
+async fn take_steered_input_or_close(
+    running_turns: &Mutex<HashMap<String, RunningTurn>>,
+    steering: &Mutex<HashMap<String, Vec<PreparedInput>>>,
+    thread_id: &str,
+    turn_id: &str,
+) -> Option<PreparedInput> {
+    // This lock order is shared with `steer_turn`: enqueue either commits
+    // before this close point or observes that the running claim is gone.
+    let mut running = running_turns.lock().await;
+    let mut queues = steering.lock().await;
+    if !running
+        .get(thread_id)
+        .is_some_and(|running| running.turn_id == turn_id)
+    {
+        return None;
+    }
+    let next = queues
+        .get_mut(thread_id)
+        .and_then(|queue| (!queue.is_empty()).then(|| queue.remove(0)));
+    if next.is_none() {
+        running.remove(thread_id);
+        queues.remove(thread_id);
+    }
+    next
+}
+
+async fn close_running_turn_claim(
+    running_turns: &Mutex<HashMap<String, RunningTurn>>,
+    steering: &Mutex<HashMap<String, Vec<PreparedInput>>>,
+    thread_id: &str,
+    turn_id: &str,
+) {
+    let mut running = running_turns.lock().await;
+    let mut queues = steering.lock().await;
+    if running
+        .get(thread_id)
+        .is_some_and(|running| running.turn_id == turn_id)
+    {
+        running.remove(thread_id);
+        queues.remove(thread_id);
+    }
 }
 
 struct PendingApproval {
@@ -140,6 +200,8 @@ pub struct CliDeveloperSessionHost {
     steering: Arc<Mutex<HashMap<String, Vec<PreparedInput>>>>,
     pending_approvals: Arc<Mutex<HashMap<String, PendingApproval>>>,
     notifications: broadcast::Sender<AppServerNotification>,
+    shutdown_started: Arc<AtomicBool>,
+    lifecycle: Arc<RwLock<()>>,
 }
 
 impl CliDeveloperSessionHost {
@@ -174,7 +236,19 @@ impl CliDeveloperSessionHost {
             steering: Arc::new(Mutex::new(HashMap::new())),
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             notifications,
+            shutdown_started: Arc::new(AtomicBool::new(false)),
+            lifecycle: Arc::new(RwLock::new(())),
         })
+    }
+
+    async fn admit_request(&self) -> Result<RwLockReadGuard<'_, ()>, DeveloperSessionHostError> {
+        let guard = self.lifecycle.read().await;
+        if self.shutdown_started.load(Ordering::Acquire) {
+            return Err(DeveloperSessionHostError::unavailable(
+                "The app-server is shutting down",
+            ));
+        }
+        Ok(guard)
     }
 
     pub fn capabilities(&self) -> AppServerCapabilities {
@@ -247,24 +321,28 @@ impl CliDeveloperSessionHost {
 
     async fn build_agent(
         &self,
-        model: &str,
         managed_session: ManagedSession,
         path: PathBuf,
     ) -> Result<Arc<Mutex<AgentSession>>, DeveloperSessionHostError> {
-        let system_context = context::gather_system_context();
-        let provider_override = models::selection_provider_override(
-            model,
-            &self.config.default.model,
-            &self.config.default.provider,
-            None,
-        );
-        let mut agent = AgentSession::new_checked(model, &system_context, None, provider_override)
+        let model = managed_session.require_model().map_err(invalid_request)?;
+        let authority = managed_session
+            .require_routing_authority()
             .map_err(invalid_request)?;
+        let system_context = context::gather_system_context();
+        let mut agent = AgentSession::new_checked(
+            model,
+            &system_context,
+            None,
+            Some(authority.provider.as_str()),
+        )
+        .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
         if !managed_session.messages.is_empty() {
             agent.messages = managed_session.messages.clone();
         }
-        agent.adopt_managed_session(managed_session, path);
+        agent
+            .adopt_managed_session(managed_session, path)
+            .map_err(invalid_request)?;
         agent.quiet = true;
 
         Ok(Arc::new(Mutex::new(agent)))
@@ -281,7 +359,16 @@ impl CliDeveloperSessionHost {
 
         self.emit("mcp/loading", serde_json::json!({ "threadId": thread_id }));
         let notifications = self.notifications.clone();
+        let shutdown_started = self.shutdown_started.clone();
+        let lifecycle = self.lifecycle.clone();
         tokio::spawn(async move {
+            // Discovery may launch MCP subprocesses, so it participates in the
+            // same admission barrier as requests. Shutdown either waits for
+            // this whole pipeline or prevents it from starting.
+            let _admission = lifecycle.read().await;
+            if shutdown_started.load(Ordering::Acquire) {
+                return;
+            }
             let privacy_mode = session.lock().await.privacy_mode;
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
@@ -295,7 +382,11 @@ impl CliDeveloperSessionHost {
             .await;
 
             let (method, message) = match result {
-                Ok(Ok(Some(manager))) => {
+                Ok(Ok(Some(mut manager))) => {
+                    if shutdown_started.load(Ordering::Acquire) {
+                        manager.shutdown_all().await;
+                        return;
+                    }
                     session.lock().await.set_mcp_manager(manager);
                     ("mcp/ready", None)
                 }
@@ -314,6 +405,9 @@ impl CliDeveloperSessionHost {
                     )),
                 ),
             };
+            if shutdown_started.load(Ordering::Acquire) {
+                return;
+            }
             if let Ok(notification) = AppServerNotification::new(
                 method,
                 serde_json::json!({
@@ -352,14 +446,7 @@ impl CliDeveloperSessionHost {
             ));
         }
         self.validate_session_workspace(&resolved.1)?;
-        let model = resolved
-            .1
-            .model
-            .clone()
-            .unwrap_or_else(|| self.config.default.model.clone());
-        let agent = self
-            .build_agent(&model, resolved.1, resolved.0.path)
-            .await?;
+        let agent = self.build_agent(resolved.1, resolved.0.path).await?;
 
         let (session, inserted) = {
             let mut sessions = self.sessions.lock().await;
@@ -434,17 +521,69 @@ impl CliDeveloperSessionHost {
     }
 
     async fn thread_summary(&self, summary: ManagedSessionSummary) -> ThreadSummary {
+        let compatible_authority = summary.routing_authority.as_ref().filter(|authority| {
+            summary.model.as_deref().is_some_and(|model| {
+                crate::agent::resolve_persisted_session_provider(
+                    model,
+                    authority,
+                    &summary.session_id,
+                )
+                .is_ok()
+            })
+        });
+        let projected_model = summary
+            .auto_routing
+            .as_ref()
+            .filter(|state| {
+                agiworkforce_model_registry::is_auto_routing_selection(&state.selection)
+                    && compatible_authority.is_some_and(|authority| {
+                        matches!(
+                            (authority.privacy_mode, state.trust_mode),
+                            (
+                                crate::agent::PrivacyMode::Local,
+                                agiworkforce_model_registry::TrustMode::Local
+                                    | agiworkforce_model_registry::TrustMode::OnDevice
+                            ) | (
+                                crate::agent::PrivacyMode::Byok,
+                                agiworkforce_model_registry::TrustMode::Byok
+                            ) | (
+                                crate::agent::PrivacyMode::Managed,
+                                agiworkforce_model_registry::TrustMode::ManagedCloud
+                            )
+                        )
+                    })
+            })
+            .map(|state| state.selection.clone())
+            .or_else(|| summary.model.clone());
+        let (trust_mode, provider) = match compatible_authority {
+            Some(authority) => (
+                match authority.privacy_mode {
+                    crate::agent::PrivacyMode::Local => DeveloperSessionTrustMode::Local,
+                    crate::agent::PrivacyMode::Byok => DeveloperSessionTrustMode::Byok,
+                    crate::agent::PrivacyMode::Managed => DeveloperSessionTrustMode::Managed,
+                },
+                Some(
+                    authority
+                        .validated_provider()
+                        .expect("compatible authority was validated")
+                        .to_string(),
+                ),
+            ),
+            None => (DeveloperSessionTrustMode::Unknown, None),
+        };
         ThreadSummary {
             id: summary.session_id.clone(),
             title: summary
                 .title
                 .clone()
                 .unwrap_or_else(|| "Untitled developer session".to_string()),
-            model: summary.model.clone(),
+            model: projected_model,
             cwd: summary
                 .workspace_root
                 .as_ref()
                 .map(|path| path.display().to_string()),
+            provider,
+            trust_mode,
             created_at: summary.created_at.to_rfc3339(),
             updated_at: summary.updated_at.to_rfc3339(),
             created_by: source_from_stored(summary.created_by.as_deref()),
@@ -460,24 +599,55 @@ impl CliDeveloperSessionHost {
         &self,
         input: Vec<UserInput>,
     ) -> Result<PreparedInput, DeveloperSessionHostError> {
+        if input.len() > MAX_USER_INPUT_ITEMS_PER_TURN {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "A turn can contain at most {MAX_USER_INPUT_ITEMS_PER_TURN} input items"
+            )));
+        }
         let mut text_parts = Vec::new();
         let mut images = Vec::new();
+        let mut text_chars = 0usize;
+        let mut text_bytes = 0usize;
+        let mut image_count = 0usize;
+        let mut image_bytes = 0usize;
 
         for item in input {
             match item {
-                UserInput::Text { text, .. } => text_parts.push(text),
+                UserInput::Text { text, .. } => {
+                    push_bounded_text_part(&mut text_parts, text, &mut text_chars, &mut text_bytes)?
+                }
                 UserInput::Image { image_url } => {
-                    images.push(content_block_from_data_url(&image_url)?);
+                    ensure_image_slot(image_count)?;
+                    let (image, decoded_bytes) = content_block_from_data_url(&image_url)?;
+                    reserve_image_bytes(image_bytes, decoded_bytes)?;
+                    image_count += 1;
+                    image_bytes += decoded_bytes;
+                    images.push(image);
                 }
                 UserInput::LocalImage { path } => {
-                    images.push(self.content_block_from_local_image(&path)?);
+                    ensure_image_slot(image_count)?;
+                    let (image, decoded_bytes) = self.content_block_from_local_image(&path)?;
+                    reserve_image_bytes(image_bytes, decoded_bytes)?;
+                    image_count += 1;
+                    image_bytes += decoded_bytes;
+                    images.push(image);
                 }
-                UserInput::Skill { name, path } => text_parts.push(format!(
-                    "Use the explicitly selected skill `{name}` at `{}`.",
-                    path.display()
-                )),
+                UserInput::Skill { name, path } => push_bounded_text_part(
+                    &mut text_parts,
+                    format!(
+                        "Use the explicitly selected skill `{name}` at `{}`.",
+                        path.display()
+                    ),
+                    &mut text_chars,
+                    &mut text_bytes,
+                )?,
                 UserInput::Mention { name, path } => {
-                    text_parts.push(format!("Use the selected context `{name}` ({path})."));
+                    push_bounded_text_part(
+                        &mut text_parts,
+                        format!("Use the selected context `{name}` ({path})."),
+                        &mut text_chars,
+                        &mut text_bytes,
+                    )?;
                 }
                 #[allow(unreachable_patterns)]
                 _ => {
@@ -500,7 +670,7 @@ impl CliDeveloperSessionHost {
     fn content_block_from_local_image(
         &self,
         path: &Path,
-    ) -> Result<ContentBlock, DeveloperSessionHostError> {
+    ) -> Result<(ContentBlock, usize), DeveloperSessionHostError> {
         let canonical = path.canonicalize().map_err(invalid_request)?;
         if !canonical.starts_with(&self.workspace_root) {
             return Err(DeveloperSessionHostError::invalid_request(format!(
@@ -509,6 +679,12 @@ impl CliDeveloperSessionHost {
                 self.workspace_root.display()
             )));
         }
+        let metadata = std::fs::metadata(&canonical).map_err(invalid_request)?;
+        if metadata.len() > MAX_IMAGE_INPUT_BYTES as u64 {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Local image input exceeds the 10 MB limit",
+            ));
+        }
         let bytes = std::fs::read(&canonical).map_err(invalid_request)?;
         let encoded = agiworkforce_utils_image::load_for_prompt_bytes(
             &canonical,
@@ -516,10 +692,19 @@ impl CliDeveloperSessionHost {
             agiworkforce_utils_image::PromptImageMode::ResizeToFit,
         )
         .map_err(invalid_request)?;
-        Ok(ContentBlock::Image {
-            mime: encoded.mime,
-            data_b64: base64::engine::general_purpose::STANDARD.encode(encoded.bytes),
-        })
+        if encoded.bytes.len() > MAX_IMAGE_INPUT_BYTES {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Local image input exceeds the 10 MB limit after processing",
+            ));
+        }
+        let decoded_bytes = encoded.bytes.len();
+        Ok((
+            ContentBlock::Image {
+                mime: encoded.mime,
+                data_b64: base64::engine::general_purpose::STANDARD.encode(encoded.bytes),
+            },
+            decoded_bytes,
+        ))
     }
 
     fn emit(&self, method: &str, params: serde_json::Value) {
@@ -732,7 +917,12 @@ fn registry_task_type(
 
 #[async_trait]
 impl DeveloperSessionHost for CliDeveloperSessionHost {
+    fn server_version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
+
     async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         let probes = crate::local_models::discover_all(&self.config).await;
         let models = crate::local_models::discovered_models(&probes)
             .into_iter()
@@ -756,6 +946,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadStartParams,
         client: AppServerClientInfo,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let requested_model = params
             .model
@@ -768,12 +959,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let source = source_from_client(&client);
 
         let system_context = context::gather_system_context();
-        let provider_override = models::selection_provider_override(
-            &model,
-            &self.config.default.model,
-            &self.config.default.provider,
-            requested_provider,
-        );
+        let provider_override = if resolved_model.auto_routing.as_ref().is_some_and(|state| {
+            state.trust_mode == agiworkforce_model_registry::TrustMode::ManagedCloud
+        }) {
+            // Auto resolves to an upstream provider model ID, but Managed
+            // sessions must retain the AGI gateway as their provider/trust
+            // authority. Detecting from the concrete model here would silently
+            // turn Managed Auto into a direct BYOK route.
+            Some("managed_cloud")
+        } else {
+            models::selection_provider_override(
+                &model,
+                &self.config.default.model,
+                &self.config.default.provider,
+                requested_provider,
+            )
+        };
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
@@ -784,6 +985,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ManagedSession::with_messages(id.clone(), chrono::Utc::now(), agent.messages.clone());
         managed.title = title;
         managed.model = Some(model.clone());
+        managed.routing_authority = Some(agent.current_routing_authority());
         managed.auto_routing = resolved_model.auto_routing;
         managed.fallback_model_ids = (!resolved_model.fallback_model_ids.is_empty())
             .then_some(resolved_model.fallback_model_ids);
@@ -795,7 +997,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await
             .map_err(internal_error)?
             .map_err(internal_error)?;
-        agent.adopt_managed_session(managed, path);
+        agent
+            .adopt_managed_session(managed, path)
+            .map_err(invalid_request)?;
         let session = Arc::new(Mutex::new(agent));
         self.sessions
             .lock()
@@ -820,6 +1024,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: ThreadListParams,
     ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let store = self.store.clone();
         let mut summaries = tokio::task::spawn_blocking(move || store.list())
@@ -871,6 +1076,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: ThreadIdParams,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.load_agent(&params.thread_id).await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
@@ -887,6 +1093,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: ThreadIdParams,
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let (resolved, session) = tokio::task::spawn_blocking(move || {
@@ -899,18 +1106,45 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(internal_error)?
         .map_err(not_found_error)?;
         self.validate_session_workspace(&session)?;
-        let messages = session
+        let eligible_count = session
             .messages
             .iter()
             .filter(|message| !message.role.eq_ignore_ascii_case("system"))
-            .map(|message| DeveloperMessage {
+            .count();
+        let mut messages_newest_first = Vec::new();
+        let mut serialized_bytes = 2usize; // JSON array brackets.
+        let mut transcript_truncated = false;
+        for message in session
+            .messages
+            .iter()
+            .rev()
+            .filter(|message| !message.role.eq_ignore_ascii_case("system"))
+        {
+            let projected = DeveloperMessage {
                 role: message.role.clone(),
                 text: message.text_content(),
-            })
-            .collect();
+            };
+            let projected_bytes = serde_json::to_vec(&projected)
+                .map_err(internal_error)?
+                .len();
+            let separator_bytes = usize::from(!messages_newest_first.is_empty());
+            if serialized_bytes
+                .checked_add(separator_bytes)
+                .and_then(|total| total.checked_add(projected_bytes))
+                .is_none_or(|total| total > MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES)
+            {
+                transcript_truncated = true;
+                continue;
+            }
+            serialized_bytes += separator_bytes + projected_bytes;
+            messages_newest_first.push(projected);
+        }
+        messages_newest_first.reverse();
+        transcript_truncated |= messages_newest_first.len() != eligible_count;
         Ok(ThreadReadResponse {
             thread: self.resolved_summary(resolved).await,
-            messages,
+            messages: messages_newest_first,
+            transcript_truncated,
         })
     }
 
@@ -919,6 +1153,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadForkParams,
         client: AppServerClientInfo,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.validate_thread_ownership(&params.thread_id).await?;
         if self
             .running_turns
@@ -956,6 +1191,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: ThreadIdParams,
     ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.validate_thread_ownership(&params.thread_id).await?;
         if self
             .running_turns
@@ -978,6 +1214,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(not_found_error)?;
         let removed = self.sessions.lock().await.remove(&id_for_event);
         if let Some(session) = removed {
+            let memory_consolidation_tasks = session.lock().await.take_memory_consolidation_tasks();
+            abort_and_join_tasks(memory_consolidation_tasks).await;
             let session = session.lock().await;
             if let Err(error) = session.finalize_memory(self.config.as_ref()).await {
                 crate::output::print_warn(&format!(
@@ -1004,6 +1242,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: TurnStartParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let context_files =
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
@@ -1047,7 +1286,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     )?;
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
-                    agent.switch_model(model).map_err(invalid_request)?;
+                    if model != agent.model {
+                        if agent.privacy_mode == crate::agent::PrivacyMode::Managed {
+                            agent.switch_managed_model(model).map_err(invalid_request)?;
+                        } else {
+                            agent.switch_model(model).map_err(invalid_request)?;
+                        }
+                    }
                     agent.fallback_chain = None;
                     agent.set_managed_auto_routing(None);
                 }
@@ -1064,6 +1309,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         )));
                     }
                 }
+                agent.validate_privacy_boundary().map_err(invalid_request)?;
                 Ok(())
             })();
             if let Err(error) = setup_result {
@@ -1086,8 +1332,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
         let task_event_sequence = Arc::new(StdMutex::new(0_u64));
-        let handle = tokio::spawn(async move {
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
             if start_receiver.await.is_err() {
+                close_running_turn_claim(
+                    task_running.as_ref(),
+                    task_steering.as_ref(),
+                    &task_thread_id,
+                    &task_turn_id,
+                )
+                .await;
                 return;
             }
             let mut next_input = Some(prepared);
@@ -1178,17 +1432,26 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     Err(error) => {
                         final_status = TurnStatus::Failed;
                         final_error = Some(format!("{error:#}"));
+                        drop(agent);
+                        close_running_turn_claim(
+                            task_running.as_ref(),
+                            task_steering.as_ref(),
+                            &task_thread_id,
+                            &task_turn_id,
+                        )
+                        .await;
                         break;
                     }
                 }
                 drop(agent);
 
-                next_input = {
-                    let mut steering = task_steering.lock().await;
-                    steering
-                        .get_mut(&task_thread_id)
-                        .and_then(|queue| (!queue.is_empty()).then(|| queue.remove(0)))
-                };
+                next_input = take_steered_input_or_close(
+                    task_running.as_ref(),
+                    task_steering.as_ref(),
+                    &task_thread_id,
+                    &task_turn_id,
+                )
+                .await;
             }
 
             let pending_ids = {
@@ -1269,9 +1532,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ) {
                 let _ = task_notifications.send(notification);
             }
-            task_steering.lock().await.remove(&task_thread_id);
-            task_running.lock().await.remove(&task_thread_id);
-        });
+        }));
 
         running_turns.insert(
             thread_id.clone(),
@@ -1279,6 +1540,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 turn_id: turn_id.clone(),
                 handle,
                 partial,
+                process_owner,
             },
         );
         drop(running_turns);
@@ -1306,6 +1568,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: TurnSteerParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         let prepared = self.prepare_input(params.input)?;
         let running = self.running_turns.lock().await;
         let Some(turn) = running.get(&params.thread_id) else {
@@ -1325,13 +1588,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let turn_id = params
             .expected_turn_id
             .unwrap_or_else(|| turn.turn_id.clone());
+        let mut steering = self.steering.lock().await;
+        let queue = steering.entry(params.thread_id.clone()).or_default();
+        if queue.len() >= MAX_STEER_QUEUE_DEPTH {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "The active turn already has {MAX_STEER_QUEUE_DEPTH} queued follow-ups; wait for one to be processed"
+            )));
+        }
+        queue.push(prepared);
+        drop(steering);
         drop(running);
-        self.steering
-            .lock()
-            .await
-            .entry(params.thread_id.clone())
-            .or_default()
-            .push(prepared);
         self.emit(
             "turn/steered",
             serde_json::json!({ "threadId": params.thread_id, "turnId": turn_id }),
@@ -1347,6 +1613,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: TurnInterruptParams,
     ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         let mut running_turns = self.running_turns.lock().await;
         let Some(active) = running_turns.get(&params.thread_id) else {
             return Err(DeveloperSessionHostError::not_found(
@@ -1362,20 +1629,33 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .remove(&params.thread_id)
             .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?;
         drop(running_turns);
+        let process_owner = running.process_owner;
         running.handle.abort();
         let _ = running.handle.await;
+        let (subagent_manager, memory_consolidation_tasks) =
+            if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
+                let mut session = session.lock().await;
+                (
+                    session.take_subagent_manager(),
+                    session.take_memory_consolidation_tasks(),
+                )
+            } else {
+                (None, Vec::new())
+            };
+        abort_and_join_tasks(memory_consolidation_tasks).await;
+        if let Some(manager) = subagent_manager {
+            manager.shutdown_all().await;
+        }
+        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
+            &[process_owner],
+            PROCESS_TREE_SHUTDOWN_TIMEOUT,
+        )
+        .await
+        .err();
         self.steering.lock().await.remove(&params.thread_id);
         self.cancel_pending_approvals(&params.turn_id).await;
 
-        if let Ok(notification) = task_state_notification(
-            params.turn_id.clone(),
-            AgentTaskState::Cancelled,
-            Some(AgentTaskState::Running),
-            Some("Agent work was cancelled.".to_string()),
-        ) {
-            let _ = self.notifications.send(notification);
-        }
-
+        let mut persist_error = None;
         if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
             let partial = match running.partial.lock() {
                 Ok(partial) => partial.clone(),
@@ -1383,7 +1663,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             };
             let mut session = session.lock().await;
             session.finalize_cancelled_turn(&partial);
-            session.persist_managed_session().map_err(internal_error)?;
+            persist_error = session.persist_managed_session().err();
+        }
+        if let Some(error) = process_shutdown_error {
+            return Err(internal_error(error));
+        }
+        if let Some(error) = persist_error {
+            return Err(internal_error(error));
+        }
+        if let Ok(notification) = task_state_notification(
+            params.turn_id.clone(),
+            AgentTaskState::Cancelled,
+            Some(AgentTaskState::Running),
+            Some("Agent work was cancelled.".to_string()),
+        ) {
+            let _ = self.notifications.send(notification);
         }
         self.emit(
             "turn/interrupted",
@@ -1400,6 +1694,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: ApprovalResponseParams,
     ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
         let mut approvals = self.pending_approvals.lock().await;
         let Some(pending) = approvals.get(&params.request_id) else {
             return Err(DeveloperSessionHostError::not_found(
@@ -1425,8 +1720,113 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             })
     }
 
+    async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
+        // Flip admission before waiting for the exclusive lifecycle guard so a
+        // queued WebSocket request cannot slip in behind shutdown.
+        self.shutdown_started.store(true, Ordering::Release);
+        let _exclusive = self.lifecycle.write().await;
+
+        let running_turns = {
+            let mut running = self.running_turns.lock().await;
+            std::mem::take(&mut *running)
+        };
+        self.steering.lock().await.clear();
+
+        let pending_approvals = {
+            let mut pending = self.pending_approvals.lock().await;
+            std::mem::take(&mut *pending)
+        };
+        for approval in pending_approvals.into_values() {
+            let _ = approval.responder.send(ApprovalDecision::Cancel);
+        }
+
+        let process_owners = running_turns
+            .values()
+            .map(|running| running.process_owner)
+            .collect::<Vec<_>>();
+        for running in running_turns.values() {
+            running.handle.abort();
+        }
+
+        let mut cancelled_turns = Vec::with_capacity(running_turns.len());
+        for (thread_id, running) in running_turns {
+            let _ = running.handle.await;
+            cancelled_turns.push((thread_id, running.turn_id, running.partial));
+        }
+
+        let sessions = self
+            .sessions
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut mcp_managers = Vec::new();
+        let mut subagent_managers = Vec::new();
+        let mut memory_consolidation_tasks = Vec::new();
+        for session in &sessions {
+            let mut session = session.lock().await;
+            if let Some(manager) = session.take_mcp_manager() {
+                mcp_managers.push(manager);
+            }
+            if let Some(manager) = session.take_subagent_manager() {
+                subagent_managers.push(manager);
+            }
+            memory_consolidation_tasks.extend(session.take_memory_consolidation_tasks());
+        }
+        abort_and_join_tasks(memory_consolidation_tasks).await;
+        for manager in subagent_managers {
+            manager.shutdown_all().await;
+        }
+
+        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
+            &process_owners,
+            PROCESS_TREE_SHUTDOWN_TIMEOUT,
+        )
+        .await
+        .err();
+
+        let mut first_persist_error = None;
+        for (thread_id, _turn_id, partial) in cancelled_turns {
+            let Some(session) = self.sessions.lock().await.get(&thread_id).cloned() else {
+                continue;
+            };
+            let partial = match partial.lock() {
+                Ok(partial) => partial.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
+            let mut session = session.lock().await;
+            session.finalize_cancelled_turn(&partial);
+            if let Err(error) = session.persist_managed_session() {
+                first_persist_error.get_or_insert(error);
+            }
+        }
+
+        for mut manager in mcp_managers {
+            manager.shutdown_all().await;
+        }
+        self.sessions.lock().await.clear();
+
+        if let Some(error) = process_shutdown_error {
+            return Err(internal_error(error));
+        }
+        if let Some(error) = first_persist_error {
+            return Err(internal_error(error));
+        }
+        Ok(())
+    }
+
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.notifications.subscribe()
+    }
+}
+
+async fn abort_and_join_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) {
+    for task in &tasks {
+        task.abort();
+    }
+    for task in tasks {
+        let _ = task.await;
     }
 }
 
@@ -1627,14 +2027,92 @@ fn classify_tool_category(name: &str) -> AgentEventToolCategory {
     }
 }
 
-fn content_block_from_data_url(image_url: &str) -> Result<ContentBlock, DeveloperSessionHostError> {
+fn push_bounded_text_part(
+    parts: &mut Vec<String>,
+    part: String,
+    total_chars: &mut usize,
+    total_bytes: &mut usize,
+) -> Result<(), DeveloperSessionHostError> {
+    let separator_units = usize::from(!parts.is_empty()) * 2;
+    let next_chars = total_chars
+        .checked_add(separator_units)
+        .and_then(|total| total.checked_add(part.chars().count()))
+        .ok_or_else(|| {
+            DeveloperSessionHostError::invalid_request("Turn text input is too large")
+        })?;
+    let next_bytes = total_bytes
+        .checked_add(separator_units)
+        .and_then(|total| total.checked_add(part.len()))
+        .ok_or_else(|| {
+            DeveloperSessionHostError::invalid_request("Turn text input is too large")
+        })?;
+    if next_chars > MAX_USER_INPUT_TEXT_CHARS || next_bytes > MAX_USER_INPUT_TEXT_BYTES {
+        return Err(DeveloperSessionHostError::invalid_request(format!(
+            "Combined turn text exceeds the {MAX_USER_INPUT_TEXT_CHARS} character limit"
+        )));
+    }
+    *total_chars = next_chars;
+    *total_bytes = next_bytes;
+    parts.push(part);
+    Ok(())
+}
+
+fn ensure_image_slot(image_count: usize) -> Result<(), DeveloperSessionHostError> {
+    if image_count >= MAX_IMAGE_INPUTS_PER_TURN {
+        return Err(DeveloperSessionHostError::invalid_request(format!(
+            "A turn can contain at most {MAX_IMAGE_INPUTS_PER_TURN} images"
+        )));
+    }
+    Ok(())
+}
+
+fn reserve_image_bytes(
+    current_bytes: usize,
+    additional_bytes: usize,
+) -> Result<(), DeveloperSessionHostError> {
+    if current_bytes
+        .checked_add(additional_bytes)
+        .is_none_or(|total| total > MAX_TOTAL_IMAGE_INPUT_BYTES)
+    {
+        return Err(DeveloperSessionHostError::invalid_request(format!(
+            "Combined image input exceeds the {MAX_TOTAL_IMAGE_INPUT_BYTES} byte limit"
+        )));
+    }
+    Ok(())
+}
+
+fn content_block_from_data_url(
+    image_url: &str,
+) -> Result<(ContentBlock, usize), DeveloperSessionHostError> {
+    if image_url.len() > MAX_IMAGE_DATA_URL_HEADER_BYTES + 1 + MAX_IMAGE_INPUT_ENCODED_BYTES {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Encoded image input exceeds the 10 MB limit",
+        ));
+    }
     let (header, data) = image_url.split_once(',').ok_or_else(|| {
         DeveloperSessionHostError::invalid_request("Image input must be a base64 data URL")
     })?;
+    if header.len() > MAX_IMAGE_DATA_URL_HEADER_BYTES {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Image data URL header is too large",
+        ));
+    }
+    if data.len() > MAX_IMAGE_INPUT_ENCODED_BYTES {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Encoded image input exceeds the 10 MB limit",
+        ));
+    }
     let mime = header
         .strip_prefix("data:")
         .and_then(|header| header.strip_suffix(";base64"))
-        .filter(|mime| mime.starts_with("image/"))
+        .filter(|mime| {
+            mime.starts_with("image/")
+                && mime.len() <= MAX_IMAGE_MIME_BYTES
+                && mime.len() > "image/".len()
+                && !mime.chars().any(|character| {
+                    character.is_ascii_control() || character.is_ascii_whitespace()
+                })
+        })
         .ok_or_else(|| {
             DeveloperSessionHostError::invalid_request(
                 "Image input must use data:image/<type>;base64,...",
@@ -1648,10 +2126,14 @@ fn content_block_from_data_url(image_url: &str) -> Result<ContentBlock, Develope
             "Image input exceeds the 10 MB limit",
         ));
     }
-    Ok(ContentBlock::Image {
-        mime: mime.to_string(),
-        data_b64: data.to_string(),
-    })
+    let decoded_bytes = decoded.len();
+    Ok((
+        ContentBlock::Image {
+            mime: mime.to_string(),
+            data_b64: data.to_string(),
+        },
+        decoded_bytes,
+    ))
 }
 
 fn apply_agent_controls(
@@ -1710,7 +2192,15 @@ fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
 
 fn clean_title(title: Option<String>) -> Option<String> {
     title
-        .map(|title| title.trim().chars().take(200).collect::<String>())
+        .map(|title| {
+            title
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(200)
+                .collect::<String>()
+        })
         .filter(|title| !title.is_empty())
 }
 
@@ -1757,7 +2247,15 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
     use tempfile::tempdir;
+
+    fn text_input(text: &str) -> UserInput {
+        UserInput::Text {
+            text: text.to_string(),
+            text_elements: Vec::new(),
+        }
+    }
 
     fn test_agent() -> AgentSession {
         let context = context::SystemContext {
@@ -1807,6 +2305,574 @@ mod tests {
         assert!(agent.skip_permissions);
     }
 
+    #[tokio::test]
+    async fn steer_enqueued_before_close_is_drained_by_the_running_turn() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let thread_id = "thread-steer-before-close".to_string();
+        let turn_id = "turn-steer-before-close".to_string();
+        host.running_turns.lock().await.insert(
+            thread_id.clone(),
+            RunningTurn {
+                turn_id: turn_id.clone(),
+                handle: tokio::spawn(async {}),
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+
+        host.steer_turn(TurnSteerParams {
+            thread_id: thread_id.clone(),
+            input: vec![text_input("follow-up")],
+            expected_turn_id: Some(turn_id.clone()),
+        })
+        .await
+        .expect("steer accepted before close");
+
+        let next = take_steered_input_or_close(
+            host.running_turns.as_ref(),
+            host.steering.as_ref(),
+            &thread_id,
+            &turn_id,
+        )
+        .await
+        .expect("accepted steer must be drained");
+        assert_eq!(next.text, "follow-up");
+        assert!(host.running_turns.lock().await.contains_key(&thread_id));
+
+        assert!(
+            take_steered_input_or_close(
+                host.running_turns.as_ref(),
+                host.steering.as_ref(),
+                &thread_id,
+                &turn_id,
+            )
+            .await
+            .is_none()
+        );
+        assert!(!host.running_turns.lock().await.contains_key(&thread_id));
+    }
+
+    #[tokio::test]
+    async fn steer_after_atomic_close_is_rejected_instead_of_dropped() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let thread_id = "thread-close-before-steer".to_string();
+        let turn_id = "turn-close-before-steer".to_string();
+        host.running_turns.lock().await.insert(
+            thread_id.clone(),
+            RunningTurn {
+                turn_id: turn_id.clone(),
+                handle: tokio::spawn(async {}),
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+
+        assert!(
+            take_steered_input_or_close(
+                host.running_turns.as_ref(),
+                host.steering.as_ref(),
+                &thread_id,
+                &turn_id,
+            )
+            .await
+            .is_none()
+        );
+        let error = host
+            .steer_turn(TurnSteerParams {
+                thread_id: thread_id.clone(),
+                input: vec![text_input("too late")],
+                expected_turn_id: Some(turn_id),
+            })
+            .await
+            .expect_err("late steer must conflict");
+        assert!(error.to_string().contains("No running turn"));
+        assert!(!host.steering.lock().await.contains_key(&thread_id));
+    }
+
+    #[tokio::test]
+    async fn steer_queue_is_bounded_without_reordering_accepted_follow_ups() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let thread_id = "thread-bounded-steer-queue".to_string();
+        let turn_id = "turn-bounded-steer-queue".to_string();
+        host.running_turns.lock().await.insert(
+            thread_id.clone(),
+            RunningTurn {
+                turn_id: turn_id.clone(),
+                handle: tokio::spawn(async {}),
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+
+        for index in 0..MAX_STEER_QUEUE_DEPTH {
+            host.steer_turn(TurnSteerParams {
+                thread_id: thread_id.clone(),
+                input: vec![text_input(&format!("follow-up-{index}"))],
+                expected_turn_id: Some(turn_id.clone()),
+            })
+            .await
+            .expect("follow-up within queue budget");
+        }
+        let error = host
+            .steer_turn(TurnSteerParams {
+                thread_id: thread_id.clone(),
+                input: vec![text_input("overflow")],
+                expected_turn_id: Some(turn_id),
+            })
+            .await
+            .expect_err("queue overflow must be rejected");
+        assert_eq!(error.code(), -32009);
+
+        let steering = host.steering.lock().await;
+        let queued = steering.get(&thread_id).expect("accepted queue");
+        assert_eq!(queued.len(), MAX_STEER_QUEUE_DEPTH);
+        for (index, prepared) in queued.iter().enumerate() {
+            assert_eq!(prepared.text, format!("follow-up-{index}"));
+        }
+    }
+
+    #[test]
+    fn prepare_input_enforces_item_text_and_image_budgets() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+
+        let too_many_items = vec![text_input("x"); MAX_USER_INPUT_ITEMS_PER_TURN + 1];
+        assert!(
+            host.prepare_input(too_many_items)
+                .expect_err("item count must be bounded")
+                .to_string()
+                .contains("input items")
+        );
+
+        let too_much_text = vec![
+            text_input(&"x".repeat(MAX_USER_INPUT_TEXT_CHARS)),
+            text_input("y"),
+        ];
+        assert!(
+            host.prepare_input(too_much_text)
+                .expect_err("aggregate text must be bounded")
+                .to_string()
+                .contains("Combined turn text")
+        );
+
+        let too_many_images = (0..=MAX_IMAGE_INPUTS_PER_TURN)
+            .map(|_| UserInput::Image {
+                image_url: "data:image/png;base64,AA==".to_string(),
+            })
+            .collect();
+        assert!(
+            host.prepare_input(too_many_images)
+                .expect_err("image count must be bounded")
+                .to_string()
+                .contains("images")
+        );
+
+        assert!(reserve_image_bytes(MAX_TOTAL_IMAGE_INPUT_BYTES - 1, 1).is_ok());
+        assert!(reserve_image_bytes(MAX_TOTAL_IMAGE_INPUT_BYTES - 1, 2).is_err());
+    }
+
+    #[test]
+    fn image_inputs_are_size_checked_before_decode_or_file_read() {
+        let long_header = format!(
+            "data:image/{};base64,AA==",
+            "x".repeat(MAX_IMAGE_DATA_URL_HEADER_BYTES)
+        );
+        assert!(
+            content_block_from_data_url(&long_header)
+                .expect_err("oversized header must be rejected")
+                .to_string()
+                .contains("header")
+        );
+
+        let oversized_encoded = format!(
+            "data:image/png;base64,{}",
+            "A".repeat(MAX_IMAGE_INPUT_ENCODED_BYTES + 1)
+        );
+        assert!(
+            content_block_from_data_url(&oversized_encoded)
+                .expect_err("oversized base64 must be rejected before decode")
+                .to_string()
+                .contains("Encoded image")
+        );
+
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let image_path = workspace.path().join("oversized.png");
+        let file = std::fs::File::create(&image_path).expect("create sparse image");
+        file.set_len((MAX_IMAGE_INPUT_BYTES + 1) as u64)
+            .expect("extend sparse image");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        assert!(
+            host.content_block_from_local_image(&image_path)
+                .expect_err("oversized local image must be rejected before read")
+                .to_string()
+                .contains("10 MB")
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_unknown_authority_is_readable_but_resume_and_turn_fail_closed() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        let mut legacy = ManagedSession::with_messages(
+            "legacy-unknown",
+            chrono::Utc::now(),
+            vec![crate::models::Message::text("user", "inspectable history")],
+        );
+        legacy.version = 4;
+        legacy.model = Some(crate::model_catalog::default_model().to_string());
+        legacy.workspace_root = Some(workspace_root.clone());
+        legacy.created_by = Some("vscode".to_string());
+        store.save(&legacy).expect("save legacy session");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: legacy.session_id.clone(),
+            })
+            .await
+            .expect("legacy history remains readable");
+        assert_eq!(read.thread.trust_mode, DeveloperSessionTrustMode::Unknown);
+        assert_eq!(read.thread.provider, None);
+        assert_eq!(read.messages.len(), 1);
+        assert!(!read.transcript_truncated);
+
+        let resume_error = host
+            .resume_thread(ThreadIdParams {
+                thread_id: legacy.session_id.clone(),
+            })
+            .await
+            .expect_err("unknown authority must not resume");
+        assert!(
+            resume_error
+                .to_string()
+                .contains("unknown routing authority")
+        );
+
+        let turn_error = host
+            .start_turn(TurnStartParams {
+                thread_id: legacy.session_id,
+                input: vec![text_input("must not route")],
+                model: None,
+                routing_task_type: None,
+                cwd: None,
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+            })
+            .await
+            .expect_err("unknown authority must not start a turn");
+        assert!(turn_error.to_string().contains("unknown routing authority"));
+    }
+
+    #[tokio::test]
+    async fn thread_read_projects_newest_messages_under_the_jsonl_line_budget() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        let bounded_text = |index: usize| {
+            let marker = format!("message-{index}:");
+            format!(
+                "{marker}{}",
+                "x".repeat(
+                    crate::runtime::session::MANAGED_SESSION_MESSAGE_TEXT_MAX_UTF16 - marker.len()
+                )
+            )
+        };
+        let mut session = ManagedSession::with_messages(
+            "bounded-thread-read",
+            chrono::Utc::now(),
+            (0..4)
+                .map(|index| {
+                    crate::models::Message::text(
+                        if index % 2 == 0 { "user" } else { "assistant" },
+                        bounded_text(index),
+                    )
+                })
+                .collect(),
+        );
+        session.model = Some("llama3".to_string());
+        session.workspace_root = Some(workspace_root.clone());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "ollama".to_string(),
+        });
+        store.save(&session).expect("save bounded session");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: session.session_id,
+            })
+            .await
+            .expect("read bounded projection");
+        assert!(read.transcript_truncated);
+        assert_eq!(read.messages.len(), 3);
+        assert!(read.messages[0].text.starts_with("message-1:"));
+        assert!(read.messages[1].text.starts_with("message-2:"));
+        assert!(read.messages[2].text.starts_with("message-3:"));
+        assert!(serde_json::to_vec(&read).expect("serialize response").len() < 4 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn malicious_provider_authority_lists_and_reads_as_unknown_but_cannot_resume() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        let mut session = ManagedSession::with_messages(
+            "malicious-provider",
+            chrono::Utc::now(),
+            vec![crate::models::Message::text("user", "inspectable history")],
+        );
+        session.model = Some(crate::model_catalog::default_model().to_string());
+        session.workspace_root = Some(workspace_root.clone());
+        session.created_by = Some("vscode".to_string());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "anthropic".to_string(),
+        });
+        let path = store.save(&session).expect("save valid session");
+
+        // Simulate a user-edited JSONL header containing a C1 control. Serde
+        // accepts the escaped string, but it must not cross the protocol or be
+        // trusted for execution.
+        let persisted = std::fs::read_to_string(&path).expect("read session");
+        let (header, records) = persisted.split_once('\n').expect("JSONL header");
+        let mut header: serde_json::Value = serde_json::from_str(header).expect("parse header");
+        header["routing_authority"]["provider"] =
+            serde_json::Value::String("hostile\u{0085}provider".to_string());
+        std::fs::write(
+            &path,
+            format!(
+                "{}\n{}",
+                serde_json::to_string(&header).expect("serialize tampered header"),
+                records
+            ),
+        )
+        .expect("tamper provider authority");
+
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+        let listed = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("malformed entry must not break list");
+        assert_eq!(listed.threads.len(), 1);
+        assert_eq!(
+            listed.threads[0].trust_mode,
+            DeveloperSessionTrustMode::Unknown
+        );
+        assert_eq!(listed.threads[0].provider, None);
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: session.session_id.clone(),
+            })
+            .await
+            .expect("malformed entry remains inspectable");
+        assert_eq!(read.thread.trust_mode, DeveloperSessionTrustMode::Unknown);
+        assert_eq!(read.thread.provider, None);
+        assert_eq!(read.messages.len(), 1);
+
+        let resume_error = host
+            .resume_thread(ThreadIdParams {
+                thread_id: session.session_id,
+            })
+            .await
+            .expect_err("malformed authority must not resume");
+        assert!(
+            resume_error
+                .to_string()
+                .contains("invalid routing authority")
+        );
+    }
+
+    #[tokio::test]
+    async fn incompatible_provider_trust_tuple_lists_as_unknown_and_cannot_resume() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        let mut session = ManagedSession::new("incompatible-provider", chrono::Utc::now());
+        session.model = Some(crate::model_catalog::default_model().to_string());
+        session.workspace_root = Some(workspace_root.clone());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Managed,
+            provider: "anthropic".to_string(),
+        });
+        store.save(&session).expect("save incompatible session");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+
+        let listed = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("incompatible entry must not break list");
+        assert_eq!(listed.threads.len(), 1);
+        assert_eq!(
+            listed.threads[0].trust_mode,
+            DeveloperSessionTrustMode::Unknown
+        );
+        assert_eq!(listed.threads[0].provider, None);
+
+        let resume_error = host
+            .resume_thread(ThreadIdParams {
+                thread_id: session.session_id,
+            })
+            .await
+            .expect_err("incompatible authority must not resume");
+        assert!(
+            resume_error
+                .to_string()
+                .contains("incompatible managed trust")
+        );
+    }
+
+    #[tokio::test]
+    async fn local_authority_with_cloud_provider_lists_and_reads_unknown_and_cannot_resume() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        let cloud_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("Anthropic catalog model")
+            .id
+            .clone();
+        let mut session = ManagedSession::with_messages(
+            "local-authority-cloud-provider",
+            chrono::Utc::now(),
+            vec![crate::models::Message::text("user", "inspectable history")],
+        );
+        session.model = Some(cloud_model);
+        session.workspace_root = Some(workspace_root.clone());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "anthropic".to_string(),
+        });
+        store.save(&session).expect("save stale Local authority");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+
+        let listed = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("stale entry remains listable");
+        assert_eq!(listed.threads.len(), 1);
+        assert_eq!(
+            listed.threads[0].trust_mode,
+            DeveloperSessionTrustMode::Unknown
+        );
+        assert_eq!(listed.threads[0].provider, None);
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: session.session_id.clone(),
+            })
+            .await
+            .expect("stale history remains inspectable");
+        assert_eq!(read.thread.trust_mode, DeveloperSessionTrustMode::Unknown);
+        assert_eq!(read.thread.provider, None);
+        assert_eq!(read.messages.len(), 1);
+
+        let resume_error = host
+            .resume_thread(ThreadIdParams {
+                thread_id: session.session_id,
+            })
+            .await
+            .expect_err("Local authority must not resume a cloud provider");
+        assert!(
+            resume_error
+                .to_string()
+                .contains("incompatible local trust"),
+            "{resume_error}"
+        );
+    }
+
     #[test]
     fn developer_effort_uses_the_existing_session_thinking_budget() {
         let mut agent = test_agent();
@@ -1839,7 +2905,10 @@ mod tests {
         // ...but must stay distinct for the providers that read a string.
         assert_eq!(low.openai_effort_str(), "low");
         assert_eq!(medium.openai_effort_str(), "medium");
-        assert_ne!(low.gemini_thinking_budget(), medium.gemini_thinking_budget());
+        assert_ne!(
+            low.gemini_thinking_budget(),
+            medium.gemini_thinking_budget()
+        );
 
         apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max));
         let max = agent.effort.expect("effort retained");
@@ -2036,6 +3105,262 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn auto_selection_survives_restart_resume_and_the_next_typed_turn() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let mut config = CliConfig::default();
+        config.default.provider = "agiworkforce".to_string();
+        config.default.model = "auto-premium".to_string();
+        let host = CliDeveloperSessionHost::new_with_store(
+            config,
+            workspace.path().to_path_buf(),
+            store.clone(),
+            false,
+        )
+        .expect("managed Auto host");
+        let thread = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.path().display().to_string()),
+                    title: Some("Durable Auto route".to_string()),
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("start Auto thread");
+        assert_eq!(thread.model.as_deref(), Some("auto-premium"));
+        let persisted_before = store
+            .load(ManagedSessionReference::SessionId(thread.id.clone()))
+            .expect("persisted Auto session");
+        let original_auto = persisted_before
+            .auto_routing
+            .expect("persisted Auto routing state");
+        let concrete_model = persisted_before.model.expect("concrete provider model");
+        assert_ne!(concrete_model, original_auto.selection);
+        drop(host);
+
+        let mut changed_config = CliConfig::default();
+        changed_config.default.provider = "ollama".to_string();
+        changed_config.default.model = "llama3".to_string();
+        let restarted = CliDeveloperSessionHost::new_with_store(
+            changed_config,
+            workspace.path().to_path_buf(),
+            store.clone(),
+            false,
+        )
+        .expect("restarted host");
+        let resumed = restarted
+            .resume_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("resume Auto thread");
+        assert_eq!(resumed.model.as_deref(), Some("auto-premium"));
+        assert_eq!(resumed.trust_mode, DeveloperSessionTrustMode::Managed);
+
+        restarted
+            .start_turn(TurnStartParams {
+                thread_id: thread.id.clone(),
+                input: vec![text_input("solve 2 + 2 and explain the derivation")],
+                model: resumed.model,
+                routing_task_type: Some(DeveloperRoutingTaskType::Reasoning),
+                cwd: Some(workspace.path().display().to_string()),
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+            })
+            .await
+            .expect("next Auto turn");
+        if let Some(running) = restarted.running_turns.lock().await.remove(&thread.id) {
+            running.handle.abort();
+            let _ = running.handle.await;
+        }
+
+        let session = restarted
+            .sessions
+            .lock()
+            .await
+            .get(&thread.id)
+            .cloned()
+            .expect("resumed live session");
+        let mut agent = session.lock().await;
+        let continued = agent
+            .managed_auto_routing()
+            .expect("Auto routing must not be cleared by the next turn")
+            .clone();
+        assert_eq!(continued.selection, "auto-premium");
+        assert_eq!(continued.task_type, DeveloperRoutingTaskType::Reasoning);
+        assert_eq!(continued.trust_mode, original_auto.trust_mode);
+        agent
+            .persist_managed_session()
+            .expect("persist continued Auto routing state");
+        drop(agent);
+
+        let persisted_after = store
+            .load(ManagedSessionReference::SessionId(thread.id))
+            .expect("reload continued Auto session");
+        let persisted_auto = persisted_after
+            .auto_routing
+            .expect("durable Auto routing after next turn");
+        assert_eq!(persisted_auto.selection, "auto-premium");
+        assert_eq!(
+            persisted_auto.task_type,
+            DeveloperRoutingTaskType::Reasoning
+        );
+        assert_eq!(persisted_auto.trust_mode, original_auto.trust_mode);
+    }
+
+    #[tokio::test]
+    async fn invalid_persisted_auto_state_falls_back_to_the_concrete_model_projection() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let mut config = CliConfig::default();
+        config.default.provider = "agiworkforce".to_string();
+        config.default.model = "auto-premium".to_string();
+        let host = CliDeveloperSessionHost::new_with_store(
+            config,
+            workspace.path().to_path_buf(),
+            store.clone(),
+            false,
+        )
+        .expect("managed Auto host");
+        let thread = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.path().display().to_string()),
+                    title: None,
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("start Auto thread");
+        let mut persisted = store
+            .load(ManagedSessionReference::SessionId(thread.id.clone()))
+            .expect("load Auto session");
+        let concrete_model = persisted.model.clone().expect("concrete model");
+        persisted
+            .auto_routing
+            .as_mut()
+            .expect("Auto state")
+            .selection = "tampered-auto-profile".to_string();
+        store.save(&persisted).expect("save tampered Auto metadata");
+        drop(host);
+
+        let restarted = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            store,
+            false,
+        )
+        .expect("restarted host");
+        let resumed = restarted
+            .resume_thread(ThreadIdParams {
+                thread_id: thread.id,
+            })
+            .await
+            .expect("concrete route remains resumable");
+        assert_eq!(resumed.model.as_deref(), Some(concrete_model.as_str()));
+        assert_eq!(resumed.trust_mode, DeveloperSessionTrustMode::Managed);
+    }
+
+    #[tokio::test]
+    async fn managed_app_server_model_change_never_rebinds_existing_history_to_byok() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let mut config = CliConfig::default();
+        config.default.provider = "agiworkforce".to_string();
+        config.default.model = "auto-premium".to_string();
+        let host = CliDeveloperSessionHost::new_with_store(
+            config,
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store_dir.path().to_path_buf()),
+            false,
+        )
+        .expect("managed host");
+        let thread = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.path().display().to_string()),
+                    title: None,
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("Managed thread");
+        let session = host
+            .sessions
+            .lock()
+            .await
+            .get(&thread.id)
+            .cloned()
+            .expect("live session");
+        session
+            .lock()
+            .await
+            .messages
+            .push(crate::models::Message::text(
+                "user",
+                "managed-only transcript",
+            ));
+        let direct_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("Anthropic catalog model")
+            .id
+            .clone();
+
+        let result = host
+            .start_turn(TurnStartParams {
+                thread_id: thread.id.clone(),
+                input: vec![text_input("keep this behind the Managed gateway")],
+                model: Some(direct_model),
+                routing_task_type: None,
+                cwd: Some(workspace.path().display().to_string()),
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+            })
+            .await;
+        if result.is_ok() {
+            if let Some(running) = host.running_turns.lock().await.remove(&thread.id) {
+                running.handle.abort();
+                let _ = running.handle.await;
+            }
+        }
+
+        let agent = session.lock().await;
+        assert_eq!(agent.provider, Provider::ManagedCloud);
+        assert_eq!(agent.privacy_mode, crate::agent::PrivacyMode::Managed);
+        assert!(agent.validate_privacy_boundary().is_ok());
+        assert!(
+            agent
+                .messages
+                .iter()
+                .any(|message| message.text_content().contains("managed-only transcript"))
+        );
+    }
+
+    #[tokio::test]
     async fn approval_notifications_match_the_typed_client_and_resume_the_waiter() {
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let (notifications, mut receiver) = broadcast::channel(4);
@@ -2111,6 +3436,11 @@ mod tests {
             )
             .await
             .expect("thread");
+        assert_ne!(thread.trust_mode, DeveloperSessionTrustMode::Unknown);
+        assert!(thread.provider.is_some());
+        let persisted_trust = thread.trust_mode;
+        let persisted_provider = thread.provider.clone();
+        let persisted_model = thread.model.clone();
         let turn_id = "turn-interrupt-test".to_string();
         let partial = Arc::new(StdMutex::new("partial assistant response".to_string()));
         host.sessions
@@ -2124,12 +3454,14 @@ mod tests {
             .messages
             .push(crate::models::Message::text("user", "interrupt me"));
         let handle = tokio::spawn(std::future::pending::<()>());
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
         host.running_turns.lock().await.insert(
             thread.id.clone(),
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle,
                 partial,
+                process_owner,
             },
         );
         let mut notifications = host.subscribe();
@@ -2153,9 +3485,21 @@ mod tests {
         assert_eq!(interrupted.method, "turn/interrupted");
         assert_eq!(interrupted.params["turnId"], turn_id);
 
+        let mut restart_config = CliConfig::default();
+        restart_config.default.model = "llama3".to_string();
+        restart_config.default.provider = "ollama".to_string();
         let reloaded =
-            CliDeveloperSessionHost::new_with_store(CliConfig::default(), workspace, store, false)
+            CliDeveloperSessionHost::new_with_store(restart_config, workspace, store, false)
                 .expect("reloaded host");
+        let resumed = reloaded
+            .resume_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("resume persisted route after config changed");
+        assert_eq!(resumed.trust_mode, persisted_trust);
+        assert_eq!(resumed.provider, persisted_provider);
+        assert_eq!(resumed.model, persisted_model);
         let history = reloaded
             .read_thread(ThreadIdParams {
                 thread_id: thread.id,
@@ -2168,6 +3512,226 @@ mod tests {
                 .iter()
                 .any(|message| message.text.contains("partial assistant response"))
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn interrupt_kills_and_reaps_an_in_flight_command_tree() {
+        use nix::errno::Errno;
+        use nix::sys::signal::kill;
+        use nix::unistd::Pid;
+
+        let workspace = tempdir().expect("workspace");
+        let session_store = tempdir().expect("session store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(session_store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let sentinel = workspace.path().join("interrupt-sentinel");
+        let pid_file = workspace.path().join("interrupt-pids");
+        let script = format!(
+            "(sleep 0.7; printf leaked > {}) & worker=$!; printf '%s\\n%s\\n' \"$$\" \"$worker\" > {}; wait \"$worker\"",
+            crate::sandbox::shell_quote(&sentinel.to_string_lossy()),
+            crate::sandbox::shell_quote(&pid_file.to_string_lossy()),
+        );
+        let mut command = tokio::process::Command::new("sh");
+        command.arg("-c").arg(script);
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let _ = crate::process_tree::output(command, None, None).await;
+        }));
+
+        let start_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let process_ids = loop {
+            if let Ok(contents) = tokio::fs::read_to_string(&pid_file).await {
+                let process_ids = contents
+                    .lines()
+                    .filter_map(|line| line.parse::<i32>().ok())
+                    .collect::<Vec<_>>();
+                if process_ids.len() == 2 {
+                    break process_ids;
+                }
+            }
+            assert!(
+                tokio::time::Instant::now() < start_deadline,
+                "command did not publish its process IDs"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        };
+
+        let thread_id = "thread-command-interrupt".to_string();
+        let turn_id = "turn-command-interrupt".to_string();
+        host.running_turns.lock().await.insert(
+            thread_id.clone(),
+            RunningTurn {
+                turn_id: turn_id.clone(),
+                handle,
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner,
+            },
+        );
+        host.interrupt_turn(TurnInterruptParams { thread_id, turn_id })
+            .await
+            .expect("interrupt command turn");
+
+        let process_exists = |process_id| match kill(Pid::from_raw(process_id), None) {
+            Ok(()) | Err(Errno::EPERM) => true,
+            Err(Errno::ESRCH) => false,
+            Err(_) => true,
+        };
+        let exit_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        while process_ids.iter().copied().any(process_exists) {
+            assert!(
+                tokio::time::Instant::now() < exit_deadline,
+                "interrupted process tree remained alive: {process_ids:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        assert!(
+            !sentinel.exists(),
+            "interrupted command continued and wrote its delayed sentinel"
+        );
+        assert!(
+            process_ids.iter().copied().all(|pid| !process_exists(pid)),
+            "interrupted process tree still exists: {process_ids:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_waits_for_a_running_turns_grandchild_tree_before_acknowledging() {
+        use nix::errno::Errno;
+        use nix::sys::signal::kill;
+        use nix::unistd::Pid;
+
+        let workspace = tempdir().expect("workspace");
+        let session_store = tempdir().expect("session store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(session_store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let sentinel = workspace.path().join("shutdown-grandchild-sentinel");
+        let pid_file = workspace.path().join("shutdown-grandchild-pids");
+        let inner_script = format!(
+            "sleep 0.05; sleep 0.7 & grandchild=$!; printf '%s\\n' \"$grandchild\" >> {}; wait \"$grandchild\"; printf leaked > {}",
+            crate::sandbox::shell_quote(&pid_file.to_string_lossy()),
+            crate::sandbox::shell_quote(&sentinel.to_string_lossy()),
+        );
+        let script = format!(
+            "sh -c {} & worker=$!; printf '%s\\n%s\\n' \"$$\" \"$worker\" > {}; wait \"$worker\"",
+            crate::sandbox::shell_quote(&inner_script),
+            crate::sandbox::shell_quote(&pid_file.to_string_lossy()),
+        );
+        let mut command = tokio::process::Command::new("sh");
+        command.arg("-c").arg(script);
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let _ = crate::process_tree::output(command, None, None).await;
+        }));
+
+        let start_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let process_ids = loop {
+            if let Ok(contents) = tokio::fs::read_to_string(&pid_file).await {
+                let process_ids = contents
+                    .lines()
+                    .filter_map(|line| line.parse::<i32>().ok())
+                    .collect::<Vec<_>>();
+                if process_ids.len() == 3 {
+                    break process_ids;
+                }
+            }
+            assert!(
+                tokio::time::Instant::now() < start_deadline,
+                "grandchild command did not publish its process IDs"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        };
+
+        host.running_turns.lock().await.insert(
+            "thread-command-shutdown".to_string(),
+            RunningTurn {
+                turn_id: "turn-command-shutdown".to_string(),
+                handle,
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner,
+            },
+        );
+
+        host.shutdown().await.expect("host shutdown");
+        assert!(host.running_turns.lock().await.is_empty());
+        let process_exists = |process_id| match kill(Pid::from_raw(process_id), None) {
+            Ok(()) | Err(Errno::EPERM) => true,
+            Err(Errno::ESRCH) => false,
+            Err(_) => true,
+        };
+        assert!(
+            process_ids.iter().copied().all(|pid| !process_exists(pid)),
+            "shutdown acknowledged while its process tree still existed: {process_ids:?}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        assert!(
+            !sentinel.exists(),
+            "a grandchild continued after host shutdown and wrote its sentinel"
+        );
+        let error = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect_err("shutdown host must reject new requests");
+        assert_eq!(error.code(), -32010);
+    }
+
+    #[tokio::test]
+    async fn shutdown_aborts_and_joins_detached_memory_consolidation_before_acknowledging() {
+        struct TaskDropMarker(Arc<AtomicBool>);
+
+        impl Drop for TaskDropMarker {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+
+        let workspace = tempdir().expect("workspace");
+        let session_store = tempdir().expect("session store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(session_store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let dropped = Arc::new(AtomicBool::new(false));
+        let task_dropped = dropped.clone();
+        let (started_sender, started_receiver) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _drop_marker = TaskDropMarker(task_dropped);
+            let _ = started_sender.send(());
+            std::future::pending::<()>().await;
+        });
+        let mut agent = test_agent();
+        agent.track_memory_consolidation(task);
+        host.sessions.lock().await.insert(
+            "thread-memory-consolidation".to_string(),
+            Arc::new(Mutex::new(agent)),
+        );
+        started_receiver.await.expect("background task started");
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), host.shutdown())
+            .await
+            .expect("shutdown must not hang on background consolidation")
+            .expect("host shutdown");
+
+        assert!(
+            dropped.load(Ordering::Acquire),
+            "shutdown returned before the memory consolidation future was dropped"
+        );
+        assert!(host.sessions.lock().await.is_empty());
     }
 
     #[tokio::test]

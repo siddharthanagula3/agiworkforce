@@ -71,6 +71,7 @@ export interface ManagedCloudAgentRunReadOptions {
 
 export interface ManagedCloudAgentRunListOptions {
   states?: CloudAgentRun['state'][];
+  requestId?: string;
   limit?: number;
   cursor?: string;
   signal?: AbortSignal;
@@ -110,6 +111,12 @@ const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_RETRY_DELAY_MS = 500;
 const DEFAULT_MAX_TRANSIENT_ERRORS = 5;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+export const ManagedCloudAgentRunRequestIdSchema = z
+  .string()
+  .min(8)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/);
 
 /**
  * Reconcile public answer text rendered by a live stream with the same text
@@ -289,11 +296,13 @@ export function createManagedCloudAgentRunClient(
         .array(AgentTaskStateSchema)
         .max(9)
         .parse(options.states ?? []);
+      const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(options.requestId);
       const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
       const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 25)));
       const params = new URLSearchParams();
       for (const state of states) params.append('state', state);
       params.set('limit', String(limit));
+      if (requestId) params.set('requestId', requestId);
       if (cursor) params.set('cursor', cursor);
       const response = await request(`${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?${params.toString()}`, {
         headers: await readHeaders(),

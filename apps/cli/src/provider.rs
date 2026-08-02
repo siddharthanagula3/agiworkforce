@@ -1152,26 +1152,20 @@ mod tests {
         assert!(cleaned.get("default").is_none());
         assert!(cleaned.get("additionalProperties").is_none());
         // items sub-schema sanitized.
-        assert!(
-            cleaned["properties"]["tags"]["items"]
-                .get("default")
-                .is_none()
-        );
+        assert!(cleaned["properties"]["tags"]["items"]
+            .get("default")
+            .is_none());
         // anyOf union members sanitized.
         let any_of = cleaned["properties"]["choice"]["anyOf"].as_array().unwrap();
         assert!(any_of[0].get("default").is_none());
         assert!(any_of[1].get("const").is_none());
         // Nested object property sanitized at depth.
-        assert!(
-            cleaned["properties"]["nested"]
-                .get("additionalProperties")
-                .is_none()
-        );
-        assert!(
-            cleaned["properties"]["nested"]["properties"]["inner"]
-                .get("default")
-                .is_none()
-        );
+        assert!(cleaned["properties"]["nested"]
+            .get("additionalProperties")
+            .is_none());
+        assert!(cleaned["properties"]["nested"]["properties"]["inner"]
+            .get("default")
+            .is_none());
         // Structural fields preserved.
         assert_eq!(cleaned["properties"]["tags"]["items"]["type"], "string");
         assert_eq!(

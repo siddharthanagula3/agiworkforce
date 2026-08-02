@@ -177,11 +177,7 @@ pub fn picker_models(catalog: &GatewayCatalog) -> Vec<Model> {
     let tier = user_tier(&catalog.user_tier);
     if !matches!(
         tier,
-        UserTier::Pro
-            | UserTier::Max
-            | UserTier::Max15x
-            | UserTier::Team
-            | UserTier::Enterprise
+        UserTier::Pro | UserTier::Max | UserTier::Max15x | UserTier::Team | UserTier::Enterprise
     ) {
         return Vec::new();
     }

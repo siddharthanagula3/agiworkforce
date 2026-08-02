@@ -8,10 +8,13 @@ use std::path::Path;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::sync::RwLock;
 
 use crate::lsp::types::Diagnostic;
+
+const LSP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const LSP_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Build a well-formed `file://` URI from a filesystem path.
 ///
@@ -103,7 +106,7 @@ impl DiagnosticsBuffer {
 
 #[allow(dead_code)]
 pub struct LspClient {
-    child: Child,
+    child: crate::process_tree::ProcessTreeChild,
     next_id: AtomicI64,
     diagnostics_buffer: DiagnosticsBuffer,
 }
@@ -118,9 +121,12 @@ impl LspClient {
         cmd.args(server_args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
-        let mut child = cmd.spawn().with_context(|| format!("spawn {server_cmd}"))?;
-        let stdin = child.stdin.as_mut().context("stdin")?;
+            // This client never reads stderr. Inheriting a pipe lets a noisy
+            // server fill it and deadlock the turn.
+            .stderr(std::process::Stdio::null());
+        let mut child = crate::process_tree::ProcessTreeChild::spawn(cmd)
+            .with_context(|| format!("spawn {server_cmd}"))?;
+        let stdin = child.child_mut().stdin.as_mut().context("stdin")?;
         let init_req = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -146,6 +152,12 @@ impl LspClient {
     }
 
     pub async fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+        tokio::time::timeout(LSP_REQUEST_TIMEOUT, self.request_inner(method, params))
+            .await
+            .map_err(|_| anyhow::anyhow!("LSP request `{method}` timed out"))?
+    }
+
+    async fn request_inner(&mut self, method: &str, params: Value) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = serde_json::json!({
             "jsonrpc": "2.0",
@@ -153,13 +165,13 @@ impl LspClient {
             "method": method,
             "params": params,
         });
-        let stdin = self.child.stdin.as_mut().context("stdin")?;
+        let stdin = self.child.child_mut().stdin.as_mut().context("stdin")?;
         let body = serde_json::to_string(&req)?;
         let header = format!("Content-Length: {}\r\n\r\n", body.len());
         stdin.write_all(header.as_bytes()).await?;
         stdin.write_all(body.as_bytes()).await?;
         stdin.flush().await?;
-        let stdout = self.child.stdout.as_mut().context("stdout")?;
+        let stdout = self.child.child_mut().stdout.as_mut().context("stdout")?;
         let mut reader = BufReader::new(stdout);
         // Upper bound on a single LSP frame to cap memory: a malicious/buggy
         // server could otherwise send a multi-GB Content-Length and OOM us.
@@ -208,8 +220,12 @@ impl LspClient {
     }
 
     pub async fn shutdown(mut self) -> Result<()> {
-        let _ = self.request("shutdown", Value::Null).await;
-        let _ = self.child.kill().await;
+        let _ = tokio::time::timeout(
+            LSP_SHUTDOWN_GRACE,
+            self.request_inner("shutdown", Value::Null),
+        )
+        .await;
+        self.child.terminate().await;
         Ok(())
     }
 

@@ -9,8 +9,10 @@ use uuid::Uuid;
 use crate::config::CliConfig;
 use crate::models::Message;
 
-use super::session::ManagedSession;
-use super::session::ManagedSessionForkMetadata;
+use super::session::{
+    validate_managed_session_id, ManagedSession, ManagedSessionAutoRouting,
+    ManagedSessionForkMetadata, ManagedSessionRoutingAuthority,
+};
 
 /// Subdirectory under the CLI config directory where managed sessions live.
 pub const MANAGED_SESSION_DIR_NAME: &str = "managed_sessions";
@@ -44,6 +46,10 @@ pub struct ManagedSessionSummary {
     pub archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_authority: Option<ManagedSessionRoutingAuthority>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_routing: Option<ManagedSessionAutoRouting>,
 }
 
 /// Resolved session reference that includes both the original reference and the located session.
@@ -107,6 +113,13 @@ impl ManagedSessionStore {
         fork_managed_session_in(&self.base_dir, reference)
     }
 
+    pub fn fork_redacted_continuation(
+        &self,
+        reference: ManagedSessionReference,
+    ) -> Result<ResolvedManagedSessionReference> {
+        fork_redacted_managed_session_in(&self.base_dir, reference)
+    }
+
     pub fn save(&self, session: &ManagedSession) -> Result<PathBuf> {
         save_session_in(&self.base_dir, session)
     }
@@ -150,6 +163,7 @@ impl ManagedSessionReference {
             return Ok(Self::Path(PathBuf::from(input)));
         }
 
+        validate_managed_session_id(input)?;
         Ok(Self::SessionId(input.to_string()))
     }
 }
@@ -169,6 +183,12 @@ impl ManagedSessionSummary {
             created_by: session.created_by.clone(),
             archived_at: session.archived_at,
             fork: session.fork.clone(),
+            routing_authority: session
+                .routing_authority
+                .as_ref()
+                .filter(|authority| authority.validated_provider().is_ok())
+                .cloned(),
+            auto_routing: session.auto_routing.clone(),
         }
     }
 }
@@ -208,6 +228,9 @@ fn candidate_session_paths_in(base_dir: &Path, session_id: &str) -> [PathBuf; 2]
 }
 
 fn find_session_path_in(base_dir: &Path, session_id: &str) -> Option<PathBuf> {
+    if validate_managed_session_id(session_id).is_err() {
+        return None;
+    }
     candidate_session_paths_in(base_dir, session_id)
         .into_iter()
         .find(|path| path.exists())
@@ -223,6 +246,7 @@ fn summary_from_path(path: PathBuf) -> Result<ManagedSessionSummary> {
 }
 
 fn save_session_in(base_dir: &Path, session: &ManagedSession) -> Result<PathBuf> {
+    validate_managed_session_id(&session.session_id)?;
     let dir = ensure_managed_session_dir(base_dir)?;
     let path = dir.join(format!(
         "{}.{}",
@@ -251,13 +275,31 @@ fn list_managed_sessions_in(base_dir: &Path) -> Result<Vec<ManagedSessionSummary
     for entry in fs::read_dir(&dir)
         .with_context(|| format!("Failed to read managed session directory {}", dir.display()))?
     {
-        let path = entry?.path();
+        let path = match entry {
+            Ok(entry) => entry.path(),
+            Err(error) => {
+                eprintln!(
+                    "warning: skipped unreadable managed-session directory entry in {}: {error}",
+                    dir.display()
+                );
+                continue;
+            }
+        };
         let extension = path.extension().and_then(|extension| extension.to_str());
         if !matches!(extension, Some("jsonl") | Some("json")) {
             continue;
         }
 
-        let summary = summary_from_path(path)?;
+        let summary = match summary_from_path(path.clone()) {
+            Ok(summary) => summary,
+            Err(error) => {
+                eprintln!(
+                    "warning: skipped invalid managed session {}: {error:#}",
+                    path.display()
+                );
+                continue;
+            }
+        };
         match by_session_id.get(&summary.session_id) {
             Some(existing)
                 if existing.updated_at > summary.updated_at
@@ -298,6 +340,7 @@ fn resolve_managed_session_reference_in(
         ManagedSessionReference::Latest => latest_managed_session_in(base_dir)?
             .ok_or_else(|| anyhow::anyhow!("No managed sessions are available")),
         ManagedSessionReference::SessionId(session_id) => {
+            validate_managed_session_id(&session_id)?;
             let path = find_session_path_in(base_dir, &session_id).ok_or_else(|| {
                 anyhow::anyhow!(
                     "Managed session '{}' was not found in {}",
@@ -365,6 +408,25 @@ fn fork_managed_session_in(
     )))
 }
 
+fn fork_redacted_managed_session_in(
+    base_dir: &Path,
+    reference: ManagedSessionReference,
+) -> Result<ResolvedManagedSessionReference> {
+    let resolved = resolve_managed_session_reference_in(base_dir, reference)?;
+    let source_session = load_session_from_path(&resolved.path)?;
+    let forked_at = Utc::now();
+    let forked = ManagedSession::redacted_continuation_from(
+        &source_session,
+        Uuid::new_v4().to_string(),
+        forked_at,
+        Some(resolved.path.clone()),
+    );
+    let path = save_session_in(base_dir, &forked)?;
+    Ok(reference_from_summary(ManagedSessionSummary::from_session(
+        &forked, path,
+    )))
+}
+
 fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference) -> Result<()> {
     let resolved = resolve_managed_session_reference_in(base_dir, reference)?;
     fs::remove_file(&resolved.path).with_context(|| {
@@ -390,7 +452,8 @@ pub fn create_managed_session(messages: Vec<Message>) -> Result<ResolvedManagedS
 /// (e.g. `agi session fork --as <name>`) before writing.
 pub fn managed_session_exists(session_id: impl AsRef<str>) -> Result<bool> {
     let base_dir = CliConfig::config_dir()?;
-    Ok(find_session_path_in(&base_dir, session_id.as_ref()).is_some())
+    let session_id = validate_managed_session_id(session_id.as_ref())?;
+    Ok(find_session_path_in(&base_dir, session_id).is_some())
 }
 
 /// Create a new managed session with an explicit session id (e.g. a user-chosen slug
@@ -460,6 +523,8 @@ mod tests {
     use super::load_managed_session_in;
     use super::managed_session_dir_in;
     use super::resolve_managed_session_reference_in;
+    use super::save_session_in;
+    use super::ManagedSession;
     use super::ManagedSessionReference;
     use crate::models::Message;
     use chrono::{TimeZone, Utc};
@@ -523,6 +588,7 @@ mod tests {
             output_style: None,
             fallback_model_ids: None,
             auto_routing: None,
+            routing_authority: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -547,6 +613,7 @@ mod tests {
             output_style: None,
             fallback_model_ids: None,
             auto_routing: None,
+            routing_authority: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));
@@ -596,5 +663,80 @@ mod tests {
             Some("session-b")
         );
         assert!(!forked.summary.session_id.is_empty());
+    }
+
+    #[test]
+    fn invalid_neighbors_do_not_hide_valid_session_history() {
+        let temp_dir = tempdir().unwrap();
+        let base = temp_dir.path();
+        let mut valid = ManagedSession::new("valid-neighbor", Utc::now());
+        valid.title = Some("Visible history".to_string());
+        save_session_in(base, &valid).expect("save valid neighbor");
+
+        let session_dir = managed_session_dir_in(base);
+        std::fs::write(session_dir.join("corrupt.jsonl"), "not-json\n")
+            .expect("write corrupt neighbor");
+
+        for (filename, field, value) in [
+            (
+                "bad-title.json",
+                "title",
+                serde_json::Value::String(
+                    "t".repeat(super::super::session::MANAGED_SESSION_TITLE_MAX_UTF16 + 1),
+                ),
+            ),
+            (
+                "bad-model.json",
+                "model",
+                serde_json::Value::String("model\u{0085}injection".to_string()),
+            ),
+            (
+                "bad-id.json",
+                "session_id",
+                serde_json::Value::String("../../escape".to_string()),
+            ),
+            (
+                "bad-cwd.json",
+                "workspace_root",
+                serde_json::Value::String(format!(
+                    "/{}",
+                    "w".repeat(super::super::session::MANAGED_SESSION_CWD_MAX_UTF16 + 1)
+                )),
+            ),
+        ] {
+            let mut tampered = serde_json::to_value(ManagedSession::new(
+                filename.trim_end_matches(".json"),
+                Utc::now(),
+            ))
+            .expect("serialize session");
+            tampered[field] = value;
+            std::fs::write(
+                session_dir.join(filename),
+                serde_json::to_vec(&tampered).expect("serialize tampered neighbor"),
+            )
+            .expect("write tampered neighbor");
+        }
+
+        let listed = list_managed_sessions_in(base).expect("list must isolate bad entries");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].session_id, "valid-neighbor");
+        assert_eq!(listed[0].title.as_deref(), Some("Visible history"));
+    }
+
+    #[test]
+    fn session_id_traversal_is_rejected_before_path_resolution_or_save() {
+        let temp_dir = tempdir().unwrap();
+        let base = temp_dir.path().join("config");
+        std::fs::create_dir_all(&base).expect("create config root");
+        let traversal = "../../outside";
+        let session = ManagedSession::new(traversal, Utc::now());
+
+        assert!(save_session_in(&base, &session).is_err());
+        assert!(resolve_managed_session_reference_in(
+            &base,
+            ManagedSessionReference::SessionId(traversal.to_string()),
+        )
+        .is_err());
+        assert!(!temp_dir.path().join("outside.jsonl").exists());
     }
 }

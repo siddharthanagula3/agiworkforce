@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const { ensureAgiInitialized } = vi.hoisted(() => ({
+  ensureAgiInitialized: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../api/agi', () => ({
+  ensureAgiInitialized,
+}));
+
 // Mock sonner toast before importing the store
 vi.mock('sonner', () => ({
   toast: {
@@ -25,6 +33,7 @@ const mockInvoke = vi.mocked(invoke);
 describe('agentTaskStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ensureAgiInitialized.mockResolvedValue(undefined);
     useAgentTaskStore.setState({
       tasks: [],
       loading: false,
@@ -121,6 +130,45 @@ describe('agentTaskStore', () => {
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal', {
         request: { description: 'Summarize cloud docs', priority: 'medium', trustMode: 'managed' },
       });
+    });
+
+    it('does not invoke native execution when caller authority expires during initialization', async () => {
+      let finishInitialization!: () => void;
+      ensureAgiInitialized.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finishInitialization = resolve;
+        }),
+      );
+      let current = true;
+
+      const submission = useAgentTaskStore.getState().submitGoal('Stale companion task', {
+        assertCurrent: () => {
+          if (!current) throw new DOMException('Session ended', 'AbortError');
+        },
+      });
+      await vi.waitFor(() => expect(ensureAgiInitialized).toHaveBeenCalledOnce());
+      current = false;
+      finishInitialization();
+
+      await expect(submission).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockInvoke).not.toHaveBeenCalledWith('agi_submit_goal', expect.anything());
+    });
+
+    it('does not silently submit under a new trust mode after initialization', async () => {
+      let finishInitialization!: () => void;
+      ensureAgiInitialized.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finishInitialization = resolve;
+        }),
+      );
+
+      const submission = useAgentTaskStore.getState().submitGoal('Boundary-pinned task');
+      await vi.waitFor(() => expect(ensureAgiInitialized).toHaveBeenCalledOnce());
+      useAppModeStore.setState({ mode: 'cloud' });
+      finishInitialization();
+
+      await expect(submission).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockInvoke).not.toHaveBeenCalledWith('agi_submit_goal', expect.anything());
     });
 
     it('uses the engine goal id and actual result for parallel execution', async () => {

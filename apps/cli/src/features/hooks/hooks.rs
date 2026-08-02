@@ -16,7 +16,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tokio::process::Command;
 
 // ---------------------------------------------------------------------------
 // Configuration types
@@ -1078,33 +1077,17 @@ pub async fn run_hooks(
 async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
     let start = std::time::Instant::now();
 
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c")
-        .arg(&hook.command)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+    let mut cmd = tokio::process::Command::new("sh");
+    cmd.arg("-c").arg(&hook.command);
 
     let timeout = Duration::from_secs(hook.timeout);
-
-    let result = tokio::time::timeout(timeout, async {
-        let mut child = cmd.spawn()?;
-
-        // Write input JSON to stdin
-        if let Some(mut stdin) = child.stdin.take() {
-            use tokio::io::AsyncWriteExt;
-            let _ = stdin.write_all(input_json.as_bytes()).await;
-            drop(stdin);
-        }
-
-        child.wait_with_output().await
-    })
-    .await;
+    let result =
+        crate::process_tree::output(cmd, Some(input_json.as_bytes().to_vec()), Some(timeout)).await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match result {
-        Ok(Ok(output)) => {
+        Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let signals = parse_hook_output(&stdout);
             HookResult {
@@ -1121,7 +1104,7 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
                 updated_mcp_tool_output: signals.updated_mcp_tool_output,
             }
         }
-        Ok(Err(e)) => HookResult {
+        Err(e) if e.kind() != std::io::ErrorKind::TimedOut => HookResult {
             hook_command: hook.command.clone(),
             success: false,
             stdout: String::new(),

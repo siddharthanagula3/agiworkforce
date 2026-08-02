@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { enableMapSet } from 'immer';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { open } from '@tauri-apps/plugin-dialog';
 
 import { useSettingsDialogStore } from '../../../stores/settings/dialog';
 import { useUnifiedAuthStore } from '../../../stores/auth';
@@ -49,6 +50,7 @@ const nativeHandoffMock = vi.hoisted(() => ({
   invoke: vi.fn(),
   unlisten: vi.fn(),
 }));
+const openDialogMock = vi.mocked(open);
 
 vi.mock('../../../lib/tauri-mock', () => ({
   isTauri: true,
@@ -183,6 +185,14 @@ vi.mock('@agiworkforce/unified-chat', async () => {
           : null,
       ),
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
+    LocalByokHandoffDialog: (props: { open: boolean }) =>
+      props.open
+        ? React.createElement(
+            'div',
+            { 'data-testid': 'cloud-folder-review' },
+            'Review what leaves this device',
+          )
+        : null,
     useChatStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,
     selectBudgetPercentage: (state: typeof unifiedChatMock.budgetState) => state.percentage,
@@ -202,6 +212,7 @@ describe('DesktopShellV3 duplication ownership', () => {
     nativeHandoffMock.listen.mockReset();
     nativeHandoffMock.invoke.mockReset();
     nativeHandoffMock.unlisten.mockReset();
+    openDialogMock.mockReset();
     localStorage.removeItem('desktop-terminal-dock-open');
     nativeHandoffMock.listen.mockImplementation(
       async (eventName: string, callback: (event: { payload: unknown }) => void) => {
@@ -255,6 +266,7 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(unifiedChatMock.chatInterfaceProps[0]?.['enableSearchOverlay']).toBe(false);
     expect(unifiedChatMock.chatInterfaceProps[0]?.['emptyStateSlot']).toBeTruthy();
     expect(unifiedChatMock.chatInterfaceProps[0]?.['voiceInputController']).toBeUndefined();
+    expect(unifiedChatMock.chatInterfaceProps[0]?.['allowModelFallbackModels']).toBe(true);
   });
 
   it('shows a native MCP approval in live chat and executes it only after Approve', async () => {
@@ -493,6 +505,42 @@ describe('DesktopShellV3 duplication ownership', () => {
     });
   });
 
+  it('rotates the composer attachment owner for a same-account auth incarnation', async () => {
+    useUnifiedAuthStore.setState({
+      user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+      isAuthenticated: true,
+      isLocalDeviceAccount: false,
+      plan: 'pro',
+      planDisplayName: 'Pro',
+      accessToken: 'cloud-token-a',
+      refreshToken: 'refresh-token-a',
+      cloudSessionEpoch: 11,
+    });
+    useAppModeStore.setState({ mode: 'cloud' });
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['attachmentContextKey']).toContain(
+      'managed:cloud-user:session-11',
+    );
+
+    act(() => {
+      useUnifiedAuthStore.setState({
+        user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+        isAuthenticated: true,
+        isLocalDeviceAccount: false,
+        accessToken: 'cloud-token-b',
+        refreshToken: 'refresh-token-b',
+        cloudSessionEpoch: 12,
+      });
+    });
+
+    await waitFor(() =>
+      expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['attachmentContextKey']).toContain(
+        'managed:cloud-user:session-12',
+      ),
+    );
+  });
+
   it('routes the live shared composer into the native skill recorder', () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
     const onRecordSkill = unifiedChatMock.chatInterfaceProps[0]?.['onRecordSkill'];
@@ -727,6 +775,7 @@ describe('DesktopShellV3 duplication ownership', () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
     const props = unifiedChatMock.chatInterfaceProps[0];
+    expect(props?.['allowModelFallbackModels']).toBe(false);
     expect(props?.['onSelectFolder']).toBeTypeOf('function');
     expect(props?.['onClearFolder']).toBeTypeOf('function');
     // Record-a-skill stays Local-only: it captures the screen, which Cloud has
@@ -738,6 +787,100 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(
       (props?.['conversationActions'] as { onShare?: (id: string) => Promise<void> })?.onShare,
     ).toBeTypeOf('function');
+  });
+
+  it('invalidates an open Cloud folder review when the signed-in account changes', async () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+    useUnifiedAuthStore.setState({
+      user: { id: 'cloud-user-a', email: 'a@agi.local', name: 'Cloud User A' },
+      isAuthenticated: true,
+      isLocalDeviceAccount: false,
+      accessToken: 'cloud-token-a',
+      refreshToken: 'refresh-token-a',
+    });
+    nativeHandoffMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'select_cloud_handoff_folder') {
+        return {
+          grantId: '123e4567-e89b-42d3-a456-426614174000',
+          path: '/Users/x/repo',
+        };
+      }
+      if (command === 'extension_clear_selected_context_handoff') return true;
+      if (command.includes('project')) return [];
+      return undefined;
+    });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    const onSelectFolder = unifiedChatMock.chatInterfaceProps.at(-1)?.['onSelectFolder'];
+    expect(onSelectFolder).toBeTypeOf('function');
+
+    await act(async () => {
+      await (onSelectFolder as () => Promise<void>)();
+    });
+    expect(await screen.findByText('Review what leaves this device')).toBeInTheDocument();
+
+    act(() => {
+      useUnifiedAuthStore.setState({
+        user: { id: 'cloud-user-b', email: 'b@agi.local', name: 'Cloud User B' },
+        accessToken: 'cloud-token-b',
+        cloudSessionEpoch: 2,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Review what leaves this device')).not.toBeInTheDocument();
+      expect(useProjectStore.getState().currentFolder).toBeNull();
+    });
+  });
+
+  it('revokes a Cloud folder grant when the same account changes auth incarnation during the picker', async () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+    useUnifiedAuthStore.setState({
+      user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+      isAuthenticated: true,
+      isLocalDeviceAccount: false,
+      accessToken: 'cloud-token-a',
+      refreshToken: 'refresh-token-a',
+      cloudSessionEpoch: 21,
+    });
+    let resolvePicker!: (grant: { grantId: string; path: string }) => void;
+    const picker = new Promise<{ grantId: string; path: string }>((resolve) => {
+      resolvePicker = resolve;
+    });
+    nativeHandoffMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'select_cloud_handoff_folder') return picker;
+      if (command === 'revoke_cloud_handoff_grant') return true;
+      if (command === 'extension_clear_selected_context_handoff') return true;
+      if (command.includes('project')) return [];
+      return undefined;
+    });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    const onSelectFolder = unifiedChatMock.chatInterfaceProps.at(-1)?.['onSelectFolder'];
+    let selection!: Promise<void>;
+    act(() => {
+      selection = (onSelectFolder as () => Promise<void>)();
+    });
+    act(() => {
+      useUnifiedAuthStore.setState({
+        user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+        isAuthenticated: true,
+        isLocalDeviceAccount: false,
+        accessToken: 'cloud-token-b',
+        refreshToken: 'refresh-token-b',
+        cloudSessionEpoch: 22,
+      });
+    });
+    resolvePicker({
+      grantId: '223e4567-e89b-42d3-a456-426614174000',
+      path: '/Users/x/private-a',
+    });
+    await act(async () => selection);
+
+    expect(screen.queryByText('Review what leaves this device')).not.toBeInTheDocument();
+    expect(nativeHandoffMock.invoke).toHaveBeenCalledWith('revoke_cloud_handoff_grant', {
+      grantId: '223e4567-e89b-42d3-a456-426614174000',
+    });
   });
 
   it('keeps the folder seam a capability grant in Local mode', () => {

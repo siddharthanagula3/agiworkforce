@@ -296,7 +296,10 @@ impl McpToolRegistry {
                 // Same third-party origin as the tool description, so the
                 // same guard applies.
                 let description = sanitize_untrusted_text(
-                    schema.get("description").and_then(|d| d.as_str()).unwrap_or(""),
+                    schema
+                        .get("description")
+                        .and_then(|d| d.as_str())
+                        .unwrap_or(""),
                 );
 
                 parameters.push(ToolParameter {
@@ -655,7 +658,10 @@ mod tests {
             .as_str()
             .expect("description stays a string");
 
-        assert!(text.contains("[removed]"), "injection marker must be stripped: {text}");
+        assert!(
+            text.contains("[removed]"),
+            "injection marker must be stripped: {text}"
+        );
         assert!(!text.to_lowercase().contains("ignore previous instructions"));
         // Structure must survive: the provider parses this as a JSON Schema.
         assert_eq!(cleaned["properties"]["path"]["type"], "string");
@@ -683,7 +689,10 @@ mod tests {
         let nested = cleaned["properties"]["items"]["items"]["properties"]["cmd"]["description"]
             .as_str()
             .expect("nested description stays a string");
-        assert!(nested.contains("[removed]"), "nested injection must be stripped: {nested}");
+        assert!(
+            nested.contains("[removed]"),
+            "nested injection must be stripped: {nested}"
+        );
     }
 
     /// Only `description` is rewritten — a value that merely LOOKS like prose

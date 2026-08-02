@@ -86,11 +86,31 @@ export interface DispatchListenerCallbacks {
 /** Whether a session key is currently active. */
 let _sessionActive = false;
 
+/** Serialises native key install/reset so stale A setup cannot overwrite B. */
+let _sessionLifecycleQueue: Promise<void> = Promise.resolve();
+let _sessionLifecycleGeneration = 0;
+let _sessionLifecycleHasKeyOrPendingSetup = false;
+
 /** Dedup cache: message ID → expiry ms. */
 const _dedupCache = new Map<string, number>();
 
 /** Registered callbacks. */
 let _callbacks: DispatchListenerCallbacks = {};
+
+class DispatchSessionSupersededError extends Error {
+  constructor() {
+    super('[dispatch] session setup superseded');
+  }
+}
+
+function enqueueSessionLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+  const result = _sessionLifecycleQueue.catch(() => undefined).then(operation);
+  _sessionLifecycleQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Dedup helpers
@@ -185,16 +205,37 @@ export async function initDispatchSession(
     );
   }
 
-  const keyHex = await invoke<string>('dispatch_hmac_init', {
-    pairingCode,
-    sessionSalt: dispatchSalt,
-  });
-
-  _sessionActive = true;
+  const setupGeneration = ++_sessionLifecycleGeneration;
+  _sessionLifecycleHasKeyOrPendingSetup = true;
+  _sessionActive = false;
   _dedupCache.clear();
 
-  console.debug('[dispatch] session key initialised');
-  return keyHex;
+  return enqueueSessionLifecycle(async () => {
+    if (setupGeneration !== _sessionLifecycleGeneration) {
+      throw new DispatchSessionSupersededError();
+    }
+
+    try {
+      const keyHex = await invoke<string>('dispatch_hmac_init', {
+        pairingCode,
+        sessionSalt: dispatchSalt,
+      });
+      if (setupGeneration !== _sessionLifecycleGeneration) {
+        throw new DispatchSessionSupersededError();
+      }
+
+      _sessionActive = true;
+      _dedupCache.clear();
+      console.debug('[dispatch] session key initialised');
+      return keyHex;
+    } catch (error) {
+      if (setupGeneration === _sessionLifecycleGeneration) {
+        _sessionActive = false;
+        _sessionLifecycleHasKeyOrPendingSetup = false;
+      }
+      throw error;
+    }
+  });
 }
 
 /**
@@ -301,21 +342,38 @@ export async function rotateDispatchKey(
 ): Promise<void> {
   const MAX_ATTEMPTS = 3;
   let lastErr: unknown;
+  let rotationGeneration = _sessionLifecycleGeneration;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (rotationGeneration !== _sessionLifecycleGeneration) {
+      throw new DispatchSessionSupersededError();
+    }
     if (attempt > 0) {
       await new Promise((res) => setTimeout(res, 1000 * 2 ** (attempt - 1)));
+      if (rotationGeneration !== _sessionLifecycleGeneration) {
+        throw new DispatchSessionSupersededError();
+      }
     }
+    let expectedGenerationAfterOwnSetup: number | null = null;
     try {
       const { new_salt } = await rotateKeyRequest();
-      const keyHex = await invoke<string>('dispatch_hmac_init', {
-        pairingCode,
-        sessionSalt: new_salt,
-      });
+      if (rotationGeneration !== _sessionLifecycleGeneration) {
+        throw new DispatchSessionSupersededError();
+      }
+      expectedGenerationAfterOwnSetup = rotationGeneration + 1;
+      const keyHex = await initDispatchSession(pairingCode, new_salt);
       console.debug('[dispatch] key rotated successfully');
       _callbacks.onKeyRotated?.(keyHex);
       return;
     } catch (err) {
+      if (err instanceof DispatchSessionSupersededError) throw err;
+      if (
+        expectedGenerationAfterOwnSetup !== null &&
+        _sessionLifecycleGeneration !== expectedGenerationAfterOwnSetup
+      ) {
+        throw new DispatchSessionSupersededError();
+      }
+      rotationGeneration = _sessionLifecycleGeneration;
       lastErr = err;
       console.warn(`[dispatch] key rotation attempt ${attempt + 1} failed:`, err);
     }
@@ -331,15 +389,24 @@ export async function rotateDispatchKey(
  * Call this when the Dispatch connection terminates.
  */
 export async function resetDispatchSession(): Promise<void> {
-  if (!_sessionActive) return;
+  const shouldResetNative = _sessionLifecycleHasKeyOrPendingSetup || _sessionActive;
+  _sessionLifecycleGeneration += 1;
 
-  try {
-    await invoke<void>('dispatch_hmac_reset');
-  } finally {
-    _sessionActive = false;
-    _dedupCache.clear();
-    console.debug('[dispatch] session reset');
-  }
+  // Revoke renderer authority before the native bridge awaits. Account/mode
+  // transitions must make send/verify fail synchronously even when native key
+  // zeroing is still in flight.
+  _sessionActive = false;
+  _sessionLifecycleHasKeyOrPendingSetup = false;
+  _dedupCache.clear();
+  if (!shouldResetNative) return;
+
+  return enqueueSessionLifecycle(async () => {
+    try {
+      await invoke<void>('dispatch_hmac_reset');
+    } finally {
+      console.debug('[dispatch] session reset');
+    }
+  });
 }
 
 /** Whether a dispatch session is currently active (key derived and stored). */

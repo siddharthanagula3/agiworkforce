@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE,
+  MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationBranchesResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -97,6 +101,44 @@ describe('managed-cloud conversation wire contract', () => {
         messages: [{ ...message, role: 'tool' }],
         total: 1,
         hasMore: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('bounds successful list and transcript response payloads', () => {
+    expect(
+      ManagedCloudConversationListResponseSchema.safeParse({
+        conversations: Array.from({ length: MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE + 1 }, (_, index) => ({
+          ...conversation,
+          id: `conversation-${index}`,
+        })),
+        hasMore: false,
+        nextOffset: MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE + 1,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ManagedCloudConversationResponseSchema.safeParse({
+        conversation,
+        messages: Array.from(
+          { length: MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE + 1 },
+          (_, index) => ({ ...message, id: `message-${index}` }),
+        ),
+        total: MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE + 1,
+        hasMore: false,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ManagedCloudMessageWireSchema.safeParse({
+        ...message,
+        content: 'x'.repeat(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+    expect(
+      ManagedCloudMessageWireSchema.safeParse({
+        ...message,
+        metadata: { value: 'x'.repeat(MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) },
       }).success,
     ).toBe(false);
   });

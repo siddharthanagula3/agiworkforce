@@ -1,5 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "com.agiworkforce.desktop.wdio",
-  "productName": "AGI Workforce WDIO"
+  "productName": "AGI Workforce WDIO",
+  "app": {
+    "withGlobalTauri": true
+  }
 }
