@@ -31,6 +31,7 @@ import { AttachmentMenu } from './AttachmentMenu';
 import { ModelSelector } from './ModelSelector';
 import { SendButton } from './SendButton';
 import { AgentControl } from './AgentControl';
+import { ThinkingControl } from './ThinkingControl';
 import { PlanModeToggle } from './ChatInputToolbar';
 import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
 import { useVoiceInput } from '../hooks/useVoiceInput';
@@ -1017,6 +1018,14 @@ export function ChatInput({
                   showEffort={supportsReasoningEffort}
                   className="min-w-0 max-w-full flex-wrap justify-start gap-1"
                 />
+              )}
+              {/* Extended thinking. Renders only what the selected model's
+                  catalog reasoning contract actually supports: an operable
+                  switch, a static "always on" badge, or nothing. Gated on the
+                  same capability as the effort chip — a runtime that does not
+                  forward reasoning parameters must not advertise one. */}
+              {supportsReasoningEffort && (
+                <ThinkingControl modelId={selectedModelId} disabled={disabled} />
               )}
               {supportsAgentControl && slashCommandHost && (
                 <PlanModeToggle

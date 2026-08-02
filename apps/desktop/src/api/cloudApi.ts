@@ -483,6 +483,25 @@ export async function generateCloudImage(input: {
 // ============================================================================
 
 /**
+ * The host's IANA time zone, or null when the runtime cannot resolve one.
+ *
+ * The completions route validates `client_timezone` with `isValidIanaTimeZone`
+ * and caps it at 64 characters, so a missing/exotic value must be OMITTED
+ * rather than substituted — a wrong zone is worse than none (the model would
+ * confidently answer "today" in the wrong calendar day).
+ */
+function resolveClientTimeZone(): string | null {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof zone === 'string' && zone.trim().length > 0 && zone.length <= 64
+      ? zone.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Sends a message to a cloud conversation and streams the assistant reply
  * via SSE. Calls the provided callbacks as the stream progresses.
  *
@@ -516,6 +535,16 @@ export async function sendCloudMessage(
     workMode?: CloudWorkMode;
     skillName?: string;
     effort?: string;
+    /**
+     * Client-minted uuid for this turn's assistant row. Serialised as the
+     * route's `assistant_message_id` (accepted at
+     * `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`'s
+     * `assistant_message_id: z.string().uuid().optional()`), which turns on the
+     * server-side assistant-turn persistence net — without it the server takes
+     * the `assistant_turn_not_server_persisted` skip branch and a crash or
+     * dropped connection after generation loses the (already billed) turn.
+     */
+    assistantMessageId?: string;
   },
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
 ): Promise<void> {
@@ -538,6 +567,8 @@ export async function sendCloudMessage(
       ? messageHistory
       : [{ role: 'user' as const, content }];
 
+  const clientTimeZone = resolveClientTimeZone();
+
   // Use the OpenAI-compatible endpoint deployed on Vercel
   const openAiBody: Record<string, unknown> = {
     model,
@@ -551,6 +582,17 @@ export async function sendCloudMessage(
     ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),
     ...(requestOptions?.skillName ? { skill_name: requestOptions.skillName } : {}),
     ...(requestOptions?.effort ? { effort: requestOptions.effort } : {}),
+    // Server-side durability net for the assistant turn — see the
+    // `assistantMessageId` doc on requestOptions.
+    ...(requestOptions?.assistantMessageId
+      ? { assistant_message_id: requestOptions.assistantMessageId }
+      : {}),
+    // The user's IANA zone. The route reads `client_timezone` and passes it to
+    // `buildCapabilityPreamble`; when it is absent the whole "use that local
+    // calendar date for 'today'" clause is dropped and the model answers date
+    // questions in the server's calendar day. Resolved (never guessed) — an
+    // environment with no resolvable zone simply omits the field.
+    ...(clientTimeZone ? { client_timezone: clientTimeZone } : {}),
     use_prompt_cache: true,
   };
 
@@ -725,38 +767,104 @@ async function consumeCloudSseResponse(
   }
 }
 
-async function readCloudResponseError(response: Response): Promise<Error> {
-  let serverMessage: string | null = null;
+/**
+ * A non-2xx AGI Cloud response, carrying the machine-readable classification
+ * the payload supplied.
+ *
+ * The refusal used to be flattened to a plain `Error`, so a managed quota /
+ * rate-limit block arrived at the UI indistinguishable from a network failure:
+ * a disappearing toast and no reset time, no upgrade path, no "switch to a
+ * standard model" hint. `code` feeds
+ * `classifyManagedQuotaErrorCode` and `resetAt` is the server's own instant —
+ * never synthesised beyond translating a `Retry-After` delay.
+ */
+export class CloudApiError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly resetAt: string | undefined;
+
+  constructor(
+    message: string,
+    options: { status: number; code?: string | undefined; resetAt?: string | undefined },
+  ) {
+    super(message);
+    this.name = 'CloudApiError';
+    this.status = options.status;
+    this.code = options.code;
+    this.resetAt = options.resetAt;
+  }
+}
+
+function readErrorString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Reset instant for an exceeded ceiling: the payload's `reset_at` (top level or
+ * nested under `error`), else a `Retry-After` delay converted to an instant.
+ * Returns undefined when the server said nothing — the UI then shows no reset
+ * time rather than inventing one.
+ */
+function readCloudErrorResetAt(payload: unknown, response: Response): string | undefined {
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const body = payload as Record<string, unknown>;
+    const error = body['error'];
+    const candidate =
+      error && typeof error === 'object' && !Array.isArray(error)
+        ? (error as Record<string, unknown>)['reset_at']
+        : body['reset_at'];
+    if (typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
+      return new Date(candidate).toISOString();
+    }
+  }
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return new Date(Date.now() + seconds * 1000).toISOString();
+    }
+  }
+  return undefined;
+}
+
+async function readCloudResponseError(response: Response): Promise<CloudApiError> {
+  let serverMessage: string | undefined;
+  let serverCode: string | undefined;
+  let payload: unknown;
   try {
-    const payload: unknown = await response.json();
+    payload = await response.json();
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
       const record = payload as Record<string, unknown>;
-      if (typeof record['message'] === 'string') {
-        serverMessage = record['message'];
-      } else if (typeof record['error'] === 'string') {
-        serverMessage = record['error'];
-      } else if (
-        record['error'] &&
-        typeof record['error'] === 'object' &&
-        !Array.isArray(record['error']) &&
-        typeof (record['error'] as Record<string, unknown>)['message'] === 'string'
-      ) {
-        serverMessage = (record['error'] as Record<string, unknown>)['message'] as string;
-      }
+      const nested =
+        record['error'] && typeof record['error'] === 'object' && !Array.isArray(record['error'])
+          ? (record['error'] as Record<string, unknown>)
+          : undefined;
+      serverMessage =
+        readErrorString(record['message']) ??
+        readErrorString(nested?.['message']) ??
+        readErrorString(record['error']);
+      serverCode = readErrorString(nested?.['code']) ?? readErrorString(record['code']);
     }
   } catch {
     // Never surface an untrusted HTML/error response body. The status remains
     // enough to diagnose the request without leaking response content.
   }
+  // Read outside the JSON branch: a proxy-generated 429 can carry `Retry-After`
+  // with a non-JSON body.
+  const resetAt = readCloudErrorResetAt(payload, response);
 
   const message =
-    serverMessage?.trim() ||
+    serverMessage ||
     (response.status === 401 || response.status === 403
       ? 'Your AGI Cloud session is no longer authorized. Please connect again.'
       : response.status === 429
         ? 'AGI Cloud is receiving too many requests. Please wait and retry.'
         : `AGI Cloud request failed (HTTP ${response.status}).`);
-  return new Error(message);
+  return new CloudApiError(message, {
+    status: response.status,
+    ...(serverCode ? { code: serverCode } : {}),
+    ...(resetAt ? { resetAt } : {}),
+  });
 }
 
 // ============================================================================

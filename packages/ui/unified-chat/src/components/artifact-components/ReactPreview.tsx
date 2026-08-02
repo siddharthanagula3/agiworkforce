@@ -15,10 +15,26 @@
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
+import {
+  SCRIPTS_BLOCKED_NOTICE,
+  type ArtifactPreviewScriptSupport,
+} from '../../lib/artifact-preview-capability';
 
 export interface ReactPreviewProps {
   code: string;
   className?: string;
+  /**
+   * DES-C15. Whether a same-document (`srcdoc`) preview may execute scripts
+   * here, as measured by `lib/artifact-preview-capability.ts`. A React preview
+   * is 100% script-dependent — the module graph, Babel and React itself all
+   * arrive as scripts — so when this is `'blocked'` the iframe would sit blank
+   * with the toolbar spinning "Loading..." forever, because the `ready`
+   * postMessage it waits for can never be sent. Render an honest explanation
+   * instead. Omit (default `'unknown'`) to keep the previous behaviour.
+   */
+  scriptSupport?: ArtifactPreviewScriptSupport;
+  /** Switch the host panel to its source view. Omit to hide the affordance. */
+  onViewSource?: () => void;
 }
 
 function escapeCodeForTemplateLiteral(code: string): string {
@@ -168,7 +184,13 @@ export function buildReactPreviewDocument(
 </html>`;
 }
 
-export function ReactPreview({ code, className }: ReactPreviewProps) {
+export function ReactPreview({
+  code,
+  className,
+  scriptSupport = 'unknown',
+  onViewSource,
+}: ReactPreviewProps) {
+  const scriptsBlocked = scriptSupport === 'blocked';
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +278,7 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/50">
         <span className="text-xs text-muted-foreground font-medium">React Preview</span>
-        {isLoading && (
+        {isLoading && !scriptsBlocked && (
           <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
         )}
         {error && (
@@ -289,7 +311,32 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
         className={cn('relative bg-card', isExpanded ? 'flex-1 min-h-0' : 'h-[400px]')}
         data-testid="react-preview-frame"
       >
-        {srcDoc && (
+        {/* DES-C15: mounting the iframe here would render a permanently blank
+            frame — every script it needs is blocked by the CSP this srcdoc
+            inherits from the embedder, so `react-preview-ready` never arrives.
+            Explain it and point at the source instead of faking a load. */}
+        {scriptsBlocked ? (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center"
+            data-testid="react-preview-scripts-blocked"
+          >
+            <AlertTriangle className="h-6 w-6 text-muted-foreground" aria-hidden />
+            <p className="max-w-sm text-sm text-foreground">
+              This React component can&apos;t run here.
+            </p>
+            <p className="max-w-sm text-xs text-muted-foreground">{SCRIPTS_BLOCKED_NOTICE}</p>
+            {onViewSource && (
+              <button
+                type="button"
+                onClick={onViewSource}
+                className="rounded-md border border-border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                View source
+              </button>
+            )}
+          </div>
+        ) : null}
+        {srcDoc && !scriptsBlocked && (
           <iframe
             key={reloadKey}
             ref={iframeRef}
@@ -302,7 +349,7 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
             referrerPolicy="no-referrer"
           />
         )}
-        {!srcDoc && error && (
+        {!srcDoc && !scriptsBlocked && error && (
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />

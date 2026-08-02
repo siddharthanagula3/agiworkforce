@@ -82,6 +82,19 @@ export interface ChatRuntime {
   /** Load conversation history. */
   getMessages?(conversationId: string): Promise<ChatMessage[]>;
 
+  /**
+   * Delete durable message rows by id. Backs Regenerate (and any future
+   * edit-and-resend): the replacement send supersedes an exchange, and without
+   * this the old rows stay on the server and the transcript shows a duplicated
+   * user turn beside a stale answer on the next reload.
+   *
+   * Ids are the SAME ids the shared transcript holds — runtimes that persist a
+   * user turn must honour `SendMessageOptions.userMessageId` for this to be
+   * addressable. Optional: hosts gate the Regenerate affordance on the runtime
+   * exposing it (no fake availability).
+   */
+  deleteMessages?(conversationId: string, messageIds: string[]): Promise<void>;
+
   /** Load messages (alias for surfaces that use this name). */
   loadMessages?(conversationId: string): Promise<ChatMessage[]>;
 
@@ -285,6 +298,21 @@ export interface SendMessageOptions {
   model?: string;
   provider?: string;
   attachments?: File[];
+  /**
+   * Client-minted id for THIS turn's user message, already used by the row the
+   * transcript renders. Runtimes that persist the user turn must save it under
+   * this id so the rendered row and the durable row share one identity —
+   * otherwise nothing (Regenerate, edit-and-resend, delete) can address a
+   * server row from the UI. Absent ⇒ the runtime mints its own.
+   */
+  userMessageId?: string;
+  /**
+   * Client-minted id for THIS turn's assistant message. Cloud runtimes forward
+   * it as the completions route's `assistant_message_id` so the server persists
+   * the turn under the SAME row the client upserts — the durability net that
+   * covers a crash/quit after generation. Absent ⇒ the caller owns persistence.
+   */
+  assistantMessageId?: string;
   thinkingEnabled?: boolean;
   webSearch?: boolean;
   /** Request the managed Deep Research workflow (capability-gated by the runtime). */
@@ -525,7 +553,26 @@ type StreamEventPayload =
        */
       streamError?: { message: string; code?: string; retryable?: boolean };
     }
-  | { type: 'error'; error: string };
+  | {
+      type: 'error';
+      error: string;
+      /**
+       * Server error code from the refusal payload (e.g.
+       * `rate_limit_exceeded`, `insufficient_credits`). Runtimes that can read
+       * it forward it verbatim so the shared UI can classify a managed quota
+       * block (`classifyManagedQuotaErrorCode`) and render an in-transcript
+       * paywall with the reason and any upgrade path, instead of a toast that
+       * disappears over an empty bubble. Optional — omitted where the transport
+       * has no code (network throw, local runtimes).
+       */
+      code?: string;
+      /**
+       * ISO instant at which the exceeded ceiling clears, as reported by the
+       * server (`Retry-After`/reset metadata). NEVER synthesised: absent means
+       * the card shows no reset time rather than inventing one.
+       */
+      resetAt?: string;
+    };
 
 /**
  * `conversationId` is required in practice for concurrent runtimes and

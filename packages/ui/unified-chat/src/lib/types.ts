@@ -244,6 +244,54 @@ export interface Artifact extends Omit<ArtifactBase, 'type'> {
   type: ArtifactType;
 }
 
+/**
+ * One assistant message's artifacts plus the body text those artifacts were
+ * lifted out of.
+ *
+ * This package deliberately does NOT own derivation: the canonical, id-stable
+ * implementation lives in `@agiworkforce/artifacts`
+ * (`deriveArtifacts` + `removeArtifactBlocks`, deterministic
+ * `uuidv5(conversationId:messageId:ordinal)` ids), and pulling it in here would
+ * fork it for a third time. Hosts that already depend on that package hand the
+ * result in through {@link DeriveMessageArtifacts}; hosts that don't keep
+ * today's behaviour (only pre-attached `message.artifacts` render).
+ */
+export interface MessageArtifactProjection {
+  /** `message.artifacts` merged with host-derived artifacts, de-duped on id. */
+  artifacts: Artifact[];
+  /**
+   * `message.content` with the derived artifacts' fenced blocks removed, so the
+   * transcript does not repeat what the artifact card/panel already shows.
+   * Copy actions still use the untouched `message.content` (web parity —
+   * `apps/web/features/chat/components/messages/MessageBubble.tsx` renders
+   * `cleanedContent` but copies `message.content`).
+   */
+  displayContent: string;
+}
+
+export interface MessageArtifactDerivationContext {
+  /**
+   * Active conversation id. Passed explicitly because `ChatMessage.conversationId`
+   * is optional and is NOT set on the optimistic message the composer creates —
+   * deriving without it would give the live turn a different (id-unstable)
+   * artifact id than the same turn gets after a reload.
+   */
+  conversationId: string;
+}
+
+/**
+ * Host capability that turns one assistant message into a
+ * {@link MessageArtifactProjection}. Return `null` when the message yields no
+ * artifacts — callers then render `message.content` untouched.
+ *
+ * MUST be referentially stable (module-level function or `useCallback`): it is
+ * a `useMemo` dependency for the whole transcript.
+ */
+export type DeriveMessageArtifacts = (
+  message: ChatMessage,
+  context: MessageArtifactDerivationContext,
+) => MessageArtifactProjection | null;
+
 // ---------------------------------------------------------------------------
 // Thinking / reasoning trace types
 // ---------------------------------------------------------------------------

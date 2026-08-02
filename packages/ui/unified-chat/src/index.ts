@@ -8,6 +8,12 @@ export * from './lib/utils';
 export * from './lib/greetings';
 export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
 export {
+  getSameDocumentScriptSupport,
+  probeSameDocumentScriptSupport,
+  SCRIPTS_BLOCKED_NOTICE,
+} from './lib/artifact-preview-capability';
+export type { ArtifactPreviewScriptSupport } from './lib/artifact-preview-capability';
+export {
   getConnectorPermissionStore,
   ConnectorPermissionsUnavailableError,
 } from './lib/connectorPermissionStore';
@@ -24,6 +30,22 @@ export type {
   StreamErrorMessageLike,
   StreamErrorInfo,
 } from './lib/continue-generation';
+export {
+  getRegenerateReplayDecision,
+  planRegenerateRollback,
+  replayToSendOptions,
+} from './lib/regenerateReplay';
+export type {
+  RegenerateReplayDecision,
+  RegenerateReplayMetadata,
+  SendReplayMetadataLike,
+} from './lib/regenerateReplay';
+export {
+  isAlwaysOnReasoningModel,
+  resolveThinkingSendPolicy,
+  showsThinkingSwitch,
+} from './lib/thinkingPolicy';
+export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
 export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
 export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
 export {
@@ -79,6 +101,7 @@ export { useChat } from './hooks/useChat';
 export { useTheme } from './hooks/useTheme';
 export { useSidebar } from './hooks/useSidebar';
 export { useArtifact } from './hooks/useArtifact';
+export { useSameDocumentScriptSupport } from './hooks/useSameDocumentScriptSupport';
 export { useKeyboard } from './hooks/useKeyboard';
 export { useModel } from './hooks/useModel';
 
@@ -145,6 +168,14 @@ export { UserProfile } from './components/UserProfile';
 // Chat area components
 export { MessageList } from './components/MessageList';
 export { MessageBubble, MarkdownLite } from './components/MessageBubble';
+export {
+  MessageLimitCard,
+  formatResetLabel,
+  readMessagePaywall,
+} from './components/MessageLimitCard';
+export type { MessageLimitCardProps, MessagePaywallBlock } from './components/MessageLimitCard';
+export { ThinkingControl } from './components/ThinkingControl';
+export type { ThinkingControlProps } from './components/ThinkingControl';
 export { ActionBar } from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
 export type { ConversationHeaderProps } from './components/ConversationHeader';
