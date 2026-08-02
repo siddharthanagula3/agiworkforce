@@ -1,11 +1,21 @@
 <!doctype html>
 <!--
-  AGI Artifact Sandbox — apps/sandbox/index.html
+  AGI Artifact Sandbox — infrastructure/sandbox/index.html
   --------------------------------------------------------------------------
   Self-contained renderer for LLM-generated HTML / React / SVG / Mermaid /
   Markdown / JSON / CSV / Code artifacts.
 
-  Deployed to a separate origin (e.g. https://sandbox.agiworkforce.com).
+  ONE renderer, two hosts:
+    - Web    — deployed to a separate origin (https://sandbox.agiworkforce.com)
+               and pointed at by NEXT_PUBLIC_SANDBOX_ORIGIN.
+    - Desktop — compiled into the Tauri binary and served from a dedicated URI
+               scheme (`artifact://localhost`, `http://artifact.localhost` on
+               Windows) by apps/desktop/src-tauri/src/ui/artifact_sandbox.rs.
+               DES-C15: a same-document `srcdoc` preview inherits the app's
+               `script-src 'self' 'wasm-unsafe-eval'`, so interactive artifacts
+               rendered inert there. A separate origin does not inherit it.
+
+  Both hosts speak the same postMessage contract, so edits here change both.
   The parent app embeds this page in an iframe and ships the artifact via
   postMessage. Because the iframe is cross-origin to the parent, scripts
   inside the rendered artifact CANNOT:
@@ -104,8 +114,16 @@
       'use strict';
       (function () {
         // --------------------------------------------------------------
-        // Parent-origin allowlist. Production parents are *.agiworkforce.com
+        // Parent-origin allowlist. Production web parents are *.agiworkforce.com
         // (apex + chat subdomain). Localhost is included for dev only.
+        //
+        // The `tauri://` / `http://tauri.localhost` entries are the AGI desktop
+        // app's own document origin — Tauri serves the app shell from
+        // `tauri://localhost` on macOS/Linux and `http://tauri.localhost` on
+        // Windows. Without them the desktop host's `render` message is dropped
+        // here and the preview never leaves "Waiting for artifact…". These
+        // origins are unreachable from a browser, so listing them costs the
+        // deployed web sandbox nothing.
         // --------------------------------------------------------------
         const ALLOWED_PARENT_ORIGINS = new Set([
           'https://agiworkforce.com',
@@ -114,6 +132,12 @@
           'https://agiworkforce-chat.vercel.app',
           'http://localhost:3000',
           'http://127.0.0.1:3000',
+          // Desktop (packaged): apps/desktop/src-tauri/tauri.conf.json
+          'tauri://localhost',
+          'http://tauri.localhost',
+          // Desktop (dev): apps/desktop/src-tauri/tauri.conf.json build.devUrl
+          'http://127.0.0.1:5173',
+          'http://localhost:5173',
         ]);
 
         function isAllowedParent(origin) {
