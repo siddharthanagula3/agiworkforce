@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CookiePreferencesButton } from './CookiePreferencesButton';
 
 export const metadata = buildMetadata({
   title: 'Cookie policy',
@@ -54,8 +55,10 @@ export default function CookiesPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Your choices</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Manage cookies through your browser. Clearing cookies will sign you out of any active
-            session. For data export or deletion requests, see the{' '}
+            <CookiePreferencesButton /> at any time — analytics stays off until you turn it on, and
+            switching it back off stops it from loading on your next page view. You can also manage
+            cookies through your browser; clearing them will sign you out of any active session. For
+            data export or deletion requests, see the{' '}
             <Link href="/privacy" style={{ color: 'var(--agi-ink)' }}>
               privacy policy
             </Link>

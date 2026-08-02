@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetSession, mockRevokeSession } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
-  mockGetSession: vi.fn(),
-  mockRevokeSession: vi.fn(),
-}));
+const { mockAuth, mockGetSession, mockRevokeSession, mockGetClerkAuthUser, mockVerifyToken } =
+  vi.hoisted(() => ({
+    mockAuth: vi.fn(),
+    mockGetSession: vi.fn(),
+    mockRevokeSession: vi.fn(),
+    mockGetClerkAuthUser: vi.fn(),
+    mockVerifyToken: vi.fn(),
+  }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -16,6 +19,14 @@ vi.mock('@clerk/nextjs/server', () => ({
       revokeSession: (...args: unknown[]) => mockRevokeSession(...args),
     },
   })),
+}));
+
+vi.mock('@clerk/backend', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -32,10 +43,11 @@ vi.mock('@/lib/logger', () => ({
 
 import { DELETE } from './route';
 
-function request(sessionId: string) {
+function request(sessionId: string, bearer?: string) {
   return DELETE(
     new Request(`http://localhost:3000/api/settings/sessions/${sessionId}`, {
       method: 'DELETE',
+      ...(bearer ? { headers: { authorization: `Bearer ${bearer}` } } : {}),
     }) as never,
     { params: Promise.resolve({ sessionId }) },
   );
@@ -45,7 +57,9 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
     mockRevokeSession.mockResolvedValue({ status: 'revoked' });
+    process.env['CLERK_SECRET_KEY'] = 'sk_test_clerk_secret';
   });
 
   it('revokes an owned session and reports whether it was current', async () => {
@@ -81,5 +95,31 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
     expect(response.status).toBe(400);
     expect(mockGetSession).not.toHaveBeenCalled();
     expect(mockRevokeSession).not.toHaveBeenCalled();
+  });
+
+  it('lets a Desktop device token revoke a browser session without claiming it was current', async () => {
+    mockVerifyToken.mockRejectedValue(new Error('not a clerk token'));
+    mockGetSession.mockResolvedValue({
+      id: 'sess_current',
+      userId: 'user-1',
+      status: 'active',
+    });
+
+    const response = await request('sess_current', 'desktop-device-token');
+
+    expect(response.status).toBe(200);
+    // The cookie mock still claims sess_current is "this device"; the bearer is
+    // authoritative and has no Clerk session, so isCurrent must stay false.
+    expect(await response.json()).toEqual({ message: 'Session revoked', isCurrent: false });
+    expect(mockRevokeSession).toHaveBeenCalledWith('sess_current');
+  });
+
+  it('tells a Mobile Clerk-JWT caller when it just revoked its own session', async () => {
+    mockVerifyToken.mockResolvedValue({ sub: 'user-1', sid: 'sess_mobile' });
+    mockGetSession.mockResolvedValue({ id: 'sess_mobile', userId: 'user-1', status: 'active' });
+
+    const response = await request('sess_mobile', 'clerk.session.jwt');
+
+    expect(await response.json()).toEqual({ message: 'Session revoked', isCurrent: true });
   });
 });

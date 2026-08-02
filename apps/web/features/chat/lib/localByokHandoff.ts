@@ -14,7 +14,7 @@ import {
   providerSurfaceToProviderMode,
   type ProviderMode,
 } from '@agiworkforce/types';
-import { getModelMetadata, normalizeModelId } from '@shared/config/llm';
+import { PROVIDER_LABELS, getModelMetadata, normalizeModelId } from '@shared/config/llm';
 import type { Conversation, Message } from '@shared/stores/web-chat-store';
 
 export const WEB_HANDOFF_CONTEXT_LIMIT = 10;
@@ -115,6 +115,109 @@ export function shouldForkLocalToByok(params: {
   const sourceMode = getConversationProviderMode(params.conversation, params.messages);
   const targetMode = getProviderModeForModel(params.targetModelId);
   return sourceMode === 'Local' && targetMode === 'DirectByok';
+}
+
+export interface LocalToByokCeremonyRequest {
+  sourceConversationId: string;
+  conversationTitle: string;
+  candidates: WebHandoffContextCandidate[];
+}
+
+export interface RouteLocalToByokSendParams {
+  sourceConversationId: string | null;
+  conversation: Conversation | null | undefined;
+  messages: readonly Message[];
+  targetModelId: string;
+  outgoingContent: string;
+  /**
+   * Opens the consent ceremony. Called INSTEAD of `send` whenever an on-device
+   * conversation is about to continue onto a direct BYOK provider.
+   */
+  startCeremony: (request: LocalToByokCeremonyRequest) => void;
+  /** Performs the ordinary send. Never called on a Local → BYOK continuation. */
+  send: () => void;
+}
+
+/**
+ * The single decision point for "does this send cross the Local → BYOK trust
+ * boundary?". It lives here rather than inline in WebChatPage so the branch is
+ * directly testable: a test can pass spies for `startCeremony`/`send` and prove
+ * that the outgoing content is NOT dispatched before consent.
+ *
+ * Locked critical rule (CLAUDE.md / AGENTS.md): "Local to BYOK must be an
+ * explicit fork/continuation with context selection, secret scan, payload
+ * preview, user consent, and visible provider label." Any early-return added
+ * here that skips the ceremony while still calling `send` violates that rule —
+ * refuse the send instead.
+ */
+export function routeLocalToByokSend(params: RouteLocalToByokSendParams): 'ceremony' | 'send' {
+  const crossesBoundary = shouldForkLocalToByok({
+    conversation: params.conversation,
+    messages: params.messages,
+    targetModelId: params.targetModelId,
+  });
+
+  // No source conversation means there is no prior on-device transcript to
+  // carry across — `displayedMessages` is empty whenever `displayedConversationId`
+  // is null — so there is nothing for the ceremony to disclose.
+  if (!crossesBoundary || !params.sourceConversationId) {
+    params.send();
+    return 'send';
+  }
+
+  params.startCeremony({
+    sourceConversationId: params.sourceConversationId,
+    conversationTitle: params.conversation?.title?.trim() || 'Local conversation',
+    candidates: buildHandoffContextCandidates({
+      conversationId: params.sourceConversationId,
+      messages: params.messages,
+      outgoingContent: params.outgoingContent,
+    }),
+  });
+  return 'ceremony';
+}
+
+/**
+ * The same trust boundary as `routeLocalToByokSend`, reached by the Regenerate
+ * control, which resends an existing on-device transcript under the currently
+ * selected model.
+ *
+ * This path REFUSES instead of opening the ceremony: the fork replays through
+ * `sendContent`, which takes browser `File` attachments, whereas a regenerated
+ * turn carries already-uploaded attachment records. Forking here would have to
+ * drop them silently, so the honest outcome is a visible refusal that names the
+ * boundary and points at the flow that does run the ceremony.
+ *
+ * Returns the message to show, or `null` when regenerating stays inside the
+ * conversation's own trust boundary.
+ */
+export function resolveRegenerateBoundaryRefusal(params: {
+  conversation: Conversation | null | undefined;
+  messages: readonly Message[];
+  targetModelId: string;
+}): string | null {
+  if (!shouldForkLocalToByok(params)) return null;
+
+  const targetLabel = getByokTargetProviderLabel(params.targetModelId) ?? 'a BYOK provider';
+  return (
+    `This conversation ran on a local model. Regenerating with ${targetLabel} would send it off ` +
+    'this device. Send the message again to review and approve a BYOK fork, or switch back to the ' +
+    'local model to regenerate here.'
+  );
+}
+
+/**
+ * Concrete destination the consent ceremony must name — "visible provider
+ * label" in the locked Local→BYOK rule. Labels come from the model registry
+ * (`PROVIDER_LABELS`, derived from models.json), never from a hand-written map,
+ * so a newly catalogued provider is named correctly without an edit here.
+ * Returns undefined for a target the registry cannot name; the dialog then
+ * falls back to the generic BYOK label rather than inventing a provider name.
+ */
+export function getByokTargetProviderLabel(modelId: string | null | undefined): string | undefined {
+  const provider = inferProviderFromModelId(modelId);
+  if (!provider) return undefined;
+  return PROVIDER_LABELS[provider] ?? PROVIDER_LABELS[normalizeProviderKey(provider) ?? ''];
 }
 
 export function getProviderModeInfo(providerMode: ProviderMode): WebProviderModeInfo {
