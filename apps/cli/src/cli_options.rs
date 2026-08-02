@@ -6,6 +6,7 @@
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,5 +84,62 @@ impl CliOptions {
             explicit_paths: self.mcp_config_paths.iter().map(Into::into).collect(),
             strict: self.strict_mcp_config,
         }
+    }
+}
+
+/// Process-wide session-persistence policy, seeded from `--no-session-persistence`.
+///
+/// `--no-session-persistence` is a privacy opt-out, so it has to reach every
+/// managed-session write site. `agi exec`, `run_oneshot`, the REPL and the TUI
+/// each build their own `AgentSession` through helpers that do not share an
+/// options struct, and the subcommand dispatch runs before the per-run option
+/// resolution — so the policy is published once at entry instead of being
+/// threaded through ~20 signatures. Mirrors `sandbox::set_sandbox_disabled`.
+///
+/// `AgentSession` reads this once at construction into
+/// `AgentSession::session_persistence`; per-session overrides never consult it
+/// again, so embedders can opt an individual session out (or back in) without
+/// disturbing the process policy.
+static SESSION_PERSISTENCE_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Publish the run's session-persistence policy. Called once from `run_main`
+/// before any subcommand dispatches or any session is constructed.
+pub(crate) fn set_session_persistence_enabled(enabled: bool) {
+    SESSION_PERSISTENCE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+/// The run's session-persistence policy. `true` unless the user passed
+/// `--no-session-persistence`.
+pub(crate) fn session_persistence_enabled() -> bool {
+    SESSION_PERSISTENCE_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Serializes the tests that flip the process-wide policy against the tests
+/// that rely on the default. The policy is genuinely global, so the tests that
+/// mutate it must not run concurrently with the ones that read it.
+#[cfg(test)]
+pub(crate) fn session_persistence_policy_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_persistence_policy_defaults_to_enabled_and_roundtrips() {
+        let _guard = session_persistence_policy_lock();
+        let previous = session_persistence_enabled();
+        assert!(
+            previous,
+            "session persistence must default to enabled so a run without the flag still persists"
+        );
+
+        set_session_persistence_enabled(false);
+        assert!(!session_persistence_enabled());
+
+        set_session_persistence_enabled(previous);
+        assert!(session_persistence_enabled());
     }
 }

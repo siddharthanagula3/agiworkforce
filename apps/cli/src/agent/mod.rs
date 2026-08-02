@@ -190,6 +190,13 @@ pub struct AgentSession {
     pub(crate) team_manager: Option<teams::TeamManager>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
+    /// When false this session must never write managed-session state — not the
+    /// session file under `~/.agiworkforce/managed_sessions/`, and not the
+    /// session index row that mirrors it. Seeded at construction from the
+    /// process-wide `--no-session-persistence` policy
+    /// (`cli_options::session_persistence_enabled`). Resuming an existing
+    /// session still rehydrates in memory; only the write-back is suppressed.
+    pub(crate) session_persistence: bool,
     /// Subscription tier used when the interactive per-turn Auto re-resolution
     /// re-queries the registry policy. Seeded by the `--auto` launch path from
     /// the account-tier lookup; when absent (e.g. resumed sessions), the
@@ -593,6 +600,7 @@ impl AgentSession {
             team_manager: None,
             managed_session: None,
             managed_session_path: None,
+            session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
             pending_image_blocks: Vec::new(),
             json_events: false,
@@ -1104,8 +1112,27 @@ impl AgentSession {
         })
     }
 
+    /// True when this session is allowed to write managed-session state to
+    /// disk. False after `--no-session-persistence`.
+    pub fn session_persistence_enabled(&self) -> bool {
+        self.session_persistence
+    }
+
+    /// Override the session-persistence policy for this session only. Used by
+    /// embedders and by tests that must not disturb the process-wide policy.
+    pub fn set_session_persistence(&mut self, enabled: bool) {
+        self.session_persistence = enabled;
+    }
+
     /// Enable managed session persistence for this session.
+    ///
+    /// No-op when `--no-session-persistence` is in effect: no session file is
+    /// created and no session-index row is written, so the run leaves no trace
+    /// under `~/.agiworkforce/`.
     pub fn enable_managed_session(&mut self) -> Result<()> {
+        if !self.session_persistence {
+            return Ok(());
+        }
         if self.managed_session.is_some() {
             return Ok(());
         }
@@ -1126,6 +1153,9 @@ impl AgentSession {
     /// be called after `enable_managed_session` so the session object exists.
     /// Useful for embedder-driven flows that pre-allocate session IDs.
     pub fn override_session_id(&mut self, session_id: &str) -> Result<()> {
+        if !self.session_persistence {
+            return Ok(());
+        }
         if let Some(ref mut ms) = self.managed_session {
             ms.session_id = session_id.to_string();
             if let Some(ref path) = self.managed_session_path {
@@ -1167,7 +1197,13 @@ impl AgentSession {
     }
 
     /// Persist the current in-memory conversation into the managed session file.
+    ///
+    /// No-op under `--no-session-persistence`, including on a `--resume`d
+    /// session: the file that was read stays exactly as it was on disk.
     pub fn persist_managed_session(&mut self) -> Result<()> {
+        if !self.session_persistence {
+            return Ok(());
+        }
         let (Some(managed_session), Some(path)) = (
             self.managed_session.as_mut(),
             self.managed_session_path.as_deref(),
@@ -1253,6 +1289,9 @@ impl AgentSession {
     }
 
     fn sync_managed_session_metadata(&self) -> Result<()> {
+        if !self.session_persistence {
+            return Ok(());
+        }
         let Some(session_id) = self.managed_session_id() else {
             return Ok(());
         };
@@ -2382,5 +2421,145 @@ mod tests {
 
         // The chunks must be delivered in order and independently (not merged).
         assert_eq!(all_lines.len(), chunks.len());
+    }
+
+    // -----------------------------------------------------------------------
+    // `--no-session-persistence` write gate
+    // -----------------------------------------------------------------------
+
+    fn persistence_test_session(enabled: bool) -> AgentSession {
+        let ctx = test_context();
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        session.set_session_persistence(enabled);
+        session
+    }
+
+    #[test]
+    fn sessions_persist_by_default() {
+        let session = persistence_test_session(true);
+        assert!(
+            session.session_persistence_enabled(),
+            "a run without --no-session-persistence must still persist"
+        );
+    }
+
+    #[test]
+    fn persistence_disabled_creates_no_managed_session() {
+        let mut session = persistence_test_session(false);
+
+        session
+            .enable_managed_session()
+            .expect("enable_managed_session must succeed as a no-op");
+
+        // `create_managed_session` writes the session file first and only then
+        // is the result adopted, so an absent id proves nothing was written
+        // under `~/.agiworkforce/managed_sessions/`.
+        assert!(
+            session.managed_session_id().is_none(),
+            "--no-session-persistence must not create a managed session"
+        );
+        assert!(
+            session.managed_session_path.is_none(),
+            "--no-session-persistence must not bind a managed session file"
+        );
+    }
+
+    #[test]
+    fn persistence_disabled_leaves_a_resumed_session_file_untouched() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("resumed.json");
+
+        let on_disk = crate::runtime::session::ManagedSession::with_messages(
+            "resumed-session-id",
+            chrono::Utc::now(),
+            vec![Message::text("user", "first turn")],
+        );
+        on_disk.save_to_path(&path).expect("seed session file");
+        let before = std::fs::read_to_string(&path).expect("read seeded file");
+
+        let mut session = persistence_test_session(false);
+        session.adopt_managed_session(on_disk, path.clone());
+        // A resumed session still rehydrates in memory...
+        assert_eq!(
+            session.managed_session_id(),
+            Some("resumed-session-id"),
+            "resume must still rehydrate even with persistence off"
+        );
+
+        // ...but the turn that follows must not be written back.
+        session
+            .messages
+            .push(Message::text("user", "second turn — must never reach disk"));
+        session
+            .persist_managed_session()
+            .expect("persist_managed_session must succeed as a no-op");
+        session
+            .override_session_id("attempted-rename")
+            .expect("override_session_id must succeed as a no-op");
+
+        let after = std::fs::read_to_string(&path).expect("read file after persist");
+        assert_eq!(
+            before, after,
+            "--no-session-persistence must not write back to a resumed session file"
+        );
+        assert!(
+            !after.contains("must never reach disk"),
+            "conversation content leaked to disk despite --no-session-persistence"
+        );
+    }
+
+    #[test]
+    fn persistence_enabled_writes_back_to_the_session_file() {
+        // Control for the test above: the same sequence with the flag off does
+        // reach disk, so the gate is what suppresses the write, not the setup.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("resumed.json");
+
+        let on_disk = crate::runtime::session::ManagedSession::with_messages(
+            "resumed-session-id",
+            chrono::Utc::now(),
+            vec![Message::text("user", "first turn")],
+        );
+        on_disk.save_to_path(&path).expect("seed session file");
+
+        let mut session = persistence_test_session(true);
+        session.adopt_managed_session(on_disk, path.clone());
+        session
+            .messages
+            .push(Message::text("user", "second turn — expected on disk"));
+        session
+            .persist_managed_session()
+            .expect("persist_managed_session should succeed");
+
+        let after = std::fs::read_to_string(&path).expect("read file after persist");
+        assert!(
+            after.contains("expected on disk"),
+            "with persistence enabled the turn must be written back"
+        );
+    }
+
+    #[test]
+    fn session_persistence_is_seeded_from_the_process_policy() {
+        // Proves the `--no-session-persistence` flag actually reaches a
+        // session: `run_main` publishes the policy before dispatch and every
+        // constructor reads it once.
+        let _guard = crate::cli_options::session_persistence_policy_lock();
+        let previous = crate::cli_options::session_persistence_enabled();
+
+        crate::cli_options::set_session_persistence_enabled(false);
+        let ctx = test_context();
+        let opted_out = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        crate::cli_options::set_session_persistence_enabled(previous);
+
+        assert!(
+            !opted_out.session_persistence_enabled(),
+            "a session constructed under --no-session-persistence must refuse to persist"
+        );
+
+        let default_session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        assert!(
+            default_session.session_persistence_enabled(),
+            "restoring the policy must restore persistence for later sessions"
+        );
     }
 }
