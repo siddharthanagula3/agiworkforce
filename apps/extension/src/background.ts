@@ -44,6 +44,18 @@ import {
   TASK_ALARM_PREFIX,
   TASK_PROMPT_MAX_CHARS,
 } from './features/background/tasks';
+import {
+  createBackgroundChatDelivery,
+  linkNotificationToConversation,
+  notificationSnippet,
+  recordBackgroundChatResult,
+  setPendingResultConversation,
+  takeNotificationConversation,
+  OPEN_BROWSER_CONVERSATION_MESSAGE,
+  SCHEDULED_TASK_CLIENT_ID,
+  SHORTCUT_REPLAY_CLIENT_ID,
+  type BackgroundChatDelivery,
+} from './features/background/background-results';
 import { getPlatformPrompt } from './platform-prompts';
 // Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
 // extension's existing `RunPageAction` machinery. The package's runtime
@@ -761,7 +773,17 @@ function handleNativeDisconnect(): void {
   scheduleNativeReconnect('native_disconnect');
 }
 
-function showNotification(title: string, message: string, tabId?: number): void {
+function showNotification(
+  title: string,
+  message: string,
+  tabId?: number,
+  /**
+   * Background result this notification announces. Clicking the notification
+   * opens that conversation in the side panel, so a scheduled answer is one
+   * click away instead of only discoverable in the History drawer.
+   */
+  conversationId?: string,
+): void {
   if (!chrome.notifications?.create) return;
   // L-12 audit 2026-05-19: crypto.randomUUID prefix instead of Date.now so
   // rapid notifications don't collide.
@@ -784,6 +806,9 @@ function showNotification(title: string, message: string, tabId?: number): void 
   if (tabId) {
     chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
   }
+  if (conversationId) {
+    void linkNotificationToConversation(notifId, conversationId);
+  }
 }
 
 // Single source of truth for the "Task notifications" options toggle. Previously
@@ -801,6 +826,19 @@ async function taskNotificationsEnabled(): Promise<boolean> {
 }
 
 chrome.notifications?.onClicked?.addListener((notifId: string) => {
+  // A completion notification for a background run points at the conversation
+  // holding its answer. Park the pointer before the panel opens (a panel that
+  // is still booting cannot receive a runtime message) and also broadcast it,
+  // for the case where a panel is already open and idle.
+  void takeNotificationConversation(notifId).then(async (conversationId) => {
+    if (!conversationId) return;
+    await setPendingResultConversation(conversationId);
+    chrome.runtime
+      .sendMessage({ type: OPEN_BROWSER_CONVERSATION_MESSAGE, conversationId })
+      .catch(() => {
+        // No extension view is open yet; the parked pointer covers that case.
+      });
+  });
   // Open side panel when notification clicked
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
@@ -876,15 +914,35 @@ async function handleReplayShortcut(
     const safePrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS);
     const chatMsg: import('./types').ChatMessageMessage = {
       type: 'CHAT_MESSAGE',
-      clientInstanceId: 'shortcut-replay',
+      clientInstanceId: SHORTCUT_REPLAY_CLIENT_ID,
       id: `shortcut_${shortcut.id}_${crypto.randomUUID()}`,
       text: safePrompt,
       timestamp: Date.now(),
       modelSelection: 'auto',
     };
-    const chatResult = await handleChatMessage(chatMsg, { id: chrome.runtime.id });
+    // SIX-04: nothing listens for `shortcut-replay` chunks, so the answer is
+    // filed into the conversation store the side panel's History drawer reads.
+    let deliveredAnswer = '';
+    const delivery = createBackgroundChatDelivery(
+      'shortcut',
+      shortcut.id,
+      shortcut.name,
+      safePrompt,
+    );
+    if (delivery) {
+      delivery.onDelivered = (answer) => {
+        deliveredAnswer = answer;
+      };
+    }
+    const chatResult = await handleChatMessage(chatMsg, { id: chrome.runtime.id }, delivery);
     if (chatResult.status === 'success') {
-      showNotification('Shortcut Replayed', `"${shortcut.name}" started`);
+      const snippet = notificationSnippet(deliveredAnswer);
+      showNotification(
+        'Shortcut Replayed',
+        snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
+        undefined,
+        deliveredAnswer ? delivery?.conversationId : undefined,
+      );
       return { success: true } as ExtensionResponse;
     }
     return {
@@ -936,6 +994,11 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
 
   try {
     let result: unknown;
+    // SIX-04: the answer a scheduled run generates is billed like any other
+    // turn, but `scheduled-task` chunks have no listener. Capture what was
+    // filed so the completion notification can quote it.
+    let deliveredAnswer = '';
+    let resultConversationId: string | undefined;
     if (task.shortcutId) {
       result = await handleReplayShortcut({
         type: 'REPLAY_SHORTCUT',
@@ -945,7 +1008,7 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
       result = await dispatchScheduledPrompt(task, async (safePrompt) => {
         const chatMsg: import('./types').ChatMessageMessage = {
           type: 'CHAT_MESSAGE',
-          clientInstanceId: 'scheduled-task',
+          clientInstanceId: SCHEDULED_TASK_CLIENT_ID,
           id: `task_${task.id}_${crypto.randomUUID()}`,
           text: safePrompt,
           timestamp: Date.now(),
@@ -954,14 +1017,29 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
         const scheduledTaskSender: chrome.runtime.MessageSender = {
           id: chrome.runtime.id,
         };
-        return handleChatMessage(chatMsg, scheduledTaskSender);
+        const delivery = createBackgroundChatDelivery('task', task.id, task.name, safePrompt);
+        if (delivery) {
+          delivery.onDelivered = (answer) => {
+            deliveredAnswer = answer;
+            resultConversationId = delivery.conversationId;
+          };
+        }
+        return handleChatMessage(chatMsg, scheduledTaskSender, delivery);
       });
     }
 
     assertScheduledExecutionSucceeded(result);
     await recordScheduledTaskRun(task.id);
     if (await taskNotificationsEnabled()) {
-      showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
+      const snippet = notificationSnippet(deliveredAnswer);
+      showNotification(
+        'Task Completed',
+        snippet
+          ? `"${task.name}": ${snippet}`
+          : `Scheduled task "${task.name}" finished — open History to see the result`,
+        undefined,
+        resultConversationId,
+      );
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
@@ -2785,6 +2863,13 @@ function isAllowedProbeUrl(raw: string): boolean {
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
+  /**
+   * Present only for background-initiated runs (scheduled tasks, prompt
+   * shortcuts). Those streams have no live `CHAT_CHUNK` listener, so the
+   * generated — and billed — answer has to be filed into the conversation
+   * store or it is lost. See `features/background/background-results.ts`.
+   */
+  delivery?: BackgroundChatDelivery,
 ): Promise<ChromeManagedChatResult> {
   const { clientInstanceId, id } = message;
   let streamKey: string;
@@ -2834,6 +2919,36 @@ async function handleChatMessage(
   };
   activeChatStreams.set(streamKey, activeStream);
 
+  // Only accumulated for background runs. An interactive turn is rendered and
+  // persisted by the panel that owns the stream, so buffering the whole answer
+  // here would just duplicate it in service-worker memory.
+  const transcript: string[] = [];
+  const onStreamText = (text: string): void => {
+    if (delivery && text) transcript.push(text);
+    broadcastChunk(text, false);
+  };
+  /**
+   * File whatever the run produced before returning. Called on every terminal
+   * path — success, error and throw — because a stream that failed midway was
+   * still billed for the tokens it emitted.
+   */
+  const deliverBackgroundResult = async (
+    routing?: ChromeManagedChatResult['routing'],
+  ): Promise<void> => {
+    if (!delivery) return;
+    const answer = transcript.join('');
+    if (!answer.trim()) return;
+    try {
+      await recordBackgroundChatResult(
+        delivery,
+        answer,
+        routing ? { selectedModel: 'auto', currentModelKey: routing.modelKey } : undefined,
+      );
+    } catch (error) {
+      logger.error('Failed to persist background chat result', error);
+    }
+  };
+
   try {
     let systemPrompt: string | undefined;
     try {
@@ -2858,7 +2973,7 @@ async function handleChatMessage(
         previousTaskType: message.previousTaskType,
         signal: activeStream.controller.signal,
       },
-      createChromeManagedChatDependencies((text) => broadcastChunk(text, false), {
+      createChromeManagedChatDependencies(onStreamText, {
         onAgentEvent: (chunk) =>
           broadcastChunk('', false, undefined, undefined, {
             agentEvent: chunk.envelope,
@@ -2875,6 +2990,7 @@ async function handleChatMessage(
       if (!activeStream.cancelNotified) {
         broadcastChunk('', true, undefined, result.routing);
       }
+      await deliverBackgroundResult(result.routing);
       return result;
     }
 
@@ -2888,6 +3004,7 @@ async function handleChatMessage(
             : result.message;
       broadcastChunk('', true, visibleError, result.routing);
     }
+    await deliverBackgroundResult(result.routing);
     return result;
   } catch (error) {
     const messageText = error instanceof Error ? error.message : 'Managed Cloud chat failed.';
@@ -2901,6 +3018,7 @@ async function handleChatMessage(
       broadcastChunk('', true, messageText);
     }
     logger.error('handleChatMessage error', error);
+    await deliverBackgroundResult();
     return result;
   } finally {
     // A stale completion must never delete a newer stream that reused the id.

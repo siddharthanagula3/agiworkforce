@@ -14,6 +14,13 @@ const MAX_CONVERSATIONS = 100;
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
 const MAX_STORED_AGENT_EVENTS = 1_000;
+/**
+ * Message cap for a task-scoped conversation. A daily task appends two
+ * messages per run forever, so the thread has to be bounded or it eventually
+ * blows the `chrome.storage.local` quota for every other conversation too.
+ */
+const MAX_BACKGROUND_MESSAGES = 100;
+const MAX_CONVERSATION_TITLE_CHARS = 80;
 
 export interface HistoryMessage {
   role: 'user' | 'assistant';
@@ -37,6 +44,13 @@ export interface ConversationRoutingState {
   selectedModel: string;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
+}
+
+/** One completed background run: what was asked, and what was generated. */
+export interface BackgroundTurn {
+  prompt: string;
+  answer: string;
+  timestamp?: number;
 }
 
 interface BrowserConversationStore {
@@ -223,6 +237,20 @@ function deriveTitle(messages: HistoryMessage[]): string {
   return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 }
 
+/**
+ * Accept a caller-supplied conversation title. Task names come from stored
+ * task records, so collapse whitespace, strip control characters and bound the
+ * length before it reaches the history list.
+ */
+function normalizeConversationTitle(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const collapsed = value.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0 || containsControlCharacter(collapsed)) return undefined;
+  return collapsed.length > MAX_CONVERSATION_TITLE_CHARS
+    ? `${collapsed.slice(0, MAX_CONVERSATION_TITLE_CHARS - 3)}...`
+    : collapsed;
+}
+
 export function createBrowserConversationId(): string {
   return `conv-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -382,6 +410,63 @@ function mutateStore<T>(operation: (store: BrowserConversationStore) => Promise<
 async function readAfterMutations(): Promise<BrowserConversationStore> {
   await mutationQueue;
   return withConversationStoreLock(readStore);
+}
+
+/**
+ * Append a completed background turn (scheduled task, shortcut replay) to a
+ * task-scoped conversation.
+ *
+ * Background runs are dispatched with a fixed `clientInstanceId` that no side
+ * panel listens for — the panel filters `CHAT_CHUNK` on its own per-panel UUID
+ * — so this is the only place their answer is retained. Without it the run is
+ * generated, billed, and discarded.
+ *
+ * Two deliberate differences from `upsertConversation`:
+ *  - the caller supplies the title (the task name), because `deriveTitle`
+ *    would otherwise label the entry with the raw prompt;
+ *  - `activeConversationId` is left alone. A task firing in the background must
+ *    never switch the conversation an open side panel is showing.
+ *
+ * The read-append-write runs inside `mutateStore`, so two tasks completing at
+ * once cannot lose each other's turn.
+ */
+export async function appendBackgroundTurn(
+  conversationId: string,
+  title: string,
+  turn: BackgroundTurn,
+  routing: ConversationRoutingState = { selectedModel: 'auto' },
+): Promise<ConversationEntry | undefined> {
+  if (!isSafeConversationId(conversationId)) {
+    throw new Error('Invalid browser conversation id');
+  }
+  const answer = turn.answer.trim();
+  if (answer.length === 0) return undefined;
+
+  const at = turn.timestamp ?? Date.now();
+  const appended: HistoryMessage[] = [
+    { role: 'user', content: turn.prompt, timestamp: at },
+    { role: 'assistant', content: answer, timestamp: at + 1 },
+  ];
+
+  return mutateStore(async (store) => {
+    const existing = store.conversations.find((entry) => entry.id === conversationId);
+    const messages = normalizeMessages([...(existing?.messages ?? []), ...appended]).slice(
+      -MAX_BACKGROUND_MESSAGES,
+    );
+    const entry: ConversationEntry = {
+      id: conversationId,
+      title: normalizeConversationTitle(title) ?? deriveTitle(messages),
+      messages,
+      savedAt: Date.now(),
+      routing: normalizeRoutingState(routing),
+    };
+    store.conversations = [
+      entry,
+      ...store.conversations.filter((candidate) => candidate.id !== conversationId),
+    ].slice(0, MAX_CONVERSATIONS);
+    await writeStore(store);
+    return entry;
+  });
 }
 
 /** Save an independent archived browser conversation. */
