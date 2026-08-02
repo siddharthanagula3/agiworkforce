@@ -218,6 +218,11 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         email: authState.user.email || null,
         accessToken: authState.session?.access_token || null,
         refreshToken: authState.session?.refresh_token || null,
+        // Clear the synthesized Local device marker in the SAME update that
+        // projects the credential. `selectHasCloudAccountSession` reads this
+        // flag, so a device that was previously running Local mode is admitted
+        // to Cloud the moment its bearer lands — not after the tier resolves.
+        isLocalDeviceAccount: false,
       });
 
       // Scope the subscription cache to this user so account switches
@@ -242,7 +247,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     // ═══════════════════════════════════════════════════════════════
     // STEP 2: Determine plan tier with cache fallback
     // ═══════════════════════════════════════════════════════════════
-    let planTier: PlanTier | null;
+    let planTier: PlanTier;
     let subscriptionStatus: SubscriptionStatus = 'none';
     const userId = authState.user.id;
 
@@ -254,14 +259,34 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       );
       setCachedSubscription(userId, planTier, subscriptionStatus);
     } else if (authState.subscriptionFetchStatus === 'failed') {
-      // Fetch failed - try cache
+      // Fetch failed — degrade in a recoverable order, never to null.
+      //
+      // A null plan is not a neutral "unknown": `desktopCloudEntitlements`
+      // returns [] for it, so App.tsx empties the Cloud model store and the
+      // picker has nothing selectable, while `planDisplayName` stays on the
+      // 'Loading...' sentinel forever. One transient /api/me failure therefore
+      // made Cloud mode permanently unusable with no path back.
+      //
+      // Order: 24 h user-scoped cache -> the tier this session already
+      // confirmed with a SUCCEEDED fetch -> 'free'. Nothing here can raise a
+      // tier the server never confirmed, and entitlement is enforced
+      // server-side on every request regardless; the shell also shows the
+      // "Cloud account details could not be refreshed" banner with a Retry.
       const cached = getCachedSubscription(userId);
+      const previous = useUnifiedAuthStore.getState();
       if (cached) {
         subscriptionStatus = cached.subscriptionStatus;
         planTier = asPlanTier(effectivePlanTier(cached.planTier, subscriptionStatus));
+      } else if (
+        previous.plan &&
+        previous.plan !== 'local-only' &&
+        previous.subscriptionFetchStatus === 'succeeded'
+      ) {
+        subscriptionStatus = previous.subscriptionStatus;
+        planTier = asPlanTier(effectivePlanTier(previous.plan, subscriptionStatus));
       } else {
-        // CRITICAL: Don't default to 'free' - keep as null
-        planTier = null;
+        subscriptionStatus = 'none';
+        planTier = 'free';
       }
     } else {
       // Fetch succeeded but no subscription = genuinely free tier
@@ -380,8 +405,9 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         authState.profile?.avatar_url ||
         (authState.user.user_metadata?.['avatar_url'] as string) ||
         null,
+      isLocalDeviceAccount: false,
       plan: planTier,
-      planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
+      planDisplayName: PLAN_DISPLAY_NAMES[planTier],
       subscriptionStatus: (authState.subscription?.status as SubscriptionStatus) || 'none',
       subscriptionFetchStatus: fetchStatus,
       currentPeriodEnd: authState.subscription?.current_period_end
