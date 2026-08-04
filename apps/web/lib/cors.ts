@@ -91,6 +91,15 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
     return true;
   }
 
+  // Electron desktop cloud shell. Its renderer is served from the privileged
+  // `agi:` scheme (registered standard+secure in apps/desktop/electron/main.ts),
+  // so every fetch carries this exact origin. Pinned literal — no wildcard, no
+  // charset surface, same style as the Tauri origins above. `null` (file://,
+  // sandboxed iframes) is intentionally NOT accepted anywhere in this function.
+  if (origin === 'agi://cloud') {
+    return true;
+  }
+
   // In development, allow any localhost origin
   if (process.env.NODE_ENV === 'development') {
     const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;

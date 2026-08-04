@@ -2,18 +2,18 @@
 
 Status: Current
 Owner: Desktop lead
-Last updated: 2026-07-14
+Last updated: 2026-08-04
 
 Read root `AGENTS.md`, then this file, then `apps/desktop/README.md`.
 
 ## Scope
 
-`apps/desktop` owns the local-first desktop app, Tauri bridge, local files, MCP/connectors, artifacts, generated files, computer-use host behavior, and Desktop as future local compute host.
+`apps/desktop` owns the local-first desktop app, Tauri bridge, local files, MCP/connectors, artifacts, generated files, computer-use host behavior, and Desktop as future local compute host. It also owns the cloud-only Electron shell (`apps/desktop/electron/` plus the `src/lib/tauri-electron/` shims), which packages the desktop cloud web build.
 
 ## Lane Contract
 
 - Primary lanes: `desktop-frontend` and `desktop-native`.
-- `desktop-frontend` owns `apps/desktop/src/**`.
+- `desktop-frontend` owns `apps/desktop/src/**` and `apps/desktop/electron/**`.
 - `desktop-native` owns `apps/desktop/src-tauri/**`.
 - Shared contracts, Rust crates outside the Desktop package, release signing, and installer metadata need the matching platform or release lane.
 - Cross-boundary Tauri IPC changes need frontend and native verification before merge.
@@ -29,14 +29,39 @@ Read root `AGENTS.md`, then this file, then `apps/desktop/README.md`.
 - Frontend: `pnpm --filter @agiworkforce/desktop typecheck`
 - Frontend behavior: `pnpm --filter @agiworkforce/desktop test`
 - Tauri/Rust: `cargo check -p agiworkforce-desktop`
+- Electron shell: `pnpm --filter @agiworkforce/desktop typecheck:electron` and
+  `pnpm --filter @agiworkforce/desktop build:electron`
 - Packaging/release: run the relevant build or document why it was not run.
 
-## Locked: one app, isolated execution planes
+## Locked: one surface, two shells, isolated execution planes
 
-**Decision:** Desktop is one installed Tauri application with Local and Cloud
-workspaces, not separate Local and Cloud binaries.
+**Decision (founder, 2026-08-03):** Desktop is one product surface with two
+installed shells. The Tauri shell owns Local, BYOK, and Managed Cloud
+workspaces. The cloud-only Electron shell (`apps/desktop/electron/`) packages
+the desktop cloud web build and lives entirely inside the Managed Cloud trust
+boundary, on the same plane as Web. This supersedes the earlier "one installed
+Tauri application" lock.
 
-**Rules:**
+**Electron shell rules:**
+
+- The Electron shell is Managed Cloud only, permanently. It must never gain a
+  Local mode, BYOK routing, local filesystem features, shell/process
+  execution, MCP hosting, or any local execution plane.
+- Default renderer is the HOSTED cloud web app (Claude-desktop model, founder
+  decision 2026-08-04): the window loads `https://agiworkforce.com/chat`
+  top-level in the pinned `persist:agi-cloud` session partition, with
+  cookie-session auth and a navigation allowlist (our hosts + identity
+  providers; everything else opens in the OS browser). Do not change the
+  partition name — it wipes signed-in state.
+- Fallback renderer (`AGI_CLOUD_RENDERER=bundled`) is the
+  `VITE_BUILD_TARGET=electron` bundle served over `agi://cloud`, with native
+  Clerk sign-in proxied by the main process. Keep it building and tested; it
+  is the escape hatch if the remote model hits a webview or auth wall.
+- The main process talks only to the Clerk Frontend API and our own cloud API.
+- Do not complete Tauri Cloud Mode by pointing users at the Electron shell, and
+  do not port Tauri Local/BYOK behavior into it.
+
+**Tauri shell rules:**
 
 - Local remains the default on a Tauri host. Local conversations and files do
   not sync or egress automatically.
@@ -56,6 +81,7 @@ workspaces, not separate Local and Cloud binaries.
   still fail closed until `CloudRuntime` is selected by the live shell and the
   `desktop/cloud-chat` runtime profile is marked `implemented` after real
   credentialed end-to-end verification.
-- Do not create a second Desktop application to complete Cloud Mode. Add the
-  Cloud runtime adapter behind the existing shell and keep Local, BYOK, and
-  Managed storage, credentials, tools, telemetry, and network policy isolated.
+- Keep Local, BYOK, and Managed storage, credentials, tools, telemetry, and
+  network policy isolated. The Electron shell is not a substitute for Tauri
+  Cloud Mode: the Tauri shell keeps its own Cloud runtime adapter behind the
+  existing shell.

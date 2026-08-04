@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the AGI cloud desktop shell (Developer ID
+  distribution, notarized). Deliberately minimal — the cloud-only shell has no
+  local files, automation, or camera features:
+
+  - allow-jit: required for V8 JIT under the hardened runtime.
+  - device.audio-input: microphone for voice input; pairs with the
+    NSMicrophoneUsageDescription injected via electron-builder extendInfo.
+
+  Do NOT add allow-unsigned-executable-memory or disable-library-validation;
+  modern Electron does not need them (same reasoning as the Tauri shell's
+  src-tauri/entitlements.plist, which documents their removal).
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

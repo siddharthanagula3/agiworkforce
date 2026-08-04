@@ -2,9 +2,58 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-01
+Last updated: 2026-08-04
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — cloud-only Electron desktop shell (macOS)] — 2026-08-04
+
+### Added
+
+- **Second desktop shell: cloud-only Electron app** (founder decision
+  2026-08-04 reversing the one-Tauri-app lock; PLAN.md, `apps/desktop/AGENTS.md`,
+  and `docs/current/source-of-truth.md` reframed as "one Desktop surface, two
+  shells"). The Tauri shell keeps Local/BYOK/Managed Cloud unchanged.
+  - **Renderer model (founder decision 2026-08-04): the hosted cloud web app**
+    — the window loads `https://agiworkforce.com/chat` top-level in a pinned
+    session partition with cookie auth, a cleaned Chrome user agent, a
+    navigation allowlist (our hosts + identity providers; everything else →
+    OS browser), and permission/screen-share handlers. Same model as Claude
+    Desktop: the app updates whenever the web deploys. The bundled renderer
+    below remains as the `AGI_CLOUD_RENDERER=bundled` fallback.
+  - New `VITE_BUILD_TARGET=electron` Vite target: the cloud-web bundle plus
+    Electron-backed shims (`apps/desktop/src/lib/tauri-electron/`) replacing
+    the browser stubs whose silent no-ops would ship as defects (dialogs
+    answering "no", dead window controls, deep links never firing,
+    `shell.open` tripping OAuth `disallowed_useragent`).
+  - Electron host (`apps/desktop/electron/`): sandboxed renderer served over
+    the privileged `agi://cloud` scheme (real CORS origin, CSP mirroring the
+    Tauri config), Clerk FAPI proxy in the main process mirroring
+    `clerk_native.rs`'s path/query allowlist, device-authorization flow
+    against our API, tokens in `safeStorage`, SSO deep link on the new
+    `agiworkforce-cloud://` scheme, window/dialog/notification IPC.
+  - Packaging + CI: `apps/desktop/electron-builder.yml`
+    (`com.agiworkforce.desktop.cloud` / "AGI Cloud", dmg+zip, arm64+x64,
+    hardened runtime, minimal entitlements) and
+    `.github/workflows/release-desktop-cloud.yml` (`v-cloud-desktop-*` tags —
+    chosen so the Tauri `v-desktop-*` workflow/updater never see them — with
+    codesign/spctl/stapler/latest-mac.yml verification gates before publish).
+  - Web: `agi://cloud` pinned in the CORS allowlist (+tests),
+    `tagPrefix`-parameterized release lookup, `/api/download?platform=mac&app=cloud`,
+    `/api/releases/desktop-cloud/latest` probe, and a live macOS card on the
+    download page.
+  - Verified: desktop typecheck/tests (2,329) and electron typecheck green;
+    electron bundle builds; dev and packaged apps launch cleanly; local
+    unsigned packaging produces arch-marked dmg/zip and a hash-verified
+    `latest-mac.yml`; `check:agent-context`, `check-boundaries`,
+    `check-trust-boundaries`, `check-ci-guardrails` all pass.
+  - Known gaps (tracked): alpha ships on `WebRuntime` (no server-side stop,
+    quota surfaces, or history pagination — CloudRuntime promotion is required
+    before GA); in-app auto-update deferred (updater feed route
+    `/api/releases/electron/mac/*` + electron-updater wiring); ops must allow
+    `v-cloud-desktop-*` tags on the `macos-release` GitHub environment, set
+    `VITE_CLERK_PUBLISHABLE_KEY` for release builds, and allowlist
+    `agiworkforce-cloud://sso-callback` as a Clerk redirect URL.
 
 ## [Unreleased — mobile parity P0 wave: all 20 demo blockers closed] — 2026-08-01
 

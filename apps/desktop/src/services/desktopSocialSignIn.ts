@@ -26,6 +26,7 @@
  * hang.
  */
 
+import { isElectronHost } from '../lib/runtimeEnvironment';
 import {
   ClerkAuthError,
   createOauthSignIn,
@@ -43,7 +44,12 @@ export const SOCIAL_PROVIDERS = [
 
 export type SocialProviderId = (typeof SOCIAL_PROVIDERS)[number]['id'];
 
-export const SSO_REDIRECT_URL = 'agiworkforce://sso-callback';
+// The Electron cloud shell registers its own scheme so it can be installed
+// next to the Tauri shell; both callback URLs must be allowlisted as redirect
+// URLs on the Clerk instance.
+export const SSO_REDIRECT_URL = isElectronHost
+  ? 'agiworkforce-cloud://sso-callback'
+  : 'agiworkforce://sso-callback';
 
 export interface SocialSignInHandle {
   signIn: ClerkSignIn;
@@ -58,6 +64,13 @@ async function openInSystemBrowser(url: string): Promise<void> {
   }
 
   const { isTauri } = await import('../lib/runtimeEnvironment');
+  if (isElectronHost) {
+    // Routed to shell.openExternal by the electron shim (a window.open here
+    // would spawn an embedded BrowserWindow, which OAuth providers refuse).
+    const { open } = await import('@tauri-apps/plugin-shell');
+    await open(url);
+    return;
+  }
   if (!isTauri) {
     const opened = window.open(url, '_blank', 'noopener,noreferrer');
     if (!opened) {
