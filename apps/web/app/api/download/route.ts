@@ -6,13 +6,19 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
+  DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestStableDesktopRelease,
   selectDesktopInstallerAsset,
   type DesktopDownloadPlatform,
+  type StableDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
 
 const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
 const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
+// The Electron cloud shell publishes v-cloud-desktop-* releases from the
+// monorepo release workflow (.github/workflows/release-desktop-cloud.yml).
+const CLOUD_REPO_OWNER = process.env['DESKTOP_CLOUD_GITHUB_OWNER'] || 'siddharthanagula3';
+const CLOUD_REPO_NAME = process.env['DESKTOP_CLOUD_GITHUB_REPO'] || 'agiworkforce';
 
 const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
   'downloads.agiworkforce.com',
@@ -24,7 +30,22 @@ const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
 const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = [
   { owner: 'siddharthanagula3', repo: 'agiworkforce' },
   { owner: REPO_OWNER, repo: REPO_NAME },
+  { owner: CLOUD_REPO_OWNER, repo: CLOUD_REPO_NAME },
 ];
+
+/**
+ * Pick the AGI Cloud (Electron) macOS installer: Apple Silicon first, Intel
+ * fallback. Cloud releases only ship .dmg + .zip; the .zip belongs to the
+ * auto-updater, never the download page.
+ */
+function selectCloudMacInstallerAsset(release: StableDesktopRelease) {
+  return (
+    release.assets.find((a) => a.name.endsWith('.dmg') && /arm64|aarch64/i.test(a.name)) ??
+    release.assets.find((a) => a.name.endsWith('.dmg') && /x64|x86_64/i.test(a.name)) ??
+    release.assets.find((a) => a.name.endsWith('.dmg')) ??
+    null
+  );
+}
 
 function isExternalRedirectAllowed(rawUrl: string): boolean {
   let parsed: URL;
@@ -79,12 +100,14 @@ async function handleDownload(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform');
+  const app = searchParams.get('app');
 
   logger.info(
     {
       clientIp,
       userAgent: userAgent.substring(0, 200), // Truncate to prevent log injection
       platform,
+      app,
       timestamp: new Date().toISOString(),
     },
     'Download request received',
@@ -93,20 +116,37 @@ async function handleDownload(request: NextRequest) {
   if (!platform || !['mac', 'windows', 'linux'].includes(platform)) {
     throw createError.validation('Invalid platform requested. Must be mac, windows, or linux.');
   }
+  if (app !== null && app !== 'cloud') {
+    throw createError.validation('Invalid app requested. Omit the parameter or use app=cloud.');
+  }
+  if (app === 'cloud' && platform !== 'mac') {
+    throw createError.validation('The AGI Cloud desktop app is currently macOS only.');
+  }
 
-  const release = await fetchLatestStableDesktopRelease({
-    owner: REPO_OWNER,
-    repo: REPO_NAME,
-    revalidateSeconds: 0,
-  });
-  if (!release) return fallbackToStatic(platform, request);
+  const release =
+    app === 'cloud'
+      ? await fetchLatestStableDesktopRelease({
+          owner: CLOUD_REPO_OWNER,
+          repo: CLOUD_REPO_NAME,
+          tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
+          revalidateSeconds: 0,
+        })
+      : await fetchLatestStableDesktopRelease({
+          owner: REPO_OWNER,
+          repo: REPO_NAME,
+          revalidateSeconds: 0,
+        });
+  if (!release) return fallbackToStatic(platform, request, app);
 
-  const asset = selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
+  const asset =
+    app === 'cloud'
+      ? selectCloudMacInstallerAsset(release)
+      : selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
 
   if (asset) {
     // Set clean filenames for downloads
     const cleanFilenames: Record<string, string> = {
-      mac: 'agiworkforce.dmg',
+      mac: app === 'cloud' ? 'agiworkforce-cloud.dmg' : 'agiworkforce.dmg',
       windows: 'agiworkforce-setup.exe',
       linux: 'agiworkforce.AppImage',
     };
@@ -152,10 +192,14 @@ async function handleDownload(request: NextRequest) {
   }
 
   // No matching asset found in release? Fallback.
-  return fallbackToStatic(platform, request);
+  return fallbackToStatic(platform, request, app);
 }
 
-function fallbackToStatic(platform: string, request: Request) {
+function fallbackToStatic(platform: string, request: Request, app: string | null = null) {
+  // The cloud shell has no static fallback URLs; absence is a plain 503.
+  if (app === 'cloud') {
+    return NextResponse.json({ error: 'Installer unavailable', platform, app }, { status: 503 });
+  }
   // Do not fall back to local static placeholders. `public/downloads/` is ignored
   // and not deployed, so every platform needs either a trusted release asset or
   // an explicit NEXT_PUBLIC_DOWNLOAD_URL_* value.

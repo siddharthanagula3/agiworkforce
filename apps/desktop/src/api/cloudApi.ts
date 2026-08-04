@@ -6,7 +6,7 @@
  */
 
 import { guardedFetch } from '../lib/egressGuard';
-import { isTauri } from '../lib/runtimeEnvironment';
+import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import {
   MANAGED_CLOUD_CONVERSATION_LIMITS,
@@ -34,9 +34,12 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 // Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
+// The Electron shell also needs the absolute base: its renderer origin is
+// `agi://cloud` (never same-origin with the API), and that origin is
+// explicitly CORS-allowlisted server-side.
 // Exported so runtimes can resolve relative wire uris (e.g. the
 // `x_generated_files` `/api/files/{id}` paths) against the same base.
-export const CLOUD_API_BASE_URL = isTauri ? WEB_APP_URL : '';
+export const CLOUD_API_BASE_URL = isTauri || isElectronHost ? WEB_APP_URL : '';
 
 /** Maximum size of one not-yet-dispatched Managed Cloud SSE event. */
 export const CLOUD_SSE_MAX_EVENT_CHARS = 1_048_576;

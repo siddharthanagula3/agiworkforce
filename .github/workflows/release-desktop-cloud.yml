@@ -1,0 +1,358 @@
+# Release workflow for the AGI cloud desktop shell (Electron, macOS first).
+#
+# One Desktop surface, two shells: this releases the cloud-only Electron shell
+# from apps/desktop/electron. The Tauri shell keeps release-desktop.yml.
+#
+# Tag scheme: v-cloud-desktop-<semver>. Deliberately NOT v-desktop-cloud-*:
+# release-desktop.yml triggers on the v-desktop-* glob and its version
+# extraction/`git describe` changelog ranges would both break. The web-side
+# Tauri updater feed and /api/download pin the v-desktop- prefix, so these
+# releases are invisible to them by construction. Never attach Electron assets
+# to a v-desktop-* release.
+#
+# Version source of truth is the TAG: the workflow stamps the app via
+# electron-builder --config.extraMetadata.version, and the verify step asserts
+# the bundle and latest-mac.yml agree. apps/desktop/package.json keeps the
+# Tauri shell's version stream untouched.
+#
+# Ops prerequisite (one-time): the `macos-release` GitHub environment must
+# allow deployments from v-cloud-desktop-* tags, alongside v-desktop-*.
+
+name: Release Desktop Cloud Shell
+
+on:
+  push:
+    tags:
+      - 'v-cloud-desktop-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (semver, e.g. 0.1.0). Must match an existing v-cloud-desktop-<version> tag.'
+        required: true
+      prerelease:
+        description: 'Mark the GitHub release as a pre-release'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-desktop-cloud-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Derive and validate release version
+        id: meta
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v-cloud-desktop-}"
+          else
+            VERSION="${DISPATCH_VERSION}"
+            TAG="v-cloud-desktop-${VERSION}"
+          fi
+
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
+            echo "ERROR: invalid cloud desktop release version: $VERSION" >&2
+            exit 1
+          fi
+          if [ "$TAG" != "v-cloud-desktop-${VERSION}" ]; then
+            echo "ERROR: cloud desktop release tag must be v-cloud-desktop-${VERSION}; got $TAG" >&2
+            exit 1
+          fi
+
+          VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+          if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
+            PRERELEASE="true"
+          else
+            PRERELEASE="${DISPATCH_PRERELEASE:-false}"
+          fi
+          case "$PRERELEASE" in
+            true|false) ;;
+            *)
+              echo "ERROR: prerelease must be true or false; got $PRERELEASE" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "ERROR: release $TAG already exists" >&2
+            exit 1
+          fi
+          PREV_TAG=$(git describe --tags --match 'v-cloud-desktop-*' --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          NOTES_FILE="${RUNNER_TEMP}/notes.md"
+          {
+            echo "AGI Cloud desktop (Electron shell) ${VERSION}"
+            echo
+            echo "## Changes"
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty='- %s' "${PREV_TAG}..${TAG}" -- apps/desktop/ | head -100
+            else
+              git log --pretty='- %s' -30 "${TAG}" -- apps/desktop/ | head -100
+            fi
+          } > "$NOTES_FILE"
+          EXTRA_FLAGS=""
+          if [ "$PRERELEASE" = "true" ]; then
+            EXTRA_FLAGS="--prerelease"
+          fi
+          gh release create "$TAG" --draft $EXTRA_FLAGS \
+            --title "AGI Cloud Desktop ${VERSION}" \
+            --notes-file "$NOTES_FILE"
+
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: prepare-release
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck and test the desktop surface
+        run: |
+          pnpm --filter @agiworkforce/desktop typecheck
+          pnpm --filter @agiworkforce/desktop typecheck:electron
+          pnpm --filter @agiworkforce/desktop lint
+          pnpm --filter @agiworkforce/desktop test
+
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 90
+    needs: [prepare-release, validate]
+    environment: macos-release
+    env:
+      TAG: ${{ needs.prepare-release.outputs.tag }}
+      EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: macos-release secret ${name} is required" >&2
+              exit 1
+            fi
+          done
+
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" | openssl base64 -d -A -out "$key_path"
+          chmod 600 "$key_path"
+          if ! grep -q -- '-----BEGIN PRIVATE KEY-----' "$key_path"; then
+            echo "ERROR: APPLE_API_PRIVATE_KEY is not a base64-encoded App Store Connect .p8 key" >&2
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
+
+      - name: Build renderer bundle (electron target)
+        env:
+          VITE_BUILD_TARGET: electron
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+        run: pnpm --filter @agiworkforce/desktop exec vite build
+
+      - name: Bundle Electron main and preload
+        run: node apps/desktop/electron/build-main.mjs
+
+      - name: Build, sign, and notarize macOS artifacts
+        env:
+          # Tauri and electron-builder use the same secret names with different
+          # meanings. Remap here instead of renaming the shared environment
+          # secrets: electron-builder wants CSC_LINK (cert), APPLE_API_KEY as a
+          # .p8 file PATH, and the key id in APPLE_API_KEY_ID.
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          pnpm exec electron-builder --mac --arm64 --x64 \
+            --config electron-builder.yml \
+            --config.extraMetadata.version="${EXPECTED_VERSION}" \
+            --publish never
+
+      - name: Verify signed, notarized artifacts and updater manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          out="apps/desktop/release"
+
+          dmgs=("$out"/*.dmg)
+          zips=("$out"/*.zip)
+          manifests=("$out"/latest-mac.yml)
+          if [ "${#dmgs[@]}" -ne 2 ] || [ "${#zips[@]}" -ne 2 ] || [ "${#manifests[@]}" -ne 1 ]; then
+            echo "ERROR: expected two .dmg, two .zip, and one latest-mac.yml; got ${#dmgs[@]}/${#zips[@]}/${#manifests[@]}" >&2
+            exit 1
+          fi
+
+          verify_app() {
+            local app_path="$1" expected_arch="$2"
+            local plist="${app_path}/Contents/Info.plist"
+            local bundle_version
+            bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")
+            if [ "$bundle_version" != "$EXPECTED_VERSION" ]; then
+              echo "ERROR: bundle version ${bundle_version} does not match ${EXPECTED_VERSION}" >&2
+              exit 1
+            fi
+            local executable
+            executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
+            local archs
+            archs=$(lipo -archs "${app_path}/Contents/MacOS/${executable}")
+            if [ "$archs" != "$expected_arch" ]; then
+              echo "ERROR: ${app_path} is ${archs}, expected ${expected_arch}" >&2
+              exit 1
+            fi
+            codesign --verify --deep --strict --verbose=2 "$app_path"
+            local signature_info
+            signature_info=$(codesign -d --verbose=4 "$app_path" 2>&1)
+            printf '%s\n' "$signature_info" | grep -F 'Authority=Developer ID Application: AGI AUTOMATION LLC (D2PR62RLT4)'
+            printf '%s\n' "$signature_info" | grep -F 'TeamIdentifier=D2PR62RLT4'
+            printf '%s\n' "$signature_info" | grep -E 'flags=.*runtime'
+            spctl --assess --type execute --verbose=4 "$app_path"
+            xcrun stapler validate "$app_path" || {
+              xcrun stapler staple "$app_path"
+              xcrun stapler validate "$app_path"
+            }
+          }
+
+          verify_app "$out/mac/AGI Cloud.app" x86_64
+          verify_app "$out/mac-arm64/AGI Cloud.app" arm64
+
+          for dmg in "${dmgs[@]}"; do
+            [ -s "$dmg" ] || { echo "ERROR: empty artifact $dmg" >&2; exit 1; }
+            xcrun stapler validate "$dmg" || {
+              xcrun stapler staple "$dmg"
+              xcrun stapler validate "$dmg"
+            }
+          done
+
+          # The updater installs from the zip: its embedded app must be signed.
+          for zip in "${zips[@]}"; do
+            tmp=$(mktemp -d)
+            ditto -x -k "$zip" "$tmp"
+            codesign --verify --deep --strict "$tmp/AGI Cloud.app"
+            rm -rf "$tmp"
+          done
+
+          # latest-mac.yml must agree with the tag and the real bytes on disk.
+          node - "$out/latest-mac.yml" "$EXPECTED_VERSION" "$out" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const [manifestPath, expectedVersion, outDir] = process.argv.slice(2);
+          const manifest = fs.readFileSync(manifestPath, 'utf8');
+          const versionLine = manifest.match(/^version:\s*(.+)$/m);
+          if (!versionLine || versionLine[1].trim() !== expectedVersion) {
+            throw new Error(`latest-mac.yml version ${versionLine?.[1]} != ${expectedVersion}`);
+          }
+          const entries = [...manifest.matchAll(/- url:\s*(.+)\n\s+sha512:\s*(.+)\n\s+size:\s*(\d+)/g)];
+          if (entries.length === 0) throw new Error('latest-mac.yml lists no files');
+          for (const [, url, sha512, size] of entries) {
+            const file = path.join(outDir, decodeURIComponent(url.trim()));
+            const bytes = fs.readFileSync(file);
+            if (bytes.length !== Number(size)) {
+              throw new Error(`${file}: size ${bytes.length} != manifest ${size}`);
+            }
+            const digest = crypto.createHash('sha512').update(bytes).digest('base64');
+            if (digest !== sha512.trim()) {
+              throw new Error(`${file}: sha512 mismatch against latest-mac.yml`);
+            }
+          }
+          console.log(`latest-mac.yml verified for ${entries.length} artifacts`);
+          NODE
+
+      - name: Upload artifacts to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          out="apps/desktop/release"
+          gh release upload "$TAG" \
+            "$out"/*.dmg \
+            "$out"/*.zip \
+            "$out"/*.blockmap \
+            "$out"/latest-mac.yml
+
+  publish-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [prepare-release, build-macos]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Publish the verified draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false
+
+  cleanup-on-failure:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: [prepare-release, validate, build-macos, publish-release]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v6
+      - name: Delete the orphaned draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            exit 0
+          fi
+          is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || echo "")
+          if [ "$is_draft" = "true" ]; then
+            gh release delete "$TAG" --yes
+          fi

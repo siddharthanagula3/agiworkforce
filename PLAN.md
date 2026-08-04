@@ -32,9 +32,14 @@ final success criterion is the full platform outcome.
 ## Locked Product And Trust Boundaries
 
 - Web is Managed Cloud only.
-- Desktop is one installed Tauri application with isolated Local, BYOK, and
-  Managed Cloud composition roots. It is not split into separate user-facing
-  Local and Cloud applications.
+- Desktop is one product surface with two installed shells (founder decision,
+  2026-08-03). The Tauri shell keeps the isolated Local, BYOK, and Managed
+  Cloud composition roots unchanged. A cloud-only Electron shell
+  (`apps/desktop/electron/`) loads the hosted cloud web app by default
+  (Claude-desktop model), with the desktop cloud web build as a bundled
+  fallback renderer; it has no Local mode, no BYOK, and no local execution
+  plane, and lives entirely inside the Managed Cloud trust boundary (same
+  plane as Web). Local and BYOK remain Tauri-shell-only.
 - Mobile supports isolated on-device Local and Managed Cloud; it has no BYOK.
 - Web, Desktop Cloud, and Mobile Cloud share cloud conversations, projects,
   memory, settings, account state, and managed artifact infrastructure.

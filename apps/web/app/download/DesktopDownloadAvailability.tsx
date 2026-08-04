@@ -46,9 +46,17 @@ function Alternatives() {
   );
 }
 
+function isCloudDesktopManifest(value: unknown): value is { version: string } {
+  if (!value || typeof value !== 'object') return false;
+  const manifest = value as Record<string, unknown>;
+  return typeof manifest['version'] === 'string' && manifest['version'].trim() !== '';
+}
+
 export function DesktopDownloadAvailability() {
   const [availability, setAvailability] = useState<Availability>({ state: 'loading' });
+  const [cloudAvailability, setCloudAvailability] = useState<Availability>({ state: 'loading' });
   const requestId = useRef(0);
+  const cloudRequestId = useRef(0);
 
   const checkRelease = useCallback(async (signal?: AbortSignal) => {
     const currentRequest = ++requestId.current;
@@ -80,11 +88,42 @@ export function DesktopDownloadAvailability() {
     }
   }, []);
 
+  const checkCloudRelease = useCallback(async (signal?: AbortSignal) => {
+    const currentRequest = ++cloudRequestId.current;
+    setCloudAvailability({ state: 'loading' });
+
+    try {
+      const response = await fetch('/api/releases/desktop-cloud/latest', {
+        cache: 'no-store',
+        signal,
+      });
+
+      if (currentRequest !== cloudRequestId.current) return;
+      if (response.status === 404) {
+        setCloudAvailability({ state: 'empty' });
+        return;
+      }
+      if (!response.ok) throw new Error(`Release lookup failed with status ${response.status}`);
+
+      const manifest: unknown = await response.json();
+      if (currentRequest !== cloudRequestId.current) return;
+      if (!isCloudDesktopManifest(manifest)) {
+        throw new Error('Release lookup returned an invalid cloud desktop manifest');
+      }
+
+      setCloudAvailability({ state: 'available', version: manifest.version });
+    } catch (error) {
+      if (signal?.aborted || currentRequest !== cloudRequestId.current) return;
+      setCloudAvailability({ state: 'error' });
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void checkRelease(controller.signal);
+    void checkCloudRelease(controller.signal);
     return () => controller.abort();
-  }, [checkRelease]);
+  }, [checkRelease, checkCloudRelease]);
 
   return (
     <section
@@ -97,14 +136,70 @@ export function DesktopDownloadAvailability() {
         Desktop installer availability
       </h2>
       <p className="agi-fl-section-lede">
-        The stable release channel currently publishes a signed Linux x64 AppImage. macOS and
-        Windows installers have not been published, and no release dates are available for them.
+        macOS gets the AGI Cloud desktop app (cloud accounts only) when a signed build is published.
+        The stable Tauri channel currently publishes a signed Linux x64 AppImage. Windows installers
+        have not been published, and no release dates are available for them.
       </p>
 
       <ul className="mt-8 grid list-none gap-4 p-0 md:grid-cols-3" aria-label="Desktop platforms">
         <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
           <p className="text-sm font-semibold">macOS</p>
-          <p className="mt-2 text-sm text-muted-foreground">macOS installer not published</p>
+
+          {cloudAvailability.state === 'loading' && (
+            <div
+              role="status"
+              aria-label="Checking macOS downloads"
+              aria-live="polite"
+              aria-busy="true"
+              className="mt-3 rounded-xl border border-border bg-card p-4 text-sm text-card-foreground"
+            >
+              Checking the release channel…
+            </div>
+          )}
+
+          {cloudAvailability.state === 'available' && (
+            <div className="mt-3">
+              <p className="mb-4 text-sm text-muted-foreground">
+                AGI Cloud (cloud accounts only) · signed and notarized · version{' '}
+                {cloudAvailability.version}
+              </p>
+              <a
+                href="/api/download?platform=mac&app=cloud"
+                className="agi-fl-cta agi-fl-cta--primary"
+              >
+                Download AGI Cloud for macOS
+              </a>
+            </div>
+          )}
+
+          {cloudAvailability.state === 'empty' && (
+            <div
+              role="status"
+              aria-label="macOS downloads unavailable"
+              aria-live="polite"
+              className="mt-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
+            >
+              <p className="text-sm">No signed macOS installer is available right now.</p>
+              <Alternatives />
+            </div>
+          )}
+
+          {cloudAvailability.state === 'error' && (
+            <div
+              role="alert"
+              className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-card-foreground"
+            >
+              <p className="text-sm">We could not verify the macOS installer.</p>
+              <button
+                type="button"
+                className="agi-fl-cta agi-fl-cta--primary mt-4"
+                onClick={() => void checkCloudRelease()}
+              >
+                Retry release check
+              </button>
+              <Alternatives />
+            </div>
+          )}
         </li>
         <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
           <p className="text-sm font-semibold">Windows</p>
@@ -130,10 +225,7 @@ export function DesktopDownloadAvailability() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Signed AppImage · version {availability.version}
               </p>
-              <a
-                href="/api/download?platform=linux"
-                className="agi-fl-cta agi-fl-cta--primary"
-              >
+              <a href="/api/download?platform=linux" className="agi-fl-cta agi-fl-cta--primary">
                 Download Linux x64 AppImage
               </a>
             </div>

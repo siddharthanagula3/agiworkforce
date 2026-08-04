@@ -28,6 +28,21 @@ describe('isOriginAllowed', () => {
     expect(isOriginAllowed('tauri://localhost')).toBe(true);
   });
 
+  it('allows the Electron cloud shell origin agi://cloud, exactly', async () => {
+    const { isOriginAllowed } = await import('../cors');
+    expect(isOriginAllowed('agi://cloud')).toBe(true);
+    expect(isOriginAllowed('agi://cloud-evil')).toBe(false);
+    expect(isOriginAllowed('agi://other')).toBe(false);
+    expect(isOriginAllowed('agi://cloud.example.com')).toBe(false);
+  });
+
+  it('rejects the literal null origin even with requireOrigin off', async () => {
+    const { isOriginAllowed } = await import('../cors');
+    // file:// pages and sandboxed iframes serialize their origin as "null";
+    // the Electron shell must never ship on file:// for exactly this reason.
+    expect(isOriginAllowed('null')).toBe(false);
+  });
+
   it('adds readable CORS headers to a wrapped Desktop failure response', async () => {
     const { withCorsRoute } = await import('../cors');
     const route = withCorsRoute(async () => Response.json({ error: 'failed' }, { status: 500 }));
