@@ -74,9 +74,17 @@ interface FetchDesktopReleaseOptions {
   owner?: string;
   repo?: string;
   revalidateSeconds?: number;
+  /**
+   * Release tag prefix to match. Defaults to the Tauri shell's `v-desktop-`.
+   * The Electron cloud shell releases under `v-cloud-desktop-` (see
+   * .github/workflows/release-desktop-cloud.yml); passing that prefix here
+   * keeps the two release streams strictly separated.
+   */
+  tagPrefix?: string;
 }
 
 const DESKTOP_TAG_PREFIX = 'v-desktop-';
+export const DESKTOP_CLOUD_TAG_PREFIX = 'v-cloud-desktop-';
 const SEMVER_PATTERN =
   /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?(?:\+([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?$/;
 const MAX_RELEASE_PAGES = 10;
@@ -153,6 +161,7 @@ export function isDesktopReleaseChannel(value: string): value is DesktopReleaseC
 export function selectLatestDesktopRelease(
   payload: unknown,
   channel: DesktopReleaseChannel,
+  tagPrefix: string = DESKTOP_TAG_PREFIX,
 ): StableDesktopRelease | null {
   const parsed = githubReleaseListSchema.safeParse(payload);
   if (!parsed.success) {
@@ -161,14 +170,10 @@ export function selectLatestDesktopRelease(
   }
 
   const candidates = parsed.data.flatMap((release) => {
-    if (
-      release.draft ||
-      !release.published_at ||
-      !release.tag_name.startsWith(DESKTOP_TAG_PREFIX)
-    ) {
+    if (release.draft || !release.published_at || !release.tag_name.startsWith(tagPrefix)) {
       return [];
     }
-    const parsedVersion = parseSemanticVersion(release.tag_name.slice(DESKTOP_TAG_PREFIX.length));
+    const parsedVersion = parseSemanticVersion(release.tag_name.slice(tagPrefix.length));
     if (!parsedVersion || desktopReleaseChannelForVersion(parsedVersion.normalized) !== channel) {
       return [];
     }
@@ -234,12 +239,12 @@ export async function fetchLatestDesktopRelease(
 
       const payload: unknown = await response.json();
       if (!Array.isArray(payload)) {
-        return selectLatestDesktopRelease(payload, channel);
+        return selectLatestDesktopRelease(payload, channel, options.tagPrefix);
       }
       releases.push(...payload);
 
       const hasNextPage = response.headers.get('link')?.includes('rel="next"') ?? false;
-      if (!hasNextPage) return selectLatestDesktopRelease(releases, channel);
+      if (!hasNextPage) return selectLatestDesktopRelease(releases, channel, options.tagPrefix);
       if (page === MAX_RELEASE_PAGES) {
         logger.warn(
           { owner, repo, maxPages: MAX_RELEASE_PAGES },

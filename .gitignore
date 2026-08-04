@@ -40,6 +40,8 @@ lib-cov/
 # --- Build artifacts ---
 dist/
 dist-ssr/
+# electron-builder output for the desktop cloud shell
+apps/desktop/release/
 build/
 out/
 .next/

@@ -26,8 +26,15 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   // env var too (CI sets it as a step env; `build:cloud` sets it inline). Without
   // this, `build:web` falls through to the native safari14 target and esbuild
   // fails lowering destructuring (368 errors).
-  const isWebBuild =
-    env['VITE_BUILD_TARGET'] === 'web' || process.env['VITE_BUILD_TARGET'] === 'web';
+  const buildTargetEnv = env['VITE_BUILD_TARGET'] || process.env['VITE_BUILD_TARGET'];
+  const isWebBuild = buildTargetEnv === 'web';
+  // Electron cloud shell: the web bundle plus Electron-backed replacements for
+  // the modules whose web stubs are silent no-ops (dialogs answering "no",
+  // dead window controls, deep links that never fire). See
+  // src/lib/tauri-electron/ and apps/desktop/electron/.
+  const isElectronBuild = buildTargetEnv === 'electron';
+  // Both are browser-class bundles that never reach the Tauri runtime.
+  const isBrowserBundle = isWebBuild || isElectronBuild;
 
   // Determine port configuration
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
@@ -36,22 +43,50 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   // Determine build targets based on platform
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
   const isDebug = Boolean(env['TAURI_DEBUG']);
-  const webTauriAliases = isWebBuild
+  // Electron overrides a module only where the browser stub's silent success
+  // would ship as a product defect; event/path/fs keep the web behavior.
+  const browserShimDir = (module: string) =>
+    isElectronBuild &&
+    [
+      'core',
+      'window',
+      'deep-link',
+      'dialog',
+      'shell',
+      'notification',
+      'process',
+      'updater',
+    ].includes(module)
+      ? './src/lib/tauri-electron'
+      : './src/lib/tauri-web';
+  const webTauriAliases = isBrowserBundle
     ? {
-        '@tauri-apps/api/core': path.resolve(__dirname, './src/lib/tauri-web/core.ts'),
+        '@tauri-apps/api/core': path.resolve(__dirname, `${browserShimDir('core')}/core.ts`),
         '@tauri-apps/api/event': path.resolve(__dirname, './src/lib/tauri-web/event.ts'),
-        '@tauri-apps/api/window': path.resolve(__dirname, './src/lib/tauri-web/window.ts'),
+        '@tauri-apps/api/window': path.resolve(__dirname, `${browserShimDir('window')}/window.ts`),
         '@tauri-apps/api/path': path.resolve(__dirname, './src/lib/tauri-web/path.ts'),
-        '@tauri-apps/plugin-deep-link': path.resolve(__dirname, './src/lib/tauri-web/deep-link.ts'),
-        '@tauri-apps/plugin-dialog': path.resolve(__dirname, './src/lib/tauri-web/dialog.ts'),
-        '@tauri-apps/plugin-shell': path.resolve(__dirname, './src/lib/tauri-web/shell.ts'),
+        '@tauri-apps/plugin-deep-link': path.resolve(
+          __dirname,
+          `${browserShimDir('deep-link')}/deep-link.ts`,
+        ),
+        '@tauri-apps/plugin-dialog': path.resolve(
+          __dirname,
+          `${browserShimDir('dialog')}/dialog.ts`,
+        ),
+        '@tauri-apps/plugin-shell': path.resolve(__dirname, `${browserShimDir('shell')}/shell.ts`),
         '@tauri-apps/plugin-fs': path.resolve(__dirname, './src/lib/tauri-web/fs.ts'),
         '@tauri-apps/plugin-notification': path.resolve(
           __dirname,
-          './src/lib/tauri-web/notification.ts',
+          `${browserShimDir('notification')}/notification.ts`,
         ),
-        '@tauri-apps/plugin-process': path.resolve(__dirname, './src/lib/tauri-web/process.ts'),
-        '@tauri-apps/plugin-updater': path.resolve(__dirname, './src/lib/tauri-web/updater.ts'),
+        '@tauri-apps/plugin-process': path.resolve(
+          __dirname,
+          `${browserShimDir('process')}/process.ts`,
+        ),
+        '@tauri-apps/plugin-updater': path.resolve(
+          __dirname,
+          `${browserShimDir('updater')}/updater.ts`,
+        ),
       }
     : {};
 
@@ -64,7 +99,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   const buildTarget = isWindows ? 'chrome105' : 'safari15';
 
   const config: UserConfig = {
-    base: isWebBuild ? '/' : undefined,
+    base: isBrowserBundle ? '/' : undefined,
 
     // ===================
     // Plugins
@@ -85,7 +120,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       // Skipped for the cloud-web build target — those bundles never reach
       // the Tauri runtime, so missing #[tauri::command] is not a real bug
       // (cloud-web routes through tauri-mock.ts's cloudApi fallthrough).
-      ...(isWebBuild
+      ...(isBrowserBundle
         ? []
         : [
             ipcCheckPlugin({
@@ -156,7 +191,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     // ===================
     build: {
       // Modern build target - use esnext for optimal performance
-      target: isWebBuild ? 'esnext' : buildTarget,
+      target: isBrowserBundle ? 'esnext' : buildTarget,
 
       // Minification settings
       minify: isDebug ? false : 'esbuild',
@@ -216,7 +251,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             }
 
             // Terminal is desktop-only
-            if (!isWebBuild && id.includes('/@xterm/')) {
+            if (!isBrowserBundle && id.includes('/@xterm/')) {
               return 'terminal-vendor';
             }
 
@@ -339,7 +374,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'react-dom',
         'react-router-dom',
         'zustand',
-        ...(isWebBuild ? [] : ['@tauri-apps/api']),
+        ...(isBrowserBundle ? [] : ['@tauri-apps/api']),
         'framer-motion',
         'clsx',
         'date-fns',
@@ -347,7 +382,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'react-syntax-highlighter',
       ],
       // Exclude CLI tools from optimization
-      exclude: isWebBuild ? [] : ['@tauri-apps/cli'],
+      exclude: isBrowserBundle ? [] : ['@tauri-apps/cli'],
       // Force optimization even for linked dependencies
       force: false,
     },
@@ -370,7 +405,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       __APP_VERSION__: JSON.stringify(env['npm_package_version'] || '0.0.0'),
       __DEV__: JSON.stringify(mode === 'development'),
       __PROD__: JSON.stringify(mode === 'production'),
-      __WEB_BUILD__: JSON.stringify(isWebBuild),
+      __WEB_BUILD__: JSON.stringify(isBrowserBundle),
+      __ELECTRON_BUILD__: JSON.stringify(isElectronBuild),
     },
 
     // ===================

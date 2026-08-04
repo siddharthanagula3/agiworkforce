@@ -2,7 +2,11 @@ import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '../lib/tauri-mock';
 
-const ALLOWED_DEEP_LINK_SCHEME = 'agiworkforce:';
+// `agiworkforce:` is the Tauri shell's scheme; `agiworkforce-cloud:` is the
+// Electron cloud shell's (distinct so both installed apps can coexist —
+// see apps/desktop/electron/config.ts). Each OS registration only ever
+// delivers its own scheme, so accepting either here is safe for both shells.
+const ALLOWED_DEEP_LINK_SCHEMES = new Set(['agiworkforce:', 'agiworkforce-cloud:']);
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
   'github',
   'google',
@@ -109,7 +113,7 @@ export function normalizeDeepLinkPath(parsed: URL): string {
 export function parseDeepLink(url: string): ParsedDeepLink | null {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== ALLOWED_DEEP_LINK_SCHEME) {
+    if (!ALLOWED_DEEP_LINK_SCHEMES.has(parsed.protocol)) {
       return null;
     }
 
