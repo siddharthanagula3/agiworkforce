@@ -21,6 +21,11 @@ import type {
 import { cn } from '../lib/utils';
 import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
 import type { InlineToolKind } from './InlineToolCall';
+import {
+  readConnectorConnectRequest,
+  type ConnectorConnectRequest,
+} from '../lib/connector-connect-required';
+import { ConnectorConnectCard } from './ConnectorConnectCard';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -34,6 +39,14 @@ export interface AgentActivityTimelineProps {
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
   isApprovalExpired?: (toolCallId: string) => boolean;
+  /**
+   * Re-runs the whole exchange from the user's last message. Wired to the
+   * inline Connect card's Retry button (lazy authentication): nothing resumes a
+   * turn after the connector OAuth callback returns, so re-running it is the
+   * only real way to make the connector tool call happen again. Omit it and no
+   * Retry button is rendered — never a dead one.
+   */
+  onRetryTurn?: () => void;
 }
 
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
@@ -167,6 +180,24 @@ function asResult(value: unknown): string | undefined {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * Lazy authentication: a connector tool call the server answered with a
+ * verified "connect required" envelope, or null for every other tool entry.
+ *
+ * `entry.name` is the qualified tool name and `entry.output` is the tool result
+ * verbatim (`tool-execution-end` carries `name: tc.qualifiedName` and
+ * `output: toAgentEventJson(content)` — a string stays a string). Those are the
+ * two inputs the trusted-path check needs; see `readConnectorConnectRequest`
+ * for why an arbitrary tool result cannot forge one of these.
+ */
+function connectRequestFor(entry: AgentActivityToolEntry): ConnectorConnectRequest | null {
+  return readConnectorConnectRequest({
+    qualifiedToolName: entry.name,
+    result: typeof entry.output === 'string' ? entry.output : undefined,
+    isError: entry.status === 'failed',
+  });
 }
 
 function safeHref(value: string): string | undefined {
@@ -419,6 +450,7 @@ export function AgentActivityTimeline({
   onCancel,
   onResend,
   isApprovalExpired,
+  onRetryTurn,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   // While the run is active (running / awaiting approval) the timeline auto-opens
@@ -441,7 +473,16 @@ export function AgentActivityTimeline({
   // else follow the manual `expanded` toggle. The local pre-provider status
   // stays compact because its only detail row repeats the same summary; real
   // provider/tool events replace it and regain live auto-expansion.
-  const isOpen = userForcedClosed ? false : (isActive && !isLocalStartingActivity) || expanded;
+  // A pending connector authorization is a blocking prompt: the run itself has
+  // finished, so the collapse-on-finish behaviour below would hide the only
+  // control that unblocks the conversation behind the summary pill.
+  const hasConnectRequest = useMemo(
+    () => activity.entries.some((e) => e.kind === 'tool' && connectRequestFor(e) !== null),
+    [activity.entries],
+  );
+  const isOpen = userForcedClosed
+    ? false
+    : (isActive && !isLocalStartingActivity) || hasConnectRequest || expanded;
 
   // When a run finishes, clear the manual-close and collapse to the summary so
   // the next run auto-opens and the completed trace reads as a single pill.
@@ -516,6 +557,12 @@ export function AgentActivityTimeline({
           {visibleEntries.map((entry) => {
             if (entry.kind === 'progress') return <ProgressRow key={entry.id} entry={entry} />;
             if (entry.kind === 'tool') {
+              // Lazy authentication: the "connect required" envelope is machine
+              // JSON written for the model. When it verifies, the inline Connect
+              // card replaces it — showing the raw payload in the card's
+              // Result/Error box as well would show the user the same thing
+              // twice, once unreadably.
+              const connectRequest = connectRequestFor(entry);
               return (
                 <div key={entry.id} className="relative py-1 pl-7">
                   <ToolCallCard
@@ -524,8 +571,8 @@ export function AgentActivityTimeline({
                     status={toToolStatus(entry)}
                     requiresApproval={entry.status === 'awaiting-approval'}
                     args={asRecord(entry.input)}
-                    result={asResult(entry.output)}
-                    error={entry.error}
+                    result={connectRequest ? undefined : asResult(entry.output)}
+                    error={connectRequest ? undefined : entry.error}
                     elapsedMs={entry.elapsedMs}
                     startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
                     kind={categoryToKind(entry.category)}
@@ -541,6 +588,14 @@ export function AgentActivityTimeline({
                     onResend={onResend}
                     footer={entry.sources ? <SourceLinks entry={entry} /> : undefined}
                   />
+                  {connectRequest ? (
+                    <div className="mt-1.5">
+                      <ConnectorConnectCard
+                        request={connectRequest}
+                        {...(onRetryTurn ? { onRetryTurn } : {})}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               );
             }

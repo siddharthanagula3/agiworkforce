@@ -32,6 +32,11 @@ import {
   useToolPermissionsStore,
   type PermissionLevel,
 } from '@/features/connectors/stores/tool-permissions-store';
+import {
+  readConnectorConnectRequest,
+  type ConnectorConnectRequest,
+} from '../../lib/connector-connect-required';
+import { ConnectorConnectCard } from '../ConnectorConnectCard';
 
 // ─── File reference helper ──────────────────────────────────────────────────
 
@@ -329,6 +334,28 @@ interface ToolTimelineProps {
   expired?: boolean;
   /** Resend affordance shown on an expired approval card. */
   onResend?: (toolCallId: string) => void;
+  /**
+   * Re-runs the whole exchange from the user's last message. Wired to the
+   * inline Connect card's Retry button (lazy authentication): nothing resumes a
+   * turn after the OAuth callback returns, so re-running it is the only real
+   * way to make the connector tool call happen again.
+   */
+  onRetryTurn?: () => void;
+}
+
+/**
+ * Lazy authentication: a connector tool call the server answered with a
+ * verified "connect required" envelope, or null for every other tool result.
+ * Verification (structure, tool binding, destination) lives in
+ * `readConnectorConnectRequest` — see that module for why a tool result cannot
+ * forge one of these.
+ */
+function findConnectRequest(tool: ToolEntry): ConnectorConnectRequest | null {
+  return readConnectorConnectRequest({
+    qualifiedToolName: tool.name,
+    result: tool.result,
+    isError: tool.status === 'failed',
+  });
 }
 
 interface EntryGroup {
@@ -520,6 +547,19 @@ const COMPACT_THRESHOLD = 3;
  * source cards render INSIDE this row (directly below the label), matching
  * the Claude reference (image 381).
  */
+/**
+ * Strip the raw tool output from a card that is being replaced by a richer
+ * renderer. The "connect required" envelope is machine JSON written for the
+ * model; dumping it into the card's Result/Error box under the Connect card
+ * would show the user the same thing twice, once unreadably.
+ */
+function withoutRawOutput(toolCall: ToolCall): ToolCall {
+  const next: ToolCall = { ...toolCall };
+  delete next.result;
+  delete next.error;
+  return next;
+}
+
 function TimelineStepRow({
   tool,
   toolCall,
@@ -530,6 +570,7 @@ function TimelineStepRow({
   onReject,
   expired,
   onResend,
+  onRetryTurn,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
@@ -540,6 +581,7 @@ function TimelineStepRow({
   onReject?: (toolCallId: string) => void;
   expired?: boolean;
   onResend?: (toolCallId: string) => void;
+  onRetryTurn?: () => void;
 }) {
   // A connector/MCP call's args (owner/repo/issue_number, etc.) can
   // incidentally look like a filename to getFileName — check this first so a
@@ -552,9 +594,15 @@ function TimelineStepRow({
   const isWebSearch = isWebSearchTool(tool.name);
   const hasSources = isWebSearch && searchSources && searchSources.length > 0;
 
+  // Lazy authentication: a verified "connect required" result renders an inline
+  // Connect card instead of the envelope's raw JSON.
+  const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
+
   // Build the humanized label for this tool call
   const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
-  const displayToolCall: ToolCall = { ...toolCall, name: humanLabel };
+  const displayToolCall: ToolCall = connectRequest
+    ? { ...withoutRawOutput(toolCall), name: humanLabel }
+    : { ...toolCall, name: humanLabel };
   // A quick-pick preference for a dead turn would silently no-op exactly
   // like live Approve/Reject buttons would -- hide it too when expired.
   const showPermissionPicker = mcpTool != null && tool.status === 'awaiting_approval' && !expired;
@@ -596,6 +644,16 @@ function TimelineStepRow({
           <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
             <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
           </span>
+        </div>
+      )}
+      {/* Lazy authentication: inline Connect card for a connector tool call the
+          server answered with a verified "connect required" envelope. */}
+      {connectRequest && (
+        <div className="pl-7 mt-1.5">
+          <ConnectorConnectCard
+            request={connectRequest}
+            {...(onRetryTurn ? { onRetryTurn } : {})}
+          />
         </div>
       )}
       {/* Inline source cards: rendered INSIDE the web-search step (Claude reference image 381) */}
@@ -707,6 +765,12 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
     return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters)}`;
   }
 
+  // Lazy authentication is a blocking prompt exactly like an approval, so it
+  // gets the same one-phrase announcement rather than being folded into the
+  // generic "N tool calls failed" line below.
+  const connectTool = tools.map(findConnectRequest).find((r) => r !== null);
+  if (connectTool) return `Connection required: ${connectTool.connectorName}`;
+
   const running = [...tools].reverse().find((t) => t.status === 'running');
   if (running) {
     return `Running: ${running.statusPhrase ?? humanizeToolName(running.name, running.args, running.parameters)}`;
@@ -729,6 +793,7 @@ function ToolTimeline({
   onReject,
   expired,
   onResend,
+  onRetryTurn,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -740,13 +805,20 @@ function ToolTimeline({
   // buttons are visible (they live inside the expandable list).
   const hasAwaiting = useMemo(() => tools.some((t) => t.status === 'awaiting_approval'), [tools]);
   const errorCount = useMemo(() => tools.filter((t) => t.status === 'failed').length, [tools]);
+  // A pending connector authorization is a blocking prompt: collapsing it
+  // behind a "1 failed" summary would hide the only control that unblocks the
+  // conversation, so it keeps the timeline open exactly like an approval does.
+  const hasConnectRequest = useMemo(
+    () => tools.some((t) => findConnectRequest(t) !== null),
+    [tools],
+  );
 
   // Compact mode: explicit prop OR auto when step count > threshold (and neither
-  // running nor awaiting approval).
+  // running, awaiting approval, nor awaiting a connector authorization).
   const isCompact =
     compactProp !== undefined
       ? compactProp
-      : !hasRunning && !hasAwaiting && tools.length > COMPACT_THRESHOLD;
+      : !hasRunning && !hasAwaiting && !hasConnectRequest && tools.length > COMPACT_THRESHOLD;
 
   // Reset userForcedClosed when all running tools finish so next batch auto-expands
   const prevHasRunning = useRef(hasRunning);
@@ -759,7 +831,9 @@ function ToolTimeline({
 
   // Auto-expand while tools are running or awaiting approval, but respect the
   // user's manual close.
-  const isOpen = userForcedClosed ? false : hasRunning || hasAwaiting || isExpanded;
+  const isOpen = userForcedClosed
+    ? false
+    : hasRunning || hasAwaiting || hasConnectRequest || isExpanded;
 
   const groups = useMemo(() => groupTools(tools), [tools]);
   const summary = useMemo(() => buildCompactSummary(tools), [tools]);
@@ -938,6 +1012,7 @@ function ToolTimeline({
                                 onReject={onReject}
                                 expired={expired}
                                 onResend={onResend}
+                                onRetryTurn={onRetryTurn}
                               />
                             );
                           })}
@@ -977,6 +1052,7 @@ function ToolTimeline({
                           onReject={onReject}
                           expired={expired}
                           onResend={onResend}
+                          onRetryTurn={onRetryTurn}
                         />
                       );
                     });
@@ -1012,6 +1088,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   // wiring and must re-render so the buttons dispatch to the new handler.
   if (prev.onApprove !== next.onApprove || prev.onReject !== next.onReject) return false;
   if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
+  if (prev.onRetryTurn !== next.onRetryTurn) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {

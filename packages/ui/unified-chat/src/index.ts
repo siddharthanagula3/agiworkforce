@@ -339,6 +339,20 @@ export {
 export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';
 export { ToolCallCard, detectCodeBlock } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
+// Lazy authentication: the inline Connect card and the trusted-path reader that
+// decides when one may be rendered.
+export { ConnectorConnectCard } from './components/ConnectorConnectCard';
+export type { ConnectorConnectCardProps } from './components/ConnectorConnectCard';
+export {
+  CONNECTOR_AUTHORIZATION_REQUIRED_KEY,
+  CONNECTOR_OAUTH_START_PATH,
+  buildConnectHref,
+  readConnectorConnectRequest,
+} from './lib/connector-connect-required';
+export type {
+  ConnectorAuthorizationReason,
+  ConnectorConnectRequest,
+} from './lib/connector-connect-required';
 export {
   InlineToolCall,
   InlineToolCallStack,

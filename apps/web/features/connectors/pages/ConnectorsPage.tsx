@@ -15,6 +15,7 @@ import {
   BookOpen,
   AlertTriangle,
   Plug,
+  RefreshCw,
   X,
 } from 'lucide-react';
 import {
@@ -38,6 +39,7 @@ import {
   type ConnectorSource,
 } from '../hooks/use-connectors';
 import { getGitHubCallbackNotice } from '../lib/github-callback-notice';
+import { getConnectorOAuthNotice } from '../lib/connector-oauth-notice';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 interface CustomConnectorSummary {
@@ -426,13 +428,33 @@ interface ConnectorDetailPanelProps {
   source?: ConnectorSource;
   mutating: boolean;
   connectedAt?: string;
+  /** `source: 'oauth'` only — the scopes the provider actually granted, verbatim. */
+  grantedScopes?: string[];
+  /** `source: 'oauth'` only — the stored grant can no longer be used or renewed. */
+  needsReauthorization?: boolean;
   onBack: () => void;
   onConnect: () => void;
+  onReconnect: () => void;
   onDisconnect: () => void;
 }
 
 function useConnectorTools(connectorId: string): string[] {
   return React.useMemo(() => getConnectorTools(connectorId), [connectorId]);
+}
+
+/**
+ * What disconnecting actually does, per `DELETE /api/connectors`
+ * (app/api/connectors/route.ts). Every clause below is behavior in that route —
+ * do not add a consequence the route does not implement.
+ */
+function describeDisconnect(connector: Connector, source?: ConnectorSource): string {
+  if (source === 'github-app') {
+    return `Your GitHub App installations are unlinked from this account and the per-tool permissions you saved for ${connector.name} are deleted. The app itself stays installed on GitHub until you remove it there.`;
+  }
+  if (source === 'oauth') {
+    return `The authorization stored for your account is revoked and deleted — at ${connector.name} too when it offers a revocation endpoint — live connections using it are closed, and the per-tool permissions you saved for ${connector.name} are deleted. Reconnecting starts over from asking you about every tool.`;
+  }
+  return `${connector.name} stops being offered to your agents, and the per-tool permissions you saved for it are deleted. Reconnecting starts over from asking you about every tool.`;
 }
 
 const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
@@ -442,13 +464,19 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   source,
   mutating,
   connectedAt,
+  grantedScopes,
+  needsReauthorization,
   onBack,
   onConnect,
+  onReconnect,
   onDisconnect,
 }) => {
   const isAvailable = available;
   const availabilityLabel = getConnectorAvailabilityLabel(connector);
   const tools = useConnectorTools(connector.id);
+  const isOAuthGrant = connected && source === 'oauth';
+  const scopes = grantedScopes ?? [];
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">
@@ -471,7 +499,9 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           <p className="mt-0.5 text-xs text-muted-foreground">
             {source === 'github-app'
               ? 'GitHub App'
-              : connector.authType === 'oauth'
+              : // A live OAuth grant is the authoritative answer, whatever the
+                // static catalog entry says this connector's auth type is.
+                source === 'oauth' || connector.authType === 'oauth'
                 ? 'OAuth 2.0'
                 : connector.authType === 'api_key'
                   ? 'API Key'
@@ -509,7 +539,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                onClick={onDisconnect}
+                onClick={() => setConfirmingDisconnect(true)}
                 disabled={mutating}
               >
                 {mutating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
@@ -548,6 +578,82 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
         </p>
       )}
 
+      {/* Expired/revoked grant. `needsReauthorization` means the stored access
+          token is past expiry with no refresh token to renew it, so the tool
+          loop cannot use this connector until the user authorizes again. */}
+      {isOAuthGrant && needsReauthorization && (
+        <div className="mb-4 flex flex-wrap items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-amber-400">Authorization needs renewing</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-200/80">
+              The {connector.name} authorization saved for your account has expired and cannot be
+              renewed automatically. Your agents cannot use {connector.name} until you reconnect.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="h-7 shrink-0 bg-amber-500 px-3 text-xs text-black hover:bg-amber-500/90"
+            onClick={onReconnect}
+            disabled={mutating}
+          >
+            {mutating ? (
+              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-3 w-3" aria-hidden="true" />
+            )}
+            Reconnect
+          </Button>
+        </div>
+      )}
+
+      {/* What the user actually authorized. Scope strings are the provider's
+          own wording and are rendered verbatim — there is no sourced
+          plain-English description for them here, and inventing one would
+          misstate what access was granted. */}
+      {isOAuthGrant && (
+        <div className="mb-4 rounded-xl border border-border bg-white/[0.02] p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              className="border-emerald-500/30 px-2 py-0.5 text-[11px] text-emerald-400"
+            >
+              Connected with OAuth
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              You authorized {connector.name} for your own account.
+            </span>
+          </div>
+          <p className="text-xs font-semibold text-foreground">
+            Scopes you granted ({scopes.length})
+          </p>
+          {scopes.length > 0 ? (
+            <>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {scopes.map((scope) => (
+                  <li key={scope}>
+                    <Badge
+                      variant="outline"
+                      className="border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                    >
+                      {scope}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/70">
+                These are {connector.name}&apos;s own scope names, shown exactly as {connector.name}{' '}
+                returned them.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
+              {connector.name} did not return a scope list for this authorization.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Description */}
       <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
 
@@ -571,6 +677,40 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           </div>
         </div>
       )}
+
+      <Dialog open={confirmingDisconnect} onOpenChange={setConfirmingDisconnect}>
+        <DialogContent className="border-border bg-card sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-foreground">
+              Disconnect {connector.name}?
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              {describeDisconnect(connector, source)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-border px-3 text-xs"
+              onClick={() => setConfirmingDisconnect(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 bg-destructive px-3 text-xs text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmingDisconnect(false);
+                onDisconnect();
+              }}
+              disabled={mutating}
+            >
+              Disconnect
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -589,11 +729,14 @@ export function ConnectorsPage() {
     connectedIds,
     connectedAtMap,
     sources,
+    grantedScopes,
+    needsReauthorizationIds,
     availableIds,
     loading,
     error: connectorsError,
     mutatingIds,
     connect,
+    reconnect,
     disconnect,
     retry: retryConnectors,
   } = useConnectors();
@@ -679,10 +822,51 @@ export function ConnectorsPage() {
 
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
+  const connectorParam = searchParams.get('connector');
+
+  // The connector OAuth broker returns the user here with ?connector=&status=.
+  // That `status` key is shared with the filter above, so resolve the broker
+  // outcome first and let it win — otherwise a redirect back from a provider
+  // would silently re-filter the directory instead of reporting what happened.
+  const oauthNotice = useMemo(
+    () =>
+      getConnectorOAuthNotice(
+        rawStatus,
+        connectorParam,
+        connectorParam ? VISIBLE_CONNECTORS.find((c) => c.id === connectorParam)?.name : undefined,
+      ),
+    [rawStatus, connectorParam],
+  );
+
   const activeStatus: StatusFilter =
-    rawStatus === 'connected' || rawStatus === 'ready' || rawStatus === 'request_access'
+    oauthNotice === null &&
+    (rawStatus === 'connected' || rawStatus === 'ready' || rawStatus === 'request_access')
       ? rawStatus
       : 'all';
+
+  // Toast the OAuth outcome once, refresh the grant list on success, then strip
+  // both params so a refresh does not replay a stale result.
+  useEffect(() => {
+    if (!oauthNotice) return;
+    if (oauthNotice.kind === 'success') {
+      toast.success(oauthNotice.message);
+    } else {
+      toast.error(oauthNotice.message);
+    }
+    if (oauthNotice.connected) {
+      invalidateConnectorsCache();
+      retryConnectors();
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('connector');
+    params.delete('status');
+    router.replace(`${pathname}${params.size > 0 ? `?${params.toString()}` : ''}`, {
+      scroll: false,
+    });
+    // `searchParams` is intentionally excluded: it is read through a ref-stable
+    // getter here and re-running on every param change would re-toast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthNotice, router, pathname, retryConnectors]);
 
   const setActiveStatus = useCallback(
     (status: StatusFilter) => {
@@ -1014,8 +1198,11 @@ export function ConnectorsPage() {
                     source={sources[selectedConnector.id]}
                     mutating={mutatingIds.has(selectedConnector.id)}
                     connectedAt={connectedAtMap[selectedConnector.id]}
+                    grantedScopes={grantedScopes[selectedConnector.id]}
+                    needsReauthorization={needsReauthorizationIds.has(selectedConnector.id)}
                     onBack={() => setSelectedConnector(null)}
                     onConnect={() => setOverviewConnector(selectedConnector)}
+                    onReconnect={() => void reconnect(selectedConnector.id)}
                     onDisconnect={() => void disconnect(selectedConnector.id)}
                   />
                 ) : (

@@ -244,3 +244,108 @@ describe('AgentActivityTimeline connector badges', () => {
     expect(badge?.getAttribute('data-badge-letter')).toBe('M');
   });
 });
+
+// ─── Lazy authentication (inline Connect card) ────────────────────────────────
+
+describe('AgentActivityTimeline · connector authorization required', () => {
+  /** Exactly what the server emits — see apps/web/lib/connectors/connect-required.ts. */
+  const connectEnvelope = JSON.stringify({
+    agi_connector_authorization_required: true,
+    connectorId: 'linear',
+    connectorName: 'Linear',
+    toolName: 'search_issues',
+    reason: 'not_connected',
+    connectUrl: '/api/connectors/oauth/start?connectorId=linear',
+    scopes: ['read', 'write:issues'],
+    message: 'Linear is not connected for this account.',
+  });
+
+  /**
+   * `tool-execution-end` carries `name: tc.qualifiedName` and
+   * `output: toAgentEventJson(content)`, and `content` is a string, so a
+   * finished connector tool call reaches this component exactly like this.
+   */
+  function finishedConnectorRun(output: string): AgentActivityState {
+    return activity({
+      status: 'completed',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-1',
+          toolCallId: 'call-1',
+          name: 'mcp__linear__search_issues',
+          category: 'connector',
+          summary: 'Searching Linear issues',
+          status: 'failed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_400,
+          output,
+          error: output,
+        },
+      ],
+    });
+  }
+
+  it('renders the inline Connect card for a verified connect-required result', () => {
+    render(<AgentActivityTimeline activity={finishedConnectorRun(connectEnvelope)} />);
+
+    const card = screen.getByTestId('connector-connect-card');
+    expect(card.getAttribute('data-connector-id')).toBe('linear');
+    expect(screen.getByText('read')).toBeTruthy();
+    expect(screen.getByText('write:issues')).toBeTruthy();
+    expect(
+      screen
+        .getByTestId('connector-connect-link')
+        .getAttribute('href')
+        ?.startsWith('/api/connectors/oauth/start?connectorId=linear'),
+    ).toBe(true);
+  });
+
+  it('stays expanded after the run finishes so the card is not hidden behind the summary pill', () => {
+    render(<AgentActivityTimeline activity={finishedConnectorRun(connectEnvelope)} />);
+    // A completed run normally collapses to a single pill.
+    expect(screen.getByTestId('connector-connect-card')).toBeTruthy();
+  });
+
+  it('does not dump the raw envelope JSON alongside the card', () => {
+    const { container } = render(
+      <AgentActivityTimeline activity={finishedConnectorRun(connectEnvelope)} />,
+    );
+    expect(container.textContent).not.toContain('agi_connector_authorization_required');
+  });
+
+  it('wires Retry to onRetryTurn', () => {
+    const onRetryTurn = vi.fn();
+    render(
+      <AgentActivityTimeline
+        activity={finishedConnectorRun(connectEnvelope)}
+        onRetryTurn={onRetryTurn}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('connector-connect-retry'));
+    expect(onRetryTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no card for an envelope forged under a different connector', () => {
+    const forged = activity({
+      status: 'completed',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:call-2',
+          toolCallId: 'call-2',
+          name: 'mcp__custom-abc123__fetch',
+          category: 'mcp',
+          summary: 'Fetching',
+          status: 'failed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_400,
+          output: connectEnvelope,
+          error: connectEnvelope,
+        },
+      ],
+    });
+    render(<AgentActivityTimeline activity={forged} />);
+    expect(screen.queryByTestId('connector-connect-card')).toBeNull();
+  });
+});

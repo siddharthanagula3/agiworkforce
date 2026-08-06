@@ -52,6 +52,11 @@ import {
   type ConnectedConnector,
   type ConnectorDirectory,
 } from '@/services/connectors';
+// The OAuth authorize URL points at the PROVIDER's host, not ours, so it goes
+// through the untrusted-URL in-app browser helper (scheme allowlist + system
+// browser fallback) rather than the first-party `openInAppBrowser`. The service
+// has already rejected anything that is not a credential-free https URL.
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
 // simple-icons SVG paths (v16 confirmed present — mirrors ConnectorLogo.tsx)
@@ -475,6 +480,7 @@ function ConnectorCard({
   entry,
   connected,
   connectedAt,
+  needsReauthorization = false,
   available,
   busy,
   onPress,
@@ -482,22 +488,32 @@ function ConnectorCard({
   entry: ConnectorEntry;
   connected: boolean;
   connectedAt?: string;
+  /**
+   * Server-reported (`/api/connectors`): this OAuth grant's token expired and
+   * cannot be refreshed. The row is still a connection, but its tools will not
+   * work until the user reauthorizes, so it must not read as healthy.
+   */
+  needsReauthorization?: boolean;
   available: boolean;
   busy: boolean;
   onPress?: () => void;
 }) {
   const colors = useThemeColors();
   const status = connected
-    ? 'Connected'
+    ? needsReauthorization
+      ? 'Authorization expired'
+      : 'Connected'
     : busy
       ? 'Connecting'
       : available
         ? 'Connect'
         : 'Coming soon';
   const actionable = !busy && (connected || available);
-  const connectedLabel = connectedAt
-    ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : 'Connected';
+  const connectedLabel = needsReauthorization
+    ? 'Authorization expired — reconnect'
+    : connectedAt
+      ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      : 'Connected';
 
   return (
     // No `style` prop on Pressable itself — deliberately. In this stack
@@ -537,7 +553,11 @@ function ConnectorCard({
               </Text>
               <Text
                 numberOfLines={1}
-                style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}
+                style={{
+                  color: connected && needsReauthorization ? colors.agentError : colors.textMuted,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
               >
                 {connected ? connectedLabel : entry.description}
               </Text>
@@ -551,12 +571,18 @@ function ConnectorCard({
                     borderRadius: 14,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: colors.successSurface,
+                    backgroundColor: needsReauthorization
+                      ? colors.dangerSurface
+                      : colors.successSurface,
                     borderWidth: 1,
-                    borderColor: colors.successBorder,
+                    borderColor: needsReauthorization ? colors.dangerBorder : colors.successBorder,
                   }}
                 >
-                  <CheckCircle size={15} color={colors.agentSuccess} />
+                  {needsReauthorization ? (
+                    <RefreshCw size={15} color={colors.agentError} />
+                  ) : (
+                    <CheckCircle size={15} color={colors.agentSuccess} />
+                  )}
                 </View>
                 <ChevronRight size={17} color={colors.textMuted} />
               </View>
@@ -668,18 +694,25 @@ export default function CloudConnectorsScreen({
   const [search, setSearch] = useState('');
   const [addCustomVisible, setAddCustomVisible] = useState(false);
 
-  const load = useCallback(async () => {
+  /**
+   * Refresh the directory. Returns the response so a caller that just came back
+   * from an authorization browser can check the REAL post-flow state instead of
+   * reading `directory` out of a stale closure.
+   */
+  const load = useCallback(async (): Promise<ConnectorDirectory | null> => {
     const account = captureCloudAccountEpoch();
-    if (!account) return;
+    if (!account) return null;
     setLoading(true);
     setError(null);
     try {
       const nextDirectory = await fetchConnectorDirectory();
-      if (!isCloudAccountEpochCurrent(account)) return;
+      if (!isCloudAccountEpochCurrent(account)) return null;
       setDirectory(nextDirectory);
+      return nextDirectory;
     } catch (err) {
-      if (!isCloudAccountEpochCurrent(account)) return;
+      if (!isCloudAccountEpochCurrent(account)) return null;
       setError(err instanceof Error ? err.message : 'Could not load connectors');
+      return null;
     } finally {
       if (isCloudAccountEpochCurrent(account)) setLoading(false);
     }
@@ -784,8 +817,37 @@ export default function CloudConnectorsScreen({
       } else {
         setConnectingId(entry.id);
         connectConnector(entry.id)
-          .then(() => {
-            if (isConnectorActionCurrent(account)) return load();
+          .then(async (result) => {
+            if (!isConnectorActionCurrent(account)) return;
+            if (result.kind === 'connected') {
+              await load();
+              return;
+            }
+            // OAuth provider: the server opened a single-use pending
+            // authorization and handed back the provider's authorize URL. The
+            // grant is written by the hosted callback, so nothing is connected
+            // until the server says so — this branch never reports success.
+            const opened = await openUntrustedUrlInAppBrowser(result.authorizeUrl);
+            if (!isConnectorActionCurrent(account)) return;
+            if (!opened) {
+              Alert.alert(
+                `Could not open ${entry.name} authorization`,
+                'No browser was available to complete the authorization. Nothing was connected.',
+              );
+              return;
+            }
+            // openUntrustedUrlInAppBrowser resolves when the sheet is dismissed,
+            // and a dismissal says nothing about whether consent was granted.
+            // The refreshed directory is the only trustworthy signal.
+            const refreshed = await load();
+            if (!isConnectorActionCurrent(account) || refreshed === null) return;
+            const granted = refreshed.connectors.some((c) => c.connectorId === entry.id);
+            if (!granted) {
+              Alert.alert(
+                `${entry.name} is not connected yet`,
+                'The authorization was not completed. If the browser asked you to sign in to AGI Cloud, finish signing in there and try again.',
+              );
+            }
           })
           .catch((err: unknown) => {
             if (!isConnectorActionCurrent(account)) return;
@@ -1062,6 +1124,7 @@ export default function CloudConnectorsScreen({
                       entry={entry}
                       connected={!!connectionFor(entry.id)}
                       connectedAt={connectionFor(entry.id)?.connectedAt}
+                      needsReauthorization={connectionFor(entry.id)?.needsReauthorization === true}
                       available={availableIds.has(entry.id)}
                       busy={connectingId === entry.id}
                       onPress={
