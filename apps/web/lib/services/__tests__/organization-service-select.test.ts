@@ -72,3 +72,34 @@ describe('OrganizationService.getOrganizationMembers (WEB-31)', () => {
   // repo's test env. The error path is exercised by integration tests in
   // __tests__/api/.
 });
+
+/**
+ * Before 0085 this was a bare DELETE with no guard, so a sole owner could be
+ * removed through this path and the organization left ownerless — unbillable
+ * and unadministrable. The database now refuses that at COMMIT via the deferred
+ * at-least-one-owner constraint trigger; the predicate below makes this path
+ * report the reason instead of surfacing a raw constraint error.
+ */
+describe('OrganizationService.removeMember owner protection', () => {
+  it('never issues an unguarded delete that could orphan the organization', async () => {
+    const execute = vi.fn().mockResolvedValue(1);
+    const db = { execute } as unknown as DatabaseAdapter;
+
+    await OrganizationService.removeMember(db, 'org-123', 'member-1');
+
+    const sql = String(execute.mock.calls[0]?.[0]);
+    expect(sql).toMatch(/organization_id\s*=\s*\$1/i);
+    expect(sql).toMatch(/user_id\s*=\s*\$2/i);
+    expect(sql).toMatch(/role\s*<>\s*'owner'/i);
+    expect(execute.mock.calls[0]?.[1]).toEqual(['org-123', 'member-1']);
+  });
+
+  it('reports the reason when the delete matched nothing, rather than reporting success', async () => {
+    const execute = vi.fn().mockResolvedValue(0);
+    const db = { execute } as unknown as DatabaseAdapter;
+
+    await expect(OrganizationService.removeMember(db, 'org-123', 'the-owner')).rejects.toThrow(
+      /ownership must be transferred first/i,
+    );
+  });
+});

@@ -88,6 +88,11 @@ export const rateLimitConfigs = {
     window: '1 h', // 10 feedback submissions per hour — generous for real use, blocks spam
     failClosed: false, // Don't block a user's feedback submission if Redis fails
   },
+  'mobile-content-report': {
+    limit: 20,
+    window: '1 h', // 20 GenAI content reports per hour — generous for real triage use, blocks spam
+    failClosed: false, // Don't block a trust-and-safety report if Redis fails
+  },
   'mobile-iap-verify': {
     limit: 10,
     window: '1 m', // 10 verify attempts per minute — allows retries, blocks receipt-replay abuse
@@ -334,6 +339,36 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  // Settings: organization invitations (member lifecycle)
+  'settings-team-invitations-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Mints a one-time token and consumes a licensed seat · fail closed.
+  'settings-team-invitations-write': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  // Token-redemption endpoint. Tight and fail-closed: an attacker who guesses a
+  // 32-byte token gets org access, so brute-force headroom must stay small.
+  'settings-team-invitations-accept': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  // Ownership transfer changes who owns the billing account · fail closed.
+  'settings-org-transfer-ownership': {
+    limit: 5,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-org-seats': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
   // Settings: activity and audit logs
   'settings-activity': {
     limit: 60,
@@ -412,6 +447,89 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 h', // 5 signups per hour per IP to prevent enumeration and spam
     failClosed: true, // Block if Redis unavailable: this endpoint stores PII
+  },
+  // SCIM 2.0 service provider · machine traffic from an enterprise IdP.
+  // Okta and Entra push a full directory reconciliation as a burst of single
+  // resource calls, so the ceiling is high, but it is still a ceiling: an
+  // unauthenticated caller can reach these routes and each request costs one
+  // Argon2id verification.
+  scim: {
+    limit: 600,
+    window: '1 m',
+    failClosed: true, // Credential-verifying endpoint: block if Redis is down.
+  },
+  // Minting a SCIM bearer token is a credential-issuing action.
+  'scim-token-mint': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'scim-token-manage': {
+    limit: 30,
+    window: '1 m',
+    failClosed: true,
+  },
+  // Support escalation ("talk to a human") · lib/support/handoff/**.
+  // Reachable signed out from the marketing widget, so these are IP-bucketed
+  // for anonymous callers.
+  'support-handoff-availability': {
+    limit: 60,
+    window: '1 m', // Read-only presence check; the service also caches 5s in-process.
+    failClosed: false, // Failing this closed would hide the honest "no one is available" copy.
+  },
+  'support-handoff-create': {
+    limit: 5,
+    window: '1 h', // Each escalation sends an email and stores a transcript.
+    failClosed: true, // Unauthenticated PII intake + outbound mail: block if Redis is down.
+  },
+  'support-handoff-status': {
+    limit: 120,
+    window: '1 m', // Polled every ~3s while waiting; 20/min expected, headroom for retries.
+    failClosed: false, // Blocking the poll would strand a user in a waiting state.
+  },
+  'support-handoff-message': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'support-handoff-agent': {
+    limit: 240,
+    window: '1 m', // Admin console: heartbeat + queue poll + claim from a small roster.
+    failClosed: false,
+  },
+  // Support agent — bounded account actions · lib/support/actions/**.
+  // All three fail closed: they read account state and mint/spend confirmation
+  // tokens that mutate the caller's own account, so losing Redis must block
+  // them rather than open them. Every one requires an authenticated session.
+  'support-account-context': {
+    limit: 30,
+    window: '1 m',
+    failClosed: true,
+  },
+  'support-action-propose': {
+    limit: 20,
+    window: '1 h',
+    failClosed: true,
+  },
+  'support-action-confirm': {
+    limit: 10,
+    window: '1 h',
+    failClosed: true,
+  },
+  // Support answer engine · lib/support/agent/**. A question that clears the
+  // relevance floor costs a managed-provider call, and the marketing widget
+  // serves signed-out visitors, so there is no per-user usage reservation to
+  // meter anonymous traffic. Both fail closed: without Redis the honest
+  // outcome is an abstention plus a human handoff, not unmetered spend.
+  'support-agent-anon': {
+    limit: 10,
+    window: '1 h', // IP-bucketed. Signed-out marketing widget.
+    failClosed: true,
+  },
+  'support-agent-user': {
+    limit: 40,
+    window: '1 h', // Authenticated in-app widget.
+    failClosed: true,
   },
   default: {
     limit: 100,

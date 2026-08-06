@@ -11,12 +11,17 @@ use tracing::{debug, info, warn};
 /// Returns `(Option<Vec<ToolDefinition>>, Option<ToolChoice>, Option<Arc<ToolRegistry>>)`.
 /// The `Arc<ToolRegistry>` is returned so callers can reuse it for tool execution without
 /// reconstructing it on every tool call.
+///
+/// `skills_offered` reflects whether this turn advertised the skill catalog. When
+/// it is false the `skill` tool is withheld too, so the model is never offered a
+/// capability whose catalog it was not shown (DESKTOP-SKILLS-EAGER-INJECTION-01).
 pub(super) fn build_tool_definitions(
     enable_tools: Option<bool>,
     mcp_state: &McpState,
     model_capabilities: Option<&ModelCapabilitiesDto>,
     is_web_focus: bool,
     model: &str,
+    skills_offered: bool,
 ) -> (
     Option<Vec<ToolDefinition>>,
     Option<ToolChoice>,
@@ -39,6 +44,10 @@ pub(super) fn build_tool_definitions(
     };
 
     let mut tool_defs = tools::build_chat_tools(registry.as_ref(), Some(mcp_state));
+
+    if !skills_offered {
+        tool_defs.retain(|tool| tool.name != crate::core::agi::tools::SKILL_TOOL_ID);
+    }
 
     if let Some(capabilities) = model_capabilities {
         let before_count = tool_defs.len();

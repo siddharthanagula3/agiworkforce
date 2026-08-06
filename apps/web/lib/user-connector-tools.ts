@@ -26,6 +26,15 @@
  *      The endpoint + auth live in the operator config server-side; user-supplied
  *      values never flow here. Dormant until an operator configures the map.
  *
+ *   2b. PER-USER OAUTH CONNECTORS (migration 0097 + `lib/connectors/**`): a
+ *      provider the OPERATOR registered an OAuth application for
+ *      (`CONNECTOR_OAUTH_PROVIDERS_JSON` + per-provider client credentials).
+ *      The platform runs the authorization-code + PKCE dance, and each user's
+ *      tokens are stored encrypted in `connector_oauth_grants`. Gated on that
+ *      user holding a live grant — the real "invoking would work" signal — so
+ *      no `user_connectors` row is involved. Dormant until an operator
+ *      registers at least one OAuth app.
+ *
  *   3. USER'S OWN CUSTOM MCP CONNECTORS: `user_custom_connectors` rows added by
  *      the user via /api/connectors/custom (Claude.ai-style "add a remote MCP
  *      server"). Unlike sources 1–2, this table IS a real per-user credential
@@ -57,6 +66,7 @@ import { z } from 'zod';
 import {
   buildMcpToolCatalog,
   connectMcpServer,
+  type McpCallToolResult,
   type McpServerConfig,
   type McpServerHandle,
   type McpToolCatalog,
@@ -74,6 +84,19 @@ import {
   postPrReview,
 } from '@/lib/github-app';
 import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
+import {
+  getConnectorOAuthProvider,
+  getOAuthConfiguredConnectorIds,
+  type ConnectorOAuthProvider,
+} from '@/lib/connectors/oauth-registry';
+import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
+import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
+import {
+  buildConnectorAuthorizationRequiredPayload,
+  serializeConnectorAuthorizationRequired,
+  type ConnectorAuthorizationReason,
+} from '@/lib/connectors/connect-required';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
@@ -419,6 +442,7 @@ function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
         if (!entry.enabled) continue;
         if (entry.connectorId === GITHUB_SERVER_ID) continue; // reserved built-in
         if (entry.connectorId.startsWith(CUSTOM_SERVER_PREFIX)) continue; // reserved for per-user custom connectors
+        if (entry.connectorId.startsWith(ORG_SHARED_SERVER_PREFIX)) continue; // reserved for org-shared connectors (0086)
         map.set(entry.connectorId, entry);
       }
       logger.info({ count: map.size }, '[user-connector] loaded operator connector MCP map');
@@ -535,6 +559,20 @@ async function buildRemoteConnectorCatalog(
   }
 }
 
+/** Flatten an MCP result's content blocks into the tool-loop's text payload. */
+function mcpResultToText(result: { content: McpCallToolResult['content'] }): string {
+  return result.content
+    .map((block) => {
+      if (block.type === 'text') return block.text;
+      if (block.type === 'resource')
+        return block.resource.text ?? `[resource: ${block.resource.uri}]`;
+      if (block.type === 'image') return '[image result]';
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 function catalogToConnectorToolDefs(
   catalog: McpToolCatalog,
   serverLabel?: string,
@@ -570,16 +608,7 @@ async function executeRemoteConnectorTool(
       _remoteHandles.set(entry.connectorId, handle);
     }
     const result = await handle.callTool(toolName, args);
-    const text = result.content
-      .map((block) => {
-        if (block.type === 'text') return block.text;
-        if (block.type === 'resource')
-          return block.resource.text ?? `[resource: ${block.resource.uri}]`;
-        if (block.type === 'image') return '[image result]';
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n');
+    const text = mcpResultToText(result);
     return { handled: true, content: text || '(no output)', isError: result.isError === true };
   } catch (err) {
     if (err instanceof EgressPolicyError) {
@@ -590,6 +619,29 @@ async function executeRemoteConnectorTool(
       return {
         handled: true,
         content: 'Connector endpoint blocked by security policy.',
+        isError: true,
+      };
+    }
+    // An authorization challenge on an OPERATOR-credentialed connector is not
+    // something the user can fix by reconnecting, so it must not produce a
+    // Connect card. Say what actually happened instead of a bare transport
+    // error, and drop the handle so a re-credentialed operator config is picked
+    // up without a process restart.
+    const challenge = detectConnectorAuthChallenge(err);
+    if (challenge) {
+      const stale = _remoteHandles.get(entry.connectorId);
+      if (stale) {
+        _remoteHandles.delete(entry.connectorId);
+        await stale.close().catch(() => undefined);
+      }
+      _remoteCatalogCache.delete(entry.connectorId);
+      logger.warn(
+        { connectorId: entry.connectorId, toolName, status: challenge.status },
+        '[user-connector] remote connector rejected the operator credentials',
+      );
+      return {
+        handled: true,
+        content: `Connector "${entry.connectorId}" rejected this deployment's credentials (HTTP ${challenge.status}). The operator must update the connector configuration; reconnecting will not help.`,
         isError: true,
       };
     }
@@ -885,16 +937,7 @@ async function executeCustomConnectorTool(
       _customHandles.set(cacheKey, handle);
     }
     const result = await handle.callTool(toolName, args);
-    const text = result.content
-      .map((block) => {
-        if (block.type === 'text') return block.text;
-        if (block.type === 'resource')
-          return block.resource.text ?? `[resource: ${block.resource.uri}]`;
-        if (block.type === 'image') return '[image result]';
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n');
+    const text = mcpResultToText(result);
     return { handled: true, content: text || '(no output)', isError: result.isError === true };
   } catch (err) {
     if (err instanceof EgressPolicyError) {
@@ -911,10 +954,571 @@ async function executeCustomConnectorTool(
     if (err instanceof ConnectorCredentialError) {
       return { handled: true, content: err.message, isError: true };
     }
+    // A custom connector's credential is a bearer token the USER supplied —
+    // there is no broker that can refresh it — so an authorization challenge
+    // means "your saved token no longer works", not "click Connect".
+    const challenge = detectConnectorAuthChallenge(err);
+    if (challenge) {
+      await evictCustomConnectorCaches(userId, row.id);
+      logger.warn(
+        { rowId: row.id, toolName, status: challenge.status },
+        '[user-connector] custom connector rejected the stored credential',
+      );
+      return {
+        handled: true,
+        content: `${row.name} rejected the saved credential (HTTP ${challenge.status}). Ask the user to update this connector's token in Settings > Connectors, then try again.`,
+        isError: true,
+      };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn(
       { rowId: row.id, toolName, error: msg },
       '[user-connector] custom connector tool execution failed',
+    );
+    return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
+  }
+}
+
+// ─── Per-user OAuth connectors (migration 0097, lib/connectors/**) ──────────
+//
+// The Anthropic-style directory connector: the OPERATOR registers one OAuth
+// application per provider, the USER clicks Connect, and the platform holds
+// that user's tokens. Unlike the operator-mapped remote connectors above, the
+// credential is per-user, so catalog and handle caches here are keyed by
+// authenticated user id + connector id and are NEVER shared across users — the
+// same rule the custom-connector path follows.
+//
+// The connector id doubles as the MCP serverId (the registry rejects ids with
+// an underscore, so `mcp__<serverId>__<tool>` still parses) and as the
+// `connector_tool_permissions.connector_id`, so the user's per-tool
+// allow/ask/deny verdicts apply to these connectors with no extra wiring.
+
+function oauthConnectorCacheKey(userId: string, connectorId: string): string {
+  return `${encodeURIComponent(userId)}:${encodeURIComponent(connectorId)}`;
+}
+
+const _oauthCatalogCache = new Map<string, CustomCatalogState>();
+const _oauthHandles = new Map<string, McpServerHandle>();
+const OAUTH_CATALOG_TTL_MS = 60_000;
+
+function oauthConnectorMcpConfig(
+  provider: ConnectorOAuthProvider,
+  accessToken: string,
+  tokenType: string,
+): McpServerConfig {
+  return {
+    url: provider.mcpUrl,
+    transport: provider.transport,
+    headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
+  };
+}
+
+/**
+ * Release the cached catalog and close the open handle for an OAuth connector.
+ * Called on disconnect and whenever a token is refreshed — a live handle holds
+ * the OLD Authorization header, so reusing it after a refresh would keep
+ * replaying the rejected credential.
+ */
+export async function evictConnectorOAuthCaches(
+  userId: string,
+  connectorId: string,
+): Promise<void> {
+  const cacheKey = oauthConnectorCacheKey(userId, connectorId);
+  _oauthCatalogCache.delete(cacheKey);
+  const handle = _oauthHandles.get(cacheKey);
+  if (handle) {
+    _oauthHandles.delete(cacheKey);
+    await handle.close().catch(() => undefined);
+  }
+}
+
+function connectRequiredResult(params: {
+  connectorId: string;
+  toolName: string;
+  reason: ConnectorAuthorizationReason;
+  additionalScopes?: string[];
+}): ConnectorExecResult {
+  const payload = buildConnectorAuthorizationRequiredPayload({
+    connectorId: params.connectorId,
+    toolName: params.toolName,
+    reason: params.reason,
+    ...(params.additionalScopes ? { additionalScopes: params.additionalScopes } : {}),
+  });
+  return {
+    handled: true,
+    content: serializeConnectorAuthorizationRequired(payload),
+    isError: true,
+  };
+}
+
+/**
+ * Connector ids that are OAuth-configured AND not already claimed by the
+ * operator MCP map. The operator's static mapping wins for a duplicated id:
+ * it is already working today, and silently swapping it for a per-user OAuth
+ * credential would change who a running deployment calls the provider as.
+ */
+const _reportedOAuthShadowedIds = new Set<string>();
+
+function getUsableOAuthConnectorIds(): string[] {
+  const operatorMapped = loadConnectorMcpMap();
+  const usable: string[] = [];
+  for (const id of getOAuthConfiguredConnectorIds()) {
+    if (operatorMapped.has(id)) {
+      // A configuration mistake, not a per-turn event: warn once per process
+      // rather than on every chat turn for the life of the deployment.
+      if (!_reportedOAuthShadowedIds.has(id)) {
+        _reportedOAuthShadowedIds.add(id);
+        logger.warn(
+          { connectorId: id },
+          '[user-connector] connector id is both operator-mapped and OAuth-configured; keeping the operator mapping',
+        );
+      }
+      continue;
+    }
+    usable.push(id);
+  }
+  return usable;
+}
+
+async function buildOAuthConnectorCatalog(
+  userId: string,
+  provider: ConnectorOAuthProvider,
+  accessToken: string,
+  tokenType: string,
+): Promise<McpToolCatalog | null> {
+  const now = Date.now();
+  const cacheKey = oauthConnectorCacheKey(userId, provider.connectorId);
+  const cached = _oauthCatalogCache.get(cacheKey);
+  if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
+
+  // SSRF: the MCP endpoint is operator-supplied but can still be re-pointed via
+  // DNS after configuration, so it is re-checked on every build.
+  try {
+    await assertResolvedPublicHostname(provider.mcpUrl);
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      logger.warn(
+        { connectorId: provider.connectorId },
+        '[user-connector] OAuth connector endpoint blocked by SSRF policy',
+      );
+      _oauthCatalogCache.set(cacheKey, { catalog: null, expiresAt: now + OAUTH_CATALOG_TTL_MS });
+      return null;
+    }
+    throw err;
+  }
+
+  try {
+    const { catalog, handles } = await buildMcpToolCatalog({
+      [provider.connectorId]: oauthConnectorMcpConfig(provider, accessToken, tokenType),
+    });
+    for (const h of handles) {
+      const old = _oauthHandles.get(cacheKey);
+      _oauthHandles.set(cacheKey, h);
+      if (old && old !== h) await old.close().catch(() => undefined);
+    }
+    _oauthCatalogCache.set(cacheKey, { catalog, expiresAt: now + OAUTH_CATALOG_TTL_MS });
+    return catalog;
+  } catch (err) {
+    logger.warn(
+      {
+        connectorId: provider.connectorId,
+        authChallenge: detectConnectorAuthChallenge(err) !== null,
+      },
+      '[user-connector] failed to build OAuth connector catalog',
+    );
+    _oauthCatalogCache.set(cacheKey, { catalog: null, expiresAt: now + OAUTH_CATALOG_TTL_MS });
+    return null;
+  }
+}
+
+async function callOAuthConnectorTool(
+  userId: string,
+  provider: ConnectorOAuthProvider,
+  accessToken: string,
+  tokenType: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<ConnectorExecResult> {
+  const cacheKey = oauthConnectorCacheKey(userId, provider.connectorId);
+  let handle = _oauthHandles.get(cacheKey);
+  if (!handle) {
+    await assertResolvedPublicHostname(provider.mcpUrl);
+    handle = await connectMcpServer({
+      serverName: provider.connectorId,
+      config: oauthConnectorMcpConfig(provider, accessToken, tokenType),
+    });
+    _oauthHandles.set(cacheKey, handle);
+  }
+  const result = await handle.callTool(toolName, args);
+  return {
+    handled: true,
+    content: mcpResultToText(result) || '(no output)',
+    isError: result.isError === true,
+  };
+}
+
+/**
+ * LAZY AUTHENTICATION — the 401 flow.
+ *
+ * A tool call that hits an authorization challenge does not fail the turn. It
+ * becomes a structured "connect required" result the client renders as an
+ * inline Connect card. Before giving up, an expired-looking 401 gets exactly
+ * ONE forced refresh + retry of the same call, because the common case is a
+ * token the provider invalidated ahead of its stated expiry.
+ *
+ * Challenge interpretation mirrors `crates/agiworkforce-mcp/src/oauth/flow.rs`
+ * (see lib/connectors/oauth-challenge.ts): a 401 means reconnect, a 403 means
+ * reconnect only when it carries `error="insufficient_scope"`.
+ */
+async function executeOAuthConnectorTool(
+  userId: string,
+  connectorId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<ConnectorExecResult> {
+  const provider = getConnectorOAuthProvider(connectorId);
+  if (!provider) return NOT_HANDLED;
+
+  const access = await resolveConnectorAccessToken(userId, connectorId);
+  if (access.status !== 'ready') {
+    return connectRequiredResult({
+      connectorId,
+      toolName,
+      reason: access.status === 'not-connected' ? 'not_connected' : 'authorization_expired',
+    });
+  }
+
+  try {
+    return await callOAuthConnectorTool(
+      userId,
+      provider,
+      access.accessToken,
+      access.tokenType,
+      toolName,
+      args,
+    );
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      logger.warn(
+        { connectorId },
+        '[user-connector] OAuth connector endpoint blocked by SSRF policy at execution',
+      );
+      return {
+        handled: true,
+        content: 'Connector endpoint blocked by security policy.',
+        isError: true,
+      };
+    }
+
+    const challenge = detectConnectorAuthChallenge(err);
+    if (!challenge) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        { connectorId, toolName, error: msg },
+        '[user-connector] OAuth connector tool execution failed',
+      );
+      return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
+    }
+
+    // The cached handle carries the rejected Authorization header; drop it so
+    // the retry below connects with the refreshed credential.
+    await evictConnectorOAuthCaches(userId, connectorId);
+
+    if (challenge.status === 403) {
+      return connectRequiredResult({
+        connectorId,
+        toolName,
+        reason: 'insufficient_scope',
+        additionalScopes: challenge.requiredScope?.split(/\s+/).filter(Boolean) ?? [],
+      });
+    }
+
+    const refreshed = await resolveConnectorAccessToken(userId, connectorId, {
+      forceRefresh: true,
+    });
+    if (refreshed.status !== 'ready') {
+      return connectRequiredResult({ connectorId, toolName, reason: 'authorization_expired' });
+    }
+
+    try {
+      return await callOAuthConnectorTool(
+        userId,
+        provider,
+        refreshed.accessToken,
+        refreshed.tokenType,
+        toolName,
+        args,
+      );
+    } catch (retryErr) {
+      if (detectConnectorAuthChallenge(retryErr)) {
+        // A freshly-minted token was rejected too. Nothing this server can do
+        // recovers that; the user has to authorize again.
+        await evictConnectorOAuthCaches(userId, connectorId);
+        return connectRequiredResult({
+          connectorId,
+          toolName,
+          reason: 'authorization_unavailable',
+        });
+      }
+      const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      logger.warn(
+        { connectorId, toolName, error: msg },
+        '[user-connector] OAuth connector tool retry failed',
+      );
+      return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
+    }
+  }
+}
+
+// ─── Organization-shared custom connectors (migration 0086) ────────────────
+//
+// An org admin connects a server once and every member can USE it. Members
+// never see the credential: `auth_header_enc` is decrypted here, server-side,
+// exactly as for a personal connector, and no API surface returns it.
+//
+// Namespace. Shared connectors are emitted as `orgmcp-<org_short_id>`, NOT
+// `custom-<short_id>`. `short_id` is unique only per (user_id, short_id), so
+// reusing it would let two members' personal connectors collide with the
+// shared one inside a single conversation, and would cross-wire
+// `connector_tool_permissions` (keyed user_id + connector_id + tool_name). The
+// `orgmcp-` prefix contains no underscore, so it still parses under
+// `mcp__<serverId>__<tool>` (parseQualifiedToolName).
+//
+// Cache scope. The catalog/handle caches below are keyed by ORGANIZATION +
+// row uuid, not by member. That is correct and deliberate: unlike a personal
+// connector, one shared credential serves every member, and there is no
+// per-member header anywhere on this path. If a per-member header is ever
+// introduced, this key MUST become per-member on the same commit.
+
+const ORG_SHARED_SERVER_PREFIX = 'orgmcp-';
+const ORG_SHORT_ID_RE = /^[0-9a-f]{10}$/;
+
+function orgSharedServerId(orgShortId: string): string {
+  return `${ORG_SHARED_SERVER_PREFIX}${orgShortId}`;
+}
+
+function orgShortIdFromServerId(serverId: string): string | null {
+  if (!serverId.startsWith(ORG_SHARED_SERVER_PREFIX)) return null;
+  const shortId = serverId.slice(ORG_SHARED_SERVER_PREFIX.length);
+  return ORG_SHORT_ID_RE.test(shortId) ? shortId : null;
+}
+
+interface OrgSharedConnectorRow extends CustomConnectorRow {
+  organization_id: string;
+  org_short_id: string;
+}
+
+/**
+ * The organization this user belongs to, read from the membership table.
+ *
+ * This is the ONLY source of org scope on this path. Nothing about the chat
+ * request can influence it, so a member of org A can never reach org B's shared
+ * connectors even if they guess an `orgmcp-` id.
+ */
+async function resolveConnectorOrganizationId(userId: string): Promise<string | null> {
+  const db = getNeonDb();
+  try {
+    const [row] = await db.query<{ organization_id: string }>(
+      `select organization_id
+         from public.organization_members
+        where user_id = $1
+        order by joined_at asc
+        limit 1`,
+      [userId],
+    );
+    return row?.organization_id ?? null;
+  } catch (error) {
+    if (isUndefinedTable(error)) return null;
+    throw error;
+  }
+}
+
+/**
+ * Shared connector rows this member may use.
+ *
+ * Runs on the privileged connection because it must read `auth_header_enc` to
+ * connect — the same regime every other credentialed connector read uses. The
+ * tenant boundary here is therefore the `s.organization_id = $1` predicate with
+ * a SERVER-DERIVED id, and it is pinned by
+ * `lib/services/__tests__/org-shared-connector-service.test.ts`.
+ *
+ * The owner's own rows are skipped: they already appear in the member's
+ * personal `custom-` catalog, and offering the same server twice would double
+ * its prompt weight and confuse the model.
+ */
+async function getOrgSharedConnectorRows(
+  userId: string,
+  organizationId: string,
+  limit?: number,
+): Promise<OrgSharedConnectorRow[]> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<OrgSharedConnectorRow>(
+      `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
+              s.organization_id, s.org_short_id
+         from public.organization_shared_connectors s
+         join public.user_custom_connectors c on c.id = s.connector_row_id
+        where s.organization_id = $1
+          and c.user_id <> $2
+        order by s.created_at asc, s.connector_row_id asc
+        limit $3`,
+      [organizationId, userId, limit ?? null],
+    );
+    return limit === undefined ? rows : rows.slice(0, limit);
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+}
+
+const _orgSharedCatalogCache = new Map<string, CustomCatalogState>();
+const _orgSharedHandles = new Map<string, McpServerHandle>();
+
+function orgSharedCacheKey(organizationId: string, rowId: string): string {
+  return `${encodeURIComponent(organizationId)}:${encodeURIComponent(rowId)}`;
+}
+
+/**
+ * Release the cached catalog and close the open MCP handle for a connector the
+ * organization has just un-shared. Without this a member keeps invoking a
+ * withdrawn connector until the process restarts — the DB row is gone but the
+ * live handle is not.
+ */
+export async function evictOrgSharedConnectorCaches(
+  organizationId: string,
+  rowId: string,
+): Promise<void> {
+  const cacheKey = orgSharedCacheKey(organizationId, rowId);
+  _orgSharedCatalogCache.delete(cacheKey);
+  const handle = _orgSharedHandles.get(cacheKey);
+  if (handle) {
+    _orgSharedHandles.delete(cacheKey);
+    await handle.close().catch(() => undefined);
+  }
+}
+
+async function buildOrgSharedConnectorCatalog(
+  row: OrgSharedConnectorRow,
+): Promise<McpToolCatalog | null> {
+  const now = Date.now();
+  const cacheKey = orgSharedCacheKey(row.organization_id, row.id);
+  const cached = _orgSharedCatalogCache.get(cacheKey);
+  if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
+
+  // SSRF: DNS can be re-pointed after the share, so re-check on every build —
+  // the same rule the personal path already applies.
+  try {
+    await assertResolvedPublicHostname(row.url);
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      logger.warn(
+        { rowId: row.id, organizationId: row.organization_id },
+        '[user-connector] shared connector endpoint blocked by SSRF policy',
+      );
+      _orgSharedCatalogCache.set(cacheKey, {
+        catalog: null,
+        expiresAt: now + CUSTOM_CATALOG_TTL_MS,
+      });
+      return null;
+    }
+    throw err;
+  }
+
+  const serverId = orgSharedServerId(row.org_short_id);
+  try {
+    const { catalog, handles } = await buildMcpToolCatalog({
+      [serverId]: customRowToMcpConfig(row),
+    });
+    for (const h of handles) {
+      const old = _orgSharedHandles.get(cacheKey);
+      _orgSharedHandles.set(cacheKey, h);
+      if (old && old !== h) await old.close().catch(() => undefined);
+    }
+    _orgSharedCatalogCache.set(cacheKey, { catalog, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
+    return catalog;
+  } catch (err) {
+    logger.warn(
+      { rowId: row.id, error: err instanceof Error ? err.message : err },
+      '[user-connector] failed to build shared connector catalog',
+    );
+    _orgSharedCatalogCache.set(cacheKey, { catalog: null, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
+    return null;
+  }
+}
+
+async function executeOrgSharedConnectorTool(
+  userId: string,
+  orgShortId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<ConnectorExecResult> {
+  // Re-resolve BOTH the membership and the share at execution time. A member
+  // removed from the org, or a connector un-shared, must stop working on the
+  // very next call — not when a cache expires.
+  const organizationId = await resolveConnectorOrganizationId(userId);
+  if (!organizationId) {
+    return {
+      handled: true,
+      content: 'This shared connector is not available for this account.',
+      isError: true,
+    };
+  }
+
+  const db = getNeonDb();
+  let rows: OrgSharedConnectorRow[];
+  try {
+    rows = await db.query<OrgSharedConnectorRow>(
+      `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
+              s.organization_id, s.org_short_id
+         from public.organization_shared_connectors s
+         join public.user_custom_connectors c on c.id = s.connector_row_id
+        where s.organization_id = $1
+          and s.org_short_id = $2`,
+      [organizationId, orgShortId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) rows = [];
+    else throw error;
+  }
+
+  const row = rows[0];
+  if (!row) {
+    return {
+      handled: true,
+      content: 'This shared connector is no longer available for this organization.',
+      isError: true,
+    };
+  }
+
+  try {
+    const cacheKey = orgSharedCacheKey(row.organization_id, row.id);
+    let handle = _orgSharedHandles.get(cacheKey);
+    if (!handle) {
+      await assertResolvedPublicHostname(row.url);
+      handle = await connectMcpServer({
+        serverName: orgSharedServerId(row.org_short_id),
+        config: customRowToMcpConfig(row),
+      });
+      _orgSharedHandles.set(cacheKey, handle);
+    }
+    const result = await handle.callTool(toolName, args);
+    const text = mcpResultToText(result);
+    return { handled: true, content: text || '(no output)', isError: result.isError === true };
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      return {
+        handled: true,
+        content: 'This shared connector endpoint is not reachable from this environment.',
+        isError: true,
+      };
+    }
+    if (err instanceof ConnectorCredentialError) {
+      return { handled: true, content: err.message, isError: true };
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      { rowId: row.id, toolName, error: msg },
+      '[user-connector] shared connector tool call failed',
     );
     return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
   }
@@ -988,6 +1592,36 @@ export async function loadUserConnectorToolCatalog(
       }
     }
 
+    // 2b. Per-user OAuth connectors (0097). Offered ONLY when this user holds a
+    // live grant whose token can be resolved right now — the same "invoking
+    // would actually work" rule the other sources follow, which is why a
+    // provider with no grant keeps reading as Connect rather than Connected.
+    //
+    // The user's live grants are read ONCE and intersected with the configured
+    // providers, so a deployment with many registered OAuth apps does not issue
+    // one lookup per provider on every chat turn.
+    const usableOAuthIds = getUsableOAuthConnectorIds();
+    const grantedOAuthIds =
+      usableOAuthIds.length > 0
+        ? new Set((await getUserConnectorOAuthGrantSummaries(userId)).map((g) => g.connectorId))
+        : new Set<string>();
+    for (const connectorId of usableOAuthIds) {
+      if (!grantedOAuthIds.has(connectorId)) continue;
+      const provider = getConnectorOAuthProvider(connectorId);
+      if (!provider) continue;
+      const access = await resolveConnectorAccessToken(userId, connectorId);
+      if (access.status !== 'ready') continue;
+      const catalog = await buildOAuthConnectorCatalog(
+        userId,
+        provider,
+        access.accessToken,
+        access.tokenType,
+      );
+      if (catalog) {
+        defs.push(...catalogToConnectorToolDefs(catalog, provider.displayName ?? connectorId));
+      }
+    }
+
     // 3. The user's own custom remote MCP connectors (per-user credentialed,
     // persisted via /api/connectors/custom). Each row independently degrades
     // to no tools on failure (buildCustomConnectorCatalog never throws).
@@ -999,6 +1633,22 @@ export async function loadUserConnectorToolCatalog(
     for (const row of customRows) {
       const catalog = await buildCustomConnectorCatalog(userId, row);
       if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
+    }
+
+    // 4. Connectors the user's ORGANIZATION shares with its members (0086).
+    // Same failure posture as 3: each row degrades to no tools independently.
+    // The org is resolved from the membership table, never from the request.
+    const organizationId = await resolveConnectorOrganizationId(userId);
+    if (organizationId) {
+      const sharedRows = await getOrgSharedConnectorRows(
+        userId,
+        organizationId,
+        customConnectorLimit,
+      );
+      for (const row of sharedRows) {
+        const catalog = await buildOrgSharedConnectorCatalog(row);
+        if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
+      }
     }
 
     // AUDIT-FIX CON-2: apply the user's blocks BEFORE the per-user cap, so a
@@ -1077,9 +1727,26 @@ export function makeUserConnectorExecutor(
       return executeCustomConnectorTool(userId, customShortId, toolName, args);
     }
 
+    // Organization-shared connector (0086). Membership and the share row are
+    // both re-resolved inside the executor, so a removed member or an
+    // un-shared connector stops working on the very next call.
+    const orgShortId = orgShortIdFromServerId(serverId);
+    if (orgShortId !== null) {
+      return executeOrgSharedConnectorTool(userId, orgShortId, toolName, args);
+    }
+
     const map = loadConnectorMcpMap();
     const entry = map.get(serverId);
-    if (!entry) return NOT_HANDLED;
+    if (!entry) {
+      // Per-user OAuth connector (0097). Checked AFTER the operator map so a
+      // duplicated id keeps its existing operator-credentialed behaviour, and
+      // it re-resolves the grant on every call, so a disconnect stops working
+      // on the very next tool call rather than when a cache expires.
+      if (getConnectorOAuthProvider(serverId)) {
+        return executeOAuthConnectorTool(userId, serverId, toolName, args);
+      }
+      return NOT_HANDLED;
+    }
 
     // Re-validate the per-user gate: the user must still have this connector
     // active. Never execute an operator-credentialed connector for a user who

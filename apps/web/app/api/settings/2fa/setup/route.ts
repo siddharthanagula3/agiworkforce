@@ -49,11 +49,11 @@ async function handleSetup2FA(request: NextRequest) {
   const { userId, email } = await getClerkAuthUser(request);
 
   const db = getNeonDb();
-  const existing = await db.query<{ enabled: boolean }>(
-    `select enabled from user_two_factor where user_id = $1`,
+  const [existing] = await db.query<{ enabled: boolean }>(
+    `select enabled from user_two_factor where user_id = $1 limit 1`,
     [userId],
   );
-  if (existing.rows[0]?.enabled === true) {
+  if (existing?.enabled === true) {
     logger.warn({ userId }, '2FA setup refused: account already enrolled');
     throw createError.conflict(
       'Two-factor authentication is already enabled. Disable it with a valid code before enrolling a new device.',

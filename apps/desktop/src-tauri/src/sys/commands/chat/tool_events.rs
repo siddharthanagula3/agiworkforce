@@ -170,6 +170,21 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         ("Glob", query.or(path).unwrap_or_default())
     } else if lower == "edit_exact_replace" {
         ("Edit", path.unwrap_or_default())
+    } else if lower == "skill" {
+        // Name the skill being disclosed so the user can see WHICH instructions the
+        // model pulled in, not just that "a tool ran".
+        let action = args
+            .get("action")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        let skill_name = args.get("name").and_then(|value| value.as_str());
+        (
+            "Skill",
+            match skill_name {
+                Some(name) => format!("{action} {name}"),
+                None => action.to_string(),
+            },
+        )
     } else if contains_any(&lower, &["search_files", "grep", "find_files", "glob"]) {
         ("Search", query.unwrap_or_default())
     } else if contains_any(

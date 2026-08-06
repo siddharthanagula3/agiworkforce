@@ -257,8 +257,14 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "incognito")]
     pub incognito: Option<bool>,
 
-    /// When true (or absent, default true), auto-inject matching skills into the
-    /// system prompt based on message content analysis.
+    /// When true (or absent, default true), offer installed skills to the model for
+    /// this turn: a name+description catalog in the system prompt plus the `skill`
+    /// tool it must call to read any body (progressive disclosure).
+    ///
+    /// The name is kept for IPC compatibility (`autoInjectSkills` is already written
+    /// by the settings store and the MCP server bridge), but nothing is auto-injected
+    /// anymore — skill bodies are never placed in the prompt, only fetched on an
+    /// explicit model tool call. `false` withholds both the catalog and the tool.
     #[serde(default = "default_auto_inject_skills", alias = "autoInjectSkills")]
     pub auto_inject_skills: Option<bool>,
 

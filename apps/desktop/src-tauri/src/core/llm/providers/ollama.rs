@@ -294,6 +294,78 @@ impl OllamaProvider {
             .unwrap_or(false)
     }
 
+    /// POST a `/api/chat` body, retrying once without the `think` field when
+    /// the model rejects it.
+    ///
+    /// The UI's thinking toggle is model-agnostic, but Ollama hard-fails a
+    /// request that sends `think: true` to a model without reasoning support
+    /// (`400 … "does not support thinking"`), which surfaced in the native
+    /// E2E run as a dead send with an error card instead of a reply. A model
+    /// that cannot think should answer without it, not refuse the message.
+    async fn post_chat_with_think_fallback(
+        &self,
+        body: serde_json::Value,
+        model: &str,
+    ) -> Result<reqwest::Response, Box<dyn Error + Send + Sync>> {
+        let url = format!("{}/api/chat", self.base_url);
+        let post = |payload: serde_json::Value| {
+            let client = self.client.clone();
+            let url = url.clone();
+            async move {
+                client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        if e.is_connect() {
+                            "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".to_string()
+                        } else {
+                            format!("Ollama request failed: {}", e)
+                        }
+                    })
+            }
+        };
+
+        let response = post(body.clone()).await?;
+        if response.status().is_success() {
+            return Ok(response);
+        }
+
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+
+        let think_rejected = status == reqwest::StatusCode::BAD_REQUEST
+            && error_text.contains("does not support thinking")
+            && body.get("think").is_some();
+        if think_rejected {
+            tracing::warn!(
+                "Ollama model '{}' rejected the think parameter; retrying without extended thinking",
+                model
+            );
+            let mut retry_body = body;
+            if let Some(fields) = retry_body.as_object_mut() {
+                fields.remove("think");
+            }
+            let retry_response = post(retry_body).await?;
+            if retry_response.status().is_success() {
+                return Ok(retry_response);
+            }
+            let retry_status = retry_response.status();
+            let retry_text = retry_response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Ollama API error {}: {}", retry_status, retry_text).into());
+        }
+
+        Err(format!("Ollama API error {}: {}", status, error_text).into())
+    }
+
     fn extract_images(multimodal: Option<&Vec<ContentPart>>) -> Option<Vec<String>> {
         multimodal.and_then(|parts| {
             let images: Vec<String> = parts
@@ -441,28 +513,8 @@ impl LLMProvider for OllamaProvider {
         );
 
         let response = self
-            .client
-            .post(format!("{}/api/chat", self.base_url))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_connect() {
-                    "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".to_string()
-                } else {
-                    format!("Ollama request failed: {}", e)
-                }
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Ollama API error {}: {}", status, error_text).into());
-        }
+            .post_chat_with_think_fallback(body, &request.model)
+            .await?;
 
         let ollama_response: OllamaResponse = response.json().await?;
 
@@ -660,28 +712,8 @@ impl LLMProvider for OllamaProvider {
         );
 
         let response = self
-            .client
-            .post(format!("{}/api/chat", self.base_url))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_connect() {
-                    "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".to_string()
-                } else {
-                    format!("Ollama streaming request failed: {}", e)
-                }
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Ollama API error {}: {}", status, error_text).into());
-        }
+            .post_chat_with_think_fallback(body, &request.model)
+            .await?;
 
         tracing::debug!("Ollama streaming response received, starting JSON line parsing");
 

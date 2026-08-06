@@ -15,6 +15,7 @@ describe('Stripe upgrade preview tokens', () => {
         plan: 'max_15x',
         billingInterval: 'monthly',
         stripeSubscriptionId: 'sub_123',
+        seats: 1,
         prorationDate: Math.floor(NOW_MS / 1000),
       },
       SECRET,
@@ -29,6 +30,7 @@ describe('Stripe upgrade preview tokens', () => {
           plan: 'max_15x',
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
+          seats: 1,
         },
         SECRET,
         NOW_MS + 60_000,
@@ -45,6 +47,7 @@ describe('Stripe upgrade preview tokens', () => {
         plan: 'max_15x',
         billingInterval: 'monthly',
         stripeSubscriptionId: 'sub_123',
+        seats: 1,
         prorationDate: Math.floor(NOW_MS / 1000),
       },
       SECRET,
@@ -59,6 +62,7 @@ describe('Stripe upgrade preview tokens', () => {
           plan: 'max_15x',
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
+          seats: 1,
         },
         SECRET,
         NOW_MS,
@@ -72,10 +76,59 @@ describe('Stripe upgrade preview tokens', () => {
           plan: 'max_15x',
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
+          seats: 1,
         },
         SECRET,
         NOW_MS + 11 * 60_000,
       ),
     ).toThrow(/expired/i);
+  });
+
+  it('refuses a token whose seat count does not match the applied seat count', () => {
+    // The proration a customer confirms is quantity-dependent. Without seats in
+    // the HMAC, a client could preview 2 seats and apply 50 against the 2-seat
+    // proration figure.
+    const twoSeatToken = createUpgradePreviewToken(
+      {
+        userId: 'user_123',
+        plan: 'team',
+        billingInterval: 'monthly',
+        stripeSubscriptionId: 'sub_123',
+        seats: 2,
+        prorationDate: Math.floor(NOW_MS / 1000),
+      },
+      SECRET,
+      NOW_MS,
+    );
+
+    expect(() =>
+      verifyUpgradePreviewToken(
+        twoSeatToken,
+        {
+          userId: 'user_123',
+          plan: 'team',
+          billingInterval: 'monthly',
+          stripeSubscriptionId: 'sub_123',
+          seats: 50,
+        },
+        SECRET,
+        NOW_MS + 60_000,
+      ),
+    ).toThrow(/invalid/i);
+
+    expect(
+      verifyUpgradePreviewToken(
+        twoSeatToken,
+        {
+          userId: 'user_123',
+          plan: 'team',
+          billingInterval: 'monthly',
+          stripeSubscriptionId: 'sub_123',
+          seats: 2,
+        },
+        SECRET,
+        NOW_MS + 60_000,
+      ),
+    ).toMatchObject({ seats: 2 });
   });
 });

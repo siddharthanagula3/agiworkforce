@@ -7,6 +7,7 @@
 //! `sse_parser`, `token_counter`, `llm_router`, `provider_adapter`,
 //! `cost_calculator`, and `sys/commands/llm`.
 
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -72,12 +73,70 @@ pub struct TokenMultiplier {
     pub completion: f64,
 }
 
+/// Catalog `cachePolicy` — only the fields cost calculation needs.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachePolicyEntry {
+    #[serde(default)]
+    pub write_multiplier: Option<f64>,
+    #[serde(default)]
+    pub read_discount: Option<f64>,
+}
+
 /// Pricing per million tokens.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PricingEntry {
     pub input_per_million: f64,
     pub output_per_million: f64,
+    /// Absolute per-million price for a cache READ, straight from the catalog's
+    /// `cached_input`. `None` when the model prices no cache read, in which case
+    /// callers must fall back to the full input rate rather than guessing a
+    /// discount. Carrying the real number matters: the cost calculator used to
+    /// hardcode 0.5x the input rate for OpenAI and Managed Cloud, while the
+    /// catalog prices a cache read at 0.1x for both gpt-5.6-sol and
+    /// gpt-5.6-luna — a 5x overcharge on every cached token.
+    #[serde(default)]
+    pub cache_read_per_million: Option<f64>,
+    /// Multiplier applied to the input rate when WRITING a cache entry, from
+    /// `cachePolicy.writeMultiplier`. `None` means the model does not price
+    /// cache writes separately.
+    #[serde(default)]
+    pub cache_write_multiplier: Option<f64>,
+    /// Absolute per-million price of a cache WRITE, from the catalog's
+    /// `cached_write`. Preferred over `cache_write_multiplier` because it is the
+    /// provider's published number rather than a derived one. `None` means the
+    /// model declares no write price, and callers must NOT invent a surcharge.
+    #[serde(default)]
+    pub cache_write_per_million: Option<f64>,
+}
+
+/// One dated pricing window from the catalog's `pricingSchedule`.
+///
+/// A window is a dated `costOverride`: it applies while
+/// `effectiveFrom <= date <= effectiveUntil`, both bounds inclusive and both
+/// optional (an absent bound is open-ended on that side). Dates are catalog ISO
+/// `YYYY-MM-DD` strings; parsing failures make a window inapplicable rather than
+/// silently shifting a price.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PricingWindowEntry {
+    #[serde(default)]
+    pub effective_from: Option<String>,
+    #[serde(default)]
+    pub effective_until: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub input_cost: Option<f64>,
+    #[serde(default)]
+    pub output_cost: Option<f64>,
+    #[serde(default, rename = "cached_input")]
+    pub cached_input: Option<f64>,
+    #[serde(default, rename = "cached_write")]
+    pub cached_write: Option<f64>,
+    #[serde(default, rename = "cached_write_1h")]
+    pub cached_write_1h: Option<f64>,
 }
 
 /// Per-task model routing for a provider.
@@ -122,6 +181,22 @@ pub struct ModelEntry {
     pub context_window: u64,
     pub input_cost: f64,
     pub output_cost: f64,
+    /// Catalog `cached_input`: absolute per-million price of a cache read.
+    #[serde(default, rename = "cached_input")]
+    pub cached_input: Option<f64>,
+    /// Catalog `cached_write`: absolute per-million price of a cache write
+    /// (5-minute / default TTL). Absent when the model prices no cache write.
+    #[serde(default, rename = "cached_write")]
+    pub cached_write: Option<f64>,
+    /// Catalog `cached_write_1h`: absolute per-million price of a one-hour-TTL
+    /// cache write. Absent when the model has no extended-TTL cache tier.
+    #[serde(default, rename = "cached_write_1h")]
+    pub cached_write_1h: Option<f64>,
+    /// Dated pricing windows. Empty for the (usual) single-price model.
+    #[serde(default)]
+    pub pricing_schedule: Vec<PricingWindowEntry>,
+    #[serde(default)]
+    pub cache_policy: Option<CachePolicyEntry>,
     pub capabilities: ModelCapabilities,
     #[serde(default)]
     pub reasoning: Option<ModelReasoning>,
@@ -135,6 +210,67 @@ pub struct ModelEntry {
     pub released: Option<String>,
     #[serde(default)]
     pub deprecated: Option<bool>,
+}
+
+/// Per-million rates that apply to a model on a specific date.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EffectivePricing {
+    pub input_cost: f64,
+    pub output_cost: f64,
+    pub cached_input: Option<f64>,
+    pub cached_write: Option<f64>,
+    pub cached_write_1h: Option<f64>,
+}
+
+impl PricingWindowEntry {
+    /// Whether this window covers `as_of`. Both bounds are inclusive; an absent
+    /// bound is open-ended. A bound that is not a parseable `YYYY-MM-DD` date
+    /// makes the window inapplicable — an unreadable schedule must never move a
+    /// price silently.
+    fn covers(&self, as_of: NaiveDate) -> bool {
+        let bound = |value: &Option<String>| -> Option<Option<NaiveDate>> {
+            match value {
+                None => Some(None),
+                Some(raw) => NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok().map(Some),
+            }
+        };
+        let (Some(from), Some(until)) = (bound(&self.effective_from), bound(&self.effective_until))
+        else {
+            return false;
+        };
+        from.is_none_or(|start| start <= as_of) && until.is_none_or(|end| as_of <= end)
+    }
+}
+
+impl ModelEntry {
+    /// Rates that apply to this model on `as_of`.
+    ///
+    /// The first `pricingSchedule` window covering `as_of` wins; with no
+    /// schedule (the usual case) or no covering window, the model's top-level
+    /// fields — which always hold the enduring/standard price — are returned.
+    pub fn effective_pricing(&self, as_of: NaiveDate) -> EffectivePricing {
+        let base = EffectivePricing {
+            input_cost: self.input_cost,
+            output_cost: self.output_cost,
+            cached_input: self.cached_input,
+            cached_write: self.cached_write,
+            cached_write_1h: self.cached_write_1h,
+        };
+        let Some(window) = self
+            .pricing_schedule
+            .iter()
+            .find(|window| window.covers(as_of))
+        else {
+            return base;
+        };
+        EffectivePricing {
+            input_cost: window.input_cost.unwrap_or(base.input_cost),
+            output_cost: window.output_cost.unwrap_or(base.output_cost),
+            cached_input: window.cached_input.or(base.cached_input),
+            cached_write: window.cached_write.or(base.cached_write),
+            cached_write_1h: window.cached_write_1h.or(base.cached_write_1h),
+        }
+    }
 }
 
 /// Provider request metadata for model-scoped reasoning controls.
@@ -229,27 +365,39 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
         .unwrap_or_else(|| get_default_model(provider))
 }
 
-/// Pricing (input, output per 1M tokens) for a specific model.
+/// Pricing (input, output per 1M tokens) for a specific model, on `as_of`.
 ///
 /// Returns the model-specific pricing if found in the catalog, otherwise
 /// falls back to the provider's default pricing.  Returns `None` when
 /// neither is available so callers can decide how to handle the gap
 /// (e.g. skip cost tracking, surface an error) instead of silently
 /// using an inaccurate placeholder.
-pub fn get_pricing(provider: &Provider, model_id: &str) -> Option<PricingEntry> {
+///
+/// `as_of` is explicit — no clock is read here — because a model may carry a
+/// dated `pricingSchedule` and the rate that applies is a function of the
+/// request's date, not of when this process happens to run.
+pub fn get_pricing(provider: &Provider, model_id: &str, as_of: NaiveDate) -> Option<PricingEntry> {
+    fn entry_pricing(model: &ModelEntry, as_of: NaiveDate) -> PricingEntry {
+        let effective = model.effective_pricing(as_of);
+        PricingEntry {
+            input_per_million: effective.input_cost,
+            output_per_million: effective.output_cost,
+            cache_read_per_million: effective.cached_input,
+            cache_write_multiplier: model
+                .cache_policy
+                .as_ref()
+                .and_then(|policy| policy.write_multiplier),
+            cache_write_per_million: effective.cached_write,
+        }
+    }
+
     if let Some(model) = CONFIG.models.get(model_id) {
-        return Some(PricingEntry {
-            input_per_million: model.input_cost,
-            output_per_million: model.output_cost,
-        });
+        return Some(entry_pricing(model, as_of));
     }
 
     let canonical_model_id = get_canonicalized_id(model_id);
     if let Some(model) = CONFIG.models.get(&canonical_model_id) {
-        return Some(PricingEntry {
-            input_per_million: model.input_cost,
-            output_per_million: model.output_cost,
-        });
+        return Some(entry_pricing(model, as_of));
     }
     if let Some(provider_cfg) = CONFIG.providers.get(provider.as_string()) {
         tracing::debug!(
@@ -527,6 +675,153 @@ pub fn get_all_model_entries() -> &'static HashMap<String, ModelEntry> {
 mod tests {
     use super::*;
     use crate::core::llm::Provider;
+
+    /// Fixed lookup date. `get_pricing` takes the request date explicitly
+    /// because a model may carry dated `pricingSchedule` windows, so tests pin a
+    /// date rather than reading the clock. No shipped model schedules a price,
+    /// so this is simply an ordinary date.
+    fn priced_on() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 9, 1).expect("2026-09-01 is a valid date")
+    }
+
+    fn day(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).expect("valid calendar date")
+    }
+
+    /// SYNTHETIC test-only entry with a dated schedule on arbitrary dates.
+    ///
+    /// The dated-pricing MECHANISM is proved against this rather than against a
+    /// shipped promotional window, so it stays covered whatever the catalog
+    /// currently prices, and no product price is reachable by editing a
+    /// mechanism test. It starts from a real catalog entry only to fill the
+    /// identity/capability fields; every rate is overwritten below.
+    fn scheduled_fixture_model() -> ModelEntry {
+        let mut model = CONFIG
+            .models
+            .get("claude-opus-5")
+            .expect("claude-opus-5 must exist in the catalog")
+            .clone();
+        model.id = "fixture-scheduled-model".to_string();
+        model.api_model_id = None;
+        model.input_cost = 3.0;
+        model.output_cost = 15.0;
+        model.cached_input = Some(0.3);
+        model.cached_write = Some(3.75);
+        model.cached_write_1h = Some(6.0);
+        model.pricing_schedule = vec![
+            PricingWindowEntry {
+                effective_from: None,
+                effective_until: Some("2030-03-31".to_string()),
+                note: None,
+                input_cost: Some(2.0),
+                output_cost: Some(10.0),
+                cached_input: Some(0.2),
+                cached_write: Some(2.5),
+                cached_write_1h: Some(4.0),
+            },
+            // Declares only its start, so every rate falls back to the
+            // top-level (enduring) fields.
+            PricingWindowEntry {
+                effective_from: Some("2030-04-01".to_string()),
+                effective_until: None,
+                note: None,
+                input_cost: None,
+                output_cost: None,
+                cached_input: None,
+                cached_write: None,
+                cached_write_1h: None,
+            },
+        ];
+        model
+    }
+
+    #[test]
+    fn effective_pricing_selects_the_window_covering_the_date() {
+        let model = scheduled_fixture_model();
+
+        let first = model.effective_pricing(day(2030, 2, 15));
+        assert_eq!(first.input_cost, 2.0);
+        assert_eq!(first.output_cost, 10.0);
+        assert_eq!(first.cached_input, Some(0.2));
+        assert_eq!(first.cached_write, Some(2.5));
+        assert_eq!(first.cached_write_1h, Some(4.0));
+
+        // The second window overrides nothing, so every rate falls back to the
+        // top-level fields.
+        let second = model.effective_pricing(day(2030, 4, 1));
+        assert_eq!(second.input_cost, 3.0);
+        assert_eq!(second.output_cost, 15.0);
+        assert_eq!(second.cached_input, Some(0.3));
+        assert_eq!(second.cached_write, Some(3.75));
+        assert_eq!(second.cached_write_1h, Some(6.0));
+
+        // Bounds are inclusive UTC calendar days: the window's last day is still
+        // inside it, and a date before every window falls back to the base.
+        assert_eq!(model.effective_pricing(day(2030, 3, 31)).input_cost, 2.0);
+        assert_eq!(model.effective_pricing(day(2029, 1, 1)).input_cost, 2.0);
+    }
+
+    #[test]
+    fn effective_pricing_is_date_invariant_without_a_schedule() {
+        let opus = CONFIG
+            .models
+            .get("claude-opus-5")
+            .expect("claude-opus-5 must exist in the catalog");
+        assert!(opus.pricing_schedule.is_empty());
+        let early = opus.effective_pricing(day(2020, 1, 1));
+        let late = opus.effective_pricing(day(2099, 12, 31));
+        assert_eq!(early, late);
+        assert_eq!(early.input_cost, opus.input_cost);
+    }
+
+    #[test]
+    fn sonnet_5_prices_the_founder_standard_rates_on_every_date() {
+        // Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md,
+        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
+        // MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
+        // Anthropic's introductory window is a provider-COST fact for the
+        // registry's verificationLog, never a product price.
+        let sonnet = CONFIG
+            .models
+            .get("claude-sonnet-5")
+            .expect("claude-sonnet-5 must exist in the catalog");
+        assert!(
+            sonnet.pricing_schedule.is_empty(),
+            "claude-sonnet-5 must not carry a dated pricing schedule"
+        );
+
+        for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
+            let pricing = sonnet.effective_pricing(date);
+            assert_eq!(pricing.input_cost, 3.0, "input cost on {date}");
+            assert_eq!(pricing.output_cost, 15.0, "output cost on {date}");
+            assert_eq!(pricing.cached_input, Some(0.3), "cache read on {date}");
+            assert_eq!(pricing.cached_write, Some(3.75), "5m cache write on {date}");
+            assert_eq!(
+                pricing.cached_write_1h,
+                Some(6.0),
+                "1h cache write on {date}"
+            );
+        }
+    }
+
+    #[test]
+    fn get_pricing_carries_the_declared_cache_write_price() {
+        for date in [day(2026, 8, 15), day(2026, 9, 15)] {
+            let sonnet = get_pricing(&Provider::Anthropic, "claude-sonnet-5", date)
+                .expect("claude-sonnet-5 must have pricing");
+            assert_eq!(sonnet.cache_write_per_million, Some(3.75));
+        }
+
+        // Pre-GPT-5.6 OpenAI models declare no write price at all.
+        let mini = get_pricing(&Provider::OpenAI, "gpt-5.4-mini", priced_on())
+            .expect("gpt-5.4-mini must have pricing");
+        assert_eq!(mini.cache_write_per_million, None);
+
+        // The GPT-5.6 family does declare one.
+        let sol = get_pricing(&Provider::OpenAI, "gpt-5.6-sol", priced_on())
+            .expect("gpt-5.6-sol must have pricing");
+        assert_eq!(sol.cache_write_per_million, Some(6.25));
+    }
 
     #[test]
     fn config_singleton_loads_without_panic() {
@@ -809,7 +1104,7 @@ mod tests {
 
     #[test]
     fn get_pricing_returns_some_for_known_model() {
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5", priced_on());
         assert!(pricing.is_some(), "claude-opus-5 must have pricing");
         let p = pricing.unwrap();
         assert!(
@@ -822,7 +1117,11 @@ mod tests {
     fn get_pricing_falls_back_to_provider_default_for_unknown_model() {
         // An unknown model under a known provider should still return
         // the provider's default pricing.
-        let pricing = get_pricing(&Provider::OpenAI, "totally-unknown-openai-model-xyz");
+        let pricing = get_pricing(
+            &Provider::OpenAI,
+            "totally-unknown-openai-model-xyz",
+            priced_on(),
+        );
         assert!(
             pricing.is_some(),
             "unknown model under known provider should return provider default pricing"
@@ -840,7 +1139,7 @@ mod tests {
         // models get provider-level default pricing. The None path is a safety
         // net for future changes when providers might be added to the enum
         // before models.json is updated.
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5", priced_on());
         assert!(pricing.is_some(), "known model must have pricing");
 
         // Verify provider fallback works for all providers
@@ -850,7 +1149,7 @@ mod tests {
             Provider::Google,
             Provider::Ollama,
         ] {
-            let p = get_pricing(&provider, "nonexistent-model-xyz-12345");
+            let p = get_pricing(&provider, "nonexistent-model-xyz-12345", priced_on());
             assert!(
                 p.is_some(),
                 "{:?} should have provider-level default pricing",

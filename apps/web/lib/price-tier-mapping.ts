@@ -19,6 +19,15 @@ interface PriceMappingEntry {
   interval: BillingInterval;
 }
 
+/**
+ * Tiers a free-form `PRICE_ID_OVERRIDES` entry may name.
+ *
+ * Deliberately EXCLUDES 'team' even though Team is now self-serve and its real
+ * Prices are registered from STRIPE_PRICE_TEAM_MONTHLY_{USD,INR} above. Team
+ * carries org-admin capability (`team_admin`), so a typo or a stray override in
+ * an env var must never be able to mint it — the only route to a Team
+ * entitlement is a Price the deployment explicitly configured.
+ */
 const STRIPE_BILLED_TIERS = new Set<BillingPlanTier>([
   'basic',
   'pro',
@@ -55,6 +64,22 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
   if (max15xMonthly)
     mapping[max15xMonthly.toLowerCase()] = { tier: 'max_15x', interval: 'monthly' };
+
+  // Team tier — per-seat, monthly only, USD and INR Prices on one product.
+  // Registering these is what lets the webhook provision a Team purchase at all:
+  // an unregistered Price makes upsertSubscriptionFromSession throw "Cannot
+  // provision subscription from an unregistered Stripe Price" AFTER the customer
+  // has been charged. The seat count rides on the subscription item quantity,
+  // not on the Price, so there is exactly one Price per currency.
+  const teamMonthlyUsd = process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'];
+  const teamMonthlyInr = process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'];
+  if (teamMonthlyUsd) mapping[teamMonthlyUsd.toLowerCase()] = { tier: 'team', interval: 'monthly' };
+  if (teamMonthlyInr) mapping[teamMonthlyInr.toLowerCase()] = { tier: 'team', interval: 'monthly' };
+  // Team yearly ($240/seat/yr, Decision #22) — USD-only, no INR yearly Price.
+  // Registering it is what lets the webhook provision a yearly Team purchase;
+  // an unregistered Price would throw after the customer was charged.
+  const teamYearlyUsd = process.env['STRIPE_PRICE_TEAM_YEARLY_USD'];
+  if (teamYearlyUsd) mapping[teamYearlyUsd.toLowerCase()] = { tier: 'team', interval: 'yearly' };
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];

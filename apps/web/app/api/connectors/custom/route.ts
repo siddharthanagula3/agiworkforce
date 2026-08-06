@@ -38,6 +38,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { evictCustomConnectorCaches } from '@/lib/user-connector-tools';
 import { getUserCustomConnectorSummaries } from '@/lib/user-connector-tools';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -288,6 +289,24 @@ async function handlePost(request: NextRequest) {
     throw createError.internal('Failed to save connector');
   }
 
+  // Audit: custom remote MCP server added. The plaintext bearer token is in
+  // scope in this handler (`authHeaderEnc`'s source) and is deliberately NOT
+  // recorded — nor is the server URL, which can itself carry a credential in
+  // its query string. Only the row id, the user's label and the transport go in.
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_added',
+    request,
+    detail: {
+      resourceType: 'custom_mcp_connector',
+      resourceId: saved.id,
+      resourceName: saved.name,
+      connectorId: `custom-${saved.short_id}`,
+      transport: saved.transport,
+      source: 'custom_mcp',
+    },
+  });
+
   return NextResponse.json(
     {
       connector: {
@@ -367,6 +386,20 @@ async function handleDelete(request: NextRequest) {
         'Custom connector tool permissions could not be cleared on delete',
       );
     }
+  }
+
+  for (const row of deleted) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_removed',
+      request,
+      detail: {
+        resourceType: 'custom_mcp_connector',
+        resourceId: row.id,
+        connectorId: `custom-${row.short_id}`,
+        source: 'custom_mcp',
+      },
+    });
   }
 
   return NextResponse.json({ success: true });

@@ -171,13 +171,26 @@ export class OrganizationService {
    * Remove member.
    * USER-CONTEXT: caller passes a db scoped to the authenticated user.
    * RLS policies enforce that only org admins/owners can remove members.
+   *
+   * The `role <> 'owner'` predicate is a second line, not the guarantee: 0085's
+   * DEFERRABLE at-least-one-owner constraint trigger rejects any transaction
+   * that would COMMIT an ownerless organization. It is written here so this
+   * path reports "not removed" rather than surfacing a raw constraint error,
+   * and so a bare DELETE can never silently orphan the billing account.
+   * Ownership moves through POST /api/settings/organization/transfer-ownership.
    */
   static async removeMember(db: DatabaseAdapter, orgId: string, userId: string): Promise<void> {
     try {
-      await db.execute(
-        `delete from organization_members where organization_id = $1 and user_id = $2`,
+      const removed = await db.execute(
+        `delete from organization_members
+          where organization_id = $1 and user_id = $2 and role <> 'owner'`,
         [orgId, userId],
       );
+      if (removed === 0) {
+        throw new Error(
+          `Member ${userId} was not removed from organization ${orgId}: either they are not a member, or they are the owner and ownership must be transferred first.`,
+        );
+      }
     } catch (error) {
       logger.error({ error, orgId, userId }, 'Failed to remove member');
       throw error;

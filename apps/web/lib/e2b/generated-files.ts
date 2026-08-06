@@ -130,8 +130,10 @@ export async function harvestGeneratedFiles(params: {
   userId: string;
   model?: string;
   prompt?: string;
+  /** Conversation provenance for the Library (migration 0081). */
+  conversationId?: string;
 }): Promise<HarvestResult> {
-  const { executor, baseline, userId, model, prompt } = params;
+  const { executor, baseline, userId, model, prompt, conversationId } = params;
   const canPersist = Boolean(executor.readFileBytes) && isMediaStorageConfigured();
 
   let files: SandboxFileEntry[];
@@ -184,6 +186,7 @@ export async function harvestGeneratedFiles(params: {
         origin: 'e2b-execution',
         model,
         prompt,
+        ...(conversationId ? { conversationId } : {}),
         extraMetadata: { sandboxPath: f.path },
       });
       if (outcome.ok) {

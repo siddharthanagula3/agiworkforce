@@ -19,6 +19,8 @@ export interface GenerateVideoOptions {
   durationSecs?: number;
   resolution?: '720p' | '1080p' | '4k';
   provider?: 'runway' | 'google';
+  /** Catalog model id chosen in the composer's video picker; see VideoGenerationRequest.model. */
+  modelId?: string;
 }
 
 export interface GeneratedVideo {
@@ -238,6 +240,7 @@ export function useMediaGeneration() {
           ...(options.durationSecs !== undefined ? { duration_secs: options.durationSecs } : {}),
           ...(options.resolution ? { resolution: options.resolution } : {}),
           ...(options.provider ? { provider: options.provider } : {}),
+          ...(options.modelId ? { model: options.modelId } : {}),
         }).catch((err: unknown) => {
           throw toMediaGenerationError(err);
         });

@@ -13,24 +13,23 @@ import {
   type ToolLoopToolResult,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
-import { getCloudAgentExecutionUsage } from '@/lib/services/cloud-agent-execution-service';
-import { finalizeObservedManagedUsage } from '@/lib/services/managed-usage-accounting-service';
 import {
   appendCloudAgentEvent,
-  completeCloudAgentApprovalCheckpoint,
   getCloudAgentRun,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
-  transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
   parseCloudAgentWorkflowInput,
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
 import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
+import {
+  settleWorkflowInvocation,
+  type WorkflowTerminalOutcome,
+} from './steps/settle-workflow-invocation';
 
 const UsageSchema = z
   .object({
@@ -101,7 +100,6 @@ const ToolResultSchema = z
   })
   .strict();
 
-type WorkflowTerminalOutcome = 'completed' | 'failed' | 'cancelled' | 'awaiting_input';
 type WorkflowInvocationResult =
   | { kind: 'continue'; input: CloudAgentWorkflowInput }
   | { kind: 'terminal'; outcome: WorkflowTerminalOutcome };
@@ -134,60 +132,6 @@ function workflowContinuation(
       }),
     ),
   );
-}
-
-function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState | null {
-  switch (outcome) {
-    case 'completed':
-      return 'ready_for_review';
-    case 'failed':
-      return 'failed';
-    case 'cancelled':
-      return 'cancelled';
-    case 'awaiting_input':
-      return null;
-  }
-}
-
-async function settleWorkflowInvocation(
-  input: CloudAgentWorkflowInput,
-  outcome: WorkflowTerminalOutcome,
-): Promise<void> {
-  const db = getNeonDb();
-  const usage = await getCloudAgentExecutionUsage(db, {
-    userId: input.userId,
-    runId: input.runId,
-    billingIdempotencyKey: input.billing.idempotencyKey,
-  });
-  await finalizeObservedManagedUsage({
-    reservation: { db, ...input.billing },
-    provider: input.processed.provider,
-    model: input.processed.chatRequest.model,
-    usage,
-    reason: `cloud_agent_workflow_${outcome}`,
-    cancelled: outcome === 'cancelled',
-  });
-
-  await recordManagedAutoMemoryTurn({
-    db,
-    userId: input.userId,
-    processed: input.processed as ProcessedRequest,
-    outcome: outcome === 'awaiting_input' ? 'cancelled' : outcome,
-  });
-
-  if (input.predecessorApproval) {
-    await completeCloudAgentApprovalCheckpoint(db, {
-      userId: input.userId,
-      checkpointId: input.predecessorApproval.checkpointId,
-      leaseToken: input.predecessorApproval.leaseToken,
-      outcome: outcome === 'failed' || outcome === 'cancelled' ? 'failed' : 'resolved',
-    });
-  }
-
-  const state = terminalState(outcome);
-  if (state) {
-    await transitionCloudAgentRun(db, { userId: input.userId, runId: input.runId, state });
-  }
 }
 
 /** One bounded, retriable Workflow step. Provider and tool side effects replay from receipts. */

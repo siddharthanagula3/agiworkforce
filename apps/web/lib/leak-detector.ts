@@ -3,7 +3,18 @@
  * Call assertNoLeaks() on untrusted data before logging or returning to clients.
  */
 
-const SECRET_PATTERNS: RegExp[] = [
+/**
+ * EXPORTED (2026-08-05) so redactors can share ONE pattern list with the
+ * detector. `lib/support/handoff/transcript.ts` needs to strip secrets out of a
+ * user-pasted support transcript rather than throw on them — rejecting a user's
+ * escalation because they pasted their own key is a worse outcome than
+ * redacting it. A second, divergent copy of this list is how a key eventually
+ * reaches an inbox, so it is shared rather than duplicated.
+ *
+ * Consumers must not mutate the array. Patterns are unanchored and non-global,
+ * so a redactor has to rebuild them with the `g` flag (see `redactSecrets`).
+ */
+export const SECRET_PATTERNS: readonly RegExp[] = [
   /sk-[A-Za-z0-9_-]{32,}/, // Anthropic/OpenAI API keys
   /sk_live_[A-Za-z0-9]{24,}/, // Stripe live keys
   /sk_test_[A-Za-z0-9]{24,}/, // Stripe test keys

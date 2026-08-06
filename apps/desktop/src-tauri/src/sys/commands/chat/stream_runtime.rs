@@ -5,6 +5,10 @@ use std::collections::HashMap;
 use tauri::Emitter;
 use tracing::{info, warn};
 
+/// Tool whose streaming arguments drive the progressive artifact preview.
+/// Mirrors the dispatch arm in `core/llm/tool_executor/mod.rs`.
+const ARTIFACT_TOOL_NAME: &str = "create_artifact";
+
 /// Result of consuming an SSE stream.
 pub(super) struct ConsumeStreamResult {
     pub tool_calls: Vec<crate::core::llm::sse_parser::StreamingToolCall>,
@@ -46,6 +50,12 @@ pub(super) async fn consume_llm_stream(
         usize,
         crate::core::llm::sse_parser::StreamingToolCall,
     > = HashMap::new();
+
+    // Per-tool-call sequence numbers for `chat:artifact-progress`. The frontend
+    // accumulates the deltas itself, so it needs an ordering guard: a gap means
+    // the progressive view is desynced and must be abandoned (the authoritative
+    // `chat:artifact` event still arrives when the tool executes).
+    let mut artifact_progress_seq: HashMap<usize, u64> = HashMap::new();
 
     let mut pending_notified = false;
 
@@ -160,6 +170,28 @@ pub(super) async fn consume_llm_stream(
                             entry.name = tool_call.name.clone();
                         }
                         entry.arguments.push_str(&tool_call.arguments);
+
+                        // Progressive artifact preview (display only). The
+                        // arguments delta is forwarded as-is; the frontend
+                        // tolerantly extracts title/type/content from the
+                        // partial JSON. Persistence and versioning still happen
+                        // exactly once, later, in
+                        // `tool_executor::execute_create_artifact_tool`.
+                        if entry.name == ARTIFACT_TOOL_NAME && !tool_call.arguments.is_empty() {
+                            let index = entry.index;
+                            let seq = artifact_progress_seq.entry(index).or_insert(0);
+                            let _ = app_handle.emit(
+                                "chat:artifact-progress",
+                                serde_json::json!({
+                                    "conversation_id": conversation_id,
+                                    "message_id": message_id,
+                                    "tool_call_index": index,
+                                    "seq": *seq,
+                                    "delta": tool_call.arguments,
+                                }),
+                            );
+                            *seq += 1;
+                        }
                     }
                 }
 

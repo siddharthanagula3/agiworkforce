@@ -33,9 +33,17 @@ describe('free trial config', () => {
     expect(FREE_TRIAL_MODELS).toContain('gemini-3.5-flash-lite');
   });
 
-  it('offers GPT-5.4 Mini on Free while keeping GPT-5.6 Luna paid', () => {
-    expect(FREE_TRIAL_MODELS).toContain('gpt-5.4-mini');
-    expect(FREE_TRIAL_MODELS).not.toContain('gpt-5.6-luna');
+  it('offers exactly the three-model Free roster set by the 2026-08-04 pricing decision', () => {
+    // GPT-5.6 Luna joined Free on its permanent price reduction. The roster is
+    // sourced from tierPolicy.minTier in models.curation.json — models.json is
+    // GENERATED, so a change made there alone is erased by `pnpm sync:models`.
+    expect([...FREE_TRIAL_MODELS].sort()).toEqual([
+      'gemini-3.5-flash-lite',
+      'gpt-5.4-mini',
+      'gpt-5.6-luna',
+    ]);
+    // Still paid: the rest of the Economy roster carries minTier 'basic'.
     expect(FREE_TRIAL_MODELS).not.toContain('gemini-3.6-flash');
+    expect(FREE_TRIAL_MODELS).not.toContain('qwen-3.5-flash');
   });
 });

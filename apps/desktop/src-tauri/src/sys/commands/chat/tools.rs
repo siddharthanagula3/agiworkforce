@@ -1450,6 +1450,39 @@ mod tests {
         }
     }
 
+    // ── DESKTOP-SKILLS-EAGER-INJECTION-01 ────────────────────────────────────
+    // Progressive disclosure only works if the model can actually reach the tool
+    // that discloses a skill body. Before this wiring the Skill tool existed but
+    // was in no catalog and had no policy, so it was unreachable dead code.
+    #[test]
+    fn chat_tool_catalog_exposes_the_skill_tool() {
+        let tools = build_chat_tools(None, None);
+        let skill = tools
+            .iter()
+            .find(|tool| tool.name == crate::core::agi::tools::SKILL_TOOL_ID)
+            .expect("the skill tool must be offered to the model");
+
+        assert!(
+            skill.description.contains("action=list") && skill.description.contains("action=load"),
+            "the model must be told how to list and load skills: {}",
+            skill.description
+        );
+        let properties = &skill.parameters["properties"];
+        assert!(properties.get("action").is_some());
+        assert!(properties.get("name").is_some());
+    }
+
+    #[test]
+    fn skill_tool_is_read_only_and_needs_no_confirmation() {
+        // Tools missing from ToolExecutionGuard's policy table are rejected outright
+        // by validate_tool_call, so an unregistered `skill` tool would be advertised
+        // and then always fail — fake availability.
+        let exposure = describe_chat_tool_exposure(crate::core::agi::tools::SKILL_TOOL_ID);
+        assert_eq!(exposure.safety_tier, "safe");
+        assert!(!exposure.requires_confirmation);
+        assert_eq!(exposure.model_capability, None);
+    }
+
     #[test]
     fn filter_hides_terminal_when_code_execution_disabled() {
         let tools = vec![

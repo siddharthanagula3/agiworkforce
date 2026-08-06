@@ -18,6 +18,7 @@ mod memory_tools;
 mod planning_tools;
 mod scheduler_tools;
 mod search_tools;
+mod skill_tools;
 mod terminal_tools;
 mod tool_search_tools;
 mod ui_automation_tools;
@@ -2108,6 +2109,7 @@ impl ToolExecutor {
             "todo_write" => self.execute_todo_write_tool(&args).await,
             "question" => self.execute_question_tool(&args).await,
             "tool_search" => self.execute_tool_search_tool(&args).await,
+            "skill" => self.execute_skill_tool(&args).await,
             "test_run" => self.execute_test_run_tool(args, action_id).await,
             "multi_edit" => self.execute_multi_edit_tool(&args).await,
             "apply_patch" => self.execute_apply_patch_tool(&args).await,

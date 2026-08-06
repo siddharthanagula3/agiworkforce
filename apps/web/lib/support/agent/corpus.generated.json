@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "generatedBy": "scripts/build-support-corpus.mjs",
+  "documentCount": 8,
+  "chunkCount": 37,
+  "documents": [
+    {
+      "id": "accounts-and-sign-in",
+      "title": "Accounts and signing in",
+      "path": "/support",
+      "category": "account",
+      "tags": [
+        "sign in",
+        "login",
+        "sign up",
+        "password",
+        "email",
+        "verification",
+        "verify email",
+        "account",
+        "multiple devices",
+        "sync"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/accounts-and-sign-in.md",
+      "chunks": [
+        {
+          "id": "accounts-and-sign-in#0",
+          "ordinal": 0,
+          "heading": "Signing in",
+          "headingPath": "Accounts and signing in › Signing in",
+          "text": "Sign in with the email address you registered. If a sign-in link or verification\nemail has not arrived, check the spam folder first, then request a new one from the\nsign-in screen."
+        },
+        {
+          "id": "accounts-and-sign-in#1",
+          "ordinal": 1,
+          "heading": "Using AGI on several devices",
+          "headingPath": "Accounts and signing in › Using AGI on several devices",
+          "text": "Your conversations sync across web, desktop, mobile, and the browser extension when\nyou are signed in. Local-mode conversations are the exception: they stay on the\ndevice that created them."
+        },
+        {
+          "id": "accounts-and-sign-in#2",
+          "ordinal": 2,
+          "heading": "The desktop master password is separate",
+          "headingPath": "Accounts and signing in › The desktop master password is separate",
+          "text": "The desktop master password is not your account password. It protects the encrypted\nprovider keys stored on your machine, AGI never has it, and it cannot be recovered."
+        },
+        {
+          "id": "accounts-and-sign-in#3",
+          "ordinal": 3,
+          "heading": "Getting a human",
+          "headingPath": "Accounts and signing in › Getting a human",
+          "text": "A real person reads contact@agiworkforce.com. The support page lists what is covered\nfor each plan."
+        }
+      ]
+    },
+    {
+      "id": "byok-provider-keys",
+      "title": "Add your own provider API key (BYOK)",
+      "path": "/byok",
+      "category": "providers",
+      "tags": [
+        "byok",
+        "api key",
+        "provider key",
+        "anthropic",
+        "openai",
+        "google",
+        "bring your own key",
+        "add key",
+        "encrypted"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/byok-provider-keys.md",
+      "chunks": [
+        {
+          "id": "byok-provider-keys#0",
+          "ordinal": 0,
+          "heading": "What BYOK means here",
+          "headingPath": "Add your own provider API key (BYOK) › What BYOK means here",
+          "text": "BYOK is \"bring your own key\". You supply a provider API key on Desktop or CLI, and\nAGI sends your requests directly to that provider using it. Keys are encrypted at\nrest on your machine. Usage is billed by your provider, not by AGI, and AGI adds no\nmarkup."
+        },
+        {
+          "id": "byok-provider-keys#1",
+          "ordinal": 1,
+          "heading": "Adding a key",
+          "headingPath": "Add your own provider API key (BYOK) › Adding a key",
+          "text": "1. Open Settings, then Providers.\n2. Choose \"Add provider\" and select the provider you have an account with.\n3. Paste the API key and save. The key is encrypted at rest before it is stored."
+        },
+        {
+          "id": "byok-provider-keys#2",
+          "ordinal": 2,
+          "heading": "Anthropic",
+          "headingPath": "Add your own provider API key (BYOK) › Anthropic",
+          "text": "Create an API key in the Anthropic console, then paste it into the Anthropic entry\nunder Settings, Providers."
+        },
+        {
+          "id": "byok-provider-keys#3",
+          "ordinal": 3,
+          "heading": "OpenAI",
+          "headingPath": "Add your own provider API key (BYOK) › OpenAI",
+          "text": "Create an API key in the OpenAI platform dashboard, then paste it into the OpenAI\nentry under Settings, Providers."
+        },
+        {
+          "id": "byok-provider-keys#4",
+          "ordinal": 4,
+          "heading": "Custom OpenAI-compatible endpoints",
+          "headingPath": "Add your own provider API key (BYOK) › Custom OpenAI-compatible endpoints",
+          "text": "If your provider exposes an OpenAI-compatible API, add it as a custom endpoint and\nsupply its base URL alongside the key."
+        },
+        {
+          "id": "byok-provider-keys#5",
+          "ordinal": 5,
+          "heading": "The desktop master password",
+          "headingPath": "Add your own provider API key (BYOK) › The desktop master password",
+          "text": "The Desktop master password protects your encrypted keys and is unrecoverable by\ndesign. AGI never has it. If you forget it, your encrypted keys cannot be\ndecrypted. Back it up somewhere safe."
+        },
+        {
+          "id": "byok-provider-keys#6",
+          "ordinal": 6,
+          "heading": "BYOK keys are never used for managed cloud",
+          "headingPath": "Add your own provider API key (BYOK) › BYOK keys are never used for managed cloud",
+          "text": "Managed cloud runs on AGI-operated provider access, and BYOK credentials are\nexplicitly refused on that path. The two remain separate trust boundaries."
+        }
+      ]
+    },
+    {
+      "id": "connectors-and-mcp",
+      "title": "Connectors and MCP",
+      "path": "/connectors",
+      "category": "connectors",
+      "tags": [
+        "connector",
+        "connectors",
+        "mcp",
+        "integration",
+        "github",
+        "tools",
+        "revoke",
+        "disconnect",
+        "permissions",
+        "always allow"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/connectors-and-mcp.md",
+      "chunks": [
+        {
+          "id": "connectors-and-mcp#0",
+          "ordinal": 0,
+          "heading": "What connectors do",
+          "headingPath": "Connectors and MCP › What connectors do",
+          "text": "Connectors let AGI call an external system on your behalf — reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
+        },
+        {
+          "id": "connectors-and-mcp#1",
+          "ordinal": 1,
+          "heading": "Adding a connector",
+          "headingPath": "Connectors and MCP › Adding a connector",
+          "text": "Open the connectors page, choose the connector, and complete its authorization flow.\nCustom MCP endpoints can be added with their own URL."
+        },
+        {
+          "id": "connectors-and-mcp#2",
+          "ordinal": 2,
+          "heading": "Tool permissions",
+          "headingPath": "Connectors and MCP › Tool permissions",
+          "text": "When a connector's tool runs for the first time, AGI asks for approval. Choosing\n\"Always allow\" saves that verdict so the same tool can run without prompting again."
+        },
+        {
+          "id": "connectors-and-mcp#3",
+          "ordinal": 3,
+          "heading": "Removing a connector",
+          "headingPath": "Connectors and MCP › Removing a connector",
+          "text": "Removing a connector deactivates it and clears the saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+        },
+        {
+          "id": "connectors-and-mcp#4",
+          "ordinal": 4,
+          "heading": "Custom MCP connections and plans",
+          "headingPath": "Connectors and MCP › Custom MCP connections and plans",
+          "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "desktop-and-cli",
+      "title": "Desktop app and CLI",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "desktop",
+        "cli",
+        "terminal",
+        "install",
+        "download",
+        "macos",
+        "windows",
+        "linux",
+        "agi install",
+        "command line"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/desktop-and-cli.md",
+      "chunks": [
+        {
+          "id": "desktop-and-cli#0",
+          "ordinal": 0,
+          "heading": "The CLI",
+          "headingPath": "Desktop app and CLI › The CLI",
+          "text": "The AGI CLI is a Rust-native developer agent with resumable sessions, sandboxed\nexecution, and offline-capable operation through Local mode. The CLI page carries\nthe current install guide for the `agi` command."
+        },
+        {
+          "id": "desktop-and-cli#1",
+          "ordinal": 1,
+          "heading": "The desktop app",
+          "headingPath": "Desktop app and CLI › The desktop app",
+          "text": "Desktop installers for macOS, Windows, and Linux are published as release assets on\nthe download page as they become available. Desktop is the surface that supports\nLocal mode and BYOK."
+        },
+        {
+          "id": "desktop-and-cli#2",
+          "ordinal": 2,
+          "heading": "What the desktop app adds",
+          "headingPath": "Desktop app and CLI › What the desktop app adds",
+          "text": "- Local mode through Ollama or LM Studio.\n- BYOK provider keys, encrypted at rest on your machine behind the master password.\n- Offline operation with no managed-cloud dependency."
+        },
+        {
+          "id": "desktop-and-cli#3",
+          "ordinal": 3,
+          "heading": "Managed cloud from developer surfaces",
+          "headingPath": "Desktop app and CLI › Managed cloud from developer surfaces",
+          "text": "Managed cloud access from the CLI, the Chrome extension, and VS Code is part of the\nhigher paid tiers. Current plan details live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "Getting started with AGI",
+      "path": "/help",
+      "category": "getting-started",
+      "tags": [
+        "getting started",
+        "first steps",
+        "setup",
+        "sign in",
+        "new account",
+        "onboarding",
+        "install"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/getting-started.md",
+      "chunks": [
+        {
+          "id": "getting-started#0",
+          "ordinal": 0,
+          "heading": "Create an account and start a chat",
+          "headingPath": "Getting started with AGI › Create an account and start a chat",
+          "text": "Sign up at agiworkforce.com, then open the chat surface and send your first message.\nA new account can use AGI managed cloud straight away — managed cloud is in public\nalpha and open by default, so there is no waitlist and no invite code to redeem."
+        },
+        {
+          "id": "getting-started#1",
+          "ordinal": 1,
+          "heading": "The three trust modes",
+          "headingPath": "Getting started with AGI › The three trust modes",
+          "text": "AGI runs in three separate trust modes and never silently moves work between them.\n\n- **Local** runs models on your own hardware through Ollama or LM Studio. No API\n  keys, no quotas, and no internet connection required. Local is free.\n- **BYOK** means you bring your own provider API key on Desktop and CLI. Keys are\n  encrypted at rest on your machine and traffic goes directly to your provider.\n  Usage is billed by the provider, not by AGI, with no markup. BYOK is free.\n- **Managed cloud** runs on AGI-operated provider access. It is metered, and\n  current plan details live on the pricing page.\n\nMoving a conversation from Local to BYOK is always an explicit fork with context\nselection, a payload preview, and a visible provider label. It never happens\nautomatically."
+        },
+        {
+          "id": "getting-started#2",
+          "ordinal": 2,
+          "heading": "What to set up first",
+          "headingPath": "Getting started with AGI › What to set up first",
+          "text": "1. Pick a trust mode. If you want to stay offline, install the desktop app and run\n   Local mode.\n2. If you want to use your own provider account, add a provider key.\n3. If you want AGI to handle provider access for you, use managed cloud on the web."
+        },
+        {
+          "id": "getting-started#3",
+          "ordinal": 3,
+          "heading": "Where to go next",
+          "headingPath": "Getting started with AGI › Where to go next",
+          "text": "The help index links the six things people ask about most. The FAQ covers the\nreasoning behind the trust boundaries."
+        }
+      ]
+    },
+    {
+      "id": "local-mode",
+      "title": "Run AGI offline with Local mode",
+      "path": "/local",
+      "category": "local",
+      "tags": [
+        "local mode",
+        "offline",
+        "ollama",
+        "lm studio",
+        "on device",
+        "no internet",
+        "privacy",
+        "free"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/local-mode.md",
+      "chunks": [
+        {
+          "id": "local-mode#0",
+          "ordinal": 0,
+          "heading": "Running models on your own hardware",
+          "headingPath": "Run AGI offline with Local mode › Running models on your own hardware",
+          "text": "Local mode on Desktop and the CLI runs models through Ollama or LM Studio on your\nown machine. There are no API keys to add, no quotas to watch, and no internet\nconnection required once the model is downloaded. Local mode is free."
+        },
+        {
+          "id": "local-mode#1",
+          "ordinal": 1,
+          "heading": "Setting it up",
+          "headingPath": "Run AGI offline with Local mode › Setting it up",
+          "text": "1. Install Ollama or LM Studio and pull at least one model.\n2. Install the AGI desktop app or the CLI.\n3. Select the local runtime in the model picker. AGI detects the locally served\n   models and lists them."
+        },
+        {
+          "id": "local-mode#2",
+          "ordinal": 2,
+          "heading": "What stays on your device",
+          "headingPath": "Run AGI offline with Local mode › What stays on your device",
+          "text": "In Local mode, conversation content never leaves your device. There is no cloud\nsync of local conversations unless you explicitly fork the conversation to another\ntrust mode, which requires context selection, a payload preview, and your consent."
+        },
+        {
+          "id": "local-mode#3",
+          "ordinal": 3,
+          "heading": "Mobile",
+          "headingPath": "Run AGI offline with Local mode › Mobile",
+          "text": "AGI Mobile launches with an on-device Local Mode."
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud",
+      "title": "AGI managed cloud",
+      "path": "/docs",
+      "category": "managed-cloud",
+      "tags": [
+        "managed cloud",
+        "hosted",
+        "public alpha",
+        "waitlist",
+        "usage",
+        "metered",
+        "capacity",
+        "quota",
+        "limit"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/managed-cloud.md",
+      "chunks": [
+        {
+          "id": "managed-cloud#0",
+          "ordinal": 0,
+          "heading": "Public alpha, open by default",
+          "headingPath": "AGI managed cloud › Public alpha, open by default",
+          "text": "AGI managed cloud is in public alpha and open by default. Sign in and start — there\nis no waitlist for managed cloud and no invite code. Team and Enterprise tiers, with\norganization seats, SSO, and admin controls, are the only waitlisted tiers."
+        },
+        {
+          "id": "managed-cloud#1",
+          "ordinal": 1,
+          "heading": "How usage works",
+          "headingPath": "AGI managed cloud › How usage works",
+          "text": "Managed cloud usage is metered. Each plan carries a capacity allowance, and the\nusage view in Settings shows how much of your current allowance you have used and\nwhen it resets. Usage is reported as a percentage of your allowance and a reset\ntime."
+        },
+        {
+          "id": "managed-cloud#2",
+          "ordinal": 2,
+          "heading": "Running out of capacity",
+          "headingPath": "AGI managed cloud › Running out of capacity",
+          "text": "When your allowance is exhausted, managed cloud requests stop until the allowance\nresets. Local mode and BYOK are unaffected by managed-cloud capacity because they do\nnot run on AGI-operated provider access."
+        },
+        {
+          "id": "managed-cloud#3",
+          "ordinal": 3,
+          "heading": "Where AGI managed cloud data is hosted",
+          "headingPath": "AGI managed cloud › Where AGI managed cloud data is hosted",
+          "text": "Hosted data lives in the United States. EU and UK residency hosting is on the\nroadmap and is not available today. Local conversations never leave your device in\nthe first place."
+        },
+        {
+          "id": "managed-cloud#4",
+          "ordinal": 4,
+          "heading": "Training",
+          "headingPath": "AGI managed cloud › Training",
+          "text": "AGI does not use customer conversation content to train AGI-owned models.\n{{POSITIONING.trustBoundary}}"
+        }
+      ]
+    },
+    {
+      "id": "providers-and-models",
+      "title": "Providers and models",
+      "path": "/providers",
+      "category": "providers",
+      "tags": [
+        "providers",
+        "models",
+        "switch model",
+        "model picker",
+        "anthropic",
+        "openai",
+        "google",
+        "xai",
+        "deepseek",
+        "perplexity",
+        "qwen",
+        "moonshot",
+        "zhipu",
+        "ollama",
+        "lm studio",
+        "routing"
+      ],
+      "updated": "2026-08-05",
+      "source": "content/support/providers-and-models.md",
+      "chunks": [
+        {
+          "id": "providers-and-models#0",
+          "ordinal": 0,
+          "heading": "Which providers are supported",
+          "headingPath": "Providers and models › Which providers are supported",
+          "text": "AGI supports {{MARKETING.providers.display}} providers: nine first-party cloud APIs\n(Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, and Zhipu),\ncustom OpenAI-compatible endpoints, and two local runtimes (Ollama and LM Studio)."
+        },
+        {
+          "id": "providers-and-models#1",
+          "ordinal": 1,
+          "heading": "How many models",
+          "headingPath": "Providers and models › How many models",
+          "text": "{{MARKETING.models.display}} models are available across those providers. The exact\ncatalogue changes as providers ship and retire models, so the model picker in the\nproduct is the current source of truth."
+        },
+        {
+          "id": "providers-and-models#2",
+          "ordinal": 2,
+          "heading": "Switching model mid-conversation",
+          "headingPath": "Providers and models › Switching model mid-conversation",
+          "text": "You can switch models in the middle of a conversation. Pick a different model and\nthe thread continues with the new one. The provider label updates with the switch,\nso you always know where the next request goes before it leaves your machine."
+        },
+        {
+          "id": "providers-and-models#3",
+          "ordinal": 3,
+          "heading": "Automatic routing",
+          "headingPath": "Providers and models › Automatic routing",
+          "text": "When the model selection is left on automatic, AGI picks a model for the task from\nthe models your plan and trust mode make available. An explicit model selection is\nnever silently replaced with a different provider."
+        }
+      ]
+    }
+  ]
+}

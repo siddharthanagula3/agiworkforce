@@ -1,0 +1,256 @@
+import 'server-only';
+
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getE2BExecutor } from '@/lib/e2b/runtime';
+import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
+import { logger } from '@/lib/logger';
+import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
+import {
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  reserveManagedUsageProviderStep,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from './managed-usage-request-service';
+import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import {
+  runCloudCodeAgentTurn,
+  type CloudCodeAgentEvent,
+  type CloudCodeAgentResult,
+} from './cloud-code-agent-loop';
+import {
+  CloudCodeConflictError,
+  CloudCodeUnavailableError,
+  getCloudCodeSession,
+  type CloudCodeOwner,
+} from './cloud-code-session-service';
+
+/**
+ * Cloud Code agent turn — the metered, persisted orchestration.
+ *
+ * This is the layer that makes the agent loop safe to expose:
+ *
+ *  - **Metering.** A reservation is taken BEFORE the first provider call and
+ *    settled on every exit path, including failure and cancellation. Each
+ *    provider call extends the lease through `onStepCommitted`. Without this
+ *    the agent would be exactly the unmetered-paid-inference defect that
+ *    `GATEWAY-PROVIDER-STREAM-UNMETERED-01` closed on the gateway.
+ *  - **Idempotency.** The caller's `Idempotency-Key` is the reservation key and
+ *    the turn's unique key (0082), so a retried request resumes the same turn
+ *    instead of starting a second billable one.
+ *  - **Session state.** The turn borrows the same `ready → running → ready`
+ *    transition the terminal path uses, so an agent turn and a typed command
+ *    cannot run concurrently in one sandbox.
+ *  - **Durable approvals.** A suspended turn is persisted as
+ *    `awaiting_approval` with its pending row, so the gate survives a reload.
+ */
+
+/** Conservative per-turn estimate, refined by real usage at settle time. */
+const ESTIMATED_TURN_COST_CENTS = 25;
+
+export interface StartCloudCodeAgentTurnInput {
+  db: DatabaseAdapter;
+  owner: CloudCodeOwner;
+  sessionId: string;
+  goal: string;
+  model: string;
+  planTier: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+  isFlagship?: boolean;
+}
+
+export interface CloudCodeAgentTurnRecord {
+  turnId: string;
+  stopReason: CloudCodeAgentResult['stopReason'];
+  stepsUsed: number;
+  finalMessage: string;
+  pendingApproval?: CloudCodeAgentResult['pendingApproval'];
+  errorMessage?: string;
+}
+
+function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
+  switch (stopReason) {
+    case 'done':
+      return 'completed';
+    case 'awaiting_approval':
+      return 'awaiting_approval';
+    case 'cancelled':
+      return 'cancelled';
+    case 'error':
+      return 'failed';
+    default:
+      // max_steps / timeout / denied are completions that stopped early — the
+      // turn produced work and must not be reported as a crash.
+      return 'completed';
+  }
+}
+
+export async function startCloudCodeAgentTurn(
+  input: StartCloudCodeAgentTurnInput,
+): Promise<CloudCodeAgentTurnRecord> {
+  const { db, owner, sessionId, goal, model, planTier, idempotencyKey } = input;
+
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot run agent turns');
+  }
+  if (session.state !== 'ready') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+
+  const provider = resolveProviderFromModel(model);
+
+  // Reserve BEFORE any provider work. A failure here must prevent the turn.
+  const reservation: ManagedUsageRequestReservation = await reserveManagedUsageRequest({
+    db,
+    userId: owner.userId,
+    idempotencyKey,
+    requestHash: fingerprintManagedUsageRequest({ sessionId, goal, model }),
+    provider,
+    model,
+    estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
+    planTier,
+    isFlagship: input.isFlagship ?? false,
+  });
+
+  const turnRows = await db.query<{ id: string }>(
+    `insert into cloud_code_agent_turns
+       (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state)
+     values ($1, $2, $3, $4, $5, $6, $7, 'running')
+     on conflict (user_id, idempotency_key) do update set updated_at = now()
+     returning id`,
+    [sessionId, owner.userId, owner.organizationId, goal, idempotencyKey, model, provider],
+  );
+  const turnId = turnRows[0]?.id;
+  if (!turnId) throw new CloudCodeUnavailableError('Could not open an agent turn');
+
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    session.networkAccess,
+    planTier,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor) {
+    await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
+    await db.query(
+      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
+        where id = $1`,
+      [turnId, 'Managed Code environment could not be attached'],
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  let result: CloudCodeAgentResult | undefined;
+  let stepIndex = 0;
+
+  try {
+    result = await runCloudCodeAgentTurn({
+      adapter: buildServerProviderAdapter(provider),
+      model,
+      goal,
+      runner: createCloudCodeToolRunner(executor, session.workspacePath),
+      signal: input.signal,
+      repositoryUrl: session.repositoryUrl,
+      workspacePath: session.workspacePath,
+      onStepCommitted: async (step: number) => {
+        // Extend the lease before every provider call, mirroring the metered
+        // chat path's per-step reservation. The operation key is 1-based and
+        // must match `provider:<n>`, so a retry of the same step reuses its key
+        // rather than reserving twice.
+        await reserveManagedUsageProviderStep({
+          reservation,
+          operationKey: `provider:${step + 1}`,
+          estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
+          planTier,
+          isFlagship: input.isFlagship ?? false,
+        });
+      },
+      onEvent: async (event: CloudCodeAgentEvent) => {
+        if (event.type !== 'tool-end') return;
+        stepIndex += 1;
+        await db.query(
+          `insert into cloud_code_agent_steps
+             (turn_id, step_index, tool_name, tool_args, output, is_error, completed_at)
+           values ($1, $2, $3, $4::jsonb, $5, $6, now())
+           on conflict (turn_id, step_index) do nothing`,
+          [
+            turnId,
+            stepIndex,
+            event.toolName ?? 'unknown',
+            JSON.stringify(event.toolArgs ?? {}),
+            (event.output ?? '').slice(0, 100_000),
+            event.isError ?? false,
+          ],
+        );
+      },
+    });
+  } catch (error) {
+    await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
+    await db.query(
+      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
+        where id = $1`,
+      [turnId, error instanceof Error ? error.message.slice(0, 2000) : 'Agent turn failed'],
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+
+  const state = turnStateFor(result.stopReason);
+
+  await db.query(
+    `update cloud_code_agent_turns
+        set state = $2, steps_used = $3, stop_reason = $4,
+            final_message = $5, error_message = $6, updated_at = now()
+      where id = $1`,
+    [
+      turnId,
+      state,
+      result.stepsUsed,
+      result.stopReason === 'awaiting_approval' ? null : result.stopReason,
+      result.finalMessage.slice(0, 100_000) || null,
+      result.errorMessage?.slice(0, 2000) ?? null,
+    ],
+  );
+
+  if (result.pendingApproval) {
+    await db.query(
+      `insert into cloud_code_agent_approvals
+         (turn_id, step_index, command, reason, expires_at)
+       values ($1, $2, $3, $4, now() + interval '30 minutes')
+       on conflict (turn_id, step_index) do nothing`,
+      [
+        turnId,
+        result.pendingApproval.stepIndex,
+        result.pendingApproval.command,
+        result.pendingApproval.reason,
+      ],
+    );
+  }
+
+  // Settle on every non-throwing exit, including early stops. A turn that ran
+  // provider calls and was never settled is a leaked reservation.
+  await finalizeManagedUsageRequest({
+    ...reservation,
+    outcome: result.stopReason === 'error' ? 'failed' : 'completed',
+    actualCostCents: result.stopReason === 'error' ? 0 : ESTIMATED_TURN_COST_CENTS,
+    usage: { steps: result.stepsUsed, stopReason: result.stopReason },
+  });
+
+  logger.info(
+    { turnId, sessionId, stopReason: result.stopReason, steps: result.stepsUsed },
+    'Cloud Code agent turn finished',
+  );
+
+  return {
+    turnId,
+    stopReason: result.stopReason,
+    stepsUsed: result.stepsUsed,
+    finalMessage: result.finalMessage,
+    ...(result.pendingApproval ? { pendingApproval: result.pendingApproval } : {}),
+    ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
+  };
+}

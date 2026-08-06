@@ -1,0 +1,162 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  getConnectorOAuthProvider,
+  isAllowedConnectorOAuthRedirectUri,
+  sanitizeConnectorReturnPath,
+} from '@/lib/connectors/oauth-registry';
+import { OAUTH_STATE_RE } from '@/lib/connectors/pkce';
+import {
+  ConnectorOAuthStoreUnavailableError,
+  consumePendingAuthorization,
+  upsertConnectorOAuthGrant,
+} from '@/lib/connectors/oauth-store';
+import { ConnectorOAuthTokenError, exchangeAuthorizationCode } from '@/lib/connectors/oauth-client';
+
+/** Longest authorization code we will forward to a token endpoint. */
+const MAX_CODE_LENGTH = 2048;
+
+/**
+ * Hosted OAuth callback for connector authorization.
+ *
+ * NOTHING SECRET IS EVER REFLECTED. The response is a redirect to a
+ * same-origin path carrying only `connector` and a coarse `status`; no token,
+ * refresh token, authorization code, verifier, or `state` appears in the body,
+ * in the redirect target, or in any log line here. Failure statuses are
+ * deliberately coarse so the endpoint cannot be used as an oracle.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const url = new URL(request.url);
+  const state = url.searchParams.get('state');
+  const code = url.searchParams.get('code');
+  const providerError = url.searchParams.get('error');
+
+  const redirectTo = (returnPath: string, connectorId: string, status: string): NextResponse => {
+    const target = new URL(sanitizeConnectorReturnPath(returnPath), request.url);
+    if (connectorId) target.searchParams.set('connector', connectorId);
+    target.searchParams.set('status', status);
+    return NextResponse.redirect(target);
+  };
+
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirectTo', '/connectors');
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (!state || !OAUTH_STATE_RE.test(state)) {
+    logger.warn('[connector-oauth] callback rejected: malformed or missing state');
+    return redirectTo('/connectors', '', 'invalid_state');
+  }
+
+  // Single-use claim happens BEFORE anything else that could fail, so a denial,
+  // a malformed code, or a token-endpoint error all leave the state spent and
+  // the callback non-replayable.
+  let pending;
+  try {
+    pending = await consumePendingAuthorization(state);
+  } catch (error) {
+    if (error instanceof ConnectorOAuthStoreUnavailableError) {
+      return redirectTo('/connectors', '', 'unavailable');
+    }
+    throw error;
+  }
+  if (!pending) {
+    logger.warn('[connector-oauth] callback rejected: unknown, expired, or replayed state');
+    return redirectTo('/connectors', '', 'invalid_state');
+  }
+
+  // The pending row is bound to the user who STARTED the flow. A different
+  // signed-in account arriving with a valid state must not have a grant written
+  // for it — that is the connector-injection variant of session fixation.
+  if (pending.userId !== userId) {
+    logger.warn(
+      { connectorId: pending.connectorId },
+      '[connector-oauth] callback rejected: state belongs to a different account',
+    );
+    return redirectTo(pending.returnPath, pending.connectorId, 'invalid_state');
+  }
+
+  if (providerError) {
+    return redirectTo(pending.returnPath, pending.connectorId, 'denied');
+  }
+  if (!code || code.length > MAX_CODE_LENGTH) {
+    return redirectTo(pending.returnPath, pending.connectorId, 'failed');
+  }
+
+  const provider = getConnectorOAuthProvider(pending.connectorId);
+  if (!provider || !isAllowedConnectorOAuthRedirectUri(pending.redirectUri)) {
+    // The registry changed under a live flow. Exchanging now would either use a
+    // different client or replay a redirect_uri this deployment no longer
+    // issues, so refuse rather than guess.
+    logger.warn(
+      { connectorId: pending.connectorId },
+      '[connector-oauth] callback rejected: provider configuration changed mid-flow',
+    );
+    return redirectTo(pending.returnPath, pending.connectorId, 'unavailable');
+  }
+
+  let grantedScopes: string[];
+  try {
+    const tokens = await exchangeAuthorizationCode({
+      provider,
+      code,
+      codeVerifier: pending.codeVerifier || null,
+      redirectUri: pending.redirectUri,
+      requestedScopes: pending.requestedScopes,
+    });
+    await upsertConnectorOAuthGrant(userId, pending.connectorId, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: tokens.tokenType,
+      grantedScopes: tokens.grantedScopes,
+      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+      tokenEndpoint: provider.tokenUrl,
+    });
+    grantedScopes = tokens.grantedScopes;
+  } catch (error) {
+    if (error instanceof ConnectorOAuthStoreUnavailableError) {
+      return redirectTo(pending.returnPath, pending.connectorId, 'unavailable');
+    }
+    // Only the status and the provider's machine-readable error code are
+    // logged — the token-endpoint body echoes the authorization code back.
+    logger.warn(
+      {
+        connectorId: pending.connectorId,
+        status: error instanceof ConnectorOAuthTokenError ? error.status : undefined,
+        oauthError: error instanceof ConnectorOAuthTokenError ? error.oauthError : undefined,
+      },
+      '[connector-oauth] authorization code exchange failed',
+    );
+    return redirectTo(pending.returnPath, pending.connectorId, 'failed');
+  }
+
+  // Scopes are recorded because they are the user-visible consequence of the
+  // grant; no credential material is in scope for the audit trail.
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_added',
+    request,
+    detail: {
+      resourceType: 'connector',
+      connectorId: pending.connectorId,
+      source: 'oauth',
+      status: 'connected',
+      scopes: grantedScopes,
+    },
+  });
+
+  return redirectTo(pending.returnPath, pending.connectorId, 'connected');
+}

@@ -73,6 +73,15 @@ impl ProjectMemoryState {
         })
     }
 
+    /// Create a ProjectMemoryState over an already keyed main-database
+    /// connection (see `ProjectMemoryManager::from_connection` for why the
+    /// main DB cannot go through `open_keyed_connection`).
+    pub fn from_connection(conn: rusqlite::Connection) -> Self {
+        Self {
+            manager: Arc::new(RwLock::new(ProjectMemoryManager::from_connection(conn))),
+        }
+    }
+
     /// Create a degraded ProjectMemoryState backed by an in-memory database.
     /// Commands will function but data will not persist across restarts.
     pub fn new_degraded() -> Self {

@@ -655,10 +655,15 @@ pub fn run() {
 
             app.manage(DocumentState::new());
 
-            // Persistent memory state for AGI cross-session memory
-            match MemoryState::new(&db_path.to_string_lossy()) {
-                Ok(memory_state) => {
-                    app.manage(memory_state);
+            // Persistent memory state for AGI cross-session memory. Lives in the
+            // encrypted main database, so it must open through MainDatabaseAccess:
+            // a plain Connection::open (what MemoryManager::new used) opens the
+            // SQLCipher file without the key and every query fails with "file is
+            // not a database", which surfaced as "Could not update memory" on
+            // every add/edit/delete.
+            match main_database_access.open_connection() {
+                Ok(conn) => {
+                    app.manage(MemoryState::from_connection(conn));
                     tracing::info!("Memory manager initialized");
                 }
                 Err(e) => {
@@ -667,12 +672,17 @@ pub fn run() {
                 }
             }
 
-            // Conversation summarizer state for automatic memory extraction
+            // Conversation summarizer state for automatic memory extraction.
+            // Its MemoryStore lives in the encrypted main database, so it must
+            // open through MainDatabaseAccess — a plain Connection::open (what
+            // ConversationSummarizerState::new used) opened the SQLCipher file
+            // unkeyed and every scheduled summarization run failed with "file
+            // is not a database".
             {
                 use crate::sys::commands::memory::ConversationSummarizerState;
-                match ConversationSummarizerState::new(&db_path.to_string_lossy(), None) {
-                    Ok(summarizer_state) => {
-                        app.manage(summarizer_state);
+                match main_database_access.open_connection() {
+                    Ok(conn) => {
+                        app.manage(ConversationSummarizerState::from_connection(conn, None));
                         tracing::info!("ConversationSummarizer initialized");
                     }
                     Err(e) => {
@@ -693,10 +703,15 @@ pub fn run() {
                 db_path.clone(),
             ));
 
-            // Project-scoped memory state for project-specific long-term memories
-            match ProjectMemoryState::new(&db_path.to_string_lossy()) {
-                Ok(project_memory_state) => {
-                    app.manage(project_memory_state);
+            // Project-scoped memory state for project-specific long-term
+            // memories. Lives in the main database, so it must open through
+            // MainDatabaseAccess: the main DB is keyed from the OS key store
+            // (or the WDIO harness key), and the machine-derived key that
+            // `open_keyed_connection` uses can never match it ("file is not a
+            // database" on every open).
+            match main_database_access.open_connection() {
+                Ok(conn) => {
+                    app.manage(ProjectMemoryState::from_connection(conn));
                     tracing::info!("Project memory manager initialized");
                 }
                 Err(e) => {
@@ -962,21 +977,6 @@ pub fn run() {
             app.manage(Arc::new(TokioMutex::new(ShortcutsState::with_defaults())));
 
             app.manage(Arc::new(LSPState::new()));
-
-            // Codebase indexer state (async_sqlite backed, Send+Sync)
-            let codebase_workspace = app_data_dir.join("codebase_index");
-            match tauri::async_runtime::block_on(
-                crate::core::codebase::CodebaseServiceState::new(codebase_workspace)
-            ) {
-                Ok(state) => {
-                    app.manage(state);
-                    tracing::info!("CodebaseServiceState initialized");
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to initialize codebase indexer: {}. Codebase indexing features will be degraded.", e);
-                    app.manage(crate::core::codebase::CodebaseServiceState::new_degraded());
-                }
-            }
 
             let cache_conn = main_database_access
                 .open_connection()
@@ -1738,8 +1738,6 @@ pub fn run() {
             crate::sys::commands::ollama_pull_model,
             crate::sys::commands::ollama_delete_model,
 
-            crate::sys::commands::vision_extract_text,
-            crate::sys::commands::vision_compare_images,
 
             // Screen Watcher (periodic screenshots for AGI awareness)
             crate::sys::commands::screen_watcher_start,
@@ -2375,20 +2373,7 @@ pub fn run() {
             crate::sys::commands::swarm::swarm_stop,
 
             // Vision Commands (Phase 7 Wiring)
-            crate::sys::commands::vision::vision_send_message,
 
-            // Google Batch Commands (not yet implemented - requires Google AI API integration)
-            crate::sys::commands::google_batch::google_batch_create,
-            crate::sys::commands::google_batch::google_batch_get,
-            crate::sys::commands::google_batch::google_batch_list,
-            crate::sys::commands::google_batch::google_batch_cancel,
-            crate::sys::commands::google_batch::google_batch_delete,
-            crate::sys::commands::google_batch::google_batch_get_results,
-            crate::sys::commands::google_batch::google_batch_create_embeddings,
-            crate::sys::commands::google_batch::google_batch_get_embeddings,
-            crate::sys::commands::google_batch::google_batch_create_images,
-            crate::sys::commands::google_batch::google_batch_calculate_cost,
-            crate::sys::commands::google_batch::google_batch_create_jsonl,
 
             // Code execution (sandboxed)
             crate::sys::commands::execute_code,
@@ -2811,8 +2796,6 @@ pub fn run() {
             // ============================================================
 
             // Error recovery (sys/error/commands.rs)
-
-            // Codebase indexing (core/codebase/mod.rs)
 
             // Billing — payment methods + invoice email + setup intent
         ])
