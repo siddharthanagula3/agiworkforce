@@ -89,13 +89,26 @@ catalog-assembly path.
 
 ## 2. What Managed Cloud can actually connect
 
-`apps/web/lib/user-connector-tools.ts` (module header L1-51). Exactly three sources:
+`apps/web/lib/user-connector-tools.ts` (module header L1-51). Exactly four sources:
 
-| Source                               | Gate                                                        | Credential location                                                       |
-| ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| GitHub App built-in                  | a usable GitHub App installation                            | `github_installations.access_token_enc`, resolved per request             |
-| Operator-mapped remote MCP servers   | active `user_connectors` row + `CONNECTOR_MCP_SERVERS_JSON` | operator config, server-side                                              |
-| User's own custom remote MCP servers | `user_custom_connectors` row                                | URL + optional bearer token, encrypted (`lib/custom-connector-crypto.ts`) |
+| Source                               | Gate                                                            | Credential location                                                                 |
+| ------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| GitHub App built-in                  | a usable GitHub App installation                                | `github_installations.access_token_enc`, resolved per request                       |
+| Operator-mapped remote MCP servers   | active `user_connectors` row + `CONNECTOR_MCP_SERVERS_JSON`     | operator config, server-side                                                        |
+| User's own custom remote MCP servers | `user_custom_connectors` row                                    | URL + optional bearer token, encrypted (`lib/custom-connector-crypto.ts`)           |
+| Platform-OAuth directory connectors  | `connector_oauth_grants` row + `CONNECTOR_OAUTH_PROVIDERS_JSON` | per-user access/refresh tokens, AES-256-GCM (`lib/connectors/oauth-store.ts`, 0097) |
+
+The fourth source is the only one where **the platform holds the OAuth client and
+the user holds the grant**. Its authority is therefore bounded by the scopes the
+user consented to at the provider, recorded on the grant row — not by operator
+configuration. The client credentials live in
+`CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET`, never in the descriptor
+JSON. Grants are strictly personal: `connector_oauth_grants` is scoped by
+`user_id` with no `organization_id`, so switching workspace never inherits
+another member's tokens (migration 0097 header).
+
+As of 2026-08-05 no provider is configured in production, so this source
+contributes no connectors and every directory entry still reports unavailable.
 
 `user_connectors` holds only `connector_id + auth_type + is_active`. **No tokens,
 no endpoint URLs.** `POST /api/connectors` returns 501 for every branded catalog
