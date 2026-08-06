@@ -25,16 +25,33 @@ const startupStateUnavailable: StartupRecoveryInfo = {
   dataPreserved: true,
 };
 
+/**
+ * How long to wait for `startup_get_recovery_state` before treating the native
+ * side as unresponsive.
+ *
+ * The command itself only reads a mutex-guarded Option, so a healthy backend
+ * answers in microseconds; anything approaching this bound means the response
+ * is not coming back at all. Without a bound, a promise that never settles
+ * (rather than rejecting) leaves the user on an unrecoverable "Opening
+ * encrypted local data…" spinner with no retry, no diagnostics, and no quit —
+ * observed in a `tauri dev` session whose backend was provably idle in its
+ * event loop. STARTUP_STATE_UNAVAILABLE was written for exactly this case but
+ * was only reachable on rejection.
+ */
+const STARTUP_STATE_TIMEOUT_MS = 10_000;
+
 interface StartupRecoveryBootstrapProps {
   children: ReactNode;
   nativeRuntime?: boolean;
   invokeCommand?: StartupRecoveryInvoke;
+  timeoutMs?: number;
 }
 
 export function StartupRecoveryBootstrap({
   children,
   nativeRuntime = isTauri,
   invokeCommand = invokeNative,
+  timeoutMs = STARTUP_STATE_TIMEOUT_MS,
 }: StartupRecoveryBootstrapProps) {
   const [phase, setPhase] = useState<StartupPhase>(() =>
     nativeRuntime ? { kind: 'checking' } : { kind: 'ready' },
@@ -44,21 +61,31 @@ export function StartupRecoveryBootstrap({
     if (!nativeRuntime) return;
 
     let active = true;
+    const timer = setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setPhase({ kind: 'recovery', info: startupStateUnavailable });
+    }, timeoutMs);
+
     void invokeCommand<StartupRecoveryInfo | null>('startup_get_recovery_state')
       .then((info) => {
         if (!active) return;
+        active = false;
+        clearTimeout(timer);
         setPhase(info ? { kind: 'recovery', info } : { kind: 'ready' });
       })
       .catch(() => {
-        if (active) {
-          setPhase({ kind: 'recovery', info: startupStateUnavailable });
-        }
+        if (!active) return;
+        active = false;
+        clearTimeout(timer);
+        setPhase({ kind: 'recovery', info: startupStateUnavailable });
       });
 
     return () => {
       active = false;
+      clearTimeout(timer);
     };
-  }, [invokeCommand, nativeRuntime]);
+  }, [invokeCommand, nativeRuntime, timeoutMs]);
 
   useEffect(() => {
     if (phase.kind !== 'recovery') return;
