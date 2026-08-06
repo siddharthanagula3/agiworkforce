@@ -458,6 +458,12 @@ const MessageBubbleComponent = function MessageBubble({
         onResend: onRegenerate ? handleResendTool : undefined,
       }
     : {};
+  // Lazy authentication (inline Connect card): after the OAuth callback returns
+  // there is nothing server-side that resumes the suspended turn, so the card's
+  // Retry re-runs the exchange from the user's last message -- the same
+  // mechanism Regenerate uses. Wired independently of `approvalHandlers`
+  // because a connect-required result never involves the approval registry.
+  const connectRetryHandler = onRegenerate ? { onRetryTurn: handleResendTool } : {};
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
@@ -937,6 +943,7 @@ const MessageBubbleComponent = function MessageBubble({
                 onReject={resolveToolApproval ? handleRejectTool : undefined}
                 isApprovalExpired={() => approvalTurnExpired}
                 onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}
+                {...connectRetryHandler}
               />
             </div>
           )}
@@ -983,6 +990,7 @@ const MessageBubbleComponent = function MessageBubble({
                           searchSources={searchSources}
                           searchQuery={searchQuery}
                           {...approvalHandlers}
+                          {...connectRetryHandler}
                         />
                       </div>,
                     );
@@ -999,6 +1007,7 @@ const MessageBubbleComponent = function MessageBubble({
                         searchSources={searchSources}
                         searchQuery={searchQuery}
                         {...approvalHandlers}
+                        {...connectRetryHandler}
                       />
                     </div>,
                   );
@@ -1050,6 +1059,7 @@ const MessageBubbleComponent = function MessageBubble({
                 searchSources={searchSources}
                 searchQuery={searchQuery}
                 {...approvalHandlers}
+                {...connectRetryHandler}
               />
             </div>
           )}

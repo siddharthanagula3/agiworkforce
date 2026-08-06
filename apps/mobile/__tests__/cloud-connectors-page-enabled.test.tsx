@@ -139,7 +139,9 @@ describe('Cloud Connectors screen — shipped-feature state', () => {
       ],
       available: ['github', 'slack'],
     });
-    mockConnect.mockResolvedValue(undefined);
+    // Real contract shape: connectConnector resolves a discriminated result,
+    // and `connected` is only returned when the server wrote the row.
+    mockConnect.mockResolvedValue({ kind: 'connected' });
     mockDisconnect.mockResolvedValue(undefined);
     mockDeleteCustom.mockResolvedValue(undefined);
   });
@@ -273,8 +275,8 @@ describe('Cloud Connectors screen — shipped-feature state', () => {
   it('ignores an account-A connect completion after account B activates', async () => {
     let resolveConnect!: () => void;
     mockConnect.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveConnect = resolve;
+      new Promise<{ kind: 'connected' }>((resolve) => {
+        resolveConnect = () => resolve({ kind: 'connected' });
       }),
     );
     const { getByLabelText, rerender } = render(<CloudConnectorsScreen />);

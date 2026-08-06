@@ -289,15 +289,9 @@ describe('ConnectorsPage', () => {
     const firstConnectorRow = listRows.find((btn) => {
       const label = btn.textContent ?? '';
       return (
-        ![
-          'All',
-          'Connected',
-          'Ready',
-          'Coming soon',
-          'Connectors',
-          'Prev',
-          'Next',
-        ].includes(label) &&
+        !['All', 'Connected', 'Ready', 'Coming soon', 'Connectors', 'Prev', 'Next'].includes(
+          label,
+        ) &&
         !label.startsWith('0') &&
         label.length > 0 &&
         !label.includes('total')
@@ -379,5 +373,130 @@ describe('ConnectorsPage', () => {
     });
 
     expect(screen.queryByText(/failed to fetch connectors/i)).toBeNull();
+  });
+});
+
+// ─── OAuth broker states ─────────────────────────────────────────────────────
+// Shapes below mirror `app/api/connectors/route.ts`: a `source: 'oauth'` entry
+// carries the scopes the provider granted and a `needsReauthorization` flag.
+
+describe('ConnectorsPage — OAuth-granted connectors', () => {
+  function stubConnectorsResponse(body: unknown) {
+    invalidateConnectorsCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(body),
+      }),
+    );
+  }
+
+  async function openLinearDetail() {
+    await act(async () => {
+      fireEvent.click(screen.getByText('Linear'));
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    invalidateConnectorsCache();
+  });
+
+  // Regression guard: a live OAuth grant rendered no different from any other
+  // connected row — the user could not see what they had actually authorized.
+  it('shows the OAuth grant and the scopes the provider granted, verbatim', async () => {
+    stubConnectorsResponse({
+      connectors: [
+        {
+          connectorId: 'linear',
+          connectedAt: '2026-08-01T00:00:00.000Z',
+          source: 'oauth',
+          scopes: ['read', 'write:issue'],
+          needsReauthorization: false,
+        },
+      ],
+      available: ['linear'],
+    });
+
+    await renderConnectorsPage();
+    await openLinearDetail();
+
+    expect(screen.getByText('Connected with OAuth')).toBeDefined();
+    expect(screen.getByText('Scopes you granted (2)')).toBeDefined();
+    // Rendered exactly as the provider returned them — no invented friendly copy.
+    expect(screen.getByText('read')).toBeDefined();
+    expect(screen.getByText('write:issue')).toBeDefined();
+    // A healthy grant must not nag the user to reconnect.
+    expect(screen.queryByRole('button', { name: /reconnect/i })).toBeNull();
+  });
+
+  it('says so plainly when the provider returned no scope list', async () => {
+    stubConnectorsResponse({
+      connectors: [{ connectorId: 'linear', source: 'oauth', scopes: [] }],
+      available: ['linear'],
+    });
+
+    await renderConnectorsPage();
+    await openLinearDetail();
+
+    expect(screen.getByText('Scopes you granted (0)')).toBeDefined();
+    expect(screen.getByText(/did not return a scope list/i)).toBeDefined();
+  });
+
+  it('offers Reconnect when the stored authorization can no longer be renewed', async () => {
+    stubConnectorsResponse({
+      connectors: [
+        {
+          connectorId: 'linear',
+          source: 'oauth',
+          scopes: ['read'],
+          needsReauthorization: true,
+        },
+      ],
+      available: ['linear'],
+    });
+
+    await renderConnectorsPage();
+    await openLinearDetail();
+
+    expect(screen.getByText('Authorization needs renewing')).toBeDefined();
+    expect(screen.getByRole('button', { name: /reconnect/i })).toBeDefined();
+  });
+
+  // Disconnecting also deletes the saved per-tool permissions
+  // (`clearConnectorToolPermissions` in DELETE /api/connectors). The user has
+  // to be told that before it happens, not after.
+  it('confirms before disconnecting and states that saved tool permissions are deleted', async () => {
+    stubConnectorsResponse({
+      connectors: [{ connectorId: 'linear', source: 'oauth', scopes: ['read'] }],
+      available: ['linear'],
+    });
+
+    await renderConnectorsPage();
+    await openLinearDetail();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    });
+
+    expect(screen.getByText('Disconnect Linear?')).toBeDefined();
+    expect(
+      screen.getByText(/per-tool permissions you saved for Linear are deleted/i),
+    ).toBeDefined();
+    expect(screen.getByText(/revoked and deleted/i)).toBeDefined();
+  });
+
+  // The honest default: zero providers are configured, so an OAuth connector
+  // with no server-side app must stay "Coming soon" with no Connect control.
+  it('keeps an unconfigured connector unavailable with no Connect button', async () => {
+    stubConnectorsResponse({ connectors: [], available: [] });
+
+    await renderConnectorsPage();
+    await openLinearDetail();
+
+    expect(screen.queryByRole('button', { name: /^Connect$/ })).toBeNull();
+    expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
   });
 });
