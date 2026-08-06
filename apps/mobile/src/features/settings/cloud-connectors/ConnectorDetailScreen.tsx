@@ -22,10 +22,15 @@ import {
   fetchConnectorToolPermissions,
   resetConnectorToolPermission,
   setConnectorToolPermission,
+  startConnectorOAuth,
   type ConnectedConnector,
   type ConnectorToolPermission,
   type ConnectorToolPermissionLevel,
 } from '@/services/connectors';
+// Provider-hosted consent screen — third-party host, so the untrusted-URL
+// in-app browser helper (scheme allowlist + system-browser fallback), matching
+// the directory's connect flow.
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -204,6 +209,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
   const [error, setError] = useState<string | null>(null);
   const [savingTool, setSavingTool] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const validConnectorId = connectorId.length > 0 && connectorId.length <= 200 ? connectorId : null;
   const isCloudModeActive = appMode === 'cloud';
@@ -257,6 +263,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
     setError(null);
     setSavingTool(null);
     setDisconnecting(false);
+    setReconnecting(false);
     if (FEATURES.connectors && isClerkSignedIn && isCloudModeActive) {
       void load();
     }
@@ -308,6 +315,48 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
     },
     [isActionCurrent],
   );
+
+  /**
+   * Re-run the hosted authorization-code flow for an OAuth grant.
+   *
+   * Only the server can turn a completed consent into a grant, so this never
+   * reports success on its own: it opens the provider's consent screen, and
+   * when the browser sheet closes it re-reads `/api/connectors`. If the grant
+   * still reports `needsReauthorization`, the banner below simply stays up.
+   */
+  const reconnect = useCallback(() => {
+    if (!connection || connection.source !== 'oauth' || reconnecting) return;
+    const account = captureCloudAccountEpoch();
+    if (!account || !isActionCurrent(account)) return;
+    const targetConnectorId = connection.connectorId;
+    setReconnecting(true);
+    void (async () => {
+      try {
+        const start = await startConnectorOAuth(targetConnectorId);
+        if (!isActionCurrent(account)) return;
+        const opened = await openUntrustedUrlInAppBrowser(start.authorizeUrl);
+        if (!isActionCurrent(account)) return;
+        if (!opened) {
+          Alert.alert(
+            'Could not open authorization',
+            'No browser was available to complete the authorization. Nothing changed.',
+          );
+          return;
+        }
+        await load();
+      } catch (reconnectError) {
+        if (!isActionCurrent(account)) return;
+        Alert.alert(
+          'Could not reauthorize',
+          reconnectError instanceof Error
+            ? reconnectError.message
+            : 'The connector was not reauthorized.',
+        );
+      } finally {
+        if (isActionCurrent(account)) setReconnecting(false);
+      }
+    })();
+  }, [connection, isActionCurrent, load, reconnecting]);
 
   const disconnect = useCallback(() => {
     if (!connection || disconnecting) return;
@@ -427,9 +476,72 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               label="Connected"
               value={formatConnectedAt(connection.connectedAt)}
               icon={Link2}
-              isLast
+              isLast={!(connection.scopes && connection.scopes.length > 0)}
             />
+            {connection.scopes && connection.scopes.length > 0 ? (
+              // The scopes the provider actually granted, straight from the
+              // grant row — not the scopes the deployment asked for.
+              <SettingsRow
+                label="Granted access"
+                value={connection.scopes.join(', ')}
+                icon={ShieldCheck}
+                isLast
+              />
+            ) : null}
           </SettingsGroup>
+
+          {connection.source === 'oauth' ? (
+            <View style={{ marginBottom: 18, gap: 10 }}>
+              {connection.needsReauthorization ? (
+                <View
+                  style={{
+                    borderRadius: cardRadius,
+                    padding: 14,
+                    gap: 6,
+                    backgroundColor: colors.dangerSurface,
+                    borderWidth: 1,
+                    borderColor: colors.dangerBorder,
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                    Authorization expired
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                    This grant can no longer be renewed, so {connectorName} tools will not run until
+                    you authorize it again.
+                  </Text>
+                </View>
+              ) : null}
+              <Pressable
+                disabled={reconnecting}
+                onPress={reconnect}
+                accessibilityRole="button"
+                accessibilityLabel={`Reauthorize ${connectorName}`}
+                accessibilityState={{ disabled: reconnecting }}
+                style={({ pressed }) => ({
+                  minHeight: 48,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                  backgroundColor: colors.neutralSurface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed || reconnecting ? 0.7 : 1,
+                })}
+              >
+                {reconnecting ? (
+                  <ActivityIndicator size="small" color={colors.teal} />
+                ) : (
+                  <RotateCcw size={17} color={colors.teal} />
+                )}
+                <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '700' }}>
+                  {reconnecting ? 'Opening authorization…' : 'Reauthorize'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={{ marginBottom: 10 }}>
             <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
