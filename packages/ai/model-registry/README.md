@@ -55,6 +55,16 @@ The compiler emits a schema-validated normalized registry for TypeScript and Rus
 
 For a normal release on an existing provider, hand-edit only `catalog/models.curation.json`: add the model record and place its key in the intended tier. `catalog/models.synced.json` is refreshed by automation and is never hand-edited. Change `catalog/harnesses.json` only for a new provider API path or verified implementation status; change `catalog/routing-policies.json` only when Auto requirements or slot assignments change. Run `generate`, inspect every generated diff, and run schema, catalog, availability, TypeScript, and Rust checks. Never hand-edit generated output.
 
+### Announced Price Changes
+
+When a PRODUCT price is scheduled to start or end on a date, add a `pricingSchedule` array to the model's curation record instead of overwriting its cost fields. Each entry is a dated `costOverride` — `effectiveFrom` and/or `effectiveUntil` (ISO `YYYY-MM-DD`) plus any of `inputCost`, `outputCost`, `cached_input`, `cached_write`, `cached_write_1h`, and a `note` recording the source and verification date. `effectiveFrom` and `effectiveUntil` are UTC calendar days and both bounds are inclusive, so a changeover happens at UTC midnight (a window ending `2026-08-31` covers all of that UTC day and the next window starts `2026-09-01`). Windows must not overlap — the compiler rejects intersecting ranges, because the first covering window wins and an overlap would make the billed price depend on authoring order. Keep the top-level cost fields on the enduring/standard price so a consumer that is not date-aware still reads a published rate; consumers resolve a window through `resolveEffectiveModelPricing` (`@agiworkforce/types`) or `ModelEntry::effective_pricing` (Rust). The older `promo_expires_at`/`post_promo_prices` pair remains supported for two-phase promotions.
+
+A provider's introductory or promotional window is a PROVIDER-COST fact, not a product price (founder Decision #22, reaffirmed 2026-08-05): record it in `verificationLog` and leave the model's billed rates alone. Only a founder-decided change to what AGI charges belongs in `pricingSchedule`.
+
+### Cache-Write Prices And Openness Metadata
+
+`cached_write` is a published price, not a derived one: declare it only when the provider charges for prompt-cache writes. Cost calculators bill a write at the declared price and otherwise at the plain input rate, so adding a speculative `cached_write` silently starts charging a surcharge that the provider does not levy. `openWeight`, `license`, and `commercialRestrictions` on a model record are optional and verification-gated — an absent field means "not verified", never "closed" or "unrestricted".
+
 ## Security, Privacy, And Trust Boundaries
 
 Registry availability does not authorize routing. Local, BYOK, and Managed Cloud eligibility belongs to route and policy data and must remain explicit. A documented provider feature must not be advertised as an application capability until the corresponding route and harness are implemented and verified.

@@ -7,7 +7,7 @@ import {
   FinalCta,
   FlagshipHero,
 } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import { CATALOG_AS_OF, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI for Business: Local, BYOK, and managed-cloud workspaces',
@@ -27,8 +27,8 @@ export default function BusinessPage() {
           lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Get notified' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/pricing', label: 'See Plans' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -82,7 +82,10 @@ export default function BusinessPage() {
           rows={[
             {
               k: 'Model choice',
-              v: `One product routes across ${MARKETING.providers.display} providers and ${MARKETING.models.display} models. Frontier cloud APIs through BYOK on Desktop and CLI, plus local models through Ollama and LM Studio.`,
+              // The count is derived from models.json and dated by its own
+              // lastUpdated stamp. A number a buyer can open and count beats a
+              // padded floor they have to trust.
+              v: `One product routes across a dated, inspectable catalog — ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop and CLI, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
               k: 'Cost shape',
@@ -98,7 +101,10 @@ export default function BusinessPage() {
             },
             {
               k: 'Admin',
-              v: 'Workspace accounts today; SSO, SCIM, audit export, and retention controls are scoped on enterprise contracts.',
+              // Mirrors the corrected /enterprise wording. These are contract
+              // commitments in progress, not switches available today, and the
+              // implementations are owned by a separate workstream.
+              v: 'Workspace accounts today. Identity, audit, and retention controls are contract-scoped commitments rather than self-serve settings — the enterprise page states which are built and which are not.',
             },
           ]}
         />
@@ -128,22 +134,21 @@ export default function BusinessPage() {
             {
               meta: 'Governance',
               title: 'Enterprise',
-              body: 'SSO, audit, retention, and security review on contract.',
+              body: 'Security review, BYOK enforcement, and contract-scoped controls.',
               href: '/enterprise',
             },
           ]}
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Start the rollout where the risk is lowest."
-          body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and talk to sales about workspace policy and Team & Enterprise controls."
+          body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and buy Team seats when you need shared workspaces. Enterprise controls are sales-assisted."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Get notified' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/pricing', label: 'See Plans' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
         <MarketingFooter />

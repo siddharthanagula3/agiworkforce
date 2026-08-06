@@ -362,7 +362,7 @@ export default function ProjectDetailPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ModelSelector
                 onSettingsClick={() => router.push('/settings/general')}
-                onProPlusRequired={() => {
+                onProviderSwitchUpgradeRequired={() => {
                   /* waitlist-gated in v1 */
                 }}
               />

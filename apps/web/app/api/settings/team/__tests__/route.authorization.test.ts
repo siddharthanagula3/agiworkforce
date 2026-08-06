@@ -20,6 +20,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'admin-user' })),
 }));
@@ -28,7 +32,10 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn(async () => ({
     plan: 'team',
     canManageTeam: true,
-    maxMembers: null,
+    maxMembers: 10,
+    seatsConsumed: 3,
+    seatsAvailable: 7,
+    seatSource: 'billing',
   })),
 }));
 
@@ -42,6 +49,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import { POST } from '../route';
 
+const ORG_A = '11111111-1111-4111-8111-111111111111';
+
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/settings/team', {
     method: 'POST',
@@ -53,6 +62,7 @@ function request(body: unknown) {
 describe('POST /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExecute.mockResolvedValue(0);
     mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
         query: (...args: unknown[]) => mockQuery(...args),
@@ -61,12 +71,50 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
   });
 
-  it('does not let an admin create an owner through the add-member route', async () => {
+  /**
+   * 0085 makes "exactly one owner" a database fact
+   * (idx_org_members_single_owner), so this route can no longer mint an owner
+   * at all — not by an admin, and not by the existing owner either. Ownership
+   * moves through POST /api/settings/organization/transfer-ownership.
+   *
+   * This replaces the previous "an admin cannot create an owner" rule, which
+   * still permitted an OWNER to create a second one.
+   */
+  it('refuses to create an owner through the add-member route, whoever is asking', async () => {
+    const response = await POST(
+      request({
+        organizationId: ORG_A,
+        email: 'future-owner@example.com',
+        role: 'owner',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    // Rejected at the edge: no transaction opened, no row touched.
+    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller who is not a member of the named organization', async () => {
+    mockQuery
+      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([]); // requester membership: none
+
+    const response = await POST(
+      request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+  });
+
+  it('refuses a plain member who is not an admin', async () => {
     mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([
       {
-        organization_id: '11111111-1111-4111-8111-111111111111',
+        organization_id: ORG_A,
         user_id: 'admin-user',
-        role: 'admin',
+        role: 'member',
         provisioning_source: 'manual',
         provisioned_at: null,
         joined_at: '2026-07-23T00:00:00.000Z',
@@ -74,15 +122,53 @@ describe('POST /api/settings/team authorization invariants', () => {
     ]);
 
     const response = await POST(
-      request({
-        organizationId: '11111111-1111-4111-8111-111111111111',
-        email: 'future-owner@example.com',
-        role: 'owner',
-      }),
+      request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
     );
 
     expect(response.status).toBe(403);
-    expect(mockQuery).toHaveBeenCalledTimes(2);
-    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+  });
+
+  it('does not read a member count before inserting, because the ceiling is a DB constraint', async () => {
+    mockQuery
+      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([
+        {
+          organization_id: ORG_A,
+          user_id: 'admin-user',
+          role: 'admin',
+          provisioning_source: 'manual',
+          provisioned_at: null,
+          joined_at: '2026-07-23T00:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'target-user', email: 'someone@example.com', display_name: null, avatar_url: null },
+      ])
+      .mockResolvedValueOnce([]) // not already a member
+      .mockResolvedValueOnce([
+        {
+          organization_id: ORG_A,
+          user_id: 'target-user',
+          role: 'member',
+          provisioning_source: 'manual',
+          provisioned_at: null,
+          joined_at: '2026-08-05T00:00:00.000Z',
+          email: 'someone@example.com',
+          display_name: null,
+          avatar_url: null,
+        },
+      ]);
+
+    const response = await POST(
+      request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
+    );
+
+    expect(response.status).toBe(201);
+    // A read-then-write count would let two admins both pass against one seat.
+    const sqls = mockQuery.mock.calls.map(([sql]) => String(sql).toLowerCase());
+    expect(
+      sqls.some((sql) => sql.includes('count(*)') && sql.includes('organization_members')),
+    ).toBe(false);
   });
 });

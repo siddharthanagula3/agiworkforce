@@ -498,8 +498,11 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                 </Card>
               )}
 
-              {/* Team is sales-assisted, so it is offered from Free, Basic,
-                  or Pro rather than as a self-serve downgrade from Max. */}
+              {/* Team is self-serve and billed PER SEAT. It is offered from
+                  Free, Basic, or Pro rather than as a downgrade from Max. The
+                  CTA goes to /pricing because that is where the seat selector
+                  lives — checkout REFUSES a Team request with no seat count, so
+                  a direct "buy" button here would be a dead control. */}
               {['free', 'basic', 'pro'].includes(normalizePlan(billing?.plan)) &&
                 isPlanSelectableOnSurface('team', 'web') && (
                   <Card className="border-2 border-muted-foreground/30">
@@ -509,11 +512,8 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                         <CardTitle>{getBillingPlanPricing('team').label}</CardTitle>
                       </div>
                       <div className="text-2xl font-bold">
-                        Custom
-                        <span className="text-sm text-muted-foreground">
-                          {' '}
-                          sales-assisted pricing
-                        </span>
+                        {formatCatalogPrice(getBillingPlanPricing('team').monthlyPriceUsd)}
+                        <span className="text-sm text-muted-foreground"> per seat / month</span>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -527,9 +527,9 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                       </ul>
                       <a
                         className="mt-4 flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-                        href="/contact-sales?plan=team"
+                        href="/pricing#pricing-team-title"
                       >
-                        Contact sales
+                        Choose seats
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </a>
                     </CardContent>

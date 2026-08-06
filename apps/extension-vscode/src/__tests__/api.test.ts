@@ -20,6 +20,7 @@ import {
   clearApiKey,
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
+import { readFileSync } from 'fs';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -452,5 +453,50 @@ describe('SSE parsing pattern', () => {
     const lines = ['event: message', ': comment', '', 'data: {"id":"1"}'];
     const dataLines = lines.filter((l) => l.trim().startsWith('data:'));
     expect(dataLines).toHaveLength(1);
+  });
+});
+
+/**
+ * VSCODE-MANAGED-CHAT-IDEMPOTENCY-MISSING-01 — static wiring invariant.
+ *
+ * Managed Cloud rejects a missing Idempotency-Key with 400
+ * `idempotency_key_required` (apps/web/lib/services/managed-usage-request-service.ts),
+ * so its absence broke every cloud editor utility before it reached a model.
+ * The request builder is not directly exercisable here (it needs live sockets
+ * and SecretStorage), so this asserts the wiring at the source level — the
+ * established pattern in this repo for cross-boundary header contracts.
+ */
+describe('managed chat Idempotency-Key wiring', () => {
+  const source = readFileSync(new URL('../utils/api.ts', import.meta.url), 'utf8');
+
+  it('sends an Idempotency-Key on the managed chat request', () => {
+    expect(source).toMatch(/'Idempotency-Key':\s*idempotencyKey/);
+  });
+
+  it('uses a key shape the server accepts', () => {
+    // Server contract: 8-128 chars of [A-Za-z0-9._:-].
+    const literal = source.match(/const idempotencyKey = `([^`]+)`/)?.[1];
+    expect(literal).toBeDefined();
+    const sample = literal!.replace('${randomUUID()}', '123e4567-e89b-42d3-a456-426614174000');
+    expect(sample).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+  });
+
+  it('mints the key once, before the chat request retries', () => {
+    // A key generated per attempt makes every retry a NEW request to the
+    // server, defeating idempotency and letting a retried turn bill twice.
+    // Anchor to the chat request specifically — unrelated helpers earlier in
+    // this file use withRetry too, so a whole-file ordering check is meaningless.
+    const requestIndex = source.indexOf('const bodyStr = JSON.stringify(requestBody)');
+    const keyIndex = source.indexOf('const idempotencyKey =');
+    expect(requestIndex).toBeGreaterThan(-1);
+    expect(keyIndex).toBeGreaterThan(requestIndex);
+
+    // The chat request does retry, and every one of its retries is downstream
+    // of the single mint above.
+    const retryAfterKey = source.indexOf('withRetry(', keyIndex);
+    expect(retryAfterKey).toBeGreaterThan(keyIndex);
+
+    // Exactly one mint site overall, so no per-attempt regeneration crept back.
+    expect(source.match(/randomUUID\(\)/g)?.length).toBe(1);
   });
 });

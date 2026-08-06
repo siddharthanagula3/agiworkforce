@@ -61,5 +61,6 @@
   "upgradeRequired": "Aggiornamento Richiesto",
   "upgradeMessage": "Questa funzione richiede un piano di abbonamento superiore.",
   "limitReached": "Limite Raggiunto",
-  "limitMessage": "Hai raggiunto il limite di {{limit}}."
+  "limitMessage": "Hai raggiunto il limite di {{limit}}.",
+  "heroLedePart2": "Il cloud gestito di AGI è aperto in alpha pubblica per uso individuale. Team è self-service e fatturato per postazione; Enterprise è assistito dal team commerciale quando la tua organizzazione desidera governance personalizzata e condizioni negoziate."
 }

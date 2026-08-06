@@ -29,6 +29,8 @@ import {
   type ComposerVoiceController,
 } from './ChatInput';
 import { QuickChips } from './QuickChips';
+import type { ManagedUsageWarning } from '@agiworkforce/types';
+import { UsageWarningBanner } from './UsageWarningBanner';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
 import { ConversationHeader, type ConversationHeaderProps } from './ConversationHeader';
@@ -315,6 +317,16 @@ export interface ChatInterfaceProps {
    * cannot safely derive.
    */
   composerHostControls?: ReactNode;
+  /**
+   * The one limit worth warning about right now, from `selectUsageWarning`.
+   * Absent or null renders nothing — the host decides whether it has usage data
+   * at all, and Local/BYOK chats have none by definition.
+   */
+  usageWarning?: ManagedUsageWarning | null;
+  /** Omit and no upgrade affordance renders — correct for the top self-serve tier. */
+  onUpgradeUsage?: () => void;
+  /** Omit and the warning is not dismissible. */
+  onDismissUsageWarning?: () => void;
   /** Host-persisted composer submission shortcut. */
   composerSendShortcut?: 'enter' | 'mod-enter';
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
@@ -397,6 +409,9 @@ export function ChatInterface({
   canUseAgiWork = true,
   quickChipAvailability,
   composerHostControls,
+  usageWarning,
+  onUpgradeUsage,
+  onDismissUsageWarning,
   composerSendShortcut,
   onNavigateView,
   hostBridge = null,
@@ -903,6 +918,20 @@ export function ChatInterface({
         {/* Input area — ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
         <div className="shrink-0 px-4 pb-2">
+          {/*
+            Running-low warning, attached ABOVE the composer.
+            Usage was previously visible only in Settings, so the first signal a
+            user got was a refused message mid-task. This sits where they are
+            already looking and where both reference products put it; a toast
+            would disappear and a settings meter is somewhere the user is not.
+            Rendered outside the composerSlot branch so a host supplying its own
+            composer still gets the warning.
+          */}
+          <UsageWarningBanner
+            warning={usageWarning ?? null}
+            {...(onUpgradeUsage ? { onUpgrade: onUpgradeUsage } : {})}
+            {...(onDismissUsageWarning ? { onDismiss: onDismissUsageWarning } : {})}
+          />
           {composerSlot !== undefined ? (
             composerSlot
           ) : (

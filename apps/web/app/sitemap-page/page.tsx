@@ -86,6 +86,8 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/legal', label: 'Legal index' },
       { href: '/legal/eu-representative', label: 'EU representative' },
       { href: '/terms', label: 'Terms' },
+      { href: '/acceptable-use', label: 'Acceptable use' },
+      { href: '/agent-permissions', label: 'Agent permissions' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/cookies', label: 'Cookies' },
       { href: '/dpa', label: 'DPA' },

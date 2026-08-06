@@ -170,12 +170,18 @@ export function SendPreview({
           accessibilityLabel={`${presentation.destinationLabel}. ${
             expanded ? 'Hide' : 'Show'
           } send details`}
+          // 10pt text in a ~16pt box is well under the tap-target minimum for a
+          // control that discloses WHERE a message is about to be sent — the one
+          // thing a user must be able to check before hitting send. hitSlop grows
+          // the touch area without changing the compact visual density.
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
           style={{
             alignSelf: 'flex-start',
             flexDirection: 'row',
             alignItems: 'center',
             gap: 4,
-            paddingVertical: 2,
+            minHeight: 24,
+            paddingVertical: 4,
             paddingHorizontal: 4,
           }}
         >

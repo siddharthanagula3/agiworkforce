@@ -178,14 +178,25 @@ describe('GET /api/projects · conversation counts', () => {
   });
 
   it('returns the canonical count of live conversations for each project', async () => {
-    mockNeonQuery.mockResolvedValueOnce([{ ...BASE_DB_ROW, conversation_count: 2 }]);
+    // The list route now also resolves the caller's org-shared project scope
+    // (migration 0086) before the project read, so the mock must dispatch on the
+    // statement rather than on call order. This caller belongs to no
+    // organization, which is the pre-0086 behaviour: personal projects only.
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('organization_members')
+        ? []
+        : [{ ...BASE_DB_ROW, conversation_count: 2 }],
+    );
 
     const res = await GET_PROJECTS(makeListProjectsRequest());
     const json = (await res.json()) as { projects: Array<Record<string, unknown>> };
 
     expect(res.status).toBe(200);
     expect(json.projects[0]?.['conversationCount']).toBe(2);
-    expect(String(mockNeonQuery.mock.calls[0]?.[0])).toContain('conversation_count');
+    const projectSql = mockNeonQuery.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('from user_projects'));
+    expect(projectSql).toContain('conversation_count');
   });
 });
 

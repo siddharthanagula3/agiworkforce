@@ -67,9 +67,15 @@ export function SendButton({
         disabled={disabled}
         className={cn(
           'rounded-full p-2 transition-all duration-200',
+          // Queue is the SAME primary action as Send, one state later — it is
+          // still "commit this message", just deferred. It rendered amber while
+          // Send rendered brand terra-cotta a row away, so one composer showed
+          // two different colours for one role and amber (the product's warning
+          // hue elsewhere) implied something had gone wrong. Same fill as Send;
+          // the clock icon and the label carry the difference.
           disabled
-            ? 'bg-amber-500/50 text-white/70 cursor-not-allowed'
-            : 'bg-amber-500 text-white hover:bg-amber-600 shadow-md',
+            ? 'bg-terra-cotta-500/50 text-white/70 cursor-not-allowed'
+            : 'bg-terra-cotta-500 text-white hover:bg-terra-cotta-600 shadow-md',
           className,
         )}
         title="Queue message · will send after current response finishes"

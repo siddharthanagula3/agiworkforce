@@ -70,8 +70,9 @@ test('emits separated registry records and cross-language artifacts', () => {
       );
     }
   }
-  assert.equal(registry.pricing[key].inputPerMillion, 1);
-  assert.equal(registry.pricing[key].cacheReadPerMillion, 0.1);
+  assert.equal(registry.pricing[key].inputPerMillion, 0.2);
+  assert.equal(registry.pricing[key].cacheReadPerMillion, 0.02);
+  assert.equal(registry.pricing[key].cacheWritePerMillion, 0.25);
   assert.equal(registry.limits[key].contextTokens, 1050000);
   assert.equal(registry.limits[key].maxOutputTokens, 128000);
   assert.equal(registry.capabilities[key].imageInput, true);

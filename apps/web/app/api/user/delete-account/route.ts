@@ -9,6 +9,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
+import { recordAuditEvent } from '@/lib/security-audit';
+import crypto from 'node:crypto';
 
 /**
  * DELETE /api/user/delete-account
@@ -29,6 +31,20 @@ import { eraseUserAccountData } from '@/lib/server/account-erasure';
  * hours" was simply untrue: nothing ever consumed `deletion_scheduled_for`, so
  * conversations, artifacts, memories, settings and every stored R2 object
  * survived indefinitely.
+ *
+ * HONESTY CONTRACT — do not re-add either claim without the implementation:
+ *
+ * 1. No confirmation email is sent. There is no transactional email provider
+ *    anywhere in this repository (no resend/sendgrid/postmark/mailgun/SES/smtp
+ *    dependency or client). This response previously asserted "A confirmation
+ *    email has been sent", which was a false statement inside a GDPR Art. 17
+ *    flow. When an email provider is wired, send the mail here first, then
+ *    restore the sentence.
+ * 2. There is no self-serve cancel route. `deletion_requested_at` /
+ *    `deletion_scheduled_for` are written here and consumed only by the purge
+ *    cron; nothing clears them. The grace window is real (the cron will not act
+ *    before `deletion_scheduled_for`), so support can still reverse it, but the
+ *    user cannot. Point them at support until a cancel endpoint exists.
  */
 
 export const runtime = 'nodejs';
@@ -60,10 +76,32 @@ export async function DELETE(request: NextRequest) {
 
   const db = getNeonDb();
 
+  /**
+   * AUDIT-TRAIL-01 — why this event is recorded UNATTRIBUTED.
+   *
+   * `public.delete_user_data(text)` (0020_functions.sql) deletes every
+   * `security_audit_logs` row whose `user_id` matches the erased account. An
+   * `account_deletion_requested` row keyed to that user would therefore be
+   * destroyed by the very flow it records, leaving no evidence the erasure was
+   * ever requested. It is written with `user_id = null` plus a salted,
+   * non-reversible subject reference so the event survives erasure while
+   * carrying no personal identifier — which is also what GDPR Art. 17 wants.
+   *
+   * Consequence, stated honestly: this row does NOT appear in the user's own
+   * "Security activity" panel (that view filters on user_id).
+   */
+  const subjectRef = crypto
+    .createHash('sha256')
+    .update(userId + (process.env['LOG_SALT'] ?? ''))
+    .digest('hex')
+    .slice(0, 16);
+
   try {
-    // Schedule deletion: set deletion_requested_at. A background job will
-    // perform the actual erasure after 24 hours.
-    // This gives the user a grace window to cancel (coming soon).
+    // Schedule deletion: set deletion_requested_at. A background job
+    // (`/api/cron/purge-deleted-accounts`) performs the actual erasure once
+    // deletion_scheduled_for has passed. Nothing clears these columns, so the
+    // grace window is support-reversible only — see the HONESTY CONTRACT above
+    // before advertising a self-serve cancel.
     try {
       await db.execute(
         `update profiles
@@ -111,6 +149,15 @@ export async function DELETE(request: NextRequest) {
       }
 
       logger.info({ userId }, 'Account deleted immediately (soft delete unavailable)');
+
+      await recordAuditEvent({
+        userId: null,
+        eventType: 'account_deletion_requested',
+        severity: 'warning',
+        request,
+        detail: { resourceType: 'account', subjectRef, status: 'erased_immediately' },
+      });
+
       return NextResponse.json(
         { message: 'Account deleted successfully.' },
         { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
@@ -118,10 +165,19 @@ export async function DELETE(request: NextRequest) {
     }
 
     logger.info({ userId }, 'Account deletion scheduled');
+
+    await recordAuditEvent({
+      userId: null,
+      eventType: 'account_deletion_requested',
+      severity: 'warning',
+      request,
+      detail: { resourceType: 'account', subjectRef, status: 'scheduled' },
+    });
+
     return NextResponse.json(
       {
         message:
-          'Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. A confirmation email has been sent.',
+          'Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. To stop this, email support@agiworkforce.com before then.',
         scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },

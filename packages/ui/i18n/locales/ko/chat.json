@@ -56,5 +56,12 @@
   "agentModeDisabled": "에이전트 모드가 비활성화되었습니다",
   "compactMode": "간결 모드",
   "compactModeEnabled": "간결 모드가 활성화되었습니다",
-  "compactModeDisabled": "간결 모드가 비활성화되었습니다"
+  "compactModeDisabled": "간결 모드가 비활성화되었습니다",
+  "artifactPublish": {
+    "untitled": "게시된 아티팩트",
+    "publishedOn": "{{date}}에 게시됨",
+    "sharedFrom": "AGI에서 공유됨",
+    "renderFailed": "이 아티팩트를 렌더링하지 못했습니다: {{error}}",
+    "svgUnavailable": "이 SVG에는 안전하게 표시할 수 있는 내용이 없었습니다."
+  }
 }

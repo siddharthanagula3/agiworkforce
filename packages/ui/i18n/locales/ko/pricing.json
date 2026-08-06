@@ -61,5 +61,6 @@
   "upgradeRequired": "업그레이드 필요",
   "upgradeMessage": "이 기능은 더 높은 구독 플랜이 필요합니다.",
   "limitReached": "한도 도달",
-  "limitMessage": "{{limit}} 한도에 도달했습니다."
+  "limitMessage": "{{limit}} 한도에 도달했습니다.",
+  "heroLedePart2": "AGI 관리형 클라우드는 개인 사용을 위한 퍼블릭 알파로 공개되어 있습니다. Team은 셀프서비스이며 시트 단위로 과금됩니다. Enterprise는 조직에 맞춤 거버넌스와 협의된 조건이 필요할 때 영업팀이 지원합니다."
 }

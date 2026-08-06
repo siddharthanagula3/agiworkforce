@@ -1,14 +1,9 @@
-//! Model routing strategies — composable chain-of-responsibility pattern.
+//! Model routing for the CLI surface.
 //!
-//! Inspired by Gemini CLI's 7-strategy routing architecture.
-//! Each strategy either returns a model decision or delegates to the next.
+//! CLI model selection uses `routing::fallback::FallbackChain` +
+//! `routing::classify`; a unified `ExecutionPlan` resolver is adopted when
+//! design-doc OQ-1 resolves the canonical resolver (Decision #23). Do not add
+//! a bespoke CLI router here.
 
 pub mod classify;
 pub mod fallback;
-mod strategy;
-
-#[allow(unused_imports)]
-pub use strategy::{
-    CompositeRouter, CostStrategy, DefaultStrategy, FallbackStrategy, RoutingContext,
-    RoutingDecision, RoutingStrategy,
-};

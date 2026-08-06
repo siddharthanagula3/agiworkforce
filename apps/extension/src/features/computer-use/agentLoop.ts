@@ -107,6 +107,12 @@ export interface AgentLoopOptions {
   assertOwnership?: () => Promise<void> | void;
   /** Lets the background distinguish agent-owned navigation from user intent changes. */
   onActionStateChange?: (active: boolean) => Promise<void> | void;
+  /**
+   * Catalog model id for this run, resolved from the account's tier by the
+   * background via resolveComputerUseModel(). Omitted (or unresolvable) falls
+   * back to the tier-agnostic COMPUTER_USE_MODEL slot inside callCloud.
+   */
+  model?: string;
 }
 
 /** P2-7: Cumulative usage for the run so far. */
@@ -499,6 +505,7 @@ export async function runAgentLoop(
         token,
         gatewayBase,
         options.signal,
+        options.model,
       );
       await assertRunOwnership(options);
       totalTokens += tokensUsed;
@@ -593,6 +600,15 @@ export async function runAgentLoop(
 
 // ─── Tool call dispatcher ─────────────────────────────────────────────────────
 
+/**
+ * How long the ask-before-acting gate waits for a decision before failing CLOSED
+ * (deny). Exported because the side panel's approval card must expire on the
+ * SAME deadline: the loop settling its promise does not remove the card, so a
+ * card outliving this timeout leaves Allow/Skip buttons that look live but
+ * resolve an already-settled promise. Import it rather than restating 30s.
+ */
+export const APPROVAL_TIMEOUT_MS = 30_000;
+
 async function dispatchToolCall(
   tabId: number,
   toolCall: ToolCall,
@@ -619,7 +635,6 @@ async function dispatchToolCall(
   // P2-5: Fail-CLOSED — a 30s timeout resolves DENY (not ALLOW).
   // The approval is bound to this specific pending action to prevent spamming.
   if (options.onBeforeAction) {
-    const APPROVAL_TIMEOUT_MS = 30_000;
     let allowed: boolean;
     try {
       allowed = await new Promise<boolean>((resolve, reject) => {

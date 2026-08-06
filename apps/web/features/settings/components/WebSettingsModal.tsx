@@ -33,6 +33,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsPlugin, SettingsSkill } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
 import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import { getCsrfToken } from '@/lib/client/csrf';
 
@@ -40,6 +41,7 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
+import { OrganizationSharingSection } from '../sections/OrganizationSharingSection';
 import { SecuritySection } from '../sections/SecuritySection';
 import { SafetySection } from '../sections/SafetySection';
 import { PrivacySection } from '../sections/PrivacySection';
@@ -502,7 +504,17 @@ export function WebSettingsModal({
   const sectionContent: Partial<Record<string, React.ReactNode>> = {
     general: <GeneralSection />,
     account: <AccountSection />,
-    team: <TeamSection />,
+    // Team administration (members, roles) and the organization's SHARED
+    // ecosystem (0086) are the same job to the person doing it: "who is in my
+    // org, and what do they get". They render in one section rather than
+    // behind a second nav entry, which would also mean changing the shared
+    // `SETTINGS_NAV_GROUPS_WEB` contract that the desktop settings-IA test pins.
+    team: (
+      <div style={{ display: 'grid', gap: 16 }}>
+        <TeamSection />
+        <OrganizationSharingSection />
+      </div>
+    ),
     security: <SecuritySection />,
     safety: <SafetySection />,
     privacy: <PrivacySection />,
@@ -528,6 +540,7 @@ export function WebSettingsModal({
         sectionContent={sectionContent}
         navGroups={SETTINGS_NAV_GROUPS_WEB}
         adapter={adapter}
+        connectorDisclosure={<ConnectorConsentSummary />}
         title="Settings"
       />
     </Suspense>

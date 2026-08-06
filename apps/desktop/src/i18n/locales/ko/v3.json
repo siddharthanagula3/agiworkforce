@@ -53,6 +53,7 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "라이브러리",
       "tasks": "작업",
       "customize": "Customize",

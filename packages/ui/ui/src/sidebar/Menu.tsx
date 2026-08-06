@@ -10,12 +10,22 @@
  * an item runs its handler then closes.
  *
  * Positioning: the panel uses `position: fixed` with coordinates computed from
- * the trigger's getBoundingClientRect so the menu always escapes any
- * `overflow-hidden` or `overflow-y-auto` ancestor (e.g. the sidebar scroll
- * container). The panel is repositioned on scroll/resize while open. Styling
- * uses the same hsl(var(--*)) tokens the surfaces resolve.
+ * the trigger's getBoundingClientRect, and is PORTALLED to document.body.
+ *
+ * The portal is load-bearing, not tidiness. Rendered inline, `position: fixed`
+ * is not relative to the viewport whenever ANY ancestor has a transform, filter,
+ * backdrop-filter or perspective — such an ancestor becomes the containing block
+ * and the viewport coordinates computed here are then applied relative to it, so
+ * the panel lands hundreds of pixels from its trigger (and off-screen entirely
+ * on large displays). An ancestor with `overflow: hidden` clips it outright.
+ * Both conditions are common in modals and scroll containers, and both are
+ * invisible from here. Portalling to body removes the entire class of bug.
+ *
+ * The panel is repositioned on scroll/resize while open. Styling uses the same
+ * hsl(var(--*)) tokens the surfaces resolve.
  */
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../cn';
 
 export interface MenuProps {
@@ -47,6 +57,9 @@ export function Menu({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Notify open/close transitions (skip the initial mount, which is not a
   // transition). Effect-based so it works for every close path (outside
@@ -91,7 +104,14 @@ export function Menu({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // The panel is portalled to document.body, so it is NOT inside
+      // containerRef any more. Checking the container alone would treat every
+      // click on a menu item as an outside click and close the menu before the
+      // item's handler could run.
+      const insideTrigger = containerRef.current?.contains(target) ?? false;
+      const insidePanel = panelRef.current?.contains(target) ?? false;
+      if (!insideTrigger && !insidePanel) {
         setOpen(false);
       }
     };
@@ -112,22 +132,27 @@ export function Menu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      role="menu"
+      style={menuStyle}
+      className={cn(
+        'fixed z-[9999] min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
+        'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
+        menuClassName,
+      )}
+    >
+      {children({ close })}
+    </div>
+  ) : null;
+
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       {trigger({ open, toggle })}
-      {open && (
-        <div
-          role="menu"
-          style={menuStyle}
-          className={cn(
-            'fixed z-[9999] min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
-            'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
-            menuClassName,
-          )}
-        >
-          {children({ close })}
-        </div>
-      )}
+      {/* Portal only once mounted: document does not exist during SSR, and this
+          package is consumed by the Next.js app. */}
+      {mounted && panel ? createPortal(panel, document.body) : null}
     </div>
   );
 }

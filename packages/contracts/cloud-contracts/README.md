@@ -10,7 +10,7 @@ Criticality: high
 
 Canonical managed-cloud wire contracts for AGI Workforce. This package owns the
 Zod schemas, endpoint paths, custom stream deltas, and typed clients shared by
-Web, Desktop, Mobile, and the transitional `@agiworkforce/services` facade.
+Web, Desktop, and Mobile.
 
 It contains contracts only. Persistence, sync-apply mechanics, artifact
 derivation, provider execution, authentication, billing, and product policy
@@ -19,9 +19,9 @@ remain with their domain owners.
 ## Boundaries
 
 - Depends only on `@agiworkforce/types` and `zod` in production.
-- Must not depend on applications, `@agiworkforce/services`, or licensing.
-- New first-party consumers import `@agiworkforce/cloud-contracts` directly.
-- `@agiworkforce/services` re-exports this package only for compatibility.
+- Must not depend on applications or licensing.
+- All consumers import `@agiworkforce/cloud-contracts` directly. The transitional
+  `@agiworkforce/services` facade was deleted at M8 (2026-07-15).
 
 ## Commands
 

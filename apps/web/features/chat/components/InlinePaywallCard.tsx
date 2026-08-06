@@ -36,8 +36,14 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkfo
 import {
   getBillingPlanPricing,
   isBillingPlanTier,
+  normalizePaywallFeature,
+  paywallLimitHeadline,
+  paywallUpgradeLabel,
   type BillingPlanTier,
+  type PaywallFeature,
 } from '@agiworkforce/types';
+
+export { normalizePaywallFeature };
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';
@@ -46,23 +52,13 @@ import { cn } from '@shared/lib/utils';
 // Types
 // ---------------------------------------------------------------------------
 
-export type PaywallFeature =
-  | 'video_generation'
-  | 'opus_5'
-  | 'gpt_5_5'
-  | 'computer_use'
-  | 'deep_research'
-  | 'image_quota'
-  | 'token_cap'
-  | 'mcp'
-  | 'web_search'
-  | 'model_access'
-  | 'paid_capability'
-  // GOV-20: the paid ceilings. Without these two the classifier's
-  // `rolling_capacity` / `request_rate` collapsed to 'paid_capability' and the
-  // card told a rate-limited user their plan lacked a capability it has.
-  | 'rolling_capacity'
-  | 'request_rate';
+/**
+ * Re-exported from the shared paywall vocabulary so this module stays the one
+ * import site for its existing consumers. The COPY now lives in
+ * @agiworkforce/types, because Desktop Cloud renders the same server refusal
+ * and was describing it with a smaller table.
+ */
+export type { PaywallFeature };
 
 export type UserTier = BillingPlanTier;
 export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
@@ -101,58 +97,12 @@ const EMPTY_REASON = '';
 // Static lookup tables (rendered during module load, never recreated)
 // ---------------------------------------------------------------------------
 
-const FEATURE_LABELS: Record<PaywallFeature, string> = {
-  video_generation: 'video generation',
-  opus_5: 'Opus 5 access',
-  gpt_5_5: 'GPT-5.5 access',
-  computer_use: 'computer use',
-  deep_research: 'deep research',
-  image_quota: 'more image generation',
-  token_cap: 'higher token limits',
-  mcp: 'MCP server support',
-  web_search: 'web search',
-  model_access: 'more models',
-  paid_capability: 'this capability',
-  rolling_capacity: 'more capacity per window',
-  request_rate: 'a higher request rate',
-};
-
-/**
- * GOV-20 — headline for a refusal an upgrade cannot fix (a plain rate limit,
- * or a user already on the top self-serve tier). `FEATURE_LABELS` is written
- * to complete "Upgrade to X for …" and reads wrong on its own ("You have hit a
- * higher request rate"), so these are separate, complete phrasings.
- */
-const FEATURE_LIMIT_HEADLINES: Record<PaywallFeature, string> = {
-  video_generation: 'You have reached your video generation limit',
-  opus_5: 'You have reached your Opus 5 limit',
-  gpt_5_5: 'You have reached your GPT-5.5 limit',
-  computer_use: 'You have reached your computer use limit',
-  deep_research: 'You have reached your deep research limit',
-  image_quota: 'You have reached your image generation limit',
-  token_cap: 'You have reached your usage limit',
-  mcp: 'You have reached your MCP limit',
-  web_search: 'You have reached your web search limit',
-  model_access: 'That model is not available on your plan',
-  paid_capability: 'You have reached a plan limit',
-  rolling_capacity: 'You have used your capacity for this window',
-  request_rate: 'You are sending requests too quickly',
-};
-
-const PAYWALL_FEATURES = new Set<PaywallFeature>(Object.keys(FEATURE_LABELS) as PaywallFeature[]);
-
 export function normalizeRequiredTier(value: string): RequiredTier {
   if (value === 'hobby') return 'basic';
   if (!isBillingPlanTier(value) || value === 'local-only' || value === 'byok' || value === 'free') {
     return 'basic';
   }
   return value;
-}
-
-export function normalizePaywallFeature(value: string): PaywallFeature {
-  return PAYWALL_FEATURES.has(value as PaywallFeature)
-    ? (value as PaywallFeature)
-    : 'paid_capability';
 }
 
 // ---------------------------------------------------------------------------
@@ -263,8 +213,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
 }: InlinePaywallCardProps) {
   // GOV-20: a refusal upgrading cannot fix must not be headlined "Upgrade to…".
   const headline = showUpgradeCta
-    ? `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${FEATURE_LABELS[feature]}`
-    : FEATURE_LIMIT_HEADLINES[feature];
+    ? `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`
+    : paywallLimitHeadline(feature);
 
   return (
     <Card

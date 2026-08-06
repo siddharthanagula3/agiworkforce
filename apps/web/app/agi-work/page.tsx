@@ -6,9 +6,9 @@ import { FinalCta, FlagshipHero } from '@/features/marketing/components/Flagship
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI Work: Scheduled work and dispatch on your desktop',
+  title: 'AGI Work: goal in, autonomous tool loop, reviewable deliverables',
   description:
-    'AGI Work is the Desktop mode for scheduled routines, local file work, approved tools, and mobile-to-desktop dispatch. Explicit approvals on every sensitive action.',
+    'AGI Work is the mode built into the AGI web chat composer: switch Chat to AGI Work, give it a goal, and it runs a multi-step tool loop with approvals on sensitive steps, then returns deliverables with a full run history at /tasks.',
   path: '/agi-work',
 });
 
@@ -19,90 +19,90 @@ export default function AgiWorkPage() {
         <Header />
 
         <FlagshipHero
-          eyebrow="AGI Work · on Desktop"
-          titleLines={['Your desktop,', 'on schedule.']}
-          em="on schedule."
-          lede="AGI Work is the Desktop mode for scheduled work and dispatched tasks: set routines that run on your own machine, send a task from your phone to the Desktop host, and approve the steps that matter before they run. The compute is yours, and so is every decision."
+          eyebrow="AGI Work · in the web app"
+          titleLines={['Give it a goal.', 'Get a deliverable.']}
+          em="Get a deliverable."
+          lede="AGI Work is a mode built into the AGI chat composer today. Flip the composer from Chat to AGI Work, describe the outcome you want, and it works through a multi-step loop with tools and files — pausing for your approval on anything sensitive — then hands back the finished work. Every run is saved to your task history."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/desktop', label: 'See AGI Desktop' },
-            { href: '/mobile', label: 'See Mobile Dispatch' },
+            { href: '/chat', label: 'Open AGI Work' },
+            { href: '/tasks', label: 'See task history' },
+            { href: '/pricing', label: 'Plans with AGI Work' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <FeatureGrid
-          eyebrow="Desktop workflows"
-          title="What AGI Work does on your machine."
+          eyebrow="How it works"
+          title="What AGI Work does in the composer."
           items={[
             {
-              meta: 'Schedule',
-              title: 'Scheduled work',
-              body: 'Run daily or weekly routines on your own machine, with results waiting in the thread when you come back.',
+              meta: 'Toggle',
+              title: 'Chat or AGI Work, one composer',
+              body: 'A single segmented toggle switches the same composer between quick chat and AGI Work — multi-step tasks with tools, files, and reviewable deliverables. No second app, no separate workspace.',
+              href: '/chat',
             },
             {
-              meta: 'Dispatch',
-              title: 'Mobile-to-desktop dispatch',
-              body: 'Start a task from the phone; the Desktop host runs it and progress streams back to your pocket.',
-              href: '/mobile',
-            },
-            {
-              meta: 'Files',
-              title: 'Local file work',
-              body: 'Read, organize, summarize, and draft against local folders through path-scoped permissions.',
-            },
-            {
-              meta: 'Tools',
-              title: 'Apps and connectors',
-              body: 'Use approved desktop extensions and local MCP servers behind explicit tool approvals.',
-              href: '/apps',
+              meta: 'Goal',
+              title: 'Goal in, plan out',
+              body: 'Describe the outcome instead of the keystrokes. AGI Work breaks the goal into steps and works through them, using the tools and files the task needs.',
             },
             {
               meta: 'Approvals',
-              title: 'Approval-first execution',
-              body: 'Sensitive actions wait for your explicit approval, with the action visible before it runs.',
+              title: 'Approval-first on sensitive steps',
+              body: 'The loop runs on its own for safe steps and pauses for your explicit approval before anything sensitive — each action is shown before it runs.',
+            },
+            {
+              meta: 'Deliverables',
+              title: 'Reviewable deliverables',
+              body: 'Runs end in something you can check: files, drafts, and artifacts you can open, edit, and keep — not just a chat reply.',
+            },
+            {
+              meta: 'History',
+              title: 'Full run history at /tasks',
+              body: 'Every AGI Work run and agent step is recorded in your task history, so you can revisit what ran, what it produced, and why.',
+              href: '/tasks',
             },
             {
               meta: 'Boundary',
-              title: 'Visible routing',
-              body: 'AGI Work shows which model is reasoning and what local context would leave the machine before any BYOK or Cloud handoff.',
+              title: 'Visible model and routing',
+              body: 'AGI Work shows which model is reasoning and what context would leave your machine before any BYOK or managed-cloud handoff. Local, BYOK, and Cloud stay separate trust boundaries.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Mode design"
+          eyebrow="Where it runs"
           title="One chat, not a second universe."
           rows={[
             {
-              k: 'Normal chat',
-              v: 'Ask questions, attach files, switch models, and create artifacts from the same composer.',
+              k: 'In the app today',
+              v: 'AGI Work ships in the web chat composer at /chat on plans that include it. Give it a goal and review the deliverable in the same thread.',
             },
             {
-              k: 'Focused file work',
-              v: 'Selecting a file adds context and affordances inside the same chat instead of moving you to another product.',
+              k: 'Task history',
+              v: 'Completed and in-progress runs live at /tasks — your managed-cloud task and agent-run history.',
             },
             {
               k: 'Approvals',
-              v: 'Actions ask before they run. Broader automation is an explicit, scoped choice. Never a silent default.',
+              v: 'Sensitive actions ask before they run. Broader automation is an explicit, scoped choice — never a silent default.',
             },
             {
-              k: 'Hosted AGI Work',
-              v: 'Managed cloud execution is public alpha, open by default; metering, fraud, and data controls keep pace with usage.',
+              k: 'Desktop dispatch — coming',
+              v: 'Scheduled routines that run on your own machine and phone-to-desktop dispatch are still in development. They are not available yet; this page will say so the moment they ship.',
             },
           ]}
         />
 
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
-          title="Put your desktop on the roster."
-          body="AGI Desktop is coming: schedule the first routine and dispatch work from your phone the moment it opens. Every sensitive action stays visible and approved before it runs."
+          title="Put a goal into AGI Work."
+          body="AGI Work is live in the web app: switch the composer to AGI Work, hand it an outcome, approve the steps that matter, and collect the deliverable. Scheduled desktop routines and mobile-to-desktop dispatch are coming later, and stay clearly labeled as future until they ship."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/desktop', label: 'See AGI Desktop' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/chat', label: 'Open AGI Work' },
+            { href: '/tasks', label: 'See task history' },
+            { href: '/pricing', label: 'Compare plans' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

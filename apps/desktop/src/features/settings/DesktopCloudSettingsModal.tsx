@@ -594,8 +594,8 @@ function SectionSkeleton() {
  * catalog ids, since local Tauri/MCP connect flows key on the catalog id as-is.
  * Every other desktop id that has no server counterpart (e.g. figma, canva,
  * vercel, atlassian — see the audit note below) is intentionally left
- * unmapped: it will never appear in `available`, so it correctly renders
- * "Coming soon" without needing an entry here.
+ * unmapped: it will never appear in `available`, so toSettingsConnectors drops
+ * it from the grid entirely without needing an entry here.
  */
 const DESKTOP_TO_SERVER_CONNECTOR_ID: Record<string, string> = {
   google_calendar: 'google-calendar',
@@ -629,32 +629,37 @@ function toDisplayConnectorId(connector: CloudConnectorEntry): string {
 
 /**
  * Maps desktop's ConnectorDef[] (names/logos/categories — static catalog
- * metadata) → shared SettingsConnector[], gated by the server's `available`
- * ids so "Connect" only lights up for connectors the cloud backend can
- * actually enable right now (see listConnectors() in api/cloudConnectors.ts).
- * Everything else renders "Coming soon" instead of a fake-connectable entry.
+ * metadata) → shared SettingsConnector[].
+ *
+ * The catalog is filtered down to connectors this surface can act on: the ones
+ * the server reports as `available` (see listConnectors() in
+ * api/cloudConnectors.ts), plus anything the account is already connected to so
+ * disconnect stays reachable even if the server later stops offering it. The
+ * rest of the static catalog is not rendered at all — a grid row promising a
+ * connector no backend can enable is an availability claim the product cannot
+ * keep, so it is omitted rather than labelled "Coming soon".
  */
-function toSettingsConnectors(availableIds: ReadonlySet<string>): SettingsConnector[] {
-  return CONNECTORS.map((c) => {
-    const canConnect = availableIds.has(toServerConnectorId(c.id));
-    return {
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      category: c.category,
-      authType: c.authType,
-      // The server does not expose a verified tool/action count. Zero keeps
-      // the optional Actions row hidden instead of fabricating a metric from
-      // static catalog order.
-      actionCount: 0,
-      // comingSoon → phase 2 so the shared shell renders "Soon"
-      phase: c.comingSoon ? 2 : 1,
-      iconBg: CONNECTOR_FALLBACK_THEME,
-      iconText: c.name.slice(0, 2).toUpperCase(),
-      canConnect,
-      statusLabel: canConnect ? undefined : 'Coming soon',
-    };
-  });
+function toSettingsConnectors(
+  availableIds: ReadonlySet<string>,
+  connectedIds: ReadonlySet<string>,
+): SettingsConnector[] {
+  return CONNECTORS.filter(
+    (c) => availableIds.has(toServerConnectorId(c.id)) || connectedIds.has(c.id),
+  ).map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description,
+    category: c.category,
+    authType: c.authType,
+    // The server does not expose a verified tool/action count. Zero keeps
+    // the optional Actions row hidden instead of fabricating a metric from
+    // static catalog order.
+    actionCount: 0,
+    phase: 1,
+    iconBg: CONNECTOR_FALLBACK_THEME,
+    iconText: c.name.slice(0, 2).toUpperCase(),
+    canConnect: availableIds.has(toServerConnectorId(c.id)),
+  }));
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -880,7 +885,14 @@ export function DesktopCloudSettingsModal({
         iconText: 'MCP',
         canConnect: false,
       }));
-    return [...toSettingsConnectors(availableConnectorIds), ...custom];
+    // Catalog ids the account already holds a connection for; they stay in the
+    // grid regardless of current server availability so disconnect is reachable.
+    const connectedCatalogIds = new Set(
+      cloudConnectors
+        .filter((connector) => connector.source !== 'custom')
+        .map((connector) => toDesktopConnectorId(connector.connectorId)),
+    );
+    return [...toSettingsConnectors(availableConnectorIds, connectedCatalogIds), ...custom];
   }, [availableConnectorIds, cloudConnectors]);
 
   // ── Data adapter ─────────────────────────────────────────────────────────

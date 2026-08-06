@@ -9,38 +9,80 @@ import {
 } from '@agiworkforce/types';
 import { AppError, type ErrorCodeValue } from '@/lib/errors';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
 
 export interface TeamAdminAccess {
   plan: BillingPlanTier;
   canManageTeam: boolean;
   /**
-   * Licensed seat quantity is not persisted in the current billing schema.
-   * Keep this unknown instead of presenting or enforcing a fictional limit.
+   * Licensed seat ceiling for the organization in scope, or null when no
+   * organization was named. Backed by `organizations.licensed_seats`
+   * (0085_organization_seats_lifecycle.sql).
    */
-  maxMembers: null;
+  maxMembers: number | null;
+  /** Seats held by active members plus pending invitations, or null. */
+  seatsConsumed: number | null;
+  /** maxMembers - seatsConsumed, floored at 0, or null. */
+  seatsAvailable: number | null;
+  /**
+   * Where `maxMembers` came from.
+   *
+   * `unknown`       — no organization was named, so no seat state was read.
+   * `unprovisioned` — the organization has no linked Stripe subscription, so
+   *                   the number is the migration's floor. It enforces the
+   *                   ceiling but cannot grow until billing writes it.
+   * `billing`       — the number came from a linked subscription.
+   */
+  seatSource: 'billing' | 'unprovisioned' | 'unknown';
 }
 
+/**
+ * Resolve the caller's Team-administration capability, and — when an
+ * organization is named — that organization's real licensed seat state.
+ *
+ * The seat numbers are REPORTING only. The ceiling itself is a database CHECK
+ * (`organizations_seats_within_license`); nothing here may be used as a
+ * read-then-write gate, because two admins would both read the same free seat.
+ */
 export async function getTeamAdminAccess(
   db: DatabaseAdapter,
   userId: string,
+  organizationId?: string | null,
 ): Promise<TeamAdminAccess> {
   const subscription = await SubscriptionService.getSubscription(db, userId);
   const plan = normalizeBillingPlanTier(
     effectivePlanTier(subscription?.plan_tier, subscription?.status),
   );
 
-  return {
+  const base: TeamAdminAccess = {
     plan,
     canManageTeam: canUseBillingPlanCapability(plan, 'team_admin'),
     maxMembers: null,
+    seatsConsumed: null,
+    seatsAvailable: null,
+    seatSource: 'unknown',
+  };
+
+  if (!organizationId) return base;
+
+  const seats = await getOrganizationSeatState(db, organizationId);
+  if (!seats) return base;
+
+  return {
+    ...base,
+    maxMembers: seats.licensedSeats,
+    seatsConsumed: seats.seatsConsumed,
+    seatsAvailable: seats.seatsAvailable,
+    seatSource: seats.seatSource,
   };
 }
 
 export async function requireTeamAdminAccess(
   db: DatabaseAdapter,
   userId: string,
+  organizationId?: string | null,
 ): Promise<TeamAdminAccess> {
-  const access = await getTeamAdminAccess(db, userId);
+  const access = await getTeamAdminAccess(db, userId, organizationId);
 
   if (!access.canManageTeam) {
     // SUBSCRIPTION_REQUIRED is already an explicitly safe recovery code in

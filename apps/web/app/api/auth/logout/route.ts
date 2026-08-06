@@ -12,6 +12,7 @@ import {
   verifyDeveloperTokenSignature,
 } from '@/lib/server/developer-token';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 
@@ -35,6 +36,20 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
       ? revokeDeveloperSessionFamily(verified.sessionFamilyId)
       : Promise.resolve(false),
   ]);
+
+  // Audit: developer/desktop sign-out. The actor comes from the verified token
+  // signature; the token itself is never recorded.
+  await recordAuditEvent({
+    userId: verified.userId,
+    eventType: 'logout',
+    request,
+    detail: {
+      source: 'developer_token',
+      resourceType: 'session',
+      status: inserted || familyRevoked ? 'revoked' : 'already_revoked',
+    },
+  });
+
   return NextResponse.json(
     { ok: true, revoked: inserted || familyRevoked },
     { headers: { 'Cache-Control': 'no-store' } },

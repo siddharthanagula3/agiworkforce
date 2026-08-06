@@ -151,6 +151,74 @@ export interface ResearchStep {
 // ============================================================================
 
 /**
+ * Lifecycle status of a research report.
+ *
+ * `'interrupted'` covers a run that stopped before synthesis without failing
+ * (user cancellation, budget exhaustion mid-gathering). Such a run still has
+ * real gathered sources, so it is persisted and can be resumed — unlike
+ * `'failed'`, which records an error.
+ */
+export type ResearchReportStatus =
+  | 'pending'
+  | 'researching'
+  | 'synthesizing'
+  | 'completed'
+  | 'interrupted'
+  | 'failed';
+
+/** Every valid {@link ResearchReportStatus}, in lifecycle order. */
+export const RESEARCH_REPORT_STATUSES: readonly ResearchReportStatus[] = [
+  'pending',
+  'researching',
+  'synthesizing',
+  'completed',
+  'interrupted',
+  'failed',
+] as const;
+
+/** Runtime guard for an untrusted status value (DB row, SSE payload, API body). */
+export function isResearchReportStatus(value: unknown): value is ResearchReportStatus {
+  return (
+    typeof value === 'string' && (RESEARCH_REPORT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** Every valid {@link ResearchStep} `status`. */
+export const RESEARCH_STEP_STATUSES: readonly ResearchStep['status'][] = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+] as const;
+
+/** Every valid {@link ResearchStep} `type`. */
+export const RESEARCH_STEP_TYPES: readonly ResearchStep['type'][] = [
+  'search',
+  'read',
+  'analyze',
+  'synthesize',
+  'verify',
+] as const;
+
+/**
+ * Runtime guard for an untrusted research step (SSE payload or persisted JSON).
+ *
+ * Returns false rather than throwing so a malformed entry can be dropped
+ * without discarding the rest of a plan.
+ */
+export function isResearchStep(value: unknown): value is ResearchStep {
+  if (!value || typeof value !== 'object') return false;
+  const step = value as Record<string, unknown>;
+  return (
+    typeof step['id'] === 'string' &&
+    step['id'].length > 0 &&
+    typeof step['description'] === 'string' &&
+    (RESEARCH_STEP_TYPES as readonly string[]).includes(step['type'] as string) &&
+    (RESEARCH_STEP_STATUSES as readonly string[]).includes(step['status'] as string)
+  );
+}
+
+/**
  * A completed research report with findings and citations.
  *
  * @example
@@ -194,7 +262,7 @@ export interface ResearchReport {
   steps?: ResearchStep[];
 
   /** Report generation status. */
-  status: 'pending' | 'researching' | 'synthesizing' | 'completed' | 'failed';
+  status: ResearchReportStatus;
 
   /** Total number of sources consulted. */
   sourcesConsulted: number;
@@ -216,4 +284,13 @@ export interface ResearchReport {
 
   /** User who requested the research. */
   userId?: string;
+
+  /** Conversation the run belonged to, when it was started from a chat. */
+  conversationId?: string;
+
+  /**
+   * The chat request that produced this report. Stable per run, so a retry of
+   * the SAME request updates the existing row instead of writing a duplicate.
+   */
+  requestId?: string;
 }

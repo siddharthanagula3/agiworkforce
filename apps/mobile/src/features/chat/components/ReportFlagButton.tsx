@@ -5,11 +5,11 @@
  * assistant turn. This button renders as a small flag icon below assistant
  * messages and opens a modal for category selection + optional support email.
  *
- * There is no moderation endpoint to submit to (see services/contentReport.ts
- * for why `/api/mobile/feedback` cannot take one), so this sheet says up front
- * that the report is stored on the device, and its confirmation reports the
- * outcome the service actually produced. It must never read as "submitted" for
- * a report that never left the phone.
+ * Reports are submitted to the server trust-and-safety intake route (see
+ * services/contentReport.ts), with an on-device copy kept as an offline / Local
+ * Mode fallback. The confirmation reports the outcome the service actually
+ * produced (ReportDelivery) — it must never read as "submitted" for a report
+ * that never left the phone.
  *
  * Usage: rendered inside MessageBubble for assistant turns only.
  */
@@ -52,12 +52,22 @@ const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
 // ---------------------------------------------------------------------------
 
 const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
+  'submitted-to-server':
+    'Your report was sent to the AGI safety team for review. A copy is also kept on this device.',
   'stored-on-device':
-    'It stays on this device — nothing was sent. Email it to support if you want someone to review it.',
+    'You are offline (or in Local Mode), so it stays on this device for now — nothing was sent. Email it to support if you want someone to review it sooner.',
   'email-composer-opened':
     'Your mail app opened with the report filled in. Send that email to reach the support team.',
   'email-unavailable':
     'No mail app is set up on this device, so the report could not be handed off. It is still saved here.',
+};
+
+/** Result heading — truthful about whether anything actually left the device. */
+const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
+  'submitted-to-server': 'Report submitted for review',
+  'stored-on-device': 'Report saved on this device',
+  'email-composer-opened': 'Report saved on this device',
+  'email-unavailable': 'Report saved on this device',
 };
 
 // ---------------------------------------------------------------------------
@@ -166,7 +176,7 @@ export function ReportFlagButton({
           {saved ? (
             <View style={styles.resultContainer}>
               <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                Report saved on this device
+                {DELIVERY_TITLE[saved.delivery.kind]}
               </Text>
               <Text style={[styles.resultBody, { color: colors.textSecondary }]}>
                 {DELIVERY_BODY[saved.delivery.kind]}
@@ -221,8 +231,9 @@ export function ReportFlagButton({
                 Report this response
               </Text>
               <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                Select the reason that best describes the issue. The report is saved on this device;
-                nothing is sent unless you email it to support below.
+                Select the reason that best describes the issue. Your report is saved on this device
+                and, when you are connected, sent to the AGI safety team for review. You can also
+                email it to support below.
               </Text>
 
               {/* Category picker */}

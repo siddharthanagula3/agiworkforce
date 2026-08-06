@@ -19,8 +19,10 @@ code also overstated readiness: neither store notification lifecycle, durable
 reverification, real credential contract, nor sanctioned device/store sandbox
 validation existed.
 
-The current product decision still makes Basic IAP-first. Existing subscription
-rows can also record Apple or Google as their historical owner.
+The governing product decision (Decision #22, updated 2026-08-05) makes Basic
+Stripe-purchasable on Web today, with Mobile adding IAP when StoreKit (MS-5)
+ships against real store products. Existing subscription rows can also record
+Apple or Google as their historical owner.
 
 ## Decision
 
@@ -28,8 +30,10 @@ Remove the unreachable placeholder-backed purchase, restore, and verification
 implementation as one vertical slice. Classify StoreKit purchase, Play Billing,
 subscription restore, and receipt validation as Missing.
 
-Do not cancel the IAP-first product decision. Reimplement the slice only after
-real products and identifiers exist in both store consoles. The production
+Mobile IAP remains committed roadmap (MS-5; per Decision #22 as updated
+2026-08-05, Web Stripe is the live primary path until then and stays alongside
+IAP after). Reimplement the slice only after real products and identifiers
+exist in both store consoles. The production
 design must include server notification and reverification lifecycles,
 idempotent receipt reconciliation, account-conflict policy, live credential
 contracts, and sanctioned sandbox/device QA.

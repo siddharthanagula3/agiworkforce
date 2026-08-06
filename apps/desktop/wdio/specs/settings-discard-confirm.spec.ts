@@ -31,6 +31,7 @@
 // the developer machine's real persisted settings file.
 
 import * as fs from 'node:fs';
+import { waitForSettingsReady } from '../support/close-settings';
 
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/settings-discard';
@@ -131,14 +132,20 @@ async function openSettings() {
   const gear = await $('button[aria-label="Settings"]');
   await gear.waitForDisplayed({ timeout: 15000 });
   await gear.click();
-  const nav = await $('nav[aria-label="Settings sections"]');
-  await nav.waitForDisplayed({ timeout: 10000 });
+  // Nav is disabled while Settings loads; wait for interactivity before any
+  // tab click (otherwise the click is a silent no-op).
+  await waitForSettingsReady();
 }
 
 function clickDialogXClose() {
   return browser.execute(() => {
     const btns = Array.from(document.querySelectorAll('[role="dialog"] button'));
-    const closeButton = btns.find((b) => b.querySelector('.sr-only')?.textContent === 'Close');
+    // The shared Dialog primitive's default closeLabel is "Close dialog"
+    // (packages/ui/ui/src/primitives/Dialog.tsx); match by prefix so a label
+    // tweak doesn't silently disable this close path again.
+    const closeButton = btns.find((b) =>
+      (b.querySelector('.sr-only')?.textContent ?? '').startsWith('Close'),
+    );
     if (closeButton) {
       (closeButton as HTMLButtonElement).click();
       return true;
@@ -157,7 +164,14 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
       'Agents',
     );
     expect(clickedAgents).toBe(true);
-    await browser.pause(1300);
+    // The Agents tab content is React.lazy behind Suspense — wait for the
+    // switch itself rather than a fixed pause (measured: 1300ms can lose the
+    // race even on an idle machine).
+    await browser.waitUntil(async () => (await getSwitchState('agents-agentMode')) !== null, {
+      timeout: 15_000,
+      interval: 250,
+      timeoutMsg: 'The Agents tab never rendered its Agent Mode switch',
+    });
 
     const before = await getSwitchState('agents-agentMode');
     console.log('Agent Mode switch state before toggle:', before);
@@ -190,16 +204,26 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     expect(stillOpenBehind).toBe(true);
 
     // Choose "Keep editing" -- must NOT discard the edit or close Settings.
-    const keptEditing = await clickButtonWithText('[role="alertdialog"]', 'Keep editing');
+    // Radix's AlertDialogCancel closes on a real activation; a stray synthetic
+    // click can land while the open transition is still settling and be
+    // swallowed, leaving the dialog up. Retry the click until the alertdialog
+    // actually goes away rather than clicking once and hoping.
+    let keptEditing = false;
+    await browser.waitUntil(
+      async () => {
+        if (await alertDialogVisible()) {
+          keptEditing = await clickButtonWithText('[role="alertdialog"]', 'Keep editing');
+          return false;
+        }
+        return true;
+      },
+      {
+        timeout: 15_000,
+        interval: 500,
+        timeoutMsg: 'alertdialog did not close after choosing "Keep editing"',
+      },
+    );
     expect(keptEditing).toBe(true);
-    // Radix's exit animation keeps the alertdialog node mounted briefly after
-    // close; under concurrent-agent CPU contention on this shared dev machine
-    // that can take noticeably longer than the open-transition waits above,
-    // so poll instead of a single fixed pause.
-    await browser.waitUntil(async () => !(await alertDialogVisible()), {
-      timeout: 5000,
-      timeoutMsg: 'alertdialog did not close after choosing "Keep editing"',
-    });
 
     const alertGone = await alertDialogVisible();
     expect(alertGone).toBe(false);
@@ -244,7 +268,12 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
       'Personalization',
     );
     expect(clickedPersonalization).toBe(true);
-    await browser.pause(1300);
+    // Same lazy-tab race as the Agents test: wait for the tab's own control.
+    await browser.waitUntil(async () => (await getInputValue('personalization-name')) !== null, {
+      timeout: 15_000,
+      interval: 250,
+      timeoutMsg: 'The Personalization tab never rendered its name input',
+    });
 
     const disabledBefore = await isSaveChangesDisabled();
     console.log('Save Changes disabled before any edit:', disabledBefore);
@@ -301,7 +330,11 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
       'Personalization',
     );
     expect(clickedPersonalizationAgain).toBe(true);
-    await browser.pause(1300);
+    await browser.waitUntil(async () => (await getInputValue('personalization-name')) !== null, {
+      timeout: 15_000,
+      interval: 250,
+      timeoutMsg: 'The Personalization tab never re-rendered its name input after reopen',
+    });
 
     const nameAfterDiscard = await getInputValue('personalization-name');
     console.log('Personalization name after discard + reopen:', JSON.stringify(nameAfterDiscard));

@@ -43,7 +43,6 @@ export function getSettingsWebviewContent(
                 data-capability-id="${escapeHtml(presentation.id)}"
                 data-capability-available="${String(presentation.available)}"
                 role="listitem"
-                title="${escapeHtml(presentation.tooltip)}"
               >
                 <div class="capability-availability-copy">
                   <div class="capability-availability-heading">
@@ -345,10 +344,28 @@ export function getSettingsWebviewContent(
 
       .setting-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(168px, 42%);
+        /* 168px could not hold an input AND a button; 220px can. */
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 42%);
         align-items: center;
+        /*
+         * One right edge for every control in the second column.
+         *
+         * Controls are placed inconsistently: some wrapped in .control-stack
+         * (which right-aligns via flex-end), some dropped straight into the grid
+         * cell. A bare toggle or button in a cell aligns LEFT, a width:100% input
+         * fills the cell, and a max-width input stops short — so toggles, number
+         * inputs, selects and buttons each landed on a different edge inside the
+         * same card. justify-items:end normalises them; the label column below
+         * opts back out.
+         */
+        justify-items: end;
         gap: 22px;
         padding: 15px 18px;
+      }
+
+      /* The label column is text and must stay left-aligned and full-width. */
+      .setting-row > *:first-child {
+        justify-self: stretch;
       }
 
       .setting-row + .setting-row {
@@ -369,7 +386,18 @@ export function getSettingsWebviewContent(
       }
 
       .setting-description.danger {
-        color: var(--vscode-inputValidation-warningForeground);
+        /*
+         * Fallback chain, because inputValidation.warningForeground is NOT
+         * defined by the default Dark+ and Light+ themes. With a single
+         * undefined variable the property is invalid-at-computed-value and the
+         * text inherits the ordinary description colour — so a safety warning
+         * rendered as plain body copy and lost the one signal that marks it as a
+         * warning. editorWarning.foreground is defined everywhere.
+         */
+        color: var(
+          --vscode-inputValidation-warningForeground,
+          var(--vscode-editorWarning-foreground, var(--agi-vscode-warning))
+        );
       }
 
       .control-stack {
@@ -378,6 +406,26 @@ export function getSettingsWebviewContent(
         justify-content: flex-end;
         gap: 8px;
         min-width: 0;
+        width: 100%;
+      }
+
+      /*
+       * An input sharing a stack with a button must take the remaining space, not
+       * compete with it. width:100% on the input plus an intrinsic-width button
+       * left Model preference about 103px wide — narrower than the model ids it
+       * exists to display ("gemini-3.5-flash-lite"), so the field truncated its
+       * own value. min-width:0 is what allows the flex child to shrink at all.
+       */
+      .control-stack > .text-input,
+      .control-stack > .select-input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .control-stack > .secondary-button,
+      .control-stack > .primary-button,
+      .control-stack > .pill {
+        flex-shrink: 0;
       }
 
       .text-input,
@@ -487,7 +535,16 @@ export function getSettingsWebviewContent(
       .instruction-source span {
         color: var(--vscode-descriptionForeground);
         font-size: 11px;
-        text-align: right;
+        /*
+         * Left-aligned, not right. These are discovered FILE PATHS, which have no
+         * spaces: right-aligning them made a long path wrap ragged-left and break
+         * mid-segment, so the reader could not scan the directory structure. Paths
+         * read left-to-right from the root; align them that way and break on the
+         * separators instead.
+         */
+        text-align: left;
+        word-break: break-word;
+        overflow-wrap: anywhere;
       }
 
       .secondary-button,
@@ -625,7 +682,14 @@ export function getSettingsWebviewContent(
 
       .capability-availability-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
+        /*
+         * The second column was minmax(170px, auto). An auto max lets a long
+         * "Available in Pro, Max 5x, Max 15x, Team and Enterprise" string grow
+         * without bound, so the SECONDARY column ended up wider than the
+         * capability name and description it qualifies. Cap it: the primary
+         * content keeps the space, and the availability text wraps.
+         */
+        grid-template-columns: minmax(0, 1fr) minmax(140px, 30%);
         align-items: center;
         gap: 18px;
         min-height: 72px;
@@ -673,6 +737,19 @@ export function getSettingsWebviewContent(
         gap: 8px;
       }
 
+      .override-notice-action {
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        color: var(--vscode-textLink-foreground);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .override-notice-action:hover {
+        color: var(--vscode-textLink-activeForeground);
+      }
+
       @media (max-width: 760px) {
         .settings-shell {
           display: block;
@@ -701,6 +778,20 @@ export function getSettingsWebviewContent(
           gap: 5px;
           overflow-x: auto;
           padding-bottom: 2px;
+          /*
+           * A 719px rail inside a 432px box scrolls, but nothing said so — the
+           * sections past the fold were simply invisible. The mask fades the
+           * trailing edge so the overflow is discoverable, and scroll-snap makes
+           * dragging land on a tab rather than mid-label.
+           */
+          scroll-snap-type: x proximity;
+          scrollbar-width: thin;
+          -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+        }
+
+        .nav-button {
+          scroll-snap-align: start;
         }
 
         .nav-button {
@@ -791,7 +882,7 @@ export function getSettingsWebviewContent(
         <header class="page-header">
           <div>
             <p class="page-kicker">Workspace-scoped developer tools</p>
-            <h1 class="page-title" id="pageTitle">Settings</h1>
+            <h1 class="page-title" id="pageTitle" tabindex="-1">Settings</h1>
             <p class="page-description" id="pageDescription">
               Configure how AGI works in VS Code. Changes are stored in your VS Code user settings.
             </p>
@@ -806,11 +897,6 @@ export function getSettingsWebviewContent(
         <div class="override-notice" id="overrideNotice" hidden></div>
 
         <section class="section" id="section-general" data-settings-section="general">
-          <div class="section-heading">
-            <h2 tabindex="-1">General</h2>
-            <p>Choose the default model, autonomy, and reasoning behavior for new sessions.</p>
-          </div>
-
           <div class="card">
             <div class="card-heading">
               <h3>Model and reasoning</h3>
@@ -962,11 +1048,6 @@ export function getSettingsWebviewContent(
           data-settings-section="configuration"
           hidden
         >
-          <div class="section-heading">
-            <h2 tabindex="-1">Configuration</h2>
-            <p>Runtime paths, cloud utility endpoints, and local Desktop availability.</p>
-          </div>
-
           <div class="card">
             <div class="card-heading">
               <h3>Local developer runtime</h3>
@@ -1130,11 +1211,6 @@ export function getSettingsWebviewContent(
           data-settings-section="personalization"
           hidden
         >
-          <div class="section-heading">
-            <h2 tabindex="-1">Personalization</h2>
-            <p>Set developer-session instructions and choose where AGI appears in the editor.</p>
-          </div>
-
           <div class="card">
             <div class="card-heading">
               <h3>Custom instructions</h3>
@@ -1342,14 +1418,36 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-usage" data-settings-section="usage" hidden>
-          <div class="section-heading">
-            <h2 tabindex="-1">Usage &amp; billing</h2>
-            <p>Review the resolved plan and continue to Web for account-level usage or billing.</p>
+          <!--
+            Leads with the plan the user is actually on. This section previously
+            opened with the debug tier-override dropdown and showed no plan name,
+            no allowance and no reset date — a user clicking "Usage & billing"
+            found only a developer control. The comparable surface (Codex's
+            Usage & billing) opens with the plan, then the balance, then meters.
+          -->
+          <div class="card">
+            <div class="card-heading">
+              <h3>Your plan</h3>
+              <p>Resolved from your account, or from the Desktop bridge when it is connected.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <span class="setting-name" id="currentTierLabel">Unknown</span>
+                <span class="setting-description" id="currentTierSource">
+                  Sign in on Web to resolve your plan.
+                </span>
+              </div>
+              <div class="control-stack">
+                <button class="secondary-button" type="button" data-command="manageBilling">
+                  View plans
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="card">
             <div class="card-heading">
-              <h3>Plan resolution</h3>
+              <h3>Developer overrides</h3>
               <p>The override is intended for local testing; BYOK uses the live resolved account tier.</p>
             </div>
             <div class="setting-row">
@@ -1404,11 +1502,6 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-mcp" data-settings-section="mcp" hidden>
-          <div class="section-heading">
-            <h2 tabindex="-1">MCP servers</h2>
-            <p>Keep cloud editor utilities and the local developer runtime on explicit boundaries.</p>
-          </div>
-
           <div class="card">
             <div class="setting-row">
               <div>
@@ -1448,10 +1541,6 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-hooks" data-settings-section="hooks" hidden>
-          <div class="section-heading">
-            <h2 tabindex="-1">Hooks</h2>
-            <p>Automation hooks are local runtime configuration, not extension-owned cloud state.</p>
-          </div>
           <div class="card">
             <div class="empty-capability">
               <h3>No extension hooks to configure</h3>
@@ -1468,10 +1557,6 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-plugins" data-settings-section="plugins" hidden>
-          <div class="section-heading">
-            <h2 tabindex="-1">Plugins</h2>
-            <p>Discover capabilities across AGI surfaces without pretending they run inside this IDE.</p>
-          </div>
           <div class="card">
             <div
               class="capability-availability-list"
@@ -1500,10 +1585,6 @@ ${capabilityAvailabilityRows}
         </section>
 
         <section class="section" id="section-account" data-settings-section="account" hidden>
-          <div class="section-heading">
-            <h2 tabindex="-1">Account</h2>
-            <p>Cloud sign-in is explicit and never required for local workspace chat.</p>
-          </div>
           <div class="card">
             <div class="account-summary">
               <div class="account-line">
@@ -1645,6 +1726,13 @@ ${capabilityAvailabilityRows}
             var selected = button.getAttribute('data-section') === section;
             if (selected) {
               button.setAttribute('aria-current', 'page');
+              // Below 760px the nav becomes a horizontal scroller wider than its
+              // box, so a section selected from anywhere other than a click —
+              // restored state, a deep link, keyboard navigation — left its own
+              // tab off-screen with no indication of where you were.
+              if (typeof button.scrollIntoView === 'function') {
+                button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+              }
             } else {
               button.removeAttribute('aria-current');
             }
@@ -1652,9 +1740,11 @@ ${capabilityAvailabilityRows}
           document.getElementById('pageTitle').textContent = sectionCopy[section].title;
           document.getElementById('pageDescription').textContent = sectionCopy[section].description;
           if (moveFocus) {
-            var heading = document.querySelector(
-              '[data-settings-section="' + section + '"] h2'
-            );
+            // The per-section <h2> blocks were removed: they restated the same
+            // title and description the JS-driven page header already sets, so
+            // every section rendered its heading twice, stacked. #pageTitle is
+            // now the single heading and therefore the focus target.
+            var heading = document.getElementById('pageTitle');
             if (heading) heading.focus();
           }
         }
@@ -1676,8 +1766,21 @@ ${capabilityAvailabilityRows}
             control.disabled = false;
           });
 
+          // Raw id stays on the developer pill; the plan card gets the canonical
+          // catalog label the rest of the product uses ("Max 15x", not "max 15x").
           document.getElementById('currentTier').textContent =
-            String(state.values.currentTier || 'unknown').replace(/_/g, ' ');
+            String(state.values.currentTier || 'unknown');
+          var tierLabelEl = document.getElementById('currentTierLabel');
+          if (tierLabelEl) {
+            tierLabelEl.textContent = String(state.values.currentTierLabel || 'Unknown');
+          }
+          var tierSourceEl = document.getElementById('currentTierSource');
+          if (tierSourceEl) {
+            var resolved = state.values.currentTier && state.values.currentTier !== 'unknown';
+            tierSourceEl.textContent = resolved
+              ? 'Usage limits, invoices and payment are managed on Web.'
+              : 'Sign in on Web to resolve your plan.';
+          }
 
           var trustPill = document.getElementById('trustPill');
           trustPill.textContent = state.workspaceTrusted
@@ -1690,10 +1793,23 @@ ${capabilityAvailabilityRows}
             var labels = state.workspaceOverrides.map(function (key) {
               return settingLabels[key] || key;
             });
-            overrideNotice.textContent =
+            // Carry the ACTION inside the notice rather than pointing at a
+            // button elsewhere. The sidebar footer that holds "Open raw settings"
+            // is display:none below 760px, so at narrow widths this text was
+            // instructing the user to click a control they could not see.
+            overrideNotice.textContent = '';
+            var overrideText = document.createElement('span');
+            overrideText.textContent =
               'Workspace settings currently override these user values: ' +
               labels.join(', ') +
-              '. Use Open raw settings to inspect or remove those overrides.';
+              '. ';
+            var overrideAction = document.createElement('button');
+            overrideAction.type = 'button';
+            overrideAction.className = 'override-notice-action';
+            overrideAction.setAttribute('data-command', 'openRawSettings');
+            overrideAction.textContent = 'Open raw settings';
+            overrideNotice.appendChild(overrideText);
+            overrideNotice.appendChild(overrideAction);
             overrideNotice.hidden = false;
           } else {
             overrideNotice.hidden = true;
@@ -1811,12 +1927,18 @@ ${capabilityAvailabilityRows}
           });
         });
 
-        document.querySelectorAll('[data-command]').forEach(function (button) {
-          button.addEventListener('click', function () {
-            var command = button.getAttribute('data-command');
-            if (!command) return;
-            vscode.postMessage({ type: 'settings.command', command: command });
-          });
+        // Delegated, not bound per element. querySelectorAll runs once at init,
+        // so any [data-command] control created later — the override notice's
+        // inline "Open raw settings" action, for one — silently did nothing when
+        // clicked. Delegation covers every present and future command button.
+        document.addEventListener('click', function (event) {
+          var target = event.target;
+          if (!(target instanceof Element)) return;
+          var button = target.closest('[data-command]');
+          if (!button) return;
+          var command = button.getAttribute('data-command');
+          if (!command) return;
+          vscode.postMessage({ type: 'settings.command', command: command });
         });
 
         ['host', 'workspace'].forEach(function (scope) {

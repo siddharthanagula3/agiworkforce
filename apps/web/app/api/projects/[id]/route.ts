@@ -23,6 +23,7 @@ import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
+import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -48,6 +49,45 @@ async function selectProjectWithConversationCount(
   return project;
 }
 
+/**
+ * Read a project the caller's ORGANIZATION shares with them (migration 0086).
+ *
+ * TENANCY. This runs on the privileged `getNeonDb()` connection (BYPASSRLS), so
+ * the `sharedProjectIds` set — resolved server-side from `organization_members`
+ * + `organization_shared_projects`, honouring an explicit `access = 'none'`
+ * denial — IS the tenant boundary. The `id = any(...)` predicate is therefore
+ * load-bearing, not cosmetic: without it any signed-in user could read any
+ * project by uuid.
+ *
+ * READ ONLY. There is no shared counterpart to PUT/DELETE below; both still
+ * match `where id = $1 and user_id = $2`, so a member can open a shared project
+ * and can never modify or delete it.
+ */
+async function selectSharedProjectWithConversationCount(
+  db: ReturnType<typeof getNeonDb>,
+  id: string,
+  userId: string,
+  sharedProjectIds: string[],
+): Promise<Record<string, unknown> | undefined> {
+  if (sharedProjectIds.length === 0) return undefined;
+  const [project] = await db.query<Record<string, unknown>>(
+    `select p.*,
+            true as is_org_shared,
+            (select count(*)::int
+               from web_conversations c
+              where c.project_id = p.id::text
+                and c.user_id = $2
+                and c.deleted_at is null) as conversation_count
+       from user_projects p
+      where p.id = $1
+        and p.id = any($3::uuid[])
+        and p.deleted_at is null
+      limit 1`,
+    [id, userId, sharedProjectIds],
+  );
+  return project;
+}
+
 async function handleGetProject(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -56,7 +96,17 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const db = getNeonDb();
   const { id } = await context.params;
 
-  const data = await selectProjectWithConversationCount(db, id, userId);
+  let data = await selectProjectWithConversationCount(db, id, userId);
+
+  if (!data) {
+    const sharedScope = await resolveSharedProjectScope(db, userId);
+    data = await selectSharedProjectWithConversationCount(
+      db,
+      id,
+      userId,
+      sharedScope?.projectIds ?? [],
+    );
+  }
 
   if (!data) {
     throw createError.notFound('Project not found');

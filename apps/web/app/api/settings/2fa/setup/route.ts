@@ -11,6 +11,14 @@
  *
  * 2FA is NOT enabled until the user calls POST /api/settings/2fa/verify with
  * a valid TOTP code, confirming they have successfully enrolled their device.
+ *
+ * SECURITY: this route refuses to run against an ALREADY-ENABLED account.
+ * Its upsert resets `enabled` to false, so without that guard any caller
+ * holding a session could strip the second factor by simply starting a new
+ * enrollment — bypassing DELETE /api/settings/2fa, which deliberately demands
+ * a valid TOTP or backup code "to prevent session-hijack escalation". A
+ * session cookie is exactly the thing 2FA exists to survive, so re-enrollment
+ * must go through the code-verified disable path first.
  */
 
 import 'server-only';
@@ -20,6 +28,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { createError } from '@/lib/errors';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import {
@@ -39,6 +48,18 @@ async function handleSetup2FA(request: NextRequest) {
 
   const { userId, email } = await getClerkAuthUser(request);
 
+  const db = getNeonDb();
+  const existing = await db.query<{ enabled: boolean }>(
+    `select enabled from user_two_factor where user_id = $1`,
+    [userId],
+  );
+  if (existing.rows[0]?.enabled === true) {
+    logger.warn({ userId }, '2FA setup refused: account already enrolled');
+    throw createError.conflict(
+      'Two-factor authentication is already enabled. Disable it with a valid code before enrolling a new device.',
+    );
+  }
+
   // Generate TOTP secret and backup codes
   const secret = generateTOTPSecret();
   const accountName = email ?? userId;
@@ -51,8 +72,9 @@ async function handleSetup2FA(request: NextRequest) {
   // Encrypt the TOTP secret for storage · will throw if TOTP_ENCRYPTION_KEY is not set
   const encryptedSecret = await encryptTOTPSecret(secret);
 
-  // Upsert into DB (enabled=false until /verify is called)
-  const db = getNeonDb();
+  // Upsert into DB (enabled=false until /verify is called). The conflict
+  // branch only ever runs for a not-yet-enabled row (guarded above), so
+  // resetting enabled/enabled_at here cannot strip a live second factor.
   await db.query(
     `insert into user_two_factor
        (user_id, totp_secret_enc, backup_codes_hashed, enabled, backup_codes_generated_at, updated_at)

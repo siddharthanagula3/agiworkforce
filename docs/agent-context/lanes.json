@@ -37,7 +37,7 @@
       "name": "CLI app and terminal UX",
       "ownerRole": "CLI lead",
       "ownedWritePaths": ["apps/cli/**"],
-      "readOnlyContextPaths": ["crates/**", "docs/cli/**", "docs/surfaces/cli.md"],
+      "readOnlyContextPaths": ["crates/**", "docs/cli/**"],
       "blockedPaths": ["crates/**", "Cargo.toml", "Cargo.lock"],
       "requiredChecks": ["cargo check -p agiworkforce-cli", "cargo test -p agiworkforce-cli --lib"],
       "escalationOwners": ["Rust platform", "Security/privacy lead"]
@@ -193,11 +193,7 @@
       "name": "Mobile native modules, iOS project, and store metadata",
       "ownerRole": "Mobile lead",
       "ownedWritePaths": ["apps/mobile/native/**", "apps/mobile/store-listing/**"],
-      "readOnlyContextPaths": [
-        "apps/mobile/app.config.js",
-        "apps/mobile/scripts/**",
-        "docs/surfaces/mobile.md"
-      ],
+      "readOnlyContextPaths": ["apps/mobile/app.config.js", "apps/mobile/scripts/**"],
       "blockedPaths": ["apps/mobile/secrets/**"],
       "requiredChecks": ["pnpm --filter @agiworkforce/mobile typecheck"],
       "escalationOwners": ["Release owner", "Legal/compliance", "Security/privacy lead"]

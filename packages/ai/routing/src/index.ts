@@ -20,6 +20,16 @@
  *     — pricing that auto-switches to `post_promo_prices` past `promo_expires_at`.
  *   - `tokenizerDriftFactor(modelId)` / `ESTIMATE_INFLATION` — tokenizer-drift
  *     inflation for cost/latency re-baselining.
+ *   - `classifyTaskFamily(signals)` — deterministic structural task-family fast
+ *     path; returns `family: null` when it declines, and the caller must then
+ *     run the existing Auto policy unchanged.
+ *   - `resolveTaskFamilyOrdering(...)` / `orderPreferredSlotsForTaskFamily(...)`
+ *     — per-family quality floor plus cost ranking over the ALREADY-ADMITTED
+ *     candidate set. The result is always a permutation of that set.
+ *   - `decideTaskFamilyContinuity(...)` / `applyTaskFamilyContinuity(...)` —
+ *     session stickiness with escalation-only switching.
+ *   - `taskFamilyRoutingStageEnabled()` / `TASK_FAMILY_STAGE_ENV` — the
+ *     operator flag for the stage. OFF by default.
  *
  * @packageDocumentation
  */
@@ -56,6 +66,45 @@ export {
 } from './pricing';
 export { assessModelSwitchCache } from './model-switch-cache';
 export type { ModelSwitchCacheAssessment, ModelSwitchCacheInput } from './model-switch-cache';
+export {
+  classifyTaskFamily,
+  isTaskFamily,
+  LONG_CONTEXT_TOKEN_THRESHOLD,
+  SIMPLE_CHAT_MAX_CHARS,
+  TASK_FAMILIES,
+  TASK_FAMILY_INTENDED_TASK_TYPES,
+} from './task-family';
+export type {
+  TaskFamily,
+  TaskFamilyClassification,
+  TaskFamilyReasonCode,
+  TaskFamilySignals,
+} from './task-family';
+export {
+  orderPreferredSlotsForTaskFamily,
+  resolveTaskFamilyOrdering,
+  slotQualityBand,
+  TASK_FAMILY_STAGE_ENV,
+  taskFamilyPolicy,
+  taskFamilyRoutingStageEnabled,
+} from './task-family-routing';
+export type {
+  TaskFamilyFloorRejection,
+  TaskFamilyOrdering,
+  TaskFamilyOrderingInput,
+  TaskFamilyPolicyEntry,
+  TaskFamilyQualityFloor,
+  TaskFamilyStageDecision,
+  TaskFamilyStageReason,
+} from './task-family-routing';
+export { applyTaskFamilyContinuity, decideTaskFamilyContinuity } from './task-family-continuity';
+export type {
+  TaskFamilyContinuityAction,
+  TaskFamilyContinuityDecision,
+  TaskFamilyContinuityInput,
+  TaskFamilyContinuityReason,
+  TaskFamilySessionRoute,
+} from './task-family-continuity';
 export type {
   ClassifierResult,
   ConversationContext,

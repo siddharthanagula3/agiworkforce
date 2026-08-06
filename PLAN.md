@@ -336,6 +336,91 @@ against the ChatGPT/Claude iOS reference sets on the founder's Desktop; the
 prioritized backlog lives with the session that produced it and lands here as
 commits.
 
+2026-08-05: THE ROUTER GETS AN OBJECTIVE — EXECUTIONPLAN AND CPST ARE
+SPECIFIED, NOTHING IS IMPLEMENTED. The design spec landed as
+`docs/design/execution-plan-contract-and-cpst-2026-08-05.md` (docs-only slice;
+no code, schema, curation, or generated file was touched). It specifies one
+`ExecutionPlan` value carrying model snapshot, provider endpoint, reasoning
+effort, service tier, execution location, harness version, tool bundle,
+retrieval policy, cache policy, verifier, fallback policy, budget, and
+approval policy, each mapped field-by-field onto what already exists — the
+canonical resolvers (`crates/agiworkforce-model-registry/src/lib.rs`,
+`packages/ai/routing/src/auto.ts`), the curation sources
+(`packages/ai/model-registry/catalog/routing-policies.json` and
+`harnesses.json`, both `schemaVersion: 1`, regenerated only via
+`pnpm sync:models`), and the desktop router
+(`apps/desktop/src-tauri/src/core/llm/llm_router.rs`). Five of the thirteen
+fields already exist in some form and are recorded rather than re-invented;
+`executionLocation` is explicitly the one field the plan may never influence,
+because trust-mode admission stays the sole authority. It also defines CPST —
+total variable cost of attempts plus tools plus retries plus fallback, divided
+by tasks that actually succeeded, computed per task family only — and fixes
+the six telemetry fields it needs. Eight open questions are recorded as
+unknown rather than answered, including which of the two already-diverged
+resolvers is canonical, what identifies a model snapshot (the generated
+registry exposes only `schemaVersion`, no hash, no `generatedAt`), and the
+service-tier vocabulary collision with the existing protocol
+`ServiceTier { Fast, Flex }`. The rollout gates in the spec — router p95
+around 100ms, router overhead 1-3% of CPST, escalation 5-10%, quality at 98%
+of the balanced baseline, no high-risk regression — are labeled in the
+document as internal targets that no repo measurement supports yet, not
+market facts, and must be re-derived from the first two weeks of real data
+before they gate anything. Evidence for this slice: `check-doc-status`,
+`check-non-md-artifacts`, and `check-reference-integrity` all pass
+(reference integrity 254 known findings, 0 undeclared);
+`pnpm check:repo-organization` fails on ten untracked root `.png` files from
+other in-flight work, which this slice did not create and did not touch.
+
+Follow-on slices, in dependency order (2 can be built in parallel with 1 but
+cannot ship before 4):
+
+1. CPST telemetry fields. Add `taskOutcome`, `retries`, `fallbackUsed`,
+   `verifierResult`, `routePlanId`, and `taskFamily` to the existing
+   `usage jsonb` on `public.managed_usage_requests`
+   (`apps/web/db/neon/0056_managed_usage_request_lifecycle.sql`) through the
+   `usage` argument of `finalizeManagedUsageRequest`, the same channel
+   `apps/web/lib/services/managed-usage-accounting-service.ts` already uses
+   for `accounting`/`reason`/`providerCalls`/`totalTokens`. No migration in
+   this slice. Two of the six values already exist in memory and are thrown
+   away — `fallbackReason` and `routeDecision.code` in
+   `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts` — so
+   wiring them is a pass-through at the existing reserve/finalize call sites,
+   which sit on the hot chat-completions path and must not disturb the
+   idempotency-replay or lease-token contracts documented in 0056. The task
+   field must be named `taskOutcome`/`task_outcome`: `outcome` is already
+   taken by the billing finalization and means "we billed it", not "it
+   worked". Scope is managed cloud only — desktop has only a daily cap, CLI
+   and mobile have no ledger, and `apps/web/lib/cost-tracker.ts` is in-memory
+   and is not a CPST source. Exit: two weeks of rows with a measured non-null
+   rate per key and a first per-family CPST baseline.
+2. Rules-based eligibility plus a Pareto router, session-sticky and
+   escalation-only. Eligibility is the existing hard gate (trust mode,
+   runtime profile, tier ceiling, lifecycle, harness allow-list, capabilities,
+   context minimum) and is not relaxed; the Pareto step only orders the
+   already-eligible set on cost against measured success. Stickiness is
+   already policy — `auto.continuity` is all-true in `routing-policies.json` —
+   and switching must be escalation-only, up the fallback ladder and never
+   sideways, because a sideways move buys nothing and pays the full
+   cache-reset penalty that `packages/ai/routing/src/model-switch-cache.ts`
+   already prices. Lands in the curation JSON plus both resolvers, or answers
+   open question OQ-1 first by nominating one canonical.
+3. Eval corpus of 8-12 task families, narrowed from the canonical 11-value
+   `RoutingTaskType` taxonomy the policy already uses. Each family needs
+   fixed versioned inputs, a grader (deterministic where possible; a model
+   grader's cost counts as router overhead), a recorded balanced-profile
+   baseline, and a `low`/`high` risk label that decides its rollout stage.
+   There is no eval corpus and no evals directory in the repo today; this is
+   net-new and is a hard prerequisite for live routing, not a parallel
+   nice-to-have.
+4. Shadow mode. Compute the `ExecutionPlan` and the router's preferred route
+   on every request, record both, execute the current route regardless.
+   Log-only by construction: no effect on billing, trust boundaries, or
+   user-visible model labels. Exit: shadow plan produced for at least 95% of
+   eligible requests, measured router decision latency, a counterfactual CPST
+   estimate per family, and a written list of every disagreement that would
+   have crossed a trust boundary — target zero, and any non-zero result
+   blocks live routing outright.
+
 ## Current Evidence Commands
 
 ```bash

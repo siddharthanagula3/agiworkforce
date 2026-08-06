@@ -196,7 +196,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: isActive ? colors.teal : 'rgba(255,255,255,0.08)',
+                  backgroundColor: isActive ? colors.teal : colors.neutralSurface,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -205,7 +205,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                   style={{
                     fontSize: 13,
                     fontWeight: '600',
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                    color: isActive ? colors.white : colors.textSecondary,
                   }}
                 >
                   {conversation.title.trim().charAt(0).toUpperCase() || '?'}
@@ -242,7 +242,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                   style={{
                     fontSize: 14,
                     fontWeight: conversation.unread ? '600' : '500',
-                    color: isActive ? colors.teal : 'rgba(255, 255, 255, 0.8)',
+                    color: isActive ? colors.teal : colors.textSecondary,
                     flex: 1,
                   }}
                   numberOfLines={1}
@@ -267,7 +267,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                 <Text
                   style={{
                     fontSize: 12,
-                    color: snippet ? 'rgba(33, 128, 141, 0.7)' : 'rgba(255, 255, 255, 0.3)',
+                    color: snippet ? 'rgba(33, 128, 141, 0.7)' : colors.textMuted,
                     flex: 1,
                   }}
                   numberOfLines={snippet ? 2 : 1}
@@ -277,7 +277,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                       ? truncate(conversation.lastMessage, 30)
                       : `${conversation.messageCount} messages`)}
                 </Text>
-                <Text style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.2)', marginLeft: 8 }}>
+                <Text style={{ fontSize: 10, color: colors.textMuted, marginLeft: 8 }}>
                   {formatRelativeTime(conversation.updatedAt)}
                 </Text>
               </View>
@@ -297,7 +297,7 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
           <Pressable
             style={{
               flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.6)',
+              backgroundColor: colors.scrim,
               justifyContent: 'center',
               padding: 24,
             }}

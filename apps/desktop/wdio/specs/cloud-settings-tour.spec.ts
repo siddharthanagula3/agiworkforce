@@ -353,7 +353,7 @@ async function setPresentationMode(enabled: boolean): Promise<void> {
   }, enabled);
 }
 
-async function mockDeviceAuthorizationIpc(): Promise<void> {
+async function mockDeviceAuthorizationIpc(retrying = false): Promise<void> {
   const start = await browser.tauri.mock('account_start_device_authorization');
   await start.mockReturnValue({
     status: 200,
@@ -404,6 +404,26 @@ async function mockDeviceAuthorizationIpc(): Promise<void> {
   ]) {
     const mock = await browser.tauri.mock(command);
     await mock.mockReturnValue(null);
+  }
+
+  // The service's per-session mock-store clear reliably fails, so a later
+  // file's registrations can hit the stale Node-side cache and never reach
+  // this document — the app then performs REAL device authorization and no
+  // owned window ceremony this test can observe. Verify the page seam and, if
+  // the device mocks did not land, re-run JUST their registration. Do NOT call
+  // restoreAllMocks here: this spec's `before` already installed the cloud API
+  // fetch shim via `installCloudApiShim`, and clearing every mock would nuke
+  // that shim and break the whole signed-in flow.
+  const missing = await browser.execute(
+    (names: string[]) => {
+      const mocks =
+        (window as unknown as { __wdio_mocks__?: Record<string, unknown> }).__wdio_mocks__ ?? {};
+      return names.filter((name) => typeof mocks[name] !== 'function');
+    },
+    ['account_start_device_authorization', 'account_poll_device_authorization'],
+  );
+  if (missing.length > 0 && !retrying) {
+    await mockDeviceAuthorizationIpc(true);
   }
 }
 
@@ -485,7 +505,10 @@ describe('AGI Desktop Cloud settings tour', () => {
     await cloudTab.waitForDisplayed({ timeout: 30_000 });
     await cloudTab.click();
 
-    const signIn = await $('button=Sign in to AGI Cloud');
+    // Since the native sign-in redesign (a3b1005c8), "Sign in to AGI Cloud"
+    // is the AuthPage heading; the owned-window device flow this test drives
+    // lives behind the explicit browser-fallback action.
+    const signIn = await $('button=Sign in through your browser instead');
     await signIn.waitForDisplayed({ timeout: 30_000 });
     await signIn.click();
 

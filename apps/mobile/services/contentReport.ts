@@ -4,29 +4,32 @@
  * Google Play GenAI policy requires an in-app mechanism for users to flag
  * harmful or inaccurate AI-generated content. This service:
  *
- *   1. Saves the report locally to MMKV (local-first, no server required)
- *   2. Optionally hands the report to the device mail client, addressed to
- *      support, when the user asks for that explicitly
+ *   1. Saves the report locally to MMKV first, so a failing network can never
+ *      lose it (local-first).
+ *   2. Submits the report to the server intake route
+ *      `POST /api/mobile/content-report` (apps/web) so it reaches the AGI
+ *      trust-and-safety queue (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01).
+ *   3. Optionally hands the report to the device mail client, addressed to
+ *      support, when the user asks for that explicitly.
  *
- * There is NO server sink. `/api/mobile/feedback` is the only mobile-facing
- * intake route and its schema is `{ type: 'bug' | 'feature' | 'general',
- * message }` — it carries no category, message id, conversation id, or
- * excerpt, and stores rows indistinguishable from feature requests, so a
- * trust-safety report cannot be filed through it. Reporting also has to work
- * in Local Mode, where the egress guard refuses our-cloud requests outright.
- * Until a real moderation endpoint exists, every caller must describe this
- * outcome truthfully: the report is on the device, and the only egress is the
- * mail hand-off the user asked for.
+ * The on-device copy is now an OFFLINE fallback, not the only sink. Reporting
+ * still has to work in Local Mode, where the egress guard refuses our-cloud
+ * requests outright: there the server POST throws, is caught, and the report
+ * stays on the device. Every caller must describe the ACTUAL outcome truthfully
+ * (see ReportDelivery) — a report that never left the phone must never read as
+ * "submitted".
  *
- * No new npm deps. Email uses React Native's Linking.openURL with a mailto
- * deep link — the OS mail client handles the actual send, and the user still
- * has to press send there.
+ * No new npm deps. The server POST goes through the shared `api` client (auth +
+ * egress guard). Email uses React Native's Linking.openURL with a mailto deep
+ * link — the OS mail client handles the actual send, and the user still has to
+ * press send there.
  *
  * MMKV key: "content-reports:v1" → JSON array of ContentReport
  */
 
 import { Linking } from 'react-native';
 import { storage } from '@/lib/mmkv';
+import { api } from '@/services/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,11 +57,18 @@ export type ContentReport = {
    * Not a claim that the mail was sent — only the user can do that.
    */
   emailHandoffOpened: boolean;
+  /**
+   * Whether the server intake route accepted this report. False when offline or
+   * in Local Mode (egress-blocked), where the on-device copy is the fallback.
+   */
+  serverAcknowledged: boolean;
 };
 
 /** What genuinely happened to a report, so the UI can say it without lying. */
 export type ReportDelivery =
-  /** Written to this device only. Nothing left the phone. */
+  /** Accepted by the server trust-and-safety intake route. */
+  | { kind: 'submitted-to-server' }
+  /** Written to this device only. Nothing left the phone (offline / Local Mode). */
   | { kind: 'stored-on-device' }
   /** Written to this device, and the mail client opened with it filled in. */
   | { kind: 'email-composer-opened' }
@@ -145,8 +155,34 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
 }
 
 /**
- * Saves a content report locally. If sendEmail is true, also opens the device
- * mail client pre-filled with the report details.
+ * Submit a report to the server intake route. Never throws: offline, a
+ * Local-Mode egress block, or a server error all resolve to `false` so the
+ * on-device copy remains the fallback and the report is never lost.
+ *
+ * @returns true only if the server accepted the report.
+ */
+async function submitReportToServer(report: ContentReport): Promise<boolean> {
+  try {
+    await api.post('/api/mobile/content-report', {
+      reportId: report.id,
+      messageId: report.messageId,
+      conversationId: report.conversationId,
+      category: report.category,
+      contentExcerpt: report.contentExcerpt,
+      userNote: report.userNote,
+    });
+    return true;
+  } catch {
+    // Offline / Local Mode (EgressBlockedError) / server error — keep the
+    // on-device copy. A failed upload must never lose or throw away the report.
+    return false;
+  }
+}
+
+/**
+ * Saves a content report locally, submits it to the server intake route (with an
+ * on-device offline fallback), and — if sendEmail is true — also opens the
+ * device mail client pre-filled with the report details.
  *
  * @returns the saved record plus what actually happened to it.
  */
@@ -167,24 +203,52 @@ export async function saveContentReport(params: {
     userNote: params.userNote.trim(),
     createdAt: new Date().toISOString(),
     emailHandoffOpened: false,
+    serverAcknowledged: false,
   };
 
-  // Persist before the mail hand-off so a failing/absent mail client can never
+  // Persist before any network / mail hand-off so a failing transport can never
   // lose the report.
   const existing = readReports();
   const updated = [report, ...existing].slice(0, MAX_STORED_REPORTS);
   writeReports(updated);
 
+  // Primary sink: the server trust-and-safety intake. Falls back to on-device
+  // when offline or in Local Mode.
+  const submitted = await submitReportToServer(report);
+  if (submitted) {
+    report.serverAcknowledged = true;
+    markServerAcknowledged(report.id);
+  }
+
   if (!params.sendEmail) {
-    return { report, delivery: { kind: 'stored-on-device' } };
+    return {
+      report,
+      delivery: { kind: submitted ? 'submitted-to-server' : 'stored-on-device' },
+    };
   }
 
   const opened = await openSupportEmail(report);
-  if (!opened) return { report, delivery: { kind: 'email-unavailable' } };
+  if (opened) {
+    return {
+      report: { ...report, emailHandoffOpened: true },
+      delivery: { kind: 'email-composer-opened' },
+    };
+  }
+  // Mail client unavailable — still report the server outcome truthfully.
   return {
-    report: { ...report, emailHandoffOpened: true },
-    delivery: { kind: 'email-composer-opened' },
+    report,
+    delivery: { kind: submitted ? 'submitted-to-server' : 'email-unavailable' },
   };
+}
+
+function markServerAcknowledged(reportId: string): void {
+  const reports = readReports();
+  const index = reports.findIndex((entry) => entry.id === reportId);
+  if (index === -1) return;
+  const target = reports[index];
+  if (!target) return;
+  reports[index] = { ...target, serverAcknowledged: true };
+  writeReports(reports);
 }
 
 function markHandoffOpened(reportId: string): void {

@@ -3,17 +3,7 @@
   "invariants": {
     "settings-section-registered": [
       {
-        "id": "desktop:apps/desktop/src/features/settings/CostEstimator.tsx",
-        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
-        "trackedBy": "SIX-32"
-      },
-      {
         "id": "desktop:apps/desktop/src/features/settings/FontSelector.tsx",
-        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
-        "trackedBy": "SIX-32"
-      },
-      {
-        "id": "desktop:apps/desktop/src/features/settings/GeneralSettings.tsx",
         "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
         "trackedBy": "SIX-32"
       },
@@ -23,17 +13,7 @@
         "trackedBy": "SIX-32"
       },
       {
-        "id": "desktop:apps/desktop/src/features/settings/ModelComparison.tsx",
-        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
-        "trackedBy": "SIX-32"
-      },
-      {
         "id": "desktop:apps/desktop/src/features/settings/TeamAccountSettings.tsx",
-        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
-        "trackedBy": "SIX-32"
-      },
-      {
-        "id": "desktop:apps/desktop/src/features/settings/UsageProgressBars.tsx",
         "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
         "trackedBy": "SIX-32"
       },

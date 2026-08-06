@@ -53,13 +53,16 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "Libreria",
       "tasks": "Attività",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
-      "routines": "Routines"
+      "routines": "Routines",
+      "design": "Design",
+      "research": "Ricerca"
     },
     "account": "Account"
   },
@@ -296,7 +299,9 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "empty": "No artifacts yet. Run a scheduled task to generate outputs.",
+      "emptyTitle": "No artifacts yet",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "AGI Work projects",
@@ -312,7 +317,16 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "emptyTitle": "No scheduled tasks"
+    },
+    "compose": {
+      "scopeAdd": "Aggiungi ambito (facoltativo)",
+      "scopeHide": "Nascondi ambito",
+      "constraintsLabel": "Vincoli",
+      "constraintsPlaceholder": "Limiti, cose da evitare, fonti da preferire…",
+      "deliverableLabel": "Risultato",
+      "deliverablePlaceholder": "Il risultato concreto che ti aspetti (un file, una tabella, un riepilogo…)"
     }
   },
   "time": {
@@ -323,5 +337,8 @@
     "mAgoShort": "{{count}}m ago",
     "daysAgo": "{{count}} days ago",
     "weeksAgo": "{{count}} weeks ago"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "Per ora gli schizzi durano solo la sessione: chiudendo l'app la lavagna si svuota."
   }
 }

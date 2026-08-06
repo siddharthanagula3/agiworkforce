@@ -191,6 +191,21 @@ export interface ConversationSummary {
   unread?: boolean;
   /** Last server-owned Managed Cloud sync revision. Missing legacy state means `0`. */
   serverVersion?: string;
+  /**
+   * When this conversation is a fork of another, the id of the source (parent)
+   * conversation it branched from. Undefined for root conversations. Mirrors the
+   * shared conversation-branch contract (packages/ui/unified-chat BranchNavigator
+   * / packages/contracts/cloud-contracts conversation branches) so a mobile fork
+   * is a real branch with a parent link, not an untracked whole-thread copy
+   * (CAP-035).
+   */
+  parentConversationId?: string;
+  /**
+   * The message id in the parent conversation at which this branch forks. Reuses
+   * the shared `forkPointMessageId` field name from the BranchNavigator contract
+   * (BranchItem.forkPointMessageId; the cloud branch request's fork `messageId`).
+   */
+  forkPointMessageId?: string;
 }
 
 export type AutoApproveMode = 'ask' | 'smart' | 'full';

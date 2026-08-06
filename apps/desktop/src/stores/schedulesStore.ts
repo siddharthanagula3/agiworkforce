@@ -3,7 +3,7 @@
  * Schedules Store
  *
  * Thin facade over schedulerStore that exposes the Schedule interface and
- * actions required by the ScheduledTasksPage / ScheduleEditor components.
+ * actions required by the ScheduleEditor component.
  *
  * The canonical state lives in schedulerStore (ScheduledTask, createTask,
  * updateTask, deleteTask, toggleTask, fetchTasks). This file re-exports
@@ -16,7 +16,7 @@ import { inferTaskInterval as inferSchedulerTaskInterval } from './schedulerStor
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'custom';
 
 /**
- * UI-friendly schedule shape used by ScheduledTasksPage / ScheduleEditor.
+ * UI-friendly schedule shape used by ScheduleEditor.
  * Maps to ScheduledTask from schedulerStore with renamed / narrowed fields.
  */
 export interface Schedule {

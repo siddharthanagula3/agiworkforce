@@ -5,7 +5,7 @@
  *
  * Mount once in the chat layout / shell. Whenever the user's billing tier
  * changes, the unified-chat tierStore is patched so ModelSelector can gate
- * the Pro+ in-thread provider switch correctly.
+ * the Max in-thread provider switch correctly.
  */
 import { useEffect } from 'react';
 import { useTierStore } from '@agiworkforce/unified-chat';

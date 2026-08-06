@@ -3,7 +3,6 @@
  *
  * Covers:
  *   - types: InviteCodeError, InviteCodeSource, InviteCodeTab, InviteCodeModalProps shapes
- *   - desktopBridge: getCloudUnlockState, setCloudUnlocked
  *   - waitlistService: redeemInviteCode (success + all 7 InviteCodeError variants), joinWaitlist
  *   - InviteCodeModal: mount/unmount, tab switching, invite submit flow, waitlist submit flow,
  *     close on backdrop click / Escape, props.open toggling, update()
@@ -58,7 +57,6 @@ vi.stubGlobal('fetch', fetchMock);
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
-import { getCloudUnlockState, setCloudUnlocked } from '../src/features/cloud-bridge/desktopBridge';
 import { waitlistService } from '../src/lib/waitlistService';
 import {
   InviteCodeModal,
@@ -144,40 +142,6 @@ describe('types', () => {
 });
 
 // ---------------------------------------------------------------------------
-// desktopBridge
-// ---------------------------------------------------------------------------
-
-describe('getCloudUnlockState', () => {
-  it('returns unlocked=false when storage is empty', async () => {
-    const state = await getCloudUnlockState();
-    expect(state.unlocked).toBe(false);
-  });
-
-  it('returns unlocked state when agi_cloud_unlocked is set', async () => {
-    chromeMock._localStore['agi_cloud_unlocked'] = {
-      unlocked: true,
-      inviteId: 'test-invite-id',
-      unlockedAt: 1716000000000,
-    };
-    const state = await getCloudUnlockState();
-    expect(state.unlocked).toBe(true);
-    expect(state.inviteId).toBe('test-invite-id');
-  });
-});
-
-describe('setCloudUnlocked', () => {
-  it('writes unlock state to chrome.storage.local', async () => {
-    await setCloudUnlocked('my-invite-id');
-    const stored = chromeMock._localStore['agi_cloud_unlocked'] as {
-      unlocked: boolean;
-      inviteId: string;
-    };
-    expect(stored.unlocked).toBe(true);
-    expect(stored.inviteId).toBe('my-invite-id');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // waitlistService.redeemInviteCode
 // ---------------------------------------------------------------------------
 
@@ -253,8 +217,20 @@ describe('waitlistService.redeemInviteCode', () => {
     expect(result.error).toBe('rpc_error');
   });
 
-  it('fails closed without a configured web API base', async () => {
+  it('falls back to the canonical agiworkforce.com origin when no build env var is set', async () => {
     vi.unstubAllEnvs();
+    mockCsrfAndApiResponse({ success: true, inviteId: 'invite-default' });
+    const result = await waitlistService.redeemInviteCode('VALIDCODE', 'other');
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://agiworkforce.com/api/claim-offer',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('fails closed when the configured base URL is outside the allowlist', async () => {
+    vi.stubEnv('VITE_AGI_WEB_API_BASE_URL', 'https://evil.example.com');
     const result = await waitlistService.redeemInviteCode('VALIDCODE', 'other');
     expect(result).toEqual({ success: false, error: 'not_wired' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -292,11 +268,23 @@ describe('waitlistService.joinWaitlist', () => {
     expect(result.success).toBe(false);
   });
 
-  it('fails closed without a configured web API base', async () => {
+  it('falls back to the canonical agiworkforce.com origin when no build env var is set', async () => {
     vi.unstubAllEnvs();
+    mockCsrfAndApiResponse({ ok: true, joined: true });
+    const result = await waitlistService.joinWaitlist({ email: 'foo@example.com' });
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://agiworkforce.com/api/waitlist/cloud-managed',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('fails closed when the configured base URL is outside the allowlist', async () => {
+    vi.stubEnv('VITE_AGI_WEB_API_BASE_URL', 'https://evil.example.com');
     const result = await waitlistService.joinWaitlist({ email: 'foo@example.com' });
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/not configured/i);
+    expect(result.error).toMatch(/invalid/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

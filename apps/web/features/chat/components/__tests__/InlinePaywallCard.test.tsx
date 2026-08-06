@@ -53,7 +53,10 @@ describe('InlinePaywallCard', () => {
       ['computer_use', 'pro', 'Upgrade to Pro for computer use'],
       ['deep_research', 'max', 'Upgrade to Max 5x for deep research'],
       ['image_quota', 'pro', 'Upgrade to Pro for more image generation'],
-      ['token_cap', 'basic', 'Upgrade to Basic for higher token limits'],
+      // "usage", not "token": Desktop Cloud said "higher usage limits" for the
+      // same refusal, and usage is what every meter in the product is labelled.
+      // Both cards now read PAYWALL_FEATURE_COPY.
+      ['token_cap', 'basic', 'Upgrade to Basic for higher usage limits'],
       ['mcp', 'basic', 'Upgrade to Basic for MCP server support'],
     ];
 

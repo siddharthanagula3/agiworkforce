@@ -23,6 +23,7 @@ import {
   useUpdateTeamMemberRole,
   type TeamMember,
 } from '../hooks/use-settings-queries';
+import { SSOPanel } from './team/SSOPanel';
 
 type MemberRole = TeamMember['role'];
 
@@ -449,7 +450,6 @@ export function TeamSection() {
                 <option value="member">Member role</option>
                 <option value="viewer">Viewer role</option>
                 <option value="admin">Admin role</option>
-                {isOwner ? <option value="owner">Owner role</option> : null}
               </select>
             </label>
             <button type="submit" disabled={addMember.isPending} style={primaryButtonStyle}>
@@ -458,7 +458,8 @@ export function TeamSection() {
             </button>
             <div style={{ flexBasis: '100%' }}>
               <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
-                No invitation email is sent. If the address has no AGI account, nothing is added.
+                No invitation email is sent. If the address has no AGI account, nothing is added. An
+                organization has exactly one owner — use Transfer ownership to move it.
               </p>
               <InlineError error={addMember.error} />
             </div>
@@ -525,19 +526,36 @@ export function TeamSection() {
                   {member.name.slice(0, 2).toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ color: 'var(--text-1)', fontSize: 13, fontWeight: 600 }}>
+                  <div
+                    // A long display name had no truncation at all and collided
+                    // with the Role select to its right.
+                    style={{
+                      color: 'var(--text-1)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={member.name}
+                  >
                     {member.name}
                     {member.isCurrentUser ? (
                       <span style={{ color: 'var(--text-3)', fontWeight: 400 }}> (you)</span>
                     ) : null}
                   </div>
                   <div
+                    // whiteSpace: nowrap is what makes textOverflow work at all —
+                    // ellipsis only applies to a single non-wrapping line, so
+                    // without it the email simply wrapped and was cut mid-address.
                     style={{
                       color: 'var(--text-3)',
                       fontSize: 12,
+                      whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                     }}
+                    title={member.email}
                   >
                     {member.email}
                   </div>
@@ -554,12 +572,13 @@ export function TeamSection() {
                           role: event.target.value as MemberRole,
                         })
                       }
-                      style={{ ...controlStyle, width: 135 }}
+                      // flexShrink: 0 so the role control keeps its width; the
+                      // name/email column beside it is min-width:0 and truncates.
+                      style={{ ...controlStyle, width: 135, flexShrink: 0 }}
                     >
                       <option value="viewer">Viewer role</option>
                       <option value="member">Member role</option>
                       <option value="admin">Admin role</option>
-                      {isOwner ? <option value="owner">Owner role</option> : null}
                     </select>
                     <button
                       type="button"
@@ -594,6 +613,13 @@ export function TeamSection() {
         )}
         <InlineError error={updateRole.error ?? removeMember.error} />
       </SectionCard>
+
+      {/*
+        Enterprise SSO. The panel asks the server whether this organization is
+        entitled and renders nothing when it is not, so no plan check happens
+        on the client and no unusable control is advertised.
+      */}
+      {canAdminister ? <SSOPanel organizationId={organization.id} isOwner={isOwner} /> : null}
 
       <AlertDialog
         open={pendingAction !== null}

@@ -11,6 +11,41 @@ import {
   reserveManagedUsage,
 } from '../../src/services/managedUsageBilling';
 
+/**
+ * The catalog lookup is mocked only to ADD a synthetic scheduled model used to
+ * prove the dated-window mechanism on arbitrary dates. Every real model still
+ * resolves through the real catalog, so the founder pin below stays a pin on
+ * shipped data.
+ */
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const fixture = {
+    id: 'fixture-scheduled-model',
+    provider: 'anthropic',
+    inputCost: 3,
+    outputCost: 15,
+    cached_input: 0.3,
+    cached_write: 3.75,
+    cached_write_1h: 6,
+    pricingSchedule: [
+      {
+        effectiveUntil: '2030-03-31',
+        inputCost: 2,
+        outputCost: 10,
+        cached_input: 0.2,
+        cached_write: 2.5,
+        cached_write_1h: 4,
+      },
+      { effectiveFrom: '2030-04-01' },
+    ],
+  };
+  return {
+    ...actual,
+    getModelMetadataById: (id: string) =>
+      id === fixture.id ? fixture : actual.getModelMetadataById(id),
+  };
+});
+
 interface RpcResult {
   data: unknown;
   error: { message: string; code?: string } | null;
@@ -93,44 +128,44 @@ describe('managed usage registry-driven cost accounting', () => {
   });
 });
 
+/**
+ * Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
+ * 2026-08-05). The managed ledger bills Sonnet 5 at the founder-selected
+ * standard $3/$15 per MTok (cache read $0.30, 5m write $3.75, 1h write $6.00)
+ * on EVERY date: 300 cents per MTok of input, before and after the retired
+ * 2026-09-01 boundary alike. Anthropic's introductory window is a provider-COST
+ * fact recorded in the registry's verificationLog, never a product price. The
+ * ledger must also resolve the same rate for the same date that apps/web's
+ * LLMCostCalculator does, so every case passes a fixed date.
+ */
 describe('managed usage Sonnet 5 standard pricing', () => {
   const MODEL = 'claude-sonnet-5';
-  const BEFORE_RETIRED_PROMO_CUTOFF = new Date('2026-08-30T23:59:59.999Z');
-  const RETIRED_PROMO_CUTOFF = new Date('2026-08-31T00:00:00.000Z');
-  const AFTER_RETIRED_PROMO_CUTOFF = new Date('2026-09-01T00:00:00.000Z');
+  const BEFORE_RETIRED_BOUNDARY = new Date('2026-08-30T23:59:59.999Z');
+  const AT_RETIRED_BOUNDARY = new Date('2026-08-31T00:00:00.000Z');
+  const AFTER_RETIRED_BOUNDARY = new Date('2026-09-01T00:00:00.000Z');
+  const WELL_AFTER_RETIRED_BOUNDARY = new Date('2026-09-15T00:00:00.000Z');
+  const EVERY_DATE = [
+    BEFORE_RETIRED_BOUNDARY,
+    AT_RETIRED_BOUNDARY,
+    AFTER_RETIRED_BOUNDARY,
+    WELL_AFTER_RETIRED_BOUNDARY,
+    new Date('2020-01-01T00:00:00.000Z'),
+  ];
 
-  it('bills standard input and cached-input rates at every date', () => {
-    expect(
-      calculateManagedUsageCostCents(
-        MODEL,
-        { inputTokens: 1_000_000, outputTokens: 0 },
-        BEFORE_RETIRED_PROMO_CUTOFF,
-      ),
-    ).toBe(300);
-    expect(
-      calculateManagedUsageCostCents(
-        MODEL,
-        { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-        BEFORE_RETIRED_PROMO_CUTOFF,
-      ),
-    ).toBe(30);
-  });
-
-  it('keeps standard rates at the retired promotional cutoff instant', () => {
-    expect(
-      calculateManagedUsageCostCents(
-        MODEL,
-        { inputTokens: 1_000_000, outputTokens: 0 },
-        RETIRED_PROMO_CUTOFF,
-      ),
-    ).toBe(300);
-    expect(
-      calculateManagedUsageCostCents(
-        MODEL,
-        { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-        RETIRED_PROMO_CUTOFF,
-      ),
-    ).toBe(30);
+  it('bills 300 cents per MTok of input on every date', () => {
+    // Standard: $3/M input, $0.3/M cache read.
+    for (const date of EVERY_DATE) {
+      expect(
+        calculateManagedUsageCostCents(MODEL, { inputTokens: 1_000_000, outputTokens: 0 }, date),
+      ).toBe(300);
+      expect(
+        calculateManagedUsageCostCents(
+          MODEL,
+          { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
+          date,
+        ),
+      ).toBe(30);
+    }
   });
 
   it('bills mixed usage at standard rates on both sides of the retired boundary', () => {
@@ -141,32 +176,35 @@ describe('managed usage Sonnet 5 standard pricing', () => {
       cacheWriteTokens: 1_000_000,
     };
 
-    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(2205);
-    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_PROMO_CUTOFF)).toBe(2205);
+    // Standard: $3 + $15 + $0.3 + $3.75 = $22.05.
+    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_BOUNDARY)).toBe(2205);
+    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_BOUNDARY)).toBe(2205);
+    expect(calculateManagedUsageCostCents(MODEL, usage, WELL_AFTER_RETIRED_BOUNDARY)).toBe(2205);
   });
 
-  it('derives the 1h cache-write rate from the standard input rate', () => {
+  it('bills the 1h cache-write tier at the standard $6/M on every date', () => {
     const usage = {
       inputTokens: 0,
       outputTokens: 0,
       cacheWriteTokens: 1_000_000,
       cacheWrite1hTokens: 1_000_000,
     };
-    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(600);
-    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_PROMO_CUTOFF)).toBe(600);
+    for (const date of EVERY_DATE) {
+      expect(calculateManagedUsageCostCents(MODEL, usage, date)).toBe(600);
+    }
   });
 
-  it('leaves a model with no promo_expires_at unaffected by the date parameter', () => {
-    const usage = { inputTokens: 1_000_000, outputTokens: 0 };
-    expect(
-      calculateManagedUsageCostCents('claude-opus-5', usage, BEFORE_RETIRED_PROMO_CUTOFF),
-    ).toBe(calculateManagedUsageCostCents('claude-opus-5', usage, AFTER_RETIRED_PROMO_CUTOFF));
-  });
-
-  it('estimates the same standard price regardless of the retired cutoff', () => {
+  it('estimates the same standard price regardless of the retired boundary', () => {
     const body = { model: MODEL, messages: [{ role: 'user', content: 'hi' }] };
-    expect(estimateManagedUsageCostCents(body, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(
-      estimateManagedUsageCostCents(body, AFTER_RETIRED_PROMO_CUTOFF),
+    expect(estimateManagedUsageCostCents(body, BEFORE_RETIRED_BOUNDARY)).toBe(
+      estimateManagedUsageCostCents(body, AFTER_RETIRED_BOUNDARY),
+    );
+  });
+
+  it('leaves a model with no dated window unaffected by the date parameter', () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 0 };
+    expect(calculateManagedUsageCostCents('claude-opus-5', usage, BEFORE_RETIRED_BOUNDARY)).toBe(
+      calculateManagedUsageCostCents('claude-opus-5', usage, AFTER_RETIRED_BOUNDARY),
     );
   });
 
@@ -195,13 +233,123 @@ describe('managed usage Sonnet 5 standard pricing', () => {
       outcome: 'completed',
       model: MODEL,
       usage: { inputTokens: 1_000_000, outputTokens: 0 },
-      now: AFTER_RETIRED_PROMO_CUTOFF,
+      now: AFTER_RETIRED_BOUNDARY,
     });
 
     expect(rpc).toHaveBeenCalledWith(
       'finalize_managed_usage_request',
       expect.objectContaining({ p_actual_cost_cents: 300 }),
     );
+  });
+});
+
+/**
+ * The dated-pricing MECHANISM, proved against the synthetic fixture registered
+ * above rather than against any shipped price. `effectiveFrom`/`effectiveUntil`
+ * are UTC calendar days, inclusive on both sides; the changeover happens at UTC
+ * midnight. Fixed dates sit on both sides of the synthetic boundary.
+ */
+describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
+  const MODEL = 'fixture-scheduled-model';
+  const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
+  const LAST_DAY_OF_FIRST_WINDOW = new Date('2030-03-31T23:59:59.999Z');
+  const FIRST_DAY_OF_SECOND_WINDOW = new Date('2030-04-01T00:00:00.000Z');
+
+  it('bills the covering window for input and cache reads', () => {
+    // First window: $2/M input, $0.2/M cache read.
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 1_000_000, outputTokens: 0 },
+        INSIDE_FIRST_WINDOW,
+      ),
+    ).toBe(200);
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
+        INSIDE_FIRST_WINDOW,
+      ),
+    ).toBe(20);
+  });
+
+  it('treats the last day of a window as inclusive and switches on the next UTC day', () => {
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 1_000_000, outputTokens: 0 },
+        LAST_DAY_OF_FIRST_WINDOW,
+      ),
+    ).toBe(200);
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 1_000_000, outputTokens: 0 },
+        FIRST_DAY_OF_SECOND_WINDOW,
+      ),
+    ).toBe(300);
+  });
+
+  it('bills mixed usage at the rate window that covers the request date', () => {
+    const usage = {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadTokens: 1_000_000,
+      cacheWriteTokens: 1_000_000,
+    };
+
+    // First window: $2 + $10 + $0.2 + $2.5 = $14.70.
+    expect(calculateManagedUsageCostCents(MODEL, usage, INSIDE_FIRST_WINDOW)).toBe(1470);
+    // Second window inherits the top-level rates: $3 + $15 + $0.3 + $3.75 = $22.05.
+    expect(calculateManagedUsageCostCents(MODEL, usage, FIRST_DAY_OF_SECOND_WINDOW)).toBe(2205);
+  });
+
+  it('takes the 1h cache-write rate from the window, not from a fixed 2x multiplier', () => {
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheWriteTokens: 1_000_000,
+      cacheWrite1hTokens: 1_000_000,
+    };
+    expect(calculateManagedUsageCostCents(MODEL, usage, INSIDE_FIRST_WINDOW)).toBe(400);
+    expect(calculateManagedUsageCostCents(MODEL, usage, FIRST_DAY_OF_SECOND_WINDOW)).toBe(600);
+  });
+});
+
+/**
+ * OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family (1.25x
+ * the uncached input rate). The catalog declares that as `cached_write`, so the
+ * ledger bills a write only when a price is published for it.
+ */
+describe('managed usage OpenAI cache-write billing', () => {
+  const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
+
+  it('bills GPT-5.6 writes at the declared price, each prompt token once', () => {
+    // gpt-5.6-terra: $2/M input, $0.2/M read, $2.5/M write. A 1M prompt of
+    // 400k reads + 200k writes + 400k plain input = $0.80 + $0.08 + $0.50.
+    expect(
+      calculateManagedUsageCostCents(
+        'gpt-5.6-terra',
+        {
+          inputTokens: 1_000_000,
+          outputTokens: 0,
+          cacheReadTokens: 400_000,
+          cacheWriteTokens: 200_000,
+        },
+        PRICED_ON,
+      ),
+    ).toBe(138);
+  });
+
+  it('keeps writes free for a pre-5.6 OpenAI model that declares no write price', () => {
+    const base = { inputTokens: 1_000_000, outputTokens: 0 };
+    const withWrites = calculateManagedUsageCostCents(
+      'gpt-5.4-mini',
+      { ...base, cacheWriteTokens: 1_000_000 },
+      PRICED_ON,
+    );
+    expect(withWrites).toBe(75);
+    expect(withWrites).toBe(calculateManagedUsageCostCents('gpt-5.4-mini', base, PRICED_ON));
   });
 });
 

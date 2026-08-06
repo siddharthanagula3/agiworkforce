@@ -61,5 +61,6 @@
   "upgradeRequired": "Upgrade Necessário",
   "upgradeMessage": "Este recurso requer um plano de assinatura superior.",
   "limitReached": "Limite Atingido",
-  "limitMessage": "Você atingiu seu limite de {{limit}}."
+  "limitMessage": "Você atingiu seu limite de {{limit}}.",
+  "heroLedePart2": "A nuvem gerenciada da AGI está aberta em alfa público para uso individual. O Team é self-service e cobrado por assento; o Enterprise é assistido por vendas quando sua organização precisa de governança personalizada e termos negociados."
 }

@@ -191,7 +191,7 @@ export default function LocalPage() {
             { href: '/download', label: 'Get notified' },
             { href: '/desktop', label: 'See AGI Desktop' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

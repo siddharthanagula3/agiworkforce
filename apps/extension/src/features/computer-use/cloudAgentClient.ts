@@ -36,14 +36,38 @@ export { getAuthToken };
 // Read from the canonical model catalog's SLOT_REGISTRY at build time
 // (managed_cloud.taskRouting in models.json was cleared in favour of the slot
 // registry — see packages/contracts/types/src/model-catalog.ts).
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor, getRoutingSlotModel } from '@agiworkforce/types';
 
 /**
- * The model ID to use for computer-use tasks, sourced from the canonical
- * catalog's 'computer_use' routing slot.
+ * The tier-agnostic computer-use model, from the canonical catalog's
+ * 'computer_use' routing slot. Every tier that can run computer use at all
+ * allows this slot, so it is the safe default when the account tier is unknown.
  * Never hardcode a model ID — always reference this constant.
  */
 export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('computer_use');
+
+/**
+ * Resolve the computer-use model the signed-in account is actually entitled to.
+ *
+ * The catalog's DEFAULT_KIND_SLOT_PREFERENCE['computer-use'] prefers
+ * `computer_use_premium` and falls back to `computer_use`, and getDefaultModelFor
+ * intersects that preference with the tier's allowedSlots — so a Max/Enterprise
+ * account gets the premium automation model while lower tiers keep the balanced
+ * one. Chrome previously pinned the balanced slot for every account, silently
+ * denying entitled users the model their plan allows.
+ *
+ * An unknown or unreadable tier resolves to COMPUTER_USE_MODEL rather than
+ * guessing upward: over-selecting a slot the plan does not allow would be
+ * rejected downstream and waste a run.
+ */
+export function resolveComputerUseModel(tier: string | null | undefined): string {
+  if (!tier) return COMPUTER_USE_MODEL;
+  try {
+    return getDefaultModelFor(tier, 'computer-use');
+  } catch {
+    return COMPUTER_USE_MODEL;
+  }
+}
 
 // ─── Gateway base URL ─────────────────────────────────────────────────────────
 
@@ -305,6 +329,7 @@ export async function callCloud(
   token: string,
   gatewayBase: string = DEFAULT_GATEWAY_BASE,
   signal?: AbortSignal,
+  model: string = COMPUTER_USE_MODEL,
 ): Promise<CloudAgentResponse> {
   // Validate gateway origin before sending JWT
   const validatedBase = validateGatewayUrl(gatewayBase);
@@ -317,7 +342,7 @@ export async function callCloud(
   const endpoint = `${validatedBase}/api/llm/v1/chat/completions`;
 
   const body = JSON.stringify({
-    model: COMPUTER_USE_MODEL,
+    model,
     messages,
     tools: BROWSER_TOOL_DEFINITIONS,
     tool_choice: 'auto',
@@ -338,9 +363,10 @@ export async function callCloud(
       // before any provider work). callCloud never retries a send, so a fresh
       // key per call is the correct durable-reservation identity.
       //
-      // Deliberately NO x-agi-fallback-models header: COMPUTER_USE_MODEL is a
-      // pinned catalog routing slot, not a resolveAutoRoute() auto plan, so
-      // this request is an explicit selection the gateway must never rotate.
+      // Deliberately NO x-agi-fallback-models header: the model is a pinned
+      // catalog routing slot resolved from the account's tier, not a
+      // resolveAutoRoute() auto plan, so this request is an explicit selection
+      // the gateway must never rotate.
       'Idempotency-Key': `cu:${crypto.randomUUID()}`,
       // Legacy no-op: managed cloud is public alpha (open by default). The server gate
       // (apps/web/lib/managed-compute-gate.ts) is now purely env-based — it ignores this

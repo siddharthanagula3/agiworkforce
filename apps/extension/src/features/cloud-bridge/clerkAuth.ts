@@ -1,13 +1,16 @@
 import { createClerkClient } from '@clerk/chrome-extension/client';
 import {
+  managedCloudOwnerFromSessionToken,
   normalizeManagedCloudOwner,
   sameManagedCloudCredential,
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './managedCloudAuthority';
 
-const publishableKey = process.env.CLERK_PUBLISHABLE_KEY?.trim() ?? '';
-const configuredSyncHost = process.env.CLERK_SYNC_HOST?.trim() ?? '';
+// Bracket access: these come from an index signature on ProcessEnv, and the
+// package builds with noPropertyAccessFromIndexSignature.
+const publishableKey = process.env['CLERK_PUBLISHABLE_KEY']?.trim() ?? '';
+const configuredSyncHost = process.env['CLERK_SYNC_HOST']?.trim() ?? '';
 const WEB_SIGN_IN_URL = 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension';
 
 interface ClerkOriginResult {
@@ -159,6 +162,32 @@ async function requestBackgroundAuthContext(
   return { token: response.token, owner };
 }
 
+type ClerkSessionLike = ClerkClient['session'];
+
+/**
+ * Resolve the owner of a live Clerk session.
+ *
+ * Hydrated Clerk resources are preferred, but the MV3 background client
+ * (`standardBrowser: false`) does not reliably populate `clerk.user` /
+ * `session.user`, so a valid token-bearing session would otherwise be rejected
+ * as unowned. The session token's own `sub`/`sid` claims are the fallback.
+ * The two sources are never mixed: normalizeManagedCloudOwner returns null
+ * unless BOTH resource fields are present, so a partial resource read falls
+ * through to a wholly token-derived owner rather than pairing mismatched ids.
+ */
+function resolveSessionOwner(
+  clerk: ClerkClient,
+  session: ClerkSessionLike,
+  token: string | null,
+): ManagedCloudOwner | null {
+  return (
+    normalizeManagedCloudOwner({
+      accountId: clerk.user?.id ?? session?.user?.id,
+      authIncarnation: session?.id,
+    }) ?? managedCloudOwnerFromSessionToken(token)
+  );
+}
+
 /**
  * Capture a token together with the exact Clerk account/session that minted it.
  * Consumers must keep these values together for the full operation lifetime.
@@ -174,10 +203,7 @@ export async function getFreshClerkAuthContext(
   if (!session) return null;
   const token = await session.getToken();
   if (!token) return null;
-  const owner = normalizeManagedCloudOwner({
-    accountId: clerk.user?.id ?? session.user?.id,
-    authIncarnation: session.id,
-  });
+  const owner = resolveSessionOwner(clerk, session, token);
   if (!owner) throw new Error('AGI Cloud returned an unowned extension session.');
   return { token, owner };
 }
@@ -250,18 +276,20 @@ export async function signOutClerkIfCurrent(expected: ClerkAuthContext): Promise
     ? await getBackgroundClient()
     : await getForegroundClient();
   const session = clerk.session;
-  const owner = normalizeManagedCloudOwner({
-    accountId: clerk.user?.id ?? session?.user?.id,
-    authIncarnation: session?.id,
+  if (!session) return false;
+
+  // Cheap pre-check: when Clerk resources ARE hydrated, reject a foreign
+  // session before minting a token for it. When they are not (background
+  // client), fall through — the credential comparison below is authoritative.
+  const resourceOwner = normalizeManagedCloudOwner({
+    accountId: clerk.user?.id ?? session.user?.id,
+    authIncarnation: session.id,
   });
-  if (!session || !owner || !sameManagedCloudOwner(owner, expected.owner)) return false;
+  if (resourceOwner && !sameManagedCloudOwner(resourceOwner, expected.owner)) return false;
 
   const token = await session.getToken();
   const liveSession = clerk.session;
-  const liveOwner = normalizeManagedCloudOwner({
-    accountId: clerk.user?.id ?? liveSession?.user?.id,
-    authIncarnation: liveSession?.id,
-  });
+  const liveOwner = resolveSessionOwner(clerk, liveSession, token);
   if (
     liveSession !== session ||
     !liveOwner ||

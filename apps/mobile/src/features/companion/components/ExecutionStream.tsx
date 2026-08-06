@@ -173,7 +173,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
               width: 1,
               flex: 1,
               minHeight: 12,
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: colors.neutralSurface,
               marginTop: 3,
             }}
           />

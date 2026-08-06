@@ -53,15 +53,15 @@ export default function WaitlistPage() {
             <a href="/pricing" className="agi-fl-surface-link">
               Team is already live at /pricing
             </a>
-            . This list is for <strong>Team &amp; Enterprise</strong> early access to org seats,
-            admin controls, SSO, and centralized billing. Leave your email and we will reach out as
-            those land.
+            . This list is for <strong>Enterprise early access</strong> — advanced org controls,
+            SSO, custom retention, and centralized governance beyond what Team ships today. Leave
+            your email and we will reach out as those land.
           </p>
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <PublicWaitlistForm source="website" ctaLabel="Request Org/SSO Early Access" />
             <p className="agi-fl-final-stamp" style={{ marginTop: 18, textTransform: 'none' }}>
-              One email when Team &amp; Enterprise org/SSO features land. No marketing drip,
-              unsubscribe anytime.
+              One email when Enterprise org/SSO features land. No marketing drip, unsubscribe
+              anytime.
             </p>
           </div>
         </section>

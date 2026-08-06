@@ -12,6 +12,7 @@ import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
+import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { seoService } from '@/lib/seo/seo-optimizer';
 
 // i18n is initialized synchronously at module import time (see app/i18n/index.ts).
@@ -41,6 +42,9 @@ export default function Providers({
               <CommandPaletteProvider />
               <OfflineIndicator position="bottom" />
               <SessionTimeoutGuard />
+              {/* Global support widget. Renders nothing unless
+                  NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED === '1'. */}
+              <SupportWidgetMount />
               <Toaster position="top-center" richColors closeButton />
             </WaitlistModalProvider>
           </I18nextProvider>

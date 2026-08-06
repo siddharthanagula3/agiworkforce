@@ -87,6 +87,13 @@ const USER_OWNED_TABLES = new Set([
   'account_sessions',
   'security_audit_logs',
   'feedback',
+  // Organization sharing grants (0086). Not user-owned, but tenant-owned: a
+  // statement that touches one over the BYPASSRLS connection without an
+  // `organization_id` predicate is a cross-ORG read, which is the same class of
+  // defect this gate exists to catch.
+  'organization_shared_projects',
+  'organization_project_access',
+  'organization_shared_connectors',
 ]);
 
 /** Tokens that prove a statement is constrained to one owner or one org. */

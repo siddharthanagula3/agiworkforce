@@ -34,13 +34,19 @@
         "properties": {
           "plan": {
             "type": "string",
-            "enum": ["basic", "pro", "max", "max_15x"],
+            "enum": ["basic", "pro", "max", "max_15x", "team"],
             "description": "The subscription plan to checkout"
           },
           "billingInterval": {
             "type": "string",
             "enum": ["monthly", "yearly"],
             "description": "Billing cycle interval"
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999,
+            "description": "Licensed seat count. Required for per-seat plans (team) and rejected for per-account plans. Charged as the Stripe line-item quantity."
           }
         }
       },
@@ -270,9 +276,17 @@
                     "user": {
                       "type": "object",
                       "properties": {
-                        "id": { "type": "string", "format": "uuid" },
-                        "email": { "type": "string", "format": "email" },
-                        "name": { "type": "string" }
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "email": {
+                          "type": "string",
+                          "format": "email"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       }
                     }
                   }
@@ -299,8 +313,13 @@
                 "type": "object",
                 "required": ["code"],
                 "properties": {
-                  "code": { "type": "string" },
-                  "action": { "type": "string", "enum": ["approve", "deny"] }
+                  "code": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["approve", "deny"]
+                  }
                 }
               }
             }
@@ -314,15 +333,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "status": { "type": "string", "enum": ["approved", "denied"] }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["approved", "denied"]
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "description": "Not authenticated" },
-          "409": { "description": "Code already processed" }
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Code already processed"
+          }
         }
       }
     },

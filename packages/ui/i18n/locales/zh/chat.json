@@ -56,5 +56,12 @@
   "agentModeDisabled": "智能体模式已禁用",
   "compactMode": "紧凑模式",
   "compactModeEnabled": "紧凑模式已启用",
-  "compactModeDisabled": "紧凑模式已禁用"
+  "compactModeDisabled": "紧凑模式已禁用",
+  "artifactPublish": {
+    "untitled": "已发布的工件",
+    "publishedOn": "发布于 {{date}}",
+    "sharedFrom": "来自 AGI 的分享",
+    "renderFailed": "无法渲染此工件：{{error}}",
+    "svgUnavailable": "此 SVG 中没有可以安全显示的内容。"
+  }
 }

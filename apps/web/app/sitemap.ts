@@ -14,9 +14,13 @@ interface RouteConfig {
  * Every indexable public route. Deliberately excludes:
  *  - authenticated app routes (/chat, /settings, /billing, /projects, /user,
  *    /customize, /admin) — disallowed in robots.ts
- *  - redirect-only routes (/privacy-policy, /terms-of-service, /documentation,
- *    /downloads, /sign-in, /sign-up, /register, /marketplace, /ai-skills,
- *    /api-reference, /device-auth, /connectors/new, /connectors/permissions,
+ *  - legal policy aliases, which are now 308 redirects declared in
+ *    next.config.ts rather than stub pages (/privacy-policy, /terms-of-service,
+ *    /cookie-policy, /aup, /acceptable-use-policy). Exactly one canonical page
+ *    per policy is listed below; never add an alias here.
+ *  - other redirect-only routes (/documentation, /downloads, /sign-in,
+ *    /sign-up, /register, /marketplace, /ai-skills, /api-reference,
+ *    /device-auth, /connectors/new, /connectors/permissions,
  *    /use-cases/consulting-businesses, /use-cases/it-service-providers, ...)
  *  - noindex utility routes (/signup, /login, /forgot-password, /verify, /auth/*)
  *  - dynamic detail routes without published content (/blog/[slug] currently
@@ -113,6 +117,8 @@ const routes: RouteConfig[] = [
   { path: '/security', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
   { path: '/terms', priority: 0.7, changeFrequency: 'yearly' },
+  { path: '/acceptable-use', priority: 0.7, changeFrequency: 'yearly' },
+  { path: '/agent-permissions', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/dpa', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/sla', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/subprocessors', priority: 0.6, changeFrequency: 'monthly' },

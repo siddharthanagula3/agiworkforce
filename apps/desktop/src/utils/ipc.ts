@@ -86,7 +86,6 @@ const ALLOWED_COMMAND_PREFIXES = [
   'format_',
   'fs_',
   'git_',
-  'google_batch_',
   'knowledge_',
   'llm_',
   'lsp_',

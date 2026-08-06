@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockOpenInAppBrowser = jest.fn();
@@ -8,6 +9,8 @@ const mockFetchStatus = jest.fn();
 const mockFetchSessionTimeout = jest.fn();
 const mockSaveSessionTimeout = jest.fn();
 const mockFetchAuditLog = jest.fn();
+const mockFetchAccountSessions = jest.fn();
+const mockRevokeAccountSession = jest.fn();
 const mockUpdatePassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
@@ -61,11 +64,20 @@ jest.mock('@clerk/expo', () => ({
   useUser: () => ({ user: { updatePassword: mockUpdatePassword } }),
 }));
 
+// App Lock is a device setting, not an account one: the screen reports the real
+// SecureStore-backed flag, so the store is stubbed as hydrated + off here.
+jest.mock('../lib/biometricFlagStore', () => ({
+  useBiometricFlag: (selector: (state: { hydrated: boolean; enabled: boolean }) => unknown) =>
+    selector({ hydrated: true, enabled: false }),
+}));
+
 jest.mock('../src/features/settings/account-security/service', () => ({
   fetchAccountSecurityStatus: (...args: unknown[]) => mockFetchStatus(...args),
   fetchSessionTimeout: (...args: unknown[]) => mockFetchSessionTimeout(...args),
   saveSessionTimeout: (...args: unknown[]) => mockSaveSessionTimeout(...args),
   fetchAuditLog: (...args: unknown[]) => mockFetchAuditLog(...args),
+  fetchAccountSessions: (...args: unknown[]) => mockFetchAccountSessions(...args),
+  revokeAccountSession: (...args: unknown[]) => mockRevokeAccountSession(...args),
   groupAuditEntries: jest.requireActual('../src/features/settings/account-security/service')
     .groupAuditEntries,
   SESSION_TIMEOUT_MINUTES: [15, 30, 60, 120, 480],
@@ -145,6 +157,28 @@ describe('Mobile Account Security screen', () => {
     mockFetchSessionTimeout.mockResolvedValue(60);
     mockSaveSessionTimeout.mockResolvedValue(undefined);
     mockFetchAuditLog.mockResolvedValue([]);
+    mockFetchAccountSessions.mockResolvedValue({
+      sessions: [
+        {
+          id: 'sess_mobile',
+          device: 'iPhone',
+          browser: null,
+          location: null,
+          lastActiveAt: new Date().toISOString(),
+          isCurrent: true,
+        },
+        {
+          id: 'sess_laptop',
+          device: 'Macintosh',
+          browser: 'Chrome 141',
+          location: null,
+          lastActiveAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+          isCurrent: false,
+        },
+      ],
+      currentSessionKnown: true,
+    });
+    mockRevokeAccountSession.mockResolvedValue(undefined);
   });
 
   it('renders authoritative factor and current-session state with bounded Web handoffs', async () => {
@@ -152,8 +186,6 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByText('4 remaining')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
-    expect(screen.getByLabelText('Current Mobile session. Active')).toBeTruthy();
-    expect(screen.getByLabelText('Other devices. Not exposed')).toBeTruthy();
     expect(
       screen.getByText(
         'Passkeys, SMS MFA, and Lockdown mode are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them.',
@@ -162,7 +194,7 @@ describe('Mobile Account Security screen', () => {
 
     fireEvent.press(screen.getByLabelText('Open Web security. Web'));
     fireEvent.press(screen.getByLabelText('Open Web account. Web'));
-    fireEvent.press(screen.getByLabelText('App Lock. On device'));
+    fireEvent.press(screen.getByLabelText('App Lock. Off'));
 
     expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       1,
@@ -185,6 +217,8 @@ describe('Mobile Account Security screen', () => {
     // boundary — Local Mode must not reach for either.
     expect(mockFetchSessionTimeout).not.toHaveBeenCalled();
     expect(mockFetchAuditLog).not.toHaveBeenCalled();
+    expect(mockFetchAccountSessions).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Devices. Cloud mode required')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Switch to AGI Cloud'));
     expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
@@ -231,6 +265,75 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
   });
 
+  it('lists the account devices the server reports and marks this device', async () => {
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('iPhone (this device)')).toBeTruthy());
+    expect(screen.getByLabelText('Macintosh · Chrome 141. 3h ago')).toBeTruthy();
+    // The current row carries no revoke action — signing THIS device out is the
+    // account sign-out flow, not a device row.
+    expect(screen.getByLabelText('iPhone (this device). Active now').props.accessibilityRole).toBe(
+      undefined,
+    );
+  });
+
+  it('revokes another device only after an explicit confirmation, then re-reads the list', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('Macintosh · Chrome 141')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Macintosh · Chrome 141. 3h ago'));
+
+    // Tapping alone must not revoke anything.
+    expect(mockRevokeAccountSession).not.toHaveBeenCalled();
+    const buttons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    await act(async () => {
+      buttons.find((button) => button.text === 'Sign out')?.onPress?.();
+    });
+
+    await waitFor(() => expect(mockRevokeAccountSession).toHaveBeenCalledWith('sess_laptop'));
+    // Two reads: the initial load and the post-revoke re-read.
+    await waitFor(() => expect(mockFetchAccountSessions).toHaveBeenCalledTimes(2));
+    alertSpy.mockRestore();
+  });
+
+  it('says the device list is unavailable instead of showing no other devices', async () => {
+    mockFetchAccountSessions.mockRejectedValue(new Error('offline'));
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Devices. Unavailable · Retry')).toBeTruthy());
+    expect(screen.queryByText('No active devices')).toBeNull();
+
+    mockFetchAccountSessions.mockResolvedValue({ sessions: [], currentSessionKnown: true });
+    fireEvent.press(screen.getByLabelText('Devices. Unavailable · Retry'));
+    await waitFor(() => expect(screen.getByText('No active devices')).toBeTruthy());
+  });
+
+  it('discloses when the server could not match this device to a listed session', async () => {
+    mockFetchAccountSessions.mockResolvedValue({
+      sessions: [
+        {
+          id: 'sess_laptop',
+          device: 'Macintosh',
+          browser: null,
+          location: null,
+          lastActiveAt: null,
+          isCurrent: false,
+        },
+      ],
+      currentSessionKnown: false,
+    });
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByText('This device could not be matched to a listed session')).toBeTruthy(),
+    );
+    expect(screen.getByLabelText('Macintosh. Unknown')).toBeTruthy();
+  });
+
   it('sign-in gates direct route access before any account request', () => {
     mockAuthState = {
       isClerkLoaded: true,
@@ -243,5 +346,6 @@ describe('Mobile Account Security screen', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
     expect(mockFetchStatus).not.toHaveBeenCalled();
+    expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });
 });

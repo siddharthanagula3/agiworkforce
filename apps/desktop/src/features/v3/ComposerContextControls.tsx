@@ -92,16 +92,25 @@ export function ComposerContextControls({
       className="flex min-w-0 items-center gap-1 overflow-hidden"
       aria-label="Active execution context"
     >
-      <button
-        type="button"
-        className={chipClass(policy.tone)}
-        onClick={() => openSettings('agent-execution')}
-        aria-label={`${policy.label}. Open agent execution settings`}
-        title={`${policy.label} · Open agent execution settings`}
-      >
-        <policy.Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
-        <span className="max-w-[9rem] truncate">{policy.label}</span>
-      </button>
+      {/* The terminal-policy chip warns about shell execution risk, which only
+          exists once a workspace folder is attached. A fresh install has no
+          folder AND ships with the sandbox not yet configured, so rendering
+          the chip unconditionally put an alarm-red "Terminal: Sandbox off"
+          in every new user's composer before they had touched the terminal.
+          The full-access policy stays visible regardless — the user opted
+          into that state explicitly and should keep seeing it. */}
+      {(folderPath || terminalSandbox.policy === 'danger-full-access') && (
+        <button
+          type="button"
+          className={chipClass(policy.tone)}
+          onClick={() => openSettings('agent-execution')}
+          aria-label={`${policy.label}. Open agent execution settings`}
+          title={`${policy.label} · Open agent execution settings`}
+        >
+          <policy.Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="max-w-[9rem] truncate">{policy.label}</span>
+        </button>
+      )}
 
       {autoApproveTools && (
         <button

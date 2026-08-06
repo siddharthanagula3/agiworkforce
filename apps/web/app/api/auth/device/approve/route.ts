@@ -12,6 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const DeviceCodeApproveSchema = z.object({
   user_code: z
@@ -82,6 +83,14 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     throw createError.notFound('Code has expired. Please run the login command again.');
   }
 
+  // Non-reversible reference to the device. `device_id` is the polling secret
+  // for the CLI/desktop flow and must never be persisted into an audit row.
+  const deviceRef = crypto
+    .createHash('sha256')
+    .update(record.device_id + (process.env['LOG_SALT'] ?? ''))
+    .digest('hex')
+    .slice(0, 12);
+
   if (action === 'deny') {
     const denied = await db.query<{ status: string }>(
       `UPDATE device_authorization_codes
@@ -99,6 +108,14 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     if (!denied.length) {
       throw createError.conflict('This device code has already been processed');
     }
+
+    await recordAuditEvent({
+      userId: authUser.userId,
+      eventType: 'device_authorization_denied',
+      outcome: 'denied',
+      request,
+      detail: { resourceType: 'device_authorization', subjectRef: deviceRef },
+    });
 
     return NextResponse.json(
       { success: true, approved: false, status: 'denied' },
@@ -124,12 +141,14 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     throw createError.conflict('This device code has already been processed');
   }
 
-  const deviceRef = crypto
-    .createHash('sha256')
-    .update(record.device_id + (process.env['LOG_SALT'] ?? ''))
-    .digest('hex')
-    .slice(0, 12);
   logger.info({ deviceRef, userId: authUser.userId }, 'Device code approved');
+
+  await recordAuditEvent({
+    userId: authUser.userId,
+    eventType: 'device_authorization_approved',
+    request,
+    detail: { resourceType: 'device_authorization', subjectRef: deviceRef },
+  });
 
   return NextResponse.json(
     { success: true, approved: true, status: 'approved' },

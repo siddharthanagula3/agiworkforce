@@ -251,6 +251,24 @@ async function enterMockedCloudMode(): Promise<void> {
   await browser.refresh();
   await installWebviewStubs();
 
+  // After the refresh the shell spends seconds in its auth-bootstrap loader
+  // before rendering EITHER the sign-in card or (with a live session) the
+  // composer. The old one-shot `deviceSignInCardVisible()` check ran during
+  // that loader, saw neither, skipped sign-in, and then waited 90s for a
+  // composer that a signed-out AuthPage can never show.
+  const composerDisplayed = async () =>
+    $('textarea[aria-label="Chat message input"]')
+      .isDisplayed()
+      .catch(() => false);
+  await browser.waitUntil(
+    async () => (await deviceSignInCardVisible()) || (await composerDisplayed()),
+    {
+      timeout: 60_000,
+      interval: 500,
+      timeoutMsg: 'Neither the Cloud sign-in card nor the composer appeared after refresh',
+    },
+  );
+
   if (await deviceSignInCardVisible()) {
     await mockDeviceAuthorization();
     await completeMockedDeviceSignIn();

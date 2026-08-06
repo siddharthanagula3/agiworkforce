@@ -94,9 +94,9 @@ function PhaseRow({ config, status, subStatusText }: PhaseRowProps) {
     <div className="flex items-start gap-3">
       {/* Status icon */}
       <div className="shrink-0 mt-0.5">
-        {status === 'complete' && <CheckCircle2 className="h-5 w-5 text-teal-400" />}
-        {status === 'active' && <Loader2 className="h-5 w-5 text-teal-400 animate-spin" />}
-        {status === 'pending' && <Circle className="h-5 w-5 text-zinc-600" />}
+        {status === 'complete' && <CheckCircle2 className="h-5 w-5 text-primary" />}
+        {status === 'active' && <Loader2 className="h-5 w-5 text-primary animate-spin" />}
+        {status === 'pending' && <Circle className="h-5 w-5 text-muted-foreground" />}
       </div>
 
       {/* Phase info */}
@@ -105,24 +105,26 @@ function PhaseRow({ config, status, subStatusText }: PhaseRowProps) {
           <Icon
             className={cn(
               'h-4 w-4 shrink-0',
-              status === 'complete' && 'text-teal-400',
-              status === 'active' && 'text-white',
-              status === 'pending' && 'text-zinc-600',
+              status === 'complete' && 'text-primary',
+              status === 'active' && 'text-foreground',
+              status === 'pending' && 'text-muted-foreground',
             )}
           />
           <span
             className={cn(
               'text-sm font-medium',
-              status === 'complete' && 'text-zinc-400',
-              status === 'active' && 'text-white',
-              status === 'pending' && 'text-zinc-600',
+              status === 'complete' && 'text-muted-foreground',
+              status === 'active' && 'text-foreground',
+              status === 'pending' && 'text-muted-foreground',
             )}
           >
             {config.label}
           </span>
         </div>
         {status === 'active' && (
-          <p className="text-xs text-zinc-500 mt-0.5 ml-6">{subStatusText ?? config.subLabel}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 ml-6">
+            {subStatusText ?? config.subLabel}
+          </p>
         )}
       </div>
     </div>
@@ -151,28 +153,31 @@ export const ResearchProgress = memo(function ResearchProgress({
   const isComplete = progress.phase === 'complete';
 
   return (
-    <div className={cn('bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-5', className)}>
+    <div className={cn('bg-card border border-border rounded-xl p-5 space-y-5', className)}>
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isFailed || isCancelled ? (
             <span
-              className={cn('text-sm font-semibold', isFailed ? 'text-red-400' : 'text-zinc-400')}
+              className={cn(
+                'text-sm font-semibold',
+                isFailed ? 'text-destructive' : 'text-muted-foreground',
+              )}
             >
               {isFailed ? 'Research failed' : 'Research cancelled'}
             </span>
           ) : isComplete ? (
-            <span className="text-sm font-semibold text-teal-400">Research complete</span>
+            <span className="text-sm font-semibold text-primary">Research complete</span>
           ) : (
-            <span className="text-sm font-semibold text-white">Researching...</span>
+            <span className="text-sm font-semibold text-foreground">Researching...</span>
           )}
         </div>
 
         {/* Source count + cancel */}
         <div className="flex items-center gap-3">
           {progress.sources_found > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-              <Globe className="h-3.5 w-3.5 text-teal-400" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Globe className="h-3.5 w-3.5 text-primary" />
               <span>{progress.sources_found} sources found</span>
             </div>
           )}
@@ -180,7 +185,7 @@ export const ResearchProgress = memo(function ResearchProgress({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-zinc-800"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={onCancel}
               title="Cancel research"
             >
@@ -194,10 +199,10 @@ export const ResearchProgress = memo(function ResearchProgress({
       <Progress
         value={progress.progress_percent}
         max={100}
-        className="h-1.5 bg-zinc-800"
+        className="h-1.5 bg-muted"
         indicatorClassName={cn(
           'transition-all duration-500',
-          isFailed ? 'bg-red-500' : 'bg-teal-500',
+          isFailed ? 'bg-destructive' : 'bg-primary',
         )}
       />
 
@@ -219,7 +224,7 @@ export const ResearchProgress = memo(function ResearchProgress({
       </div>
 
       {/* Footer: time + iterations */}
-      <div className="flex items-center justify-between pt-1 border-t border-zinc-800 text-xs text-zinc-500">
+      <div className="flex items-center justify-between pt-1 border-t border-border text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5" />
           <span>

@@ -51,6 +51,14 @@ export default function RefundPolicyPage() {
                 </td>
               </tr>
               <tr>
+                <td>App Store and Play purchases</td>
+                <td>
+                  Subscriptions bought inside the mobile apps are charged by Apple or Google, not by
+                  us. We cannot refund them. Request those through the store that took the payment;
+                  its own refund rules and windows apply.
+                </td>
+              </tr>
+              <tr>
                 <td>Enterprise contracts</td>
                 <td>Refund terms are part of the MSA negotiated with each customer.</td>
               </tr>
@@ -65,15 +73,31 @@ export default function RefundPolicyPage() {
           </table>
         </section>
         <section className="agi-section">
+          <p className="agi-section-eyebrow">Statutory withdrawal rights</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            <strong>EU, UK and other consumers with a statutory cooling-off right:</strong> where
+            the law gives you a right to withdraw from a distance contract within 14 days, that
+            right applies and this policy does not reduce it. Note that when you ask us to start the
+            service immediately, that right can be lost or reduced in proportion to what you have
+            already used, which is what the law provides for. Tell us within the window and we will
+            apply the statutory outcome, not the commercial one above.
+          </p>
+        </section>
+        <section className="agi-section">
           <p className="agi-section-eyebrow">How to request</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Email{' '}
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
               contact@agiworkforce.com
             </a>{' '}
-            with the email on your account, charge date, and a brief reason. We aim to respond
-            within one business day. Approved refunds are returned through the original payment
-            method on the payment processor&rsquo;s timeline.
+            with the email on your account, the charge date, and a brief reason. We aim to respond
+            within the support response target for your plan, published at{' '}
+            <Link href="/sla" style={{ color: 'var(--agi-ink)' }}>
+              /sla
+            </Link>{' '}
+            — this page used to promise one business day for everyone, which did not match those
+            targets. Approved refunds are returned through the original payment method on the
+            payment processor&rsquo;s timeline.
           </p>
           <div className="agi-cta-row">
             <a href="mailto:contact@agiworkforce.com" className="agi-cta-primary">

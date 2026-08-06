@@ -25,6 +25,8 @@ import {
 export interface UpgradeConfirmRequest {
   plan: SelectablePaidPlan;
   billingInterval: 'monthly' | 'yearly';
+  /** Licensed seats; required for per-seat plans (Team), omitted otherwise. */
+  seats?: number;
 }
 
 interface UpgradeConfirmDialogProps {
@@ -80,7 +82,11 @@ export function UpgradeConfirmDialog({
     setError(null);
     setAmountDue(null);
     setCheckoutRequired(null);
-    previewUpgrade({ plan: request.plan, billingInterval: request.billingInterval })
+    previewUpgrade({
+      plan: request.plan,
+      billingInterval: request.billingInterval,
+      ...(request.seats === undefined ? {} : { seats: request.seats }),
+    })
       .then((r) => {
         if (!cancelled) {
           setAmountDue({
@@ -115,10 +121,12 @@ export function UpgradeConfirmDialog({
 
   const display = getBillingPlanDisplay(request.plan);
   const planLabel = display.pricing.label;
+  // Per-seat plans renew at unit price x seats; showing the unit price as the
+  // renewal would understate a Team org's bill by the seat count.
   const recurringUsd =
-    request.billingInterval === 'yearly'
+    (request.billingInterval === 'yearly'
       ? display.pricing.yearlyPriceUsd
-      : display.pricing.monthlyPriceUsd;
+      : display.pricing.monthlyPriceUsd) * (request.seats ?? 1);
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
 
   async function handleConfirm() {
@@ -130,6 +138,7 @@ export function UpgradeConfirmDialog({
         await startPlanCheckout({
           plan: request.plan,
           billingInterval: request.billingInterval,
+          ...(request.seats === undefined ? {} : { seats: request.seats }),
         });
         return;
       }
@@ -138,6 +147,7 @@ export function UpgradeConfirmDialog({
         plan: request.plan,
         billingInterval: request.billingInterval,
         previewToken: amountDue.previewToken,
+        ...(request.seats === undefined ? {} : { seats: request.seats }),
       });
       onConfirmed();
     } catch (e) {

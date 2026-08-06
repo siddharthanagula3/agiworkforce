@@ -374,18 +374,6 @@
     {
       "command": "update_memory_importance",
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "vision_compare_images",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "vision_extract_text",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "vision_send_message",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     }
   ]
 }

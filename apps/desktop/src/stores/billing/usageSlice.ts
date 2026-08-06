@@ -18,7 +18,7 @@ import { useBillingStore } from '../auth';
  * intentionally exposes only bounded usage percentages and reset times; raw
  * provider cost, ledger cents, token conversions, and allowance operands stay
  * server-private. Rather than fabricate those fields, `fetchUsage` leaves
- * `usageStats` null — the UI (UsageProgressBars, UsageDashboard) already
+ * `usageStats` null — the UI (UsageDashboard) already
  * renders an honest no-data fallback.
  */
 

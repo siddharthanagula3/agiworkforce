@@ -56,5 +56,12 @@
   "agentModeDisabled": "エージェントモードが無効になりました",
   "compactMode": "コンパクトモード",
   "compactModeEnabled": "コンパクトモードが有効になりました",
-  "compactModeDisabled": "コンパクトモードが無効になりました"
+  "compactModeDisabled": "コンパクトモードが無効になりました",
+  "artifactPublish": {
+    "untitled": "公開されたアーティファクト",
+    "publishedOn": "{{date}} に公開",
+    "sharedFrom": "AGI から共有",
+    "renderFailed": "このアーティファクトを表示できませんでした: {{error}}",
+    "svgUnavailable": "この SVG には安全に表示できる内容が含まれていませんでした。"
+  }
 }

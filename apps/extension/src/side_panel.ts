@@ -5,6 +5,9 @@ import { getExtensionTokensCssAuto } from './tokens';
 import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
+  formatUsageRemaining,
+  formatUsageResetIn,
+  getBillingPlanPricing,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   normalizeModelId,
@@ -882,7 +885,18 @@ function injectStyles(): void {
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
       border-radius: 4px;
       padding: 1px 6px;
+      /*
+       * A Chrome side panel is ~320-500px and cannot be widened. Model ids run
+       * long ("gemini-3.5-flash-lite", "mcp"-namespaced routes), and with only
+       * white-space:nowrap this badge held its full intrinsic width and pushed
+       * #sp-header-right — which is flex-shrink:0 — off the panel edge, taking
+       * the header icon buttons with it. Truncate here so the actions survive.
+       */
       white-space: nowrap;
+      min-width: 0;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     #sp-header-right {
       display: flex;
@@ -1104,6 +1118,12 @@ function injectStyles(): void {
       transition: opacity 0.15s, color 0.15s, background 0.15s;
     }
     .sp-msg:hover .sp-copy-btn { opacity: 1; }
+    /* Keyboard users tab to an opacity:0 control and cannot see where focus is;
+       touch devices never hover at all, so Copy was unreachable there. */
+    .sp-copy-btn:focus-visible { opacity: 1; }
+    @media (hover: none) {
+      .sp-copy-btn { opacity: 1; }
+    }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     .sp-copy-btn.copied { color: var(--agi-ext-success); opacity: 1; }
 
@@ -1457,56 +1477,6 @@ function injectStyles(): void {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.4); opacity: 0.6; }
     }
-
-    /* ── Console log viewer ── */
-    #sp-console-panel {
-      display: none;
-      flex-direction: column;
-      max-height: 200px;
-      overflow-y: auto;
-      background: var(--agi-ext-bg);
-      border-bottom: 1px solid var(--agi-ext-border);
-      flex-shrink: 0;
-      font-family: 'SF Mono', Consolas, monospace;
-      font-size: 11px;
-    }
-    #sp-console-panel.open { display: flex; }
-    .sp-console-entry {
-      padding: 3px 10px;
-      border-bottom: 1px solid var(--agi-ext-border);
-      line-height: 1.4;
-      word-break: break-all;
-    }
-    .sp-console-log { color: var(--agi-ext-text); }
-    .sp-console-warn { color: var(--agi-ext-warning); background: rgba(251, 191, 36, 0.06); }
-    .sp-console-error { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
-    .sp-console-info { color: var(--agi-ext-info); }
-    .sp-console-debug { color: var(--agi-ext-text-muted); }
-    .sp-console-time {
-      color: var(--agi-ext-text-muted);
-      font-size: 9px;
-      margin-right: 6px;
-    }
-    .sp-console-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 10px;
-      background: var(--agi-ext-bg);
-      border-bottom: 1px solid var(--agi-ext-border);
-      position: sticky;
-      top: 0;
-    }
-    .sp-console-title { font-size: 10px; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .sp-console-clear {
-      background: none;
-      border: none;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      cursor: pointer;
-      padding: 2px 6px;
-    }
-    .sp-console-clear:hover { color: var(--agi-ext-text); }
 
     /* ── Shortcuts dropdown ── */
     .sp-shortcuts-wrapper { position: relative; }
@@ -1898,11 +1868,23 @@ function injectStyles(): void {
       align-items: center;
       gap: 6px;
       padding: 5px 2px 0;
+      /* The Quick toggle beside the chip is flex-shrink:0, so without a bound
+         here a long hostname pushed it off a ~320px side panel. */
+      min-width: 0;
+      overflow: hidden;
     }
     .sp-context-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
+      /*
+       * inline-block, NOT inline-flex. The chip's text is written straight onto
+       * the element (contextBtn.textContent = hostname), and text-overflow does
+       * not apply to the anonymous text of a flex container — so a long hostname
+       * was hard-clipped mid-character instead of ellipsising. Nothing else is
+       * ever appended here, so there is no flex layout to preserve.
+       * flex-shrink lets it yield to the Quick toggle beside it rather than
+       * pushing that control off the panel.
+       */
+      display: inline-block;
+      vertical-align: middle;
       background: var(--agi-ext-overlay);
       border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
@@ -1913,6 +1895,8 @@ function injectStyles(): void {
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s, background 0.15s;
       white-space: nowrap;
+      min-width: 0;
+      flex-shrink: 1;
       max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2340,11 +2324,11 @@ function injectStyles(): void {
     .sp-wf-save-dialog.open { display: flex; }
     .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
     .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
-    .sp-model-selector-wrap { position: relative; }
-    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
+    .sp-model-selector-wrap { position: relative; min-width: 0; }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
+    #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; flex-shrink: 0; }
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
@@ -2580,8 +2564,15 @@ function injectStyles(): void {
     }
     .sp-history-item-del:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
 
-    /* ── Phase 2: Tab bar hidden (Workflows / CU are drawer launchers now) ── */
+    /* ── Phase 2: Tab bar hidden (Workflows / CU are drawer launchers now) ──
+       Hidden on the chat view only. Workflows and Computer Use are entered from
+       the drawer but had NO exit: switchTab hides #sp-input-area and #sp-toolbar,
+       and this rule hid the one control that could call switchTab('chat'), so the
+       panel was a dead end recoverable only by closing and reopening it. The tab
+       bar comes back whenever we are off the chat view, so there is always a way
+       home. */
     #sp-tab-bar { display: none; }
+    #sp-tab-bar.sp-tab-bar-exit { display: flex; }
 
     /* ── Phase 2: Settings drawer ──────────────────────────────────────────── */
     #sp-drawer-overlay {
@@ -2740,6 +2731,12 @@ function injectStyles(): void {
       cursor: pointer;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
+      /* Button reset — the element is a <button> for keyboard access, so undo
+         the UA defaults that would otherwise centre and re-font the row. */
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: inherit;
     }
     .sp-drawer-history-text { flex: 1; min-width: 0; }
     .sp-drawer-history-title {
@@ -2943,6 +2940,19 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-drawer-memory-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+
+    /* Respect the OS "reduce motion" setting. Five infinite animations (typing
+       dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
+       which is a vestibular-trigger risk and an accessibility failure. Motion is
+       reduced to near-zero rather than removed, so state changes still register. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
     /* In-page panel toggle */
     .sp-drawer-toggle-row {
       display: flex;
@@ -2971,7 +2981,12 @@ function injectStyles(): void {
       width: 13px;
       height: 13px;
       border-radius: 50%;
-      background: white;
+      background: #ffffff;
+      /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
+         the light theme — a plain white knob on it was ~1.05:1 and the OFF
+         state read as an empty pill. An outset ring costs no layout and
+         reads on both grounds. */
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
       top: 2.5px;
       left: 2.5px;
       transition: transform 0.2s;
@@ -3224,6 +3239,12 @@ function injectStyles(): void {
       white-space: nowrap;
       cursor: pointer;
       transition: opacity 0.15s;
+      /* Now a <button> for keyboard access — reset the UA chrome so it still
+         renders as a badge. */
+      border: none;
+      background: none;
+      font-family: inherit;
+      color: inherit;
     }
     #sp-quota-badge.visible { display: flex; }
     #sp-quota-badge.has-prompts {
@@ -5262,6 +5283,9 @@ function buildUI(): void {
   newChatBtn.addEventListener('click', () => {
     cancelCurrentManagedStream(false);
     resetConversationView();
+    // The header is visible from Workflows / Computer Use too, where this used to
+    // reset the transcript behind a display:none panel and look like a no-op.
+    switchTab('chat');
   });
   headerRight.appendChild(newChatBtn);
 
@@ -5425,14 +5449,50 @@ function buildUI(): void {
     role: 'dialog',
     'aria-modal': 'true',
     'aria-label': 'AGI menu',
+    // Closed on first paint, so it must start inert too — otherwise the very
+    // first Tab press from the composer lands inside the hidden drawer.
+    inert: '',
   });
 
   let drawerReturnFocus: HTMLElement = menuBtn;
+
+  /**
+   * Turn a Chrome extension-internals error into a sentence with a next step.
+   *
+   * These strings came straight from chrome.runtime and were shown verbatim:
+   * "Autofill failed: Could not establish connection. Receiving end does not
+   * exist." That describes the extension's message port, not anything the user
+   * did or can fix, and it reads as a crash. The underlying conditions are all
+   * ordinary and recoverable — the content script has not loaded on this tab
+   * yet, or the page is one extensions may not touch.
+   *
+   * Unrecognised errors keep their original text rather than being swallowed by
+   * a generic apology: an unknown failure the user can quote to support beats a
+   * friendly sentence that hides it.
+   */
+  function explainExtensionFailure(message: string): string {
+    if (/Receiving end does not exist|Could not establish connection/i.test(message)) {
+      return "AGI isn't running on this page yet. Reload the tab, then try again.";
+    }
+    if (/Cannot access|extension manifest|chrome:\/\/|blocked by the extension/i.test(message)) {
+      return "AGI can't run on this page. Chrome blocks extensions on its own pages and on the Web Store — open an ordinary site and try again.";
+    }
+    if (/The tab was closed|No tab with id/i.test(message)) {
+      return 'That tab was closed before the action finished.';
+    }
+    return `Autofill failed: ${message}`;
+  }
 
   function openDrawer(trigger: HTMLElement = menuBtn): void {
     drawerReturnFocus = trigger;
     drawerOverlay.classList.add('open');
     drawer.classList.add('open');
+    // The drawer is hidden by translateX(100%), which moves it off-screen but
+    // leaves every control focusable — Tab walked through ~30 invisible buttons
+    // before reaching the composer. `inert` removes them from the tab order AND
+    // the accessibility tree without touching the slide transition, which
+    // visibility:hidden or display:none would break.
+    drawer.removeAttribute('inert');
     // Refresh dynamic content when drawer opens
     void refreshDrawerPairingState();
     void refreshDrawerAllowlist();
@@ -5444,6 +5504,7 @@ function buildUI(): void {
   function closeDrawer(): void {
     drawerOverlay.classList.remove('open');
     drawer.classList.remove('open');
+    drawer.setAttribute('inert', '');
     drawerReturnFocus.focus();
   }
 
@@ -5514,7 +5575,10 @@ function buildUI(): void {
       return;
     }
     for (const entry of filteredEntries) {
-      const item = el('div', { class: 'sp-drawer-history-item' });
+      // A real <button>: these rows have a click handler, so as <div>s they were
+      // unreachable by keyboard and had no focus ring. The global
+      // button:focus-visible rule supplies the ring for free.
+      const item = el('button', { class: 'sp-drawer-history-item', type: 'button' });
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
       const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
@@ -5546,7 +5610,12 @@ function buildUI(): void {
       item.appendChild(delBtn);
 
       item.addEventListener('click', () => {
-        void restoreHistoryEntry(entry.id).finally(closeDrawer);
+        void restoreHistoryEntry(entry.id).finally(() => {
+          closeDrawer();
+          // Restoring from Recent chats while in Workflows / Computer Use left the
+          // other view on screen with the restored chat hidden behind it.
+          switchTab('chat');
+        });
       });
       drawerHistoryList.appendChild(item);
     }
@@ -6531,18 +6600,19 @@ function buildUI(): void {
 
   // ── Quota badge in header (click opens drawer to cloud section) ──────────
   // Insert into the slot reserved in the header above.
-  const quotaBadgeEl = el('div', {
+  const quotaBadgeEl = el('button', {
     id: 'sp-quota-badge',
+    type: 'button',
     title: 'AGI Cloud plan',
-    style: 'cursor:pointer',
+    'aria-label': 'AGI Cloud plan and usage — open menu',
   });
   quotaBadgeEl.addEventListener('click', () => {
-    const drawerEl = document.getElementById('sp-drawer');
-    if (drawerEl && !drawerEl.classList.contains('open')) {
-      drawerEl.classList.add('open');
-      const overlayEl = document.getElementById('sp-drawer-overlay');
-      if (overlayEl) overlayEl.classList.add('open');
-    }
+    // Route through openDrawer rather than toggling classes by hand. The manual
+    // version skipped the drawer's refresh calls AND its inert handling, so the
+    // drawer opened stale and — once closed drawers became inert — completely
+    // unusable. It also never recorded a focus-return target, stranding keyboard
+    // users when the drawer closed.
+    openDrawer(quotaBadgeEl);
   });
   // Attach to the slot created in the header section above
   const quotaSlot = document.getElementById('sp-quota-badge-slot');
@@ -6696,19 +6766,22 @@ function buildUI(): void {
 
     if (canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')) {
       quotaWrap.style.display = '';
+      // Shared vocabulary: web and mobile state what is LEFT, this panel stated
+      // what was USED — the same number reading as its own opposite depending on
+      // which surface you looked at. The reset was a bare date here and a
+      // relative countdown elsewhere. Both now come from @agiworkforce/types.
       const usage =
         typeof access.usagePercentage === 'number'
-          ? `${Math.round(access.usagePercentage)}% used`
+          ? formatUsageRemaining(100 - access.usagePercentage)
           : 'usage unavailable';
-      const resetTimestamp = access.usageResetAt ? Date.parse(access.usageResetAt) : Number.NaN;
-      const resetLabel = Number.isFinite(resetTimestamp)
-        ? ` · resets ${new Date(resetTimestamp).toLocaleDateString()}`
-        : '';
-      quotaLabelEl.textContent = `Cloud usage: ${usage}${resetLabel}`;
+      const resets = formatUsageResetIn(access.usageResetAt ?? null);
+      quotaLabelEl.textContent = resets ? `Cloud: ${usage} · ${resets}` : `Cloud: ${usage}`;
       quotaUpgradeRow.style.display = 'none';
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = access.subscriptionTier.trim().toUpperCase();
+      // Canonical catalog label, not the raw tier id upper-cased — that printed
+      // "MAX_15X" where every other surface says "Max 15x".
+      quotaBadgeEl.textContent = getBillingPlanPricing(access.subscriptionTier).label;
       setManagedCloudChatState('ready');
       refreshPageHostname();
       if (ownerChanged) {
@@ -6864,25 +6937,6 @@ function buildUI(): void {
   document.body.appendChild(drawerOverlay);
   document.body.appendChild(drawer);
 
-  const consolePanel = el('div', { id: 'sp-console-panel' });
-  const consoleHeader = el('div', { class: 'sp-console-header' });
-  consoleHeader.appendChild(el('span', { class: 'sp-console-title' }, 'Console'));
-  const consoleClearBtn = el('button', { class: 'sp-console-clear' }, 'Clear');
-  consoleClearBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'CLEAR_CONSOLE_LOGS' }, () => {
-      if (chrome.runtime.lastError) return;
-      const entries = consolePanel.querySelector('.sp-console-entries');
-      if (entries) clearChildren(entries);
-    });
-  });
-  const consoleRefreshBtn = el('button', { class: 'sp-console-clear' }, 'Refresh');
-  consoleRefreshBtn.addEventListener('click', () => refreshConsoleLogs());
-  consoleHeader.appendChild(consoleRefreshBtn);
-  consoleHeader.appendChild(consoleClearBtn);
-  consolePanel.appendChild(consoleHeader);
-  consolePanel.appendChild(el('div', { class: 'sp-console-entries' }));
-  document.body.appendChild(consolePanel);
-
   // Phase 3: #sp-settings-bar removed; bridge URL is managed exclusively via the
   // drawer's Bridge URL section (drawerSaveBridgeUrl). The hidden bridgeUrlInput
   // element is kept in the DOM so that the drawer's sync line (oldInput?.value = raw)
@@ -6942,6 +6996,8 @@ function buildUI(): void {
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
+    // Only route back to chat from Workflows / Computer Use.
+    tabBar.classList.toggle('sp-tab-bar-exit', tab !== 'chat');
     if (tab === 'workflows') {
       refreshWorkflowsShortcuts();
       refreshWorkflowsTasks();
@@ -7655,7 +7711,7 @@ function buildUI(): void {
         })) as Record<string, unknown> | null;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        cuPanel.showHandoffBanner(`Autofill failed: ${msg}`, 'error');
+        cuPanel.showHandoffBanner(explainExtensionFailure(msg), 'error');
         return;
       }
 
@@ -8479,45 +8535,6 @@ function buildUI(): void {
   // primary surface (opened on toolbar click), so it must read as a chat first.
   // Computer-Use still auto-activates when a CU event actually arrives.
   switchTab('chat');
-}
-
-function refreshConsoleLogs(): void {
-  chrome.runtime.sendMessage(
-    { type: 'GET_CONSOLE_LOGS' },
-    (
-      response:
-        | { success?: boolean; logs?: Array<{ level: string; message: string; timestamp: number }> }
-        | undefined,
-    ) => {
-      if (chrome.runtime.lastError || !response?.success) return;
-      const entries = document.querySelector('.sp-console-entries');
-      if (!entries) return;
-      clearChildren(entries);
-      const logs = response.logs ?? [];
-      if (logs.length === 0) {
-        const noLogs = createElementWith({ tag: 'div', text: 'No console logs captured' });
-        noLogs.style.padding = '10px 8px';
-        noLogs.style.color = 'var(--agi-ext-text-muted)';
-        noLogs.style.fontSize = '11px';
-        noLogs.style.textAlign = 'center';
-        entries.appendChild(noLogs);
-        return;
-      }
-      for (const log of logs) {
-        const entry = el('div', { class: `sp-console-entry sp-console-${log.level}` });
-        const time = new Date(log.timestamp).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
-        entry.appendChild(el('span', { class: 'sp-console-time' }, time));
-        entry.appendChild(document.createTextNode(log.message));
-        entries.appendChild(entry);
-      }
-      const panel = document.getElementById('sp-console-panel');
-      if (panel) panel.scrollTop = panel.scrollHeight;
-    },
-  );
 }
 
 function refreshShortcuts(): void {

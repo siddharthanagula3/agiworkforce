@@ -94,8 +94,8 @@ describe('public marketing copy regressions', () => {
 
   it('does not imply public Web or Mobile BYOK chat', () => {
     const byok = readWebFile('app/byok/page.tsx');
-    const pricingEn = readWebFile('app/i18n/locales/en/pricing.json');
-    const pricingEs = readWebFile('app/i18n/locales/es/pricing.json');
+    const pricingEn = readWebFile('../../packages/ui/i18n/locales/en/pricing.json');
+    const pricingEs = readWebFile('../../packages/ui/i18n/locales/es/pricing.json');
     const normalized = byok.replace(/\s+/g, ' ');
 
     expect(byok).not.toContain('Web and mobile use explicit consent before sending a prompt');
@@ -108,7 +108,7 @@ describe('public marketing copy regressions', () => {
   it('does not promise unverified contact or enterprise sales guarantees', () => {
     const contact = readWebFile('app/contact/page.tsx');
     const sales = readWebFile('app/contact-sales/page.tsx');
-    const pricing = readWebFile('app/i18n/locales/en/pricing.json');
+    const pricing = readWebFile('../../packages/ui/i18n/locales/en/pricing.json');
     const matrix = readWebFile('lib/marketing-constants.ts');
 
     expect(contact).not.toContain('Sent.');
@@ -278,8 +278,8 @@ describe('public marketing copy regressions', () => {
   });
 
   it('does not call managed cloud private-beta/waitlist-to-use on the pricing page (PA-5)', () => {
-    const en = readWebFile('app/i18n/locales/en/pricing.json');
-    const es = readWebFile('app/i18n/locales/es/pricing.json');
+    const en = readWebFile('../../packages/ui/i18n/locales/en/pricing.json');
+    const es = readWebFile('../../packages/ui/i18n/locales/es/pricing.json');
     const layout = readWebFile('app/pricing/layout.tsx');
 
     // EN: no private-beta or by-invite framing for managed cloud access.

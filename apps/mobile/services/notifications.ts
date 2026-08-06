@@ -339,18 +339,6 @@ export async function scheduleLocalNotification(opts: {
 }
 
 // ---------------------------------------------------------------------------
-// Input validation — sanitize notification data before use in navigation
-// ---------------------------------------------------------------------------
-
-/** Matches a standard UUID (v4 or any version with hex chars). */
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/** Validate that a value is a well-formed UUID safe for use in navigation paths. */
-function isValidAgentId(value: unknown): value is string {
-  return typeof value === 'string' && UUID_PATTERN.test(value);
-}
-
-// ---------------------------------------------------------------------------
 // Route allowlist — only navigate to known safe app routes
 // ---------------------------------------------------------------------------
 
@@ -453,39 +441,22 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   switch (data.type) {
     case 'agent_failed':
     case 'emergency_stop_triggered':
-      // Critical: deep link to agent detail or companion dashboard
-      if (isValidAgentId(data.agentId)) {
-        safeNavigate({
-          pathname: '/(app)/companion/agent/[id]' as const,
-          params: { id: data.agentId },
-        });
-      } else {
-        if (data.agentId) {
-          console.warn('[notifications] Blocked navigation with invalid agentId:', data.agentId);
-        }
-        safeNavigate({ pathname: '/(app)/companion' as const });
-      }
+    case 'agent_paused':
+      // Deep link to the live Cloud tasks/runs list. The legacy companion
+      // agent-detail screen (/(app)/companion/agent/[id]) and /(app)/agents/[id]
+      // are both gated behind FEATURES.agents (false in v1) and render
+      // <FeatureUnavailable/>, so a real notification tap there was a dead end
+      // (MOBILE-AGENT-NOTIF-DEADEND-01). /(app)/agents (TasksScreen) is gated by
+      // FEATURES.cloudTasks (true) and is the live runs list. The push agentId is
+      // a companion id, not a cloud run id, so we route to the list rather than a
+      // mismatched detail route.
+      safeNavigate({ pathname: '/(app)/agents' as const });
       break;
 
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
-      // Navigate to companion/desktop view for approval
+      // Navigate to companion/desktop view for approval (FEATURES.companion is live)
       safeNavigate({ pathname: '/(app)/companion' as const });
-      break;
-
-    case 'agent_paused':
-      // Navigate to agent detail if we have a valid agentId
-      if (isValidAgentId(data.agentId)) {
-        safeNavigate({
-          pathname: '/(app)/companion/agent/[id]' as const,
-          params: { id: data.agentId },
-        });
-      } else {
-        if (data.agentId) {
-          console.warn('[notifications] Blocked navigation with invalid agentId:', data.agentId);
-        }
-        safeNavigate({ pathname: '/(app)/companion' as const });
-      }
       break;
 
     case 'task_completed':

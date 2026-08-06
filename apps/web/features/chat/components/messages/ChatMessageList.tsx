@@ -82,6 +82,13 @@ export interface ChatMessageListProps {
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
   /**
+   * Retry a Deep Research turn that errored or was stopped (CAP-045 slice 4).
+   * Surfaces that cannot send omit it, so no dead Retry control is rendered.
+   */
+  onRetryResearch?: (messageId: string) => void;
+  /** The message whose research retry is currently in flight, if any. */
+  retryingResearchMessageId?: string | null;
+  /**
    * Continue Generation: called with the LAST assistant message's id when it
    * ended early (truncated at the token cap, or user-stopped with partial
    * text) and the user clicks the Continue button rendered below it. The
@@ -253,6 +260,8 @@ interface MessageGroupRowProps {
   group: MessageGroup;
   isLastGroup: boolean;
   onRegenerate?: (id: string) => void;
+  onRetryResearch?: (id: string) => void;
+  retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
@@ -277,6 +286,8 @@ interface MessageGroupRowProps {
 interface MessageRowProps {
   message: ChatMessage;
   onRegenerate?: (id: string) => void;
+  onRetryResearch?: (id: string) => void;
+  retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
@@ -532,6 +543,8 @@ function paywallResetLabel(paywall: { showResetTime?: boolean; resetAt?: string 
 const MessageRow = ({
   message,
   onRegenerate,
+  onRetryResearch,
+  retryingResearchMessageId,
   onEdit,
   onDelete,
   onReact,
@@ -628,6 +641,12 @@ const MessageRow = ({
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
       onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
+      onRetryResearch={
+        onRetryResearch && displayRole === 'assistant' && message.metadata?.['research']
+          ? onRetryResearch
+          : undefined
+      }
+      isRetryingResearch={retryingResearchMessageId === message.id}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
@@ -648,6 +667,8 @@ const MessageGroupRow = memo(
     group,
     isLastGroup: _isLastGroup,
     onRegenerate,
+    onRetryResearch,
+    retryingResearchMessageId,
     onEdit,
     onDelete,
     onReact,
@@ -672,6 +693,8 @@ const MessageGroupRow = memo(
             key={message.id}
             message={message}
             onRegenerate={onRegenerate}
+            onRetryResearch={onRetryResearch}
+            retryingResearchMessageId={retryingResearchMessageId}
             onEdit={onEdit}
             onDelete={onDelete}
             onReact={onReact}
@@ -705,6 +728,8 @@ const MessageGroupRow = memo(
       }) &&
       prev.isLastGroup === next.isLastGroup &&
       prev.onRegenerate === next.onRegenerate &&
+      prev.onRetryResearch === next.onRetryResearch &&
+      prev.retryingResearchMessageId === next.retryingResearchMessageId &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onReact === next.onReact &&
@@ -823,6 +848,8 @@ const ChatMessageListComponent = ({
   conversationId = null,
   isLoading,
   onRegenerate,
+  onRetryResearch,
+  retryingResearchMessageId = null,
   onContinue,
   onEdit,
   onDelete,
@@ -1159,6 +1186,8 @@ const ChatMessageListComponent = ({
   const groupProps = useMemo<Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>>(
     () => ({
       onRegenerate: handleRegenerate,
+      onRetryResearch,
+      retryingResearchMessageId,
       onEdit: handleEdit,
       onDelete: handleDelete,
       onReact: handleReact,
@@ -1185,6 +1214,8 @@ const ChatMessageListComponent = ({
       handleReadAloud,
       handleRegenerate,
       handleRegenerateImage,
+      onRetryResearch,
+      retryingResearchMessageId,
       isReadAloudSupported,
       isSpeaking,
       onBranch,
@@ -1376,6 +1407,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.isLoading === next.isLoading &&
     prev.isUserTyping === next.isUserTyping &&
     prev.onRegenerate === next.onRegenerate &&
+    prev.onRetryResearch === next.onRetryResearch &&
+    prev.retryingResearchMessageId === next.retryingResearchMessageId &&
     prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&
     prev.onReact === next.onReact &&

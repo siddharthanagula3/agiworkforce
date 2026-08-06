@@ -36,9 +36,14 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock security audit
+// Mock security audit.
+// `recordAuditEvent` is the business audit-trail writer (AUDIT-TRAIL-01); the
+// cancellation handler calls it to record the entitlement change. It must be
+// present in this factory or the handler throws on an undefined import and the
+// webhook 500s.
 vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Neon DB mock — module-level refs survive clearAllMocks because they use

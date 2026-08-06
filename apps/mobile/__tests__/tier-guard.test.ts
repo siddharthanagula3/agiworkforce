@@ -2,13 +2,14 @@
  * tierGuard — unit tests
  *
  * Verifies `guardProviderSwitch` and `mapBillingPlanToUIPlan` correctly enforce
- * the current provider-switch gate: Pro tier and above may switch providers
- * mid-thread. Free/BYOK/local-only may not.
+ * the current provider-switch gate: Max tier and above may switch providers
+ * mid-thread. Pro/team/free/BYOK/local-only may not.
  *
- * Tier model (2026-06-20):
- *   PROVIDER_SWITCH_MIN_TIER = 'pro'   (was 'pro_plus' — removed tier)
+ * Tier model (2026-08-05, MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01):
+ *   PROVIDER_SWITCH_MIN_TIER = 'max'   (aligned to canonical
+ *     canSwitchProviderInThread: max / max_15x / enterprise only)
  *   BillingPlanTier: local-only | byok | free | pro | max | team | enterprise
- *   hobby / pro_plus removed; team maps to pro in UIPlanTier
+ *   team maps to pro in UIPlanTier; enterprise/max_15x map to max.
  */
 
 import {
@@ -57,7 +58,7 @@ describe('mapBillingPlanToUIPlan — all current BillingPlanTier values', () => 
 });
 
 // ---------------------------------------------------------------------------
-// guardProviderSwitch — allow cases (pro+ may switch)
+// guardProviderSwitch — allow cases (max+ may switch)
 // ---------------------------------------------------------------------------
 
 describe('guardProviderSwitch — allow cases', () => {
@@ -86,14 +87,6 @@ describe('guardProviderSwitch — allow cases', () => {
     expect(guardProviderSwitch('openai', 'auto-balanced', 'free')).toBe('allow');
   });
 
-  it('allows cross-provider switch for pro tier (min tier as of 2026-06-20)', () => {
-    expect(guardProviderSwitch('anthropic', 'openai', 'pro')).toBe('allow');
-  });
-
-  it('allows cross-provider switch for team tier (maps to pro)', () => {
-    expect(guardProviderSwitch('anthropic', 'openai', 'team')).toBe('allow');
-  });
-
   it('allows cross-provider switch for max tier', () => {
     expect(guardProviderSwitch('anthropic', 'google', 'max')).toBe('allow');
   });
@@ -104,20 +97,30 @@ describe('guardProviderSwitch — allow cases', () => {
 });
 
 // ---------------------------------------------------------------------------
-// guardProviderSwitch — upgrade-required (below pro)
+// guardProviderSwitch — upgrade-required (below max)
 // ---------------------------------------------------------------------------
 
 describe('guardProviderSwitch — upgrade-required cases', () => {
-  const belowProTiers: Tier[] = ['free', 'byok', 'local-only'];
+  // Canonical gate admits only max / max_15x / enterprise; pro and team (which
+  // maps to pro) are now denied along with free / byok / local-only.
+  const belowMaxTiers: Tier[] = ['free', 'byok', 'local-only', 'pro', 'team'];
 
-  for (const tier of belowProTiers) {
-    it(`blocks cross-provider switch for sub-pro tier "${tier}"`, () => {
+  for (const tier of belowMaxTiers) {
+    it(`blocks cross-provider switch for sub-max tier "${tier}"`, () => {
       expect(guardProviderSwitch('anthropic', 'openai', tier)).toBe('upgrade-required');
     });
   }
 
   it('blocks switch from anthropic → google at free tier', () => {
     expect(guardProviderSwitch('anthropic', 'google', 'free')).toBe('upgrade-required');
+  });
+
+  it('blocks cross-provider switch at pro tier (below canonical max gate)', () => {
+    expect(guardProviderSwitch('anthropic', 'openai', 'pro')).toBe('upgrade-required');
+  });
+
+  it('blocks cross-provider switch at team tier (maps to pro, below max gate)', () => {
+    expect(guardProviderSwitch('anthropic', 'openai', 'team')).toBe('upgrade-required');
   });
 
   it('blocks switch from openai → xai at byok tier', () => {

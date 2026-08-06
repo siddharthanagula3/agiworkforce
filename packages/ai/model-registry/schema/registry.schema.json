@@ -71,6 +71,7 @@
   },
   "definitions": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "isoDate": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
     "trustMode": {
       "enum": ["local", "on_device", "byok", "managed_cloud"]
     },
@@ -97,7 +98,10 @@
         "provider": { "$ref": "#/definitions/nonEmptyString" },
         "providerModelId": { "$ref": "#/definitions/nonEmptyString" },
         "kind": { "$ref": "#/definitions/nonEmptyString" },
-        "familyPartner": { "$ref": "#/definitions/nonEmptyString" }
+        "familyPartner": { "$ref": "#/definitions/nonEmptyString" },
+        "openWeight": { "type": "boolean" },
+        "license": { "$ref": "#/definitions/nonEmptyString" },
+        "commercialRestrictions": { "$ref": "#/definitions/nonEmptyString" }
       }
     },
     "lifecycle": {
@@ -276,7 +280,28 @@
           }
         },
         "promoExpiresAt": { "type": ["string", "null"] },
-        "postPromoPrices": { "type": ["object", "null"] }
+        "postPromoPrices": { "type": ["object", "null"] },
+        "schedule": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Dated pricing windows. effectiveFrom/effectiveUntil are UTC calendar days and both bounds are inclusive, so a changeover happens at UTC midnight. Windows must not overlap; the first window covering a date wins, and the top-level fields are the fallback for any rate a window omits.",
+          "items": { "$ref": "#/definitions/pricingScheduleEntry" }
+        }
+      }
+    },
+    "pricingScheduleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One dated pricing window. effectiveFrom and effectiveUntil are UTC calendar days, inclusive on both sides; changeovers happen at UTC midnight.",
+      "properties": {
+        "effectiveFrom": { "$ref": "#/definitions/isoDate" },
+        "effectiveUntil": { "$ref": "#/definitions/isoDate" },
+        "note": { "$ref": "#/definitions/nonEmptyString" },
+        "inputPerMillion": { "type": "number", "minimum": 0 },
+        "outputPerMillion": { "type": "number", "minimum": 0 },
+        "cacheReadPerMillion": { "type": "number", "minimum": 0 },
+        "cacheWritePerMillion": { "type": "number", "minimum": 0 },
+        "cacheWrite1hPerMillion": { "type": "number", "minimum": 0 }
       }
     },
     "limits": {
@@ -420,6 +445,51 @@
           "type": "object",
           "minProperties": 1,
           "additionalProperties": { "$ref": "#/definitions/autoSlot" }
+        },
+        "taskFamilies": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Optional. Narrower task families layered on top of the canonical task taxonomy, each with a quality floor for the deterministic task-family ordering stage (packages/ai/routing/src/task-family-routing.ts). Families NEVER participate in admission: a family only reorders the candidate set its declared task type already produced, and the stage is off unless AGI_ROUTING_TASK_FAMILY_STAGE=1.",
+          "additionalProperties": { "$ref": "#/definitions/autoTaskFamily" }
+        }
+      }
+    },
+    "autoTaskFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appliesToTaskTypes", "riskLabel", "qualityFloor"],
+      "properties": {
+        "appliesToTaskTypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Canonical task types this family narrows. The ordering stage runs only when the request's task type is in this list.",
+          "items": { "$ref": "#/definitions/nonEmptyString" }
+        },
+        "riskLabel": {
+          "enum": ["low", "high"],
+          "description": "Rollout risk band. Low-risk families are enabled first; high-risk families are last and only behind an approval policy."
+        },
+        "qualityFloor": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Minimum quality a candidate must clear before cost ranking. Expressed only against metadata the registry already carries. An empty object is a floor every candidate meets.",
+          "properties": {
+            "minimumSlotBand": { "$ref": "#/definitions/routingProfile" },
+            "requiredCapabilities": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/nonEmptyString" }
+            },
+            "minimumContextTokens": { "type": "integer", "minimum": 1 },
+            "minimumBenchmarkScores": {
+              "type": "object",
+              "minProperties": 1,
+              "description": "Fail-closed: a model with no recorded score for a named benchmark fails the floor. Benchmark coverage is partial today, so authoring one of these will exclude every model that carries no score.",
+              "additionalProperties": { "type": "number", "minimum": 0 }
+            }
+          }
         }
       }
     },

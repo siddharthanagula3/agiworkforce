@@ -42,37 +42,26 @@ import { handleBridgeCommand } from './accountBridge';
 import {
   CLOUD_APP_ORIGIN,
   DEEP_LINK_SCHEME,
+  REMOTE_SESSION_PARTITION,
   RENDERER_CSP,
   RENDERER_HOST,
+  RENDERER_MODE,
   RENDERER_ORIGIN,
   RENDERER_SCHEME,
 } from './config';
-
-type RendererMode = 'remote' | 'bundled';
-const RENDERER_MODE: RendererMode =
-  process.env['AGI_CLOUD_RENDERER'] === 'bundled' ? 'bundled' : 'remote';
-
-/** Cookie/localStorage live here; changing the partition wipes user state. */
-const REMOTE_SESSION_PARTITION = 'persist:agi-cloud';
-
-/**
- * Hosts the remote renderer may navigate to in-window. Everything else opens
- * in the OS browser. The identity-provider hosts are included because web
- * sign-in round-trips through them as ordinary top-level redirects.
- */
-const REMOTE_NAVIGATION_HOSTS = [
-  'agiworkforce.com',
-  '.agiworkforce.com',
-  'accounts.google.com',
-  'login.microsoftonline.com',
-  'login.live.com',
-  'appleid.apple.com',
-  '.clerk.accounts.dev',
-] as const;
+import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
+import { captureToChat } from './screenshot';
+import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
+import { createTray } from './tray';
+import { applyRemoteWindowPolicy } from './windowPolicy';
 
 let mainWindow: BrowserWindow | null = null;
 /** Deep link that arrived before the window was ready (bundled mode only). */
 let pendingDeepLink: string | null = null;
+
+/** Delay before pre-loading the quick-ask panel, so it never competes with
+ * the main window's first paint. */
+const QUICK_ASK_WARMUP_MS = 5000;
 
 // ---------------------------------------------------------------------------
 // Bundled-renderer scheme: standard + secure so document.origin is agi://cloud
@@ -153,35 +142,6 @@ async function serveRenderer(request: Request): Promise<Response> {
     headers['Content-Security-Policy'] = RENDERER_CSP;
   }
   return new Response(new Uint8Array(body), { status: 200, headers });
-}
-
-// ---------------------------------------------------------------------------
-// Shared navigation policy
-// ---------------------------------------------------------------------------
-function openExternally(url: string): void {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-      void shell.openExternal(parsed.toString());
-    }
-  } catch {
-    // Unparseable URL: drop it.
-  }
-}
-
-function isAllowedRemoteNavigation(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:') return false;
-  return REMOTE_NAVIGATION_HOSTS.some((host) =>
-    host.startsWith('.')
-      ? parsed.hostname.endsWith(host) || parsed.hostname === host.slice(1)
-      : parsed.hostname === host,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +347,48 @@ function configureSession(targetSession: Electron.Session): void {
   });
 }
 
+/**
+ * Branded offline/unreachable screen.
+ *
+ * Without this the remote renderer shows Chromium's own "This site can't be
+ * reached" interstitial as the ENTIRE app window — no branding, no explanation
+ * that this is a connectivity problem rather than a broken install, and a Reload
+ * button that re-runs the same failing navigation. That is what a user sees on
+ * captive-portal wifi, in a tunnel, or during an agiworkforce.com outage.
+ *
+ * Served as a data: URL so it works with no network and no local build output.
+ * The retry navigates to the app origin, which is on the navigation allowlist —
+ * if it fails again `did-fail-load` simply brings this screen back.
+ */
+function offlineScreenUrl(targetUrl: string, detail: string): string {
+  const html = `<!doctype html><html><head><meta charset="utf-8">
+<meta name="color-scheme" content="dark"><title>AGI — offline</title><style>
+  html,body{height:100%;margin:0}
+  body{background:#212121;color:#ececec;display:flex;align-items:center;justify-content:center;
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  main{max-width:30rem;padding:2rem;text-align:center}
+  h1{font-size:1.25rem;font-weight:600;margin:0 0 .5rem;letter-spacing:-.01em}
+  p{color:#b4b4b4;margin:0 0 1.5rem}
+  code{color:#8a9693;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    word-break:break-all}
+  button{background:#da7756;color:#fff;border:0;border-radius:8px;padding:.6rem 1.25rem;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:hover{opacity:.9}
+  button:focus-visible{outline:2px solid #ececec;outline-offset:2px}
+</style></head><body><main>
+  <h1>Can't reach AGI</h1>
+  <p>You appear to be offline, or agiworkforce.com is unreachable. Your local
+     data is safe — this only affects the cloud connection.</p>
+  <button id="retry" autofocus>Try again</button>
+  <p style="margin:1.5rem 0 0"><code>${detail}</code></p>
+</main><script>
+  document.getElementById('retry').addEventListener('click',function(){
+    location.href=${JSON.stringify(targetUrl)};
+  });
+</script></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
 function createMainWindow(): void {
   const isRemote = RENDERER_MODE === 'remote';
 
@@ -396,9 +398,24 @@ function createMainWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    ...(process.platform === 'darwin' && !isRemote
-      ? { titleBarStyle: 'hiddenInset' as const }
-      : {}),
+    // Electron paints a white window before the first frame. In a dark-themed
+    // app that reads as a flash on launch and on every top-level navigation.
+    // Matches agiCoolPalette.dark.surface.base.
+    backgroundColor: '#212121',
+    // NOTE: deliberately no `titleBarStyle: 'hiddenInset'`.
+    //
+    // hiddenInset was applied to the BUNDLED renderer only (`!isRemote`), and the
+    // React shell it loads reserves no top inset. macOS floats the traffic lights
+    // over the web content at roughly x=13-75, y=12-32, while the sidebar header
+    // starts at exactly x=12, y=12 — so the brand mark sat underneath them, and
+    // with the sidebar collapsed the expand button landed entirely under the
+    // yellow and green buttons and could not be clicked at all. Since the
+    // collapsed state persists across restarts, that was unrecoverable.
+    //
+    // The shipped remote path never set it and is unaffected. Matching it here
+    // costs a frameless look on an escape-hatch mode and buys back a working
+    // window; re-introducing it requires a real --titlebar-inset in the shell
+    // plus WebkitAppRegion drag handling, not just the flag.
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -412,34 +429,9 @@ function createMainWindow(): void {
     },
   });
 
-  if (isRemote) {
-    // Google/Microsoft/Apple reject OAuth from user agents that advertise an
-    // embedded shell. Present the underlying Chrome UA without the Electron
-    // and app-name tokens — the same approach Electron-based chat wrappers
-    // ship with. If a provider still refuses, the email/OTP path is unaffected.
-    const cleanedUserAgent = mainWindow.webContents.userAgent
-      .replace(/\sAGICloud\/[\d.]+/i, '')
-      .replace(/\sAGI Cloud\/[\d.]+/i, '')
-      .replace(/\sElectron\/[\d.]+/i, '');
-    mainWindow.webContents.userAgent = cleanedUserAgent;
-  }
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Everything the page tries to pop lands in the OS browser, never in a
-    // child BrowserWindow (which would also break OAuth user-agent checks).
-    openExternally(url);
-    return { action: 'deny' };
-  });
-
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowed = isRemote
-      ? isAllowedRemoteNavigation(url)
-      : url.startsWith(`${RENDERER_ORIGIN}/`);
-    if (!allowed) {
-      event.preventDefault();
-      openExternally(url);
-    }
-  });
+  // User-agent cleanup, popup denial and the navigation allowlist — shared
+  // with the quick-ask panel so both cloud windows enforce the same policy.
+  applyRemoteWindowPolicy(mainWindow);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -455,13 +447,52 @@ function createMainWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // The warm quick-ask panel is a hidden BrowserWindow, so on platforms
+    // where closing the main window quits the app it would otherwise keep
+    // `window-all-closed` from ever firing. macOS keeps running by design.
+    if (process.platform !== 'darwin') destroyQuickAsk();
   });
 
-  if (isRemote) {
-    void mainWindow.loadURL(`${CLOUD_APP_ORIGIN}/chat`);
-  } else {
-    void mainWindow.loadURL(`${RENDERER_ORIGIN}/index.html`);
+  const entryUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
+
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      // Sub-resource failures are the page's own problem, not a dead app window.
+      if (!isMainFrame) return;
+      // -3 is ERR_ABORTED: a superseded navigation, not a failure the user caused.
+      if (errorCode === -3) return;
+      // Don't recurse if the offline screen itself somehow fails to load.
+      if (validatedURL.startsWith('data:')) return;
+      void mainWindow?.loadURL(
+        offlineScreenUrl(entryUrl, `${errorDescription || 'load failed'} (${errorCode})`),
+      );
+    },
+  );
+
+  void mainWindow.loadURL(entryUrl);
+}
+
+/** Raise the main window, recreating it if it has been closed (macOS). */
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow();
+    return;
   }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/**
+ * Tray "New Chat": send the window back to a fresh chat. In bundled mode the
+ * renderer owns its own routing, so reloading the shell is the equivalent.
+ */
+function openNewChat(): void {
+  showMainWindow();
+  const target =
+    RENDERER_MODE === 'remote' ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
+  void mainWindow?.loadURL(target);
 }
 
 // ---------------------------------------------------------------------------
@@ -500,10 +531,34 @@ if (!hasSingleInstanceLock) {
 
     createMainWindow();
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-      else mainWindow?.show();
+    // Shell garnish: menu-bar entry point plus the two global hotkeys. Both
+    // routes call the same handlers, so a hotkey the OS refuses to register
+    // still has a working equivalent in the tray menu.
+    const garnishHandlers = {
+      onOpen: showMainWindow,
+      onNewChat: openNewChat,
+      onQuickAsk: () => toggleQuickAsk(mainWindow),
+      onScreenshot: () => void captureToChat(mainWindow),
+    };
+    createTray(garnishHandlers);
+    registerGarnishShortcuts({
+      onQuickAsk: garnishHandlers.onQuickAsk,
+      onScreenshot: garnishHandlers.onScreenshot,
     });
+
+    // Pre-load the quick-ask page once the main window has settled, so the
+    // first summon is instant instead of a cold page load.
+    setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
+
+    app.on('activate', () => {
+      // Checked against the main window, not the window count: the hidden
+      // quick-ask panel is a window and would otherwise mask a closed app.
+      showMainWindow();
+    });
+  });
+
+  app.on('will-quit', () => {
+    unregisterGarnishShortcuts();
   });
 
   app.on('window-all-closed', () => {

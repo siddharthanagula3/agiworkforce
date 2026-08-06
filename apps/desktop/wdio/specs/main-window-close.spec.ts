@@ -44,7 +44,9 @@ describe('AGI Desktop main-window lifecycle', () => {
     expect(eventAccepted).toBe(false);
 
     await browser.pause(500);
-    expect(await browser.getTitle()).toBe('AGI Workforce');
+    // tauri.conf.json ships `productName: "AGI"` / window title "AGI"; the
+    // old "AGI Workforce" expectation predated the rebrand.
+    expect(await browser.getTitle()).toBe('AGI');
 
     const restored = await browser.execute(async () => {
       const tauriWindow = window as typeof window & {

@@ -53,8 +53,10 @@ export function ModeToggle({
     paddingHorizontal: 8,
     height: 28,
     flex: 1,
-    minWidth: 80,
-    flexShrink: 0,
+    // Was minWidth 80 + flexShrink 0, which made the toggle incompressible and
+    // pushed it over the neighbouring project chip on narrow iPhones.
+    minWidth: 60,
+    flexShrink: 1,
     borderRadius: 999,
     borderWidth: 1,
     ...(selected ? selectedSegmentStyle : inactiveSegmentStyle),
@@ -72,7 +74,16 @@ export function ModeToggle({
         borderColor: colors.border,
         padding: 3,
         height: 36,
-        width: toggleWidth,
+        /*
+         * maxWidth, NOT width. A hard `width: 172` in a flex:1 slot overflows
+         * rather than shrinking: on a 375pt iPhone the chat header leaves this
+         * slot ~131pt, so the toggle spilled over the project chip to its left
+         * and swallowed taps meant for it and for "New chat". Cap the width and
+         * let it compress; the segments above shrink with it.
+         */
+        maxWidth: toggleWidth,
+        minWidth: compact ? 132 : 160,
+        flexShrink: 1,
         flexWrap: 'nowrap',
         overflow: 'hidden',
       }}
@@ -107,7 +118,7 @@ export function ModeToggle({
               lineHeight: 14,
               fontWeight: '600',
               color: mode === 'local' ? selectedTextColor : inactiveTextColor,
-              flexShrink: 0,
+              flexShrink: 1,
               includeFontPadding: false,
             }}
           >
@@ -144,7 +155,7 @@ export function ModeToggle({
               lineHeight: 14,
               fontWeight: cloudActive ? '600' : '500',
               color: cloudActive ? selectedTextColor : inactiveTextColor,
-              flexShrink: 0,
+              flexShrink: 1,
               includeFontPadding: false,
             }}
           >

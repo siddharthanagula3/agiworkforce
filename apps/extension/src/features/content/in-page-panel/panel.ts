@@ -62,6 +62,10 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   const providerLabel = document.createElement('span');
   providerLabel.className = 'agi-provider-pill';
+  // The in-page panel's send path (IN_PAGE_PROMPT → handleInPagePrompt) always
+  // routes to Managed Cloud with modelSelection: 'auto'. There is no per-panel
+  // provider/model selection reachable from the page world, so the pill reflects
+  // that fixed routing rather than reading storage keys nothing writes.
   providerLabel.textContent = 'Auto';
 
   const closeBtn = document.createElement('button');
@@ -222,20 +226,6 @@ function getActionIcon(actionId: string): string {
   return FileText;
 }
 
-// ─── Provider label ────────────────────────────────────────────────────────────
-
-async function refreshProviderLabel(label: HTMLElement): Promise<void> {
-  try {
-    const result = await chrome.storage.local.get(['agi_default_provider', 'agi_default_model']);
-    const provider = (result['agi_default_provider'] as string | undefined) ?? '';
-    const model = (result['agi_default_model'] as string | undefined) ?? '';
-    const text = model || provider || 'Default';
-    label.textContent = text.length > 18 ? text.slice(0, 17) + '…' : text;
-  } catch {
-    label.textContent = 'Default';
-  }
-}
-
 function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto';
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
@@ -352,7 +342,6 @@ export function createPanel(): {
     if (isOpen) return;
     isOpen = true;
     els.panel.classList.add('open');
-    void refreshProviderLabel(els.providerLabel);
     els.textarea.focus();
   }
 

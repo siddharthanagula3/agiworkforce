@@ -23,7 +23,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
-import { AgiMark } from '@agiworkforce/ui';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { WEB_APP_URL } from '../../api/config';
@@ -432,14 +431,11 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
   const isBusy = busy !== null;
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-xl shadow-black/5">
-      <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
-        <AgiMark size={24} ariaLabel="AGI" />
-      </div>
-
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Sign in to AGI Cloud
-      </h1>
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl shadow-black/5">
+      {/* The AuthPage header carries the brand mark; repeating it here made
+          the column read as two stacked logos. Keep the card content-first,
+          matching the web embedded auth card. */}
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">Sign in to AGI Cloud</h1>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         {step === 'credentials'
           ? 'Sign in right here. Local Mode keeps working without an account.'

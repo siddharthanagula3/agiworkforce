@@ -39,6 +39,13 @@ export interface VideoGenerationRequest {
   duration_secs?: number;
   resolution?: '720p' | '1080p' | '4k';
   provider?: 'runway' | 'google';
+  /**
+   * Catalog model id for the composer's video picker. The route validates it
+   * (must be `modelType: 'video'`, live, and owned by an executable provider)
+   * and falls back to the catalog's `video_generation` routing slot when
+   * omitted, so sending nothing preserves the previous behavior exactly.
+   */
+  model?: string;
 }
 
 export interface VideoGenerationResponse {

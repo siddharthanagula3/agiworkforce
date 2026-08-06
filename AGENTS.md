@@ -89,7 +89,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Do not combine file moves with behavior changes.
 - Tool config folders were classified on 2026-07-08 (monorepo restructure P0): `.cursor`, `.minimax`, `.opencode`, and `.superpowers` were removed; `.claude`, `.codex`, `.agents`, and `.mcp.json` remain loader-owned — do not move or delete them without reclassifying.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
-- Do not add new root control docs. Use `PLAN.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, and `docs/agent-context/known-flaws.md` as defined in `docs/engineering/naming-conventions.md`. (The former `audit/`, `reports/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28 — do not recreate them without a current decision doc.)
+- Do not add new root control docs. Use `PLAN.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, and `docs/agent-context/known-flaws.md` as defined in `docs/engineering/naming-conventions.md`. (The former `reports/` and `docs/archive/` directories were removed repo-wide on 2026-06-28 — do not recreate them without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root.)
 - Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
 - Keep orchestration and mechanics separate: actions, routes, and command handlers own product policy and state transitions; reusable provider, sandbox, database, generated-file, browser/computer-use, and transport mechanics belong in explicit service functions.
 

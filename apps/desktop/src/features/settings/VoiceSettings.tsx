@@ -30,6 +30,7 @@ import {
 } from '../../stores/settingsStore';
 import { VoicePersonaSelector } from './VoicePersonaSelector';
 import { VOICE_PERSONA_STORAGE_KEY } from './voicePersonaParams';
+import { voiceCheckLocalWhisper } from '../../api/voice';
 
 const HOTKEY_OPTIONS = [
   { value: 'option', label: 'Option / Alt (hold to dictate)' },
@@ -124,6 +125,11 @@ export function VoiceSettings() {
   const [piperVoices, setPiperVoices] = useState<PiperVoiceInfo[]>([]);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadingVoice, setDownloadingVoice] = useState<string | null>(null);
+  // Fail closed: local Whisper dictation only works when the `local-whisper`
+  // Cargo feature is compiled in. Shipped builds omit it, so the Local Whisper
+  // provider would always fail. Probe the backend and disable the option unless
+  // it is genuinely available. No selectable provider may always-fail.
+  const [localWhisperAvailable, setLocalWhisperAvailable] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<string>(
     () => localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) ?? 'professional',
   );
@@ -148,6 +154,9 @@ export function VoiceSettings() {
       .catch((err: unknown) => {
         console.error('Failed to load Piper voices:', err);
       });
+    voiceCheckLocalWhisper()
+      .then(setLocalWhisperAvailable)
+      .catch(() => setLocalWhisperAvailable(false));
   }, [fetchCapabilities, listWhisperModels, listPiperVoices]);
 
   // Microphone picker: browser device list (the in-app path captures via
@@ -275,13 +284,25 @@ export function VoiceSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PROVIDER_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+                {PROVIDER_OPTIONS.map((opt) => {
+                  // Local Whisper only works when the on-device backend is
+                  // compiled in. Disable (never silently hide → never silently
+                  // reroute) it otherwise so it can't be picked and always fail.
+                  const unavailable = opt.value === 'local_whisper' && !localWhisperAvailable;
+                  return (
+                    <SelectItem key={opt.value} value={opt.value} disabled={unavailable}>
+                      {unavailable ? `${opt.label} — not compiled into this build` : opt.label}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {provider === 'local_whisper' && !localWhisperAvailable && (
+              <p className="text-xs text-destructive">
+                Local Whisper is not compiled into this build. Choose OpenAI Whisper (your key) or
+                AGI Cloud, or dictation will fail.
+              </p>
+            )}
           </div>
 
           {/* Microphone selector */}

@@ -482,6 +482,123 @@ pub fn resolve_oneshot_output_mode(
     }
 }
 
+/// Build the canonical one-shot JSON result object emitted by
+/// `--output-format json` / `--json`. Extracted so the REPL `/raw json` alias
+/// renders through the exact same shape as the headless raw-output mode instead
+/// of a divergent hand-rolled object.
+#[allow(clippy::too_many_arguments)]
+pub fn oneshot_result_json_value(
+    model: &str,
+    response: &str,
+    input_tokens: u32,
+    output_tokens: u32,
+    via_subscription: bool,
+    cost: &str,
+    duration_ms: u64,
+    is_error: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "result",
+        "model": model,
+        "response": response,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "via_subscription": via_subscription,
+        "cost": cost,
+        "duration_ms": duration_ms,
+        "is_error": is_error,
+    })
+}
+
+/// Compute the effective `tracing`/`log` env-filter directive string from the
+/// `-v/--verbose` and `--debug[=categories]` controls.
+///
+/// Precedence:
+/// 1. An explicit `RUST_LOG` (or `AGIWORKFORCE_LOG`) env value always wins — it
+///    is returned verbatim so operators keep full control.
+/// 2. `--debug` with an explicit comma-separated category list raises exactly
+///    those crate sub-modules (`agiworkforce_cli::<category>`) to `debug`, on
+///    top of a crate-wide `info` floor. This is the category-aware behavior the
+///    `--debug` help text promises.
+/// 3. `--debug` with no categories, or `-v/--verbose`, raises the whole
+///    `agiworkforce_cli` crate to `debug`.
+/// 4. Otherwise the crate logs at `warn` (quiet default).
+///
+/// Returned as a directive string so it is unit-testable without installing a
+/// global subscriber.
+pub fn compute_log_filter(
+    verbose: bool,
+    debug: Option<&Option<String>>,
+    env: Option<&str>,
+) -> String {
+    if let Some(explicit) = env {
+        let trimmed = explicit.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    // `--debug=cat1,cat2` → per-category debug directives on an info floor.
+    if let Some(Some(categories)) = debug {
+        let mut directives: Vec<String> = Vec::new();
+        let mut any_category = false;
+        for category in categories.split(',') {
+            let category = category.trim();
+            if category.is_empty() {
+                continue;
+            }
+            any_category = true;
+            // Map a category to a crate sub-module target. `all` is the escape
+            // hatch for whole-crate debug.
+            if category.eq_ignore_ascii_case("all") {
+                return "agiworkforce_cli=debug".to_string();
+            }
+            directives.push(format!("agiworkforce_cli::{category}=debug"));
+        }
+        if any_category {
+            // Crate-wide info floor so unrelated modules still surface warnings
+            // and above, then raise the requested categories to debug.
+            let mut filter = vec!["agiworkforce_cli=info".to_string()];
+            filter.extend(directives);
+            return filter.join(",");
+        }
+        // `--debug` with an empty/whitespace category list → whole-crate debug.
+        return "agiworkforce_cli=debug".to_string();
+    }
+
+    // `--debug` (no category argument) or `-v/--verbose` → whole-crate debug.
+    if debug.is_some() || verbose {
+        return "agiworkforce_cli=debug".to_string();
+    }
+
+    "agiworkforce_cli=warn".to_string()
+}
+
+/// Install the process-wide `tracing` subscriber using the filter computed from
+/// the `-v/--verbose` and `--debug` controls. Idempotent: a second call (or a
+/// subscriber already installed by an embedder) is ignored rather than
+/// panicking. Returns the effective filter directive that was applied.
+pub fn init_tracing(verbose: bool, debug: Option<&Option<String>>) -> String {
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let env = std::env::var("RUST_LOG")
+        .or_else(|_| std::env::var("AGIWORKFORCE_LOG"))
+        .ok();
+    let directive = compute_log_filter(verbose, debug, env.as_deref());
+
+    let filter =
+        EnvFilter::try_new(&directive).unwrap_or_else(|_| EnvFilter::new("agiworkforce_cli=warn"));
+
+    // Diagnostics go to stderr so they never contaminate stdout payloads
+    // (raw/JSON one-shot output, SDK JSONL streams).
+    let _ = fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+
+    directive
+}
+
 /// Shell type for completions generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ShellType {
@@ -777,6 +894,42 @@ enum SessionAction {
         #[arg(long)]
         force: bool,
     },
+    /// Archive a session (hidden from active listings, kept on disk).
+    Archive { session_id: String },
+    /// Unarchive a previously archived session.
+    Unarchive { session_id: String },
+    /// Permanently delete a session file. Requires confirmation.
+    Delete {
+        session_id: String,
+        /// Skip the interactive confirmation (for scripts / CI).
+        #[arg(long, visible_alias = "yes")]
+        force: bool,
+    },
+}
+
+/// Outcome of gating a destructive operation on confirmation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DestructiveDecision {
+    /// `--force`/`--yes` supplied — proceed without prompting.
+    Proceed,
+    /// Interactive terminal — ask the user to confirm.
+    Prompt,
+    /// Neither forced nor interactive — refuse rather than delete blindly.
+    Refuse,
+}
+
+/// Decide how a destructive command should proceed. Pure and unit-testable:
+/// `force` bypasses the prompt, an interactive terminal gets a confirmation,
+/// and a non-interactive run without `--force` is refused so scripts never
+/// delete data by surprise.
+pub fn resolve_destructive_decision(force: bool, interactive: bool) -> DestructiveDecision {
+    if force {
+        DestructiveDecision::Proceed
+    } else if interactive {
+        DestructiveDecision::Prompt
+    } else {
+        DestructiveDecision::Refuse
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -1311,6 +1464,65 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             );
             Ok(())
         }
+        SessionAction::Archive { session_id } => {
+            runtime::session_control::archive_managed_session(&session_id)
+                .with_context(|| format!("failed to archive session '{session_id}'"))?;
+            println!(
+                "{} Archived '{}'. Unarchive with: {}",
+                ts::success_header("archive:"),
+                session_id,
+                ts::accent_header(format!("agi session unarchive {session_id}"))
+            );
+            Ok(())
+        }
+        SessionAction::Unarchive { session_id } => {
+            runtime::session_control::unarchive_managed_session(&session_id)
+                .with_context(|| format!("failed to unarchive session '{session_id}'"))?;
+            println!(
+                "{} Unarchived '{}'.",
+                ts::success_header("unarchive:"),
+                session_id
+            );
+            Ok(())
+        }
+        SessionAction::Delete { session_id, force } => {
+            // Resolve first so a bad id fails before we prompt or delete.
+            runtime::session_control::resolve_managed_session_reference(&session_id)
+                .with_context(|| format!("session '{session_id}' was not found"))?;
+
+            let interactive = io::stdin().is_terminal() && io::stderr().is_terminal();
+            match resolve_destructive_decision(force, interactive) {
+                DestructiveDecision::Refuse => {
+                    anyhow::bail!(
+                        "refusing to delete session '{session_id}' without confirmation. \
+                         Re-run with --force (alias --yes) to delete non-interactively."
+                    );
+                }
+                DestructiveDecision::Prompt => {
+                    let confirmed = dialoguer::Confirm::new()
+                        .with_prompt(format!(
+                            "Permanently delete session '{session_id}'? This cannot be undone."
+                        ))
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false);
+                    if !confirmed {
+                        println!("Aborted. Session '{session_id}' was not deleted.");
+                        return Ok(());
+                    }
+                }
+                DestructiveDecision::Proceed => {}
+            }
+
+            runtime::session_control::delete_managed_session(&session_id)
+                .with_context(|| format!("failed to delete session '{session_id}'"))?;
+            println!(
+                "{} Deleted '{}'.",
+                ts::success_header("delete:"),
+                session_id
+            );
+            Ok(())
+        }
     }
 }
 
@@ -1382,6 +1594,13 @@ async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
 /// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Install the single logging owner before anything else runs so `-v/--verbose`
+    // and `--debug[=categories]` actually change what `tracing` emits. Without
+    // this, every `tracing::{debug,info,warn}` call in the crate went nowhere and
+    // the flags were inert (CLI-DEBUG-CONTROLS-INERT-01).
+    let effective_log_filter = init_tracing(cli.verbose, cli.debug.as_ref());
+
     sandbox::set_sandbox_disabled(cli.no_sandbox);
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
     // `--no-session-persistence` is a privacy opt-out, so it has to be in force
@@ -1396,18 +1615,11 @@ pub async fn run_main() -> Result<()> {
             .map_err(|e| anyhow::anyhow!("--add-dir {}: {}", dir, e))?;
     }
 
-    // --debug: enable verbose logging
-    if cli.debug.is_some() {
-        // Setting verbose mode so debug info is visible
-        if !cli.quiet {
-            eprintln!(
-                "[debug] Debug mode enabled. Categories: {}",
-                cli.debug
-                    .as_ref()
-                    .and_then(|d| d.as_deref())
-                    .unwrap_or("all")
-            );
-        }
+    // --debug / --verbose: the tracing subscriber is already installed above with
+    // the computed filter. Surface the effective filter so the banner reflects
+    // what was actually applied (category-aware) instead of a fixed claim.
+    if (cli.debug.is_some() || cli.verbose) && !cli.quiet {
+        eprintln!("[debug] logging filter: {effective_log_filter}");
     }
 
     // --fork-session: noted for session loading (handled below)
@@ -3465,17 +3677,16 @@ pub async fn run_oneshot(
                 } else {
                     output::format_cost(model, turn.input_tokens, turn.output_tokens)
                 };
-                let json_out = serde_json::json!({
-                    "type": "result",
-                    "model": model,
-                    "response": turn.response,
-                    "input_tokens": turn.input_tokens,
-                    "output_tokens": turn.output_tokens,
-                    "via_subscription": turn.via_subscription,
-                    "cost": cost_str,
-                    "duration_ms": duration_ms,
-                    "is_error": false,
-                });
+                let json_out = oneshot_result_json_value(
+                    model,
+                    &turn.response,
+                    turn.input_tokens,
+                    turn.output_tokens,
+                    turn.via_subscription,
+                    &cost_str,
+                    duration_ms,
+                    false,
+                );
                 println!("{}", serde_json::to_string_pretty(&json_out)?);
             }
             Err(e) => {
@@ -3558,6 +3769,94 @@ pub async fn run_oneshot(
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn verbose_and_debug_flags_change_the_effective_log_filter() {
+        // Quiet default keeps the crate at warn.
+        assert_eq!(
+            compute_log_filter(false, None, None),
+            "agiworkforce_cli=warn"
+        );
+        // -v/--verbose raises the whole crate to debug — the flag now has effect.
+        assert_eq!(
+            compute_log_filter(true, None, None),
+            "agiworkforce_cli=debug"
+        );
+        assert_ne!(
+            compute_log_filter(true, None, None),
+            compute_log_filter(false, None, None),
+            "--verbose must change the effective filter"
+        );
+        // Bare --debug → whole-crate debug.
+        assert_eq!(
+            compute_log_filter(false, Some(&None), None),
+            "agiworkforce_cli=debug"
+        );
+        // --debug=mcp,agent → per-category debug on an info floor (category-aware).
+        assert_eq!(
+            compute_log_filter(false, Some(&Some("mcp,agent".to_string())), None),
+            "agiworkforce_cli=info,agiworkforce_cli::mcp=debug,agiworkforce_cli::agent=debug"
+        );
+        // --debug=all is the whole-crate escape hatch.
+        assert_eq!(
+            compute_log_filter(false, Some(&Some("all".to_string())), None),
+            "agiworkforce_cli=debug"
+        );
+        // An explicit RUST_LOG-style env value always wins verbatim.
+        assert_eq!(
+            compute_log_filter(true, Some(&None), Some("warn,foo=trace")),
+            "warn,foo=trace"
+        );
+        // The computed directive must be a valid EnvFilter that installs cleanly
+        // (idempotent — safe even if another test already installed a subscriber).
+        // Skip the exact-value assertion when the environment pins a log filter.
+        let applied = init_tracing(true, None);
+        if std::env::var("RUST_LOG").is_err() && std::env::var("AGIWORKFORCE_LOG").is_err() {
+            assert_eq!(
+                applied, "agiworkforce_cli=debug",
+                "init_tracing must apply the computed verbose filter"
+            );
+        }
+    }
+
+    #[test]
+    fn destructive_delete_refuses_without_force_or_a_terminal() {
+        // Non-interactive and unforced → refuse rather than delete silently.
+        assert_eq!(
+            resolve_destructive_decision(false, false),
+            DestructiveDecision::Refuse
+        );
+        // --force / --yes bypasses the prompt for scripts.
+        assert_eq!(
+            resolve_destructive_decision(true, false),
+            DestructiveDecision::Proceed
+        );
+        // Interactive terminal without force → ask the user.
+        assert_eq!(
+            resolve_destructive_decision(false, true),
+            DestructiveDecision::Prompt
+        );
+        // Force wins even on a terminal.
+        assert_eq!(
+            resolve_destructive_decision(true, true),
+            DestructiveDecision::Proceed
+        );
+    }
+
+    #[test]
+    fn session_delete_parses_force_alias() {
+        let cli = Cli::try_parse_from(["agi", "session", "delete", "abc", "--yes"])
+            .expect("--yes alias should parse");
+        match cli.command {
+            Some(Command::Session {
+                action: SessionAction::Delete { session_id, force },
+            }) => {
+                assert_eq!(session_id, "abc");
+                assert!(force, "--yes must set force");
+            }
+            other => panic!("expected session delete, got {other:?}"),
+        }
+    }
 
     #[test]
     fn declined_first_run_trust_exits_before_launching_the_cli() {

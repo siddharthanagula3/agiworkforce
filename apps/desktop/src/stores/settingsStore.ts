@@ -2345,5 +2345,6 @@ export type {
   LocalModelsInfo,
   TtsConfig,
   PostProcessingMode,
+  VoiceInputHotkey,
 } from './settings/voice';
 export { useVoiceModeStore, useVoiceInputStore, detectVoiceCommand } from './settings/voice';

@@ -11,12 +11,14 @@
  * programmatically via useResearchPanelStore.openPanel(...).
  */
 
-import { useState } from 'react';
-import { Globe, X, ExternalLink, Search, PanelRight } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
+import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { ResearchReportView } from './ResearchReportView';
 
 // ============================================================================
 // Source row
@@ -114,6 +116,83 @@ function EmptyState() {
 }
 
 // ============================================================================
+// Persisted report tab (CAP-045 slice 3)
+// ============================================================================
+
+/**
+ * Loads the durable reports this conversation produced and renders the newest
+ * one as an artifact-style view. Nothing is rendered optimistically: until the
+ * server confirms a persisted report exists, the tab says so plainly.
+ */
+function ReportTab({ conversationId }: { conversationId: string | null }) {
+  const [report, setReport] = useState<ResearchReport | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      if (!conversationId) {
+        setState('loaded');
+        setReport(null);
+        return;
+      }
+      setState('loading');
+      setError(null);
+      try {
+        const response = await fetch(
+          `/api/research/reports?conversationId=${encodeURIComponent(conversationId)}&limit=1`,
+          { signal, credentials: 'same-origin' },
+        );
+        if (!response.ok) throw new Error(`Could not load reports (${response.status})`);
+        const body = (await response.json()) as { reports?: ResearchReport[] };
+        setReport(body.reports?.[0] ?? null);
+        setState('loaded');
+      } catch (fetchError) {
+        if (signal.aborted) return;
+        setError(fetchError instanceof Error ? fetchError.message : 'Could not load reports');
+        setState('error');
+      }
+    },
+    [conversationId],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  if (state === 'loading' || state === 'idle') {
+    return (
+      <p className="px-4 py-6 text-center text-xs text-muted-foreground">Loading saved report…</p>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <p role="alert" className="px-4 py-6 text-center text-xs text-destructive">
+        {error}
+      </p>
+    );
+  }
+  if (!report) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
+          <Telescope className="h-6 w-6 text-muted-foreground/60" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">No saved report yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Deep Research runs save their report here when they finish
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <ResearchReportView report={report} />;
+}
+
+// ============================================================================
 // Main panel
 // ============================================================================
 
@@ -125,6 +204,9 @@ export function ResearchPanel() {
   // Scope to the active conversation: a chat that didn't run a web search shows
   // no sources, never a previous chat's leftover sources.
   const { sources, query } = sourcesFor(activeConversationId);
+  // Two views over the same research run: the live source list, and the durable
+  // report the run persisted (CAP-045 slice 3).
+  const [tab, setTab] = useState<'sources' | 'report'>('sources');
 
   if (!panelOpen) return null;
 
@@ -145,18 +227,47 @@ export function ResearchPanel() {
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
           // Desktop: inline panel, same width as ArtifactsPanel
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:shrink-0',
+          'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
         )}
-        aria-label="Research sources panel"
+        aria-label="Research panel"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
             <PanelRight className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Sources</h2>
-            {sources.length > 0 && (
+            <div className="flex items-center gap-1" role="tablist" aria-label="Research views">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'sources'}
+                onClick={() => setTab('sources')}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-sm font-semibold transition-colors',
+                  tab === 'sources'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Sources
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'report'}
+                onClick={() => setTab('report')}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-sm font-semibold transition-colors',
+                  tab === 'report'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Report
+              </button>
+            </div>
+            {tab === 'sources' && sources.length > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 {sources.length}
               </span>
@@ -173,25 +284,33 @@ export function ResearchPanel() {
           </Button>
         </div>
 
-        {/* Query line (if present) */}
-        {query && (
-          <div className="border-b border-border/20 px-4 py-2">
-            <div className="inline-flex items-center gap-1.5 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-              <Search className="h-3 w-3 shrink-0" />
-              <span className="font-mono">{query}</span>
-            </div>
+        {tab === 'report' ? (
+          <div className="min-h-0 flex-1">
+            <ReportTab conversationId={activeConversationId} />
           </div>
-        )}
-
-        {/* Source list */}
-        {sources.length === 0 ? (
-          <EmptyState />
         ) : (
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 [scrollbar-width:thin]">
-            {sources.map((source, index) => (
-              <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
-            ))}
-          </div>
+          <>
+            {/* Query line (if present) */}
+            {query && (
+              <div className="border-b border-border/20 px-4 py-2">
+                <div className="inline-flex items-center gap-1.5 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+                  <Search className="h-3 w-3 shrink-0" />
+                  <span className="font-mono">{query}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Source list */}
+            {sources.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-width:thin]">
+                {sources.map((source, index) => (
+                  <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

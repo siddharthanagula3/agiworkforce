@@ -104,6 +104,31 @@ export interface ArtifactDiff {
 }
 
 // =============================================================================
+// Progressive (display-only) artifact draft
+// =============================================================================
+
+/**
+ * A `create_artifact` tool call whose arguments are still streaming.
+ *
+ * This is a DISPLAY-ONLY projection of partially parsed tool input — it is
+ * never persisted, never versioned, and never becomes an `Artifact`. The real
+ * artifact arrives on `chat:artifact` once the tool executes, at which point
+ * `finalizeArtifactDraft` swaps the panel over to it.
+ */
+export interface ArtifactDraft {
+  /** Stable per-turn key: `${messageId}:${toolCallIndex}`. */
+  key: string;
+  title: string | null;
+  artifactType: string | null;
+  content: string;
+  language: string | null;
+  /** True once the streamed argument object closed (content is final text). */
+  complete: boolean;
+  /** Whether showing this draft is what opened the panel. */
+  openedPanel: boolean;
+}
+
+// =============================================================================
 // Store State
 // =============================================================================
 
@@ -123,6 +148,9 @@ interface ArtifactStoreState {
   // Loading states
   isLoading: boolean;
   isStreaming: string | null; // ID of currently streaming artifact
+
+  // Progressive tool-call preview (display only, never persisted)
+  draft: ArtifactDraft | null;
 
   // Actions
   createArtifact: (
@@ -188,6 +216,13 @@ interface ArtifactStoreState {
   togglePanel: () => void;
   setPanelWidth: (width: number) => void;
 
+  // Progressive draft actions (display only)
+  updateArtifactDraft: (draft: Omit<ArtifactDraft, 'openedPanel'>) => void;
+  /** Real artifact landed: point the panel at it and drop the draft. */
+  finalizeArtifactDraft: (artifactId: string) => void;
+  /** Tool call ended without an artifact (error/stop): undo the preview. */
+  discardArtifactDraft: (key?: string) => void;
+
   // Bulk operations
   clearAllArtifacts: () => Promise<boolean>;
   exportAllArtifacts: () => Promise<Artifact[] | null>;
@@ -215,6 +250,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         panelWidth: 480,
         isLoading: false,
         isStreaming: null,
+        draft: null,
 
         // Create a new artifact
         createArtifact: async (
@@ -602,6 +638,46 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
         setPanelWidth: (width) => set({ panelWidth: width }),
 
+        // Progressive preview of a streaming `create_artifact` tool call.
+        // Nothing here touches the backend: no create, no append, no version.
+        updateArtifactDraft: (draft) =>
+          set((state) => {
+            const isSameDraft = state.draft?.key === draft.key;
+            const openedPanel = isSameDraft
+              ? (state.draft?.openedPanel ?? false)
+              : !state.panelOpen;
+            return {
+              draft: {
+                key: draft.key,
+                title: draft.title,
+                artifactType: draft.artifactType,
+                content: draft.content,
+                language: draft.language,
+                complete: draft.complete,
+                openedPanel,
+              },
+              panelOpen: true,
+            };
+          }),
+
+        finalizeArtifactDraft: (artifactId) =>
+          set((state) =>
+            state.draft
+              ? { draft: null, activeArtifactId: artifactId, selectedVersion: null }
+              : state,
+          ),
+
+        discardArtifactDraft: (key) =>
+          set((state) => {
+            if (!state.draft) return state;
+            if (key !== undefined && state.draft.key !== key) return state;
+            return {
+              draft: null,
+              // Only close what the preview itself opened.
+              panelOpen: state.draft.openedPanel ? false : state.panelOpen,
+            };
+          }),
+
         // Bulk operations
         clearAllArtifacts: async () => {
           set({ isLoading: true });
@@ -653,6 +729,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
             panelOpen: false,
             isLoading: false,
             isStreaming: null,
+            draft: null,
           }),
       }),
       {

@@ -53,13 +53,16 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "المكتبة",
       "tasks": "المهام",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
-      "routines": "Routines"
+      "routines": "Routines",
+      "design": "تصميم",
+      "research": "بحث"
     },
     "account": "Account"
   },
@@ -296,7 +299,9 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "empty": "No artifacts yet. Run a scheduled task to generate outputs.",
+      "emptyTitle": "No artifacts yet",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "AGI Work projects",
@@ -312,7 +317,16 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "emptyTitle": "No scheduled tasks"
+    },
+    "compose": {
+      "scopeAdd": "إضافة نطاق (اختياري)",
+      "scopeHide": "إخفاء النطاق",
+      "constraintsLabel": "القيود",
+      "constraintsPlaceholder": "الحدود، ما يجب تجنّبه، المصادر المفضّلة…",
+      "deliverableLabel": "المُخرَج",
+      "deliverablePlaceholder": "الناتج الملموس الذي تتوقعه (ملف، جدول، ملخّص…)"
     }
   },
   "time": {
@@ -323,5 +337,8 @@
     "mAgoShort": "{{count}}m ago",
     "daysAgo": "{{count}} days ago",
     "weeksAgo": "{{count}} weeks ago"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "الرسومات مؤقتة لهذه الجلسة فقط — إغلاق التطبيق يمسح اللوحة."
   }
 }

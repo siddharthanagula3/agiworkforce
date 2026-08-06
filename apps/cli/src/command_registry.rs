@@ -277,6 +277,9 @@ mod tests {
             category: Some("review".to_string()),
             required_env_vars: vec![],
             required_tools: vec![],
+            version: None,
+            content_hash: crate::skills::hash_skill_content(b""),
+            tree_hash: None,
         };
 
         let command = registry_command_from_skill(&skill, CommandSource::Project);
@@ -352,6 +355,9 @@ mod tests {
             category: None,
             required_env_vars: vec![],
             required_tools: vec![],
+            version: None,
+            content_hash: crate::skills::hash_skill_content(b""),
+            tree_hash: None,
         }];
 
         let registry = registry_from_builtins_and_skills(&skills);
@@ -399,6 +405,9 @@ mod tests {
             category: None,
             required_env_vars: vec![],
             required_tools: vec![],
+            version: None,
+            content_hash: crate::skills::hash_skill_content(b""),
+            tree_hash: None,
         }];
         let prompts = vec![
             agiworkforce_protocol::custom_prompts::CustomPrompt {

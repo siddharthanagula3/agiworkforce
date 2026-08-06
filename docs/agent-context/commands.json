@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-15",
+  "lastUpdated": "2026-08-03",
   "repoWide": {
     "install": "pnpm install",
     "lint": "pnpm lint",
@@ -69,7 +69,9 @@
     "llmOperability": "pnpm check:llm-operability",
     "docsCheck": "pnpm docs:check",
     "dbIsolation": "pnpm check:db-isolation",
-    "cssTokens": "pnpm check:css-tokens"
+    "cssTokens": "pnpm check:css-tokens",
+    "referenceIntegrity": "pnpm check:reference-integrity",
+    "referenceIntegrityBaseline": "node scripts/check-reference-integrity.mjs --write-baseline"
   },
   "surfaces": {
     "desktop": {

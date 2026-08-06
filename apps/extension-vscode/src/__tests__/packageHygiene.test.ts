@@ -48,6 +48,22 @@ describe('VSIX package hygiene', () => {
     );
   });
 
+  // Lives here rather than in marketplaceReadme.test.ts so the two expensive
+  // vsce listings stay in one file and never run in parallel.
+  it('packages the Marketplace README but not the contributor notes', { timeout: 60_000 }, () => {
+    const extensionRoot = resolve(__dirname, '../..');
+    const result = spawnSync(
+      process.execPath,
+      [resolve(extensionRoot, 'scripts/vsce-package.js'), 'ls', '--no-dependencies'],
+      { cwd: extensionRoot, encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    const files = result.stdout.split(/\r?\n/u).map((file) => file.trim());
+    expect(files).toContain('README.md');
+    expect(files.filter((file) => file.startsWith('docs/'))).toEqual([]);
+  });
+
   it('rejects stale compiled files even when all release outputs are present', () => {
     expect(() =>
       validatePackagedRuntimeOutput([

@@ -343,6 +343,27 @@
     @apply border-border;
   }
 
+  /*
+   * Base keyboard focus ring.
+   *
+   * The only :focus-visible rules in this file sat inside `prefers-contrast` and
+   * `forced-colors` queries, so under ordinary settings NOTHING in the desktop app
+   * showed a focus ring — sidebar nav rows, icon buttons and custom controls were
+   * all silently focusable. :focus-visible (not :focus) means pointer users never
+   * see it, so this costs nothing visually while making the app keyboard-navigable.
+   * The high-contrast blocks below still override it with a stronger treatment.
+   */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+
+  /* Never strip the ring without replacing it. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
   html {
     margin: 0;
     padding: 0;

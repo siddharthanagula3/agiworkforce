@@ -74,9 +74,21 @@ const apps = fs
 
 if (apps.length === 0) {
   // Loud, not silent: an empty tier is a legitimate state (only priority-level-1
-  // is populated today), but it must be visible in CI logs so a wiped test tier
-  // can never masquerade as a green run.
+  // is populated today), but it must be visible so a wiped test tier can never
+  // masquerade as a green run.
+  //
+  // A console line alone was not enough. These tiers run in jobs named
+  // "(Gating)" and "(Blocking)", which report a green check while executing
+  // nothing — and nobody opens the log of a passing job. `::warning::` raises a
+  // GitHub annotation on the run and the PR itself, where a reviewer trusting
+  // that green check will actually see it.
   console.log(`\n⚠️  [run-priority-tier] No app owns tests matching "${token}". Nothing to run.`);
+  if (process.env['GITHUB_ACTIONS'] === 'true') {
+    console.log(
+      `::warning title=Empty test tier::No app owns tests matching "${token}". ` +
+        `This job passed WITHOUT running any tests — it is not gating anything.`,
+    );
+  }
   process.exit(0);
 }
 

@@ -33,6 +33,11 @@ jest.mock('@/src/ui/theme', () => {
     agentSuccess: '#22c55e',
     agentWarning: '#fbbf24',
     purple: '#a78bfa',
+    // Present in src/ui/theme/tokens.ts for every palette. Omitting them here
+    // made components that moved off hardcoded rgba onto these tokens render
+    // `color: undefined` in snapshots — a mock gap, not a product bug.
+    white: '#fff',
+    scrim: 'rgba(0,0,0,0.6)',
   };
   return {
     colors,

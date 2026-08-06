@@ -8,7 +8,13 @@ import { ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
-import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import {
+  getWorstUsagePercent,
+  readManagedUsageBuckets,
+  useManagedUsageSummary,
+} from '@/lib/hooks/useManagedUsageSummary';
+import { selectUsageWarning } from '@agiworkforce/types';
+import { UsageWarningBanner } from '@agiworkforce/unified-chat';
 import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
@@ -135,6 +141,8 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
+import { completedResearchSteps } from '../utils/research-plan';
+import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
   planRegenerateRollback,
@@ -179,6 +187,8 @@ type SendMeta = {
   styleInstruction?: string;
   /** Exact server-catalog skill name. */
   skillName?: string;
+  /** CAP-048: structured AGI Work goal captured by the composer. */
+  agiWorkGoal?: AgiWorkGoalInput;
 };
 
 /**
@@ -405,8 +415,9 @@ export default function WebChatPage() {
 
   // Core chat UI previously had zero i18n coverage — every string, including
   // the composer placeholder, was hardcoded English even though full
-  // translation resources already exist (app/i18n/locales/*). Wire the most
-  // visible strings through the existing 'chat' and 'common' namespaces.
+  // translation resources already exist (packages/ui/i18n/locales/*, the single
+  // runtime locale root). Wire the most visible strings through the existing
+  // 'chat' and 'common' namespaces.
   const { t, i18n } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded, userId } = useAuth();
   const router = useRouter();
@@ -807,6 +818,26 @@ export default function WebChatPage() {
    * next turn.
    */
   const { usage: managedUsageSummary } = useManagedUsageSummary();
+  /*
+   * The one limit worth warning about, named in prose above the composer.
+   * Usage was previously visible only in Settings, so the first signal a user
+   * got was a refused message mid-task. `selectUsageWarning` picks the BINDING
+   * bucket rather than the worst percentage with no name attached, which is
+   * what `getWorstUsagePercent` (used by the sidebar widget) has to discard.
+   */
+  const usageWarning = useMemo(
+    () => selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
+    [managedUsageSummary],
+  );
+  const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
+  const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
+  const usageBanner = (
+    <UsageWarningBanner
+      warning={liveUsageWarning}
+      onUpgrade={() => router.push('/settings/usage')}
+      onDismiss={() => setUsageWarningDismissed(true)}
+    />
+  );
   const managedBudgetPercent = useMemo(
     () => getWorstUsagePercent(managedUsageSummary),
     [managedUsageSummary],
@@ -1115,6 +1146,7 @@ export default function WebChatPage() {
             codeExecution: options.meta?.codeExecutionEnabled,
             officeCreation: options.meta?.officeCreationEnabled,
             workMode: options.meta?.workMode,
+            agiWorkGoal: options.meta?.agiWorkGoal,
             research: options.meta?.researchEnabled,
             styleMode: options.meta?.styleMode,
             styleInstruction: options.meta?.styleInstruction,
@@ -1518,7 +1550,7 @@ export default function WebChatPage() {
   // what flips the same bubble to the player + download affordance.
   // ---------------------------------------------------------------------------
   const handleGenerateVideo = useCallback(
-    (prompt: string) => {
+    (prompt: string, videoOptions?: { modelId?: string }) => {
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(videoGuardKey)) return;
       sendingConversationsRef.current.add(videoGuardKey);
@@ -1587,7 +1619,10 @@ export default function WebChatPage() {
           );
 
           try {
-            const { videoUrl, thumbnailUrl } = await generateVideo(prompt);
+            const { videoUrl, thumbnailUrl } = await generateVideo(
+              prompt,
+              videoOptions?.modelId ? { modelId: videoOptions.modelId } : {},
+            );
             const finalMetadata: MessageMetadata = {
               toolType: 'video-generation',
               videoUrl,
@@ -2450,6 +2485,76 @@ export default function WebChatPage() {
   );
 
   /**
+   * Retry a Deep Research run that errored or was interrupted (CAP-045 slice 4).
+   *
+   * Goes through the SAME send path as any other turn — reservation, metering,
+   * quota gates, and the managed-usage lifecycle all apply exactly as they do
+   * to a first attempt. There is no client-side loop and no re-use of the
+   * original run's reservation: this is a new, separately billed request that
+   * merely starts with the previous attempt's material so it does not pay to
+   * repeat searches that already succeeded.
+   */
+  const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
+  const handleRetryResearch = useCallback(
+    async (id: string) => {
+      if (!displayedConversationId || isStreaming) return;
+      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      const research = assistantMsg?.metadata?.research;
+      // Only an ended, unsuccessful run is retryable; anything else has no
+      // Retry control rendered and must not be startable from here either.
+      if (!research || (research.phase !== 'error' && research.phase !== 'interrupted')) return;
+      const plan = planRegenerateRollback(displayedMessages, id);
+      if (!plan) return;
+      const userMsg = displayedMessages[plan.userIndex];
+      if (!userMsg) return;
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, displayedConversationId);
+        return;
+      }
+
+      setRetryingResearchMessageId(id);
+      try {
+        await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            research: true,
+            researchResume: {
+              sources: research.sourcesForRetry ?? [],
+              steps: completedResearchSteps(research.steps),
+            },
+            onTurnCommitted,
+          }),
+        );
+      } finally {
+        setRetryingResearchMessageId(null);
+      }
+    },
+    [
+      activeModelId,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
+      handleOpenUpgradeDialog,
+      isStreaming,
+      isTrialExhausted,
+      sendMessage,
+      sendReplacingMessages,
+      setChatError,
+    ],
+  );
+
+  /**
    * Continue Generation: resume the last assistant turn when it was truncated
    * at the token cap or user-stopped with partial text. Appends to the same
    * message (never a new bubble); useChatStream.continueGeneration owns the
@@ -2928,7 +3033,15 @@ export default function WebChatPage() {
 
       {/* Main area + artifact workbench */}
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/*
+         * sm:min-w-[360px] is a floor, not a preference. The three right-hand
+         * panels (Artifacts 480px, Work session 380px, Research 360px) were each
+         * sm:shrink-0, so opening two of them on a 1024px laptop consumed the
+         * entire row and this column — transcript AND composer — collapsed to
+         * zero width and disappeared. The panels now shrink to a 280px floor and
+         * this column holds 360px, so the conversation is always reachable.
+         */}
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]">
           <div
             className={cn(
               'relative flex h-11 shrink-0 items-center justify-between px-4',
@@ -3053,6 +3166,7 @@ export default function WebChatPage() {
               <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
                 <GreetingBanner onSendMessage={setComposerPrefill} />
                 <div className="w-full max-w-[940px]">
+                  {usageBanner}
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -3092,6 +3206,8 @@ export default function WebChatPage() {
                     isLoading={isLoading && !isStreaming}
                     isUserTyping={isUserTyping}
                     onRegenerate={handleRegenerateMessage}
+                    onRetryResearch={handleRetryResearch}
+                    retryingResearchMessageId={retryingResearchMessageId}
                     onContinue={handleContinueMessage}
                     onEdit={handleEditMessage}
                     onDelete={handleDeleteMessage}
@@ -3128,6 +3244,7 @@ export default function WebChatPage() {
                     effectiveSidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
+                  {usageBanner}
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}

@@ -110,7 +110,10 @@ vi.mock('../../../stores/appModeStore', () => ({
 vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));
-vi.mock('@agiworkforce/ui', () => ({ AgiMark: () => null }));
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  AgiMark: () => null,
+}));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 import { Sidebar } from '../Sidebar';

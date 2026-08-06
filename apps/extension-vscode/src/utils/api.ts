@@ -10,6 +10,7 @@
 
 import * as vscode from 'vscode';
 import * as http from 'http';
+import { randomUUID } from 'crypto';
 import * as https from 'https';
 import { URL } from 'url';
 // AUDIT-FIX: vscode-reorg
@@ -630,11 +631,31 @@ export async function streamChatCompletion(
   };
 
   const bodyStr = JSON.stringify(requestBody);
+
+  /*
+   * VSCODE-MANAGED-CHAT-IDEMPOTENCY-MISSING-01.
+   *
+   * Managed Cloud requires this header: `parseManagedUsageIdempotencyKey`
+   * (apps/web/lib/services/managed-usage-request-service.ts:76-93) rejects a
+   * missing header with 400 `idempotency_key_required`, so without it EVERY
+   * cloud editor utility — Explain, Fix, Refactor, diagnostics, terminal,
+   * inline completions — failed before reaching a model. The shape it accepts
+   * is 8-128 chars of [A-Za-z0-9._:-]; this matches the Chrome surface's
+   * `agi.chrome.chat.*` convention (freeTrialClient.ts:779).
+   *
+   * Generated ONCE here, deliberately OUTSIDE the `withRetry` closures below.
+   * A key minted per attempt would make each retry a distinct request to the
+   * server and defeat the idempotency it exists to provide — the reserve/settle
+   * path would bill a retried turn twice.
+   */
+  const idempotencyKey = `agi.vscode.chat.${randomUUID()}`;
+
   const authHeaders: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'User-Agent': 'agi-workforce-vscode/0.1.0',
     'X-Client': 'vscode-extension',
     'X-AGI-Surface': 'vscode',
+    'Idempotency-Key': idempotencyKey,
   };
 
   const requestStartTime = Date.now();

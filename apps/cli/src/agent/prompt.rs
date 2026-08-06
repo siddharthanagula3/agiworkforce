@@ -251,8 +251,8 @@ pub(super) fn build_reviewed_continuation_system_prompt(
 #[cfg(test)]
 mod tests {
     use super::{
-        UNTRUSTED_MEMORY_CONTEXT_RULES, build_reviewed_continuation_system_prompt,
-        encode_untrusted_context,
+        build_reviewed_continuation_system_prompt, encode_untrusted_context,
+        UNTRUSTED_MEMORY_CONTEXT_RULES,
     };
 
     #[test]

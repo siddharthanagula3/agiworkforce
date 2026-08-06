@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
-import { Terminal as TerminalIcon, X } from 'lucide-react';
+import { Loader2, Terminal as TerminalIcon, X } from 'lucide-react';
 import { updateCloudConversationTitle } from '@/api/cloudApi';
 import {
   ChatInterface,
@@ -17,6 +17,7 @@ import { AgiWorkProjects } from './AgiWorkProjects';
 import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
+import { ArtifactDraftView } from '@/features/artifacts/ArtifactDraftView';
 // Library is the Managed Cloud counterpart to Local's Artifacts: cloud-stored
 // files, shared with web through @agiworkforce/unified-chat.
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
@@ -31,6 +32,30 @@ const DesktopAgentTasks = lazy(() =>
 );
 // Account-owned schedules that continue to run after Desktop closes.
 const DesktopCloudSchedules = lazy(() => import('@/features/schedules/DesktopCloudSchedules'));
+// Device filesystem editor. Local-only: it reads and writes real files through
+// the native FS, so it must never render over a Managed Cloud session.
+const CodeWorkspace = lazy(() =>
+  import('@/features/code/CodeWorkspace').then((module) => ({
+    default: module.CodeWorkspace,
+  })),
+);
+// Freehand design board. Local-only: CAP-051 ships session-only (the board
+// lives in React state on the device and is never uploaded), so it belongs on
+// the same device trust boundary as the code workspace.
+const CanvasWorkspace = lazy(() =>
+  import('@/features/canvas/CanvasWorkspace').then((module) => ({
+    default: module.CanvasWorkspace,
+  })),
+);
+// Deep research. Local-only: `useResearchStore.startResearch` invokes the
+// native `research_start` command (stores/researchStore.ts), which runs the
+// on-device swarm orchestrator in src-tauri/src/core/research. Nothing here
+// touches the managed cloud research route.
+const DeepResearchPage = lazy(() =>
+  import('@/features/research/DeepResearchPage').then((module) => ({
+    default: module.DeepResearchPage,
+  })),
+);
 const DesktopTerminalWorkspace = lazy(() =>
   import('@/features/terminal/TerminalWorkspace').then((module) => ({
     default: module.TerminalWorkspace,
@@ -109,6 +134,9 @@ type V3Panel =
   | 'chat'
   | 'projects'
   | 'artifacts'
+  | 'code'
+  | 'design'
+  | 'research'
   | 'library'
   | 'tasks'
   | 'agent-tasks'
@@ -141,6 +169,18 @@ export interface DesktopShellV3Props {
  * emptyStateSlot, CapModal, and all ChatInterface props from the legacy
  * mount point in App.tsx are preserved unchanged.
  */
+/**
+ * Lazy panels used to suspend with `fallback={null}`, leaving the content
+ * area a blank void for the chunk-load window (the WDIO sweep screenshotted
+ * exactly that on the Tasks panel). A visible spinner keeps every panel
+ * honest while it loads.
+ */
+const panelFallback = (
+  <div className="flex h-full items-center justify-center" aria-busy="true">
+    <Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-label="Loading panel" />
+  </div>
+);
+
 export function DesktopShellV3({
   runtime,
   className,
@@ -176,6 +216,11 @@ export function DesktopShellV3({
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
   const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
   const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
+  // Progressive preview of a `create_artifact` tool call whose arguments are
+  // still streaming. Display only — it is replaced by the real artifact as soon
+  // as `chat:artifact` lands (runtime/TauriRuntime.ts).
+  const artifactDraft = useArtifactStore((s) => s.draft);
+  const discardArtifactDraft = useArtifactStore((s) => s.discardArtifactDraft);
   // The folder seam is available in BOTH Local and Managed Cloud, but they mean
   // different things. Local grants the folder as a working scope (a persistent
   // capability — see useFolderSelection's docstring). Cloud receives only an
@@ -318,7 +363,15 @@ export function DesktopShellV3({
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
-      ['artifacts', 'scheduled', 'record-skill', 'agent-tasks'].includes(activePanel)
+      [
+        'artifacts',
+        'code',
+        'design',
+        'research',
+        'scheduled',
+        'record-skill',
+        'agent-tasks',
+      ].includes(activePanel)
     ) {
       setActivePanel('chat');
     }
@@ -570,6 +623,32 @@ export function DesktopShellV3({
         setActivePanel('artifacts');
         return;
       }
+      if (view === 'code') {
+        if (privacyMode !== 'local') {
+          toast.info('The code workspace edits device files and is available in Local mode.');
+          return;
+        }
+        setActivePanel('code');
+        return;
+      }
+      if (view === 'design') {
+        if (privacyMode !== 'local') {
+          toast.info(
+            'The design board keeps sketches on this device and is available in Local mode.',
+          );
+          return;
+        }
+        setActivePanel('design');
+        return;
+      }
+      if (view === 'research') {
+        if (privacyMode !== 'local') {
+          toast.info('Deep research runs on this device and is available in Local mode.');
+          return;
+        }
+        setActivePanel('research');
+        return;
+      }
       if (view === 'work-scheduled') {
         if (privacyMode === 'managed') {
           setActivePanel('cloud-schedules');
@@ -599,6 +678,7 @@ export function DesktopShellV3({
           onOpenSearch={onOpenSearch}
           onCreateProject={handleCreateProject}
           onNavigateView={handleNavigateView}
+          activeView={activePanel}
           onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
           accountMenuOpen={accountMenuOpen}
           onJumpConversation={(id) => {
@@ -677,8 +757,8 @@ export function DesktopShellV3({
             ) : activePanel === 'library' && privacyMode !== 'local' ? (
               // The shell clips overflow, so the panel owns its own scrolling or
               // a long grid is simply unreachable.
-              <div className="h-full overflow-y-auto px-6 py-6">
-                <Suspense fallback={null}>
+              <div data-testid="desktop-library" className="h-full overflow-y-auto px-6 py-6">
+                <Suspense fallback={panelFallback}>
                   <DesktopLibrary
                     initialQuery={libraryInitialQuery}
                     onStartChat={() => handleNewChat()}
@@ -689,8 +769,8 @@ export function DesktopShellV3({
               // TasksPage's root is h-full, which collapses to zero unless it is
               // given a parent with a resolved height. Without this wrapper the
               // panel mounted and rendered nothing at all.
-              <div className="h-full overflow-y-auto">
-                <Suspense fallback={null}>
+              <div data-testid="desktop-tasks" className="h-full overflow-y-auto">
+                <Suspense fallback={panelFallback}>
                   <DesktopTasks
                     onOpenConversation={handleOpenProjectConversation}
                     onStartChat={() => handleNewChat()}
@@ -698,17 +778,35 @@ export function DesktopShellV3({
                 </Suspense>
               </div>
             ) : activePanel === 'agent-tasks' && privacyMode === 'local' ? (
-              <div className="h-full overflow-y-auto">
-                <Suspense fallback={null}>
+              <div data-testid="desktop-agent-tasks" className="h-full overflow-y-auto">
+                <Suspense fallback={panelFallback}>
                   <DesktopAgentTasks />
                 </Suspense>
               </div>
             ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
-              <Suspense fallback={null}>
+              <Suspense fallback={panelFallback}>
                 <DesktopCloudSchedules />
               </Suspense>
             ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
               <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
+            ) : activePanel === 'code' && privacyMode === 'local' ? (
+              <div className="h-full p-3">
+                <Suspense fallback={panelFallback}>
+                  <CodeWorkspace />
+                </Suspense>
+              </div>
+            ) : activePanel === 'design' && privacyMode === 'local' ? (
+              <div className="h-full p-3">
+                <Suspense fallback={panelFallback}>
+                  <CanvasWorkspace />
+                </Suspense>
+              </div>
+            ) : activePanel === 'research' && privacyMode === 'local' ? (
+              <div data-testid="desktop-research" className="h-full">
+                <Suspense fallback={panelFallback}>
+                  <DeepResearchPage />
+                </Suspense>
+              </div>
             ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
               <AgiWorkScheduled />
             ) : (
@@ -735,7 +833,14 @@ export function DesktopShellV3({
                   background: 'var(--chat-surface-base)',
                 }}
               >
-                <ArtifactPanel onClose={closeArtifactPanel} />
+                {artifactDraft ? (
+                  <ArtifactDraftView
+                    draft={artifactDraft}
+                    onClose={() => discardArtifactDraft(artifactDraft.key)}
+                  />
+                ) : (
+                  <ArtifactPanel onClose={closeArtifactPanel} />
+                )}
               </div>
             )}
             <SelectedContextReview onAccept={handleSelectedContextAccept} />
@@ -779,7 +884,7 @@ export function DesktopShellV3({
             <>
               {terminalDockOpen && (
                 <div className="relative h-80 shrink-0 border-t border-[var(--chat-border)] bg-background">
-                  <Suspense fallback={null}>
+                  <Suspense fallback={panelFallback}>
                     <DesktopTerminalWorkspace />
                   </Suspense>
                   <button

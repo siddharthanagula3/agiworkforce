@@ -53,11 +53,13 @@ describe('AGI Desktop first-run Cloud onboarding', () => {
       },
     );
 
-    // The shell must now render the device sign-in card — not the Local
-    // composer, which is where the unwired callback silently landed.
-    const signInButton = await $('button=Sign in to AGI Cloud');
-    await signInButton.waitForDisplayed({ timeout: 60_000 });
-    await expect(signInButton).toBeDisplayed();
+    // The shell must now render the sign-in surface — not the Local composer,
+    // which is where the unwired callback silently landed. Since the native
+    // sign-in redesign (a3b1005c8) the AuthPage's "Sign in to AGI Cloud" is
+    // the card HEADING; the old device-auth page's button of that name is gone.
+    const signInHeading = await $('h1=Sign in to AGI Cloud');
+    await signInHeading.waitForDisplayed({ timeout: 60_000 });
+    await expect(signInHeading).toBeDisplayed();
 
     expect(await persistedAppMode()).toBe('cloud');
 
@@ -70,7 +72,12 @@ describe('AGI Desktop first-run Cloud onboarding', () => {
   it('still lets the Local card keep the install on device', async function () {
     this.timeout(180_000);
 
-    await writePersistedAppMode({ mode: 'cloud', hasSelectedMode: false, hasOnboarded: false });
+    // A real first run persists the shipped Local default with no selection.
+    // (`mode: 'cloud'` + `hasSelectedMode: false` is unreachable in product —
+    // choosing Cloud always records the selection — and the shell renders
+    // AuthPage before the onboarding overlay for any signed-out Cloud mode,
+    // so that synthetic state can never show the wizard.)
+    await writePersistedAppMode({ mode: 'local', hasSelectedMode: false, hasOnboarded: false });
     await browser.refresh();
 
     const localCard = await $('button*=Start Local Mode');

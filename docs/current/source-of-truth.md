@@ -41,16 +41,7 @@ Public v1 launches with:
 
 Managed cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta launch gate has been removed.
 
-Development is serial by surface:
-
-1. Website
-2. Mobile
-3. Desktop
-4. Chrome Extension
-5. VS Code Extension
-6. CLI
-
-The active surface is Website. Work proceeds to Mobile, Desktop, Chrome Extension, VS Code Extension, and CLI in that order. A later surface does not become active until the founder advances the release sequence or explicitly authorizes work during QA, review, or another waiting period.
+Development is serial by surface, ordered shortest-remaining-work-first (founder decision 2026-08-05 — supersedes the prior fixed Website-first order here and Decision #20's earlier Mobile-first order): estimate the remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six surfaces are at zero. One surface is active at a time. A later surface does not become active until the founder advances the sequence or explicitly authorizes work during QA, review, or another waiting period. The routing substrate (registry dated pricing and cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins.
 
 The parity ledger may track all six surfaces at all times, but tracking is not authorization to implement non-active surfaces.
 
@@ -212,7 +203,7 @@ Billing plan lock (founder decision, 2026-07-18):
 
 Basic is available on Web, Mobile, and Desktop. Free and Basic do not include managed-cloud CLI, Chrome, or VS Code access; Local/BYOK developer use remains available inside its separate trust boundary. Skills and chat tools remain available in Free chat, while AGI Work and managed developer surfaces are Pro+ capabilities.
 
-Location pricing is server-derived. The Website uses the trusted deployment country header and the configured Stripe Price currency options; it never trusts a browser-supplied currency. India-specific amounts render only for India. Other supported currencies use the matching Stripe currency option, with USD as the honest fallback when no localized Stripe amount is configured.
+Subscriptions are globally available (founder, 2026-08-05) — no country is excluded; every region can purchase, with localized amounts where configured and USD everywhere else. Location pricing is server-derived. The Website uses the trusted deployment country header and the configured Stripe Price currency options; it never trusts a browser-supplied currency. India-specific amounts render only for India. Other supported currencies use the matching Stripe currency option, with USD as the honest fallback when no localized Stripe amount is configured.
 
 Paid usage is enforced as overlapping billing-period, rolling seven-day, rolling five-hour, and flagship rolling-week windows. The five-hour allowance is 20% of that plan's weekly allowance and the flagship sub-limit is 30% of the weekly allowance. These are spend windows, not seven daily buckets: usage ages out from its original transaction timestamp. Rolling spend windows warn at 80% and hard-stop at 100%; there is no downgrade or 150% financial grace band. The server-owned reservation includes the estimated in-flight request before provider work and serializes concurrent reservations for one tenant.
 
@@ -272,9 +263,17 @@ Desktop:
   instead of synthesized models or universal capabilities. Runtime capability
   probing is reserved for dynamically discovered Ollama models.
 - `apps/desktop/src/features/v3/DesktopShellV3.tsx` no longer exposes separate
-  AGI Work and AGI Code mode placeholders. It exposes chat plus AGI Work Projects,
-  Artifacts, Scheduled, and Dispatch subpanels. AGI Code remains missing or
-  unmounted in V3; `CodeModeHome.tsx` exists but is not mounted.
+  AGI Work and AGI Code mode placeholders. It exposes chat plus AGI Work
+  Projects, Artifacts, Scheduled, Code, Tasks, Library, and Cloud Schedules
+  panels, each gated by privacy mode. There is no Dispatch subpanel; the
+  `sidebar.nav.dispatch` translation keys survive in the i18n corpus but no
+  component reads them. `CodeModeHome.tsx` was deleted in `c39eba06c`. AGI Code
+  is now mounted as `apps/desktop/src/features/code/CodeWorkspace.tsx`, reached
+  from the sidebar `code` nav entry and rendered **Local-only**: the nav entry is
+  absent in Managed Cloud, the navigate guard refuses the panel outside Local,
+  and switching a session to Managed Cloud evicts an open workspace back to
+  chat. It edits real device files, so it must never render over a cloud
+  session.
 - Desktop settings currently includes General, Account,
   Personalization/Appearance, Privacy, Models & Keys, Agents, Skills,
   Connectors, Plugins, Memory, Notifications, and Voice. Legacy Capabilities

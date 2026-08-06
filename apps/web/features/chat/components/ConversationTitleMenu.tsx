@@ -63,7 +63,14 @@ export function ConversationTitleMenu({
   }, [draft, title, onRename]);
 
   return (
-    <div className="absolute left-1/2 flex max-w-[46%] -translate-x-1/2 items-center">
+    <div
+      // The cap has to reserve ABSOLUTE space, not a proportion. The header's
+      // icon-button groups are fixed pixel widths, so on a narrow window they eat
+      // proportionally more and a centred 46% ran straight under them. Reserving
+      // 14rem total keeps the title clear of both flanks at every width, while
+      // still yielding to 46% on a wide one.
+      className="absolute left-1/2 flex max-w-[min(46%,calc(100%-14rem))] -translate-x-1/2 items-center"
+    >
       {isRenaming ? (
         <input
           autoFocus

@@ -43,6 +43,8 @@ import {
   useChatStore as useDesktopChatStore,
   uuidToDbId,
 } from '../stores/chat/chatStore';
+import { useArtifactStore } from '../stores/artifactStore';
+import { PartialArtifactAccumulator } from './partialArtifactArgs';
 
 // ---------------------------------------------------------------------------
 // Raw Tauri event payload shapes (snake_case from Rust serde serialisation)
@@ -122,6 +124,18 @@ interface ArtifactEventPayload {
     created_at?: string;
     updated_at?: string;
   };
+}
+
+// Raw payload for `chat:artifact-progress`, emitted by
+// `sys/commands/chat/stream_runtime.rs` while a `create_artifact` tool call's
+// arguments are still streaming. Display only — the durable artifact still
+// arrives on `chat:artifact` when the tool executes.
+interface ArtifactProgressPayload {
+  conversation_id: string | number;
+  message_id: string | number;
+  tool_call_index: number;
+  seq: number;
+  delta: string;
 }
 
 // Raw shape of the Rust `ArtifactResponse<T>` wrapper
@@ -651,6 +665,9 @@ export class TauriRuntime implements ChatRuntime {
     const queue: StreamChunk[] = [];
     const waiting: Resolve[] = [];
     const streamedArtifactIds = new Set<string>();
+    // Progressive `create_artifact` previews, keyed by `${messageId}:${index}`.
+    const artifactDraftAccumulators = new Map<string, PartialArtifactAccumulator>();
+    let activeArtifactDraftKey: string | null = null;
     let done = false;
     let streamEndHandled = false;
     let agentEventSequence = 0;
@@ -912,6 +929,43 @@ export class TauriRuntime implements ChatRuntime {
       }
     });
 
+    // chat:artifact-progress — `create_artifact` arguments are still streaming.
+    // Drives a DISPLAY-ONLY preview in the artifact panel: no artifact is
+    // created, appended, or versioned here. If a delta is lost (seq gap) or the
+    // partial JSON yields nothing usable, the preview is simply skipped and the
+    // artifact appears when the tool call completes, exactly as before.
+    await registerListener<ArtifactProgressPayload>('chat:artifact-progress', (payload) => {
+      const convId = String(payload.conversation_id);
+      if (
+        convId !== String(backendConversationId) &&
+        payload.conversation_id !== backendConversationId
+      )
+        return;
+      if (typeof payload.delta !== 'string' || typeof payload.seq !== 'number') return;
+
+      const key = `${String(payload.message_id)}:${String(payload.tool_call_index)}`;
+      let accumulator = artifactDraftAccumulators.get(key);
+      if (!accumulator) {
+        accumulator = new PartialArtifactAccumulator();
+        artifactDraftAccumulators.set(key, accumulator);
+      }
+      const fields = accumulator.push(payload.delta, payload.seq);
+      if (!fields) return;
+      // Wait until the model has committed to a title or a type before taking
+      // over the panel — an empty shell is noise, not progress.
+      if (fields.title === undefined && fields.artifactType === undefined) return;
+
+      activeArtifactDraftKey = key;
+      useArtifactStore.getState().updateArtifactDraft({
+        key,
+        title: fields.title ?? null,
+        artifactType: fields.artifactType ?? null,
+        content: fields.content ?? '',
+        language: fields.language ?? null,
+        complete: fields.complete,
+      });
+    });
+
     // chat:artifact — emitted when a `create_artifact` tool call completes
     // during this turn (core/llm/tool_executor/artifact_tools.rs). Mirrors
     // the chat:stream-chunk conversation-id filter above.
@@ -931,6 +985,11 @@ export class TauriRuntime implements ChatRuntime {
         return;
       }
       streamedArtifactIds.add(payload.artifact.id);
+      // The authoritative artifact replaces the progressive preview.
+      if (activeArtifactDraftKey !== null) {
+        activeArtifactDraftKey = null;
+        useArtifactStore.getState().finalizeArtifactDraft(payload.artifact.id);
+      }
       push({
         type: 'artifact',
         data: {
@@ -954,6 +1013,14 @@ export class TauriRuntime implements ChatRuntime {
         unlisten();
       }
       unlisteners.length = 0;
+      artifactDraftAccumulators.clear();
+      // A preview left over from a tool call that errored, was stopped, or
+      // never produced an artifact must not linger as a fake panel.
+      if (activeArtifactDraftKey !== null) {
+        const key = activeArtifactDraftKey;
+        activeArtifactDraftKey = null;
+        useArtifactStore.getState().discardArtifactDraft(key);
+      }
     };
 
     // Cancellation must wait for native stream-end: that event carries the
@@ -1080,6 +1147,14 @@ export class TauriRuntime implements ChatRuntime {
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
     const backendConversationId = uuidToDbId(conversationId);
+    // A conversation that has never been persisted (a fresh "New chat" before
+    // its first message) has no DB id mapping — and by definition no stored
+    // messages. Passing `undefined` into the i64 command arg made the invoke
+    // reject, which ChatInterface rendered as "Could not load this
+    // conversation" on every brand-new chat in a fresh profile.
+    if (typeof backendConversationId !== 'number' || backendConversationId <= 0) {
+      return [];
+    }
     const raw = await invoke<RawMessage[]>('chat_get_messages', {
       conversationId: backendConversationId,
       userId: this.getCurrentUserId(),

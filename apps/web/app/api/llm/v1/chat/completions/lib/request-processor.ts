@@ -2,7 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { ResearchStep } from '@agiworkforce/types';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
+import { AgiWorkGoalSchema } from './agiwork-plan';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import {
@@ -48,13 +50,21 @@ import {
 import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
   applyConversationContext,
+  classifyTaskFamily,
   classifyTaskLocally,
   detectIndicScript,
   estimateTokens,
   resolveAutoRoute,
+  taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
-import type { RoutingTaskType } from '@agiworkforce/routing';
+import type {
+  RoutingAttachment,
+  RoutingTaskType,
+  TaskFamily,
+  TaskFamilySignals,
+} from '@agiworkforce/routing';
 import { trimMessagesToContextWindow } from './context-window';
+import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -170,16 +180,72 @@ export const ChatCompletionRequestSchema = z.object({
   user: z.string().optional(),
   tools: z.array(ToolDefinitionSchema).max(64).optional(),
   tool_choice: ToolChoiceSchema.optional(),
+  /*
+   * CAPABILITY HONESTY: this field was validated here and then read nowhere
+   * else in the repo, so a caller could ask for `json_object` / `json_schema`,
+   * receive 200 OK, and get prose. Silently ignoring a structured-output
+   * request is worse than refusing it — the caller's parser fails downstream
+   * with no indication of why.
+   *
+   * `text` is accepted because it is the actual behaviour. The other two are
+   * refused with an actionable message until the response path genuinely
+   * enforces a schema. Tool calling (`tools` + `tool_choice`) IS wired and is
+   * the supported way to get a shaped payload today.
+   */
   response_format: z
     .object({
       type: z.enum(['text', 'json_object', 'json_schema']).optional(),
       json_schema: z.unknown().optional(),
+    })
+    .refine((value) => value.type === undefined || value.type === 'text', {
+      message:
+        "response_format only supports type 'text' on this endpoint. " +
+        'Structured output is not enforced here yet, and returning prose for a ' +
+        'json_schema request would be silently wrong. Use `tools` with `tool_choice` ' +
+        'to get a schema-shaped payload.',
+      path: ['type'],
     })
     .optional(),
   seed: z.number().int().optional(),
   web_search: z.boolean().optional(),
   web_fetch: z.boolean().optional(),
   research: z.boolean().optional(),
+  /**
+   * CAP-045 slice 4: material carried forward when the user retries a research
+   * run that errored or was interrupted. Purely additive and fully bounded —
+   * the loop pre-seeds these sources into its aggregator (keeping their citation
+   * numbers stable) and tells the model not to repeat the completed queries, so
+   * a retry does not pay to re-run work that already succeeded.
+   *
+   * This is a HINT, not a grant: the retry still goes through the normal
+   * request path, so reservation, metering, and every quota gate apply exactly
+   * as they do to a first attempt.
+   */
+  research_resume: z
+    .object({
+      sources: z
+        .array(
+          z.object({
+            url: z.string().trim().url().max(2000),
+            title: z.string().max(500).optional(),
+            snippet: z.string().max(2000).optional(),
+          }),
+        )
+        .max(100)
+        .optional(),
+      steps: z
+        .array(
+          z.object({
+            id: z.string().trim().min(1).max(100),
+            type: z.enum(['search', 'read', 'analyze', 'synthesize', 'verify']),
+            description: z.string().trim().min(1).max(500),
+            status: z.enum(['pending', 'running', 'completed', 'failed']),
+          }),
+        )
+        .max(50)
+        .optional(),
+    })
+    .optional(),
   code_execution: z.boolean().optional(),
   // Logical client selection only. The server owns the Office schemas,
   // generation runtime, storage target, and emitted file descriptors.
@@ -187,6 +253,11 @@ export const ChatCompletionRequestSchema = z.object({
   // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
   // that exposes AGI's server-owned search/fetch/sandbox tools below.
   work_mode: z.enum(CLOUD_WORK_MODES).optional(),
+  // CAP-048: the structured goal the composer captures in AGI Work mode. Purely
+  // additive and fully bounded — the server stores it on the run's journal (so
+  // `/tasks` can show WHICH task a run is) and threads it into the tool-free
+  // planning turn. Ignored unless `work_mode === 'agiwork'`.
+  agi_work_goal: AgiWorkGoalSchema.optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
@@ -275,7 +346,8 @@ export type ImplicitManagedToolIntentContext = {
  * Cloud share this request boundary. The model still decides whether to call
  * an offered tool; this function never executes a tool by itself. Normal-chat
  * execution remains metered by the plan's usage limits, while the separate
- * long-running AGI Work mode remains Pro+ and explicitly user-selected.
+ * long-running AGI Work mode remains Pro-and-above (`agi_work` capability) and
+ * explicitly user-selected.
  */
 export function applyImplicitManagedToolIntent(
   request: ChatCompletionRequest,
@@ -411,14 +483,32 @@ export function getWorkModeEntitlementError(
 }
 
 /**
- * Keep ordinary request recovery responsive while giving durable AGI Work
- * workflows enough time to span many bounded invocations without the billing
- * recovery job classifying an active run as abandoned.
+ * Keep ordinary request recovery responsive while giving durable agent runs
+ * enough time to span many bounded invocations without the billing recovery job
+ * classifying an active run as abandoned.
+ *
+ * The long lease used to be AGI Work's alone, which was correct while AGI Work
+ * was the only thing that ran on the durable transport. It no longer is: an
+ * ordinary chat turn that reaches for a tool now runs as a durable workflow too
+ * (`AGI_DURABLE_INITIAL_TURNS`), chaining bounded ~210 s invocations without
+ * settling in between. A chain of five is already past the 900 s lease, at which
+ * point `recover_stale_managed_usage_requests` would refund a reservation whose
+ * run is still executing — silently, and in the customer's favour, so nothing
+ * would ever surface it.
+ *
+ * So the lease follows the transport, not the label: any turn that can enter the
+ * tool loop gets the long lease. Plain chat, which never goes durable and is
+ * capped by the route's own `maxDuration`, keeps the responsive one.
  */
 export function resolveManagedUsageLeaseSeconds(
-  workMode: ChatCompletionRequest['work_mode'],
+  chatRequest: Pick<ChatCompletionRequest, 'work_mode' | 'tools' | 'web_search' | 'code_execution'>,
 ): number {
-  return workMode === 'agiwork' ? 86_400 : 900;
+  const canEnterToolLoop =
+    chatRequest.work_mode === 'agiwork' ||
+    (Array.isArray(chatRequest.tools) && chatRequest.tools.length > 0) ||
+    chatRequest.web_search === true ||
+    chatRequest.code_execution === true;
+  return canEnterToolLoop ? 86_400 : 900;
 }
 
 export type ProcessedRequest = {
@@ -469,6 +559,26 @@ export type ProcessedRequest = {
    * skipped, never served). Optional for the same fixture-compat reason.
    */
   subscriptionTier?: string;
+  /**
+   * CPST Stage-0 telemetry, MANAGED CLOUD ONLY
+   * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2/§4.3).
+   * Interim route identity for the resolved route, built by
+   * `buildInterimRoutePlanId`. It is NOT an `ExecutionPlan` id — that contract
+   * does not exist yet (§3) — and is self-labelled `interim:` so no consumer
+   * mistakes it for one. Persisted into the managed-usage `usage` jsonb at
+   * finalize time and never used to make a routing decision. Optional for the
+   * same additive-schema reason as the fields above: absent means unknown.
+   */
+  routePlanId?: string;
+  /**
+   * CPST Stage-0 telemetry, MANAGED CLOUD ONLY: additional provider attempts
+   * inside THIS billed request, incremented only by `buildFailoverAttemptView`
+   * (lib/managed-failover.ts), which is the sole place an extra attempt is
+   * created. Absent when no rotation happened — task-scoped retry counting
+   * needs the task identifier the design document leaves undecided (OQ-6), so
+   * absence is recorded as unknown rather than asserted as zero.
+   */
+  retries?: number;
   resolvedTaskType: RoutingTaskType;
   classifierConfidence: number;
   resolvedSlot: RoutingSlot | null;
@@ -483,6 +593,14 @@ export type ProcessedRequest = {
    * ProcessedRequest fixtures stay valid without churn.
    */
   researchMode?: boolean;
+  /**
+   * CAP-045 slice 4: validated retry material (`research_resume`), surfaced only
+   * when this really is a research request. route.ts seeds the loop with it.
+   */
+  researchResume?: {
+    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    steps: ResearchStep[];
+  };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   llmRequest: {
@@ -954,6 +1072,61 @@ export function isFreeTierBlockedAddOn(
   );
 }
 
+/**
+ * Structural signals for the deterministic task-family fast path
+ * (`packages/ai/routing/src/task-family.ts`).
+ *
+ * Reads only fields this request already carries — the work-mode toggle, the
+ * explicit tool toggles, the caller's tool surface, attachment kinds, the token
+ * and character lengths already computed for routing, and the canonical
+ * runtime profile. It never reads message prose: the prose classifier is
+ * `classifyTaskLocally`, and duplicating it here would create a second,
+ * silently diverging one.
+ *
+ * `web/cloud-chat` is passed as the surface because that is the runtime profile
+ * `resolveWebCloudModelRoute` hardcodes; the family stage records it and does
+ * not branch on it.
+ */
+export function buildTaskFamilySignals(
+  request: Pick<
+    ChatCompletionRequest,
+    | 'work_mode'
+    | 'research'
+    | 'web_search'
+    | 'web_fetch'
+    | 'code_execution'
+    | 'office_creation'
+    | 'tools'
+    | 'tool_choice'
+    | 'thinking_mode'
+  >,
+  context: {
+    attachments?: readonly RoutingAttachment[] | undefined;
+    estimatedInputTokens: number;
+    messageCharCount: number;
+    priorTurnCount: number;
+  },
+): TaskFamilySignals {
+  return {
+    ...(request.work_mode !== undefined ? { workMode: request.work_mode } : {}),
+    ...(request.research !== undefined ? { researchMode: request.research } : {}),
+    ...(request.web_search !== undefined ? { webSearch: request.web_search } : {}),
+    ...(request.web_fetch !== undefined ? { webFetch: request.web_fetch } : {}),
+    ...(request.code_execution !== undefined ? { codeExecution: request.code_execution } : {}),
+    ...(request.office_creation !== undefined ? { officeCreation: request.office_creation } : {}),
+    ...(request.tools !== undefined ? { declaredToolCount: request.tools.length } : {}),
+    ...(request.tool_choice !== undefined
+      ? { toolChoiceForced: request.tool_choice !== 'none' }
+      : {}),
+    ...(request.thinking_mode !== undefined ? { thinkingMode: request.thinking_mode } : {}),
+    ...(context.attachments !== undefined ? { attachments: context.attachments } : {}),
+    estimatedInputTokens: context.estimatedInputTokens,
+    messageCharCount: context.messageCharCount,
+    priorTurnCount: context.priorTurnCount,
+    runtimeProfileId: 'web/cloud-chat',
+  };
+}
+
 export function resolveWebCloudModelRoute(
   model: string,
   subscriptionTier: string | undefined,
@@ -964,6 +1137,13 @@ export function resolveWebCloudModelRoute(
     budgetRemainingCents?: number;
     estimatedInputTokens?: number;
     estimatedOutputTokens?: number;
+    /**
+     * Deterministic task family, or `null`/omitted when the fast path
+     * declined. Never changes `taskType` and never changes admission — it only
+     * lets Auto order the candidate set the task type already produced, and
+     * only when `AGI_ROUTING_TASK_FAMILY_STAGE=1`.
+     */
+    taskFamily?: TaskFamily | null;
   },
 ) {
   return resolveAutoRoute({
@@ -981,6 +1161,7 @@ export function resolveWebCloudModelRoute(
     ...(usage?.estimatedOutputTokens !== undefined
       ? { estimatedOutputTokens: usage.estimatedOutputTokens }
       : {}),
+    ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
   });
 }
 
@@ -1674,6 +1855,23 @@ export async function processRequest(
     estimateTokens(lastUserText),
   );
 
+  // Deterministic task-family fast path. Computed ONLY when the operator flag
+  // is on, so with the flag off (the default) this path is byte-for-byte the
+  // previous behaviour: no classification runs, no family reaches Auto, and
+  // the resolver takes its `task_family_stage_disabled` branch. The family
+  // refines the already-computed `resolvedTaskType`; it never replaces it and
+  // never participates in admission.
+  const routeTaskFamily: TaskFamily | null = taskFamilyRoutingStageEnabled()
+    ? classifyTaskFamily(
+        buildTaskFamilySignals(chatRequest, {
+          attachments: routingAttachments,
+          estimatedInputTokens: routeEstimatedInputTokens,
+          messageCharCount: lastUserText.length,
+          priorTurnCount: routingHistory.length,
+        }),
+      ).family
+    : null;
+
   // Canonical registry admission for both Auto aliases and explicit selections.
   // This is the same policy seam used by unified-chat/Desktop. It validates the
   // Web managed-cloud runtime profile, exact provider route, model lifecycle,
@@ -1687,6 +1885,7 @@ export async function processRequest(
         ? { budgetRemainingCents: routeBudgetRemainingCents }
         : {}),
       estimatedInputTokens: routeEstimatedInputTokens,
+      taskFamily: routeTaskFamily,
     },
   );
   if (routeDecision.status === 'unavailable') {
@@ -2273,7 +2472,7 @@ export async function processRequest(
         provider,
         model: chatRequest.model,
         estimatedCostCents,
-        leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest.work_mode),
+        leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
         planTier: subscription.plan_tier,
         isFlagship: isFlagshipRequest,
       });
@@ -2520,6 +2719,11 @@ export async function processRequest(
       ? []
       : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
     subscriptionTier: subscription.plan_tier,
+    // CPST Stage-0 (managed cloud only): the resolver's route identity was
+    // computed and then discarded. Recording it costs nothing and changes no
+    // decision — it is the interim stand-in for the not-yet-existing
+    // ExecutionPlan id.
+    routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,
     classifierConfidence: classifierResult.confidence,
     resolvedSlot,
@@ -2527,6 +2731,16 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
+    // Retry material is only meaningful for a research run; a non-research
+    // request that sends it gets it dropped rather than silently applied.
+    ...(researchMode && chatRequest.research_resume
+      ? {
+          researchResume: {
+            sources: chatRequest.research_resume.sources ?? [],
+            steps: (chatRequest.research_resume.steps ?? []) as ResearchStep[],
+          },
+        }
+      : {}),
     indicResult,
     freeTrial,
     llmRequest,

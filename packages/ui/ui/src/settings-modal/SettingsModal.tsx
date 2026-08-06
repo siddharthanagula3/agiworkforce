@@ -201,6 +201,7 @@ function ConnectorDetail({
   onDisconnect,
   onBack,
   error,
+  disclosure,
 }: {
   connector: SettingsConnector;
   connection: ConnectedConnector | undefined;
@@ -210,6 +211,12 @@ function ConnectorDetail({
   onDisconnect: () => void;
   onBack: () => void;
   error?: string;
+  /**
+   * Surface-supplied permission disclosure shown before the user connects.
+   * Optional and surface-owned on purpose: this package must not hard-code web
+   * routes or web-specific policy copy into a shell that Desktop also renders.
+   */
+  disclosure?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -297,6 +304,11 @@ function ConnectorDetail({
 
       <p className="text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
 
+      {/* Surface-supplied permission disclosure (what connecting grants, how to
+          revoke). Rendered before the Details block so it is above the fold at
+          the moment the user is deciding. */}
+      {disclosure}
+
       {/* Details — real catalog metadata only (no invented author/URL/docs). */}
       <div className="rounded-lg border border-border/80">
         <div className="border-b border-border/60 px-3 py-2 text-xs font-semibold text-foreground">
@@ -311,12 +323,12 @@ function ConnectorDetail({
             <dt className="text-muted-foreground">Authentication</dt>
             <dd className="uppercase text-foreground">{connector.authType.replace('_', ' ')}</dd>
           </div>
-          {connector.actionCount > 0 && (
-            <div className="flex items-center justify-between px-3 py-2">
-              <dt className="text-muted-foreground">Actions</dt>
-              <dd className="text-foreground">{connector.actionCount}</dd>
-            </div>
-          )}
+          {/* NOTE: an "Actions" row rendered `connector.actionCount` here. That
+              number has no backing implementation on any surface — web supplies
+              hand-written counts from features/connectors/data/connectors.ts and
+              Desktop passes 0 — so it advertised a capability count at exactly
+              the moment the user is deciding to grant access. Do not reinstate
+              it without a runtime tool count to render. */}
           {connection?.connectedAt && (
             <div className="flex items-center justify-between px-3 py-2">
               <dt className="text-muted-foreground">Connected</dt>
@@ -941,6 +953,21 @@ function AddCustomConnectorForm({
         </p>
       </div>
 
+      {/*
+        CONNECTOR-FORM-PASSWORD-AUTOFILL-01 — do not remove these autofill
+        opt-outs. A bare text input followed by a password input is the exact
+        shape browsers and password managers treat as a LOGIN form, so Chrome
+        and Safari filled the signed-in user's account email into "Name" and
+        their saved ACCOUNT PASSWORD into "Bearer token" — a field whose own
+        help text promises it is "Sent only to this MCP server". Submitting the
+        prefilled form would have transmitted the user's password to an
+        arbitrary third-party MCP server.
+
+        `autoComplete="off"` alone does not stop this: managers deliberately
+        ignore it on login-shaped forms. `new-password` on the secret field is
+        what actually defeats the heuristic, and the vendor-specific opt-outs
+        cover 1Password/LastPass/Bitwarden.
+      */}
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-foreground">Name</span>
         <input
@@ -948,6 +975,11 @@ function AddCustomConnectorForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="My connector"
+          name="mcp-connector-label"
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           className={inputClass}
         />
       </label>
@@ -962,7 +994,13 @@ function AddCustomConnectorForm({
             value={authToken}
             onChange={(e) => setAuthToken(e.target.value)}
             placeholder="Token is encrypted before storage"
-            autoComplete="off"
+            name="mcp-connector-bearer-token"
+            // `new-password`, not `off`: password managers ignore `off` on a
+            // login-shaped form. See CONNECTOR-FORM-PASSWORD-AUTOFILL-01 above.
+            autoComplete="new-password"
+            data-1p-ignore
+            data-lpignore="true"
+            data-bwignore
             className={inputClass}
           />
           <span className="text-[11px] text-muted-foreground">
@@ -1033,7 +1071,13 @@ function AddCustomConnectorForm({
   );
 }
 
-function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
+function ConnectorsPanel({
+  adapter,
+  connectorDisclosure,
+}: {
+  adapter?: SettingsDataAdapter;
+  connectorDisclosure?: React.ReactNode;
+}) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<ConnectorTab>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -1129,6 +1173,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         onDisconnect={() => handleDisconnect(detailConnector.id)}
         onBack={() => setDetailId(null)}
         error={rowErrors[detailConnector.id]}
+        disclosure={connectorDisclosure}
       />
     );
   }
@@ -1781,6 +1826,13 @@ export interface SettingsModalProps {
   navGroups?: SettingsNavGroupResolved[];
   /** Data for built-in Connectors/Skills/Plugins panels. */
   adapter?: SettingsDataAdapter;
+  /**
+   * Permission disclosure rendered in the built-in connector detail view before
+   * the Connect/Disconnect control. Surface-owned so this package never
+   * hard-codes web policy copy or web routes into a shell Desktop also renders.
+   * Omit and the detail view simply shows no disclosure block.
+   */
+  connectorDisclosure?: React.ReactNode;
   /** Modal title (default: "Settings") */
   title?: string;
 }
@@ -1794,6 +1846,7 @@ export function SettingsModal({
   activeKeys,
   navGroups,
   adapter,
+  connectorDisclosure,
   title = 'Settings',
 }: SettingsModalProps) {
   const [navSearch, setNavSearch] = useState('');
@@ -1824,7 +1877,11 @@ export function SettingsModal({
 
   function renderSection() {
     if (activeSection === 'connectors') {
-      return sectionContent['connectors'] ?? <ConnectorsPanel adapter={adapter} />;
+      return (
+        sectionContent['connectors'] ?? (
+          <ConnectorsPanel adapter={adapter} connectorDisclosure={connectorDisclosure} />
+        )
+      );
     }
     if (activeSection === 'skills') {
       return sectionContent['skills'] ?? <SkillsPanel adapter={adapter} />;

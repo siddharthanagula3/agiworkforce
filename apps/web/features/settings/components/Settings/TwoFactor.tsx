@@ -1,7 +1,6 @@
 import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';
 import {
-  Switch,
   Card,
   CardContent,
   CardDescription,
@@ -61,34 +60,14 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
     <CardContent className="space-y-6">
       <Form {...securityForm}>
         <form onSubmit={securityForm.handleSubmit(onSaveSecurity)} className="space-y-6">
-          <FormField
-            control={securityForm.control}
-            name="two_factor_enabled"
-            render={({ field }) => (
-              <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-foreground">Two-Factor Authentication</FormLabel>
-                  {/*
-                    Honest state: web does not yet ship the full authenticator
-                    enrollment flow (setup -> scan QR -> verify a TOTP code), so
-                    enabling here cannot truthfully succeed. Rather than a toggle
-                    that throws on click, present it disabled with copy that tells
-                    the user where 2FA can be managed today. (Enrollment dialog is
-                    tracked as a follow-up; the backend endpoints already exist.)
-                  */}
-                  <FormDescription>
-                    {field.value
-                      ? 'Two-factor authentication is enabled for your account.'
-                      : 'Two-factor via an authenticator app is coming to web. Manage 2FA from your identity provider for now.'}
-                  </FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} disabled aria-readonly="true" />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
+          {/*
+            2FA is owned by TwoFactorEnrollmentPanel, which drives the real
+            /api/settings/2fa routes. This form still carries
+            `two_factor_enabled` so a session-timeout save writes the mirror
+            column back truthfully, but it must never present a control that
+            claims to flip 2FA — the server only flips it after POST
+            /api/settings/2fa/verify succeeds.
+          */}
           <FormField
             control={securityForm.control}
             name="session_timeout"

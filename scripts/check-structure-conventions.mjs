@@ -459,7 +459,14 @@ for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
 }
 
 for (const file of walk('apps/web/features')) {
-  const body = readText(file);
+  // These markers target apps/web's own retired src/features/ layout. A web
+  // feature doc may still legitimately cite another surface's real path — the
+  // CLI genuinely lives at apps/cli/src/features/… — so drop other-app paths
+  // before scanning rather than forcing docs to obscure a true location.
+  const body = readText(file).replace(
+    /apps\/(?:cli|desktop|mobile|extension|extension-vscode)\/\S*/g,
+    '',
+  );
   for (const marker of forbiddenFeatureMarkers) {
     if (body.includes(marker)) {
       errors.push(`${file} contains stale split-feature marker: ${marker}`);

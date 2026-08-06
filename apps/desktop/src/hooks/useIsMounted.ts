@@ -15,7 +15,7 @@
  * SaveToMemoryButton, MemoryCard, ToolLabel, ArtifactToolbar,
  * DataSection, DotfileSettings.ConfigEditorSection, ConnectorDetailView,
  * ArtifactVersionHistory, MemoryImport, ShareConversationDialog,
- * AgentTaskCreator, DatabaseWorkspace.SchemaExplorer). Those are
+ * AgentTaskCreator). Those are
  * harmless but redundant. The remaining ~50 candidates from the sweep
  * should be left alone.
  *

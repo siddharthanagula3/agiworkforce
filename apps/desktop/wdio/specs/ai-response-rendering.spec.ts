@@ -1,3 +1,4 @@
+import { resolveScreenDir } from '../support/dom';
 // AI Response Rendering QA — drives a real Local-mode (Ollama) chat send with
 // a prompt that forces a deterministic, markdown-rich reply, then inspects the
 // real rendered DOM (not source-reading) for: headings, bold/italic, inline
@@ -5,12 +6,7 @@
 // blockquotes, lists, and incremental/streaming render behavior. Part of the
 // Application checklist row #7 (docs/agent-context/desktop-qa-checklist.md).
 
-import * as fs from 'node:fs';
-
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/5c2cae99-6834-4da9-92a9-3df91afbf448/scratchpad/desktop-qa-screens';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
 const MARKDOWN_PROMPT =
   'Output exactly and only the following markdown, verbatim, with no extra commentary before or after:\n\n' +
@@ -61,9 +57,13 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     if (pickerVisible) {
       await modelPicker.click();
       await browser.pause(500);
+      // Prefer any installed qwen3.5-family model: this test needs a model
+      // that can echo markdown verbatim, and the 0.5b fallback strips the
+      // markers (renders "bold text" without **), failing the structural
+      // checks for model reasons rather than renderer reasons.
       const clicked = await browser.execute(() => {
         const buttons = Array.from(document.querySelectorAll('button'));
-        const match = buttons.find((b) => (b.textContent ?? '').includes('qwen3.5:9b'));
+        const match = buttons.find((b) => (b.textContent ?? '').includes('qwen3.5'));
         if (match) {
           (match as HTMLButtonElement).click();
           return true;

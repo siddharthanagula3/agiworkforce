@@ -15,7 +15,11 @@ import {
   type RoutingTrustMode,
 } from '@agiworkforce/routing';
 import type { ChatHostBridge } from '../lib/hostBridge';
-import type { ChatRuntime, CloudApprovalTurnProjection } from '../lib/runtime';
+import type {
+  ChatRuntime,
+  CloudApprovalTurnProjection,
+  CloudRunReattachment,
+} from '../lib/runtime';
 import type { Attachment, ChatMessage } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
@@ -126,6 +130,41 @@ interface UseChatOptions {
    * `'desktop'`, etc.) so persistence keys don't collide.
    */
   surfaceId?: string;
+}
+
+const TERMINAL_CLOUD_RUN_STATES = new Set<string>([
+  'ready_for_review',
+  'completed',
+  'failed',
+  'cancelled',
+  'archived',
+]);
+
+/**
+ * Read the durable-run checkpoint off a persisted assistant turn, or return
+ * null when this turn is finished business and not worth a server round trip.
+ */
+function readCloudRunReattachment(message: ChatMessage): CloudRunReattachment | null {
+  const raw = message.metadata?.['cloudAgentRun'];
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const runId = record['runId'];
+  const runPath = record['runPath'];
+  const lastSequence = record['lastSequence'];
+  if (typeof runId !== 'string' || !runId) return null;
+  if (typeof runPath !== 'string' || !runPath) return null;
+  if (!Number.isInteger(lastSequence)) return null;
+  const state = record['state'];
+  if (typeof state === 'string' && TERMINAL_CLOUD_RUN_STATES.has(state)) return null;
+  if (message.metadata?.['finishReason']) return null;
+
+  return {
+    assistantMessageId: message.id,
+    model: message.model ?? '',
+    content: message.content,
+    runReference: { runId, runPath, lastSequence: lastSequence as number },
+    hasPersistedApproval: Boolean(message.metadata?.['cloudApproval']),
+  };
 }
 
 export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
@@ -1576,6 +1615,66 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     },
     [runtime],
   );
+
+  /**
+   * Rejoin a durable run when its conversation is opened.
+   *
+   * A Managed Cloud run outlives the app: the answer may have been finished, or
+   * an approval asked for, while this client was closed. The server saves the
+   * turn in that case, so what the transcript shows on reopen is a real but
+   * possibly unfinished record. Reattaching streams only what happened AFTER the
+   * cursor stored on that message, and the runtime no-ops for a run that has
+   * since ended.
+   *
+   * The two cheap skips below matter: without them every reopened conversation
+   * with any cloud history would ask the server about a run that finished weeks
+   * ago. A recorded `finishReason` means a client watched this turn end, and a
+   * terminal recorded state means the server already said so.
+   */
+  const lastAssistantMessageId = useChatStore((state) => {
+    const messages = activeConversationId
+      ? state.messagesByConversation[activeConversationId]
+      : undefined;
+    if (!messages) return null;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const candidate = messages[index];
+      if (candidate?.role === 'assistant') return candidate.id;
+    }
+    return null;
+  });
+  const reattachedTurnsRef = useRef(new Set<string>());
+  useEffect(() => {
+    const reattach = runtime?.reattachConversation;
+    if (!reattach || !activeConversationId || !lastAssistantMessageId) return;
+    // Messages arrive after the conversation is selected, so this effect keys on
+    // the last assistant turn rather than the conversation alone — keying on the
+    // conversation would run once against an empty transcript and never again.
+    const attemptKey = `${activeConversationId}:${lastAssistantMessageId}`;
+    if (reattachedTurnsRef.current.has(attemptKey)) return;
+    const messages = useChatStore.getState().messagesByConversation[activeConversationId] ?? [];
+    const message = messages.find((candidate) => candidate.id === lastAssistantMessageId);
+    if (!message || message.isStreaming) return;
+
+    const reattachment = readCloudRunReattachment(message);
+    if (!reattachment) return;
+    reattachedTurnsRef.current.add(attemptKey);
+
+    // Point the stream refs at the persisted row so replayed content and any
+    // rebuilt approval card append to it instead of opening a second bubble.
+    assistantMessageIdRef.current = message.id;
+    assistantMessageIdsRef.current.set(activeConversationId, message.id);
+    streamConvIdRef.current = activeConversationId;
+
+    void (async () => {
+      try {
+        await reattach.call(runtime, activeConversationId, reattachment);
+      } catch (error) {
+        // A run we could not rejoin is not a failed turn: what is on screen is
+        // still what the server has. Say so quietly and leave the transcript be.
+        console.warn('[useChat] Could not reattach to the Cloud run:', error);
+      }
+    })();
+  }, [activeConversationId, lastAssistantMessageId, runtime]);
 
   const activeApprovalMessages = useChatStore((state) =>
     activeConversationId ? state.messagesByConversation[activeConversationId] : undefined,

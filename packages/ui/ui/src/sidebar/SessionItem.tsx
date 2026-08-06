@@ -147,7 +147,15 @@ function SessionItemBase({
           )}
         </button>
 
-        <div className="flex items-center gap-0.5 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {/*
+         * Revealed on hover OR focus-within OR on any device that cannot hover.
+         * Keyboard users were already covered by group-focus-within, but a phone
+         * has no hover state at all: rename / pin / archive / delete were simply
+         * unreachable, while the invisible 0-opacity strip still absorbed taps
+         * meant for the conversation row. `(hover: none)` is the correct query —
+         * `pointer: coarse` also matches some hybrid laptops that DO hover.
+         */}
+        <div className="flex items-center gap-0.5 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {session.hasCustomInstructions && onOpenCustomInstructions && (
             <button
               type="button"
@@ -156,7 +164,7 @@ function SessionItemBase({
                 e.stopPropagation();
                 onOpenCustomInstructions(session.id);
               }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-amber-500 hover:bg-[hsl(var(--muted))]"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-[hsl(var(--muted))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
             >
               <Sparkles className="h-3 w-3" />
             </button>
@@ -172,7 +180,7 @@ function SessionItemBase({
                   e.stopPropagation();
                   toggle();
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>

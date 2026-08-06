@@ -7,6 +7,7 @@ import { secureToken } from '@/lib/secure-random';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import type { ProcessedRequest } from './request-processor';
 import {
@@ -67,6 +68,15 @@ export async function buildNonStreamResponse(
         cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
       });
 
+  // CPST Stage-0 telemetry, MANAGED CLOUD ONLY
+  // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1:
+  // additive keys in the existing `usage` jsonb, no migration). Built once here
+  // because `finalize_managed_usage_request` REPLACES the usage column rather
+  // than merging into it, so these keys must ride the same single call as the
+  // token counters. `taskOutcome` is 'unknown' on a successful charge: billing
+  // success is not task success.
+  const cpstUsage = buildCpstUsageFields(processed, { billingOutcome: 'completed' });
+
   if (processed.managedUsage) {
     // Financial terminal state is durable before the successful HTTP response
     // is constructed. Do not swallow this failure and hand out an unmetered
@@ -82,6 +92,7 @@ export async function buildNonStreamResponse(
         cacheReadTokens: llmResponse.cachedInputTokens,
         cacheWriteTokens: llmResponse.cacheCreationInputTokens,
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+        ...cpstUsage,
       },
     });
   } else if (!freeTrial) {
@@ -92,12 +103,16 @@ export async function buildNonStreamResponse(
     );
   }
 
-  // Cache analytics
+  // Cache analytics. Both rates are resolved for THIS request's date so a model
+  // with dated pricing (or a declared cache-write price) is reported at the same
+  // rates it is billed at.
+  const pricedAt = new Date();
   let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0, cacheWriteCostCents: 0 };
   try {
     cacheMetrics = calculateCacheSavings(
       llmResponse,
-      LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model),
+      LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model, pricedAt),
+      LLMCostCalculator.getCacheWriteCostPerMtok(provider, llmResponse.model, pricedAt),
     );
 
     if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {
@@ -117,13 +132,13 @@ export async function buildNonStreamResponse(
       cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
       cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
     };
-    recordModelUsage(userId, llmResponse.model, usage);
+    recordModelUsage(userId, llmResponse.model, usage, pricedAt);
     logger.info(
       {
         event: 'gen_ai_usage_recorded',
         userId,
         requestId,
-        ...toOtelAttributes(provider, llmResponse.model, usage),
+        ...toOtelAttributes(provider, llmResponse.model, usage, cpstUsage),
       },
       'GenAI usage attributes recorded',
     );

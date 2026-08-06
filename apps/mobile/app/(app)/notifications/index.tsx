@@ -196,34 +196,21 @@ export default function NotificationCenterScreen() {
     (item: NotificationCenterItem) => {
       markRead(item.id);
       const route = item.data.route;
-      const agentId = item.data.agentId;
 
       // Deep-link based on notification type
       switch (item.data.type) {
         case 'agent_failed':
         case 'emergency_stop_triggered':
-          if (agentId) {
-            router.push({
-              pathname: '/(app)/companion/agent/[id]' as const,
-              params: { id: agentId },
-            });
-          } else {
-            router.push({ pathname: '/(app)/companion' as const });
-          }
+        case 'agent_paused':
+          // /(app)/companion/agent/[id] and /(app)/agents/[id] are gated behind
+          // FEATURES.agents (false in v1) and render <FeatureUnavailable/>, so a
+          // tap there was a dead end (MOBILE-AGENT-NOTIF-DEADEND-01). Route to the
+          // live Cloud tasks/runs list (/(app)/agents, gated by FEATURES.cloudTasks).
+          router.push({ pathname: '/(app)/agents' as const });
           break;
         case 'agent_approval_needed':
         case 'approval_pending_escalation':
           router.push({ pathname: '/(app)/companion' as const });
-          break;
-        case 'agent_paused':
-          if (agentId) {
-            router.push({
-              pathname: '/(app)/companion/agent/[id]' as const,
-              params: { id: agentId },
-            });
-          } else {
-            router.push({ pathname: '/(app)/companion' as const });
-          }
           break;
         case 'task_completed':
           if (route && typeof route === 'string') {

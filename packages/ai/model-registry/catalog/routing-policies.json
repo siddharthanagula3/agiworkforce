@@ -133,6 +133,98 @@
       "preferCurrentRouteForCache": true,
       "reevaluateOnTaskChange": true
     },
+    "taskFamilies": {
+      "deep_research": {
+        "appliesToTaskTypes": ["research"],
+        "riskLabel": "low",
+        "qualityFloor": { "minimumSlotBand": "balanced" }
+      },
+      "agentic_work": {
+        "appliesToTaskTypes": ["agentic"],
+        "riskLabel": "high",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["functionCalling"]
+        }
+      },
+      "document_authoring": {
+        "appliesToTaskTypes": ["agentic"],
+        "riskLabel": "high",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["functionCalling", "structuredOutput"]
+        }
+      },
+      "code_execution": {
+        "appliesToTaskTypes": ["coding"],
+        "riskLabel": "high",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["functionCalling"]
+        }
+      },
+      "web_grounded_answer": {
+        "appliesToTaskTypes": ["research", "general", "simple_chat"],
+        "riskLabel": "low",
+        "qualityFloor": { "minimumSlotBand": "economy" }
+      },
+      "screen_automation": {
+        "appliesToTaskTypes": ["computer-use"],
+        "riskLabel": "high",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["imageInput", "functionCalling"]
+        }
+      },
+      "vision": {
+        "appliesToTaskTypes": ["multimodal"],
+        "riskLabel": "low",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["imageInput"]
+        }
+      },
+      "long_context": {
+        "appliesToTaskTypes": ["long_context"],
+        "riskLabel": "low",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "minimumContextTokens": 200000
+        }
+      },
+      "caller_tool_loop": {
+        "appliesToTaskTypes": ["general", "simple_chat", "coding", "agentic"],
+        "riskLabel": "high",
+        "qualityFloor": {
+          "minimumSlotBand": "economy",
+          "requiredCapabilities": ["functionCalling"]
+        }
+      },
+      "extended_thinking": {
+        "appliesToTaskTypes": ["reasoning", "general", "coding"],
+        "riskLabel": "low",
+        "qualityFloor": {
+          "minimumSlotBand": "balanced",
+          "requiredCapabilities": ["reasoning"]
+        }
+      },
+      "simple_chat": {
+        "appliesToTaskTypes": ["simple_chat"],
+        "riskLabel": "low",
+        "qualityFloor": {
+          "minimumSlotBand": "economy",
+          "requiredCapabilities": ["textInput", "textOutput"]
+        }
+      },
+      "general_chat": {
+        "appliesToTaskTypes": ["general", "creative_writing"],
+        "riskLabel": "low",
+        "qualityFloor": {
+          "minimumSlotBand": "economy",
+          "requiredCapabilities": ["textInput", "textOutput"]
+        }
+      }
+    },
     "tasks": {
       "simple_chat": {
         "requiredCapabilities": ["textInput", "textOutput"],

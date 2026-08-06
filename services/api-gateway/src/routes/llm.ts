@@ -265,8 +265,13 @@ export async function enforcePlanTier(
     throw new AppError(`Model "${model}" is not available on managed cloud.`, 403);
   }
 
-  const allowed =
-    (tier === 'free' && minimumTier === 'basic') || canAccessModelForSubscriptionTier(model, tier);
+  // Free resolves through the shared catalog gate like every other tier. This
+  // previously carried `(tier === 'free' && minimumTier === 'basic')`, which
+  // admitted Free to the ENTIRE Economy roster because `getMinimumRequiredTier`
+  // is roster-based and reports 'basic' for all of it. apps/web meanwhile sells
+  // Free only the models whose `tierPolicy.minTier` is 'free', so the gateway
+  // was handing out models the product does not offer on that plan.
+  const allowed = canAccessModelForSubscriptionTier(model, tier);
   if (allowed) return tier;
 
   if (tier === 'free') {

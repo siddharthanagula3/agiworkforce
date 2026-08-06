@@ -24,6 +24,9 @@ vi.mock('@/lib/logger', () => ({
 // Mock security audit
 vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
+  // AUDIT-TRAIL-01: the subscription-deleted handler records a plan_changed
+  // audit event. Omitting it here makes the import undefined and 500s the hook.
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Neon DB mock — use module-level objects so they survive resetModules

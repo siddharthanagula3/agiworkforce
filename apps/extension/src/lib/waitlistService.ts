@@ -6,8 +6,17 @@ export interface WaitlistEntry {
   referralSource?: string;
 }
 
-const WEB_API_NOT_WIRED_ERROR =
-  'AGI web API base URL is not configured for the extension. Code-redemption and product-update calls are not wired.';
+/**
+ * Canonical production web origin for this extension.
+ *
+ * The managed-cloud transport in features/cloud-bridge/freeTrialClient.ts already
+ * pins the same origin (FREE_TRIAL_GATEWAY). Failing closed here when no build
+ * env var is present made every packaged build report "not wired" for a feature
+ * whose destination is fixed and known, so the default is the pin, not an error.
+ * A build may still override it, but validateWebApiBaseUrl() keeps the override
+ * inside the agiworkforce.com allowlist (or localhost for development).
+ */
+const DEFAULT_WEB_API_BASE_URL = 'https://agiworkforce.com';
 
 const WEB_API_INVALID_CONFIG_ERROR =
   'AGI web API base URL is invalid for the extension. Code-redemption and product-update calls are not wired.';
@@ -46,11 +55,9 @@ function validateWebApiBaseUrl(raw: string): string | null {
 function getWebApiBaseUrl(): string {
   const env = getMetaEnv();
   const configured =
-    env['VITE_AGI_WEB_API_BASE_URL']?.trim() || env['VITE_API_BASE_URL']?.trim() || '';
-
-  if (!configured) {
-    throw new WebApiConfigError(WEB_API_NOT_WIRED_ERROR);
-  }
+    env['VITE_AGI_WEB_API_BASE_URL']?.trim() ||
+    env['VITE_API_BASE_URL']?.trim() ||
+    DEFAULT_WEB_API_BASE_URL;
 
   const validated = validateWebApiBaseUrl(configured);
   if (!validated) {

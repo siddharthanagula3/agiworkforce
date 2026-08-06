@@ -39,6 +39,26 @@ impl std::fmt::Display for SubagentStatus {
     }
 }
 
+/// Render the `/task list` management view over the spawned-subagent task
+/// state `(id, description, status)`. Read-only.
+pub fn format_task_list(tasks: &[(String, String, SubagentStatus)]) -> String {
+    if tasks.is_empty() {
+        return "No subagent tasks in this session yet.\n  \
+                Tasks appear here after the model calls the `task` tool to spawn a subagent."
+            .to_string();
+    }
+    let mut lines = vec![format!("Subagent tasks ({})", tasks.len())];
+    for (id, description, status) in tasks {
+        let desc = if description.trim().is_empty() {
+            "(no description)"
+        } else {
+            description.trim()
+        };
+        lines.push(format!("  {:<20} [{}] {}", id, status, desc));
+    }
+    lines.join("\n")
+}
+
 /// Result produced by a completed subagent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentResult {
@@ -700,6 +720,30 @@ mod tests {
             "failed: oops"
         );
         assert_eq!(SubagentStatus::Cancelled.to_string(), "cancelled");
+    }
+
+    #[test]
+    fn format_task_list_renders_state_and_empty() {
+        assert!(format_task_list(&[]).contains("No subagent tasks"));
+
+        let tasks = vec![
+            (
+                "task-1".to_string(),
+                "refactor module".to_string(),
+                SubagentStatus::Running,
+            ),
+            (
+                "task-2".to_string(),
+                String::new(),
+                SubagentStatus::Failed("boom".to_string()),
+            ),
+        ];
+        let out = format_task_list(&tasks);
+        assert!(out.contains("Subagent tasks (2)"), "{out}");
+        assert!(out.contains("task-1"), "{out}");
+        assert!(out.contains("[running] refactor module"), "{out}");
+        assert!(out.contains("[failed: boom]"), "{out}");
+        assert!(out.contains("(no description)"), "{out}");
     }
 
     #[test]

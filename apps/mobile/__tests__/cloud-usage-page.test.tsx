@@ -10,6 +10,7 @@
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -211,7 +212,7 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
     const { getByText, queryByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('This period')).toBeTruthy();
+      expect(getByText(managedUsageBucketLabel('period'))).toBeTruthy();
     });
     expect(getByText('10% used')).toBeTruthy();
     expect(getByText('Free plan')).toBeTruthy();
@@ -249,14 +250,14 @@ describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
     const { getByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Current session')).toBeTruthy();
+      expect(getByText(managedUsageBucketLabel('session'))).toBeTruthy();
     });
     expect(getByText('43% used')).toBeTruthy();
     expect(getByText(/Resets in 3 hr/)).toBeTruthy();
 
     expect(getByText('Weekly limits')).toBeTruthy();
-    expect(getByText('All models')).toBeTruthy();
-    expect(getByText('Flagship models')).toBeTruthy();
+    expect(getByText(managedUsageBucketLabel('weekly'))).toBeTruthy();
+    expect(getByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
     expect(getByText('85% used')).toBeTruthy();
     expect(getByText('29% used')).toBeTruthy();
   });
@@ -275,9 +276,9 @@ describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
     const { getByText, queryByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('This period')).toBeTruthy();
+      expect(getByText(managedUsageBucketLabel('period'))).toBeTruthy();
     });
-    expect(queryByText('Current session')).toBeNull();
+    expect(queryByText(managedUsageBucketLabel('session'))).toBeNull();
     expect(queryByText('Weekly limits')).toBeNull();
   });
 });

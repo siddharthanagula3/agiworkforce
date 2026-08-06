@@ -402,14 +402,22 @@ function renderTextSegment(
           if (tableRows.length > 0) {
             const numCols = Math.max(...tableRows.map((row) => row.length));
             nodes.push(
-              <View
+              // Horizontal scroll, because a phone cannot fit a wide table.
+              // Cells were flex:1 inside an overflow:'hidden' box, so every
+              // column was forced to an equal share of ~360pt — a four-column
+              // table gave each cell ~70pt and the text was clipped with no way
+              // to read it. Both reference apps scroll tables sideways instead.
+              <ScrollView
                 key={`${keyBase}-table-${idx}`}
-                style={{
+                horizontal
+                showsHorizontalScrollIndicator
+                style={{ marginVertical: 8 }}
+                contentContainerStyle={{
                   borderWidth: 1,
                   borderColor: renderColors.border,
                   borderRadius: 4,
                   overflow: 'hidden',
-                  marginVertical: 8,
+                  flexDirection: 'column',
                 }}
               >
                 {tableRows.map((row, rowIdx) => (
@@ -426,7 +434,11 @@ function renderTextSegment(
                       <View
                         key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
                         style={{
-                          flex: 1,
+                          // minWidth instead of flex:1 — inside a horizontal
+                          // ScrollView a flexed child collapses to its content,
+                          // and a readable floor is what makes scrolling useful.
+                          minWidth: 120,
+                          maxWidth: 260,
                           borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
                           borderRightColor: renderColors.border,
                           paddingHorizontal: 8,
@@ -450,7 +462,7 @@ function renderTextSegment(
                     ))}
                   </View>
                 ))}
-              </View>,
+              </ScrollView>,
             );
           }
           continue;

@@ -143,6 +143,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
         inputTokens: 120,
         outputTokens: 80,
       }),
+      expect.any(Date),
     );
   });
 
@@ -225,6 +226,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       expect.objectContaining({
         cacheReadInputTokens: 150,
       }),
+      expect.any(Date),
     );
   });
 
@@ -259,6 +261,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       expect.objectContaining({
         cacheReadInputTokens: 80,
       }),
+      expect.any(Date),
     );
   });
 
@@ -298,6 +301,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
         cacheReadInputTokens: 100,
         cacheCreationInputTokens: 400,
       }),
+      expect.any(Date),
     );
   });
 
@@ -335,6 +339,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       expect.objectContaining({
         reasoningOutputTokens: 320,
       }),
+      expect.any(Date),
     );
   });
 
@@ -372,6 +377,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       expect.objectContaining({
         reasoningOutputTokens: 240,
       }),
+      expect.any(Date),
     );
   });
 
@@ -402,6 +408,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       expect.objectContaining({
         reasoningOutputTokens: undefined,
       }),
+      expect.any(Date),
     );
   });
 });

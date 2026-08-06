@@ -100,6 +100,14 @@ export function buildFailoverAttemptView(
     provider,
     usedFallback: true,
     fallbackReason: 'managed_failover',
+    // CPST Stage-0 telemetry (managed cloud only,
+    // docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2): this is
+    // the only place an ADDITIONAL provider attempt is created inside one billed
+    // request, so it is the only honest place to count one. The counter rides
+    // the attempt view, so whichever attempt finally settles carries the number
+    // of rotations it took to get there. Observability only — nothing reads it
+    // to decide anything.
+    retries: (processed.retries ?? 0) + 1,
     chatRequest: { ...processed.chatRequest, model },
     llmRequest: {
       ...processed.llmRequest,
@@ -127,6 +135,13 @@ export function createFailoverPlan(
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
+  // CPST `retries` lineage: each attempt view must be built from the LATEST
+  // attempt view, not the original request view, or the counter re-computes
+  // `(original.retries ?? 0) + 1 = 1` on every rotation and the ledger
+  // under-counts multi-rotation requests. Only the counter lineage rides this
+  // variable — admission, tool checks, and the OpenRouter route-retry all still
+  // read the original `processed` on purpose.
+  let latestView: ProcessedRequest = processed;
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
@@ -165,10 +180,12 @@ export function createFailoverPlan(
         );
         continue;
       }
+      const attemptView = buildFailoverAttemptView(latestView, candidate, provider);
+      latestView = attemptView;
       return {
         model: candidate,
         provider,
-        processed: buildFailoverAttemptView(processed, candidate, provider),
+        processed: attemptView,
       };
     }
     return null;
@@ -206,14 +223,17 @@ export function createFailoverPlan(
     if (hasVendorNativeTools) return null;
     routeRetryUsed = true;
     // Same model — only the provider changes, so pricing, tier admission and
-    // the response's model field all stay exactly as they were.
+    // the response's model field all stay exactly as they were. Built from
+    // `latestView` so the retries counter keeps its lineage across attempts.
+    const attemptView = {
+      ...buildFailoverAttemptView(latestView, processed.llmRequest.model, 'openrouter'),
+      fallbackReason: 'openrouter_route_failover',
+    };
+    latestView = attemptView;
     return {
       model: processed.llmRequest.model,
       provider: 'openrouter',
-      processed: {
-        ...buildFailoverAttemptView(processed, processed.llmRequest.model, 'openrouter'),
-        fallbackReason: 'openrouter_route_failover',
-      },
+      processed: attemptView,
     };
   };
 

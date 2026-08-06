@@ -294,6 +294,15 @@ describe('cloud send → sync write-through', () => {
       expect.objectContaining({ conversationId: forkId, content: 'source message' }),
     );
     expect(isUuidV7(forkMessages[0]!.id)).toBe(true);
+
+    // CAP-035: the fork persists a real parent/branch relation, not an
+    // untracked copy. The parent link points at the source conversation and the
+    // fork point is the last source message id.
+    const forkConversation = useChatCloudMessageStore
+      .getState()
+      .conversations.find((c) => c.id === forkId);
+    expect(forkConversation?.parentConversationId).toBe(CONV_ID);
+    expect(forkConversation?.forkPointMessageId).toBe('0190a000-0000-7000-8000-000000000002');
   });
 
   it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {

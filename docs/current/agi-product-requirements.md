@@ -32,11 +32,13 @@ The suite has six first-class surfaces:
 5. VS Code Extension
 6. CLI
 
-The locked development order is exactly the same as the list above. AGI works on
-one surface at a time. The active surface is Website. Work advances through
-Mobile, Desktop, Chrome Extension, VS Code Extension, and CLI in that order,
-unless the founder explicitly authorizes later-surface work during QA, review,
-or another waiting period.
+The development order is shortest-remaining-work-first (founder decision
+2026-08-05, Decision #20 — supersedes the prior fixed order): estimate the
+remaining Class-1 work per surface, complete the fastest surface first, then
+the next fastest, until all six are at zero. AGI still works on one surface at
+a time; a later surface does not become active unless the founder advances the
+sequence or explicitly authorizes work during QA, review, or another waiting
+period.
 
 AGI's core differentiation is:
 
@@ -67,11 +69,13 @@ truth.
 
 ### 2.2 Development Order
 
-The development order is locked:
+The surface roster is fixed; completion order is shortest-remaining-work-first
+(founder decision 2026-08-05, Decision #20). Numbers below are roster indices,
+not a sequence:
 
 | Order | Surface           | Meaning                                                                             |
 | ----- | ----------------- | ----------------------------------------------------------------------------------- |
-| 1     | Website           | Active surface: public site, signed-in Cloud product, account, and launch support.  |
+| 1     | Website           | Public site, signed-in Cloud product, account, and launch support.                  |
 | 2     | Mobile            | Native Local/Cloud app; must pass App Store release requirements.                   |
 | 3     | Desktop           | Deepest Local/BYOK host, rich app shell, local files, MCP, artifacts, computer use. |
 | 4     | Chrome Extension  | Browser context, capture, native bridge, page automation.                           |
@@ -79,10 +83,11 @@ The development order is locked:
 | 6     | CLI               | Developer engine and terminal agent.                                                |
 
 The parity ledger may track all six surfaces at all times. Implementation does
-not run on all six at once. A future agent must not start Mobile, Desktop, Chrome,
-VS Code, or CLI work just because the row exists in a parity matrix. The founder
-must explicitly advance the release order or authorize next-surface work during
-QA or waiting periods.
+not run on all six at once. A future agent must not start work on a non-active
+surface just because the row exists in a parity matrix. The active surface is
+determined by the shortest-remaining-work-first order (Decision #20,
+2026-08-05); the founder advances the sequence or authorizes next-surface work
+during QA or waiting periods.
 
 ### 2.3 Mobile Release Definition
 

@@ -256,3 +256,9 @@ _archive/
 
 # Founder demo-prep working notes (root-level scratch, not repo truth)
 /investor_demo_prep.md
+
+# Root-level debug/repro screenshots. The repo root has a closed file
+# allowlist (scripts/check-repo-organization.mjs), so no screenshot belongs
+# here; these accumulate from local UI debugging. Generalizes the earlier
+# one-off /qa-inchat*.png entries above.
+/*.png

@@ -70,6 +70,7 @@ The protected job fails unless it can prove all of the following:
 3. Launch from Finder and verify the first-run permission prompts, Local workspace, updater check, native browser host installation, and explicit automation/accessibility consent.
 4. On both Apple Silicon and Intel (or an Intel validation host), confirm the updater endpoint returns the same release version with the correct target key and a valid `.app.tar.gz` signature.
 5. Confirm the GitHub release contains one universal `.dmg`, one `.app.tar.gz`, and its `.sig`, alongside the Linux artifacts.
+6. Run `pnpm --filter @agiworkforce/desktop check:release-binary /Applications/AGI.app/Contents/MacOS/agiworkforce-desktop --probe` to prove the artifact carries no WDIO test seams: the isolated `com.agiworkforce.desktop.wdio` identifier must be absent and the embedded WebDriver port must never open (the wdio plugins only register behind `#[cfg(debug_assertions)]`).
 
 ## Recovery and rotation
 

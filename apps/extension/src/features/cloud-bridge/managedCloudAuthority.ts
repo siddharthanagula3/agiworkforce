@@ -48,6 +48,57 @@ export function normalizeManagedCloudOwner(value: unknown): ManagedCloudOwner | 
   return { accountId, authIncarnation };
 }
 
+function decodeBase64UrlSegment(segment: string): string | null {
+  const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = (4 - (base64.length % 4)) % 4;
+  if (padding === 3) return null;
+  try {
+    return atob(base64 + '='.repeat(padding));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derive owner identity from a Clerk session JWT's own claims.
+ *
+ * The MV3 background Clerk client loads with `standardBrowser: false` and does
+ * not reliably hydrate `clerk.user` / `session.user`, so reading identity off
+ * the resource objects alone can leave a perfectly valid, token-bearing session
+ * "unowned" and lock the side panel out of Managed Cloud entirely. The bearer
+ * always carries `sub` (account) and `sid` (session incarnation), which is the
+ * same pair the server authenticates, so the claims are the correct fallback.
+ *
+ * The signature is deliberately NOT verified here: this token was just minted
+ * by our own Clerk client inside our own extension, and the derived value is
+ * only ever used to partition local state. Every authority decision that
+ * matters still happens server-side against the full token.
+ */
+export function managedCloudOwnerFromSessionToken(token: unknown): ManagedCloudOwner | null {
+  if (typeof token !== 'string') return null;
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+  const payload = segments[1];
+  if (!payload) return null;
+
+  const decoded = decodeBase64UrlSegment(payload);
+  if (decoded === null) return null;
+
+  let claims: unknown;
+  try {
+    claims = JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) return null;
+
+  const record = claims as Record<string, unknown>;
+  return normalizeManagedCloudOwner({
+    accountId: record['sub'],
+    authIncarnation: record['sid'],
+  });
+}
+
 export function sameManagedCloudOwner(
   left: ManagedCloudOwner | null | undefined,
   right: ManagedCloudOwner | null | undefined,

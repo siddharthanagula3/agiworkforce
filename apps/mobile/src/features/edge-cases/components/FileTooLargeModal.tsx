@@ -30,7 +30,7 @@ export function FileTooLargeModal({ visible, onDismiss }: FileTooLargeModalProps
       <View
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.65)',
+          backgroundColor: colors.scrim,
           alignItems: 'center',
           justifyContent: 'center',
           padding: spacing['2xl'],

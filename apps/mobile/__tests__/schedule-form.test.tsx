@@ -94,7 +94,7 @@ describe('Mobile schedule form', () => {
       />,
     );
 
-    expect(screen.getByText(/legacy cadence is not deliverable/i)).toBeTruthy();
+    expect(screen.getByText(/cannot be edited on Mobile/i)).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Save Changes'));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('Choose Once, Daily, Weekly, or Monthly')).toBeTruthy();

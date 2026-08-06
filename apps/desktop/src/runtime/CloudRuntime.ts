@@ -40,6 +40,7 @@
 import type {
   ChatRuntime,
   CloudApprovalTurnProjection,
+  CloudRunReattachment,
   GeneratedFileEntry,
   SendMessageOptions,
   StreamCallback,
@@ -49,6 +50,7 @@ import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
   parseAgentEventDelta,
   reconcileManagedCloudPublicText,
+  type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
@@ -115,8 +117,6 @@ interface ActiveCloudTurn {
   sink: ReturnType<typeof createCloudStreamDeltaSink>;
   settled: boolean;
   runReference?: ManagedCloudAgentRunReference;
-  /** Exact bearer/account used at the final transport boundary for this run. */
-  cleanupCredential?: DesktopCloudRunCleanupCredential;
   replayPromise?: Promise<void>;
   /** Public chunks rendered before their matching canonical event arrived. */
   unacknowledgedPublicText: string;
@@ -128,6 +128,38 @@ interface ActiveCloudTurn {
 
 function durableAssistantContent(turn: ActiveCloudTurn): string {
   return `${turn.persistedContentPrefix}${turn.sink.getAccumulatedContent()}`;
+}
+
+/**
+ * Run states worth rejoining. A terminal run has nothing left to stream, and
+ * its stored message is already the whole answer.
+ */
+const REATTACHABLE_RUN_STATES = new Set<CloudAgentRun['state']>([
+  'queued',
+  'running',
+  'paused',
+  'awaiting_input',
+]);
+
+/**
+ * Rebuild displayable tool arguments from the server's truncated preview.
+ *
+ * The preview is a JSON prefix cut at a fixed length, so it usually will not
+ * parse. That is fine for a card whose job is to tell the user WHAT is being
+ * asked: an unparseable preview is shown as-is rather than dropped, because
+ * "fs_write {…" tells the user more than an empty argument list does. The real
+ * arguments live in the server's checkpoint and execute from there.
+ */
+function parsePendingApprovalArgs(preview: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(preview);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Truncated JSON is the expected case, not an error.
+  }
+  return preview ? { preview } : {};
 }
 
 function failedMessageProjection(
@@ -340,27 +372,28 @@ export class CloudRuntime implements ChatRuntime {
   }
 
   /**
-   * Ends every request owned by this authenticated runtime without persisting
-   * a synthetic failure into the account that is being signed out. Server-run
-   * cancellation is best-effort and bounded so logout cannot hang on network
-   * loss.
+   * Detaches this client from its runs. It does NOT stop them.
+   *
+   * DURABLE SESSIONS: dispose used to fan out `cancelRun` to every in-flight
+   * run, which made the runtime's own teardown — a window closing, a React
+   * remount, a sign-out — indistinguishable from the user pressing Stop. A run
+   * the user paid for and walked away from was killed by walking away, which is
+   * the exact failure durable sessions exist to remove. The server does not need
+   * this client to keep executing; the run continues, journals its events, and
+   * is picked back up by `reattachConversation` or from Tasks on any surface.
+   *
+   * Stopping is now only ever explicit: `stopGeneration` and the Tasks page Stop
+   * button both still call `cancelRun`. NOTE that this includes sign-out —
+   * signing out of Desktop detaches, it does not cancel, and the run stays
+   * billable to that account until it finishes or is stopped from another
+   * surface.
    */
   async dispose(): Promise<void> {
     if (this._disposed) return;
-    const cleanupBoundary = this._boundary;
     this._disposed = true;
 
-    const runsToCancel = new Map<string, DesktopCloudRunCleanupCredential>();
     for (const turn of this._activeTurns.values()) {
       turn.settled = true;
-      if (turn.runReference && cleanupBoundary) {
-        runsToCancel.set(turn.runReference.runId, turn.cleanupCredential ?? cleanupBoundary);
-      }
-    }
-    for (const approval of this._resolvingApprovals.values()) {
-      if (cleanupBoundary) {
-        runsToCancel.set(approval.runId, approval.cleanupCredential ?? cleanupBoundary);
-      }
     }
     this._activeTurns.clear();
     this._resolvingApprovals.clear();
@@ -370,22 +403,6 @@ export class CloudRuntime implements ChatRuntime {
     }
     this._abortControllers.clear();
     this._streamCallbacks.clear();
-
-    if (runsToCancel.size === 0) return;
-
-    const cancelController = new AbortController();
-    const timeoutId = setTimeout(() => cancelController.abort(), 3_000);
-    try {
-      await Promise.allSettled(
-        [...runsToCancel].map(([runId, credential]) =>
-          createDesktopCloudAgentRunCleanupClient(credential).cancelRun(runId, {
-            signal: cancelController.signal,
-          }),
-        ),
-      );
-    } finally {
-      clearTimeout(timeoutId);
-    }
   }
 
   /** Persists a completed assistant turn, surfacing a save failure as a follow-up 'error' event without hiding 'done'. */
@@ -629,12 +646,7 @@ export class CloudRuntime implements ChatRuntime {
     }
 
     let replayFinishReason: string | undefined;
-    const client = createDesktopCloudAgentRunClient(
-      this.requireBoundary().accountId,
-      (credential) => {
-        turn.cleanupCredential = credential;
-      },
-    );
+    const client = createDesktopCloudAgentRunClient(this.requireBoundary().accountId);
     const followed = await client.followRun(runReference.runId, {
       afterSequence: Math.max(
         runReference.lastSequence,
@@ -773,6 +785,129 @@ export class CloudRuntime implements ChatRuntime {
       type: 'done',
       ...(replayFinishReason ? { finishReason: replayFinishReason } : {}),
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // reattachConversation — rejoin a run this client did not stream
+  // -------------------------------------------------------------------------
+
+  /**
+   * Pick a durable run back up when its conversation is reopened.
+   *
+   * The turn may have been started on this machine before it slept, or on a
+   * different device entirely; either way the server kept executing and kept
+   * journaling. What makes reattachment safe is `persisted.lastSequence`: it is
+   * the exact cursor already reflected in the stored message, so the replay asks
+   * only for what came after it and no sentence is rendered twice. Nothing is
+   * re-seeded into the sink — the prose already on screen enters as the turn's
+   * `persistedContentPrefix`, which is what the eventual save concatenates.
+   */
+  async reattachConversation(
+    conversationId: string,
+    persisted: CloudRunReattachment,
+  ): Promise<void> {
+    if (this._disposed) return;
+    // A live turn in this session is authoritative; reattaching over it would
+    // fork one conversation into two writers of the same message.
+    if (this._activeTurns.has(conversationId)) return;
+
+    const boundary = this.requireBoundary();
+    const client = createDesktopCloudAgentRunClient(boundary.accountId);
+    const snapshot = await client.getRun(persisted.runReference.runId, {
+      afterSequence: persisted.runReference.lastSequence,
+      limit: 1,
+    });
+    const run = snapshot.run;
+    if (REATTACHABLE_RUN_STATES.has(run.state) === false) return;
+
+    const runReference: ManagedCloudAgentRunReference = {
+      ...persisted.runReference,
+      state: run.state,
+      cancellationRequestedAt: run.cancellationRequestedAt,
+    };
+
+    if (run.state === 'awaiting_input') {
+      this.reattachPendingApproval(conversationId, persisted, run, runReference);
+      return;
+    }
+
+    const sink = createCloudStreamDeltaSink(
+      (event) => this.emitForConversation(conversationId, event),
+      CLOUD_API_BASE_URL,
+    );
+    const turn: ActiveCloudTurn = {
+      assistantMessageId: persisted.assistantMessageId,
+      model: persisted.model || run.model,
+      sink,
+      settled: false,
+      runReference,
+      unacknowledgedPublicText: '',
+      canonicalPublicTextAwaitingChunk: '',
+      persistedContentPrefix: persisted.content,
+    };
+    const controller = new AbortController();
+    this._abortControllers.set(conversationId, controller);
+    this._activeTurns.set(conversationId, turn);
+
+    turn.replayPromise = this.replayDurableRun(conversationId, turn)
+      .catch((error: unknown) => {
+        if (turn.settled) return;
+        turn.settled = true;
+        this._activeTurns.delete(conversationId);
+        this.emitForConversation(
+          conversationId,
+          cloudErrorEvent(error instanceof Error ? error : new Error(String(error))),
+        );
+      })
+      .finally(() => this.clearAbortController(conversationId, controller));
+    await turn.replayPromise;
+  }
+
+  /**
+   * Rebuild a live approval card for a run that is blocked on a decision.
+   *
+   * This is the case the old client could not represent at all. When the server
+   * persisted the turn (because nobody was connected to persist it), the stored
+   * message carries the run reference but no `cloudApproval` projection, so the
+   * ordinary reload hydration finds nothing to render and the user sees a turn
+   * that simply stopped mid-sentence. The pending-approval summary on the run is
+   * the server's own account of what it is waiting for, so the card is rebuilt
+   * from that. Arguments shown here are a truncated preview; the authoritative
+   * arguments never leave the server's checkpoint and are not resubmitted by the
+   * client on resume.
+   */
+  private reattachPendingApproval(
+    conversationId: string,
+    persisted: CloudRunReattachment,
+    run: CloudAgentRun,
+    runReference: ManagedCloudAgentRunReference,
+  ): void {
+    if (persisted.hasPersistedApproval) return;
+    const pending = run.pendingApproval;
+    if (!pending) return;
+
+    const calls = pending.toolCalls.map((call) => ({
+      toolCallId: call.toolCallId,
+      name: call.name,
+      args: parsePendingApprovalArgs(call.argsPreview),
+    }));
+    this._approvals.hasLiveTurn(conversationId, {
+      assistantMessageId: persisted.assistantMessageId,
+      runId: run.id,
+      runReference,
+      model: persisted.model || run.model,
+      assistantContent: persisted.content,
+      calls,
+      messageProjection: {},
+    });
+    for (const call of calls) {
+      this.emitForConversation(conversationId, {
+        type: 'tool_approval_request',
+        toolCallId: call.toolCallId,
+        name: call.name,
+        args: call.args,
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1150,9 +1285,6 @@ export class CloudRuntime implements ChatRuntime {
               runPath: handle.runPath,
             });
           }
-        },
-        (credential) => {
-          activeTurn.cleanupCredential = credential;
         },
       );
       if (activeTurn.replayPromise) await activeTurn.replayPromise;

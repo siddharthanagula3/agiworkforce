@@ -134,6 +134,37 @@ export interface AuditExportRequest {
   expiresAt?: string;
 }
 
+/**
+ * Lifecycle of an enterprise SSO connection.
+ *
+ * A connection is inert until its email domain is proven by DNS TXT and the
+ * identity provider has been configured. Both are security preconditions:
+ * connections route every sign-in on a matching email domain, so an unverified
+ * claim would be an authentication-takeover vector.
+ */
+export type IdentityProviderStatus =
+  | 'awaiting_domain_verification'
+  | 'awaiting_provider_configuration'
+  | 'ready_to_activate'
+  | 'active';
+
+/** The DNS record that proves control of a claimed email domain. */
+export interface IdentityProviderDomainChallenge {
+  recordType: 'TXT';
+  recordName: string;
+  recordValue: string;
+}
+
+/** Values the identity provider requires, produced once the connection exists. */
+export interface IdentityProviderServiceProvider {
+  /** Assertion Consumer Service URL. SAML only. */
+  acsUrl: string | null;
+  /** Service Provider entity id. SAML only. */
+  entityId: string | null;
+  /** Service Provider metadata URL. SAML only. */
+  metadataUrl: string | null;
+}
+
 export interface IdentityProviderConfig {
   id: string;
   organizationId: string;
@@ -141,7 +172,15 @@ export interface IdentityProviderConfig {
   domain: string;
   displayName?: string | null;
   metadataUrl?: string | null;
+  /** OIDC discovery document URL. The client secret is never returned. */
+  oidcDiscoveryUrl?: string | null;
+  oidcClientId?: string | null;
   isActive: boolean;
+  status: IdentityProviderStatus;
+  domainVerifiedAt?: string | null;
+  serviceProvider?: IdentityProviderServiceProvider;
+  /** Present only while the domain is unverified. */
+  domainVerification?: IdentityProviderDomainChallenge | null;
   createdAt: string;
   updatedAt: string;
 }

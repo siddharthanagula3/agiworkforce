@@ -49,6 +49,27 @@ export interface AssistantTurnSnapshot {
   outputTokens: number;
   /** True when the stream ended by cancellation/abort rather than completion. */
   truncated: boolean;
+  /**
+   * Durable run this turn belongs to, when it was produced by the managed
+   * agent workflow. Stored under the `cloudAgentRun` metadata key — the SAME
+   * key and shape desktop writes from `CloudRuntime.persistAssistantTurn`
+   * (see `apps/desktop/src/runtime/cloudMessageMetadata.ts`) — so a turn the
+   * server saved while the client was offline reattaches through exactly the
+   * code path a client-saved turn does. `lastSequence` is the journal cursor
+   * already projected into `content`; a reattaching client resumes strictly
+   * after it, which is what keeps replayed prose from being rendered twice.
+   */
+  runReference?: {
+    runId: string;
+    runPath: string;
+    lastSequence: number;
+    /**
+     * Run state at the moment this turn was written. Lets a client decide
+     * whether the run is worth rejoining without asking the server about every
+     * finished conversation it opens.
+     */
+    state?: string;
+  };
 }
 
 /**
@@ -93,8 +114,10 @@ export async function persistAssistantTurn(params: {
   }
 
   // An empty, non-truncated turn carries nothing worth a row. A truncated turn
-  // with no text still records that the turn existed and was cut off.
-  if (!snapshot.content.trim() && !snapshot.truncated) return;
+  // with no text still records that the turn existed and was cut off, and a
+  // turn carrying a run reference is the reattachment anchor for work that is
+  // still running server-side — dropping it would strand the run.
+  if (!snapshot.content.trim() && !snapshot.truncated && !snapshot.runReference) return;
 
   const metadata: Record<string, unknown> = {
     serverPersisted: true,
@@ -103,6 +126,7 @@ export async function persistAssistantTurn(params: {
     ...(snapshot.truncated
       ? { truncated: true, truncationReason: TRUNCATED_ASSISTANT_TURN_REASON }
       : {}),
+    ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
   };
 
   try {

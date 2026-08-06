@@ -5,12 +5,34 @@
  *
  * Shown before the user connects a connector. Displays:
  * - Developer/publisher info
- * - Trust disclaimer listing what the connector can access
- * - List of tools it provides
+ * - The plain-language consent summary (ConnectorConsentSummary)
+ * - The connector's real tools, when any are implemented
  * - Connect / Cancel buttons
+ *
+ * HONESTY CONSTRAINTS (do not regress these):
+ *
+ *  1. This dialog used to render `accessScopes()`, which built its lines from the
+ *     connector's declared authType and asserted storage that does not exist —
+ *     "OAuth tokens stored securely in your account", "Token stored in local
+ *     secure storage", "Grants access to your local machine resources". On web
+ *     there is NO OAuth flow for any branded catalog connector (POST
+ *     /api/connectors 501s every id that is not operator-mapped) and
+ *     `user_connectors` stores only connector_id + auth_type + is_active — no
+ *     tokens, no endpoints (lib/user-connector-tools.ts header). That function
+ *     is gone; ConnectorConsentSummary states what is true instead.
+ *
+ *  2. The "Provided tools" list came from CONNECTOR_TOOLS in
+ *     config/connector-logos.ts, which advertises tool names for connectors with
+ *     no runtime implementation anywhere ("Read emails", "Send email", ...). The
+ *     only entry that mirrors real wire names is `github`
+ *     (lib/user-connector-tools.ts L180-240). We now render tools only for
+ *     connectors whose tools actually exist, and say so honestly otherwise.
+ *
+ *  3. `actionCount` on the connector record has no backing implementation, so it
+ *     is not rendered as a capability count.
  */
 
-import { ShieldAlert, Wrench } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -21,7 +43,16 @@ import {
   DialogDescription,
 } from '@agiworkforce/ui';
 import { getConnectorTools } from '../config/connector-logos';
+import { ConnectorConsentSummary } from './ConnectorConsentSummary';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
+
+/**
+ * Connector ids whose advertised tool list matches tools that actually exist in
+ * a runtime path. Today that is exactly the GitHub App built-in, whose three
+ * tools are defined in lib/user-connector-tools.ts. Adding an id here is a claim
+ * that invoking those tools works — do not add one speculatively.
+ */
+const CONNECTORS_WITH_REAL_TOOLS = new Set(['github']);
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,26 +90,6 @@ function authLabel(authType: ConnectorInfo['authType']): string {
   }
 }
 
-function accessScopes(connector: ConnectorInfo): string[] {
-  // Build a human-readable list of what the connector can access based on its
-  // category/id. This is intentionally conservative - we surface the broadest
-  // reasonable scope to prompt an informed consent decision.
-  const base: string[] = [`Data readable and writable via ${connector.name}`];
-  if (connector.authType === 'oauth') {
-    base.push('OAuth tokens stored securely in your account');
-    base.push('Can act on your behalf until you revoke access');
-  } else if (connector.authType === 'api_key') {
-    base.push('API key stored in encrypted storage');
-    base.push('Access limited by the key scope you provide');
-  } else if (connector.authType === 'pat') {
-    base.push('Token stored in local secure storage');
-    base.push('Grants access to your local machine resources');
-  } else {
-    base.push('Credentials stored securely for the duration of the session');
-  }
-  return base;
-}
-
 // ─── ConnectorOverviewDialog ──────────────────────────────────────────────────
 
 export function ConnectorOverviewDialog({
@@ -89,7 +100,7 @@ export function ConnectorOverviewDialog({
 }: ConnectorOverviewDialogProps) {
   if (!connector) return null;
 
-  const tools = getConnectorTools(connector.id);
+  const tools = CONNECTORS_WITH_REAL_TOOLS.has(connector.id) ? getConnectorTools(connector.id) : [];
 
   const handleConnect = () => {
     onConnect();
@@ -107,7 +118,7 @@ export function ConnectorOverviewDialog({
                 Connect {connector.name}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                {authLabel(connector.authType)} &middot; {connector.actionCount} actions
+                {authLabel(connector.authType)}
               </DialogDescription>
             </div>
           </div>
@@ -117,33 +128,19 @@ export function ConnectorOverviewDialog({
           {/* Description */}
           <p className="text-sm text-muted-foreground leading-relaxed">{connector.description}</p>
 
-          {/* Trust disclaimer */}
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5">
+          {/* Plain-language consent summary — every line traceable, see
+              docs/legal/agent-authority-and-connector-scopes.md */}
+          <ConnectorConsentSummary />
+
+          {/* Tools list — only for connectors whose tools actually exist. */}
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
             <div className="mb-2 flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-              <span className="text-xs font-semibold text-amber-400">
-                This connector will have access to:
+              <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="text-xs font-semibold text-foreground">
+                {tools.length > 0 ? `Tools (${tools.length})` : 'Tools'}
               </span>
             </div>
-            <ul className="space-y-1">
-              {accessScopes(connector).map((scope) => (
-                <li key={scope} className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/50" />
-                  {scope}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Tools list */}
-          {tools.length > 0 && (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
-              <div className="mb-2 flex items-center gap-2">
-                <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="text-xs font-semibold text-foreground">
-                  Provided tools ({tools.length})
-                </span>
-              </div>
+            {tools.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {tools.map((tool) => (
                   <Badge
@@ -155,8 +152,13 @@ export function ConnectorOverviewDialog({
                   </Badge>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                This connector&rsquo;s tools are listed after it connects. We don&rsquo;t show a
+                tool list here that we can&rsquo;t confirm it provides.
+              </p>
+            )}
+          </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-3">

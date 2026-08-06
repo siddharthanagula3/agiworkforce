@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isManagedCloudBroadcastOwnedBy,
   isCurrentManagedCloudOperation,
+  managedCloudOwnerFromSessionToken,
   normalizeManagedCloudOwner,
   sameManagedCloudCredential,
   sameManagedCloudOwner,
@@ -301,5 +302,96 @@ describe('Managed Cloud account/session authority', () => {
     expect(transition).toContain('ownerByStreamId.clear()');
     expect(transition).toContain("type: 'MANAGED_CLOUD_AUTH_CHANGED'");
     expect(sidePanelSource).toContain('isManagedCloudBroadcastOwnedBy(');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Token-claim owner fallback
+//
+// Regression: the MV3 background Clerk client (standardBrowser: false) does not
+// reliably hydrate clerk.user / session.user, so a valid signed-in session was
+// rejected as "unowned" and the side panel could never reach Managed Cloud.
+// ---------------------------------------------------------------------------
+
+function base64Url(value: string): string {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function makeSessionToken(claims: Record<string, unknown>): string {
+  return `${base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64Url(
+    JSON.stringify(claims),
+  )}.signature-not-verified-locally`;
+}
+
+describe('managedCloudOwnerFromSessionToken', () => {
+  it('derives the owner from the sub/sid claims of a session token', () => {
+    const token = makeSessionToken({ sub: 'user_abc123', sid: 'sess_xyz789', exp: 1 });
+    expect(managedCloudOwnerFromSessionToken(token)).toEqual({
+      accountId: 'user_abc123',
+      authIncarnation: 'sess_xyz789',
+    });
+  });
+
+  it('distinguishes two sessions of the same account', () => {
+    const first = managedCloudOwnerFromSessionToken(
+      makeSessionToken({ sub: 'user_abc123', sid: 'sess_1' }),
+    );
+    const second = managedCloudOwnerFromSessionToken(
+      makeSessionToken({ sub: 'user_abc123', sid: 'sess_2' }),
+    );
+    expect(sameManagedCloudOwner(first, second)).toBe(false);
+  });
+
+  it('returns null when either claim is missing, so identity is never half-derived', () => {
+    expect(managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 'user_abc' }))).toBeNull();
+    expect(managedCloudOwnerFromSessionToken(makeSessionToken({ sid: 'sess_abc' }))).toBeNull();
+    expect(
+      managedCloudOwnerFromSessionToken(makeSessionToken({ sub: '', sid: 'sess_abc' })),
+    ).toBeNull();
+    expect(
+      managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 42, sid: 'sess_abc' })),
+    ).toBeNull();
+  });
+
+  it('rejects malformed, non-string, and non-JWT input', () => {
+    expect(managedCloudOwnerFromSessionToken(null)).toBeNull();
+    expect(managedCloudOwnerFromSessionToken(undefined)).toBeNull();
+    expect(managedCloudOwnerFromSessionToken(123)).toBeNull();
+    expect(managedCloudOwnerFromSessionToken('')).toBeNull();
+    expect(managedCloudOwnerFromSessionToken('not-a-jwt')).toBeNull();
+    expect(managedCloudOwnerFromSessionToken('only.two')).toBeNull();
+    expect(managedCloudOwnerFromSessionToken('a.!!!!.c')).toBeNull();
+    expect(managedCloudOwnerFromSessionToken(`a.${base64Url('[1,2,3]')}.c`)).toBeNull();
+    expect(managedCloudOwnerFromSessionToken(`a.${base64Url('not json')}.c`)).toBeNull();
+  });
+
+  it('rejects claims carrying control characters', () => {
+    expect(
+      managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 'user abc', sid: 'sess_1' })),
+    ).toBeNull();
+  });
+});
+
+describe('clerkAuth owner resolution', () => {
+  const clerkAuthSource = readFileSync(
+    resolve(here, '../src/features/cloud-bridge/clerkAuth.ts'),
+    'utf8',
+  );
+
+  it('falls back to token claims instead of throwing on an unhydrated session', () => {
+    const resolver = sourceBetween(
+      clerkAuthSource,
+      'function resolveSessionOwner',
+      'export async function getFreshClerkAuthContext',
+    );
+    expect(resolver).toContain('normalizeManagedCloudOwner(');
+    expect(resolver).toContain('?? managedCloudOwnerFromSessionToken(token)');
+  });
+
+  it('routes both the auth-context and sign-out paths through the same resolver', () => {
+    expect(clerkAuthSource).toContain('const owner = resolveSessionOwner(clerk, session, token);');
+    expect(clerkAuthSource).toContain(
+      'const liveOwner = resolveSessionOwner(clerk, liveSession, token);',
+    );
   });
 });

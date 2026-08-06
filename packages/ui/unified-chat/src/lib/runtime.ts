@@ -61,6 +61,28 @@ export interface CloudApprovalTurnProjection {
   /** Rich fields already persisted on the suspended assistant message. */
   messageProjection?: CloudMessageProjection;
 }
+/** The persisted assistant turn a runtime needs to rejoin its server-side run. */
+export interface CloudRunReattachment {
+  /** Row the reattached stream must keep appending to, not a fresh bubble. */
+  assistantMessageId: string;
+  model: string;
+  /** Prose already on screen. The replay cursor covers it; do not re-render it. */
+  content: string;
+  runReference: {
+    runId: string;
+    runPath: string;
+    lastSequence: number;
+  };
+  /**
+   * True when the stored turn already carries a `cloudApproval` projection, so
+   * the ordinary reload hydration will render its approval card. When false and
+   * the run turns out to be waiting on a decision, the runtime must rebuild the
+   * card from the server's pending-approval summary instead — that is the case
+   * where the server saved the turn because no client was there to.
+   */
+  hasPersistedApproval?: boolean;
+}
+
 import type { CloudWorkMode } from '@agiworkforce/types';
 
 /**
@@ -261,6 +283,24 @@ export interface ChatRuntime {
    * policy, and exact pending-call membership.
    */
   hasLiveApprovalTurn?(conversationId: string, projection?: CloudApprovalTurnProjection): boolean;
+
+  /**
+   * Re-open a conversation whose last assistant turn belongs to a server-side
+   * run that may still be going.
+   *
+   * Managed Cloud runs outlive the client that started them, so a relaunched
+   * app can find work in progress that it has never streamed a byte of. This
+   * hands the runtime the persisted turn so it can pick the run back up from
+   * `runReference.lastSequence` — the cursor is what stops already-rendered
+   * prose from being replayed into the transcript a second time.
+   *
+   * Optional: runtimes with no durable-run concept (Local, BYOK, mobile) simply
+   * do not implement it, and callers should invoke it optionally.
+   */
+  reattachConversation?(
+    conversationId: string,
+    persisted: CloudRunReattachment,
+  ): Promise<void> | void;
 
   /**
    * Persist an edit to an artifact's content (backs `ArtifactPanel`'s

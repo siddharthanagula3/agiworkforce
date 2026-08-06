@@ -1,9 +1,6 @@
-import * as fs from 'node:fs';
+import { resolveScreenDir } from '../support/dom';
 
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
 describe('AGI Desktop native chat send/receive (via actual live composer: ChatInput)', () => {
   // RE-ENABLED 2026-07-11 (desktop-qa): was skipped pending isolation of a

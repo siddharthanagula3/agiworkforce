@@ -36,6 +36,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateCost: vi.fn(() => 123),
     getInputCostPerMtok: vi.fn(() => 300),
+    getCacheWriteCostPerMtok: vi.fn(() => 300),
   },
 }));
 vi.mock('@/lib/prompt-cache-helper', () => ({
@@ -154,6 +155,16 @@ describe('buildNonStreamResponse golden fixture', () => {
         cacheReadTokens: undefined,
         cacheWriteTokens: undefined,
         cacheWrite1hTokens: undefined,
+        // CPST Stage-0 additive telemetry (design doc §4.3, phase 1). Asserted
+        // exactly rather than loosened to objectContaining, so an unreviewed
+        // seventh key cannot appear in the ledger payload unnoticed. The
+        // fixture carries no routePlanId and never rotated, so routePlanId,
+        // retries, and fallbackReason must stay absent.
+        taskOutcome: 'unknown',
+        verifierResult: 'skipped',
+        fallbackUsed: false,
+        taskFamily: 'general',
+        taskFamilyConfidence: 0.9,
       },
     });
   });
@@ -371,5 +382,96 @@ describe('buildNonStreamResponse golden fixture', () => {
 
     const json = await (response as any).json();
     expect(json.choices[0].finish_reason).toBe('stop');
+  });
+});
+
+/**
+ * CPST Stage-0 telemetry, managed cloud only
+ * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1:
+ * additive keys in the existing `usage` jsonb, no migration).
+ */
+describe('buildNonStreamResponse CPST usage telemetry', () => {
+  function finalizedUsage(): Record<string, unknown> {
+    const call = mockFinalizeManagedUsageRequest.mock.lastCall?.[0] as {
+      usage: Record<string, unknown>;
+    };
+    // The service JSON.stringifies this into the jsonb parameter.
+    return JSON.parse(JSON.stringify(call.usage));
+  }
+
+  it('writes the CPST keys in the same finalize call as the token counters', async () => {
+    await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-opus-5',
+        content: 'hi',
+        promptTokens: 11,
+        completionTokens: 3,
+        totalTokens: 14,
+      },
+      makeProcessed({
+        routePlanId: 'interim:anthropic/messages:route-1:preferred_slot',
+        resolvedTaskType: 'coding' as any,
+        classifierConfidence: 0.8,
+      }),
+      'user-cpst',
+      'token-cpst',
+    );
+
+    const usage = finalizedUsage();
+    expect(usage['inputTokens']).toBe(11);
+    expect(usage['outputTokens']).toBe(3);
+    expect(usage['taskOutcome']).toBe('unknown');
+    expect(usage['verifierResult']).toBe('skipped');
+    expect(usage['fallbackUsed']).toBe(false);
+    expect(usage['routePlanId']).toBe('interim:anthropic/messages:route-1:preferred_slot');
+    expect(usage['taskFamily']).toBe('coding');
+    expect(usage['taskFamilyConfidence']).toBe(0.8);
+  });
+
+  it('leaves unknown CPST fields absent instead of defaulting them', async () => {
+    await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-opus-5',
+        content: 'hi',
+        promptTokens: 1,
+        completionTokens: 1,
+        totalTokens: 2,
+      },
+      makeProcessed(),
+      'user-cpst-absent',
+      'token-cpst-absent',
+    );
+
+    const usage = finalizedUsage();
+    expect('routePlanId' in usage).toBe(false);
+    expect('retries' in usage).toBe(false);
+    expect('fallbackReason' in usage).toBe(false);
+  });
+
+  it('records the reason and retry count of a rotated attempt', async () => {
+    await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-sonnet-5',
+        content: 'hi',
+        promptTokens: 1,
+        completionTokens: 1,
+        totalTokens: 2,
+      },
+      makeProcessed({
+        usedFallback: true,
+        fallbackReason: 'managed_failover',
+        retries: 2,
+      }),
+      'user-cpst-fallback',
+      'token-cpst-fallback',
+    );
+
+    const usage = finalizedUsage();
+    expect(usage['fallbackUsed']).toBe(true);
+    expect(usage['fallbackReason']).toBe('managed_failover');
+    expect(usage['retries']).toBe(2);
   });
 });
