@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   customConnectors: vi.fn(),
   operatorIds: new Set(['slack']),
   linkingAvailable: vi.fn(() => false),
+  oauthConfiguredIds: vi.fn(() => new Set<string>()),
+  oauthGrants: vi.fn(),
+  disconnectOauth: vi.fn(),
+  evictOauthCaches: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +30,18 @@ vi.mock('@/lib/user-connector-tools', () => ({
   getOperatorMappedConnectorIds: vi.fn(() => mocks.operatorIds),
   getUserGithubInstallations: (...args: unknown[]) => mocks.githubInstallations(...args),
   getUserCustomConnectorSummaries: (...args: unknown[]) => mocks.customConnectors(...args),
+  evictConnectorOAuthCaches: (...args: unknown[]) => mocks.evictOauthCaches(...args),
+}));
+vi.mock('@/lib/connectors/oauth-registry', () => ({
+  getOAuthConfiguredConnectorIds: () => mocks.oauthConfiguredIds(),
+  isConnectorOAuthConfigured: (id: string) => mocks.oauthConfiguredIds().has(id),
+  buildConnectorOAuthStartPath: (id: string) => `/api/connectors/oauth/start?connectorId=${id}`,
+}));
+vi.mock('@/lib/connectors/oauth-store', () => ({
+  getUserConnectorOAuthGrantSummaries: (...args: unknown[]) => mocks.oauthGrants(...args),
+}));
+vi.mock('@/lib/connectors/oauth-access', () => ({
+  disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),
 }));
 vi.mock('@/lib/github-app', () => ({
   getGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/agi/installations/new'),
@@ -45,7 +61,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { GET, POST } from './route';
+import { DELETE, GET, POST } from './route';
 
 function getRequest(): NextRequest {
   return new NextRequest('http://localhost:3000/api/connectors');
@@ -67,6 +83,10 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     mocks.githubInstallations.mockResolvedValue([]);
     mocks.customConnectors.mockResolvedValue([]);
     mocks.linkingAvailable.mockReturnValue(false);
+    mocks.oauthConfiguredIds.mockReturnValue(new Set<string>());
+    mocks.oauthGrants.mockResolvedValue([]);
+    mocks.disconnectOauth.mockResolvedValue(false);
+    mocks.evictOauthCaches.mockResolvedValue(undefined);
   });
 
   it('does not advertise or restore device-local connector rows in Cloud mode', async () => {
@@ -152,6 +172,96 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       connectorId: 'github',
       installStartPath: '/api/github/install/start',
     });
+  });
+
+  it('advertises a provider as soon as an operator registers its OAuth app', async () => {
+    // This is the "Coming soon" fix: availability is computed from real
+    // capability, and an OAuth-configured provider is real capability.
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { available: string[] };
+
+    expect(body.available).toContain('linear');
+  });
+
+  it('sends an OAuth provider through the authorization flow, not a directory toggle', async () => {
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+
+    const response = await POST(postRequest('linear'));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      connectorId: 'linear',
+      oauthStartPath: '/api/connectors/oauth/start?connectorId=linear',
+      // Alias the existing web directory hook already follows on a 409, so a
+      // configured OAuth connector opens consent instead of toasting an error.
+      installStartPath: '/api/connectors/oauth/start?connectorId=linear',
+    });
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('reports an OAuth grant as connected, without exposing any token material', async () => {
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+    mocks.oauthGrants.mockResolvedValue([
+      {
+        connectorId: 'linear',
+        grantedScopes: ['read'],
+        connectedAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        needsReauthorization: false,
+      },
+    ]);
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as {
+      connectors: Array<{ connectorId: string; source: string; scopes?: string[] }>;
+    };
+
+    const entry = body.connectors.find((c) => c.connectorId === 'linear');
+    expect(entry).toMatchObject({ source: 'oauth', scopes: ['read'] });
+    expect(JSON.stringify(body)).not.toMatch(/token/i);
+  });
+
+  it('does not report a grant whose provider is no longer configured', async () => {
+    mocks.oauthGrants.mockResolvedValue([
+      {
+        connectorId: 'linear',
+        grantedScopes: [],
+        connectedAt: '',
+        updatedAt: '',
+        needsReauthorization: false,
+      },
+    ]);
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { connectors: Array<{ connectorId: string }> };
+
+    expect(body.connectors.some((c) => c.connectorId === 'linear')).toBe(false);
+  });
+
+  it('revokes the grant, closes the live handle, and clears saved verdicts on disconnect', async () => {
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+    mocks.disconnectOauth.mockResolvedValue(true);
+
+    const response = await DELETE(
+      new NextRequest('http://localhost:3000/api/connectors?connectorId=linear', {
+        method: 'DELETE',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.disconnectOauth).toHaveBeenCalledWith('user-1', 'linear');
+    expect(mocks.evictOauthCaches).toHaveBeenCalledWith('user-1', 'linear');
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from public.connector_tool_permissions'),
+      ['user-1', 'linear'],
+    );
+    // No user_connectors row exists for an OAuth connector, so nothing should
+    // be soft-deleted there.
+    expect(
+      mocks.execute.mock.calls.some(([sql]) => String(sql).includes('update user_connectors')),
+    ).toBe(false);
   });
 
   it('fails closed when the real GitHub installation signal cannot be loaded', async () => {

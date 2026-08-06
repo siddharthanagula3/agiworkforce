@@ -7,6 +7,19 @@
 // that never called `CostCalculator`.  Those have been replaced with tests that
 // call `CostCalculator::calculate()` and `calculate_media_cost()` directly.
 
+/// Fixed pricing date shared by every cost assertion in this file.
+///
+/// Cost calculation takes the request date explicitly because the catalog can
+/// carry dated `pricingSchedule` windows. Tests therefore pin a date instead of
+/// reading the clock. No shipped model schedules a price, so every total
+/// asserted here is the model's single published price on any date; the dated
+/// mechanism itself is exercised against a synthetic fixture in
+/// `cost_calculator.rs`'s own test module.
+#[cfg(test)]
+fn priced_on() -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("2026-09-01 is a valid date")
+}
+
 // H46 — Media pricing calculations (uses CostCalculator directly)
 #[cfg(test)]
 mod media_pricing_tests {
@@ -156,7 +169,7 @@ mod tests {
     #[test]
     fn test_zero_tokens_returns_zero() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 0, 0, super::priced_on());
         assert_eq!(cost, 0.0, "Zero tokens must produce zero cost");
     }
 
@@ -170,6 +183,7 @@ mod tests {
             "deepseek-v4-flash",
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         assert!(
             (cost - 0.42).abs() < 1e-9,
@@ -183,7 +197,13 @@ mod tests {
         let calc = CostCalculator::new();
         // claude-sonnet-5: $3.00/M input, $15.00/M output
         // 1_000_000 input + 1_000_000 output = $3.00 + $15.00 = $18.00
-        let cost = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Anthropic,
+            "claude-sonnet-5",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 18.0).abs() < 1e-9,
             "Expected $18.00 for claude-sonnet-5 1M+1M tokens, got ${}",
@@ -196,7 +216,13 @@ mod tests {
         let calc = CostCalculator::new();
         // claude-opus-5: $5.00/M input, $25.00/M output
         // 1_000_000 + 1_000_000 = $30.00
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-5", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 30.0).abs() < 1e-9,
             "Expected $30.00 for Opus 5 1M+1M tokens, got ${}",
@@ -208,7 +234,13 @@ mod tests {
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
         // gpt-5.6-sol: $5.00/M input, $30.00/M output = $35.00
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            "gpt-5.6-sol",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 35.00).abs() < 1e-9,
             "Expected $35.00 for gpt-5.6-sol 1M+1M tokens, got ${}",
@@ -219,11 +251,18 @@ mod tests {
     #[test]
     fn test_openai_gpt56_luna_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.6-luna: $1.00/M input, $6.00/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-luna", 1_000_000, 0);
+        // gpt-5.6-luna: $0.20/M input, $1.20/M output after OpenAI's 2026-07-30
+        // price cut (verified 2026-08-05 against the official pricing page).
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            "gpt-5.6-luna",
+            1_000_000,
+            0,
+            super::priced_on(),
+        );
         assert!(
-            (cost - 1.0).abs() < 1e-9,
-            "Expected $1.00 for gpt-5.6-luna 1M input only, got ${}",
+            (cost - 0.2).abs() < 1e-9,
+            "Expected $0.20 for gpt-5.6-luna 1M input only, got ${}",
             cost
         );
     }
@@ -232,10 +271,20 @@ mod tests {
     fn test_google_gemini_flash_cost() {
         let calc = CostCalculator::new();
         let model = Provider::Google.default_model();
-        let pricing = crate::core::llm::models_config::get_pricing(&Provider::Google, model)
-            .expect("Google default model should have catalog pricing");
+        let pricing = crate::core::llm::models_config::get_pricing(
+            &Provider::Google,
+            model,
+            super::priced_on(),
+        )
+        .expect("Google default model should have catalog pricing");
         let expected = pricing.input_per_million + pricing.output_per_million;
-        let cost = calc.calculate(Provider::Google, model, 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Google,
+            model,
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - expected).abs() < 1e-9,
             "Expected ${expected} for {model} 1M+1M tokens, got ${cost}"
@@ -246,7 +295,13 @@ mod tests {
     fn test_ollama_always_free() {
         let calc = CostCalculator::new();
         // Ollama default: $0.00/M — local models are free
-        let cost = calc.calculate(Provider::Ollama, "llama4-maverick", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Ollama,
+            "llama4-maverick",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert_eq!(cost, 0.0, "Ollama models must be free, got ${}", cost);
     }
 
@@ -254,10 +309,20 @@ mod tests {
     fn test_zhipu_default_model_uses_catalog_pricing() {
         let calc = CostCalculator::new();
         let model = Provider::Zhipu.default_model();
-        let pricing = crate::core::llm::models_config::get_pricing(&Provider::Zhipu, model)
-            .expect("Zhipu default model should have catalog pricing");
+        let pricing = crate::core::llm::models_config::get_pricing(
+            &Provider::Zhipu,
+            model,
+            super::priced_on(),
+        )
+        .expect("Zhipu default model should have catalog pricing");
         let expected = pricing.input_per_million + pricing.output_per_million;
-        let cost = calc.calculate(Provider::Zhipu, model, 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Zhipu,
+            model,
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - expected).abs() < 1e-9,
             "Expected ${expected} for {model} 1M+1M tokens, got ${cost}"
@@ -268,7 +333,13 @@ mod tests {
     fn test_xai_grok45_cost() {
         let calc = CostCalculator::new();
         // grok-4.5: $2.00/M input, $6.00/M output
-        let cost = calc.calculate(Provider::XAI, "grok-4.5", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::XAI,
+            "grok-4.5",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 8.0).abs() < 1e-9,
             "Expected $8.00 for grok-4.5 1M+1M tokens, got ${}",
@@ -280,7 +351,13 @@ mod tests {
     fn test_cost_only_input_tokens() {
         let calc = CostCalculator::new();
         // deepseek-v4-flash: $0.14/M input; 500k input tokens → $0.07
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 500_000, 0);
+        let cost = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            500_000,
+            0,
+            super::priced_on(),
+        );
         assert!(
             (cost - 0.07).abs() < 1e-9,
             "Expected $0.07 for 500k input-only deepseek-v4-flash, got ${}",
@@ -292,7 +369,13 @@ mod tests {
     fn test_cost_only_output_tokens() {
         let calc = CostCalculator::new();
         // deepseek-v4-flash: $0.28/M output; 1M output → $0.28
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 0, 1_000_000);
+        let cost = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            0,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 0.28).abs() < 1e-9,
             "Expected $0.28 for 1M output-only deepseek-v4-flash, got ${}",
@@ -303,8 +386,20 @@ mod tests {
     #[test]
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
-        let cheap = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 100_000, 100_000);
-        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-5", 100_000, 100_000);
+        let cheap = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            100_000,
+            100_000,
+            super::priced_on(),
+        );
+        let expensive = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            100_000,
+            100_000,
+            super::priced_on(),
+        );
         assert!(
             expensive > cheap,
             "Opus-5 (${}) must cost more than deepseek-v4-flash (${}) for equal tokens",
@@ -322,12 +417,14 @@ mod tests {
             "deepseek-v4-flash",
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         let origin = calc.calculate(
             Provider::DeepSeek,
             "deepseek-v4-flash",
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         assert!(
             (managed - origin).abs() < 1e-9,
@@ -340,7 +437,13 @@ mod tests {
         let calc = CostCalculator::new();
         // A model name not in the pricing map triggers the provider default.
         // DeepSeek default: $0.27/M input, $0.42/M output
-        let cost = calc.calculate(Provider::DeepSeek, "unknown-future-model", 1_000_000, 0);
+        let cost = calc.calculate(
+            Provider::DeepSeek,
+            "unknown-future-model",
+            1_000_000,
+            0,
+            super::priced_on(),
+        );
         // Must be positive and close to the DeepSeek default ($0.27)
         assert!(
             cost > 0.0,
@@ -355,8 +458,20 @@ mod tests {
     #[test]
     fn test_cost_scales_linearly_with_token_count() {
         let calc = CostCalculator::new();
-        let cost_1m = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 1_000_000, 0);
-        let cost_2m = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 2_000_000, 0);
+        let cost_1m = calc.calculate(
+            Provider::Anthropic,
+            "claude-sonnet-5",
+            1_000_000,
+            0,
+            super::priced_on(),
+        );
+        let cost_2m = calc.calculate(
+            Provider::Anthropic,
+            "claude-sonnet-5",
+            2_000_000,
+            0,
+            super::priced_on(),
+        );
         assert!(
             (cost_2m - 2.0 * cost_1m).abs() < 1e-9,
             "Cost must scale linearly: 2M tokens (${cost_2m}) must be 2× 1M tokens (${cost_1m})"
@@ -367,7 +482,13 @@ mod tests {
     fn test_perplexity_sonar_pro_cost() {
         let calc = CostCalculator::new();
         // sonar-pro: $3.00/M input, $15.00/M output
-        let cost = calc.calculate(Provider::Perplexity, "sonar-pro", 1_000_000, 0);
+        let cost = calc.calculate(
+            Provider::Perplexity,
+            "sonar-pro",
+            1_000_000,
+            0,
+            super::priced_on(),
+        );
         assert!(
             (cost - 3.0).abs() < 1e-9,
             "Expected $3.00 for sonar-pro 1M input, got ${}",
@@ -380,7 +501,13 @@ mod tests {
         let calc = CostCalculator::new();
         // qwen-3.7-plus: $0.40/M input, $1.60/M output.
         // SSOT: packages/contracts/types/src/models.json "qwen-3.7-plus" inputCost/outputCost.
-        let cost = calc.calculate(Provider::Qwen, "qwen-3.7-plus", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Qwen,
+            "qwen-3.7-plus",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 2.00).abs() < 1e-9,
             "Expected $2.00 for qwen-3.7-plus 1M+1M tokens, got ${}",
@@ -392,7 +519,13 @@ mod tests {
     fn test_moonshot_kimi_k3_cost() {
         let calc = CostCalculator::new();
         // kimi-k3: $3.00/M input, $15.00/M output
-        let cost = calc.calculate(Provider::Moonshot, "kimi-k3", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::Moonshot,
+            "kimi-k3",
+            1_000_000,
+            1_000_000,
+            super::priced_on(),
+        );
         assert!(
             (cost - 18.0).abs() < 1e-9,
             "Expected $18.00 for kimi-k3 1M+1M tokens, got ${}",
@@ -408,12 +541,14 @@ mod tests {
             "unlisted-moonshot-model",
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         let default = calc.calculate(
             Provider::Moonshot,
             Provider::Moonshot.default_model(),
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         assert!(
             (unknown - default).abs() < 1e-9,
@@ -429,12 +564,14 @@ mod tests {
             "unlisted-deepseek-model",
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         let default = calc.calculate(
             Provider::DeepSeek,
             Provider::DeepSeek.default_model(),
             1_000_000,
             1_000_000,
+            super::priced_on(),
         );
         assert!(
             (unknown - default).abs() < 1e-9,

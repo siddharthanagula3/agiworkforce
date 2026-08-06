@@ -66,6 +66,28 @@ export const STRIPE_PRICE_IDS = {
     ),
     yearly: undefined, // Max 15x is monthly-only
   },
+  team: {
+    // Team is billed PER SEAT: these Prices carry the per-seat unit amount and
+    // Checkout/upgrade supply the seat count as the line-item quantity. Same
+    // USD/INR split as Basic — two Stripe Price objects on one product, both
+    // resolving to tier 'team'.
+    monthlyUsd: validatePriceId(
+      process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'],
+      'STRIPE_PRICE_TEAM_MONTHLY_USD',
+    ),
+    monthlyInr: validatePriceId(
+      process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'],
+      'STRIPE_PRICE_TEAM_MONTHLY_INR',
+    ),
+    // Team yearly is USD-only ($240/seat/yr, Decision #22). No INR yearly Price
+    // (founder-undecided) — an INR yearly request falls back to this USD Price,
+    // mirroring the monthlyInr -> monthlyUsd fallback. Absent env → undefined →
+    // yearly checkout refuses (fail-closed).
+    yearlyUsd: validatePriceId(
+      process.env['STRIPE_PRICE_TEAM_YEARLY_USD'],
+      'STRIPE_PRICE_TEAM_YEARLY_USD',
+    ),
+  },
 };
 
 /**
@@ -86,11 +108,20 @@ export function getConfiguredPriceId(
   interval: BillingInterval,
   currency?: string,
 ): string | undefined {
-  if (plan === 'basic') {
-    if (interval !== 'monthly') return undefined;
-    return currency?.toLowerCase() === 'inr'
-      ? (STRIPE_PRICE_IDS.basic.monthlyInr ?? STRIPE_PRICE_IDS.basic.monthlyUsd)
-      : STRIPE_PRICE_IDS.basic.monthlyUsd;
+  // Basic and Team each have a dedicated INR Price object alongside the USD one.
+  if (plan === 'basic' || plan === 'team') {
+    const prices = STRIPE_PRICE_IDS[plan];
+    if (interval === 'monthly') {
+      return currency?.toLowerCase() === 'inr'
+        ? (prices.monthlyInr ?? prices.monthlyUsd)
+        : prices.monthlyUsd;
+    }
+    // Yearly: only Team offers it, and USD-only. INR yearly is founder-undecided
+    // (no INR Price), so an INR yearly request falls back to the USD yearly
+    // Price — the same fallback shape as monthlyInr ?? monthlyUsd. Basic has no
+    // yearly Price at all. Absent env → undefined → checkout refuses.
+    if (plan === 'team') return STRIPE_PRICE_IDS.team.yearlyUsd;
+    return undefined;
   }
   return STRIPE_PRICE_IDS[plan][interval];
 }
@@ -134,6 +165,21 @@ export const PRICING_CONFIG = {
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max_15x,
     },
+    {
+      id: 'team',
+      name: 'Team',
+      price: {
+        // Per seat, per month. Multiply by the purchased seat count for the
+        // organization's bill; never render this as an account price.
+        monthly: getPlanPriceUsd('team', 'monthly'),
+        monthlyInr: getPlanPriceInr('team'),
+        // Per seat, per year ($240, Decision #22). USD-only; INR yearly is
+        // founder-undecided so it is intentionally not published here.
+        yearly: getPlanPriceUsd('team', 'yearly'),
+      },
+      perSeat: true,
+      stripe_price_ids: STRIPE_PRICE_IDS.team,
+    },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
     if (
@@ -141,6 +187,13 @@ export const PRICING_CONFIG = {
       STRIPE_PRICE_IDS.basic.monthlyInr === priceId
     ) {
       return 'basic';
+    }
+    if (
+      STRIPE_PRICE_IDS.team.monthlyUsd === priceId ||
+      STRIPE_PRICE_IDS.team.monthlyInr === priceId ||
+      STRIPE_PRICE_IDS.team.yearlyUsd === priceId
+    ) {
+      return 'team';
     }
     const allPlans = ['pro', 'max', 'max_15x'] as const;
     for (const plan of allPlans) {

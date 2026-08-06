@@ -16,6 +16,19 @@ import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 export interface AuthResult {
   userId: string;
   email?: string;
+  /**
+   * Surface class proved by the CREDENTIAL, not asserted by the caller.
+   *
+   * WEB-AUTH-SURFACE-CLAIM-DISCARDED-01: developer device tokens are signed with
+   * `surface: 'developer'` and `verifyDeveloperTokenSignature` rejects any token
+   * whose claim is not exactly that — but the verified claim used to be dropped
+   * here, leaving downstream entitlement gates with nothing but the spoofable
+   * `x-agi-surface` header. Propagate it so those gates can be authoritative.
+   *
+   * Absent for Clerk sessions and API keys: neither carries an issuance-time
+   * surface claim today.
+   */
+  surfaceClass?: 'developer';
 }
 
 export interface AuthOptions {
@@ -114,9 +127,12 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
         'Unable to verify device session. Please try again shortly.',
       );
     }
+    // The signature check above already REQUIRES `surface === 'developer'`, so
+    // reaching here proves the class. Carry it forward — see AuthResult.
     return {
       userId: developerToken.userId,
       ...(developerToken.email ? { email: developerToken.email } : {}),
+      surfaceClass: 'developer',
     };
   }
 

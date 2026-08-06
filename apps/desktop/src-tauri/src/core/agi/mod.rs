@@ -86,8 +86,7 @@ pub use templates::{
     WorkflowDefinition, WorkflowStep,
 };
 pub use tools::{
-    create_list_skills_tool, create_skill_use_tool, SkillTool, SkillToolInput, Tool,
-    ToolCapability, ToolRegistry, ToolResult,
+    SkillTool, SkillToolInput, Tool, ToolCapability, ToolRegistry, ToolResult, SKILL_TOOL_ID,
 };
 
 // Export the new modular executor architecture

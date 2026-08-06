@@ -62,6 +62,24 @@ export interface Skill {
   description: string;
   /** Markdown body following the closing `---`. */
   body: string;
+  /**
+   * Optional declared version (from frontmatter `version`). Undefined when the
+   * skill declares none — the field is additive, never required.
+   */
+  version?: string;
+  /**
+   * `sha256:<hex>` over the raw bytes of the skill file that produced this
+   * record. Lets a caller detect that a skill changed between two loads.
+   * See `integrity.ts` for the `agiskill-sha256-v1` definition.
+   */
+  contentHash: string;
+  /**
+   * `sha256-tree-v1:<hex>` over the whole package directory — `SKILL.md` plus
+   * any `scripts/`, `references/`, or `assets/` shipped with it. Undefined for
+   * flat single-file skills, which have no package directory, and when the
+   * package directory could not be walked.
+   */
+  treeHash?: string;
   /** Where on disk this skill came from. */
   filePath: string;
   /** Precedence source. */

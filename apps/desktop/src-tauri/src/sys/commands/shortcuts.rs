@@ -369,11 +369,11 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
                             tracing::error!("Failed to emit global-hotkey-triggered: {}", e);
                         }
                     }
-                    "floating_window" => {
-                        if let Err(e) = _app.emit("shortcut_action", "floating_window") {
-                            tracing::error!("Failed to emit floating_window action: {}", e);
-                        }
-                    }
+                    // `floating_window` needs no arm: the unconditional emit
+                    // above already delivers it, and App.tsx turns that one
+                    // event into `window_toggle_floating`. Re-emitting here
+                    // fired the toggle twice, which opened the floating window
+                    // and immediately closed it again.
                     _ => {}
                 }
             }

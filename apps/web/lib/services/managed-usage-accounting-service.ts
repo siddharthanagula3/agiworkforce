@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
   finalizeManagedUsageRequest,
   type ManagedUsageFinalization,
@@ -66,6 +67,15 @@ export interface FinalizeObservedManagedUsageInput {
   reason: string;
   /** A cancellation releases the reservation only when no provider usage exists. */
   cancelled?: boolean;
+  /**
+   * CPST Stage-0 telemetry, MANAGED CLOUD ONLY
+   * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2/§4.3).
+   * Built by the caller with `buildCpstUsageFields`, because only the caller
+   * knows the TASK-level signals; this service knows only the charge. Optional
+   * and additive: an omitted value leaves the `usage` jsonb exactly as it was
+   * before CPST existed, and consumers must treat every missing key as unknown.
+   */
+  cpst?: CpstUsageFields;
 }
 
 /**
@@ -87,6 +97,7 @@ export function finalizeObservedManagedUsage(
         accounting: 'released_no_observed_provider_usage',
         reason: input.reason,
         providerCalls: 0,
+        ...input.cpst,
       },
     });
   }
@@ -100,6 +111,7 @@ export function finalizeObservedManagedUsage(
         accounting: 'reservation_estimate_no_provider_usage',
         reason: input.reason,
         providerCalls: 0,
+        ...input.cpst,
       },
     });
   }
@@ -123,6 +135,9 @@ export function finalizeObservedManagedUsage(
       reason: input.reason,
       ...input.usage,
       totalTokens,
+      // CPST keys are disjoint from the accounting/token keys above and are
+      // spread last so the additive intent is obvious at the call site.
+      ...input.cpst,
     },
   });
 }

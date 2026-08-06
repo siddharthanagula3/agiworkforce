@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assertDeliverableCadence, parseCronExpression, SWEEP_INTERVAL_MS } from './schedule-time';
+import {
+  assertDeliverableCadence,
+  describeSweepCadence,
+  parseCronExpression,
+  SWEEP_INTERVAL_MS,
+} from './schedule-time';
 
 const SWEEP_ROUTE = '/api/cron/run-schedules';
 
@@ -35,12 +40,16 @@ describe('schedule cadence floor', () => {
   });
 
   it('rejects an interval finer than the sweep can deliver', () => {
-    expect(() =>
-      assertDeliverableCadence(
-        { scheduleType: 'interval', intervalMs: 5 * 60 * 1000, timezone: 'UTC' },
-        new Date('2026-07-26T00:00:00Z'),
-      ),
-    ).toThrow(/swept once a day/);
+    expect(
+      () =>
+        assertDeliverableCadence(
+          { scheduleType: 'interval', intervalMs: 5 * 60 * 1000, timezone: 'UTC' },
+          new Date('2026-07-26T00:00:00Z'),
+        ),
+      // Matched against the derived phrase rather than a literal cadence, so
+      // this assertion survives the sweep changing speed. Pinning "once a day"
+      // here is what made the message and vercel.json able to disagree.
+    ).toThrow(new RegExp(`swept ${describeSweepCadence().cadence}`));
   });
 
   it('accepts an interval at or above the floor', () => {
@@ -52,14 +61,28 @@ describe('schedule cadence floor', () => {
     ).not.toThrow();
   });
 
-  it('rejects a cron that fires more than once a day', () => {
-    for (const expression of ['*/5 * * * *', '0 * * * *', '0 0,12 * * *']) {
+  it('rejects a cron that fires more often than the deployed sweep', () => {
+    for (const expression of ['*/5 * * * *', '*/30 * * * *']) {
       expect(() =>
         assertDeliverableCadence(
           { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
           new Date('2026-07-26T00:00:00Z'),
         ),
-      ).toThrow(/once per day/);
+      ).toThrow(/cannot fire more often/);
+    }
+  });
+
+  it('accepts hourly and twice-daily crons now that the sweep is hourly', () => {
+    // These were refused under the old once-daily sweep. They are deliverable
+    // now, and this test is what would catch the cadence floor being loosened
+    // without vercel.json actually getting faster.
+    for (const expression of ['0 * * * *', '0 0,12 * * *']) {
+      expect(() =>
+        assertDeliverableCadence(
+          { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
+          new Date('2026-07-26T00:00:00Z'),
+        ),
+      ).not.toThrow();
     }
   });
 

@@ -2,7 +2,11 @@ import 'server-only';
 
 import { createHmac, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
-import { SELF_SERVE_PAID_PLAN_TIERS } from '@agiworkforce/types';
+import {
+  MAX_PURCHASABLE_SEATS,
+  MIN_PURCHASABLE_SEATS,
+  SELF_SERVE_PAID_PLAN_TIERS,
+} from '@agiworkforce/types';
 
 const PREVIEW_TOKEN_TTL_MS = 10 * 60 * 1000;
 
@@ -12,6 +16,14 @@ const UpgradePreviewTokenPayloadSchema = z
     plan: z.enum(SELF_SERVE_PAID_PLAN_TIERS),
     billingInterval: z.enum(['monthly', 'yearly']),
     stripeSubscriptionId: z.string().regex(/^sub_[A-Za-z0-9]+$/),
+    /**
+     * Line-item quantity the preview was computed for. Bound into the HMAC
+     * because the proration figure the customer confirmed is quantity-dependent:
+     * without it, a client could preview 2 seats and apply the same token with
+     * 50, and be charged the 2-seat proration for a 50-seat subscription.
+     * Always 1 for per-account plans.
+     */
+    seats: z.number().int().min(MIN_PURCHASABLE_SEATS).max(MAX_PURCHASABLE_SEATS),
     prorationDate: z.number().int().positive(),
     expiresAt: z.number().int().positive(),
   })
@@ -76,7 +88,8 @@ export function verifyUpgradePreviewToken(
     payload.userId !== expected.userId ||
     payload.plan !== expected.plan ||
     payload.billingInterval !== expected.billingInterval ||
-    payload.stripeSubscriptionId !== expected.stripeSubscriptionId
+    payload.stripeSubscriptionId !== expected.stripeSubscriptionId ||
+    payload.seats !== expected.seats
   ) {
     throw new Error('Invalid upgrade preview token');
   }

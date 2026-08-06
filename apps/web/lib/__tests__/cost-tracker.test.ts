@@ -2,41 +2,98 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-// Mock @agiworkforce/types so we control pricing without needing the actual catalog.
-vi.mock('@agiworkforce/types', () => ({
-  getModelMetadataById: vi.fn((id: string) => {
-    // `provider` is load-bearing: the cost tracker uses it to decide token
-    // accounting (Anthropic reports input DISJOINT from cache tokens; OpenAI/
-    // Gemini/DeepSeek report INCLUSIVE prompt counts where cache tokens are a
-    // subset that must be subtracted before billing input).
-    const catalog: Record<string, Record<string, unknown>> = {
-      'claude-sonnet-5': {
-        provider: 'anthropic',
-        inputCost: 3.0,
-        outputCost: 15.0,
-        cached_input: 0.3,
-        cached_write: 3.75,
-        cached_write_1h: 6.0,
-      },
-      'claude-opus-5': {
-        provider: 'anthropic',
-        inputCost: 5.0,
-        outputCost: 25.0,
-        cached_input: 0.5,
-        cached_write: 6.25,
-        cached_write_1h: 10.0,
-      },
-      'gpt-5.6-sol': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
-      'deepseek-v4-flash': {
-        provider: 'deepseek',
-        inputCost: 0.14,
-        outputCost: 0.28,
-        cached_input: 0.0028,
-      },
-    };
-    return catalog[id] ?? null;
-  }),
-}));
+// Mock ONLY the catalog lookup so pricing is controlled without needing the real
+// catalog. `resolveEffectiveModelPricing` is deliberately left REAL: it is the
+// shared, pure date-window resolver, and stubbing it would test nothing.
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  // `provider` is load-bearing: the cost tracker uses it to decide token
+  // accounting (Anthropic reports input DISJOINT from cache tokens; OpenAI/
+  // Gemini/DeepSeek report INCLUSIVE prompt counts where cache tokens are a
+  // subset that must be subtracted before billing input).
+  const catalog: Record<string, Record<string, unknown>> = {
+    // Mirrors the shipped catalog: ONE price on every date. Founder Decision
+    // #22 (reaffirmed 2026-08-05) — Sonnet 5 bills the standard $3/$15 per MTok
+    // regardless of date; a provider's introductory window is a provider-cost
+    // fact, not a product price.
+    'claude-sonnet-5': {
+      provider: 'anthropic',
+      inputCost: 3.0,
+      outputCost: 15.0,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: 6.0,
+    },
+    // SYNTHETIC scheduled model. Its window dates are arbitrary and belong to
+    // no product price: the dated-window mechanism is proved here so it stays
+    // covered without a live promotional window to lean on.
+    'fixture-scheduled-model': {
+      provider: 'anthropic',
+      inputCost: 3.0,
+      outputCost: 15.0,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: 6.0,
+      pricingSchedule: [
+        {
+          effectiveUntil: '2030-03-31',
+          inputCost: 2.0,
+          outputCost: 10.0,
+          cached_input: 0.2,
+          cached_write: 2.5,
+          cached_write_1h: 4.0,
+        },
+        { effectiveFrom: '2030-04-01' },
+      ],
+    },
+    'claude-opus-5': {
+      provider: 'anthropic',
+      inputCost: 5.0,
+      outputCost: 25.0,
+      cached_input: 0.5,
+      cached_write: 6.25,
+      cached_write_1h: 10.0,
+    },
+    'gpt-5.6-sol': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
+    // GPT-5.6 declares a cache-WRITE price (1.25x the uncached input rate).
+    'gpt-5.6-terra': {
+      provider: 'openai',
+      inputCost: 2.0,
+      outputCost: 12.0,
+      cached_input: 0.2,
+      cached_write: 2.5,
+    },
+    // Pre-5.6 OpenAI: no write price declared, so cache writes stay free.
+    'gpt-5.4-mini': {
+      provider: 'openai',
+      inputCost: 0.75,
+      outputCost: 4.5,
+      cached_input: 0.075,
+    },
+    'deepseek-v4-flash': {
+      provider: 'deepseek',
+      inputCost: 0.14,
+      outputCost: 0.28,
+      cached_input: 0.0028,
+    },
+  };
+  return {
+    ...actual,
+    getModelMetadataById: vi.fn((id: string) => catalog[id] ?? null),
+  };
+});
+
+/**
+ * Fixed pricing dates. Cost is billed at the request's date, so every assertion
+ * pins one of these rather than reading the clock. The `SCHEDULED_*` dates
+ * bracket the SYNTHETIC fixture's window boundary; `PRICED_ON` is an ordinary
+ * date used wherever the model has one price on every date.
+ */
+const SCHEDULED_MODEL = 'fixture-scheduled-model';
+const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
+const LAST_DAY_OF_FIRST_WINDOW = new Date('2030-03-31T23:59:59.999Z');
+const FIRST_DAY_OF_SECOND_WINDOW = new Date('2030-04-01T00:00:00.000Z');
+const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
 import {
   recordModelUsage,
@@ -112,12 +169,17 @@ describe('recordModelUsage', () => {
 
 describe('cost calculation', () => {
   it('calculates input/output cost from models.json pricing', () => {
-    // claude-sonnet-5: $3/M input, $15/M output
+    // claude-sonnet-5: $3/M input, $15/M output on every date.
     // 1M input + 1M output = $3 + $15 = $18
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
-    });
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+      },
+      PRICED_ON,
+    );
 
     const report = getModelUsageReport(SESSION_A);
     const cost = report.get('claude-sonnet-5')!.costUsd;
@@ -186,11 +248,16 @@ describe('cost calculation', () => {
   it('charges cache_creation at 125% of input rate', () => {
     // claude-sonnet-5: catalog cacheCreation = $3.75/M
     // 1M cache_creation = $3.75
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheCreationInputTokens: 1_000_000,
-    });
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 1_000_000,
+      },
+      PRICED_ON,
+    );
 
     const report = getModelUsageReport(SESSION_A);
     const cost = report.get('claude-sonnet-5')!.costUsd;
@@ -226,12 +293,17 @@ describe('worked cost examples — all token classes, per provider', () => {
     //   cache-read 200k * 0.30 /1e6 = $0.06
     //   cache-write800k * 3.75 /1e6 = $3.00
     //   total = $4.11
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
-      inputTokens: 100_000,
-      outputTokens: 50_000,
-      cacheReadInputTokens: 200_000,
-      cacheCreationInputTokens: 800_000,
-    });
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      {
+        inputTokens: 100_000,
+        outputTokens: 50_000,
+        cacheReadInputTokens: 200_000,
+        cacheCreationInputTokens: 800_000,
+      },
+      PRICED_ON,
+    );
     expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.11, 6);
   });
 
@@ -259,12 +331,17 @@ describe('worked cost examples — all token classes, per provider', () => {
     //   total = $4.65
     // Exercises the 2x 1h premium explicitly — the other examples leave
     // cacheCreation1hInputTokens at 0, so only this case can fail on that rate.
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheCreationInputTokens: 1_000_000,
-      cacheCreation1hInputTokens: 400_000,
-    });
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 1_000_000,
+        cacheCreation1hInputTokens: 400_000,
+      },
+      PRICED_ON,
+    );
     expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.65, 6);
   });
 
@@ -299,6 +376,197 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 });
 
+// Effective-dated pricing, proved against the SYNTHETIC fixture model above —
+// arbitrary window dates that belong to no product price. Bounds are UTC
+// calendar days, inclusive on both sides, so the changeover happens at UTC
+// midnight. Every case pins a fixed date on one side of that boundary and none
+// of them can drift with the calendar.
+//
+// Sonnet 5 deliberately does NOT appear here: founder Decision #22 (reaffirmed
+// 2026-08-05) prices it identically on every date, which the pin below asserts.
+describe('effective-dated pricing', () => {
+  it('bills the first window rate for a request inside it', () => {
+    // First window: $2/M input, $10/M output → 1M + 1M = $12.
+    recordModelUsage(
+      SESSION_A,
+      SCHEDULED_MODEL,
+      { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      INSIDE_FIRST_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_A).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(12.0, 6);
+  });
+
+  it('bills the later window rate on and after the changeover date', () => {
+    // The second window declares only its start, so it inherits the top-level
+    // rates: $3/M input, $15/M output → 1M + 1M = $18.
+    recordModelUsage(
+      SESSION_A,
+      SCHEDULED_MODEL,
+      { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      FIRST_DAY_OF_SECOND_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_A).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(18.0, 6);
+  });
+
+  it('treats both window bounds as inclusive at the changeover boundary', () => {
+    recordModelUsage(
+      SESSION_A,
+      SCHEDULED_MODEL,
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      LAST_DAY_OF_FIRST_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_A).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(2.0, 6);
+
+    recordModelUsage(
+      SESSION_B,
+      SCHEDULED_MODEL,
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      FIRST_DAY_OF_SECOND_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_B).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(3.0, 6);
+  });
+
+  it('moves every cache rate with the window, not just input and output', () => {
+    // First window cache rates: read $0.2/M, 5m write $2.5/M, 1h write $4/M.
+    //   read     1M * 0.2 /1e6 = $0.20
+    //   1h write 1M * 4.0 /1e6 = $4.00
+    //   total = $4.20
+    recordModelUsage(
+      SESSION_A,
+      SCHEDULED_MODEL,
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 1_000_000,
+        cacheCreationInputTokens: 1_000_000,
+        cacheCreation1hInputTokens: 1_000_000,
+      },
+      INSIDE_FIRST_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_A).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(4.2, 6);
+
+    // Inherited rates in the second window: read $0.3/M, 1h write $6/M → $6.30.
+    recordModelUsage(
+      SESSION_B,
+      SCHEDULED_MODEL,
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 1_000_000,
+        cacheCreationInputTokens: 1_000_000,
+        cacheCreation1hInputTokens: 1_000_000,
+      },
+      FIRST_DAY_OF_SECOND_WINDOW,
+    );
+    expect(getModelUsageReport(SESSION_B).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(6.3, 6);
+  });
+
+  it('prices Sonnet 5 identically on every date — founder Decision #22', () => {
+    // $3/M input on both sides of the retired 2026-09-01 boundary.
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      new Date('2026-08-15T00:00:00.000Z'),
+    );
+    recordModelUsage(
+      SESSION_B,
+      'claude-sonnet-5',
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      new Date('2026-09-15T00:00:00.000Z'),
+    );
+    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(3.0, 6);
+    expect(getModelUsageReport(SESSION_B).get('claude-sonnet-5')!.costUsd).toBeCloseTo(3.0, 6);
+  });
+
+  it('prices a model without a schedule identically on any date', () => {
+    recordModelUsage(
+      SESSION_A,
+      'claude-opus-5',
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      new Date('2020-01-01T00:00:00.000Z'),
+    );
+    recordModelUsage(
+      SESSION_B,
+      'claude-opus-5',
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      new Date('2099-12-31T00:00:00.000Z'),
+    );
+    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(
+      getModelUsageReport(SESSION_B).get('claude-opus-5')!.costUsd,
+      10,
+    );
+  });
+});
+
+// OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family
+// (1.25x the uncached input rate, automatic and explicit breakpoints alike).
+// The catalog expresses that as a `cached_write` price, so billing keys off the
+// declared price rather than the model name.
+describe('OpenAI cache-write billing', () => {
+  it('bills writes at the declared price for models that publish one', () => {
+    // gpt-5.6-terra: input $2/M, cached_write $2.5/M. OpenAI prompt_tokens are
+    // INCLUSIVE, so a 1M prompt that is entirely cache writes bills
+    // 1M * $2.5/M = $2.50 — the input charge plus the 0.25x write surcharge.
+    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheCreationInputTokens: 1_000_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-terra')!.costUsd).toBeCloseTo(2.5, 6);
+  });
+
+  it('keeps writes free for pre-5.6 OpenAI models that declare no write price', () => {
+    // gpt-5.4-mini: input $0.75/M, no cached_write. A written token bills once,
+    // at the input rate — identical to the same prompt with no cache activity.
+    recordModelUsage(SESSION_A, 'gpt-5.4-mini', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheCreationInputTokens: 1_000_000,
+    });
+    recordModelUsage(SESSION_B, 'gpt-5.4-mini', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+    });
+    const withWrites = getModelUsageReport(SESSION_A).get('gpt-5.4-mini')!.costUsd;
+    expect(withWrites).toBeCloseTo(0.75, 6);
+    expect(withWrites).toBeCloseTo(getModelUsageReport(SESSION_B).get('gpt-5.4-mini')!.costUsd, 10);
+  });
+
+  it('bills each prompt token exactly once across input, read, and write', () => {
+    // gpt-5.6-terra: input $2/M, cached_input $0.2/M, cached_write $2.5/M.
+    //   plain input (1M - 400k - 200k) 400k * 2   /1e6 = $0.80
+    //   cache read                     400k * 0.2 /1e6 = $0.08
+    //   cache write                    200k * 2.5 /1e6 = $0.50
+    //   total = $1.38
+    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 400_000,
+      cacheCreationInputTokens: 200_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-terra')!.costUsd).toBeCloseTo(1.38, 6);
+  });
+
+  it('keeps Anthropic disjoint accounting: cache tokens add to input, never subtract', () => {
+    // claude-opus-5: input $5/M, cached_input $0.5/M, cached_write $6.25/M.
+    // Anthropic reports input_tokens SEPARATELY from the cache buckets, so all
+    // three are summed — this is the accounting distinction that must survive
+    // the OpenAI write-billing change.
+    //   input       1M * 5    /1e6 = $5.00
+    //   cache read  1M * 0.50 /1e6 = $0.50
+    //   cache write 1M * 6.25 /1e6 = $6.25
+    //   total = $11.75
+    recordModelUsage(SESSION_A, 'claude-opus-5', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 1_000_000,
+      cacheCreationInputTokens: 1_000_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(11.75, 6);
+  });
+});
+
 describe('getSessionTotalCostUsd', () => {
   it('returns 0 for unknown session', () => {
     expect(getSessionTotalCostUsd('nonexistent')).toBe(0);
@@ -306,7 +574,12 @@ describe('getSessionTotalCostUsd', () => {
 
   it('sums cost across all models in a session', () => {
     // claude-sonnet-5: $3/M input → 1M = $3
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 1_000_000, outputTokens: 0 });
+    recordModelUsage(
+      SESSION_A,
+      'claude-sonnet-5',
+      { inputTokens: 1_000_000, outputTokens: 0 },
+      PRICED_ON,
+    );
     // gpt-5.6-sol: $5/M input → 1M = $5
     recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 1_000_000, outputTokens: 0 });
 
@@ -528,5 +801,98 @@ describe('toOtelAttributes', () => {
     });
 
     expect(attrs['gen_ai.system']).toBe('google_ai_studio');
+  });
+
+  // CPST Stage-0 mirror of the managed-usage ledger keys
+  // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2). The
+  // tracker is in-memory and is explicitly NOT a CPST source; these attributes
+  // only label the span with what the durable row already carries.
+  describe('CPST vendor attributes', () => {
+    it('emits no codex.usage CPST attribute when no CPST fields are supplied', () => {
+      const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+        inputTokens: 100,
+        outputTokens: 50,
+      });
+
+      expect('codex.usage.task_outcome' in attrs).toBe(false);
+      expect('codex.usage.retries' in attrs).toBe(false);
+      expect('codex.usage.fallback_used' in attrs).toBe(false);
+      expect('codex.usage.verifier_result' in attrs).toBe(false);
+      expect('codex.usage.route_plan_id' in attrs).toBe(false);
+      expect('codex.usage.task_family' in attrs).toBe(false);
+      expect('codex.usage.task_family_confidence' in attrs).toBe(false);
+    });
+
+    it('mirrors every populated CPST field into the codex.usage namespace', () => {
+      const attrs = toOtelAttributes(
+        'anthropic',
+        'claude-sonnet-5',
+        { inputTokens: 10, outputTokens: 5 },
+        {
+          taskOutcome: 'unknown',
+          verifierResult: 'skipped',
+          fallbackUsed: true,
+          fallbackReason: 'managed_failover',
+          retries: 2,
+          routePlanId: 'interim:anthropic/messages:route-1:fallback_slot',
+          taskFamily: 'coding',
+          taskFamilyConfidence: 0.75,
+        },
+      );
+
+      expect(attrs['codex.usage.task_outcome']).toBe('unknown');
+      expect(attrs['codex.usage.verifier_result']).toBe('skipped');
+      expect(attrs['codex.usage.fallback_used']).toBe(true);
+      expect(attrs['codex.usage.fallback_reason']).toBe('managed_failover');
+      expect(attrs['codex.usage.retries']).toBe(2);
+      expect(attrs['codex.usage.route_plan_id']).toBe(
+        'interim:anthropic/messages:route-1:fallback_slot',
+      );
+      expect(attrs['codex.usage.task_family']).toBe('coding');
+      expect(attrs['codex.usage.task_family_confidence']).toBe(0.75);
+    });
+
+    it('keeps an absent CPST field absent instead of defaulting it', () => {
+      const attrs = toOtelAttributes(
+        'openai',
+        'gpt-5.6-sol',
+        { inputTokens: 10, outputTokens: 5 },
+        { taskOutcome: 'failure', verifierResult: 'skipped' },
+      );
+
+      expect(attrs['codex.usage.task_outcome']).toBe('failure');
+      expect('codex.usage.retries' in attrs).toBe(false);
+      expect('codex.usage.fallback_used' in attrs).toBe(false);
+      expect('codex.usage.route_plan_id' in attrs).toBe(false);
+      expect('codex.usage.task_family' in attrs).toBe(false);
+    });
+
+    it('emits fallback_used:false as a real false, not as an omission', () => {
+      const attrs = toOtelAttributes(
+        'openai',
+        'gpt-5.6-sol',
+        { inputTokens: 10, outputTokens: 5 },
+        { fallbackUsed: false, retries: 0 },
+      );
+
+      expect(attrs['codex.usage.fallback_used']).toBe(false);
+      expect(attrs['codex.usage.retries']).toBe(0);
+    });
+
+    it('leaves the token attributes byte-identical whether or not CPST is passed', () => {
+      const usage = { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 300 };
+      const withoutCpst = toOtelAttributes('openai', 'gpt-5.6-sol', usage);
+      const withCpst = toOtelAttributes('openai', 'gpt-5.6-sol', usage, {
+        taskOutcome: 'unknown',
+      });
+
+      for (const key of Object.keys(withoutCpst)) {
+        expect(withCpst[key]).toBe(withoutCpst[key]);
+      }
+      expect(Object.keys(withCpst)).toEqual([
+        ...Object.keys(withoutCpst),
+        'codex.usage.task_outcome',
+      ]);
+    });
   });
 });

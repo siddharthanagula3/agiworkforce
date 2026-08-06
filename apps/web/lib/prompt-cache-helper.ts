@@ -88,6 +88,16 @@ export function calculateCacheSavings(
     promptTokens?: number;
   },
   inputCostPerMtok: number,
+  /**
+   * Per-million cache-WRITE price for this model, resolved from the catalog by
+   * the caller (`LLMCostCalculator.getCacheWriteCostPerMtok`, which is date- and
+   * provider-aware). Omitted only by callers with no model context, where the
+   * Anthropic-published 1.25x surcharge is the historical default. Passing the
+   * resolved rate is what keeps models that declare NO write price — every
+   * pre-GPT-5.6 OpenAI model — reported at their free-write cost instead of an
+   * invented 25% surcharge.
+   */
+  cacheWriteCostPerMtok: number = inputCostPerMtok * 1.25,
 ): {
   tokensSavedByCache: number;
   savedCostCents: number;
@@ -102,11 +112,10 @@ export function calculateCacheSavings(
   const cachedCostCents = (cachedTokens * inputCostPerMtok * 0.1) / 10_000;
   const savedCostCents = normalCostCents - cachedCostCents;
 
-  // Cache write costs 1.25× the normal input rate (Anthropic 5m TTL: +25% surcharge over
-  // the standard input rate). The full write cost, not just the surcharge, is reported here.
-  // Note: Anthropic 1h TTL write is 2.0× — indistinguishable from 5m at this call site
-  // (NormalizedUsage conflates both; tracked gap in cost-tracker.ts).
-  const cacheWriteCostCents = (cacheWriteTokens * inputCostPerMtok * 1.25) / 10_000;
+  // The full write cost, not just the surcharge, is reported here.
+  // Note: Anthropic 1h TTL write is 2.0x — indistinguishable from 5m at this call
+  // site (NormalizedUsage conflates both; tracked gap in cost-tracker.ts).
+  const cacheWriteCostCents = (cacheWriteTokens * cacheWriteCostPerMtok) / 10_000;
 
   return {
     tokensSavedByCache: cachedTokens,

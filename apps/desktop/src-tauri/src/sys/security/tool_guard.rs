@@ -754,6 +754,19 @@ impl ToolExecutionGuard {
             },
         );
 
+        // Skill (progressive disclosure) — reads installed skill metadata/instructions
+        // from the already-loaded catalog. Model-supplied paths are never honored, so
+        // the only reachable data is a skill the user already installed.
+        allowed_tools.insert(
+            "skill".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["action".to_string(), "name".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
         // Code analysis — read-only, no execution
         allowed_tools.insert(
             "code_analyze".to_string(),

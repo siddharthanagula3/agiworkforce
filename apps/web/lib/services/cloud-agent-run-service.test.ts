@@ -13,6 +13,7 @@ import {
   findActiveCloudAgentRunForConversation,
   getCloudAgentRun,
   listCloudAgentRuns,
+  readCloudAgentRunAssistantText,
   requestCloudAgentRunCancellation,
   releaseCloudAgentApprovalCheckpoint,
   saveCloudAgentApprovalCheckpoint,
@@ -327,6 +328,117 @@ describe('cloud agent run service', () => {
     ]);
   });
 
+  describe('pending approval inbox', () => {
+    const PENDING_ROW = {
+      ...RUN_ROW,
+      state: 'awaiting_input',
+      pending_approval_requested_at: '2026-07-17T20:05:00.000Z',
+      pending_approval_tool_calls: [
+        {
+          id: 'call-1',
+          qualifiedName: 'mcp__github__create_issue',
+          args: { repo: 'agiworkforce/app', title: 'Ship durable sessions' },
+        },
+      ],
+    };
+
+    it('summarizes the outstanding approval so a surface that never streamed the run can act', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([PENDING_ROW]);
+
+      const result = await listCloudAgentRuns(db, {
+        userId: 'user-1',
+        states: ['awaiting_input'],
+      });
+
+      expect(result.runs[0]?.pendingApproval).toEqual({
+        requestedAt: '2026-07-17T20:05:00.000Z',
+        toolCalls: [
+          {
+            toolCallId: 'call-1',
+            name: 'mcp__github__create_issue',
+            argsPreview: '{"repo":"agiworkforce/app","title":"Ship durable sessions"}',
+          },
+        ],
+      });
+    });
+
+    it('truncates the argument preview server-side rather than shipping whole tool payloads', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([
+        {
+          ...PENDING_ROW,
+          pending_approval_tool_calls: [
+            { id: 'call-1', qualifiedName: 'fs_write', args: { body: 'x'.repeat(5_000) } },
+          ],
+        },
+      ]);
+
+      const result = await listCloudAgentRuns(db, { userId: 'user-1', states: ['awaiting_input'] });
+
+      expect(result.runs[0]?.pendingApproval?.toolCalls[0]?.argsPreview).toHaveLength(300);
+    });
+
+    it('hides an approval that has aged past the claim window instead of offering a dead button', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([PENDING_ROW]);
+
+      await listCloudAgentRuns(db, { userId: 'user-1', states: ['awaiting_input'] });
+
+      // The lateral join applies the same TTL predicate the claim does, so an
+      // approval the resume endpoint would answer 410 for never reaches a client.
+      const [sql] = vi.mocked(db.query).mock.calls[0]!;
+      expect(sql).toMatch(
+        /state = 'pending'[\s\S]*created_at > now\(\) - make_interval\(hours =>/i,
+      );
+    });
+
+    it('omits the summary once the checkpoint has been claimed', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([
+        {
+          ...PENDING_ROW,
+          state: 'running',
+          pending_approval_requested_at: null,
+          pending_approval_tool_calls: null,
+        },
+      ]);
+
+      const result = await listCloudAgentRuns(db, { userId: 'user-1', states: ['running'] });
+
+      expect(result.runs[0]?.pendingApproval).toBeUndefined();
+    });
+
+    it('attaches the same summary to a single-run read so a relaunched client can rebuild the card', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([PENDING_ROW]).mockResolvedValueOnce([]);
+
+      const result = await getCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id });
+
+      expect(result?.run.pendingApproval?.toolCalls[0]?.toolCallId).toBe('call-1');
+    });
+  });
+
+  describe('assistant text aggregation', () => {
+    it('concatenates the journalled answer in sequence order with its replay cursor', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([{ text: 'Hello, world.', last_sequence: '41' }]);
+
+      const result = await readCloudAgentRunAssistantText(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+      });
+
+      expect(result).toEqual({ text: 'Hello, world.', lastSequence: 41 });
+      const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+      expect(sql).toMatch(/string_agg\(envelope->'event'->>'delta', '' order by sequence\)/i);
+      expect(sql).toMatch(/envelope->'event'->>'type' = 'text-delta'/i);
+      expect(params).toEqual([RUN_ROW.id, 'user-1']);
+    });
+
+    it('reports an empty answer and a null cursor for a run with no journalled events', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([{ text: '', last_sequence: -1 }]);
+
+      await expect(
+        readCloudAgentRunAssistantText(db, { userId: 'user-1', runId: RUN_ROW.id }),
+      ).resolves.toEqual({ text: '', lastSequence: -1 });
+    });
+  });
+
   it('lists only tenant-owned runs in the requested states with a stable tuple cursor', async () => {
     const olderRow = {
       ...RUN_ROW,
@@ -357,7 +469,7 @@ describe('cloud agent run service', () => {
     expect(result.next).toEqual({ updatedAt: olderRow.updated_at, id: olderRow.id });
     expect(db.query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*request_id = \$3[\s\S]*\(updated_at, id\) < \(\$4::timestamptz, \$5::uuid\)/i,
+        /runs\.user_id = \$1[\s\S]*runs\.state = any\(\$2::text\[\]\)[\s\S]*runs\.request_id = \$3[\s\S]*\(runs\.updated_at, runs\.id\) < \(\$4::timestamptz, \$5::uuid\)/i,
       ),
       [
         'user-1',
@@ -383,7 +495,7 @@ describe('cloud agent run service', () => {
     expect(result.runs).toHaveLength(1);
     const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
     expect(sql).toMatch(
-      /where user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*request_id = \$3/i,
+      /where runs\.user_id = \$1[\s\S]*runs\.state = any\(\$2::text\[\]\)[\s\S]*runs\.request_id = \$3/i,
     );
     expect(params).toEqual([
       'user-1',

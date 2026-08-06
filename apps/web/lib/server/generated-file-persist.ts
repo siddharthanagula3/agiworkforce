@@ -197,6 +197,11 @@ export async function persistGeneratedFileBytes(params: {
   origin: string;
   model?: string;
   prompt?: string;
+  /**
+   * Conversation that produced the file (migration 0081). Provenance only:
+   * deleting the conversation nulls this and leaves the file intact.
+   */
+  conversationId?: string;
   extraMetadata?: Record<string, unknown>;
 }): Promise<PersistGeneratedFileOutcome> {
   const { userId, data, mimeType, filename, provider, origin, model, prompt } = params;
@@ -226,6 +231,7 @@ export async function persistGeneratedFileBytes(params: {
       provider,
       model,
       sourceSurface: 'web',
+      ...(params.conversationId ? { conversationId: params.conversationId } : {}),
       metadata: {
         filename,
         origin,

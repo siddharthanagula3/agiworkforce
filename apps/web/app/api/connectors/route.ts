@@ -27,7 +27,9 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
+  evictConnectorOAuthCaches,
   getOperatorMappedConnectorIds,
   getUserGithubInstallations,
   getUserCustomConnectorSummaries,
@@ -37,6 +39,13 @@ import {
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
 } from '@/lib/github-app';
+import {
+  buildConnectorOAuthStartPath,
+  getOAuthConfiguredConnectorIds,
+  isConnectorOAuthConfigured,
+} from '@/lib/connectors/oauth-registry';
+import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
+import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 
 const GITHUB_CONNECTOR_ID = 'github';
 
@@ -142,13 +151,19 @@ const LOCAL_CONNECTOR_IDS = new Set([
 
 /**
  * Connector ids that can actually be used by managed-cloud chat in this
- * deployment: operator-mapped remote MCP connectors, and github when the App
- * install flow is configured. Device-local connectors deliberately stay out
- * of this Cloud API.
+ * deployment: operator-mapped remote MCP connectors, providers the operator has
+ * registered a platform OAuth application for (migration 0097 broker), and
+ * github when the App install flow is configured. Device-local connectors
+ * deliberately stay out of this Cloud API.
+ *
+ * Every source here answers the same question — "would clicking Connect
+ * actually do something?" — which is what keeps the directory from showing a
+ * live-looking control backed by nothing.
  */
 function getAvailableConnectorIds(): string[] {
   const available = new Set<string>();
   for (const id of getOperatorMappedConnectorIds()) available.add(id);
+  for (const id of getOAuthConfiguredConnectorIds()) available.add(id);
   if (
     isGitHubInstallationLinkingAvailable() &&
     isGitHubAppConfigured() &&
@@ -190,9 +205,13 @@ async function handleGetConnectors(request: NextRequest) {
     authType: string;
     connectedAt: string;
     updatedAt: string;
-    source: 'user' | 'github-app' | 'custom';
+    source: 'user' | 'github-app' | 'custom' | 'oauth';
     /** Display name — only populated for `source: 'custom'` (no static catalog entry exists for these). */
     name?: string;
+    /** OAuth grants only: the scopes the provider actually granted. */
+    scopes?: string[];
+    /** OAuth grants only: true when the stored token can no longer be renewed. */
+    needsReauthorization?: boolean;
   };
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
@@ -220,6 +239,27 @@ async function handleGetConnectors(request: NextRequest) {
       connectedAt: '',
       updatedAt: '',
       source: 'github-app',
+    });
+  }
+
+  // Per-user OAuth grants (migration 0097). These are the connectors the user
+  // authorized through the platform's own OAuth app; the grant IS the connected
+  // state, so — like github — no user_connectors row is involved and none is
+  // written. A grant whose provider has since been de-configured is skipped:
+  // the tool loop cannot use it either, so reporting it as connected would lie.
+  const oauthGrants = await getUserConnectorOAuthGrantSummaries(userId);
+  for (const grant of oauthGrants) {
+    if (!isConnectorOAuthConfigured(grant.connectorId)) continue;
+    if (connectors.some((c) => c.connectorId === grant.connectorId)) continue;
+    connectors.push({
+      id: `oauth-${grant.connectorId}`,
+      connectorId: grant.connectorId,
+      authType: 'oauth',
+      connectedAt: grant.connectedAt,
+      updatedAt: grant.updatedAt,
+      source: 'oauth',
+      scopes: grant.grantedScopes,
+      needsReauthorization: grant.needsReauthorization,
     });
   }
 
@@ -316,6 +356,29 @@ async function handleCreateConnector(request: NextRequest) {
     );
   }
 
+  // A provider with a registered platform OAuth app connects by running the
+  // authorization-code flow, not by flipping a row. Mirrors the github 409:
+  // tell the caller exactly where to send the user.
+  if (!operatorMappedIds.has(body.connectorId) && isConnectorOAuthConfigured(body.connectorId)) {
+    const startPath = buildConnectorOAuthStartPath(body.connectorId);
+    return NextResponse.json(
+      {
+        error: 'This connector connects through OAuth authorization, not a directory toggle.',
+        connectorId: body.connectorId,
+        oauthStartPath: startPath,
+        // Compatibility alias. The web directory
+        // (features/connectors/hooks/use-connectors.ts) already follows
+        // `installStartPath` on a 409 — it was added for the GitHub App install
+        // flow — and without this a correctly configured OAuth connector would
+        // show a generic "could not connect" toast instead of opening the
+        // provider's consent screen. Remove once that hook reads
+        // `oauthStartPath`; both fields carry the same value today.
+        installStartPath: startPath,
+      },
+      { status: 409 },
+    );
+  }
+
   // Operator-mapped remote MCP connectors are honestly connectable: the
   // endpoint + credentials live server-side and lib/user-connector-tools gates
   // tool-offering on exactly this user_connectors row.
@@ -366,6 +429,22 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.internal('Failed to save connector');
   }
 
+  // Audit: connector enabled. Only the connector id and auth mechanism are
+  // recorded — credentials for this connector live in the OAuth/token stores
+  // and are never in scope here.
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_added',
+    request,
+    detail: {
+      resourceType: 'connector',
+      resourceId: data.id,
+      connectorId: data.connector_id,
+      source: 'catalog',
+      status: data.auth_type,
+    },
+  });
+
   return NextResponse.json(
     {
       // Same entry shape as GET's `connectors` rows (source included) so
@@ -400,12 +479,40 @@ async function handleDeleteConnector(request: NextRequest) {
 
   if (
     !connectorId ||
-    (!VALID_CONNECTOR_IDS.has(connectorId) && !getOperatorMappedConnectorIds().has(connectorId))
+    (!VALID_CONNECTOR_IDS.has(connectorId) &&
+      !getOperatorMappedConnectorIds().has(connectorId) &&
+      !isConnectorOAuthConfigured(connectorId))
   ) {
     throw createError.validation('Valid connectorId query param is required');
   }
 
   const db = getNeonDb();
+
+  // Disconnecting an OAuth connector must actually destroy the credential:
+  // revoke at the provider when it exposes an endpoint, then drop the stored
+  // ciphertext (0097 forbids a revoked row from holding one). Runs before the
+  // user_connectors soft-delete below so a connector that is BOTH enabled and
+  // OAuth-granted is fully torn down by a single request.
+  const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
+  if (oauthRevoked) {
+    // Close the live MCP handle too: it holds the now-revoked Authorization
+    // header, and without this the connection keeps working until the process
+    // restarts even though the grant is gone.
+    await evictConnectorOAuthCaches(userId, connectorId);
+    await clearConnectorToolPermissions(db, userId, connectorId);
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_removed',
+      request,
+      detail: { resourceType: 'connector', connectorId, source: 'oauth' },
+    });
+    // An OAuth grant is the whole connected state for these providers (no
+    // user_connectors row is ever written for them), so stop here unless the id
+    // also has one of the other backings below.
+    if (connectorId !== GITHUB_CONNECTOR_ID && !getOperatorMappedConnectorIds().has(connectorId)) {
+      return NextResponse.json({ success: true });
+    }
+  }
 
   if (connectorId === GITHUB_CONNECTOR_ID) {
     // Unlink this user's GitHub App installations so github tools stop being
@@ -417,6 +524,16 @@ async function handleDeleteConnector(request: NextRequest) {
       if (!isUndefinedTable(error)) throw error;
     }
     await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID);
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_removed',
+      request,
+      detail: {
+        resourceType: 'connector',
+        connectorId: GITHUB_CONNECTOR_ID,
+        source: 'github_installation',
+      },
+    });
     return NextResponse.json({ success: true });
   }
 
@@ -437,6 +554,13 @@ async function handleDeleteConnector(request: NextRequest) {
   }
 
   await clearConnectorToolPermissions(db, userId, connectorId);
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'connector_removed',
+    request,
+    detail: { resourceType: 'connector', connectorId, source: 'catalog' },
+  });
 
   return NextResponse.json({ success: true });
 }

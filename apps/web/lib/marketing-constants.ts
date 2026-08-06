@@ -2,14 +2,16 @@
  * Single source of truth for all marketing statistics used across the website.
  * Import from here instead of hardcoding numbers in pages.
  *
- * When product stats change, update ONLY this file - all pages pull from here.
+ * RULE: a number in this file must be DERIVED from a canonical source or carry
+ * the evidence for it in a comment. Numbers typed from memory are how "50+
+ * models" shipped against a 31-model catalog on five pages at once.
  *
- * Provider count: "10+" = 9 first-party cloud APIs (Anthropic, OpenAI, Google,
- * xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu) + Ollama (local) + LM Studio
- * (local) + unlimited custom OpenAI-compatible BYO endpoints.
- *
+ * Model and provider counts derive from `models.json` (see `MARKETING`).
  * Surface count: 6 (Desktop, Web, Mobile, CLI, VS Code, Chrome).
+ * Per-surface availability: `SURFACE_STATUS`, sourced from release tags.
  */
+
+import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
 
 /**
  * Provider labels shown in marketing surfaces. Runtime model IDs must come
@@ -22,27 +24,68 @@ export const MARKETING_MODEL_PILLS = [
   'Local LLMs',
 ] as const;
 
+/**
+ * Launch messaging — deliberately STATUS-ONLY, with no date.
+ *
+ * A hardcoded date here renders as a FUTURE promise across ~25 marketing pages
+ * plus their SEO descriptions, and silently becomes a false claim the day it
+ * passes. It did: the previous value, `July 12, 2026`, was three weeks stale
+ * while every surface in `SURFACE_STATUS` still read "Coming soon" — the site
+ * simultaneously advertised a launch date that had gone by and six products
+ * that had not shipped.
+ *
+ * `isoDate` and `allProductsLabel` were already dead and are gone with it.
+ *
+ * To announce a real date, add the field back deliberately and update the
+ * consumers that should carry it — do not reintroduce a default that every
+ * page inherits by accident.
+ */
 export const LAUNCH = {
-  date: 'July 12, 2026',
-  isoDate: '2026-07-12',
-  shortDate: 'July 12',
-  publicLabel: 'Public launch: July 12, 2026',
-  allProductsLabel: 'Public launch target: July 12',
+  publicLabel: 'Public launch: date to be announced',
+  /** Compact form for chips and stat rows where the full label will not fit. */
+  shortLabel: 'To be announced',
   ctaLabel: 'Get launch access',
 } as const;
 
 /**
- * All six surfaces are pre-launch. Marketing pages show "Coming soon"
- * instead of install/download claims; every notify CTA routes to the
- * /download page, which acts as the coming-soon hub with the waitlist form.
+ * Label for surfaces that genuinely have no published release.
+ *
+ * Kept for the three surfaces that are actually unreleased (Mobile, VS Code,
+ * Chrome) and for hubs that gate on them. Do NOT reapply it to Web, Desktop,
+ * or the CLI — see `SURFACE_STATUS` for why that was wrong.
  */
 export const COMING_SOON_LABEL = 'Coming soon';
 
+/**
+ * Per-surface availability, stated from release evidence rather than mood.
+ *
+ * This map previously read `COMING_SOON_LABEL` for ALL SIX surfaces, which the
+ * home page contradicted one screen away: its primary CTA is "Try AGI Web" →
+ * `/login?redirectTo=%2Fchat`, and both routes exist and work. A visitor who
+ * clicked through into a working product learned the site was wrong about its
+ * own status.
+ *
+ * Evidence for each value, re-verify before changing:
+ *   web      — this application. `app/login` and `app/chat` both resolve.
+ *   desktop  — git tag `v-desktop-1.2.0`. `.github/workflows/release-desktop.yml`
+ *              publishes Linux x86_64 + notarized universal macOS artifacts;
+ *              `app/api/download/route.ts` resolves live GitHub release
+ *              installers. Per-PLATFORM availability is resolved at request time
+ *              by `/download` — do not restate it as a static claim here.
+ *   cli      — git tag `v-cli-1.0.0`. `.github/workflows/release-cli.yml` builds
+ *              six targets and publishes `@agiworkforce/cli` to npm.
+ *   mobile   — ZERO `v-mobile-*` tags. Workflow exists; nothing published.
+ *   vscode   — ZERO `v-vscode-*` tags. Workflow exists; nothing published.
+ *   chrome   — ZERO `v-ext-*` tags. Workflow exists; nothing published.
+ *
+ * A surface moves off `COMING_SOON_LABEL` when it has a release tag, not when
+ * it has a landing page.
+ */
 export const SURFACE_STATUS = {
-  web: COMING_SOON_LABEL,
-  desktop: COMING_SOON_LABEL,
+  web: 'Available now',
+  desktop: 'Released · v1.2.0',
+  cli: 'Released · v1.0.0',
   mobile: COMING_SOON_LABEL,
-  cli: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,
   chrome: COMING_SOON_LABEL,
 } as const;
@@ -162,19 +205,54 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
   ],
 };
 
+/**
+ * Model and provider counts are DERIVED from the canonical catalog, never typed
+ * by hand.
+ *
+ * The previous hardcoded value was `{ count: 50, display: '50+' }`, justified by
+ * a comment claiming "the generated catalog currently contains 56 compatibility
+ * models". It does not, and there is no evidence it ever did: `models.json`
+ * holds 31. That single wrong constant rendered "50+ models" on five pages, and
+ * it was the exact claim a prior audit flagged as contradicted by the code.
+ *
+ * Deriving from `modelsCatalogJson` means `pnpm sync:models` updates the site
+ * automatically and the number CANNOT drift from the catalog again. Do not
+ * replace these with literals.
+ */
+const CATALOG_MODEL_COUNT = Object.keys(modelsCatalogJson.models).length;
+const CATALOG_PROVIDER_COUNT = Object.keys(modelsCatalogJson.providers).length;
+
+/**
+ * The catalog's own `lastUpdated` stamp, for pages that must date a mutable
+ * fact (press fact sheet, colophon) instead of asserting it timelessly.
+ */
+export const CATALOG_AS_OF = modelsCatalogJson.lastUpdated;
+
 export const MARKETING = {
-  providers: { count: 10, display: '10+', label: 'AI Providers' },
+  // `count` is the exact derived number of provider entries in models.json.
+  //
+  // `display` stays the conservative "10+" floor ON PURPOSE. Several pages
+  // enumerate the providers around this token — /faq, for one, expands it as
+  // "nine first-party cloud APIs ... and two local runtimes" — so swapping the
+  // token for the exact count would make those sentences stop adding up. "10+"
+  // is true (there are more than ten), and pages that want the precise figure
+  // use `count` instead. Do not change `display` without rewriting every
+  // sentence that enumerates around it.
+  providers: {
+    count: CATALOG_PROVIDER_COUNT,
+    display: '10+',
+    label: 'AI Providers',
+  },
   // skills: 23 categories with counted skills in features/ai-skills page (168 total). 150+ is a
   // conservative defensible floor. Update when a canonical skill registry ships.
   skills: { count: 150, display: '150+', label: 'AI Skills' },
   categories: { count: 23, display: '23', label: 'Skill Categories' },
   tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
-  // The generated catalog currently contains 56 compatibility models.
-  // '50+' is the conservative public floor; re-verify after pnpm sync:models.
-  models: { count: 50, display: '50+', label: 'Models' },
+  // Exact, not a floor: an exact number a reader can verify is worth more than
+  // a padded one they cannot.
+  models: { count: CATALOG_MODEL_COUNT, display: `${CATALOG_MODEL_COUNT}`, label: 'Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
   appSize: { value: 0, display: 'Native', label: 'Desktop Build' },
   tagline:
     'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';

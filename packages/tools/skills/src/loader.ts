@@ -16,6 +16,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { FrontmatterError, parseFrontmatter } from './frontmatter';
+import { computeSkillTreeHash, hashSkillContent, readSkillVersion } from './integrity';
 import type { Skill, SkillLayer, SkillMetadata, SkillSource } from './types';
 
 function asString(value: unknown): string | undefined {
@@ -65,13 +66,15 @@ async function loadSkillFile(
   filePath: string,
   fallbackName: string,
   source: SkillSource,
+  packageDir?: string,
 ): Promise<Skill | null> {
-  let raw: string;
+  let bytes: Buffer;
   try {
-    raw = await readFile(filePath, 'utf-8');
+    bytes = await readFile(filePath);
   } catch {
     return null;
   }
+  const raw = bytes.toString('utf-8');
   let data: Record<string, unknown>;
   let body: string;
   try {
@@ -86,15 +89,32 @@ async function loadSkillFile(
   }
   const name = asString(data['name']) ?? fallbackName;
   const description = asString(data['description']) ?? `Skill ${name}`;
-  return {
+  const version = readSkillVersion(data);
+  // A packaged skill's scripts/references/assets are what the instructions tell
+  // the agent to run, so they belong inside the integrity envelope. An
+  // unreadable package must not sink the whole catalog load, so drift is
+  // reported as an absent treeHash rather than a thrown error.
+  let treeHash: string | undefined;
+  if (packageDir !== undefined) {
+    try {
+      treeHash = await computeSkillTreeHash(packageDir);
+    } catch {
+      treeHash = undefined;
+    }
+  }
+  const skill: Skill = {
     name,
     description,
     body: body.trim(),
+    contentHash: hashSkillContent(bytes),
     filePath,
     source,
     metadata: extractMetadata(data),
     frontmatter: data,
   };
+  if (version !== undefined) skill.version = version;
+  if (treeHash !== undefined) skill.treeHash = treeHash;
+  return skill;
 }
 
 /**
@@ -112,11 +132,16 @@ export async function loadSkillsFromDir(layer: SkillLayer): Promise<Skill[]> {
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
     if (entry.isDirectory()) {
-      const skillFile = join(layer.rootDir, entry.name, 'SKILL.md');
-      const skill = await loadSkillFile(skillFile, entry.name, layer.source);
+      const packageDir = join(layer.rootDir, entry.name);
+      const skillFile = join(packageDir, 'SKILL.md');
+      const skill = await loadSkillFile(skillFile, entry.name, layer.source, packageDir);
       if (skill) out.push(skill);
       continue;
     }
+    // A layer root's own documentation is not a skill. Without this, a policy
+    // README.md in a skills directory is offered to the model as a skill named
+    // "README" with a synthesized description.
+    if (entry.isFile() && entry.name.toLowerCase() === 'readme.md') continue;
     if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       const filePath = join(layer.rootDir, entry.name);
       const fallback = entry.name.replace(/\.md$/i, '');

@@ -123,6 +123,25 @@ export type OrganizationRow = {
   updated_at: string;
 };
 
+/**
+ * `organizations` columns added by 0085_organization_seats_lifecycle.sql.
+ *
+ * `owner_user_id` and `seats_consumed` are DERIVED — maintained exclusively by
+ * database triggers and rejected on any direct `app_rls` write. `licensed_seats`
+ * is written by billing provisioning only. Nothing in this app may UPDATE them.
+ */
+export type OrganizationSeatColumns = {
+  owner_user_id: string | null;
+  licensed_seats: number;
+  seats_consumed: number;
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
+  billing_plan_tier: string | null;
+  seat_billing_updated_at: string | null;
+};
+
+export type OrganizationWithSeatsRow = OrganizationRow & OrganizationSeatColumns;
+
 export type OrganizationMemberRow = {
   organization_id: string;
   user_id: string;
@@ -130,6 +149,30 @@ export type OrganizationMemberRow = {
   provisioning_source: string | null;
   provisioned_at: string | null;
   joined_at: string;
+};
+
+export type OrganizationInvitationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined'
+  | 'revoked'
+  | 'expired';
+
+export type OrganizationInvitationRow = {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: 'admin' | 'member' | 'viewer';
+  status: OrganizationInvitationStatus;
+  /** sha256 hex. The raw token is returned to the caller exactly once. */
+  token_hash: string;
+  invited_by_user_id: string;
+  accepted_by_user_id: string | null;
+  expires_at: string;
+  resent_at: string | null;
+  resend_count: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ConnectorToolPermissionRow = {
@@ -354,6 +397,16 @@ export type SSOConnectionRow = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Added by migration 0083 — links the row to the provisioned Clerk enterprise connection. */
+  clerk_connection_id: string | null;
+  oidc_discovery_url: string | null;
+  /** The matching OIDC client secret is forwarded to Clerk and never stored. */
+  oidc_client_id: string | null;
+  acs_url: string | null;
+  sp_entity_id: string | null;
+  sp_metadata_url: string | null;
+  domain_verified_at: string | null;
+  domain_verification_token: string | null;
 };
 
 export type ReleaseRow = {
@@ -396,6 +449,9 @@ export type DirectorySyncConnectionRow = {
 export type DirectorySyncEventRow = {
   id: string;
   connection_id: string;
+  /** Added by 0084_scim_provisioning.sql — SCIM has no RLS subject, so every
+   * statement must be able to name its tenant explicitly. */
+  organization_id: string;
   event_type: string;
   user_email: string | null;
   raw_payload: Record<string, unknown> | null;
@@ -414,4 +470,72 @@ export type GitHubPrReviewAttemptRow = {
   attempted_at: string;
   completed_at: string | null;
   tokens_used: number | null;
+};
+
+// ---------------------------------------------------------------------------
+// SCIM 2.0 provisioning runtime — 0084_scim_provisioning.sql
+// ---------------------------------------------------------------------------
+
+/**
+ * An IdP bearer credential. `token_hash` is the Argon2id digest and must never
+ * be selected into a response; use `Omit<ScimTokenRow, 'token_hash'>` for any
+ * shape that leaves the server.
+ */
+export type ScimTokenRow = {
+  id: string;
+  connection_id: string;
+  organization_id: string;
+  name: string;
+  token_prefix: string;
+  token_hash: string;
+  created_by_user_id: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * A SCIM /Users resource. `linked_user_id` is null while the person has no AGI
+ * account yet — the resource is real and addressable by the IdP, but no
+ * organization membership exists until the account appears.
+ */
+export type ScimProvisionedUserRow = {
+  id: string;
+  connection_id: string;
+  organization_id: string;
+  external_id: string | null;
+  user_name: string;
+  email: string | null;
+  given_name: string | null;
+  family_name: string | null;
+  display_name: string | null;
+  active: boolean;
+  linked_user_id: string | null;
+  linked_at: string | null;
+  raw_attributes: Record<string, unknown> | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A SCIM /Groups resource. `mapped_role` can never be 'owner' (see 0084). */
+export type ScimGroupRow = {
+  id: string;
+  connection_id: string;
+  organization_id: string;
+  external_id: string | null;
+  display_name: string;
+  mapped_role: 'admin' | 'member' | 'viewer' | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ScimGroupMemberRow = {
+  group_id: string;
+  scim_user_id: string;
+  organization_id: string;
+  created_at: string;
 };

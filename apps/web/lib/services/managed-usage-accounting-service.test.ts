@@ -149,4 +149,78 @@ describe('managed usage accounting', () => {
       },
     });
   });
+
+  /**
+   * CPST Stage-0 telemetry, managed cloud only
+   * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1).
+   * The keys are additive and optional: omitting them must leave the usage
+   * payload byte-identical to what this service wrote before CPST existed,
+   * which the three assertions above already pin.
+   */
+  it('spreads caller-supplied CPST keys into the observed-usage payload', async () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 10, outputTokens: 4 });
+
+    await finalizeObservedManagedUsage({
+      reservation,
+      provider: 'anthropic',
+      model: 'claude-test',
+      usage,
+      reason: 'tool_loop_completed',
+      cpst: {
+        taskOutcome: 'unknown',
+        verifierResult: 'skipped',
+        fallbackUsed: false,
+        routePlanId: 'interim:anthropic/messages:route-1:preferred_slot',
+        taskFamily: 'agentic',
+        taskFamilyConfidence: 0.9,
+      },
+    });
+
+    const call = (finalizeManagedUsageRequest as ReturnType<typeof vi.fn>).mock.lastCall?.[0] as {
+      usage: Record<string, unknown>;
+    };
+    const persisted = JSON.parse(JSON.stringify(call.usage));
+
+    // Accounting keys are untouched by the additive spread.
+    expect(persisted.accounting).toBe('observed_provider_usage');
+    expect(persisted.reason).toBe('tool_loop_completed');
+    expect(persisted.inputTokens).toBe(10);
+    expect(persisted.totalTokens).toBe(14);
+
+    expect(persisted.taskOutcome).toBe('unknown');
+    expect(persisted.verifierResult).toBe('skipped');
+    expect(persisted.fallbackUsed).toBe(false);
+    expect(persisted.routePlanId).toBe('interim:anthropic/messages:route-1:preferred_slot');
+    expect(persisted.taskFamily).toBe('agentic');
+    expect(persisted.taskFamilyConfidence).toBe(0.9);
+    expect('retries' in persisted).toBe(false);
+  });
+
+  it('spreads CPST keys into the released-cancellation payload too', async () => {
+    const usage = createObservedProviderUsage();
+
+    await finalizeObservedManagedUsage({
+      reservation,
+      provider: 'openai',
+      model: 'gpt-test',
+      usage,
+      reason: 'client_cancelled_tool_loop',
+      cancelled: true,
+      cpst: { taskOutcome: 'abandoned', verifierResult: 'skipped' },
+    });
+
+    expect(finalizeManagedUsageRequest).toHaveBeenLastCalledWith({
+      ...reservation,
+      outcome: 'failed',
+      actualCostCents: 0,
+      usage: {
+        accounting: 'released_no_observed_provider_usage',
+        reason: 'client_cancelled_tool_loop',
+        providerCalls: 0,
+        taskOutcome: 'abandoned',
+        verifierResult: 'skipped',
+      },
+    });
+  });
 });

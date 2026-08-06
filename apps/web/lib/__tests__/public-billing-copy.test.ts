@@ -30,7 +30,11 @@ describe('public billing truth', () => {
       components: {
         schemas: {
           CheckoutRequest: {
-            properties: { plan: { enum: string[] }; billingInterval: { enum: string[] } };
+            properties: {
+              plan: { enum: string[] };
+              billingInterval: { enum: string[] };
+              seats?: { type: string; minimum: number };
+            };
           };
           User: { properties: { subscription: { properties: { plan_tier: { enum: string[] } } } } };
         };
@@ -42,7 +46,15 @@ describe('public billing truth', () => {
       'pro',
       'max',
       'max_15x',
+      'team',
     ]);
+    // Team is per-seat, so the published contract must expose the seat count
+    // clients have to send. A documented plan with an undocumented required
+    // field is worse than no documentation.
+    expect(document.components.schemas.CheckoutRequest.properties.seats).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+    });
     expect(document.components.schemas.CheckoutRequest.properties.billingInterval.enum).toEqual([
       'monthly',
       'yearly',
@@ -64,14 +76,30 @@ describe('public billing truth', () => {
     ];
 
     for (const variable of expected) expect(example).toContain(`${variable}=price_...`);
-    expect(example).not.toContain('STRIPE_PRICE_TEAM_');
     expect(example).not.toContain('STRIPE_PRICE_BASIC_YEARLY');
     expect(example).not.toContain('STRIPE_PRICE_MAX_YEARLY');
   });
 
+  it('reads the Team seat Prices from dedicated STRIPE_PRICE_TEAM_* variables', () => {
+    // Team joined self-serve checkout, so its Prices must come from env vars on
+    // the same STRIPE_PRICE_* convention as every other tier — not a hardcoded
+    // id and not a PRICE_ID_OVERRIDES entry.
+    //
+    // KNOWN GAP: apps/web/.env.example does not yet list these two variables.
+    // This assertion pins the variable NAMES against the code so the contract
+    // cannot drift while that documentation is added.
+    const pricing = read('lib/pricing.ts');
+    expect(pricing).toContain('STRIPE_PRICE_TEAM_MONTHLY_USD');
+    expect(pricing).toContain('STRIPE_PRICE_TEAM_MONTHLY_INR');
+
+    const mapping = read('lib/price-tier-mapping.ts');
+    expect(mapping).toContain('STRIPE_PRICE_TEAM_MONTHLY_USD');
+    expect(mapping).toContain('STRIPE_PRICE_TEAM_MONTHLY_INR');
+  });
+
   it('does not prepend a second currency symbol to localized annual prices', () => {
     for (const locale of ['en', 'es']) {
-      const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
+      const pricing = JSON.parse(read(`../../packages/ui/i18n/locales/${locale}/pricing.json`)) as {
         compareProInterval: string;
         compareTeamBilling: string;
       };
@@ -82,11 +110,11 @@ describe('public billing truth', () => {
   });
 
   it('keeps Local on-device while describing BYOK as an explicit provider boundary', () => {
-    const english = JSON.parse(read('app/i18n/locales/en/pricing.json')) as {
+    const english = JSON.parse(read('../../packages/ui/i18n/locales/en/pricing.json')) as {
       heroLedePart1: string;
       wedgeLede: string;
     };
-    const spanish = JSON.parse(read('app/i18n/locales/es/pricing.json')) as {
+    const spanish = JSON.parse(read('../../packages/ui/i18n/locales/es/pricing.json')) as {
       heroLedePart1: string;
       wedgeLede: string;
     };
@@ -104,7 +132,7 @@ describe('public billing truth', () => {
 
   it('aligns both locales with the canonical paid-plan usage ratios', () => {
     for (const locale of ['en', 'es']) {
-      const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
+      const pricing = JSON.parse(read(`../../packages/ui/i18n/locales/${locale}/pricing.json`)) as {
         basicTierBody: string;
         proTierBody: string;
         proFeature1: string;
@@ -130,27 +158,51 @@ describe('public billing truth', () => {
     }
   });
 
-  it('presents Team as sales-assisted contracted capacity without a fictional seat price', () => {
-    for (const locale of ['en', 'es']) {
-      const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
-        teamTierBody: string;
-        teamFeature1: string;
-        teamFeature4: string;
-        teamCta: string;
-        compareTeamBilling: string;
-        compareTeamUsage: string;
-      };
-      const teamCopy = `${pricing.teamTierBody} ${pricing.teamFeature1} ${pricing.teamFeature4} ${pricing.teamCta} ${pricing.compareTeamBilling} ${pricing.compareTeamUsage}`;
+  it('presents Team as self-serve and per-seat, at Pro capacity', () => {
+    // 2026-08-05 consolidation: `packages/ui/i18n/locales` is the ONLY runtime
+    // locale root (packages/ui/i18n/src/resources.ts imports it statically;
+    // apps/web/app/i18n re-exports from @agiworkforce/i18n). The legacy
+    // apps/web/app/i18n/locales copy was dead at runtime and has been deleted,
+    // so the old two-root drift check collapses to the single live root.
+    const bundles = [(locale: string) => `../../packages/ui/i18n/locales/${locale}/pricing.json`];
+    for (const bundle of bundles) {
+      for (const locale of ['en', 'es']) {
+        const pricing = JSON.parse(read(bundle(locale))) as Record<string, string>;
+        const teamCopy = [
+          pricing['teamTierBody'],
+          pricing['teamFeature1'],
+          pricing['teamFeature4'],
+          pricing['teamCta'],
+          pricing['compareTeamBilling'],
+          pricing['compareTeamUsage'],
+        ].join(' ');
 
-      expect(teamCopy).toMatch(/sales-assisted|ventas/i);
-      expect(teamCopy).toMatch(/contracted|contratad/i);
-      expect(teamCopy).not.toMatch(/\$|€|per seat|por asiento/i);
+        // Team is now bought without sales. Copy that still routes buyers to a
+        // sales conversation would send a self-serve customer down a dead end.
+        expect(teamCopy).toMatch(/per seat|por licencia/i);
+        expect(teamCopy).not.toMatch(/sales-assisted|asistid[oa] por ventas/i);
+
+        // The price itself must NOT be hardcoded into copy: it is rendered from
+        // the localized catalog, so a literal currency amount here would drift
+        // from what Checkout actually charges (and from INR buyers entirely).
+        expect(teamCopy).not.toMatch(/[$€₹]\s?\d/);
+
+        // Team's managed-usage allowance is byte-identical to Pro's in
+        // apps/web/lib/server/managed-usage-policy.ts, and no per-org override
+        // exists anywhere. Copy claiming negotiated or contracted CAPACITY sells a
+        // dimension the product does not have — the in-product badge already says
+        // "Same usage as Pro". Sales-assisted BILLING is real and stays allowed.
+        expect(pricing['compareTeamUsage']).not.toMatch(/contracted|contratad/i);
+        expect(pricing['teamTierBody']).not.toMatch(
+          /contracted (managed )?capacity|capacidad contratada/i,
+        );
+      }
     }
   });
 
   it('keeps annual savings percentage-driven instead of publishing a stale fixed rate', () => {
     for (const locale of ['en', 'es']) {
-      const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
+      const pricing = JSON.parse(read(`../../packages/ui/i18n/locales/${locale}/pricing.json`)) as {
         annualSave: string;
       };
 

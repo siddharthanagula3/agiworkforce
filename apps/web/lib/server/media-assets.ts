@@ -49,6 +49,12 @@ export interface InsertMediaAssetParams {
   height?: number;
   sourceSurface?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Conversation that produced this asset (migration 0081). Provenance only —
+   * `on delete set null`, so deleting a chat never destroys its generated
+   * files. Absent for uploads, which have no source conversation.
+   */
+  conversationId?: string;
 }
 
 function mapRow(row: Record<string, unknown>): MediaAsset {
@@ -72,10 +78,13 @@ export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<strin
   const db = getNeonDb();
   try {
     const rows = await db.query<{ id: string }>(
+      // `conversation_id` is provenance only (migration 0081). Deleting a
+      // conversation sets it NULL; it never destroys the asset.
       `insert into public.media_assets
          (user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
-          prompt, provider, model, width, height, source_surface, metadata)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
+          prompt, provider, model, width, height, source_surface, metadata,
+          conversation_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14)
        returning id`,
       [
         p.userId,
@@ -91,6 +100,7 @@ export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<strin
         p.height ?? null,
         p.sourceSurface ?? null,
         JSON.stringify(p.metadata ?? {}),
+        p.conversationId ?? null,
       ],
     );
     return rows[0]?.id ?? null;

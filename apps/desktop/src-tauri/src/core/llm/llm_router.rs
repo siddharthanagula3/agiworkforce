@@ -1299,6 +1299,8 @@ impl LLMRouter {
         response.completion_tokens = Some(completion_tokens);
 
         if response.cost.is_none() {
+            // Price this request on today's date: the router is long-lived, so
+            // the date must be read per request, not captured at construction.
             let cost = self.cost_calculator.calculate_with_cache(
                 candidate.provider,
                 &response.model,
@@ -1306,6 +1308,7 @@ impl LLMRouter {
                 completion_tokens,
                 response.cache_read_input_tokens.unwrap_or(0),
                 response.cache_creation_input_tokens.unwrap_or(0),
+                chrono::Utc::now().date_naive(),
             );
             response.cost = Some(cost);
         }
@@ -2286,6 +2289,7 @@ impl LLMRouter {
                 &routed_request.model,
                 prompt_tokens,
                 0, // output tokens unknown at this point; guard on input alone
+                chrono::Utc::now().date_naive(),
             );
             let projected_cost = current_cost + estimated_input_cost;
             if projected_cost > SESSION_COST_SAFETY_CAP {

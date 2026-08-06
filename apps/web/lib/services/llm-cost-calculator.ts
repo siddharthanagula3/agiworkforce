@@ -4,6 +4,7 @@ import {
   getProviderConfig,
   listCanonicalModels,
   normalizeModelId,
+  resolveEffectiveModelPricing,
 } from '@agiworkforce/types';
 import { isPromoExpired } from '@agiworkforce/routing';
 import { logger } from '@/lib/logger';
@@ -19,15 +20,25 @@ import { logger } from '@/lib/logger';
  * Runtime overrides remain supported for emergency pricing patches, but
  * canonical pricing should be changed in the shared catalog.
  *
- * Promotional pricing: catalog entries may carry `promo_expires_at` +
- * `post_promo_prices` (e.g. Sonnet 5's promo ends 2026-08-31). `getPricing`
- * switches every rate field -- input, output, AND cached_input/cached_write,
- * not just the headline input/output rates -- to the post-promo block once
- * `isPromoExpired` (from `@agiworkforce/routing`, the same date-boundary
- * logic `effectiveInputPrice`/`effectiveOutputPrice` use) says the cutoff has
- * passed. The 1h cache-write rate is never read from the catalog at all --
- * `calculateCost` derives it as 2x whatever `inputCostPer1MTokens` resolves
- * to, so it inherits the promo/post-promo switch automatically.
+ * Effective-dated pricing: `getPricing` is date-aware through TWO catalog
+ * mechanisms, both keyed off the caller-supplied `now` (never a clock read
+ * inside the pricing path, so the same inputs always bill the same):
+ *  1. `pricingSchedule` — dated windows resolved by
+ *     `resolveEffectiveModelPricing` (`@agiworkforce/types`). Bounds are UTC
+ *     calendar days, inclusive on both sides, and every rate field moves
+ *     together: input, output, cache read, and both cache-write tiers. No
+ *     shipped model schedules a price today; the mechanism exists for an
+ *     announced PRODUCT price change.
+ *  2. `promo_expires_at` + `post_promo_prices` — the older two-phase form,
+ *     applied on top via `isPromoExpired` (from `@agiworkforce/routing`, the
+ *     same date-boundary logic `effectiveInputPrice`/`effectiveOutputPrice`
+ *     use). No model currently sets both.
+ * Cache-write rates come from the catalog when declared. When they are not,
+ * the fallback depends on the provider's token accounting: Anthropic-style
+ * disjoint accounting falls back to the published 1.25x (5m) / 2x (1h)
+ * surcharges, while inclusive-prompt providers (OpenAI/Gemini/DeepSeek) fall
+ * back to the plain input rate -- a model that declares no write price is not
+ * charged a write surcharge it never published.
  */
 
 export interface TokenUsage {
@@ -67,7 +78,8 @@ export interface ModelPricing {
   inputCostPer1MTokens: number; // Cost per 1M input tokens in dollars
   outputCostPer1MTokens: number; // Cost per 1M output tokens in dollars
   cachedInputCostPer1MTokens?: number; // Cost per 1M cache-read tokens (when cacheable)
-  cachedWriteCostPer1MTokens?: number; // Cost per 1M cache-write tokens (Anthropic)
+  cachedWriteCostPer1MTokens?: number; // Cost per 1M cache-write tokens (5m TTL when tiered)
+  cachedWrite1hCostPer1MTokens?: number; // Cost per 1M 1-hour-TTL cache-write tokens
   /** True for Anthropic-style accounting where input_tokens excludes cache tokens. */
   cacheTokensDisjointFromInput?: boolean;
 }
@@ -111,7 +123,16 @@ export class LLMCostCalculator {
     now: Date = new Date(),
   ): number {
     const costCents = this.calculateCostDollars(provider, model, usage, now) * 100;
-    return costCents > 0 ? Math.max(1, Math.round(costCents)) : 0;
+    // CEIL with a one-cent floor, IDENTICAL to the billing authority:
+    // `dollarsToLedgerCents` in services/api-gateway/src/services/
+    // managedUsageBilling.ts is `Math.max(1, Math.ceil(costDollars * 100))`, and
+    // this is the same rounding on the same quantity, so the product preview and
+    // the ledger agree cent-for-cent (both sides read 2026-08-05 and verified
+    // equal). They previously diverged — gateway up, this to nearest — so the
+    // cost the product showed could sit a cent below what the ledger charged on
+    // every request whose fractional part was under .5. Rounding up per-request
+    // is also what stops a stream of sub-cent calls slipping past metering.
+    return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
   }
 
   /**
@@ -177,11 +198,8 @@ export class LLMCostCalculator {
       // promptTokens already excludes them — don't subtract.
       const cacheReadRate =
         pricing.cachedInputCostPer1MTokens ?? pricing.inputCostPer1MTokens * 0.1;
-      // 5m write rate: 1.25x input (Anthropic default ephemeral cache).
-      const cacheWrite5mRate =
-        pricing.cachedWriteCostPer1MTokens ?? pricing.inputCostPer1MTokens * 1.25;
-      // 1h write rate: 2x input (Anthropic's extended-TTL cache option).
-      const cacheWrite1hRate = pricing.inputCostPer1MTokens * 2.0;
+      const { write5m: cacheWrite5mRate, write1h: cacheWrite1hRate } =
+        this.resolveCacheWriteRates(pricing);
 
       const billableInput = pricing.cacheTokensDisjointFromInput
         ? promptTokens
@@ -199,6 +217,44 @@ export class LLMCostCalculator {
     } catch (error) {
       logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
       return 0;
+    }
+  }
+
+  /**
+   * Resolve the per-million cache-WRITE rates for already-resolved pricing.
+   *
+   * Catalog-declared rates win. The fallback is provider-shaped: with
+   * Anthropic-style disjoint accounting the written tokens are billed ONLY as a
+   * write, so an undeclared rate falls back to Anthropic's published 1.25x (5m)
+   * / 2x (1h) surcharges. With inclusive-prompt accounting (OpenAI/Gemini/
+   * DeepSeek) the written tokens are part of the prompt and are subtracted from
+   * the billable-input bucket, so an undeclared write rate falls back to the
+   * plain input rate — that is exactly "free cache writes" (each token billed
+   * once, at the input rate), which is what pre-GPT-5.6 OpenAI models get. The
+   * GPT-5.6 family declares `cached_write` (1.25x input) and is billed for it.
+   */
+  static resolveCacheWriteRates(pricing: ModelPricing): { write5m: number; write1h: number } {
+    const disjoint = pricing.cacheTokensDisjointFromInput === true;
+    return {
+      write5m:
+        pricing.cachedWriteCostPer1MTokens ??
+        (disjoint ? pricing.inputCostPer1MTokens * 1.25 : pricing.inputCostPer1MTokens),
+      write1h:
+        pricing.cachedWrite1hCostPer1MTokens ??
+        (disjoint ? pricing.inputCostPer1MTokens * 2.0 : pricing.inputCostPer1MTokens),
+    };
+  }
+
+  /**
+   * Per-million cache-write rate (5m/default TTL) for a model on `now`.
+   * Used by the prompt-cache analytics path so it reports the same write price
+   * the billing path charges.
+   */
+  static getCacheWriteCostPerMtok(provider: string, model: string, now: Date = new Date()): number {
+    try {
+      return this.resolveCacheWriteRates(this.getPricing(provider, model, now)).write5m;
+    } catch {
+      return FALLBACK_PRICING.inputCostPer1MTokens;
     }
   }
 
@@ -238,11 +294,15 @@ export class LLMCostCalculator {
           metadata.post_promo_prices && isPromoExpired(resolvedModelId, now)
             ? metadata.post_promo_prices
             : undefined;
+        // Dated pricing windows resolve first; the older promo block, when a
+        // model still uses one, is layered on top of the resolved rates.
+        const effective = resolveEffectiveModelPricing(metadata, now);
         return {
-          inputCostPer1MTokens: postPromo?.input ?? metadata.inputCost,
-          outputCostPer1MTokens: postPromo?.output ?? metadata.outputCost,
-          cachedInputCostPer1MTokens: postPromo?.cached_input ?? metadata.cached_input,
-          cachedWriteCostPer1MTokens: postPromo?.cached_write ?? metadata.cached_write,
+          inputCostPer1MTokens: postPromo?.input ?? effective.inputCost,
+          outputCostPer1MTokens: postPromo?.output ?? effective.outputCost,
+          cachedInputCostPer1MTokens: postPromo?.cached_input ?? effective.cached_input,
+          cachedWriteCostPer1MTokens: postPromo?.cached_write ?? effective.cached_write,
+          cachedWrite1hCostPer1MTokens: postPromo?.cached_write_1h ?? effective.cached_write_1h,
           // Anthropic reports input_tokens disjoint from cache_read/cache_creation.
           cacheTokensDisjointFromInput: metadata.provider === 'anthropic',
         };

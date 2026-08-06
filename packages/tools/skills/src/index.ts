@@ -26,6 +26,14 @@
 export type { Skill, SkillLayer, SkillMetadata, SkillSource } from './types';
 export { parseFrontmatter } from './frontmatter';
 export type { ParsedFrontmatter } from './frontmatter';
+export {
+  computeSkillTreeHash,
+  hashSkillContent,
+  readSkillVersion,
+  SKILL_CONTENT_HASH_PREFIX,
+  SKILL_HASH_ALGORITHM,
+  SKILL_TREE_HASH_PREFIX,
+} from './integrity';
 export { loadSkillsFromDir, loadSkillsFromLayers } from './loader';
 export { mergeSkills } from './merge';
 export { formatSkillsForPrompt } from './format';

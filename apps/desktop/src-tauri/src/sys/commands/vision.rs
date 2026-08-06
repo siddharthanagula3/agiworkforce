@@ -53,15 +53,6 @@ pub struct VisionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImageComparisonResult {
-    pub similarity_score: f32,
-    pub differences_description: String,
-    pub visual_diff_highlighted: Option<String>,
-    pub model: String,
-    pub cost: Option<f64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VisualElementLocation {
     pub description: String,
     pub x: i32,
@@ -71,7 +62,6 @@ pub struct VisualElementLocation {
     pub confidence: f32,
 }
 
-#[tauri::command]
 pub async fn vision_send_message(
     request: VisionRequest,
     state: State<'_, LLMState>,
@@ -220,103 +210,6 @@ pub async fn vision_send_message(
     Err(last_error
         .unwrap_or_else(|| anyhow::anyhow!("All providers failed"))
         .to_string())
-}
-
-#[tauri::command]
-pub async fn vision_extract_text(
-    image_path: String,
-    provider: Option<String>,
-    state: State<'_, LLMState>,
-    db: State<'_, AppDatabase>,
-) -> Result<VisionResponse, String> {
-    tracing::info!(
-        "Extracting text from image using vision model: {}",
-        image_path
-    );
-
-    let prompt = "Extract all visible text from this image. Maintain the original formatting and structure as much as possible. Output only the extracted text without any additional commentary.".to_string();
-
-    let request = VisionRequest {
-        prompt,
-        images: vec![VisionImage {
-            source_type: "path".to_string(),
-            source: image_path,
-            detail: Some("high".to_string()),
-        }],
-        provider,
-        model: Some(default_vision_model()),
-        temperature: Some(0.0),
-        max_tokens: Some(2000),
-        detail_level: Some("high".to_string()),
-    };
-
-    vision_send_message(request, state, db).await
-}
-
-#[tauri::command]
-pub async fn vision_compare_images(
-    image_path_1: String,
-    image_path_2: String,
-    comparison_type: Option<String>,
-    provider: Option<String>,
-    state: State<'_, LLMState>,
-    db: State<'_, AppDatabase>,
-) -> Result<ImageComparisonResult, String> {
-    tracing::info!("Comparing images: {} vs {}", image_path_1, image_path_2);
-
-    let comp_type = comparison_type.unwrap_or_else(|| "changes".to_string());
-
-    let prompt = match comp_type.as_str() {
-        "visual_diff" => {
-            "Compare these two images and describe all visual differences. Be precise about locations, colors, and changes.".to_string()
-        }
-        "similarity" => {
-            "Analyze these two images and rate their similarity on a scale of 0-100. Explain what's similar and what's different.".to_string()
-        }
-        "changes" => {
-            "Compare the first image (before) with the second image (after). List all changes, additions, and removals you can identify.".to_string()
-        }
-        _ => {
-            "Compare these two images and describe their differences.".to_string()
-        }
-    };
-
-    let request = VisionRequest {
-        prompt,
-        images: vec![
-            VisionImage {
-                source_type: "path".to_string(),
-                source: image_path_1,
-                detail: Some("high".to_string()),
-            },
-            VisionImage {
-                source_type: "path".to_string(),
-                source: image_path_2,
-                detail: Some("high".to_string()),
-            },
-        ],
-        provider,
-        model: Some(default_vision_model()),
-        temperature: Some(0.3),
-        max_tokens: Some(1500),
-        detail_level: Some("high".to_string()),
-    };
-
-    let response = vision_send_message(request, state, db).await?;
-
-    let similarity_score = if comp_type == "similarity" {
-        extract_similarity_score(&response.content)
-    } else {
-        0.0
-    };
-
-    Ok(ImageComparisonResult {
-        similarity_score,
-        differences_description: response.content,
-        visual_diff_highlighted: None,
-        model: response.model,
-        cost: response.cost,
-    })
 }
 
 pub async fn vision_locate_element(
@@ -529,43 +422,6 @@ fn parse_detail_level(detail: &str) -> Result<ImageDetail, String> {
         "auto" => Ok(ImageDetail::Auto),
         _ => Err(format!("Invalid detail level: {}", detail)),
     }
-}
-
-fn extract_similarity_score(text: &str) -> f32 {
-    use regex::Regex;
-
-    if let Ok(re) = Regex::new(r"(\d+)%") {
-        if let Some(caps) = re.captures(text) {
-            if let Some(score_str) = caps.get(1) {
-                if let Ok(score) = score_str.as_str().parse::<f32>() {
-                    return score;
-                }
-            }
-        }
-    }
-
-    if let Ok(re) = Regex::new(r"(\d+)\s+out\s+of\s+100") {
-        if let Some(caps) = re.captures(text) {
-            if let Some(score_str) = caps.get(1) {
-                if let Ok(score) = score_str.as_str().parse::<f32>() {
-                    return score;
-                }
-            }
-        }
-    }
-
-    // AUDIT-P3-001: Use safe pattern matching instead of unwrap()
-    if let Ok(re) = Regex::new(r"0\.\d+") {
-        if let Some(caps) = re.captures(text) {
-            if let Some(match_str) = caps.get(0) {
-                if let Ok(score) = match_str.as_str().parse::<f32>() {
-                    return score * 100.0;
-                }
-            }
-        }
-    }
-
-    0.0
 }
 
 fn parse_element_location(text: &str, description: &str) -> Result<VisualElementLocation, String> {

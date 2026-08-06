@@ -168,9 +168,84 @@ describe('PRICING_CONFIG.plans', () => {
     expect(max).not.toHaveProperty('waitlist', true);
   });
 
-  it('keeps sales-assisted Team out of the configured checkout catalog', async () => {
+  it('carries Team in the configured checkout catalog as a per-seat plan', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
-    expect(PRICING_CONFIG.plans.map((plan) => plan.id)).not.toContain('team');
+    const team = PRICING_CONFIG.plans.find((plan) => plan.id === 'team');
+    expect(team).toBeDefined();
+    // Marked per-seat so no price renderer can mistake the unit amount for the
+    // whole organization's monthly bill. $25/seat per founder decision
+    // 2026-08-05 (Decision #22); yearly ($240) stays unexposed until
+    // STRIPE_PRICE_TEAM_YEARLY_* wiring lands.
+    expect(team).toHaveProperty('perSeat', true);
+    expect(team?.price.monthly).toBe(25);
+    // Yearly is now published from the canonical catalog at $240/seat/yr
+    // (Decision #22). Live checkout still fails closed until the Stripe Price
+    // behind STRIPE_PRICE_TEAM_YEARLY_USD exists.
+    expect(team?.price.yearly).toBe(240);
+  });
+
+  it('resolves both Team currency Prices back to the team tier', async () => {
+    const { PRICING_CONFIG } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',
+      STRIPE_PRICE_TEAM_MONTHLY_INR: 'price_team_inr',
+    });
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_team_usd')).toBe('team');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_team_inr')).toBe('team');
+  });
+
+  it('selects the Team Price by billing currency and interval', async () => {
+    const { getConfiguredPriceId, PRICING_CONFIG } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',
+      STRIPE_PRICE_TEAM_MONTHLY_INR: 'price_team_inr',
+      STRIPE_PRICE_TEAM_YEARLY_USD: 'price_team_yearly_usd',
+    });
+    expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBe('price_team_usd');
+    expect(getConfiguredPriceId('team', 'monthly', 'INR')).toBe('price_team_inr');
+    expect(getConfiguredPriceId('team', 'monthly')).toBe('price_team_usd');
+    // Team yearly is wired (USD $240/seat/yr, Decision #22). A yearly lookup
+    // must resolve to the dedicated yearly Price, never reuse the monthly one.
+    expect(getConfiguredPriceId('team', 'yearly', 'usd')).toBe('price_team_yearly_usd');
+    // No INR yearly Price exists (founder-undecided); an INR yearly request
+    // falls back to the USD yearly Price, mirroring monthlyInr -> monthlyUsd.
+    expect(getConfiguredPriceId('team', 'yearly', 'inr')).toBe('price_team_yearly_usd');
+    expect(getConfiguredPriceId('team', 'yearly')).toBe('price_team_yearly_usd');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_team_yearly_usd')).toBe('team');
+  });
+
+  it('offers no Team yearly Price when STRIPE_PRICE_TEAM_YEARLY_USD is unset (fail-closed)', async () => {
+    const { getConfiguredPriceId } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',
+      STRIPE_PRICE_TEAM_YEARLY_USD: undefined,
+    });
+    // Monthly still resolves; yearly refuses so an unconfigured deployment
+    // cannot start Team yearly checkout.
+    expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBe('price_team_usd');
+    expect(getConfiguredPriceId('team', 'yearly', 'usd')).toBeUndefined();
+    expect(getConfiguredPriceId('team', 'yearly', 'inr')).toBeUndefined();
+  });
+
+  it('falls back to the USD Team Price when no INR Price is configured', async () => {
+    const { getConfiguredPriceId } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',
+      STRIPE_PRICE_TEAM_MONTHLY_INR: undefined,
+    });
+    expect(getConfiguredPriceId('team', 'monthly', 'inr')).toBe('price_team_usd');
+  });
+
+  it('resolves no Team Price at all when the env vars are unset', async () => {
+    const { getConfiguredPriceId } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: undefined,
+      STRIPE_PRICE_TEAM_MONTHLY_INR: undefined,
+    });
+    // Fails CLOSED: an unconfigured deployment cannot start Team checkout.
+    expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBeUndefined();
+  });
+
+  it('rejects a malformed Team price id instead of passing it to Stripe', async () => {
+    const { getConfiguredPriceId } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_MONTHLY_USD: 'prod_not_a_price',
+    });
+    expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBeUndefined();
   });
 
   it('plans are ordered pro, max', async () => {
