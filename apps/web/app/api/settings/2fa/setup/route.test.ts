@@ -45,9 +45,12 @@ function request() {
   });
 }
 
-/** Rows the route's own `select enabled from user_two_factor` would return. */
+/**
+ * getNeonDb().query<T>() resolves to the row ARRAY itself, not a { rows }
+ * envelope — see the destructuring callers in ../route.ts.
+ */
 function existingRow(enabled: boolean | null) {
-  return { rows: enabled === null ? [] : [{ enabled }] };
+  return enabled === null ? [] : [{ enabled }];
 }
 
 beforeEach(() => {
@@ -79,7 +82,7 @@ describe('POST /api/settings/2fa/setup', () => {
   });
 
   it('allows a first-time enrollment and returns the secret and backup codes once', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(null)).mockResolvedValueOnce({ rows: [] });
+    mocks.query.mockResolvedValueOnce(existingRow(null)).mockResolvedValueOnce([]);
 
     const response = await POST(request());
     const body = (await response.json()) as {
@@ -95,7 +98,7 @@ describe('POST /api/settings/2fa/setup', () => {
   });
 
   it('allows re-running a stale, never-verified setup', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(false)).mockResolvedValueOnce({ rows: [] });
+    mocks.query.mockResolvedValueOnce(existingRow(false)).mockResolvedValueOnce([]);
 
     const response = await POST(request());
 

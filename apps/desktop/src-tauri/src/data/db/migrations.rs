@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 76;
+const CURRENT_VERSION: i32 = 77;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -639,6 +639,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 76 {
         run_migration_in_transaction(conn, 76, apply_migration_v76)?;
+    }
+
+    if current_version < 77 {
+        run_migration_in_transaction(conn, 77, apply_migration_v77)?;
     }
 
     Ok(())
@@ -6076,6 +6080,124 @@ fn apply_migration_v76(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v77: fix the `user_memory.category` CHECK constraint.
+///
+/// v46 created the table with `CHECK(category IN ('Preference', 'Fact',
+/// 'Decision', 'Context'))` — PascalCase. But `MemoryCategory::as_str`
+/// (agiworkforce-agent-core) returns the lowercase canonical wire value
+/// ("preference"/"fact"/"decision"/"context"), which `MemoryManager::remember`
+/// writes. Every insert therefore failed the CHECK with
+/// "CHECK constraint failed: category IN (...)", surfacing in Settings →
+/// Memory as "Could not update memory" on every add/edit. SQLite cannot ALTER
+/// a CHECK, so rebuild the table with a case-insensitive constraint and copy
+/// existing rows, normalizing any legacy PascalCase categories to lowercase.
+fn apply_migration_v77(conn: &Connection) -> Result<()> {
+    // Guard: only rebuild if the table exists (fresh installs already get the
+    // corrected shape below on first run of this migration).
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='user_memory'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !table_exists {
+        // Fresh install after this migration: create the corrected shape
+        // directly (v46 will not have run on a DB created at >= v77).
+        conn.execute(
+            "CREATE TABLE user_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL CHECK(lower(category) IN ('preference', 'fact', 'decision', 'context')),
+                topic TEXT NOT NULL,
+                content TEXT NOT NULL,
+                importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+                source TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(category, topic)
+            )",
+            [],
+        )?;
+        return Ok(());
+    }
+
+    // Capture the live CREATE TABLE statement so the rebuild keeps every column
+    // later migrations added (server_id, created_at_utc, needs_push, …) — they
+    // used ALTER TABLE ADD COLUMN, which leaves the original CHECK clause
+    // intact, so a text swap of just that clause is safe.
+    let create_sql: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='user_memory'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    // Idempotent + restart-safe: if the PascalCase CHECK is already gone this
+    // migration has effectively run; nothing to rebuild.
+    if !create_sql.contains("'Preference'") {
+        return Ok(());
+    }
+
+    // Preserve indexes: SQLite drops them with the table, and they are declared
+    // in separate CREATE INDEX statements the RENAME does not restore.
+    let index_sqls: Vec<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT sql FROM sqlite_master
+                 WHERE type='index' AND tbl_name='user_memory' AND sql IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    // The full column list, so the copy keeps every column later migrations
+    // added and can lowercase `category` in flight (the old CHECK forbids an
+    // in-place UPDATE to lowercase, so normalization must happen during the
+    // copy into the new, correctly-constrained table).
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info('user_memory')")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+    let target_columns = columns.join(", ");
+    let select_columns = columns
+        .iter()
+        .map(|col| {
+            if col == "category" {
+                "lower(category)".to_string()
+            } else {
+                col.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let fixed_sql = create_sql
+        .replace(
+            "CHECK(category IN ('Preference', 'Fact', 'Decision', 'Context'))",
+            "CHECK(lower(category) IN ('preference', 'fact', 'decision', 'context'))",
+        )
+        .replace("CREATE TABLE user_memory", "CREATE TABLE user_memory_v77");
+
+    conn.execute_batch(&fixed_sql)?;
+    conn.execute(
+        &format!(
+            "INSERT INTO user_memory_v77 ({target_columns}) SELECT {select_columns} FROM user_memory"
+        ),
+        [],
+    )?;
+    conn.execute_batch(
+        "DROP TABLE user_memory;
+         ALTER TABLE user_memory_v77 RENAME TO user_memory;",
+    )?;
+    for index_sql in index_sqls {
+        // Indexes were auto-dropped with the old table; recreate them.
+        conn.execute_batch(&index_sql)?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6250,6 +6372,71 @@ mod tests {
         assert!(!table_has_column(&conn, "realtime_metrics", "employee_id").unwrap());
 
         apply_migration_v76(&conn).expect("v76 must remain restart-safe");
+    }
+
+    #[test]
+    fn migration_v77_allows_lowercase_memory_categories() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Reproduce the shipped v46 table with the PascalCase CHECK plus one of
+        // the indexes and a legacy PascalCase row.
+        conn.execute_batch(
+            "CREATE TABLE user_memory (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 category TEXT NOT NULL CHECK(category IN ('Preference', 'Fact', 'Decision', 'Context')),
+                 topic TEXT NOT NULL,
+                 content TEXT NOT NULL,
+                 importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+                 source TEXT,
+                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 UNIQUE(category, topic)
+             );
+             CREATE INDEX idx_user_memory_category ON user_memory(category);
+             INSERT INTO user_memory (category, topic, content) VALUES ('Fact', 'legacy', 'kept');",
+        )
+        .unwrap();
+
+        // Before: the lowercase value MemoryManager::remember writes is rejected.
+        let pre = conn.execute(
+            "INSERT INTO user_memory (category, topic, content) VALUES ('fact', 't1', 'c1')",
+            [],
+        );
+        assert!(
+            pre.is_err(),
+            "PascalCase CHECK must reject lowercase before v77"
+        );
+
+        apply_migration_v77(&conn).unwrap();
+
+        // After: the lowercase canonical value inserts cleanly.
+        conn.execute(
+            "INSERT INTO user_memory (category, topic, content) VALUES ('fact', 't1', 'c1')",
+            [],
+        )
+        .expect("lowercase category must insert after v77");
+
+        // The legacy PascalCase row was normalized, not lost.
+        let legacy: String = conn
+            .query_row(
+                "SELECT category FROM user_memory WHERE topic = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy, "fact");
+
+        // The index survived the table rebuild.
+        let index_exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_user_memory_category')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(index_exists, "indexes must be recreated after the rebuild");
+
+        // Restart-safe / idempotent.
+        apply_migration_v77(&conn).expect("v77 must remain restart-safe");
     }
 
     #[test]

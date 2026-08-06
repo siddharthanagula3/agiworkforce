@@ -29,6 +29,9 @@ const INDIA_MONTHLY_PRICE_MINOR: Readonly<Partial<Record<PublicCheckoutPlan, num
     pro: 199_900,
     max: 999_900,
     max_15x: 2_499_900,
+    // Per SEAT per month, mirroring Pro because a Team seat carries Pro's exact
+    // managed-usage allowance. Multiply by the purchased seat count for the bill.
+    team: 199_900,
   });
 
 export function getCurrencyForCountry(countryCode: string | null | undefined): string {

@@ -275,6 +275,25 @@ impl MemoryManager {
         })
     }
 
+    /// Create a MemoryManager over an already-opened connection.
+    ///
+    /// The main database is SQLCipher-encrypted and keyed by
+    /// `MainDatabaseAccess` (Keychain-stored, or the WDIO harness key). A plain
+    /// `Connection::open` on that file opens but every query fails with "file
+    /// is not a database" — which surfaced in the UI as "Could not update
+    /// memory" on every add. Callers pointing at the main database must hand in
+    /// a connection from `MainDatabaseAccess::open_connection`.
+    pub fn from_connection(conn: Connection) -> Self {
+        let has_last_accessed = Self::probe_schema(&conn);
+        Self {
+            conn: Mutex::new(conn),
+            decay_config: Mutex::new(DecayConfig::default()),
+            tfidf_index: RwLock::new(TfIdfIndex::new()),
+            semantic_config: RwLock::new(SemanticSearchConfig::default()),
+            has_last_accessed,
+        }
+    }
+
     /// Create a MemoryManager with custom decay configuration
     pub fn with_decay_config(db_path: &str, config: DecayConfig) -> Result<Self> {
         let conn = Connection::open(db_path)

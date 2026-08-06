@@ -279,13 +279,28 @@ impl MemoryStore {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
 
-        Ok(Self {
+        Ok(Self::from_open_connection(conn))
+    }
+
+    /// Create a memory store over an already-opened connection.
+    ///
+    /// The main database is SQLCipher-encrypted and keyed by
+    /// `MainDatabaseAccess`; a plain `Connection::open(db_path)` opens it
+    /// without the key and every query fails with "file is not a database".
+    /// Callers pointing at the main database must hand in a connection from
+    /// `MainDatabaseAccess::open_connection`.
+    pub fn from_connection(conn: Connection) -> Self {
+        Self::from_open_connection(conn)
+    }
+
+    fn from_open_connection(conn: Connection) -> Self {
+        Self {
             conn: Arc::new(Mutex::new(conn)),
             summarizer_config: RwLock::new(SummarizerConfig::default()),
             embedding_cache: RwLock::new(HashMap::new()),
             cache_order: RwLock::new(VecDeque::new()),
             max_cache_size: 1000,
-        })
+        }
     }
 
     /// Create a memory store from an existing path

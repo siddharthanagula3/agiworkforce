@@ -404,30 +404,14 @@ pub async fn voice_get_settings(
 
 #[tauri::command]
 pub async fn voice_check_local_whisper() -> Result<bool, String> {
-    // Check if local Whisper model is available
-    // This checks for common whisper.cpp paths
-    let possible_paths = ["/usr/local/bin/whisper", "/usr/bin/whisper"];
-
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            return Ok(true);
-        }
-    }
-
-    // Check home directory paths
-    if let Some(home) = dirs::home_dir() {
-        let home_whisper = home.join(".local/bin/whisper");
-        if home_whisper.exists() {
-            return Ok(true);
-        }
-    }
-
-    // Also check if whisper is in PATH
-    if which::which("whisper").is_ok() {
-        return Ok(true);
-    }
-
-    Ok(false)
+    // Honest availability signal for on-device dictation. The real transcription
+    // path (`transcribe_with_local_whisper` -> `WhisperLocal::transcribe`) is the
+    // compiled `local-whisper` (whisper-rs) backend, NOT an external `whisper`
+    // CLI. When the feature is not compiled, `WhisperLocal::transcribe` always
+    // returns "Local Whisper support not compiled", so any Local Whisper
+    // selection would always fail. Report availability strictly from the
+    // compiled feature so the UI can hide/disable an option that cannot work.
+    Ok(cfg!(feature = "local-whisper"))
 }
 
 async fn transcribe_with_cloud(

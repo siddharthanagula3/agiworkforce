@@ -136,11 +136,18 @@ fn persist_token(server_name: &str, token: &McpOAuthToken) -> Result<(), String>
             server_name
         )
     })?;
+    // Category MUST be one of the settings_v2 CHECK values
+    // ('llm','ui','security','window','system'). These four writes previously
+    // passed "mcp_oauth", which is not in that set, so every MCP OAuth token
+    // persist failed with "CHECK constraint failed: settings_v2" — the whole
+    // MCP OAuth login path was broken. Encrypted OAuth tokens belong under
+    // 'security' (the same bucket the other upsert_settings_v2_value callers
+    // use); the row key already namespaces them per server.
     upsert_settings_v2_value(
         &conn,
         &db_key_access(server_name),
         &encrypted_access,
-        "mcp_oauth",
+        "security",
         true,
     )?;
 
@@ -156,7 +163,7 @@ fn persist_token(server_name: &str, token: &McpOAuthToken) -> Result<(), String>
             &conn,
             &db_key_refresh(server_name),
             &encrypted_refresh,
-            "mcp_oauth",
+            "security",
             true,
         )?;
     }
@@ -166,7 +173,7 @@ fn persist_token(server_name: &str, token: &McpOAuthToken) -> Result<(), String>
         &conn,
         &db_key_expires(server_name),
         &token.expires_at.timestamp().to_string(),
-        "mcp_oauth",
+        "security",
         false,
     )?;
 
@@ -175,7 +182,7 @@ fn persist_token(server_name: &str, token: &McpOAuthToken) -> Result<(), String>
         &conn,
         &db_key_token_type(server_name),
         &token.token_type,
-        "mcp_oauth",
+        "security",
         false,
     )?;
 

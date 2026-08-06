@@ -65,6 +65,14 @@ export interface MappedProject {
   importedFrom: ProjectImportSource | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * True when the caller reaches this project through an organization share
+   * (migration 0086) rather than owning it. Read-only for the caller: the
+   * update/delete handlers still match on `user_id`, so a shared project is
+   * openable but not editable by a member. Surfaced so a client can say so
+   * instead of rendering edit controls that will 404.
+   */
+  isOrgShared: boolean;
 }
 
 function asString(value: unknown): string | null {
@@ -158,5 +166,8 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     importedFrom: asImportSource(row['imported_from']),
     createdAt: String(row['created_at'] ?? ''),
     updatedAt: String(row['updated_at'] ?? ''),
+    // Absent on every pre-0086 read path, which is exactly right: a row with no
+    // `is_org_shared` column is a personal project.
+    isOrgShared: asBool(row['is_org_shared'], false),
   };
 }

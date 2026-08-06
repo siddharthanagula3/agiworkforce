@@ -185,6 +185,16 @@ pub fn register_main_database_access(access: MainDatabaseAccess) -> Result<(), S
         .map_err(|_| "The main database capability was already registered.".to_string())
 }
 
+/// Whether the OS-protected main-database key has been registered yet.
+///
+/// Managers that live in the main database but open per-call by path (e.g.
+/// `KnowledgeBase`) use this to prefer the correctly-keyed registered
+/// connection in production while still opening a keyed temp file by path in
+/// isolated unit tests, where startup never runs.
+pub fn main_database_access_registered() -> bool {
+    MAIN_DATABASE_ACCESS.get().is_some()
+}
+
 /// Open another connection to the verified main database.
 ///
 /// Production code fails closed until startup has registered the OS-protected

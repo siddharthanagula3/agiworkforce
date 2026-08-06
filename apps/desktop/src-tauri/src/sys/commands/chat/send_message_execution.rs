@@ -1865,6 +1865,8 @@ fn calculate_streaming_persistence_usage(
             let cache_creation = final_usage
                 .and_then(|u| u.cache_creation_input_tokens)
                 .unwrap_or(0);
+            // Price this turn on today's date so dated catalog rates resolve.
+            let priced_on = chrono::Utc::now().date_naive();
             if cache_read > 0 || cache_creation > 0 {
                 CostCalculator::new().calculate_with_cache(
                     provider,
@@ -1873,9 +1875,16 @@ fn calculate_streaming_persistence_usage(
                     output_tokens,
                     cache_read,
                     cache_creation,
+                    priced_on,
                 )
             } else {
-                CostCalculator::new().calculate(provider, model, prompt_tokens, output_tokens)
+                CostCalculator::new().calculate(
+                    provider,
+                    model,
+                    prompt_tokens,
+                    output_tokens,
+                    priced_on,
+                )
             }
         })
         .unwrap_or(0.0);

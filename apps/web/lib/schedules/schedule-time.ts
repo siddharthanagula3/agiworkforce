@@ -305,7 +305,7 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
  * Pinned to `vercel.json` by `schedule-cadence.test.ts` — if the deployed cron
  * gets faster, that test fails until this constant follows it.
  */
-export const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 /** Occurrences to sample when measuring the tightest gap a cron can produce. */
 const CADENCE_SAMPLE_OCCURRENCES = 8;
@@ -343,14 +343,35 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
  * aborts the entire batch for every other user. This belongs at the write
  * boundary only, so rows created under the old contract keep running.
  */
+/**
+ * The sweep cadence in words, derived from `SWEEP_INTERVAL_MS` so the refusal
+ * message cannot outlive the constant. These strings previously hardcoded "once
+ * a day"; when the deployed cron moved to hourly they would have kept telling
+ * users a limit the platform no longer had.
+ */
+export function describeSweepCadence(): { cadence: string; minimum: string } {
+  const hours = SWEEP_INTERVAL_MS / (60 * 60 * 1000);
+  if (hours >= 24) {
+    const days = hours / 24;
+    return days === 1
+      ? { cadence: 'once a day', minimum: '1 day' }
+      : { cadence: `every ${days} days`, minimum: `${days} days` };
+  }
+  return hours === 1
+    ? { cadence: 'once an hour', minimum: '1 hour' }
+    : { cadence: `every ${hours} hours`, minimum: `${hours} hours` };
+}
+
 export function assertDeliverableCadence(timing: ScheduleTiming, now: Date): void {
   if (timing.scheduleType === 'once') return;
+
+  const { cadence, minimum } = describeSweepCadence();
 
   if (timing.scheduleType === 'interval') {
     const intervalMs = timing.intervalMs;
     if (typeof intervalMs === 'number' && intervalMs < SWEEP_INTERVAL_MS) {
       throw new Error(
-        'Scheduled tasks are swept once a day, so the shortest supported interval is 1 day',
+        `Scheduled tasks are swept ${cadence}, so the shortest supported interval is ${minimum}`,
       );
     }
     return;
@@ -361,7 +382,7 @@ export function assertDeliverableCadence(timing: ScheduleTiming, now: Date): voi
   const gap = tightestCronGapMs(expression, timing.timezone, now);
   if (gap !== null && gap < SWEEP_INTERVAL_MS) {
     throw new Error(
-      'Scheduled tasks are swept once a day, so a cron expression cannot fire more than once per day',
+      `Scheduled tasks are swept ${cadence}, so a cron expression cannot fire more often than that`,
     );
   }
 }

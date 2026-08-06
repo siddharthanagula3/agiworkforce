@@ -42,7 +42,11 @@ const ProcessedRequestSchema = z
       .object({
         model: z.string().min(1),
         messages: z.array(z.unknown()),
-        work_mode: z.literal('agiwork'),
+        // Durable execution is no longer AGI Work's alone: an ordinary chat
+        // that reaches for a tool starts a paid, resumable server-side run too,
+        // and that run must survive the client that started it. `work_mode` is
+        // absent entirely on plain OpenAI-compatible callers.
+        work_mode: z.enum(['chat', 'agiwork']).optional(),
       })
       .passthrough(),
     conversationId: z.string().optional(),
@@ -190,9 +194,9 @@ export function buildCloudAgentWorkflowInput(input: {
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }): CloudAgentWorkflowInput {
-  if (input.processed.chatRequest.work_mode !== 'agiwork') {
-    throw new Error('Only AGI Work requests may enter the durable workflow');
-  }
+  // The managed-usage reservation is the real admission control here, and it is
+  // kept deliberately: a free-trial turn has no reservation to replay billing
+  // against, so by construction it can never enter durable execution.
   if (!input.processed.managedUsage) {
     throw new Error('A managed usage reservation is required for durable AGI Work');
   }

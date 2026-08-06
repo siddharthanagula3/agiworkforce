@@ -16,6 +16,7 @@ function makeSkill(name: string, source: SkillSource, suffix = ''): Skill {
     name,
     description: `${name}${suffix} description`,
     body: `${name}${suffix} body`,
+    contentHash: `sha256:${'0'.repeat(64)}`,
     filePath: `/fake/${source}/${name}${suffix}.md`,
     source,
     metadata: {},

@@ -81,6 +81,26 @@ impl MemoryState {
         })
     }
 
+    /// Create a MemoryState over an already-keyed main-database connection
+    /// (see `MemoryManager::from_connection` for why the encrypted main DB
+    /// cannot be reopened with a plain `Connection::open`).
+    pub fn from_connection(conn: rusqlite::Connection) -> Self {
+        let default_config = MemoryInjectionConfig {
+            enabled: false,
+            max_memories: 10,
+            min_importance: 5,
+            priority_categories: vec![
+                MemoryCategory::Decision,
+                MemoryCategory::Preference,
+                MemoryCategory::Fact,
+            ],
+        };
+        Self {
+            manager: Arc::new(MemoryManager::from_connection(conn)),
+            injection_config: Arc::new(RwLock::new(default_config)),
+        }
+    }
+
     /// Create a degraded MemoryState backed by an in-memory database.
     /// Commands will function but data will not persist across restarts.
     pub fn new_degraded() -> Self {
@@ -125,6 +145,23 @@ impl ConversationSummarizerState {
         Ok(Self {
             summarizer: Arc::new(summarizer),
         })
+    }
+
+    /// Create a summarizer state over an already-keyed main-database
+    /// connection. `MemoryStore` lives in the encrypted main database, so a
+    /// plain `Connection::open(db_path)` (what `MemoryStore::new` used) opened
+    /// it without the SQLCipher key and every summarization run failed with
+    /// "file is not a database". Callers targeting the main database must hand
+    /// in a `MainDatabaseAccess` connection.
+    pub fn from_connection(conn: rusqlite::Connection, openai_api_key: Option<String>) -> Self {
+        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
+        use crate::core::agi::memory_persistence::MemoryStore;
+
+        let store = Arc::new(MemoryStore::from_connection(conn));
+        let llm = Arc::new(HttpSummaryLLM::new(openai_api_key));
+        Self {
+            summarizer: Arc::new(ConversationSummarizer::new(store, llm)),
+        }
     }
 
     /// Create a degraded summarizer state backed by an in-memory database.

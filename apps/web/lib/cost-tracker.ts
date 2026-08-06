@@ -12,10 +12,13 @@
  *    for R24; flagged as follow-up.
  *  - LRU eviction after MAX_SESSIONS prevents unbounded growth on warm instances.
  *
- * Pricing reads from models.json via @agiworkforce/types helpers. Cache pricing:
- *  - cache_read: 10% of input cost (Anthropic's published 90% discount).
- *  - cache_creation: 125% of input cost (Anthropic's 25% write surcharge).
- *  These constants mirror prompt-cache-helper.ts calculateCacheSavings().
+ * Pricing reads from models.json via @agiworkforce/types helpers, resolved for an
+ * explicit date (models may carry dated `pricingSchedule` windows). Cache pricing
+ * uses the catalog's own rates when declared; the fallbacks are:
+ *  - cache_read: 10% of input cost (published 90% cache-read discount).
+ *  - cache_creation: 125% / 200% of input cost for Anthropic-style disjoint
+ *    accounting (5m / 1h TTL), and the plain input rate for inclusive-prompt
+ *    providers, i.e. no surcharge for a model that declares no write price.
  *
  * Reasoning tokens (OpenAI o-series, Anthropic extended thinking) are billed
  * at the same per-token rate as regular output tokens, matching codex-cli's
@@ -29,7 +32,8 @@
 
 import 'server-only';
 
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, resolveEffectiveModelPricing } from '@agiworkforce/types';
+import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 
 export interface ModelUsage {
   modelId: string;
@@ -72,22 +76,30 @@ function evictIfNeeded() {
 }
 
 /**
- * Calculate cost in USD for a model/usage pair.
+ * Calculate cost in USD for a model/usage pair, at an explicit date.
  *
  * Pricing source: models.json via getModelMetadataById.
  *   inputCost / outputCost = USD per 1M tokens.
  *   cached_input = USD per 1M read tokens (when present in catalog).
  *
+ * `asOf` is REQUIRED and never defaulted here: a model may carry a
+ * `pricingSchedule` of dated windows (UTC calendar days, both bounds
+ * inclusive), so the billed rate is a function of the request date. No shipped
+ * model schedules a price today; the mechanism exists for an announced PRODUCT
+ * price change. Keeping the clock out of this function means a given
+ * (model, usage, date) always produces the same cost.
+ *
  * Fallback when model not in catalog: $0 (unknown model warning logged by caller).
  */
-function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
+function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): number {
   const meta = getModelMetadataById(modelId);
   if (!meta) {
     return 0;
   }
 
-  const inputPerM = meta.inputCost ?? 0;
-  const outputPerM = meta.outputCost ?? 0;
+  const effective = resolveEffectiveModelPricing(meta, asOf);
+  const inputPerM = effective.inputCost ?? 0;
+  const outputPerM = effective.outputCost ?? 0;
 
   // Use catalog cached_input price when available; fall back to 10% of input rate.
   // cached_input is defined on ModelMetadata as an optional sparse field sourced
@@ -95,20 +107,33 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   // or models.curation.json overrides.
   // Confirmed prices (June 2026): Anthropic = 0.10× input, OpenAI = 0.10× input,
   // DeepSeek = per catalog, Gemini 3.5 Flash = $0.15/M.
-  const cacheReadPerM = typeof meta.cached_input === 'number' ? meta.cached_input : inputPerM * 0.1;
+  const cacheReadPerM =
+    typeof effective.cached_input === 'number' ? effective.cached_input : inputPerM * 0.1;
 
   // Cache creation:
   //  - Anthropic 5m TTL: 1.25× input rate (published: write costs +25%).
   //  - Anthropic 1h TTL: 2.0× input rate (published: write costs +100%).
-  //  - OpenAI / DeepSeek: no creation counter exposed — cacheCreationInputTokens
-  //    will always be 0 for those providers so this rate is never applied.
+  //  - OpenAI: free cache writes UNTIL the GPT-5.6 family, which bills writes at
+  //    1.25× the uncached input rate on both automatic and explicit breakpoints.
+  //    That is expressed in the catalog as a `cached_write` price, so a declared
+  //    write price is billed and an undeclared one is not — pre-5.6 OpenAI models
+  //    declare none and their written tokens bill once, at the input rate.
   // Anthropic's response only breaks cacheCreationInputTokens down into
   // cacheCreation1hInputTokens when a request mixes 5m/1h TTLs; the remainder
   // is billed at the 5m rate. See anthropic.ts's stable-prefix 1h upgrade.
-  // Use catalog cached_write when populated; fall back to 1.25× of input rate.
+  const isAnthropic = meta.provider === 'anthropic';
   const cacheCreationPerM =
-    typeof meta.cached_write === 'number' ? meta.cached_write : inputPerM * 1.25;
-  const cacheCreation1hPerM = inputPerM * 2.0;
+    typeof effective.cached_write === 'number'
+      ? effective.cached_write
+      : isAnthropic
+        ? inputPerM * 1.25
+        : inputPerM;
+  const cacheCreation1hPerM =
+    typeof effective.cached_write_1h === 'number'
+      ? effective.cached_write_1h
+      : isAnthropic
+        ? inputPerM * 2.0
+        : inputPerM;
 
   const rawInputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
@@ -133,8 +158,10 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   //    the cached tokens are a SUBSET of the prompt total. Billing the full
   //    prompt at input rate PLUS the cached subset at the cache-read rate would
   //    double-charge the cached portion. Subtract cache tokens from the billable
-  //    input bucket so each token is billed exactly once.
-  const isAnthropic = meta.provider === 'anthropic';
+  //    input bucket so each token is billed exactly once. Written tokens are part
+  //    of that subset too, so they leave the input bucket and are re-billed above
+  //    at cacheCreationPerM — which equals the input rate when no write price is
+  //    declared, so an undeclared write costs exactly what it always did.
   const billableInput = isAnthropic
     ? rawInputTokens
     : Math.max(0, rawInputTokens - cacheRead - cacheCreationTotal);
@@ -152,8 +179,18 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
 /**
  * Record usage for a model within a session.
  * Creates the session entry if it does not exist.
+ *
+ * `asOf` is the request date used to pick the model's effective rates (see
+ * `calculateCostUsd`). It is the ONLY place in this module a clock is read, and
+ * production call sites pass their own `new Date()` so the billing date is the
+ * request's date rather than whenever this module happens to run.
  */
-export function recordModelUsage(sessionId: string, modelId: string, usage: NormalizedUsage): void {
+export function recordModelUsage(
+  sessionId: string,
+  modelId: string,
+  usage: NormalizedUsage,
+  asOf: Date = new Date(),
+): void {
   if (!sessionStore.has(sessionId)) {
     sessionStore.set(sessionId, new Map());
     sessionOrder.push(sessionId);
@@ -178,7 +215,7 @@ export function recordModelUsage(sessionId: string, modelId: string, usage: Norm
   existing.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
   existing.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
   existing.requestCount += 1;
-  existing.costUsd += calculateCostUsd(modelId, usage);
+  existing.costUsd += calculateCostUsd(modelId, usage, asOf);
 
   sessionMap.set(modelId, existing);
 }
@@ -250,6 +287,36 @@ export function inferGenAiSystem(provider: string): string {
 }
 
 /**
+ * Mirror the CPST Stage-0 telemetry keys (apps/web/lib/cpst-telemetry.ts) into
+ * the codex.usage.* vendor namespace this module already uses.
+ *
+ * MANAGED CLOUD ONLY, and observability only: this tracker is in-memory and
+ * resets on cold start, so it is explicitly NOT a CPST source
+ * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, "Surface
+ * coverage"). The durable numbers come from the managed-usage ledger; these
+ * attributes exist so a span carries the same labels as the row it belongs to.
+ *
+ * Every key is emitted only when its source field is present — an absent CPST
+ * field stays an absent attribute, never a defaulted one.
+ */
+export function toCpstOtelAttributes(
+  cpst: CpstUsageFields,
+): Record<string, number | string | boolean> {
+  const attrs: Record<string, number | string | boolean> = {};
+  if (cpst.taskOutcome !== undefined) attrs['codex.usage.task_outcome'] = cpst.taskOutcome;
+  if (cpst.retries !== undefined) attrs['codex.usage.retries'] = cpst.retries;
+  if (cpst.fallbackUsed !== undefined) attrs['codex.usage.fallback_used'] = cpst.fallbackUsed;
+  if (cpst.fallbackReason !== undefined) attrs['codex.usage.fallback_reason'] = cpst.fallbackReason;
+  if (cpst.verifierResult !== undefined) attrs['codex.usage.verifier_result'] = cpst.verifierResult;
+  if (cpst.routePlanId !== undefined) attrs['codex.usage.route_plan_id'] = cpst.routePlanId;
+  if (cpst.taskFamily !== undefined) attrs['codex.usage.task_family'] = cpst.taskFamily;
+  if (cpst.taskFamilyConfidence !== undefined) {
+    attrs['codex.usage.task_family_confidence'] = cpst.taskFamilyConfidence;
+  }
+  return attrs;
+}
+
+/**
  * Produce an OpenTelemetry attribute bag for a single LLM usage event.
  *
  * Standard GenAI semantic conventions (spec-stable):
@@ -262,6 +329,10 @@ export function inferGenAiSystem(provider: string): string {
  *   codex.usage.reasoning_output_tokens    · thinking/reasoning tokens (output rate)
  *   codex.usage.total_tokens               · sum of all categories for cost attribution
  *
+ * The optional `cpst` argument adds the CPST Stage-0 labels (see
+ * `toCpstOtelAttributes`). Omitting it leaves the attribute bag byte-identical
+ * to what every existing caller already emitted.
+ *
  * Returns a plain Record so callers have zero opentelemetry package dependency.
  * Reference: codex-cli otel-attributes.ts toOtelAttributes().
  */
@@ -269,8 +340,9 @@ export function toOtelAttributes(
   provider: string,
   modelId: string,
   usage: NormalizedUsage,
-): Record<string, number | string> {
-  const attrs: Record<string, number | string> = {
+  cpst?: CpstUsageFields,
+): Record<string, number | string | boolean> {
+  const attrs: Record<string, number | string | boolean> = {
     'gen_ai.system': inferGenAiSystem(provider),
     'gen_ai.request.model': modelId,
     'gen_ai.usage.input_tokens': usage.inputTokens ?? 0,
@@ -296,6 +368,8 @@ export function toOtelAttributes(
     (usage.reasoningOutputTokens ?? 0) +
     (usage.cacheCreationInputTokens ?? 0);
   attrs['codex.usage.total_tokens'] = total;
+
+  if (cpst) Object.assign(attrs, toCpstOtelAttributes(cpst));
 
   return attrs;
 }

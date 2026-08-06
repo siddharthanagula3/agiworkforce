@@ -480,9 +480,14 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         },
       );
 
+      // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01: the signed `surface: 'developer'`
+      // claim must survive onto the principal. It used to be verified and then
+      // dropped, which left downstream entitlement gates with nothing but the
+      // spoofable `x-agi-surface` header to reason about.
       await expect(getClerkAuthUser(makeBearerRequest(token))).resolves.toEqual({
         userId: 'device-user',
         email: 'device@example.com',
+        surfaceClass: 'developer',
       });
       expect(mockAuth).not.toHaveBeenCalled();
     });

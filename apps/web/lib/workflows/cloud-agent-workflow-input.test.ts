@@ -126,19 +126,22 @@ describe('cloud agent workflow input', () => {
     ).toThrow(/managed usage reservation/i);
   });
 
-  it('rejects non-AGI Work input at the durable worker boundary', () => {
+  it.each([
+    ['an ordinary tool-using chat turn', 'chat' as const],
+    ['a plain OpenAI-compatible caller with no work mode', undefined],
+  ])('admits %s now that durability is not AGI Work-only', (_label, workMode) => {
     const processed = makeProcessed();
-    processed.chatRequest.work_mode = undefined;
+    processed.chatRequest.work_mode = workMode;
 
-    expect(() =>
-      buildCloudAgentWorkflowInput({
-        runId: RUN_ID,
-        userId: 'user-1',
-        processed,
-        mcpTools: [],
-        approvalMode: 'auto',
-      }),
-    ).toThrow(/AGI Work/i);
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: [],
+      approvalMode: 'auto',
+    });
+
+    expect(input.processed.chatRequest.work_mode).toBe(workMode);
   });
 
   it('round-trips invocation and approval continuation cursors', () => {

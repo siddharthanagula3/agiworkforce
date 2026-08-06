@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { ManagedUsageBucketReading } from '@agiworkforce/types';
 import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 /**
@@ -77,4 +78,42 @@ export function getWorstUsagePercent(usage: ManagedUsageSummaryResponse | null):
     normalizeUsagePercentage(usage.weekly_usage_percentage),
     normalizeUsagePercentage(usage.flagship_weekly_usage_percentage),
   );
+}
+
+/**
+ * The four buckets as readings, keeping WHICH bucket each number belongs to.
+ *
+ * `getWorstUsagePercent` above collapses them to a single max, which is right
+ * for a one-bar widget but loses the bucket identity — so the sidebar can show
+ * "92%" without being able to say 92% of what. `selectUsageWarning` needs the
+ * identity to name the binding limit in prose, so it gets the readings intact.
+ */
+export function readManagedUsageBuckets(
+  usage: ManagedUsageSummaryResponse | null,
+): ManagedUsageBucketReading[] {
+  if (!usage) return [];
+  return [
+    {
+      bucket: 'session',
+      percentRemaining: 100 - normalizeUsagePercentage(usage.session_usage_percentage),
+      resetAt: usage.session_reset_at ?? null,
+    },
+    {
+      bucket: 'weekly',
+      percentRemaining: 100 - normalizeUsagePercentage(usage.weekly_usage_percentage),
+      resetAt: usage.weekly_reset_at ?? null,
+    },
+    {
+      bucket: 'weeklyFlagship',
+      percentRemaining: 100 - normalizeUsagePercentage(usage.flagship_weekly_usage_percentage),
+      resetAt: usage.flagship_weekly_reset_at ?? null,
+    },
+    {
+      bucket: 'period',
+      percentRemaining: 100 - normalizeUsagePercentage(usage.usage_percentage),
+      // `usage_reset_at`, not `period_end`: the billing period can end later
+      // than the allowance refills, and the user cares about the refill.
+      resetAt: usage.usage_reset_at ?? null,
+    },
+  ];
 }

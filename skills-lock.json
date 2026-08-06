@@ -1,25 +1,14 @@
 {
-  "version": 1,
-  "skills": {
-    "ai-seo": {
-      "source": "coreyhaines31/marketingskills",
-      "sourceType": "github",
-      "computedHash": "5f7ce5ccdb2b0dce5e1ea7f3ed8bf17070b790865e91725ca8908e6ec829e164"
-    },
-    "programmatic-seo": {
-      "source": "coreyhaines31/marketingskills",
-      "sourceType": "github",
-      "computedHash": "40b8fe29a6c9cb0606e6fa77aff227cf275e3808adf66e5ef69e02dcf60a7303"
-    },
-    "remotion-best-practices": {
-      "source": "remotion-dev/skills",
-      "sourceType": "github",
-      "computedHash": "9851afb52e1b892c43b2af973bda1776ce01fedfdfe704e0cfd70069a3a9c300"
-    },
-    "seo-geo": {
-      "source": "resciencelab/opc-skills",
-      "sourceType": "github",
-      "computedHash": "56f90ba46b36563bb5461feb8462aed9283e74dfc4cdac2a98c42c4bc86a95be"
-    }
-  }
+  "version": 2,
+  "algorithm": "agiskill-sha256-v1",
+  "notes": [
+    "Verified by `node scripts/verify-skills-lock.mjs` (CI: .github/workflows/repo-operability.yml). Regenerate with --regenerate.",
+    "The hashing algorithm is specified in packages/tools/skills/src/integrity.ts and reimplemented identically in apps/cli/src/skills.rs and scripts/verify-skills-lock.mjs.",
+    "v1 of this file recorded computedHash values for ai-seo, programmatic-seo, remotion-best-practices, and seo-geo with no algorithm field. Those hashes are NOT reproducible: re-hashing the exact bundle bytes from d694f17b2 under agiskill-sha256-v1 yields different digests, and no generator for the v1 values exists anywhere in the repo. They were never verified against anything.",
+    "Those four bundles were themselves deleted from .agents/skills in 5b14585dd, so their entries were also stale. They are dropped here rather than carried forward as unverifiable claims; git history retains the original values.",
+    "skills is empty because no skill under `roots` currently exists in the tree. Verification is not vacuous: adding any skill under a locked root fails CI until it is locked with declared provenance."
+  ],
+  "roots": [".agents/skills"],
+  "referenceTrees": ["packages/tools/skills/reference-bundles"],
+  "skills": {}
 }

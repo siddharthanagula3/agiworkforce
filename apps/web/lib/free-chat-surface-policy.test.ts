@@ -58,4 +58,43 @@ describe('managed cloud chat surface policy', () => {
       ),
     ).toBe('chrome');
   });
+
+  // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01
+  describe('credential-proved developer class outranks the caller-declared header', () => {
+    it.each(['desktop', 'web', 'mobile'] as const)(
+      'refuses to let a developer token escape into %s',
+      (claimed) => {
+        const surface = resolveCloudChatSurface(request({ 'x-agi-surface': claimed }), 'developer');
+
+        expect(getCloudChatSurfaceCapability(surface)).toBe('developer_surfaces');
+        // The whole point: Free/Basic must NOT be admitted.
+        expect(canUseManagedCloudChatSurface('free', surface)).toBe(false);
+        expect(canUseManagedCloudChatSurface('basic', surface)).toBe(false);
+        expect(canUseManagedCloudChatSurface('pro', surface)).toBe(true);
+      },
+    );
+
+    it.each(['cli', 'vscode', 'chrome'] as const)(
+      'keeps %s granularity when the header names a surface already in the class',
+      (claimed) => {
+        expect(resolveCloudChatSurface(request({ 'x-agi-surface': claimed }), 'developer')).toBe(
+          claimed,
+        );
+      },
+    );
+
+    it('defaults to a developer surface when no usable hint is present', () => {
+      expect(resolveCloudChatSurface(request(), 'developer')).toBe('cli');
+      expect(getCloudChatSurfaceCapability(resolveCloudChatSurface(request(), 'developer'))).toBe(
+        'developer_surfaces',
+      );
+    });
+
+    it('leaves header resolution unchanged when no class was proved', () => {
+      expect(resolveCloudChatSurface(request({ 'x-agi-surface': 'desktop' }), undefined)).toBe(
+        'desktop',
+      );
+      expect(resolveCloudChatSurface(request(), undefined)).toBe('unknown');
+    });
+  });
 });

@@ -8,6 +8,8 @@ import {
   useEffect,
   type MutableRefObject,
 } from 'react';
+import { INTERACTIVE_CARD_DELTA_KEY, type InteractiveCard } from '@agiworkforce/types';
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useAuth } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import {
@@ -51,6 +53,9 @@ import {
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+import type { ResearchStep } from '@agiworkforce/types';
+import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
+import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 // GOV-20: one classifier for every managed quota refusal, free or paid.
 import { classifyManagedQuotaErrorCode, getNextUpgradeTier } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -89,8 +94,25 @@ interface SendMessageOptions {
   skillName?: string;
   /** Deep Research mode: forces web_search and injects a research system prompt. */
   research?: boolean;
+  /**
+   * Material carried forward when retrying a research run that errored or was
+   * interrupted: sources already gathered (their citation numbers stay stable)
+   * and the plan steps that already completed (never re-run). Ignored unless
+   * `research` is true.
+   */
+  researchResume?: {
+    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    steps: ResearchStep[];
+  };
   /** Validated product mode; AGI Work exposes the paid server-owned tool harness. */
   workMode?: CloudWorkMode;
+  /**
+   * CAP-048: the structured AGI Work goal (objective + optional scope /
+   * deliverable). Sent as `agi_work_goal`; the server validates it, stores it on
+   * the run journal, and threads it into the planning turn. Ignored by the
+   * server unless `workMode === 'agiwork'`.
+   */
+  agiWorkGoal?: AgiWorkGoalInput;
   /**
    * AUDIT-FIX STR-22: invoked once the new USER turn is durable -- its row has
    * been written (or the conversation is temporary, so there is nothing to
@@ -627,6 +649,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const setCodeExecutionResult = store.setCodeExecutionResult;
   const setToolTimeline = store.setToolTimeline;
   const setResearchState = store.setResearchState;
+  const setAgiWorkPlan = store.setAgiWorkPlan;
   const stopStreaming = store.stopStreaming;
   const setLoading = store.setLoading;
 
@@ -651,6 +674,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let currentResearch: MessageResearchState | undefined = seedMetadata?.research
     ? { ...seedMetadata.research }
     : undefined;
+  // CAP-048: the AGI Work plan queue is tracked as a local like `currentResearch`
+  // so the terminal `buildAssistantMetadata` rebuild re-includes it instead of
+  // dropping the mid-stream write when it replaces the metadata bag.
+  let currentAgiWorkPlan: MessageMetadata['agiWorkPlan'] = seedMetadata?.agiWorkPlan;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
   let currentAgentActivity: AgentActivityState | undefined = liveMessageMetadata?.agentActivity;
   let currentCloudAgentRun: ManagedCloudAgentRunReference | undefined = runHandle
@@ -680,6 +707,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
    */
   let streamErrorInfo: { message: string; code?: string; retryable?: boolean } | undefined =
     seedMetadata?.streamError;
+  /**
+   * Interactive cards seen this turn, keyed by cardId so a re-emitted card
+   * (the server re-sends one when its state changes from pending to answered)
+   * replaces rather than duplicates. Seeded from the live metadata so a resumed
+   * continuation does not drop the card the user just answered.
+   */
+  const interactiveCards = new Map<string, InteractiveCard>(
+    (seedMetadata?.interactiveCards ?? []).map((card) => [card.cardId, card]),
+  );
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
   // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
@@ -933,6 +969,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (currentResearch) {
       metadata.research = { ...currentResearch };
+    }
+    if (currentAgiWorkPlan) {
+      metadata.agiWorkPlan = currentAgiWorkPlan.map((step) => ({ ...step }));
     }
     if (finishReason) {
       metadata.finishReason = finishReason;
@@ -1356,8 +1395,42 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                       ? researchStatus.label
                       : 'Research run failed'
                     : undefined,
+                // The plan and retry material live on their own events; carry
+                // them across status updates instead of dropping them.
+                steps: currentResearch?.steps,
+                sourcesForRetry: currentResearch?.sourcesForRetry,
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
+            }
+          }
+
+          // Deep Research plan queue (additive x_research_plan event). Whole
+          // plan, last-write-wins. A client that ignored this event before
+          // behaved exactly as it does now minus the plan list.
+          const researchPlan = parsed.choices?.[0]?.delta?.x_research_plan;
+          if (researchPlan) {
+            const planSteps = parseResearchPlanEvent(researchPlan);
+            if (planSteps) {
+              currentResearch = {
+                ...(currentResearch ?? {
+                  phase: 'planning',
+                  startedAt: new Date().toISOString(),
+                }),
+                steps: planSteps,
+              };
+              setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
+            }
+          }
+
+          // AGI Work plan queue (additive x_agiwork_plan event, CAP-048). Whole
+          // plan, last-write-wins — same additive contract as x_research_plan, so
+          // a client that ignores it is unchanged.
+          const agiWorkPlan = parsed.choices?.[0]?.delta?.x_agiwork_plan;
+          if (agiWorkPlan) {
+            const planSteps = parseAgiWorkPlanEvent(agiWorkPlan);
+            if (planSteps) {
+              currentAgiWorkPlan = planSteps;
+              setAgiWorkPlan(assistantMessageId, planSteps, conversationId);
             }
           }
 
@@ -1442,6 +1515,26 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
+          /*
+           * Interactive card.
+           *
+           * `parseInteractiveCardDelta` NEVER throws and never drops a card it
+           * cannot understand: an unknown kind, a newer schemaVersion, or a body
+           * that fails validation all come back `recognized: false` still
+           * carrying the server-authored `fallback`. So this branch has no
+           * error path of its own — a null return means the payload was not an
+           * envelope at all, which is the only case where there is nothing to
+           * show.
+           */
+          const cardDelta = parsed.choices?.[0]?.delta?.[INTERACTIVE_CARD_DELTA_KEY];
+          if (cardDelta) {
+            const card = parseInteractiveCardDelta(cardDelta);
+            if (card) {
+              interactiveCards.set(card.cardId, card);
+              patchMessageMeta({ interactiveCards: [...interactiveCards.values()] });
+            }
+          }
+
           // Code execution result.
           const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
           if (codeResultBlock) {
@@ -1490,6 +1583,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (results.length > 0) {
               currentSearchResults = results;
               setSearchResults(assistantMessageId, results, conversationId);
+              // CAP-045 slice 4: a research run keeps its cumulative sources on
+              // the research state so a Retry can carry them forward and skip
+              // work that already succeeded.
+              if (currentResearch) {
+                currentResearch = { ...currentResearch, sourcesForRetry: results };
+                setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
+              }
             }
             // url_fetch sources carry tool:'url_fetch' — their timeline entry is
             // driven by mcp_tool_use status events, so don't synthesize a
@@ -2020,10 +2120,20 @@ export function useChatStream(): UseChatStreamReturn {
             web_search: options.webSearch || options.research || undefined,
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
+            // CAP-045 slice 4: retry material for a research run that errored
+            // or was stopped. Sent only alongside research:true; the server
+            // drops it otherwise. This is the NORMAL send path, so the retry
+            // reserves and meters exactly like a first attempt.
+            research_resume:
+              options.research && options.researchResume ? options.researchResume : undefined,
             code_execution: options.codeExecution || undefined,
             office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
             work_mode: options.workMode,
+            // CAP-048: only meaningful in AGI Work mode; the server drops it
+            // otherwise. Sent on the normal billed path so the planning turn it
+            // drives meters exactly like the rest of the run.
+            agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
             thinking_mode: thinkingEnabled,
             effort:
               supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)

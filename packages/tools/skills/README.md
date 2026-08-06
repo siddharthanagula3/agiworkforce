@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Tooling/security owner
-Last updated: 2026-05-20
+Last updated: 2026-08-05
 Kind: ts-package
 Criticality: medium
 
@@ -32,6 +32,35 @@ Desktop, Web, CLI-adjacent flows, services, and future marketplace/customization
 ## Key Files
 
 - `src/index.ts` - public export surface.
+- `src/integrity.ts` - normative `agiskill-sha256-v1` specification.
+- `reference-bundles/` - non-loadable upstream bundle examples (no `SKILL.md`).
+
+## Skill Integrity (`agiskill-sha256-v1`)
+
+Every loaded skill carries `contentHash`, and packaged skills also carry
+`treeHash`, so a caller can detect that a skill changed between two `skill`
+tool calls. An optional frontmatter `version` is surfaced alongside them; a
+`SKILL.md` without one still loads.
+
+- **Content hash** — `sha256:<hex>` over the raw bytes of the skill markdown
+  file as read from disk.
+- **Tree hash** — `sha256-tree-v1:<hex>` over the whole package directory:
+  walk recursively, skip any entry whose basename starts with `.` and any
+  symlink, join relative paths with `/`, sort by UTF-8 byte order, then feed a
+  SHA-256 accumulator `<relPath>` + `0x00` + `<hex sha256 of file bytes>` +
+  `\n` per member. `SKILL.md` is included, so the tree hash alone detects any
+  change inside the package.
+
+`src/integrity.ts` is normative. The algorithm is reimplemented in
+`apps/cli/src/skills.rs` and `scripts/verify-skills-lock.mjs`; all three assert
+the same known-answer vector, so a divergence fails a test instead of producing
+two disagreeing "integrity" values.
+
+`skills-lock.json` records the tree hash of every skill vendored under its
+declared roots. `node scripts/verify-skills-lock.mjs` recomputes them and fails
+on a mismatch, an unlocked skill, a stale entry, or a `SKILL.md` appearing in a
+declared non-loadable reference tree; `--regenerate` rewrites it and
+`--self-test` checks only the algorithm vector.
 
 ## Commands
 

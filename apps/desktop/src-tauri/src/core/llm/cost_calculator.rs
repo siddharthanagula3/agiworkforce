@@ -1,19 +1,78 @@
 use std::collections::HashMap;
 
+use chrono::NaiveDate;
+
+use crate::core::llm::models_config::{ModelEntry, PricingWindowEntry};
 use crate::core::llm::Provider;
 
 #[derive(Debug, Clone)]
 struct Pricing {
     input_per_million: f64,
     output_per_million: f64,
+    /// Absolute per-million price of a cache READ, from the catalog's
+    /// `cached_input`. `None` when the model prices no cache read.
+    cache_read_per_million: Option<f64>,
+    /// Multiplier on the input rate when WRITING a cache entry, from
+    /// `cachePolicy.writeMultiplier`.
+    cache_write_multiplier: Option<f64>,
+    /// Absolute per-million price of a cache WRITE, from the catalog's
+    /// `cached_write`. Preferred over the multiplier; `None` when the model
+    /// declares no write price (pre-GPT-5.6 OpenAI models, whose writes are
+    /// free — i.e. billed once at the plain input rate and nothing more).
+    cache_write_per_million: Option<f64>,
+    /// Dated pricing windows from the catalog's `pricingSchedule`. Empty for
+    /// the usual single-price model.
+    schedule: Vec<PricingWindowEntry>,
 }
 
 impl Pricing {
+    /// This model's rates on `as_of`. Returns `self` unchanged when the model
+    /// has no dated schedule, so the common path allocates nothing new.
+    fn as_of(&self, as_of: NaiveDate) -> Pricing {
+        if self.schedule.is_empty() {
+            return self.clone();
+        }
+        let Some(window) = self
+            .schedule
+            .iter()
+            .find(|window| window_covers(window, as_of))
+        else {
+            return self.clone();
+        };
+        Pricing {
+            input_per_million: window.input_cost.unwrap_or(self.input_per_million),
+            output_per_million: window.output_cost.unwrap_or(self.output_per_million),
+            cache_read_per_million: window.cached_input.or(self.cache_read_per_million),
+            cache_write_multiplier: self.cache_write_multiplier,
+            cache_write_per_million: window.cached_write.or(self.cache_write_per_million),
+            schedule: Vec::new(),
+        }
+    }
+
     fn cost(&self, input_tokens: u32, output_tokens: u32) -> f64 {
         let input_cost = (input_tokens as f64 / 1_000_000.0) * self.input_per_million;
         let output_cost = (output_tokens as f64 / 1_000_000.0) * self.output_per_million;
         input_cost + output_cost
     }
+}
+
+/// Whether a dated pricing window covers `as_of`. Both bounds are inclusive and
+/// optional; an unparseable bound makes the window inapplicable rather than
+/// silently shifting a price.
+fn window_covers(window: &PricingWindowEntry, as_of: NaiveDate) -> bool {
+    let bound = |value: &Option<String>| -> Option<Option<NaiveDate>> {
+        match value {
+            None => Some(None),
+            Some(raw) => NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok().map(Some),
+        }
+    };
+    let (Some(from), Some(until)) = (
+        bound(&window.effective_from),
+        bound(&window.effective_until),
+    ) else {
+        return false;
+    };
+    from.is_none_or(|start| start <= as_of) && until.is_none_or(|end| as_of <= end)
 }
 
 /// Media type for per-unit pricing (images and video).
@@ -38,6 +97,22 @@ struct MediaPricing {
     cost_per_unit: f64,
 }
 
+/// Catalog entry -> pricing record, carrying the model's dated schedule so the
+/// per-request date can select the window that applies.
+fn catalog_pricing(model: &ModelEntry) -> Pricing {
+    Pricing {
+        input_per_million: model.input_cost,
+        output_per_million: model.output_cost,
+        cache_read_per_million: model.cached_input,
+        cache_write_multiplier: model
+            .cache_policy
+            .as_ref()
+            .and_then(|policy| policy.write_multiplier),
+        cache_write_per_million: model.cached_write,
+        schedule: model.pricing_schedule.clone(),
+    }
+}
+
 pub struct CostCalculator {
     pricing: HashMap<(Provider, String), Pricing>,
     provider_defaults: HashMap<Provider, Pricing>,
@@ -60,24 +135,12 @@ impl CostCalculator {
         let mut pricing = HashMap::new();
         for (model_id, model) in &config.models {
             if let Some(provider) = Provider::from_string(&model.provider) {
-                pricing.insert(
-                    (provider, model_id.clone()),
-                    Pricing {
-                        input_per_million: model.input_cost,
-                        output_per_million: model.output_cost,
-                    },
-                );
+                pricing.insert((provider, model_id.clone()), catalog_pricing(model));
                 // If the model has an apiModelId different from id, also register
                 // under the API model ID so cost lookups work after canonicalization.
                 if let Some(api_id) = &model.api_model_id {
                     if api_id != model_id {
-                        pricing.insert(
-                            (provider, api_id.clone()),
-                            Pricing {
-                                input_per_million: model.input_cost,
-                                output_per_million: model.output_cost,
-                            },
-                        );
+                        pricing.insert((provider, api_id.clone()), catalog_pricing(model));
                     }
                 }
             }
@@ -92,6 +155,14 @@ impl CostCalculator {
                     Pricing {
                         input_per_million: provider_cfg.default_pricing.input_per_million,
                         output_per_million: provider_cfg.default_pricing.output_per_million,
+                        // Provider defaults price no cache tier; the caller falls
+                        // back to the full input rate rather than inventing one.
+                        cache_read_per_million: provider_cfg.default_pricing.cache_read_per_million,
+                        cache_write_multiplier: provider_cfg.default_pricing.cache_write_multiplier,
+                        cache_write_per_million: provider_cfg
+                            .default_pricing
+                            .cache_write_per_million,
+                        schedule: Vec::new(),
                     },
                 );
             }
@@ -175,12 +246,22 @@ impl CostCalculator {
             })
     }
 
+    /// Calculate cost for a request priced on `as_of`.
+    ///
+    /// `as_of` is an explicit parameter and no clock is read here: a model may
+    /// carry dated `pricingSchedule` windows (UTC calendar days, both bounds
+    /// inclusive), so the rate that applies is a function of the request's date.
+    /// No shipped model schedules a price today; the mechanism exists for an
+    /// announced PRODUCT price change. Callers pass the current date at their
+    /// own boundary, which also keeps this deterministic and testable on both
+    /// sides of a price change.
     pub fn calculate(
         &self,
         provider: Provider,
         model: &str,
         input_tokens: u32,
         output_tokens: u32,
+        as_of: NaiveDate,
     ) -> f64 {
         if input_tokens == 0 && output_tokens == 0 {
             return 0.0;
@@ -202,7 +283,7 @@ impl CostCalculator {
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
-            .cloned();
+            .map(|pricing| pricing.as_of(as_of));
 
         match pricing {
             Some(p) => p.cost(input_tokens, output_tokens),
@@ -220,9 +301,14 @@ impl CostCalculator {
         }
     }
 
-    /// Calculate cost with cache discount applied.
-    /// - Anthropic: cache_creation tokens billed at 1.25x input rate, cache_read at 0.1x input rate
-    /// - OpenAI: cached_prompt tokens billed at 0.5x input rate
+    /// Calculate cost with cache pricing applied, priced on `as_of`.
+    ///
+    /// Rates are read from the model catalog (`cached_input`, `cached_write`,
+    /// and `cachePolicy.writeMultiplier`), NOT from hardcoded multipliers —
+    /// those drifted from the real prices and overcharged managed-cloud cache
+    /// reads. When a model prices no cache read, the full input rate is used.
+    /// See [`CostCalculator::calculate`] for why `as_of` is explicit.
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_with_cache(
         &self,
         provider: Provider,
@@ -231,6 +317,7 @@ impl CostCalculator {
         completion_tokens: u32,
         cache_read_tokens: u32,
         cache_creation_tokens: u32,
+        as_of: NaiveDate,
     ) -> f64 {
         if prompt_tokens == 0 && completion_tokens == 0 {
             return 0.0;
@@ -249,7 +336,7 @@ impl CostCalculator {
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
-            .cloned();
+            .map(|pricing| pricing.as_of(as_of));
 
         let pricing = match pricing {
             Some(p) => p,
@@ -271,26 +358,70 @@ impl CostCalculator {
         let input_rate = pricing.input_per_million / 1_000_000.0;
         let output_rate = pricing.output_per_million / 1_000_000.0;
 
+        // Cache rates come from the CATALOG, not from a hardcoded multiplier.
+        // This previously assumed 0.1x for Anthropic and 0.5x for OpenAI/Managed
+        // Cloud. The catalog prices a cache read at 0.1x input for both
+        // gpt-5.6-sol (5 -> 0.5) and gpt-5.6-luna (1 -> 0.1), so managed-cloud
+        // cache reads were being costed at five times their real price. Falling
+        // back to the full input rate when the catalog prices no cache read is
+        // deliberate: over-costing a cached token is recoverable, inventing a
+        // discount the provider does not give is not.
+        let cache_read_rate = pricing
+            .cache_read_per_million
+            .map(|per_million| per_million / 1_000_000.0)
+            .unwrap_or(input_rate);
+        // Cache-WRITE rate, in preference order: the catalog's published
+        // absolute price (`cached_write`), then a declared multiplier on the
+        // input rate, then the plain input rate. That last fallback is the
+        // "free cache write" case — the written token is billed once, as input,
+        // with no surcharge — which is what every pre-GPT-5.6 OpenAI model gets.
+        // The GPT-5.6 family DOES publish a write price (1.25x uncached input on
+        // both automatic and explicit breakpoints), so it is billed for writes.
+        let cache_write_rate = pricing
+            .cache_write_per_million
+            .map(|per_million| per_million / 1_000_000.0)
+            .or_else(|| {
+                pricing
+                    .cache_write_multiplier
+                    .map(|multiplier| input_rate * multiplier)
+            })
+            .unwrap_or(input_rate);
+
         match provider {
             Provider::Anthropic => {
-                // cache_read at 0.1x, cache_creation at 1.25x, rest at 1.0x
                 let regular_input =
                     prompt_tokens.saturating_sub(cache_read_tokens + cache_creation_tokens);
                 let input_cost = (regular_input as f64 * input_rate)
-                    + (cache_creation_tokens as f64 * input_rate * 1.25)
-                    + (cache_read_tokens as f64 * input_rate * 0.1);
+                    + (cache_creation_tokens as f64 * cache_write_rate)
+                    + (cache_read_tokens as f64 * cache_read_rate);
                 let output_cost = completion_tokens as f64 * output_rate;
                 input_cost + output_cost
             }
             Provider::OpenAI | Provider::ManagedCloud => {
-                // cached tokens at 0.5x input rate
+                // OpenAI reports prompt_tokens INCLUSIVE of the cache buckets:
+                // cache reads are a SUBSET of the prompt (so they are subtracted
+                // and re-billed at the read rate), and written tokens are
+                // freshly-sent uncached input that stays inside `regular_input`.
+                // A cache WRITE is therefore billed as its input token plus the
+                // SURCHARGE over the input rate — for the GPT-5.6 family that
+                // totals the published 1.25x. A model that declares no write
+                // price has a write rate equal to the input rate, so the
+                // surcharge is exactly zero and its writes stay free.
                 let regular_input = prompt_tokens.saturating_sub(cache_read_tokens);
+                let cache_write_surcharge = (cache_write_rate - input_rate).max(0.0);
                 let input_cost = (regular_input as f64 * input_rate)
-                    + (cache_read_tokens as f64 * input_rate * 0.5);
+                    + (cache_creation_tokens as f64 * cache_write_surcharge)
+                    + (cache_read_tokens as f64 * cache_read_rate);
                 let output_cost = completion_tokens as f64 * output_rate;
                 input_cost + output_cost
             }
-            _ => self.calculate(provider, exact_model, prompt_tokens, completion_tokens),
+            _ => self.calculate(
+                provider,
+                exact_model,
+                prompt_tokens,
+                completion_tokens,
+                as_of,
+            ),
         }
     }
 
@@ -340,10 +471,75 @@ impl CostCalculator {
 mod tests {
     use super::*;
 
+    /// Fixed pricing dates. Cost calculation takes the request date explicitly,
+    /// so every test pins one instead of reading the clock rather than because
+    /// any shipped model changes price on these days.
+    fn standard_window_date() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 9, 1).expect("2026-09-01 is a valid date")
+    }
+
+    fn day(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).expect("valid calendar date")
+    }
+
+    /// SYNTHETIC model with a dated schedule, registered under an id no catalog
+    /// model uses. The dated-pricing MECHANISM is proved against this fixture so
+    /// it stays covered without a live promotional window to lean on, and so no
+    /// shipped product price is reachable by editing a mechanism test. Window
+    /// bounds are UTC calendar days, inclusive on both sides.
+    const FIXTURE_MODEL: &str = "fixture-scheduled-model";
+
+    fn scheduled_fixture_calculator() -> CostCalculator {
+        let pricing = Pricing {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+            cache_read_per_million: Some(0.3),
+            cache_write_multiplier: None,
+            cache_write_per_million: Some(3.75),
+            schedule: vec![
+                PricingWindowEntry {
+                    effective_from: None,
+                    effective_until: Some("2030-03-31".to_string()),
+                    note: None,
+                    input_cost: Some(2.0),
+                    output_cost: Some(10.0),
+                    cached_input: Some(0.2),
+                    cached_write: Some(2.5),
+                    cached_write_1h: Some(4.0),
+                },
+                // Declares only its start, so every rate falls back to the
+                // top-level (enduring) fields.
+                PricingWindowEntry {
+                    effective_from: Some("2030-04-01".to_string()),
+                    effective_until: None,
+                    note: None,
+                    input_cost: None,
+                    output_cost: None,
+                    cached_input: None,
+                    cached_write: None,
+                    cached_write_1h: None,
+                },
+            ],
+        };
+        let mut map = HashMap::new();
+        map.insert((Provider::Anthropic, FIXTURE_MODEL.to_string()), pricing);
+        CostCalculator {
+            pricing: map,
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        }
+    }
+
     #[test]
     fn calculate_returns_positive_for_known_model() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-5", 1000, 500);
+        let cost = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            1000,
+            500,
+            standard_window_date(),
+        );
         assert!(
             cost > 0.0,
             "known model cost must be positive, got {}",
@@ -354,7 +550,13 @@ mod tests {
     #[test]
     fn calculate_returns_zero_for_zero_tokens() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-luna", 0, 0);
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            "gpt-5.6-luna",
+            0,
+            0,
+            standard_window_date(),
+        );
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "zero tokens must produce zero cost"
@@ -371,6 +573,7 @@ mod tests {
             "totally-unknown-model-xyz-99",
             1_000_000,
             1_000_000,
+            standard_window_date(),
         );
         assert!(
             cost > 0.0,
@@ -390,7 +593,13 @@ mod tests {
             provider_defaults: HashMap::new(),
             media_pricing: HashMap::new(),
         };
-        let cost = calc.calculate(Provider::Bedrock, "no-such-model", 1000, 500);
+        let cost = calc.calculate(
+            Provider::Bedrock,
+            "no-such-model",
+            1000,
+            500,
+            standard_window_date(),
+        );
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "missing pricing must return 0.0, not a fabricated cost; got {}",
@@ -405,8 +614,15 @@ mod tests {
             provider_defaults: HashMap::new(),
             media_pricing: HashMap::new(),
         };
-        let cost =
-            calc.calculate_with_cache(Provider::Anthropic, "no-such-model", 1000, 500, 200, 100);
+        let cost = calc.calculate_with_cache(
+            Provider::Anthropic,
+            "no-such-model",
+            1000,
+            500,
+            200,
+            100,
+            standard_window_date(),
+        );
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "missing pricing must return 0.0 for cached calculation; got {}",
@@ -417,7 +633,13 @@ mod tests {
     #[test]
     fn calculate_with_cache_anthropic_applies_cache_discount() {
         let calc = CostCalculator::new();
-        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-5", 1000, 500);
+        let cost_no_cache = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            1000,
+            500,
+            standard_window_date(),
+        );
         // With cache: 500 cache_read tokens billed at 0.1x should be cheaper
         let cost_cached = calc.calculate_with_cache(
             Provider::Anthropic,
@@ -426,6 +648,7 @@ mod tests {
             500,
             500, // cache_read_tokens
             0,   // cache_creation_tokens
+            standard_window_date(),
         );
         assert!(
             cost_cached < cost_no_cache,
@@ -436,11 +659,56 @@ mod tests {
     }
 
     #[test]
+    fn cache_read_rate_comes_from_the_catalog_not_a_hardcoded_multiplier() {
+        // Regression pin. This path used to hardcode 0.5x the input rate for
+        // OpenAI and ManagedCloud, while models.json prices gpt-5.6-luna at
+        // inputCost 0.2 and cached_input 0.02 — i.e. 0.1x. Managed-cloud cache
+        // reads were therefore costed at FIVE TIMES their real price. Asserting
+        // the exact catalog-derived figure makes reinstating any fixed
+        // multiplier fail.
+        let calc = CostCalculator::new();
+
+        // 1M cache-read tokens, nothing else, so the result IS the cache-read rate.
+        let cost = calc.calculate_with_cache(
+            Provider::ManagedCloud,
+            "gpt-5.6-luna",
+            1_000_000, // prompt_tokens, all of which are cache reads
+            0,         // completion_tokens
+            1_000_000, // cache_read_tokens
+            0,         // cache_creation_tokens
+            standard_window_date(),
+        );
+
+        // catalog: cached_input = 0.02 per million (post-2026-07-30 price cut).
+        let expected = 0.02_f64;
+        assert!(
+            (cost - expected).abs() < 1e-9,
+            "cache-read cost {} should equal the catalog cached_input {} — a hardcoded \
+             0.5x multiplier would give {}",
+            cost,
+            expected,
+            0.1
+        );
+    }
+
+    #[test]
     fn managed_cloud_looks_up_origin_provider_pricing() {
         let calc = CostCalculator::new();
         // ManagedCloud should find gpt-5.6-luna pricing via OpenAI origin
-        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5.6-luna", 1_000_000, 1_000_000);
-        let direct_cost = calc.calculate(Provider::OpenAI, "gpt-5.6-luna", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::ManagedCloud,
+            "gpt-5.6-luna",
+            1_000_000,
+            1_000_000,
+            standard_window_date(),
+        );
+        let direct_cost = calc.calculate(
+            Provider::OpenAI,
+            "gpt-5.6-luna",
+            1_000_000,
+            1_000_000,
+            standard_window_date(),
+        );
         assert!(
             (cost - direct_cost).abs() < f64::EPSILON,
             "ManagedCloud cost ({}) must equal direct provider cost ({})",
@@ -459,10 +727,327 @@ mod tests {
             provider_defaults: HashMap::new(),
             media_pricing: HashMap::new(),
         };
-        let cost = calc.calculate(Provider::OpenAI, "any-model", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            "any-model",
+            1_000_000,
+            1_000_000,
+            standard_window_date(),
+        );
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "must not silently produce a cost from fabricated pricing; got {}",
+            cost
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Effective-dated pricing
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn dated_pricing_bills_the_window_that_covers_the_request_date() {
+        // Synthetic fixture: $2/M input and $10/M output through 2030-03-31,
+        // then the top-level $3/M and $15/M. 1M + 1M = $12.00 inside the first
+        // window, $18.00 after it.
+        let calc = scheduled_fixture_calculator();
+        let first = calc.calculate(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            1_000_000,
+            1_000_000,
+            day(2030, 2, 15),
+        );
+        let second = calc.calculate(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            1_000_000,
+            1_000_000,
+            day(2030, 4, 1),
+        );
+        assert!(
+            (first - 12.0).abs() < 1e-9,
+            "the first window must bill $12.00 for 1M+1M, got ${}",
+            first
+        );
+        assert!(
+            (second - 18.0).abs() < 1e-9,
+            "the second window must fall back to the top-level $18.00, got ${}",
+            second
+        );
+    }
+
+    #[test]
+    fn dated_pricing_switches_exactly_at_the_window_boundary() {
+        // The last day of the first window and the first day of the next, so an
+        // off-by-one in either inclusive bound fails here.
+        let calc = scheduled_fixture_calculator();
+        let last_day_of_first = calc.calculate(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            1_000_000,
+            0,
+            day(2030, 3, 31),
+        );
+        let first_day_of_second = calc.calculate(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            1_000_000,
+            0,
+            day(2030, 4, 1),
+        );
+        assert!(
+            (last_day_of_first - 2.0).abs() < 1e-9,
+            "2030-03-31 is still inside the first window ($2/M), got ${}",
+            last_day_of_first
+        );
+        assert!(
+            (first_day_of_second - 3.0).abs() < 1e-9,
+            "2030-04-01 starts the second window ($3/M), got ${}",
+            first_day_of_second
+        );
+    }
+
+    #[test]
+    fn dated_pricing_covers_every_cache_rate_not_just_input_and_output() {
+        // The first window prices cache reads at $0.2/M and 5m cache writes at
+        // $2.5/M; the second inherits $0.3/M and $3.75/M from the top-level
+        // fields. Anthropic reports cache tokens separately, so 1M of each
+        // isolates the two cache rates.
+        let calc = scheduled_fixture_calculator();
+        let first = calc.calculate_with_cache(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            2_000_000, // prompt tokens, all of them cache reads/writes
+            0,
+            1_000_000, // cache_read_tokens
+            1_000_000, // cache_creation_tokens
+            day(2030, 2, 15),
+        );
+        let second = calc.calculate_with_cache(
+            Provider::Anthropic,
+            FIXTURE_MODEL,
+            2_000_000,
+            0,
+            1_000_000,
+            1_000_000,
+            day(2030, 4, 1),
+        );
+        assert!(
+            (first - 2.7).abs() < 1e-9,
+            "the first window's cache rates must bill $0.20 + $2.50 = $2.70, got ${}",
+            first
+        );
+        assert!(
+            (second - 4.05).abs() < 1e-9,
+            "the inherited cache rates must bill $0.30 + $3.75 = $4.05, got ${}",
+            second
+        );
+    }
+
+    #[test]
+    fn sonnet_5_bills_the_founder_standard_rate_on_every_date() {
+        // Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md,
+        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
+        // MTok (cache read $0.30, 5m write $3.75) on EVERY date. Anthropic's
+        // introductory window is a provider-COST fact for the registry's
+        // verificationLog, never a product price. Fixed dates on both sides of
+        // that retired 2026-09-01 boundary.
+        let calc = CostCalculator::new();
+        for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
+            let cost = calc.calculate(
+                Provider::Anthropic,
+                "claude-sonnet-5",
+                1_000_000,
+                1_000_000,
+                date,
+            );
+            assert!(
+                (cost - 18.0).abs() < 1e-9,
+                "Sonnet 5 must bill the standard $18.00 for 1M+1M on {}, got ${}",
+                date,
+                cost
+            );
+
+            let cached = calc.calculate_with_cache(
+                Provider::Anthropic,
+                "claude-sonnet-5",
+                2_000_000,
+                0,
+                1_000_000, // cache_read_tokens  @ $0.30/M
+                1_000_000, // cache_creation_tokens @ $3.75/M
+                date,
+            );
+            assert!(
+                (cached - 4.05).abs() < 1e-9,
+                "Sonnet 5 cache rates must bill $0.30 + $3.75 = $4.05 on {}, got ${}",
+                date,
+                cached
+            );
+        }
+    }
+
+    #[test]
+    fn a_model_without_a_schedule_prices_the_same_on_any_date() {
+        // Scheduleless models must be date-invariant, which is what keeps every
+        // other test in this file independent of the calendar.
+        let calc = CostCalculator::new();
+        let early = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            1_000_000,
+            1_000_000,
+            NaiveDate::from_ymd_opt(2020, 1, 1).expect("valid date"),
+        );
+        let late = calc.calculate(
+            Provider::Anthropic,
+            "claude-opus-5",
+            1_000_000,
+            1_000_000,
+            NaiveDate::from_ymd_opt(2099, 12, 31).expect("valid date"),
+        );
+        assert!(
+            (early - late).abs() < f64::EPSILON,
+            "a model with no pricing schedule must not move with the date: {} vs {}",
+            early,
+            late
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Cache-write billing
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn openai_bills_cache_writes_for_models_that_declare_a_write_price() {
+        // OpenAI started charging for prompt-cache WRITES with the GPT-5.6
+        // family: 1.25x the uncached input rate. gpt-5.6-sol is $5/M input and
+        // declares cached_write $6.25/M. prompt_tokens are INCLUSIVE, so 1M
+        // prompt tokens that are all cache writes cost 1M * $6.25/M = $6.25 —
+        // the plain input charge plus the 0.25x write surcharge. Before this
+        // was wired, cache_creation_tokens were ignored entirely and the same
+        // request billed only $5.00.
+        let calc = CostCalculator::new();
+        let cost = calc.calculate_with_cache(
+            Provider::OpenAI,
+            "gpt-5.6-sol",
+            1_000_000, // prompt_tokens
+            0,         // completion_tokens
+            0,         // cache_read_tokens
+            1_000_000, // cache_creation_tokens
+            standard_window_date(),
+        );
+        assert!(
+            (cost - 6.25).abs() < 1e-9,
+            "1M GPT-5.6 Sol cache-write tokens must bill the catalog $6.25/M, got ${}",
+            cost
+        );
+    }
+
+    #[test]
+    fn managed_cloud_bills_gpt_5_6_cache_writes_through_the_origin_provider() {
+        // gpt-5.6-luna: $0.2/M input, cached_write $0.25/M. Managed Cloud proxies
+        // the origin provider's pricing, so the write surcharge must survive the
+        // origin lookup.
+        let calc = CostCalculator::new();
+        let cost = calc.calculate_with_cache(
+            Provider::ManagedCloud,
+            "gpt-5.6-luna",
+            1_000_000,
+            0,
+            0,
+            1_000_000,
+            standard_window_date(),
+        );
+        assert!(
+            (cost - 0.25).abs() < 1e-9,
+            "1M GPT-5.6 Luna cache-write tokens must bill the catalog $0.25/M, got ${}",
+            cost
+        );
+    }
+
+    #[test]
+    fn pre_gpt_5_6_openai_models_keep_free_cache_writes() {
+        // gpt-5.4-mini predates the GPT-5.6 write-billing change and declares no
+        // cached_write, so a written token bills exactly once at the $0.75/M
+        // input rate — identical to the same request with no cache activity.
+        // This is the pin that stops a blanket 1.25x surcharge being reinstated.
+        let calc = CostCalculator::new();
+        let with_writes = calc.calculate_with_cache(
+            Provider::OpenAI,
+            "gpt-5.4-mini",
+            1_000_000,
+            0,
+            0,
+            1_000_000, // cache_creation_tokens
+            standard_window_date(),
+        );
+        let without_writes = calc.calculate(
+            Provider::OpenAI,
+            "gpt-5.4-mini",
+            1_000_000,
+            0,
+            standard_window_date(),
+        );
+        assert!(
+            (with_writes - 0.75).abs() < 1e-9,
+            "a free cache write must bill the plain input rate ($0.75), got ${}",
+            with_writes
+        );
+        assert!(
+            (with_writes - without_writes).abs() < f64::EPSILON,
+            "an undeclared write price must add nothing: ${} vs ${}",
+            with_writes,
+            without_writes
+        );
+    }
+
+    #[test]
+    fn openai_cache_reads_and_writes_bill_each_prompt_token_exactly_once() {
+        // gpt-5.6-terra: $2/M input, cached_input $0.2/M, cached_write $2.5/M.
+        // A 1M prompt made of 400k cache reads + 200k cache writes + 400k plain
+        // input bills 400k*$2 + 200k*$2.5 + 400k*$0.2 = $0.8 + $0.5 + $0.08.
+        let calc = CostCalculator::new();
+        let cost = calc.calculate_with_cache(
+            Provider::OpenAI,
+            "gpt-5.6-terra",
+            1_000_000,
+            0,
+            400_000,
+            200_000,
+            standard_window_date(),
+        );
+        assert!(
+            (cost - 1.38).abs() < 1e-9,
+            "mixed OpenAI prompt must bill $1.38, got ${}",
+            cost
+        );
+    }
+
+    #[test]
+    fn anthropic_cache_writes_use_the_catalog_price_not_the_input_rate() {
+        // Regression pin. This is a SOURCE change, not a price change: Anthropic
+        // writes used to be billed as a hardcoded 1.25x multiplier on the input
+        // rate and are now billed from the catalog's absolute `cached_write`.
+        // For every Anthropic model whose cached_write equals 1.25x input —
+        // claude-opus-5 is $5/M input with cached_write $6.25/M — that is
+        // behavior-neutral. The pin exists so the rate stays catalog-driven: if
+        // a future Anthropic model prices writes at anything other than 1.25x,
+        // the published number must win over the old multiplier.
+        let calc = CostCalculator::new();
+        let cost = calc.calculate_with_cache(
+            Provider::Anthropic,
+            "claude-opus-5",
+            0, // Anthropic reports cache tokens separately from input_tokens
+            1, // keep the request non-empty
+            0,
+            1_000_000,
+            standard_window_date(),
+        );
+        let output_rate = 25.0 / 1_000_000.0;
+        assert!(
+            (cost - (6.25 + output_rate)).abs() < 1e-9,
+            "1M Opus 5 cache-write tokens must bill the catalog $6.25/M, got ${}",
             cost
         );
     }

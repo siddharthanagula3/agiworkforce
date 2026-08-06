@@ -4,7 +4,6 @@ pub mod dictation;
 pub mod local_stt;
 pub mod local_tts;
 pub mod ptt;
-pub mod recognition;
 pub mod tts;
 pub mod vad;
 pub mod wake;
@@ -23,7 +22,6 @@ pub use local_tts::{
     VoiceInfo as PiperVoiceInfo,
 };
 pub use ptt::{PttConfig, PttEvent, PttState, PushToTalk};
-pub use recognition::*;
 pub use tts::{
     create_tts_provider, AudioFormat, AudioOutput, ElevenLabsTts, SystemTts, TextToSpeech,
     TtsConfig, TtsInterruptReason, TtsPlaybackEvent, TtsPlayer, TtsProvider, Voice,

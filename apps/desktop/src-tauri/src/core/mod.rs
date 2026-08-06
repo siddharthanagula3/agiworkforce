@@ -1,7 +1,6 @@
 pub mod agent;
 pub mod agi;
 pub mod artifacts;
-pub mod codebase;
 pub mod embeddings;
 pub mod hooks;
 pub mod intent;

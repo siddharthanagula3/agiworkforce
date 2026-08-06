@@ -254,3 +254,149 @@ describe('useChatStream deep research handling', () => {
     });
   });
 });
+
+// ─── CAP-045 slice 2/4: plan surface + retry ─────────────────────────────────
+
+function researchPlan(steps: Array<Record<string, unknown>>) {
+  return { choices: [{ delta: { x_research_plan: { steps } }, index: 0 }] };
+}
+
+describe('useChatStream research plan reduction', () => {
+  it('stores the plan and replaces it wholesale as steps advance', async () => {
+    installFetch([
+      researchStatus('planning'),
+      researchPlan([
+        { id: 'plan-1', type: 'search', description: 'alpha', status: 'pending' },
+        { id: 'plan-2', type: 'search', description: 'beta', status: 'pending' },
+      ]),
+      researchStatus('searching'),
+      researchPlan([
+        { id: 'plan-1', type: 'search', description: 'alpha', status: 'completed' },
+        { id: 'plan-2', type: 'search', description: 'beta', status: 'completed' },
+        { id: 'synthesize', type: 'synthesize', description: 'Write report', status: 'running' },
+      ]),
+      contentDelta('Report'),
+      researchStatus('complete'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+
+    expect(assistantMessage()?.metadata?.research?.steps).toEqual([
+      { id: 'plan-1', type: 'search', description: 'alpha', status: 'completed' },
+      { id: 'plan-2', type: 'search', description: 'beta', status: 'completed' },
+      { id: 'synthesize', type: 'synthesize', description: 'Write report', status: 'running' },
+    ]);
+    // A later status event must not wipe the plan.
+    expect(assistantMessage()?.metadata?.research?.phase).toBe('complete');
+  });
+
+  it('ignores a malformed plan event rather than erasing a good plan', async () => {
+    installFetch([
+      researchPlan([{ id: 'plan-1', type: 'search', description: 'alpha', status: 'running' }]),
+      researchPlan([{ id: 'plan-2', type: 'nonsense', description: 'bad', status: 'running' }]),
+      contentDelta('Report'),
+      researchStatus('complete'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+
+    expect(assistantMessage()?.metadata?.research?.steps).toEqual([
+      { id: 'plan-1', type: 'search', description: 'alpha', status: 'running' },
+    ]);
+  });
+
+  it('keeps the gathered sources on the research state for a later retry', async () => {
+    installFetch([
+      researchStatus('searching'),
+      searchResults,
+      researchStatus('error'),
+      contentDelta('Deep research failed'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+
+    expect(assistantMessage()?.metadata?.research?.sourcesForRetry).toEqual([
+      { url: 'https://a.com', title: 'A', snippet: '' },
+      { url: 'https://b.com', title: 'B', snippet: '' },
+    ]);
+  });
+});
+
+describe('useChatStream research retry request', () => {
+  function completionBodies(): Array<Record<string, unknown>> {
+    return fetchCalls
+      .filter((call) => call.url.includes('/api/llm/v1/chat/completions'))
+      .map((call) => JSON.parse(call.init.body as string) as Record<string, unknown>);
+  }
+
+  it('sends carried sources and completed steps as research_resume', async () => {
+    installFetch([contentDelta('Retried report'), researchStatus('complete')]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', {
+        research: true,
+        researchResume: {
+          sources: [{ url: 'https://a.com', title: 'A' }],
+          steps: [{ id: 'plan-1', type: 'search', description: 'alpha', status: 'completed' }],
+        },
+      });
+    });
+
+    const bodies = completionBodies();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.['research']).toBe(true);
+    expect(bodies[0]?.['research_resume']).toEqual({
+      sources: [{ url: 'https://a.com', title: 'A' }],
+      steps: [{ id: 'plan-1', type: 'search', description: 'alpha', status: 'completed' }],
+    });
+  });
+
+  it('never attaches resume material to a non-research send', async () => {
+    installFetch([contentDelta('plain answer')]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hello', {
+        researchResume: { sources: [{ url: 'https://a.com' }], steps: [] },
+      });
+    });
+
+    expect(completionBodies()[0]?.['research_resume']).toBeUndefined();
+  });
+
+  it('bills the retry as a NEW request: its own idempotency key, no reuse of the original', async () => {
+    installFetch([contentDelta('first attempt'), researchStatus('error')]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+    const firstKey = fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init
+      .headers as Record<string, string> | undefined;
+
+    installFetch([contentDelta('second attempt'), researchStatus('complete')]);
+    await act(async () => {
+      await result.current.sendMessage('research the topic', {
+        research: true,
+        researchResume: { sources: [{ url: 'https://a.com', title: 'A' }], steps: [] },
+      });
+    });
+    const secondKey = fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init
+      .headers as Record<string, string> | undefined;
+
+    // A distinct Idempotency-Key means the server opens a NEW managed-usage
+    // reservation; it can neither settle nor re-charge the original one.
+    expect(firstKey?.['Idempotency-Key']).toBeTruthy();
+    expect(secondKey?.['Idempotency-Key']).toBeTruthy();
+    expect(secondKey?.['Idempotency-Key']).not.toBe(firstKey?.['Idempotency-Key']);
+  });
+});

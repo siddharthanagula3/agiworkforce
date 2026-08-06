@@ -7,6 +7,7 @@ import {
   AgentTaskStateSchema,
   CloudAgentRunSchema,
   ManagedCloudAgentRunRequestIdSchema,
+  MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
   type CloudAgentWorkMode,
@@ -38,6 +39,13 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   completed_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
+  /**
+   * Populated only by the queries that join the pending-approval lateral. A run
+   * read through a query that does not join it is indistinguishable from a run
+   * with nothing pending, which is why both are mapped to `undefined`.
+   */
+  pending_approval_requested_at?: string | Date | null;
+  pending_approval_tool_calls?: unknown;
 }
 
 interface CloudAgentEventRow extends Record<string, unknown> {
@@ -180,8 +188,71 @@ export class CloudAgentApprovalCheckpointConflictError extends Error {
   }
 }
 
+/**
+ * AUDIT-FIX AGT-3: checkpoints carry no expiry column, so a pending approval
+ * created months ago used to stay claimable and would execute its tools
+ * against a world that has since changed. Bound the claim by checkpoint age.
+ */
+export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
+
+/**
+ * SQL that attaches the newest still-claimable approval checkpoint to a run
+ * row. Kept as one fragment so the list (Tasks inbox) and the single-run read
+ * (desktop reattach) can never disagree about which approval is outstanding.
+ *
+ * The TTL predicate mirrors `claimCloudAgentApprovalCheckpoint` deliberately:
+ * an approval that can no longer be claimed must not be advertised with live
+ * Approve/Deny affordances that would only ever answer 410.
+ */
+const PENDING_APPROVAL_LATERAL = `
+  left join lateral (
+    select checkpoint.created_at, checkpoint.pending_tool_calls
+      from public.cloud_agent_approval_checkpoints checkpoint
+     where checkpoint.run_id = runs.id
+       and checkpoint.user_id = runs.user_id
+       and checkpoint.state = 'pending'
+       and checkpoint.created_at > now() - make_interval(hours => ${APPROVAL_CHECKPOINT_TTL_HOURS})
+     order by checkpoint.version desc
+     limit 1
+  ) pending on true`;
+
+const PENDING_APPROVAL_COLUMNS = `
+  pending.created_at as pending_approval_requested_at,
+  pending.pending_tool_calls as pending_approval_tool_calls`;
+
+/**
+ * Project a checkpoint's validated tool calls into the inbox summary. Arguments
+ * are truncated HERE, on the server, because the whole point of the summary is
+ * that a client can render an approval it never streamed — shipping unbounded
+ * tool arguments to every list response would make the Tasks page pay for
+ * payloads it only ever shows the first line of.
+ */
+function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApproval'] {
+  const requestedAt = toIsoTimestamp(row.pending_approval_requested_at ?? null);
+  if (!requestedAt) return undefined;
+  const parsed = z
+    .array(PendingToolCallSchema)
+    .min(1)
+    .max(32)
+    .safeParse(row.pending_approval_tool_calls);
+  if (!parsed.success) return undefined;
+  return {
+    requestedAt,
+    toolCalls: parsed.data.map((call) => ({
+      toolCallId: call.id,
+      name: call.qualifiedName,
+      argsPreview: JSON.stringify(call.args).slice(
+        0,
+        MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
+      ),
+    })),
+  };
+}
+
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
+  const pendingApproval = mapPendingApproval(row);
   return CloudAgentRunSchema.parse({
+    ...(pendingApproval ? { pendingApproval } : {}),
     id: row.id,
     userId: row.user_id,
     requestId: row.request_id,
@@ -431,7 +502,11 @@ export async function getCloudAgentRun(
   input: { userId: string; runId: string; afterSequence?: number; limit?: number },
 ): Promise<CloudAgentRunSnapshot | null> {
   const runRows = await db.query<CloudAgentRunRow>(
-    `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
+    `select runs.*, ${PENDING_APPROVAL_COLUMNS}
+       from public.cloud_agent_runs runs
+       ${PENDING_APPROVAL_LATERAL}
+      where runs.id = $1 and runs.user_id = $2
+      limit 1`,
     [input.runId, input.userId],
   );
   const runRow = runRows[0];
@@ -468,12 +543,14 @@ export async function listCloudAgentRuns(
     : null;
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
   const rows = await db.query<CloudAgentRunRow>(
-    `select * from public.cloud_agent_runs
-      where user_id = $1
-        and state = any($2::text[])
-        and ($3::text is null or request_id = $3)
-        and ($4::timestamptz is null or (updated_at, id) < ($4::timestamptz, $5::uuid))
-      order by updated_at desc, id desc
+    `select runs.*, ${PENDING_APPROVAL_COLUMNS}
+       from public.cloud_agent_runs runs
+       ${PENDING_APPROVAL_LATERAL}
+      where runs.user_id = $1
+        and runs.state = any($2::text[])
+        and ($3::text is null or runs.request_id = $3)
+        and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
+      order by runs.updated_at desc, runs.id desc
       limit $6`,
     [
       input.userId,
@@ -495,6 +572,52 @@ export async function listCloudAgentRuns(
             id: lastRow.id,
           }
         : null,
+  };
+}
+
+export interface CloudAgentRunAssistantText {
+  /** Visible answer prose, concatenated in journal order. */
+  text: string;
+  /** Highest journal sequence covered by `text`; -1 when the run has no events. */
+  lastSequence: number;
+}
+
+/**
+ * Rebuild the assistant's visible answer from the run journal.
+ *
+ * The durable workflow has no in-process text accumulator to hand to
+ * `persistAssistantTurn` — the browser that started the turn may be gone, and a
+ * Workflow step can be retried in a fresh process. The journal is the only
+ * writer-independent record of what was said, and it is duplicate-free by
+ * construction: `cloud_agent_events` is keyed on `(run_id, sequence)`, so a
+ * replayed step re-appending the same envelope is a no-op rather than a second
+ * copy of the sentence.
+ */
+export async function readCloudAgentRunAssistantText(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRunAssistantText> {
+  const rows = await db.query<{ text: string | null; last_sequence: number | string | null }>(
+    `select coalesce(
+              string_agg(envelope->'event'->>'delta', '' order by sequence)
+                filter (where envelope->'event'->>'type' = 'text-delta'
+                          and jsonb_typeof(envelope->'event'->'delta') = 'string'),
+              ''
+            ) as text,
+            coalesce(max(sequence), -1) as last_sequence
+       from public.cloud_agent_events
+      where run_id = $1 and user_id = $2`,
+    [input.runId, input.userId],
+  );
+  const row = rows[0];
+  return {
+    text: row?.text ?? '',
+    lastSequence: z.coerce
+      .number()
+      .int()
+      .min(-1)
+      .catch(-1)
+      .parse(row?.last_sequence ?? -1),
   };
 }
 
@@ -635,13 +758,6 @@ export async function saveCloudAgentApprovalCheckpoint(
     return requireApprovalCheckpoint(checkpointRows);
   });
 }
-
-/**
- * AUDIT-FIX AGT-3: checkpoints carry no expiry column, so a pending approval
- * created months ago used to stay claimable and would execute its tools
- * against a world that has since changed. Bound the claim by checkpoint age.
- */
-export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
 
 /**
  * Atomically bind a complete decision set to the latest pending checkpoint.
