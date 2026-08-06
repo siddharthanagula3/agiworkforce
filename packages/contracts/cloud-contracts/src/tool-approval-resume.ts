@@ -16,10 +16,14 @@
  */
 
 import { z } from 'zod';
+// Imported from the leaf module rather than `./managed-cloud-agent-runs-client`
+// (which re-exports it): that client imports the resume request schema from
+// here, so taking the reference schema from it would close a runtime require
+// cycle.
 import {
   ManagedCloudAgentRunReferenceSchema,
   type ManagedCloudAgentRunReference,
-} from './managed-cloud-agent-runs-client';
+} from './managed-cloud-agent-run-reference';
 
 /** One per-tool decision in the resume body. */
 export const ToolApprovalDecisionSchema = z.object({

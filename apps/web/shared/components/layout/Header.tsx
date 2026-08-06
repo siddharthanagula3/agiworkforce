@@ -7,7 +7,7 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import { useTheme } from 'next-themes';
 import { Moon, Sun } from 'lucide-react';
 import { AgiMark } from '../agi/AgiMark';
-import { COMING_SOON_LABEL } from '@/lib/marketing-constants';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 function ThemeToggle({ className = '' }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -44,12 +44,23 @@ function ThemeToggle({ className = '' }: { className?: string }) {
  * aria-expanded reflects state.
  */
 
+/**
+ * Product hints come from `SURFACE_STATUS`, which is sourced from release tags.
+ *
+ * These were hardcoded to `COMING_SOON_LABEL` for all five surfaces. Desktop
+ * (tag `v-desktop-1.2.0`) and the CLI (tag `v-cli-1.0.0`) have shipped, so the
+ * nav was calling two released products "Coming soon" on every page of the
+ * site — and it sits on the same screen as the home page's availability strip,
+ * which now states their real status. Two different answers to "can I install
+ * this?" in one viewport is worse than either answer alone, so both read from
+ * the same constant.
+ */
 const PRODUCT_ITEMS = [
-  { href: '/desktop', label: 'AGI Desktop', hint: COMING_SOON_LABEL },
-  { href: '/mobile', label: 'AGI Mobile', hint: COMING_SOON_LABEL },
-  { href: '/cli', label: 'AGI CLI', hint: COMING_SOON_LABEL },
-  { href: '/chrome-extension', label: 'AGI in Chrome', hint: COMING_SOON_LABEL },
-  { href: '/vscode-extension', label: 'AGI in VS Code', hint: COMING_SOON_LABEL },
+  { href: '/desktop', label: 'AGI Desktop', hint: SURFACE_STATUS.desktop },
+  { href: '/mobile', label: 'AGI Mobile', hint: SURFACE_STATUS.mobile },
+  { href: '/cli', label: 'AGI CLI', hint: SURFACE_STATUS.cli },
+  { href: '/chrome-extension', label: 'AGI in Chrome', hint: SURFACE_STATUS.chrome },
+  { href: '/vscode-extension', label: 'AGI in VS Code', hint: SURFACE_STATUS.vscode },
   { href: '/agi-code', label: 'AGI Code', hint: 'The developer stack' },
   { href: '/apps', label: 'Apps & Connectors', hint: 'MCP tools & integrations' },
 ] as const;
@@ -130,92 +141,92 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
     <>
       <header className="agi-top">
         <Link href="/" className="agi-mark" aria-label={t('agiHome')}>
-        <AgiMark size={20} />
-        <span className="agi-mark-word">AGI</span>
-      </Link>
+          <AgiMark size={20} />
+          <span className="agi-mark-word">AGI</span>
+        </Link>
 
-      <nav id="main-navigation" className="agi-top-right" aria-label="Primary">
-        {/* Desktop nav links */}
-        <span className="agi-top-nav-desktop">
-          <div className="agi-top-products" ref={productsRef}>
+        <nav id="main-navigation" className="agi-top-right" aria-label="Primary">
+          {/* Desktop nav links */}
+          <span className="agi-top-nav-desktop">
+            <div className="agi-top-products" ref={productsRef}>
+              <button
+                type="button"
+                className="agi-top-link agi-top-products-button"
+                aria-expanded={isProductsOpen}
+                aria-haspopup="true"
+                onClick={() => setIsProductsOpen((v) => !v)}
+              >
+                {t('navProducts', 'Products')}
+                <span aria-hidden="true" className="agi-top-products-chevron">
+                  {isProductsOpen ? '▴' : '▾'}
+                </span>
+              </button>
+              {isProductsOpen && (
+                <div className="agi-top-products-menu" role="menu" aria-label="AGI products">
+                  {PRODUCT_ITEMS.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      role="menuitem"
+                      className="agi-top-products-item"
+                      onClick={() => setIsProductsOpen(false)}
+                    >
+                      <span className="agi-top-products-label">{item.label}</span>
+                      <span className="agi-top-products-hint">{item.hint}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            {NAV_ITEMS.map((item) => (
+              <Link key={item.href} href={item.href} className="agi-top-link">
+                {t(item.key, item.fallback)}
+              </Link>
+            ))}
+          </span>
+
+          <span className="agi-top-actions-desktop">
+            <ThemeToggle />
+            <span className="agi-top-divider" aria-hidden="true" />
+            {userEmail ? (
+              <>
+                <Link href="/chat" className="agi-top-link">
+                  {t('navChat')}
+                </Link>
+                <button type="button" onClick={handleSignOut} className="agi-top-link">
+                  {t('navSignOut')}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="agi-top-link">
+                  {t('navSignIn')}
+                </Link>
+                <Link href="/login?redirectTo=%2Fchat" className="agi-top-cta">
+                  {t('navChat', 'Open AGI')}
+                </Link>
+              </>
+            )}
+          </span>
+
+          {/* Mobile menu toggle */}
+          <span className="agi-top-mobile-controls">
+            <ThemeToggle className="agi-top-theme-toggle--mobile" />
             <button
               type="button"
-              className="agi-top-link agi-top-products-button"
-              aria-expanded={isProductsOpen}
-              aria-haspopup="true"
-              onClick={() => setIsProductsOpen((v) => !v)}
+              className="agi-top-link agi-top-mobile-toggle"
+              aria-label={isMenuOpen ? t('menuClose') : t('menuOpen')}
+              aria-expanded={isMenuOpen}
+              aria-controls="agi-mobile-menu"
+              onClick={() => setIsMenuOpen((v) => !v)}
             >
-              {t('navProducts', 'Products')}
-              <span aria-hidden="true" className="agi-top-products-chevron">
-                {isProductsOpen ? '▴' : '▾'}
+              <span className={`agi-burger${isMenuOpen ? ' is-open' : ''}`} aria-hidden="true">
+                <span />
+                <span />
+                <span />
               </span>
             </button>
-            {isProductsOpen && (
-              <div className="agi-top-products-menu" role="menu" aria-label="AGI products">
-                {PRODUCT_ITEMS.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    role="menuitem"
-                    className="agi-top-products-item"
-                    onClick={() => setIsProductsOpen(false)}
-                  >
-                    <span className="agi-top-products-label">{item.label}</span>
-                    <span className="agi-top-products-hint">{item.hint}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} className="agi-top-link">
-              {t(item.key, item.fallback)}
-            </Link>
-          ))}
-        </span>
-
-        <span className="agi-top-actions-desktop">
-          <ThemeToggle />
-          <span className="agi-top-divider" aria-hidden="true" />
-          {userEmail ? (
-            <>
-              <Link href="/chat" className="agi-top-link">
-                {t('navChat')}
-              </Link>
-              <button type="button" onClick={handleSignOut} className="agi-top-link">
-                {t('navSignOut')}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="agi-top-link">
-                {t('navSignIn')}
-              </Link>
-              <Link href="/login?redirectTo=%2Fchat" className="agi-top-cta">
-                {t('navChat', 'Open AGI')}
-              </Link>
-            </>
-          )}
-        </span>
-
-        {/* Mobile menu toggle */}
-        <span className="agi-top-mobile-controls">
-          <ThemeToggle className="agi-top-theme-toggle--mobile" />
-          <button
-            type="button"
-            className="agi-top-link agi-top-mobile-toggle"
-            aria-label={isMenuOpen ? t('menuClose') : t('menuOpen')}
-            aria-expanded={isMenuOpen}
-            aria-controls="agi-mobile-menu"
-            onClick={() => setIsMenuOpen((v) => !v)}
-          >
-            <span className={`agi-burger${isMenuOpen ? ' is-open' : ''}`} aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
-        </span>
+          </span>
         </nav>
       </header>
 

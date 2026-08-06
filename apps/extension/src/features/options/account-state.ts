@@ -1,6 +1,14 @@
 export interface OptionsAccountState {
   signedIn: boolean;
   unavailable: boolean;
+  /**
+   * True until `getToken()` settles. Without it the first synchronous render
+   * asserted `signedIn: false`, so every already-signed-in user was shown a
+   * "Sign in" row with a live button that then swapped to "Log out" — an
+   * actionable control stating the opposite of the truth for the length of a
+   * network round-trip.
+   */
+  loading: boolean;
 }
 
 /**
@@ -15,12 +23,12 @@ export function beginOptionsAccountRefresh(
   render: (state: OptionsAccountState) => void,
   onUnavailable: () => void = () => undefined,
 ): Promise<void> {
-  render({ signedIn: false, unavailable: false });
+  render({ signedIn: false, unavailable: false, loading: true });
   return getToken().then(
-    (token) => render({ signedIn: Boolean(token), unavailable: false }),
+    (token) => render({ signedIn: Boolean(token), unavailable: false, loading: false }),
     () => {
       onUnavailable();
-      render({ signedIn: false, unavailable: true });
+      render({ signedIn: false, unavailable: true, loading: false });
     },
   );
 }

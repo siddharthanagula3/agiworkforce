@@ -1,4 +1,4 @@
-name: Test Priority Levels 3-4 (Gating)
+name: Test Priority Levels 3-4 (Gating when populated)
 
 on:
   pull_request:

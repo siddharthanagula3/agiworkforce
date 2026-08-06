@@ -22,6 +22,16 @@ const DOCS: { href: string; label: string; body: string }[] = [
     body: 'How we collect, use, and protect your data.',
   },
   {
+    href: '/acceptable-use',
+    label: 'Acceptable use policy',
+    body: 'Prohibited uses, automated-access limits, and what happens on a violation.',
+  },
+  {
+    href: '/agent-permissions',
+    label: 'Agent permissions',
+    body: 'What the agent may do without asking, what always requires approval, and how to revoke access.',
+  },
+  {
     href: '/dpa',
     label: 'Data processing agreement',
     body: 'For customers handling EU/UK personal data.',
@@ -51,7 +61,20 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/security',
     label: 'Security',
-    body: 'Operational details: encryption, sandboxing, audit trails.',
+    body: 'Operational posture across the trust boundaries, plus the coordinated vulnerability disclosure policy: scope, safe harbour, and response targets.',
+  },
+  // Both of these were published and reachable, but only from the sitemap or a
+  // cross-link buried inside another policy. A procurement reviewer starts here,
+  // so every published legal document has to be listed here.
+  {
+    href: '/legal/eu-representative',
+    label: 'EU representative',
+    body: 'Our position under GDPR Art. 27, stated plainly rather than deferred to a launch.',
+  },
+  {
+    href: '/mobile/legal',
+    label: 'Mobile app terms and privacy',
+    body: 'Surface-specific terms for AGI Mobile on iOS and Android, including platform disclosures. The documents above govern where they overlap.',
   },
 ];
 

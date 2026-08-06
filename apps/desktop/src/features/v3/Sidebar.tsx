@@ -9,9 +9,12 @@ import {
   FolderPlus,
   Box,
   CalendarClock,
+  FileCode,
   Library,
   ListChecks,
+  Palette,
   RefreshCw,
+  Telescope,
   LogIn,
   PanelLeftClose,
   PanelLeftOpen,
@@ -36,8 +39,9 @@ import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
 import { AccountMenu } from './AccountMenu';
-import { AgiMark } from '@agiworkforce/ui';
+import { AgiMark, shortcutLabel } from '@agiworkforce/ui';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { useCloudTaskBadge } from './useCloudTaskBadge';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -110,6 +114,38 @@ type NavItem = {
   beta?: boolean;
 };
 
+/**
+ * Count pill for a nav row. Renders nothing at zero: an empty badge would claim
+ * pending work that does not exist, and a "0" reads as a broken counter.
+ */
+function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      data-testid="nav-badge-tasks"
+      aria-label={`${count} ${count === 1 ? 'task needs' : 'tasks need'} your input`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: collapsed ? 15 : 17,
+        height: collapsed ? 15 : 17,
+        padding: '0 4px',
+        borderRadius: 999,
+        background: 'var(--chat-accent-primary)',
+        // Accent background + elevated-surface text is the existing on-accent
+        // idiom here (see CapModal's primary button); there is no on-accent token.
+        color: 'var(--chat-surface-elevated)',
+        fontSize: collapsed ? 9 : 10,
+        fontWeight: 600,
+        lineHeight: 1,
+      }}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
 function navItemsForMode(
   mode: V3Mode,
   privacyMode: 'local' | 'byok' | 'managed',
@@ -128,9 +164,15 @@ function navItemsForMode(
     ];
   }
   // Projects moved to its own ChatGPT-style folder section below; the rest
-  // stay as flat nav entries.
+  // stay as flat nav entries. Code, Design, and Research are absent from the
+  // managed list above: Code opens device files, Design keeps its board in
+  // device memory, and Research drives the on-device swarm engine — none of
+  // them may render over a Managed Cloud session.
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+    { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
+    { id: 'design', label: t('sidebar.nav.design'), icon: Palette },
+    { id: 'research', label: t('sidebar.nav.research'), icon: Telescope },
     { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
@@ -167,7 +209,14 @@ function railItems(
     items.push({ id: 'scheduled', icon: CalendarClock, title: t('sidebar.nav.scheduled') });
   } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
+    items.push({ id: 'code', icon: FileCode, title: t('sidebar.nav.code') });
+    items.push({ id: 'design', icon: Palette, title: t('sidebar.nav.design') });
+    items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
+    // Was missing: collapsing the sidebar in Local mode dropped Scheduled
+    // entirely, even though the expanded nav offers it (the managed branch
+    // always had it). RefreshCw matches Local's expanded icon for this row.
+    items.push({ id: 'scheduled', icon: RefreshCw, title: t('sidebar.nav.scheduled') });
   }
   items.push({ id: 'customize', icon: Settings, title: t('sidebar.nav.customize') });
   return items;
@@ -193,10 +242,28 @@ export interface SidebarProps {
   onOpenSearch?: () => void;
   onCreateProject?: () => void;
   onNavigateView?: (view: string) => void;
+  /** The shell's current panel, so the nav can show where the user is. */
+  activeView?: string;
   onJumpConversation?: (id: string) => void;
   onOpenAccountMenu?: () => void;
   accountMenuOpen?: boolean;
 }
+
+/**
+ * Nav id -> shell view. Shared by the click handler and the selected-state check
+ * so the highlight can never disagree with where the click actually goes.
+ */
+const NAV_ID_TO_VIEW: Record<string, string> = {
+  projects: 'projects',
+  artifacts: 'artifacts',
+  code: 'code',
+  design: 'design',
+  research: 'research',
+  library: 'library',
+  tasks: 'tasks',
+  scheduled: 'work-scheduled',
+  customize: 'settings',
+};
 
 export function Sidebar({
   mode,
@@ -204,6 +271,7 @@ export function Sidebar({
   onOpenSearch,
   onCreateProject,
   onNavigateView,
+  activeView,
   onJumpConversation,
   onOpenAccountMenu,
   accountMenuOpen = false,
@@ -266,19 +334,17 @@ export function Sidebar({
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
   const navItems = useMemo(() => navItemsForMode(mode, privacyMode, t), [mode, privacyMode, t]);
+  // Platform-correct label. Was a hardcoded ⌘K, which is wrong for every
+  // Windows and Linux user of the desktop app.
+  const searchShortcut = useMemo(() => shortcutLabel('K'), []);
   const RAIL_ITEMS = useMemo(() => railItems(privacyMode, t), [privacyMode, t]);
+  // Managed Cloud runs are durable and can stop waiting on the user while
+  // nothing on screen says so; the hook polls only in managed mode.
+  const { needsUserCount: tasksNeedingInput } = useCloudTaskBadge();
 
   const handleNavClick = useCallback(
     (id: string) => {
-      const viewMap: Record<string, string> = {
-        projects: 'projects',
-        artifacts: 'artifacts',
-        library: 'library',
-        tasks: 'tasks',
-        scheduled: 'work-scheduled',
-        customize: 'settings',
-      };
-      const view = viewMap[id];
+      const view = NAV_ID_TO_VIEW[id];
       if (view) onNavigateView?.(view);
     },
     [onNavigateView],
@@ -500,7 +566,7 @@ export function Sidebar({
                   padding: '1px 5px',
                 }}
               >
-                ⌘K
+                {searchShortcut}
               </span>
             </>
           )}
@@ -512,10 +578,17 @@ export function Sidebar({
         <div style={{ padding: '0 8px', flexShrink: 0 }}>
           {navItems.map((item) => {
             const Icon = item.icon;
+            // The nav previously gave no indication of the current section and had
+            // no focus ring at all — keyboard users could not tell where they were
+            // in either sense.
+            const isActive = NAV_ID_TO_VIEW[item.id] === activeView;
             return (
               <button
                 key={item.id}
+                data-nav-id={item.id}
                 onClick={() => handleNavClick(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className="agi-v3-nav-row"
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -524,15 +597,17 @@ export function Sidebar({
                   padding: '6px 10px',
                   borderRadius: 8,
                   border: 'none',
-                  background: 'transparent',
+                  background: isActive ? 'var(--chat-surface-hover)' : 'transparent',
                   cursor: 'pointer',
-                  color: 'var(--chat-text-secondary)',
+                  color: isActive ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
+                  fontWeight: isActive ? 600 : 400,
                   fontSize: 13,
                   textAlign: 'left',
                 }}
               >
                 <Icon size={14} />
                 <span style={{ flex: 1 }}>{item.label}</span>
+                {item.id === 'tasks' && <NavBadge count={tasksNeedingInput} />}
                 {item.beta && (
                   <span
                     style={{
@@ -767,12 +842,17 @@ export function Sidebar({
         >
           {RAIL_ITEMS.map((it) => {
             const Icon = it.icon;
+            const badgeCount = it.id === 'tasks' ? tasksNeedingInput : 0;
             return (
               <button
                 key={it.id}
-                title={it.title}
+                data-nav-id={it.id}
+                // Collapsed, the icon is the only label, so the count has to be
+                // in the tooltip too or it is unreadable.
+                title={badgeCount > 0 ? `${it.title} (${badgeCount})` : it.title}
                 onClick={() => handleNavClick(it.id)}
                 style={{
+                  position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -786,6 +866,11 @@ export function Sidebar({
                 }}
               >
                 <Icon size={16} />
+                {badgeCount > 0 && (
+                  <span style={{ position: 'absolute', top: 2, right: 2 }}>
+                    <NavBadge count={badgeCount} collapsed />
+                  </span>
+                )}
               </button>
             );
           })}

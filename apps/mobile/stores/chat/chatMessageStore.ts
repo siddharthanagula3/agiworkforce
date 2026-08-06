@@ -56,6 +56,12 @@ export { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 export interface ForkConversationOptions {
   title?: string;
   model?: string;
+  /**
+   * The message id in the source conversation at which this fork branches. When
+   * omitted, the fork branches after the whole thread (the last source message).
+   * Reuses the shared BranchNavigator `forkPointMessageId` semantics.
+   */
+  forkPointMessageId?: string;
 }
 
 interface MessageState {
@@ -225,6 +231,11 @@ export const useChatMessageStore = create<MessageState>()(
           forkModel,
           sourceMode,
         );
+        // Persist the parent/branch relation so a fork is a real branch, not an
+        // untracked copy (CAP-035). The fork point defaults to the last message of
+        // the source thread — a whole-thread copy diverges after it.
+        const forkPointMessageId =
+          options?.forkPointMessageId ?? sourceMessages[sourceMessages.length - 1]?.id;
         const now = Date.now();
         const forkedMessages = sourceMessages.map((message, index) => {
           const {
@@ -253,6 +264,9 @@ export const useChatMessageStore = create<MessageState>()(
                   provider: providerForExecutionMode(sourceMode),
                   executionMode: sourceMode,
                   updatedAt: new Date(now).toISOString(),
+                  // Real branch relation back to the source conversation.
+                  parentConversationId: sourceConversationId,
+                  forkPointMessageId,
                 }
               : conversation,
           ),

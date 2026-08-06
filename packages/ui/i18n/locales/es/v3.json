@@ -53,13 +53,16 @@
     "nav": {
       "projects": "Proyectos",
       "artifacts": "Artefactos",
+      "code": "Código",
       "library": "Biblioteca",
       "tasks": "Tareas",
       "customize": "Personalizar",
       "scheduled": "Programado",
       "liveArtifacts": "Artefactos en vivo",
       "dispatch": "Despacho",
-      "routines": "Rutinas"
+      "routines": "Rutinas",
+      "design": "Diseño",
+      "research": "Investigación"
     },
     "account": "Cuenta"
   },
@@ -296,7 +299,9 @@
       "title": "Artefactos en vivo",
       "subtitle": "Resultados de tareas programadas. Refrescados en cada ejecución.",
       "loading": "Cargando artefactos…",
-      "empty": "Aún no hay artefactos. Ejecuta una tarea programada para generar resultados."
+      "empty": "Aún no hay artefactos. Ejecuta una tarea programada para generar resultados.",
+      "emptyTitle": "Aún no hay artefactos",
+      "startChat": "Iniciar un chat"
     },
     "projects": {
       "title": "Proyectos AGI Work",
@@ -312,7 +317,16 @@
       "loading": "Cargando tareas programadas…",
       "nextRun": "Próxima ejecución",
       "paused": "Pausado",
-      "empty": "Aún no hay tareas programadas. Pulsa \"Programar nueva tarea\" para empezar."
+      "empty": "Aún no hay tareas programadas. Pulsa \"Programar nueva tarea\" para empezar.",
+      "emptyTitle": "No hay tareas programadas"
+    },
+    "compose": {
+      "scopeAdd": "Añadir alcance (opcional)",
+      "scopeHide": "Ocultar alcance",
+      "constraintsLabel": "Restricciones",
+      "constraintsPlaceholder": "Límites, cosas a evitar, fuentes preferidas…",
+      "deliverableLabel": "Entregable",
+      "deliverablePlaceholder": "El resultado concreto que esperas (un archivo, una tabla, un resumen…)"
     }
   },
   "time": {
@@ -323,5 +337,8 @@
     "mAgoShort": "hace {{count}}m",
     "daysAgo": "hace {{count}} días",
     "weeksAgo": "hace {{count}} semanas"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "Por ahora los bocetos solo duran la sesión: al cerrar la app se borra el lienzo."
   }
 }

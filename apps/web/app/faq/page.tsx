@@ -32,7 +32,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does AGI Cloud cost?',
-    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Team & Enterprise (org seats, SSO, admin controls) are the only waitlisted tiers.',
+    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Team is a real self-serve per-seat tier on the pricing page; only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
   },
   {
     q: 'Do you train on my data?',

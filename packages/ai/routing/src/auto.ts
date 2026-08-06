@@ -5,6 +5,13 @@ import {
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
 import { effectiveInputPrice, effectiveOutputPrice } from './pricing';
+import type { TaskFamily } from './task-family';
+import {
+  resolveTaskFamilyOrdering,
+  taskFamilyRoutingStageEnabled,
+  type TaskFamilyPolicyEntry,
+  type TaskFamilyStageDecision,
+} from './task-family-routing';
 import type { RoutingTaskType } from './types';
 
 export type RoutingTrustMode = 'local' | 'on_device' | 'byok' | 'managed_cloud';
@@ -88,6 +95,13 @@ interface AutoPolicy {
   };
   tasks: Record<RoutingTaskType, AutoTaskPolicy>;
   slots: Record<string, { modelKey: string }>;
+  /**
+   * Optional, additive: per-task-family quality floors for the deterministic
+   * task-family ordering stage (`task-family-routing.ts`). Absent means the
+   * stage never applies. It NARROWS the canonical task taxonomy; it never
+   * replaces it, and it never participates in admission.
+   */
+  taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
 }
 
 interface RoutingRegistry {
@@ -153,6 +167,24 @@ export interface AutoRoutingRequest {
   estimatedInputTokens?: number;
   /** Estimated completion (output) tokens; a default is applied when omitted. */
   estimatedOutputTokens?: number;
+  /**
+   * Deterministic task family from `classifyTaskFamily` (`task-family.ts`), or
+   * `null` when the structural fast path declined. Purely a REFINEMENT of
+   * `taskType`, which is still what admission runs on: the family can only
+   * reorder the candidate set `taskType` already produced, and only when the
+   * curated policy says the family narrows this exact task type. `null`, an
+   * unknown family, or a family/task mismatch all leave routing unchanged.
+   */
+  taskFamily?: TaskFamily | null;
+  /**
+   * Explicit override for the task-family ordering stage. Omitted, the stage
+   * follows `AGI_ROUTING_TASK_FAMILY_STAGE`, which is OFF by default (see
+   * `taskFamilyRoutingStageEnabled` for why that default is the honest one).
+   * Provided, it wins — this is the seam for shadow-mode experiments and for
+   * tests that must not mutate process env. It can never widen admission: the
+   * stage only permutes an already-admitted list.
+   */
+  enableTaskFamilyStage?: boolean;
 }
 
 export interface AutoFallbackRoute {
@@ -180,7 +212,31 @@ export interface SelectedAutoRoute {
    * receive a silent provider fallback.
    */
   fallbacks: AutoFallbackRoute[];
-  reason: 'explicit' | 'continuity' | 'preferred_slot' | 'fallback_slot' | 'capability_fallback';
+  /**
+   * Why this route was chosen. `task_family_pareto` is the task-family
+   * ordering stage's own value: the slot came from the floor-meeting,
+   * cost-ranked head rather than from the curator's authored order. It is
+   * reachable only when the stage is enabled, which is off by default.
+   */
+  reason:
+    | 'explicit'
+    | 'continuity'
+    | 'preferred_slot'
+    | 'fallback_slot'
+    | 'capability_fallback'
+    | 'task_family_pareto';
+  /**
+   * The task-family stage's decision and reason code. Present on every Auto
+   * route selected by the slot walk (or by continuity), including when the
+   * stage was disabled, declined, or found nothing above the floor — Decision
+   * #10: the stage never substitutes silently, so it always says what it did.
+   *
+   * Absent on `explicit` selections, which return before the stage runs.
+   * `UnavailableAutoRoute` carries no stage decision either; its `reasons[]`
+   * already explains the refusal, and the stage cannot cause one because it
+   * only permutes an already-admitted list.
+   */
+  taskFamilyDecision?: TaskFamilyStageDecision;
 }
 
 export interface UnavailableAutoRoute {
@@ -449,6 +505,7 @@ function selectedDecision(
   eligibility: EligibilityResult,
   reason: SelectedAutoRoute['reason'],
   fallbacks: AutoFallbackRoute[] = [],
+  taskFamilyDecision?: TaskFamilyStageDecision,
 ): SelectedAutoRoute {
   const route = eligibility.route;
   if (!route || !eligibility.routeId) {
@@ -467,6 +524,7 @@ function selectedDecision(
     harnessId: route.harnessId,
     fallbacks,
     reason,
+    ...(taskFamilyDecision ? { taskFamilyDecision } : {}),
   };
 }
 
@@ -629,6 +687,24 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   const allowedSlots = new Set(policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot]);
   const preferredSlots = task.preferredSlots[effectiveProfile] ?? [];
 
+  // Task-family stage (off by default). It runs AFTER the tier clamp and the
+  // preferred-slot lookup, so its input is the candidate set admission already
+  // produced; it returns a PERMUTATION of that set, never a wider one. Every
+  // outcome — disabled, unclassified, no policy, task mismatch, floor unmet —
+  // carries its own reason code onto the decision (Decision #10).
+  const taskFamilyDecision = resolveTaskFamilyOrdering({
+    enabled: request.enableTaskFamilyStage ?? taskFamilyRoutingStageEnabled(),
+    family: request.taskFamily ?? null,
+    taskType: request.taskType,
+    preferredSlots,
+    preferredSlotsByProfile: task.preferredSlots,
+    profileOrder: policy.profileOrder,
+    slots: policy.slots,
+    estimateCents: (modelKey) => estimatedRequestCents(modelKey, request),
+  });
+  const orderedSlots = taskFamilyDecision.ordering?.slots ?? preferredSlots;
+  const paretoHead = new Set(taskFamilyDecision.ordering?.aboveFloor ?? []);
+
   if (
     request.currentModelKey &&
     policy.continuity.preferCurrentModelWhenEligible &&
@@ -649,7 +725,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         task,
         policy,
         allowedSlots,
-        preferredSlots,
+        orderedSlots,
         request.currentModelKey,
         eligibility.route.provider,
       );
@@ -662,12 +738,13 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         eligibility,
         'continuity',
         fallbacks,
+        taskFamilyDecision,
       );
     }
   }
 
   const reasons: string[] = [];
-  for (const slotId of preferredSlots) {
+  for (const slotId of orderedSlots) {
     if (!allowedSlots.has(slotId)) {
       reasons.push(`routing slot ${slotId} is not allowed for tier ${tier}`);
       continue;
@@ -692,7 +769,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         task,
         policy,
         allowedSlots,
-        preferredSlots,
+        orderedSlots,
         modelKey,
         eligibility.route.provider,
       );
@@ -703,8 +780,12 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         effectiveProfile,
         modelKey,
         eligibility,
-        'preferred_slot',
+        // A pick from the floor-meeting, cost-ranked head is named as such so
+        // the decision is legible in telemetry; anything else keeps the
+        // existing `preferred_slot` value exactly as before.
+        paretoHead.has(slotId) ? 'task_family_pareto' : 'preferred_slot',
         fallbacks,
+        taskFamilyDecision,
       );
     }
     reasons.push(...eligibility.reasons);
@@ -720,7 +801,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
           task,
           policy,
           allowedSlots,
-          preferredSlots,
+          orderedSlots,
           fallbackModelKey,
           eligibility.route.provider,
         );
@@ -733,6 +814,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
           eligibility,
           'fallback_slot',
           fallbacks,
+          taskFamilyDecision,
         );
       }
       reasons.push(...eligibility.reasons);

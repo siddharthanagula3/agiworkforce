@@ -358,13 +358,20 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         if (prev.some((f) => f.path === filePath)) return prev;
         return [...prev, newFile];
       });
-      // Store in project memory
+      // Store in project memory. `topic` is required (non-Option) by the Rust
+      // command and `category` must be a valid MemoryCategory
+      // ('preference'|'fact'|'decision'|'context'); the previous call passed no
+      // topic and category:'project', so it failed on both counts and the
+      // swallowing catch hid it — the file was never actually stored.
       if (typeof content === 'string' && content.length > 0) {
         await invoke('memory_remember', {
+          category: 'context',
+          topic: `knowledge_base:${fileName}`,
           content: `[Knowledge Base: ${fileName}]\n${content.slice(0, 8000)}`,
-          category: 'project',
-        }).catch(() => {
-          // Memory storage failure is non-fatal
+        }).catch((err) => {
+          // Non-fatal, but no longer silent — a failure here previously read as
+          // success while storing nothing.
+          console.warn('[ProjectSettings] failed to store knowledge-base memory:', err);
         });
       }
     } catch {
@@ -704,7 +711,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ backgroundColor: color }}
             >
-              <FolderPlus className="w-4 h-4 text-white" />
+              <FolderPlus className="w-4 h-4 text-foreground" />
             </div>
             Edit Project
           </DialogTitle>
@@ -1000,18 +1007,27 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       {files.map((file) => (
                         <div
                           key={file.id}
-                          className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                          className="group flex items-center justify-between gap-2 rounded-md bg-muted p-2"
                         >
-                          <div className="flex items-center gap-2">
-                            <File className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-foreground">{file.name}</span>
-                            <span className="text-xs text-muted-foreground">{file.path}</span>
+                          {/* File paths are long and unbreakable, and this row sits
+                              inside a scroll box. Without min-w-0 + truncate the path
+                              widened the row and pushed the remove button out of the
+                              dialog, so a file could be listed but never removed. */}
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="shrink-0 text-sm text-foreground">{file.name}</span>
+                            <span
+                              className="min-w-0 truncate text-xs text-muted-foreground"
+                              title={file.path}
+                            >
+                              {file.path}
+                            </span>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveFile(file.id)}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400"
+                            className="shrink-0 text-muted-foreground opacity-0 hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -1303,7 +1319,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                             </span>
                           </div>
                           {isLinked && (
-                            <Badge className="bg-blue-500 text-white text-xs">Linked</Badge>
+                            <Badge className="bg-blue-500 text-foreground text-xs">Linked</Badge>
                           )}
                         </button>
                       );
@@ -1326,7 +1342,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           <Button
             onClick={handleSave}
             disabled={!name.trim() || isSaving}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-foreground"
           >
             {isSaving ? (
               <>

@@ -187,6 +187,8 @@ export {
   formatResetLabel,
   readMessagePaywall,
 } from './components/MessageLimitCard';
+export { UsageWarningBanner } from './components/UsageWarningBanner';
+export type { UsageWarningBannerProps } from './components/UsageWarningBanner';
 export type { MessageLimitCardProps, MessagePaywallBlock } from './components/MessageLimitCard';
 export { ThinkingControl } from './components/ThinkingControl';
 export type { ThinkingControlProps } from './components/ThinkingControl';
@@ -224,11 +226,13 @@ export {
 export type { LibraryTransport } from './components/library/LibraryView';
 export { TasksPage } from './components/tasks/TasksPage';
 export type { TasksTransport } from './components/tasks/TasksPage';
+export type { AgiWorkRerunGoal } from './components/tasks/task-display';
 export {
   workModeLabel,
   taskStateLabel,
   taskStateTone,
   isCancellableState,
+  isLiveTaskState,
   TASK_TONE_BADGE_CLASS,
 } from './components/tasks/task-display';
 export type { AgentTaskState, TaskStateTone } from './components/tasks/task-display';
@@ -274,7 +278,12 @@ export { BudgetTracker } from './components/BudgetTracker';
 export { BudgetAlertsPanel } from './components/BudgetAlertsPanel';
 export { TokenCounter } from './components/TokenCounter';
 export type { TokenCounterProps } from './components/TokenCounter';
-export { UsageLimitBanner, UsageLimitBannerContainer } from './components/UsageLimitBanner';
+export {
+  UsageLimitBanner,
+  UsageLimitBannerContainer,
+  getUsageUrgency,
+  type UrgencyLevel,
+} from './components/UsageLimitBanner';
 export { CurrentActionBadge, CurrentActionStack } from './components/CurrentActionBadge';
 export {
   useBudgetStore,
@@ -498,9 +507,9 @@ export {
   selectHasPendingApproval,
 } from './stores/planModeStore';
 
-// Pro+ tier gating (Task #17 — multi-provider in-thread switch)
-export { ProPlusUpgradePrompt } from './components/ProPlusUpgradePrompt';
-export type { ProPlusUpgradePromptProps } from './components/ProPlusUpgradePrompt';
+// Max tier gating (Task #17 — multi-provider in-thread switch)
+export { MaxUpgradePrompt } from './components/MaxUpgradePrompt';
+export type { MaxUpgradePromptProps } from './components/MaxUpgradePrompt';
 export {
   useTierStore,
   selectTier,

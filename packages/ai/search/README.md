@@ -18,11 +18,11 @@ generic platform tool is required; it does not execute search.
   metadata; this package owns no provider allowlist copy.
 - Search backend configuration, tool execution, credentials, citations, and
   request policy stay with the owning host.
-- This package must not import applications, provider SDKs, or the transitional
-  `@agiworkforce/services` facade.
+- This package must not import applications or provider SDKs.
 
-`@agiworkforce/services` temporarily re-exports this package for downstream
-compatibility. New first-party code imports this owner directly.
+Import this package directly. The transitional `@agiworkforce/services` facade that
+once re-exported it was deleted at M8 (2026-07-15); `scripts/check-artifact-sync-ownership.mjs`
+guards against it reappearing.
 
 ## Commands
 

@@ -1168,3 +1168,177 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
     },
   });
 }
+
+// ============================================================================
+// ORGANIZATION SHARED ECOSYSTEM (migration 0086)
+// ============================================================================
+
+export type OrgSharingRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type OrgMemberProjectAccess = 'read' | 'write' | 'none';
+
+export interface OrgSharedProject {
+  projectId: string;
+  organizationId: string;
+  name: string;
+  ownerUserId: string;
+  sharedByUserId: string;
+  defaultAccess: 'read' | 'write';
+  createdAt: string;
+  /** Explicit per-member overrides. Members not listed inherit `defaultAccess`. */
+  memberGrants: { userId: string; access: OrgMemberProjectAccess }[];
+}
+
+export interface OrgSharedConnector {
+  organizationId: string;
+  connectorRowId: string;
+  /** Chat-facing id: shared connector tools appear as `orgmcp-<orgShortId>`. */
+  orgShortId: string;
+  name: string;
+  url: string;
+  transport: string;
+  ownerUserId: string;
+  sharedByUserId: string;
+  createdAt: string;
+}
+
+export interface OrgSharedOverview {
+  organizationId: string;
+  currentUserRole: OrgSharingRole;
+  canManageSharing: boolean;
+  members: { userId: string; role: OrgSharingRole; joinedAt: string }[];
+  sharedProjects: OrgSharedProject[];
+  sharedConnectors: OrgSharedConnector[];
+}
+
+const ORG_SHARED_QUERY_KEY = ['settings', 'organization', 'shared'] as const;
+
+/**
+ * What the caller's organization shares, and who can see it.
+ *
+ * Returns `null` when the caller belongs to no organization — the API answers
+ * 403 in that case, which is a legitimate state for a personal account, not an
+ * error worth surfacing as a red banner.
+ */
+export function useOrganizationSharedOverview(): UseQueryResult<OrgSharedOverview | null, Error> {
+  return useQuery<OrgSharedOverview | null, Error>({
+    queryKey: ORG_SHARED_QUERY_KEY,
+    queryFn: async (): Promise<OrgSharedOverview | null> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const res = await fetch('/api/settings/organization/shared', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 403) return null;
+      if (!res.ok) throw new Error(await readApiError(res));
+
+      return (await res.json()) as OrgSharedOverview;
+    },
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    meta: { errorMessage: 'Failed to load organization sharing' },
+  });
+}
+
+async function sharingRequest(path: string, method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown) {
+  const token = await getAuthToken();
+  if (!token) throw new Error('User not authenticated');
+  const csrfToken = await getCsrfToken();
+
+  const res = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'x-csrf-token': csrfToken,
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.json() as Promise<unknown>;
+}
+
+/** Share one of the caller's own projects with their organization. */
+export function useShareProjectWithOrganization(): UseMutationResult<unknown, Error, string> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (projectId: string) =>
+      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PUT'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project shared with your organization');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useUnshareProjectFromOrganization(): UseMutationResult<unknown, Error, string> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (projectId: string) =>
+      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'DELETE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project is no longer shared');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+/**
+ * Set one member's access to a shared project. `inherit` removes the override;
+ * `none` is an explicit denial that the database itself honours.
+ */
+export function useSetSharedProjectMemberAccess(): UseMutationResult<
+  unknown,
+  Error,
+  { projectId: string; userId: string; access: 'read' | 'none' | 'inherit' }
+> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<
+    unknown,
+    Error,
+    { projectId: string; userId: string; access: 'read' | 'none' | 'inherit' }
+  >({
+    mutationFn: ({ projectId, userId, access }) =>
+      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PATCH', {
+        userId,
+        access,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      toast.success('Access updated');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useUnshareConnectorFromOrganization(): UseMutationResult<unknown, Error, string> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (connectorRowId: string) =>
+      sharingRequest(`/api/settings/organization/shared/connectors/${connectorRowId}`, 'DELETE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      toast.success('Connector is no longer shared');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useShareConnectorWithOrganization(): UseMutationResult<unknown, Error, string> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (connectorRowId: string) =>
+      sharingRequest(`/api/settings/organization/shared/connectors/${connectorRowId}`, 'PUT'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
+      toast.success('Connector shared with your organization');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}

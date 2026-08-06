@@ -35,8 +35,27 @@ export function getNonce(): string {
 
 /**
  * Generates the webview HTML.
- * Colors adapt to the active VS Code theme via --vscode-* variables with
- * AGI palette fallbacks (dark defaults). Light/HC themes work automatically.
+ *
+ * COLOUR POLICY — this panel does NOT follow the host theme.
+ *
+ * Its surface, text and border tokens resolve to a FIXED dark palette
+ * (`agiVsCodeCssVars` in packages/ui/design-tokens), a founder decision from
+ * 2026-07-27 so the panel looks the same in VS Code, Cursor, Windsurf and
+ * Antigravity. In a Light+ or High Contrast theme it therefore stays dark by
+ * design.
+ *
+ * This comment previously read "Light/HC themes work automatically", which was
+ * the opposite of what the tokens do — and believing it is how host-themed
+ * colours ended up composited onto the fixed panel, producing pairings like
+ * #ececec text on a pale-yellow warning background at ~1.10:1.
+ *
+ * The rule that follows from the decision: within a single rule, background and
+ * foreground must come from the SAME family — either both --vscode-* or both
+ * fixed. `panelPaletteConsistency.test.ts` enforces it.
+ *
+ * Genuine exceptions exist and are deliberate: the diff tokens and
+ * --agi-vscode-danger stay theme-derived because they must match the editor's
+ * own diff and error colours to be legible as those things.
  */
 export function getWebviewContent(
   webview: vscode.Webview,
@@ -233,7 +252,16 @@ export function getWebviewContent(
       border-radius: 10px;
       color: var(--text-primary);
       white-space: nowrap;
-      flex-shrink: 0;
+      /*
+       * Must yield. flex-shrink:0 on a variable-length provider name let the
+       * badge hold its intrinsic width and paint over the four header icon
+       * buttons between roughly 341px and 450px. Its inner label already has
+       * min-width:0 + ellipsis (see .provider-badge > span:last-child above);
+       * this is what lets that truncation actually engage.
+       */
+      min-width: 0;
+      flex-shrink: 1;
+      overflow: hidden;
       transition: background 0.25s ease;
     }
 
@@ -292,9 +320,19 @@ export function getWebviewContent(
     .runtime-status {
       margin: 8px 10px 0;
       padding: 10px;
-      border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+      /*
+       * Fixed-palette warning, NOT --vscode-inputValidation-*. This panel is a
+       * deliberately fixed-dark surface, so --text-primary is always #ececec.
+       * Pairing that with the host's warning background rendered near-white text
+       * on Light+'s pale yellow (~1.10:1 — an apparently empty yellow strip with
+       * a floating button). --agi-vscode-warning-bg is a translucent warm
+       * overlay authored to composite on this panel, so both sides now come from
+       * one palette. Never pair a --vscode-* background with an --agi-vscode-*
+       * foreground, or the reverse.
+       */
+      border: 1px solid var(--agi-vscode-warning-border);
       border-radius: var(--radius-md);
-      background: var(--vscode-inputValidation-warningBackground);
+      background: var(--agi-vscode-warning-bg);
       color: var(--text-primary);
       display: none;
       flex-direction: column;
@@ -510,7 +548,9 @@ export function getWebviewContent(
     .onboarding-button--primary {
       border-color: var(--accent-teal);
       background: var(--accent-teal);
-      color: var(--vscode-button-foreground, #fff);
+      /* Fixed fill needs a fixed foreground: --vscode-button-foreground is
+         whatever the host theme pairs with ITS button colour, not with our teal. */
+      color: var(--agi-vscode-button-text);
     }
     .onboarding-button:disabled {
       cursor: not-allowed;
@@ -678,13 +718,27 @@ export function getWebviewContent(
     }
 
     #userInput {
-      flex: 1;
+      /*
+       * width:100%, NOT flex:1. The parent .input-wrapper is a block box
+       * (position:relative, stacking the mention dropdown, this textarea and the
+       * hint vertically), so a flex property here has nothing to resolve against
+       * and the textarea silently falls back to its intrinsic cols width —
+       * about 150px, leaving most of the composer dead space at every panel
+       * width. Do not "fix" this by making the wrapper display:flex: that would
+       * lay its three children out in a row.
+       */
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
       background: transparent;
       border: 0;
       outline: 0;
       color: var(--text-primary);
       font-family: inherit;
-      font-size: 13px;
+      /* Follow the editor's configured size, matching :root above. A hardcoded
+         13px ignored a user who had raised VS Code's font size for readability —
+         in the one control they type into. */
+      font-size: var(--vscode-font-size, 13px);
       line-height: 1.5;
       min-height: 46px;
       max-height: 140px;
@@ -879,7 +933,14 @@ export function getWebviewContent(
       right: 10px;
       bottom: calc(100% + 6px);
       width: min(320px, calc(100vw - 20px));
-      max-height: 360px;
+      /*
+       * Bound by the viewport, not a fixed 360px. The popover opens UPWARD from
+       * the composer, so in a short sidebar (a split editor, a small window) a
+       * fixed 360px box extended past the top edge: overflow-y scrolled the
+       * content INSIDE the box, but the box itself was clipped, so the first
+       * models in the list were unreachable.
+       */
+      max-height: min(360px, calc(100vh - 140px));
       overflow-y: auto;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
@@ -940,10 +1001,20 @@ export function getWebviewContent(
     }
 
     /* ── Code blocks ── */
-    pre { background: var(--vscode-textCodeBlock-background, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
+    /*
+     * Code blocks use the AGI panel palette, NOT --vscode-* colours.
+     *
+     * This panel is deliberately fixed-dark (founder decision 2026-07-27), so a
+     * theme-derived code background lands a light-theme grey block inside a dark
+     * panel, and --vscode-editor-foreground puts near-black text on it. The block
+     * became a bright, muddy rectangle that did not belong to the surface around
+     * it. Same rule as .runtime-status and .usage-meter-banner: never composite a
+     * host-themed colour onto this panel.
+     */
+    pre { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
     code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
-    pre code { color: var(--vscode-editor-foreground, var(--text-primary)); }
-    :not(pre) > code { background: var(--vscode-textCodeBlock-background, var(--bg-overlay)); padding: 2px 5px; border-radius: 3px; color: var(--vscode-textPreformat-foreground, var(--text-primary)); }
+    pre code { color: var(--text-primary); }
+    :not(pre) > code { background: var(--bg-overlay); padding: 2px 5px; border-radius: 3px; color: var(--text-primary); }
     strong { font-weight: 600; }
     em { font-style: italic; }
     del { text-decoration: line-through; opacity: 0.6; }
@@ -959,7 +1030,10 @@ export function getWebviewContent(
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 4px; color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
-    .copy-btn:hover { background: var(--vscode-button-secondaryHoverBackground, var(--bg-overlay)); color: var(--text-primary); }
+    /* Hover keeps the panel palette on BOTH sides. Borrowing the host's hover
+       background under our fixed #ececec text put near-white on a light grey in
+       every light theme. */
+    .copy-btn:hover { background: var(--agi-vscode-hover); color: var(--text-primary); }
     .apply-btn { background: var(--vscode-button-background); border-color: transparent; color: var(--vscode-button-foreground); }
     .apply-btn:hover { background: var(--vscode-button-hoverBackground); }
 
@@ -984,10 +1058,22 @@ export function getWebviewContent(
                   background 0.15s var(--transition),
                   border-color 0.15s var(--transition);
       white-space: nowrap;
+      /*
+       * Truncate rather than clip. The composer's bottom row holds seven children
+       * and gains an eighth (Stop) while streaming; the action buttons are
+       * flex-shrink:0 and must stay, so the chips are what has to give. With
+       * nowrap and no ellipsis they were cut mid-word at the panel's default
+       * 300px width. min-width:0 is what lets the shrink actually happen.
+       */
+      min-width: 0;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .mode-chip:hover, .effort-chip:hover, .model-chip:hover {
+      /* Panel palette on both sides — see .copy-btn:hover. */
       color: var(--text-primary);
-      background: var(--vscode-toolbar-hoverBackground);
+      background: var(--agi-vscode-hover);
       border-color: var(--vscode-focusBorder);
     }
     .mode-chip.active {
@@ -1005,6 +1091,10 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       padding: 6px 12px;
+      /* Backstop: even with every child shrinking correctly, a pathological
+       * string must clip inside the panel rather than force the whole webview
+       * into horizontal scroll. */
+      overflow: hidden;
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
       font-size: 11px;
@@ -1015,8 +1105,11 @@ export function getWebviewContent(
     }
 
     .usage-meter-banner.warn {
-      background: var(--vscode-inputValidation-warningBackground);
-      border-bottom-color: var(--vscode-inputValidation-warningBorder);
+      /* Same fixed-palette rule as .runtime-status — the banner's text is
+       * --text-secondary (#b4b4b4), which vanished on a light host's warning
+       * background in exactly the low-quota state where the Upgrade CTA matters. */
+      background: var(--agi-vscode-warning-bg);
+      border-bottom-color: var(--agi-vscode-warning-border);
     }
 
     .usage-meter-collapsed {
@@ -1051,16 +1144,34 @@ export function getWebviewContent(
       transition: width 0.4s var(--transition), background 0.4s var(--transition);
     }
 
+    /*
+     * The two text children MUST be allowed to shrink. They previously carried
+     * flex-shrink:0 alongside white-space:nowrap, so at any sidebar narrower than
+     * ~405px — including the 300px default — they held their full intrinsic width
+     * and pushed the Upgrade button and the collapse × clean off the right edge.
+     * That was worst in the .warn state, i.e. exactly when the upgrade CTA is the
+     * point of the banner.
+     *
+     * flex-shrink:0 belongs on the icons and the two buttons below (which have
+     * it), never on variable-length text. .usage-reset shrinks first because a
+     * truncated reset time costs less than a truncated quota figure.
+     */
     .usage-text {
       white-space: nowrap;
-      flex-shrink: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 1;
     }
 
     .usage-reset {
       white-space: nowrap;
       color: var(--text-secondary);
       opacity: 0.7;
-      flex-shrink: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 2;
     }
 
     .upgrade-btn {
@@ -1084,7 +1195,14 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       font-size: 11px;
-      padding: 0 2px;
+      /* Was padding 0 2px, giving a ~13px hit area. Pad to a 24px square —
+         the minimum comfortable target — without changing the glyph size. */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0 4px;
       line-height: 1;
       transition: color 0.12s;
       flex-shrink: 0;
@@ -1193,7 +1311,18 @@ export function getWebviewContent(
     .tool-call--error .tool-call__bar { color: var(--agi-vscode-danger); }
     .tool-call--error .tool-call__icon { color: var(--agi-vscode-danger); }
 
-    .tool-call__label { font-weight: 400; color: var(--text-secondary); flex-shrink: 0; }
+    /* Tool names are arbitrary-length (MCP servers namespace them, e.g.
+     * "mcp__filesystem__read_text_file"). flex-shrink:0 with no ellipsis forced
+     * the whole row wider than the panel. The .progress-event variant below
+     * already had the right pattern — this is the same rule, un-drifted. */
+    .tool-call__label {
+      font-weight: 400;
+      color: var(--text-secondary);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     .tool-call__summary {
       color: var(--text-secondary);

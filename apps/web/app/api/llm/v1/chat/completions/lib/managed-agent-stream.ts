@@ -6,6 +6,7 @@ import {
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
+import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import {
   appendCloudAgentEvent,
@@ -179,6 +180,14 @@ export function buildManagedAgentStream(
         usage: input.usage,
         reason,
         cancelled: outcome !== 'completed',
+        // CPST Stage-0 telemetry, MANAGED CLOUD ONLY. Read from the SERVING
+        // request view so a rotated attempt reports the route and retry count
+        // that actually produced the bill. 'cancelled' is the agent's own
+        // terminal signal, which is why it is not derived from the charge.
+        cpst: buildCpstUsageFields(serving, {
+          billingOutcome: outcome === 'completed' ? 'completed' : 'failed',
+          ...(outcome === 'cancelled' ? { cancelled: true } : {}),
+        }),
       });
     } else if (input.processed.freeTrial) {
       const inputTokens = input.usage.inputTokens;

@@ -121,7 +121,10 @@ export function AgiWorkProjects({
 
   if (activeProject) {
     return (
-      <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
+      <div
+        data-testid="agi-work-projects"
+        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
+      >
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
           <button
             type="button"
@@ -139,11 +142,15 @@ export function AgiWorkProjects({
                 style={{ background: projectColor(activeProject, 0) }}
               />
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-semibold text-[var(--chat-text-primary)]">
+                {/* Project names are user-supplied and frequently unbroken
+                    (slugs, repo names). Without a break rule the heading held its
+                    intrinsic width and painted over the Settings and New chat
+                    buttons to its right. */}
+                <h1 className="text-xl font-semibold text-[var(--chat-text-primary)] [overflow-wrap:anywhere]">
                   {activeProject.name}
                 </h1>
                 {activeProject.description && (
-                  <p className="mt-1 text-sm leading-6 text-[var(--chat-text-secondary)]">
+                  <p className="mt-1 text-sm leading-6 text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]">
                     {activeProject.description}
                   </p>
                 )}
@@ -152,14 +159,14 @@ export function AgiWorkProjects({
                 type="button"
                 onClick={() => setSettingsProject(activeProject)}
                 aria-label="Project settings"
-                className="rounded-lg p-2 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="shrink-0 rounded-lg p-2 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 <Settings size={16} />
               </button>
               <button
                 type="button"
                 onClick={() => onNewChat?.(activeProject.id)}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-xs font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-85"
+                className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-xs font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-85"
               >
                 <SquarePen size={14} />
                 New chat
@@ -248,7 +255,10 @@ export function AgiWorkProjects({
 
   return (
     <>
-      <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
+      <div
+        data-testid="agi-work-projects"
+        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
+      >
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
           <div className="flex items-start justify-between gap-4">
             <div>

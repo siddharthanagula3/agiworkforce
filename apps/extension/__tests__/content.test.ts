@@ -225,6 +225,18 @@ describe('handleMessage — GET_PAGE_INFO', () => {
       selectedText: expect.any(String),
     });
   });
+
+  it('routes synced page context through extractPageMetadata (CHR-PAGE-METADATA-DEAD)', async () => {
+    const response = (await dispatchMessage({ type: 'GET_PAGE_INFO' })) as {
+      metadata?: { title?: string; favicon?: string; schemaTypes?: unknown[] };
+    };
+    // The page-metadata module is mocked (see top of file) to a known object;
+    // its presence proves handleGetPageInfo actually calls extractPageMetadata.
+    expect(response.metadata).toBeDefined();
+    expect(response.metadata?.title).toBe('Test Page');
+    expect(response.metadata?.favicon).toBe('/favicon.ico');
+    expect(Array.isArray(response.metadata?.schemaTypes)).toBe(true);
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -524,26 +536,6 @@ describe('handleMessage — recording lifecycle', () => {
     };
     expect(response.success).toBe(true);
     expect(Array.isArray(response.actions)).toBe(true);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('handleMessage — console log buffer', () => {
-  it('GET_CONSOLE_LOGS returns success with a logs array', async () => {
-    const response = (await dispatchMessage({ type: 'GET_CONSOLE_LOGS' })) as {
-      success: boolean;
-      logs: unknown[];
-    };
-    expect(response.success).toBe(true);
-    expect(Array.isArray(response.logs)).toBe(true);
-  });
-
-  it('CLEAR_CONSOLE_LOGS returns success', async () => {
-    const response = await dispatchMessage({ type: 'CLEAR_CONSOLE_LOGS' });
-    expect(response).toMatchObject({ success: true });
   });
 });
 

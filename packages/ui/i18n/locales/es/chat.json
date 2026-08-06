@@ -57,5 +57,12 @@
   "compactMode": "Modo Compacto",
   "compactModeEnabled": "Modo compacto habilitado",
   "compactModeDisabled": "Modo compacto deshabilitado",
-  "placeholderEmpty": "¿En qué puedo ayudarte hoy?"
+  "placeholderEmpty": "¿En qué puedo ayudarte hoy?",
+  "artifactPublish": {
+    "untitled": "Artefacto publicado",
+    "publishedOn": "Publicado el {{date}}",
+    "sharedFrom": "Compartido desde AGI",
+    "renderFailed": "No se pudo mostrar este artefacto: {{error}}",
+    "svgUnavailable": "Este SVG no contenía nada que se pudiera mostrar de forma segura."
+  }
 }

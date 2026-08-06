@@ -7,12 +7,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
-import {
-  LAUNCH,
-  MARKETING,
-  MARKETING_FEATURE_MATRIX,
-  POSITIONING,
-} from '../../../lib/marketing-constants';
+import { MARKETING, MARKETING_FEATURE_MATRIX, POSITIONING } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Startups: AGI',
@@ -55,7 +50,7 @@ export default function StartupsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get notified
+              Get AGI Desktop
             </Link>
             <Link href="/pricing" className="agi-fl-cta agi-fl-cta--ghost">
               See Pricing
@@ -116,13 +111,13 @@ export default function StartupsPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Start free, route deliberately."
-          body="Get notified, run Local and BYOK from day one, and turn on public-alpha managed cloud whenever you want hosted compute."
+          body="Run Local and BYOK from day one at no platform cost — Desktop and the CLI are released — and turn on public-alpha managed cloud whenever you want hosted compute."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/pricing', label: 'See Pricing' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/cli', label: 'Install the CLI' },
+            { href: '/pricing', label: 'See Plans' },
           ]}
         />
 

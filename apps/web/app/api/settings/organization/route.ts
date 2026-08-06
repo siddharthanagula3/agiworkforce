@@ -58,7 +58,7 @@ const UNSUPPORTED_PATCH_FIELDS = [
   'settings',
 ] as const satisfies readonly (keyof z.infer<typeof PatchSchema>)[];
 
-type OrgWithCount = OrganizationRow & { member_count: string };
+type OrgWithCount = OrganizationRow & { member_count: string; owner_user_id?: string | null };
 
 function buildOrgResponse(
   org: OrgWithCount,
@@ -71,7 +71,15 @@ function buildOrgResponse(
     slug: org.slug,
     plan: access.plan,
     memberCount: parseInt(org.member_count, 10),
+    // Backed by `organizations.licensed_seats` when an organization is in
+    // scope (0085); null only when no organization was named.
     maxMembers: access.maxMembers,
+    seatsConsumed: access.seatsConsumed,
+    seatsAvailable: access.seatsAvailable,
+    seatSource: access.seatSource,
+    // Derived by trigger from organization_members, so it can never disagree
+    // with the membership table.
+    ownerUserId: org.owner_user_id ?? null,
     createdAt: org.created_at,
     updatedAt: org.updated_at,
     currentUserRole: memberRow?.role ?? 'member',
@@ -88,7 +96,6 @@ async function handleGet(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
-  const access = await getTeamAdminAccess(db, userId);
 
   // Find the organization the user is a member of.
   const [membership] = await db.query<OrganizationMemberRow>(
@@ -100,12 +107,16 @@ async function handleGet(request: NextRequest) {
     [userId],
   );
 
+  // Seat state is only meaningful for an organization in scope, so the
+  // capability is resolved AFTER membership rather than before it.
+  const access = await getTeamAdminAccess(db, userId, membership?.organization_id ?? null);
+
   if (!membership) {
     return NextResponse.json({ organization: null, access });
   }
 
   const [org] = await db.query<OrgWithCount>(
-    `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at,
+    `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at, o.owner_user_id,
             count(m.user_id)::text as member_count
      from public.organizations o
      left join public.organization_members m on m.organization_id = o.id
@@ -194,7 +205,10 @@ async function handleCreate(request: NextRequest) {
     return NextResponse.json(
       {
         organization: buildOrgResponse(
-          { ...organization, member_count: '1' },
+          // The owner membership row inserted above is what the 0085 trigger
+          // derives `organizations.owner_user_id` from, so reporting the
+          // creator here matches what a re-read returns.
+          { ...organization, member_count: '1', owner_user_id: userId },
           {
             organization_id: organization.id,
             user_id: userId,
@@ -235,7 +249,7 @@ async function handlePatch(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
-  const access = await requireTeamAdminAccess(db, userId);
+  await requireTeamAdminAccess(db, userId);
 
   // Verify the user has an admin/owner role.
   const [membership] = await db.query<OrganizationMemberRow>(
@@ -250,6 +264,10 @@ async function handlePatch(request: NextRequest) {
   if (!membership) {
     throw createError.notFound('You are not a member of any organization');
   }
+
+  // Re-resolve with the organization in scope so the response carries this
+  // org's real licensed seat state rather than the no-org placeholder.
+  const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
 
   if (!['owner', 'admin'].includes(membership.role)) {
     throw createError.forbidden('Only owners and admins can update organization settings');
@@ -303,7 +321,7 @@ async function handlePatch(request: NextRequest) {
 
   // Return the updated organization.
   const [updatedOrg] = await db.query<OrgWithCount>(
-    `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at,
+    `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at, o.owner_user_id,
             count(m.user_id)::text as member_count
      from public.organizations o
      left join public.organization_members m on m.organization_id = o.id

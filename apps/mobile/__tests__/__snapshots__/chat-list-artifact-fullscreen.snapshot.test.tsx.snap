@@ -764,7 +764,7 @@ exports[`ConversationItem snapshots locks the tree for a default (read, inactive
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255,255,255,0.08)",
+              "backgroundColor": "#242424",
               "borderRadius": 16,
               "height": 32,
               "justifyContent": "center",
@@ -775,7 +775,7 @@ exports[`ConversationItem snapshots locks the tree for a default (read, inactive
           <Text
             style={
               {
-                "color": "rgba(255,255,255,0.6)",
+                "color": "#aaa",
                 "fontSize": 13,
                 "fontWeight": "600",
               }
@@ -806,7 +806,7 @@ exports[`ConversationItem snapshots locks the tree for a default (read, inactive
             numberOfLines={1}
             style={
               {
-                "color": "rgba(255, 255, 255, 0.8)",
+                "color": "#aaa",
                 "flex": 1,
                 "fontSize": 14,
                 "fontWeight": "500",
@@ -830,7 +830,7 @@ exports[`ConversationItem snapshots locks the tree for a default (read, inactive
             numberOfLines={1}
             style={
               {
-                "color": "rgba(255, 255, 255, 0.3)",
+                "color": "#777",
                 "flex": 1,
                 "fontSize": 12,
               }
@@ -841,7 +841,7 @@ exports[`ConversationItem snapshots locks the tree for a default (read, inactive
           <Text
             style={
               {
-                "color": "rgba(255, 255, 255, 0.2)",
+                "color": "#777",
                 "fontSize": 10,
                 "marginLeft": 8,
               }
@@ -992,7 +992,7 @@ exports[`ConversationItem snapshots locks the tree for an active conversation 1`
             numberOfLines={1}
             style={
               {
-                "color": "rgba(255, 255, 255, 0.3)",
+                "color": "#777",
                 "flex": 1,
                 "fontSize": 12,
               }
@@ -1003,7 +1003,7 @@ exports[`ConversationItem snapshots locks the tree for an active conversation 1`
           <Text
             style={
               {
-                "color": "rgba(255, 255, 255, 0.2)",
+                "color": "#777",
                 "fontSize": 10,
                 "marginLeft": 8,
               }
@@ -1084,7 +1084,7 @@ exports[`ConversationItem snapshots locks the tree for an unread conversation 1`
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255,255,255,0.08)",
+              "backgroundColor": "#242424",
               "borderRadius": 16,
               "height": 32,
               "justifyContent": "center",
@@ -1095,7 +1095,7 @@ exports[`ConversationItem snapshots locks the tree for an unread conversation 1`
           <Text
             style={
               {
-                "color": "rgba(255,255,255,0.6)",
+                "color": "#aaa",
                 "fontSize": 13,
                 "fontWeight": "600",
               }
@@ -1142,7 +1142,7 @@ exports[`ConversationItem snapshots locks the tree for an unread conversation 1`
             numberOfLines={1}
             style={
               {
-                "color": "rgba(255, 255, 255, 0.8)",
+                "color": "#aaa",
                 "flex": 1,
                 "fontSize": 14,
                 "fontWeight": "600",
@@ -1166,7 +1166,7 @@ exports[`ConversationItem snapshots locks the tree for an unread conversation 1`
             numberOfLines={1}
             style={
               {
-                "color": "rgba(255, 255, 255, 0.3)",
+                "color": "#777",
                 "flex": 1,
                 "fontSize": 12,
               }
@@ -1177,7 +1177,7 @@ exports[`ConversationItem snapshots locks the tree for an unread conversation 1`
           <Text
             style={
               {
-                "color": "rgba(255, 255, 255, 0.2)",
+                "color": "#777",
                 "fontSize": 10,
                 "marginLeft": 8,
               }

@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// chrome shim — InviteCodeModal's success path calls setCloudUnlocked (chrome.storage).
+// chrome shim — InviteCodeModal touches chrome.storage during mount/redeem.
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {};
   const mock = {

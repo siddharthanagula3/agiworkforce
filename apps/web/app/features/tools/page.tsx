@@ -4,7 +4,11 @@ import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { LedgerSection } from '@/features/marketing/components/LandingSections';
-import { CapabilityGrid, DevBand, FinalCta } from '@/features/marketing/components/FlagshipSections';
+import {
+  CapabilityGrid,
+  DevBand,
+  FinalCta,
+} from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -121,7 +125,7 @@ export default function FeaturesToolsPage() {
             { href: '/connectors', label: 'Browse Connectors' },
             { href: '/download', label: 'Get notified' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

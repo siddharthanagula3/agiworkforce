@@ -99,7 +99,9 @@ export default function CloudBillingScreen() {
   const paywallSheetRef = useRef<BottomSheet>(null);
 
   // Single source of truth for plan labels (@agiworkforce/types) — keeps this
-  // screen's label in lock-step with account.tsx / web (no "Pro+" vs "Pro Max" drift).
+  // screen's label in lock-step with account.tsx / web, so no surface invents
+  // its own plan name (the failure this guards against: a hand-written label
+  // for a tier that does not exist in BILLING_PLAN_PRICING).
   const tierLabel = getBillingPlanPricing(billingTier).label;
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);

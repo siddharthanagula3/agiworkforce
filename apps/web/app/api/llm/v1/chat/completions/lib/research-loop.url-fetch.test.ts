@@ -117,9 +117,19 @@ beforeEach(() => {
   dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 });
 
+/**
+ * The loop's tool-free planning turn (CAP-045 slice 2) runs before gathering
+ * whenever the iteration budget allows it, so every stream chain below queues
+ * it first.
+ */
+function planStream() {
+  return sseStream([contentEvent('["fetch the page", "check the docs"]'), finishEvent()]);
+}
+
 describe('research loop url_fetch integration', () => {
   it('executes a url_fetch call in a gathering round and merges the page into the cumulative sources', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       // Round 1, pass 1: the model asks to fetch a page.
       .mockResolvedValueOnce(
         toolCallsTurn([{ id: 'call_1', name: 'url_fetch', args: { url: 'https://example.com/' } }]),
@@ -166,10 +176,10 @@ describe('research loop url_fetch integration', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe('https://example.com/');
 
-      // The continuation turn (call 2) carried the assistant tool_call turn
+      // The continuation turn (call 3, after the planning turn) carried the assistant tool_call turn
       // AND the tool result with the extracted page text.
-      expect(streamRequestMock).toHaveBeenCalledTimes(3);
-      const continuation = streamRequestMock.mock.calls[1]?.[2] as {
+      expect(streamRequestMock).toHaveBeenCalledTimes(4);
+      const continuation = streamRequestMock.mock.calls[2]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
       const toolMsg = continuation.messages.find((m) => m.role === 'tool');
@@ -178,7 +188,7 @@ describe('research loop url_fetch integration', () => {
       expect(toolMsg?.content).not.toContain('<html>');
 
       // The synthesis directive's numbered source list includes the fetched page.
-      const synthesis = streamRequestMock.mock.calls[2]?.[2] as {
+      const synthesis = streamRequestMock.mock.calls[3]?.[2] as {
         messages: Array<{ role: string; content: string }>;
       };
       const directive = synthesis.messages[synthesis.messages.length - 1];
@@ -190,6 +200,7 @@ describe('research loop url_fetch integration', () => {
 
   it('feeds an honest error back for blocked URLs and over-budget or unknown tools', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       // Round 1: one blocked URL and one tool the loop never offers.
       .mockResolvedValueOnce(
         toolCallsTurn([
@@ -217,7 +228,7 @@ describe('research loop url_fetch integration', () => {
 
       // Both tool calls got results in the continuation thread (no dangling
       // tool_calls, which providers reject).
-      const continuation = streamRequestMock.mock.calls[1]?.[2] as {
+      const continuation = streamRequestMock.mock.calls[2]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
       const toolIds = continuation.messages
@@ -234,6 +245,7 @@ describe('research loop url_fetch integration', () => {
 
   it('caps fetches per round and returns a budget error for excess calls', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(
         toolCallsTurn([
           { id: 'c1', name: 'url_fetch', args: { url: 'https://one.example/' } },
@@ -267,7 +279,7 @@ describe('research loop url_fetch integration', () => {
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(raw).toContain('Fetch budget for this research run is exhausted');
 
-      const continuation = streamRequestMock.mock.calls[1]?.[2] as {
+      const continuation = streamRequestMock.mock.calls[2]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
       const toolIds = continuation.messages

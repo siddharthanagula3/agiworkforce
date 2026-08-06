@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
@@ -275,6 +276,14 @@ async function handlePortal(request: NextRequest) {
         throw createError.internal('No Stripe customer found for this account');
       }
       const origin = getValidatedOrigin(request);
+      // SEATS: whether this portal lets a customer edit the subscription
+      // quantity is decided by the Stripe Dashboard portal configuration, not
+      // here — no `configuration` is pinned, so this route cannot enable or
+      // disable it. Any seat change made there reaches us only as
+      // `customer.subscription.updated`, where the webhook reads the
+      // authoritative quantity via `resolveSubscriptionSeats`. Do NOT add
+      // `flow_data`/`configuration` without a configured portal-configuration
+      // id; guessing one would fail every portal request.
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: `${origin}/pricing`,
@@ -288,6 +297,16 @@ async function handlePortal(request: NextRequest) {
         },
         'Portal session created (self-healing)',
       );
+
+      // Audit: the caller opened Stripe's billing management surface, where
+      // plan and payment-method changes happen outside our own routes. The
+      // portal URL is a single-use credential and is never recorded.
+      await recordAuditEvent({
+        userId,
+        eventType: 'billing_portal_opened',
+        request,
+        detail: { resourceType: 'subscription', source: 'self_healing' },
+      });
 
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (err) {
@@ -375,6 +394,9 @@ async function handlePortal(request: NextRequest) {
   const origin = getValidatedOrigin(request);
 
   try {
+    // See the seat note on the self-healing session above: seat/quantity edits
+    // made in Stripe's hosted portal arrive as `customer.subscription.updated`
+    // and are read from the subscription item, never from metadata.
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: `${origin}/pricing`,
@@ -388,6 +410,13 @@ async function handlePortal(request: NextRequest) {
       },
       'Portal session created',
     );
+
+    await recordAuditEvent({
+      userId,
+      eventType: 'billing_portal_opened',
+      request,
+      detail: { resourceType: 'subscription', source: 'billing_portal' },
+    });
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (error) {

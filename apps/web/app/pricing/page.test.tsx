@@ -12,6 +12,7 @@ const stripeMocks = vi.hoisted(() => ({
   upgradeToProPlan: vi.fn(),
   upgradeToMaxPlan: vi.fn(),
   upgradeToMax15xPlan: vi.fn(),
+  upgradeToTeamPlan: vi.fn(),
   upgradePlanMidCycle: vi.fn(),
   previewUpgrade: vi.fn(),
 }));
@@ -71,17 +72,143 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$200').length).toBeGreaterThan(0);
     expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
-    expect(screen.queryByText('$25')).toBeNull();
+    // Team is a real per-seat plan: its $25/seat unit price renders in the Team
+    // card (alongside a "per seat" sub), so the unit amount is expected here.
+    expect(screen.getAllByText('$25').length).toBeGreaterThan(0);
   });
 
-  it('keeps Team visible but routes it to sales instead of personal checkout', async () => {
+  it('offers Team as a real per-seat checkout instead of a sales hand-off', async () => {
     render(<PricingPage />);
 
-    const teamSalesLink = (await screen.findAllByRole('link', { name: 'talkToSalesCta' })).find(
-      (link) => link.getAttribute('href') === '/contact-sales?plan=team',
+    // The contact-sales dead end is gone for Team; Enterprise keeps it.
+    const salesLinks = await screen.findAllByRole('link', { name: /Cta$/ });
+    expect(
+      salesLinks.some((link) => link.getAttribute('href') === '/contact-sales?plan=team'),
+    ).toBe(false);
+    expect(salesLinks.some((link) => link.getAttribute('href') === '/contact-sales')).toBe(true);
+
+    expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toBeInTheDocument();
+  });
+
+  it('sends the chosen seat count to Team checkout', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        country: 'US',
+        requestedCurrency: 'usd',
+        plans: {
+          basic: {},
+          pro: {},
+          max: {},
+          max_15x: {},
+          team: {
+            monthly: {
+              amountMinor: 2_000,
+              currency: 'usd',
+              localized: false,
+              checkoutReady: true,
+            },
+          },
+        },
+      }),
+    } as Response);
+
+    render(<PricingPage />);
+
+    const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    fireEvent.change(seatInput, { target: { value: '14' } });
+
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+
+    await waitFor(() => expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: 14 }));
+  });
+
+  it('offers a Team yearly cadence and sends billingPeriod yearly when the yearly Price is ready', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        country: 'US',
+        requestedCurrency: 'usd',
+        plans: {
+          basic: {},
+          pro: {},
+          max: {},
+          max_15x: {},
+          team: {
+            monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
+            yearly: { amountMinor: 24_000, currency: 'usd', localized: false, checkoutReady: true },
+          },
+        },
+      }),
+    } as Response);
+
+    render(<PricingPage />);
+
+    // The Team card exposes its own monthly/yearly cadence, separate from the
+    // individual-plan annual toggle.
+    const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
+    fireEvent.click(within(teamCadence).getByRole('button', { name: /annual/i }));
+
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+
+    await waitFor(() =>
+      expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({
+        seats: 1,
+        billingPeriod: 'yearly',
+      }),
     );
-    expect(teamSalesLink).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'teamCta' })).toBeNull();
+  });
+
+  it('does not offer a Team yearly cadence when the yearly Price is not checkout-ready (fail-closed)', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        country: 'US',
+        requestedCurrency: 'usd',
+        plans: {
+          basic: {},
+          pro: {},
+          max: {},
+          max_15x: {},
+          team: {
+            monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
+            // Present but not checkout-ready (e.g. STRIPE_PRICE_TEAM_YEARLY_USD unset).
+            yearly: {
+              amountMinor: 24_000,
+              currency: 'usd',
+              localized: false,
+              checkoutReady: false,
+            },
+          },
+        },
+      }),
+    } as Response);
+
+    render(<PricingPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('group', { name: 'Team billing cadence' })).toBeNull();
+  });
+
+  it('clamps a seat count below the minimum instead of sending it to checkout', async () => {
+    render(<PricingPage />);
+
+    const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    fireEvent.change(seatInput, { target: { value: '0' } });
+    expect(seatInput).toHaveValue(1);
+
+    fireEvent.change(seatInput, { target: { value: '-5' } });
+    expect(seatInput).toHaveValue(1);
   });
 
   it('shows the enforceable project, MCP, media, and developer-surface plan differences', async () => {
@@ -105,9 +232,13 @@ describe('PricingPage', () => {
       'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team custom compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Sales-assisted pilot compareTeamBestFor',
+      'Team perSeatPrice compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes compareTeamBestFor',
     );
-  });
+    // Explicit timeout: this assertion computes the accessible name of every row
+    // in the full comparison table, which is genuinely slow in jsdom and sits
+    // close to the 5s default even before machine load. Raising it here keeps
+    // the failure mode "assertion failed", not "flaky timeout".
+  }, 30_000);
 
   it('renders trusted regional prices without exposing India pricing to other regions', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce({
@@ -206,6 +337,24 @@ describe('PricingPage', () => {
     expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
     expect(screen.getByRole('button', { name: 'maxCta' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Get Max 15x' })).toBeEnabled();
+    // Team is a different product, not a rung on the individual ladder: a Pro
+    // subscriber can still buy it (as a seat-carrying org plan).
+    expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
+  });
+
+  it('routes a Team subscriber to seat changes, not to an individual upgrade', () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    testState.billing = { plan: 'team', status: 'active' };
+
+    render(<PricingPage />);
+
+    // Not "Current plan": a growing org's actionable change is more seats.
+    expect(screen.getByRole('button', { name: 'changeSeatsCta' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'teamCta' })).toBeNull();
+    // Individual plans must NOT read as upgrades from an org plan — converting a
+    // Team subscription into a personal one would strand the other seats.
+    expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Manage billing' }).length).toBeGreaterThan(0);
   });
 
   it('keeps paid checkout disabled until trusted localized prices are ready', () => {
@@ -325,6 +474,14 @@ describe('PricingPage', () => {
           },
           max: {},
           max_15x: {},
+          team: {
+            monthly: {
+              amountMinor: 1_800,
+              currency: 'gbp',
+              localized: true,
+              checkoutReady: true,
+            },
+          },
         },
       }),
     } as Response);
@@ -334,8 +491,10 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getAllByText('£15').length).toBeGreaterThan(0));
     expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£15');
-    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('custom');
-    expect(screen.queryByText('£18')).toBeNull();
+    // Team is per seat and monthly-only: the annual toggle must not divide its
+    // per-seat price by twelve the way it does Pro's yearly price.
+    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('perSeatPrice');
+    expect(screen.getAllByText('£18').length).toBeGreaterThan(0);
   });
 
   it('does not render the obsolete managed-cloud early-access waitlist', () => {

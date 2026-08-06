@@ -1,3 +1,4 @@
+import { resolveScreenDir } from '../support/dom';
 // Drives the 11 conversation-action QA items (Chat, Tier 1, desktop-qa-checklist.md)
 // against the LIVE tree: DesktopShellV3 -> unified-chat ChatInterface/ChatInput/
 // MessageBubble for message rendering, apps/desktop/src/features/v3/Sidebar.tsx +
@@ -12,12 +13,7 @@
 // are collapsed into single `browser.execute()` calls that do the DOM
 // query/click/poll in-page (one WebDriver round trip instead of many).
 
-import * as fs from 'node:fs';
-
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
 function clickSelector(selector: string) {
   return browser.execute((sel) => {

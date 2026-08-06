@@ -14,6 +14,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -74,7 +75,23 @@ async function handleExportUserData(request: NextRequest) {
     // The legacy export_user_data RPC serializes entire credit ledgers and
     // must never be used for a user-facing export. Build a reviewed DTO from
     // explicit, tenant-scoped selects instead.
-    return createExportResponse(request, userId, await collectUserData({ id: userId, email }, db));
+    const exportData = await collectUserData({ id: userId, email }, db);
+
+    // Audit: a full personal-data export left the system. Recorded AFTER
+    // authorization and with the section count only — never any exported
+    // content, which is the entire point of the export being sensitive.
+    await recordAuditEvent({
+      userId,
+      eventType: 'data_exported',
+      request,
+      detail: {
+        resourceType: 'user_data',
+        source: 'gdpr_portability_export',
+        count: Object.keys(exportData).length,
+      },
+    });
+
+    return createExportResponse(request, userId, exportData);
   } catch (error) {
     logger.error(
       {

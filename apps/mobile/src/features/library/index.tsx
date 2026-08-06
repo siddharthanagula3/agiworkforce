@@ -330,8 +330,14 @@ function FilterChip({
   return (
     <Pressable
       onPress={onPress}
-      className="px-3 py-1.5 rounded-full"
+      className="px-3 rounded-full"
+      // 44pt is the iOS minimum tap target; these chips were ~30pt, and the same
+      // control is full height elsewhere in the app. hitSlop alone would fix the
+      // touch area but leave them visually undersized next to their siblings.
+      hitSlop={6}
       style={{
+        minHeight: 40,
+        justifyContent: 'center',
         backgroundColor: active ? c.accentSurface : c.surfaceElevated,
         borderWidth: 1,
         borderColor: active ? c.accentBorder : c.border,

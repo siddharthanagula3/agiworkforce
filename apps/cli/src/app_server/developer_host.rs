@@ -4,13 +4,13 @@ use agiworkforce_protocol::agent_events::{
     AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
-    AppServerCapabilities, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
-    DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
-    DeveloperSessionSource, DeveloperSessionTrustMode, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
-    ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams,
-    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary, agent_event_notification,
-    task_state_notification,
+    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
+    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource,
+    DeveloperSessionTrustMode, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{Mutex, RwLock, RwLockReadGuard, broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, Mutex, RwLock, RwLockReadGuard};
 use uuid::Uuid;
 
 use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
@@ -2347,16 +2347,14 @@ mod tests {
         assert_eq!(next.text, "follow-up");
         assert!(host.running_turns.lock().await.contains_key(&thread_id));
 
-        assert!(
-            take_steered_input_or_close(
-                host.running_turns.as_ref(),
-                host.steering.as_ref(),
-                &thread_id,
-                &turn_id,
-            )
-            .await
-            .is_none()
-        );
+        assert!(take_steered_input_or_close(
+            host.running_turns.as_ref(),
+            host.steering.as_ref(),
+            &thread_id,
+            &turn_id,
+        )
+        .await
+        .is_none());
         assert!(!host.running_turns.lock().await.contains_key(&thread_id));
     }
 
@@ -2383,16 +2381,14 @@ mod tests {
             },
         );
 
-        assert!(
-            take_steered_input_or_close(
-                host.running_turns.as_ref(),
-                host.steering.as_ref(),
-                &thread_id,
-                &turn_id,
-            )
-            .await
-            .is_none()
-        );
+        assert!(take_steered_input_or_close(
+            host.running_turns.as_ref(),
+            host.steering.as_ref(),
+            &thread_id,
+            &turn_id,
+        )
+        .await
+        .is_none());
         let error = host
             .steer_turn(TurnSteerParams {
                 thread_id: thread_id.clone(),
@@ -2468,35 +2464,32 @@ mod tests {
         .expect("host");
 
         let too_many_items = vec![text_input("x"); MAX_USER_INPUT_ITEMS_PER_TURN + 1];
-        assert!(
-            host.prepare_input(too_many_items)
-                .expect_err("item count must be bounded")
-                .to_string()
-                .contains("input items")
-        );
+        assert!(host
+            .prepare_input(too_many_items)
+            .expect_err("item count must be bounded")
+            .to_string()
+            .contains("input items"));
 
         let too_much_text = vec![
             text_input(&"x".repeat(MAX_USER_INPUT_TEXT_CHARS)),
             text_input("y"),
         ];
-        assert!(
-            host.prepare_input(too_much_text)
-                .expect_err("aggregate text must be bounded")
-                .to_string()
-                .contains("Combined turn text")
-        );
+        assert!(host
+            .prepare_input(too_much_text)
+            .expect_err("aggregate text must be bounded")
+            .to_string()
+            .contains("Combined turn text"));
 
         let too_many_images = (0..=MAX_IMAGE_INPUTS_PER_TURN)
             .map(|_| UserInput::Image {
                 image_url: "data:image/png;base64,AA==".to_string(),
             })
             .collect();
-        assert!(
-            host.prepare_input(too_many_images)
-                .expect_err("image count must be bounded")
-                .to_string()
-                .contains("images")
-        );
+        assert!(host
+            .prepare_input(too_many_images)
+            .expect_err("image count must be bounded")
+            .to_string()
+            .contains("images"));
 
         assert!(reserve_image_bytes(MAX_TOTAL_IMAGE_INPUT_BYTES - 1, 1).is_ok());
         assert!(reserve_image_bytes(MAX_TOTAL_IMAGE_INPUT_BYTES - 1, 2).is_err());
@@ -2508,23 +2501,19 @@ mod tests {
             "data:image/{};base64,AA==",
             "x".repeat(MAX_IMAGE_DATA_URL_HEADER_BYTES)
         );
-        assert!(
-            content_block_from_data_url(&long_header)
-                .expect_err("oversized header must be rejected")
-                .to_string()
-                .contains("header")
-        );
+        assert!(content_block_from_data_url(&long_header)
+            .expect_err("oversized header must be rejected")
+            .to_string()
+            .contains("header"));
 
         let oversized_encoded = format!(
             "data:image/png;base64,{}",
             "A".repeat(MAX_IMAGE_INPUT_ENCODED_BYTES + 1)
         );
-        assert!(
-            content_block_from_data_url(&oversized_encoded)
-                .expect_err("oversized base64 must be rejected before decode")
-                .to_string()
-                .contains("Encoded image")
-        );
+        assert!(content_block_from_data_url(&oversized_encoded)
+            .expect_err("oversized base64 must be rejected before decode")
+            .to_string()
+            .contains("Encoded image"));
 
         let workspace = tempdir().expect("workspace");
         let store = tempdir().expect("store");
@@ -2539,12 +2528,11 @@ mod tests {
             false,
         )
         .expect("host");
-        assert!(
-            host.content_block_from_local_image(&image_path)
-                .expect_err("oversized local image must be rejected before read")
-                .to_string()
-                .contains("10 MB")
-        );
+        assert!(host
+            .content_block_from_local_image(&image_path)
+            .expect_err("oversized local image must be rejected before read")
+            .to_string()
+            .contains("10 MB"));
     }
 
     #[tokio::test]
@@ -2591,11 +2579,9 @@ mod tests {
             })
             .await
             .expect_err("unknown authority must not resume");
-        assert!(
-            resume_error
-                .to_string()
-                .contains("unknown routing authority")
-        );
+        assert!(resume_error
+            .to_string()
+            .contains("unknown routing authority"));
 
         let turn_error = host
             .start_turn(TurnStartParams {
@@ -2747,11 +2733,9 @@ mod tests {
             })
             .await
             .expect_err("malformed authority must not resume");
-        assert!(
-            resume_error
-                .to_string()
-                .contains("invalid routing authority")
-        );
+        assert!(resume_error
+            .to_string()
+            .contains("invalid routing authority"));
     }
 
     #[tokio::test]
@@ -2796,11 +2780,9 @@ mod tests {
             })
             .await
             .expect_err("incompatible authority must not resume");
-        assert!(
-            resume_error
-                .to_string()
-                .contains("incompatible managed trust")
-        );
+        assert!(resume_error
+            .to_string()
+            .contains("incompatible managed trust"));
     }
 
     #[tokio::test]
@@ -3352,12 +3334,10 @@ mod tests {
         assert_eq!(agent.provider, Provider::ManagedCloud);
         assert_eq!(agent.privacy_mode, crate::agent::PrivacyMode::Managed);
         assert!(agent.validate_privacy_boundary().is_ok());
-        assert!(
-            agent
-                .messages
-                .iter()
-                .any(|message| message.text_content().contains("managed-only transcript"))
-        );
+        assert!(agent
+            .messages
+            .iter()
+            .any(|message| message.text_content().contains("managed-only transcript")));
     }
 
     #[tokio::test]
@@ -3506,12 +3486,10 @@ mod tests {
             })
             .await
             .expect("persisted interrupted history");
-        assert!(
-            history
-                .messages
-                .iter()
-                .any(|message| message.text.contains("partial assistant response"))
-        );
+        assert!(history
+            .messages
+            .iter()
+            .any(|message| message.text.contains("partial assistant response")));
     }
 
     #[cfg(unix)]
@@ -4027,12 +4005,10 @@ mod tests {
             agent.attached_context_files,
             [
                 original_attachments,
-                vec![
-                    valid_context_file
-                        .path()
-                        .canonicalize()
-                        .expect("canonical valid context")
-                ],
+                vec![valid_context_file
+                    .path()
+                    .canonicalize()
+                    .expect("canonical valid context")],
             ]
             .concat()
         );

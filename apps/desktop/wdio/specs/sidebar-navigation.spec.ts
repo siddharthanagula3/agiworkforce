@@ -147,19 +147,20 @@ describe('AGI Desktop v3 Sidebar', () => {
     this.timeout(60000);
     await browser.pause(500);
 
-    // Seed a findable conversation.
+    // Seed a findable conversation. Type through the real composer (setting
+    // textarea.value directly never fires React's onChange, so the old inline
+    // injection sent nothing), then wait for the USER message — the
+    // conversation exists and is searchable the moment the user turn lands, so
+    // this no longer depends on a live Ollama assistant response.
     const seedTitle = `QA Search Target ${Date.now()}`;
-    await browser.execute((title) => {
-      const ta = document.querySelector(
-        'textarea[aria-label="Chat message input"]',
-      ) as HTMLTextAreaElement | null;
-      if (ta) ta.value = title;
-      const sendBtn = document.querySelector(
-        'button[aria-label*="Send message ("]',
-      ) as HTMLButtonElement | null;
-      sendBtn?.click();
-    }, seedTitle);
-    await waitForSelector('[data-role="assistant"]', 30000);
+    const composer = await $('textarea[aria-label="Chat message input"]');
+    await composer.waitForDisplayed({ timeout: 15000 });
+    await composer.click();
+    await composer.addValue(seedTitle);
+    const sendBtn = await $('button[aria-label*="Send message ("]');
+    await sendBtn.waitForClickable({ timeout: 5000 });
+    await sendBtn.click();
+    await waitForSelector('[data-role="user"]', 30000);
 
     await clickSelector('aside[data-v3-sidebar] button[title="Search (⌘K)"]');
     const dialogAppeared = await waitForSelector('div[role="dialog"][aria-modal="true"]', 5000);

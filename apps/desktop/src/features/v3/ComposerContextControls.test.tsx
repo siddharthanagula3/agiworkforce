@@ -120,6 +120,49 @@ describe('ComposerContextControls', () => {
     expect(gitStatusMock).not.toHaveBeenCalled();
   });
 
+  it('suppresses the sandbox-off warning until a workspace folder exists', () => {
+    useSettingsStore.setState((state) => ({
+      executionPreferences: {
+        ...state.executionPreferences,
+        terminalSandbox: {
+          ...state.executionPreferences.terminalSandbox,
+          enabled: false,
+        },
+      },
+    }));
+
+    // Fresh-install shape: no folder attached. The shell-execution warning is
+    // about a workspace that does not exist yet, so no chip should alarm.
+    render(<ComposerContextControls mode="local" folderPath={null} folderLabel={null} />);
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Terminal: Sandbox off. Open agent execution settings',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps an explicit full-access policy visible even without a folder', () => {
+    useSettingsStore.setState((state) => ({
+      executionPreferences: {
+        ...state.executionPreferences,
+        terminalSandbox: {
+          ...state.executionPreferences.terminalSandbox,
+          enabled: true,
+          policy: 'danger-full-access',
+        },
+      },
+    }));
+
+    render(<ComposerContextControls mode="local" folderPath={null} folderLabel={null} />);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Terminal: Full access. Open agent execution settings',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('keeps automatic approval risk visible at the point of execution', async () => {
     const user = userEvent.setup();
     useSettingsStore.setState((state) => ({

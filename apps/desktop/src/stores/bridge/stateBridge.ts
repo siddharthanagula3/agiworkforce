@@ -305,6 +305,26 @@ export function bridgeMcpServerStore(): void {
 // ---------------------------------------------------------------------------
 
 export function bridgeMemoryStore(): void {
+  // decayEnabled is not part of MemoryState; it comes from the real backend
+  // decay config (memory_get_decay_config). Fetch it once at bridge init and
+  // cache it here so the surfaced AppState toggle reflects actual backend state
+  // instead of a hardcoded default. Refreshed values (via setDecayConfig) flow
+  // in when this bridge is re-run.
+  let decayEnabled = false;
+
+  import('../../api/memory')
+    .then(({ getDecayConfig }) => getDecayConfig())
+    .then((config) => {
+      decayEnabled = config.enabled;
+      appStateStore.setState((prev: AppState) => {
+        if (prev.memory.decayEnabled === decayEnabled) return prev;
+        return { ...prev, memory: { ...prev.memory, decayEnabled } };
+      });
+    })
+    .catch((err: unknown) => {
+      console.warn('[stateBridge] Failed to fetch memory decay config:', err);
+    });
+
   import('../memoryStore')
     .then(({ useMemoryStore }) => {
       const unsubscribe = useMemoryStore.subscribe((state) => {
@@ -314,14 +334,12 @@ export function bridgeMemoryStore(): void {
           totalEntries > 0
             ? state.memories.reduce((acc, m) => acc + m.importance, 0) / totalEntries
             : 0;
-        // decayEnabled: not directly available in MemoryState without fetching decay config.
-        // Leave as current canonical value — decay config is fetched separately.
-        const decayEnabled = false; // default; updated when getDecayConfig() is called
 
         appStateStore.setState((prev: AppState) => {
           if (
             prev.memory.totalEntries === totalEntries &&
-            Math.abs(prev.memory.avgImportance - avgImportance) < 0.001
+            Math.abs(prev.memory.avgImportance - avgImportance) < 0.001 &&
+            prev.memory.decayEnabled === decayEnabled
           ) {
             return prev;
           }

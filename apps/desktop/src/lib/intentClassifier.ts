@@ -7,7 +7,7 @@
  *
  * Architecture:
  * 1. For Basic tier: Fast keyword-based classification (free, instant)
- * 2. For Pro+ tiers: Uses a fast, cheap classifier model with recent knowledge cutoff
+ * 2. For Pro and above: Uses a fast, cheap classifier model with recent knowledge cutoff
  * 3. Returns structured intent with confidence and required capabilities
  *
  * CLASSIFIER MODEL SELECTION (January 2026):
@@ -250,7 +250,7 @@ export interface ClassifiedIntent {
   keywords: string[];
   requiredCapabilities: Array<keyof ModelMetadata['capabilities']>;
   suggestedTools: ToolCategory[];
-  reasoning?: string; // LLM's reasoning (for Pro+ tiers)
+  reasoning?: string; // LLM's reasoning (for Pro and above)
 }
 
 /**
@@ -591,7 +591,7 @@ export function classifyIntentLocally(
 }
 
 /**
- * Generate LLM prompt for intent classification (Pro+ tiers)
+ * Generate LLM prompt for intent classification (Pro and above)
  */
 export function getIntentClassificationPrompt(
   message: string,
@@ -774,7 +774,7 @@ function validateIntentType(type: string): IntentType {
  * Classify user intent
  *
  * For Basic tier: Uses fast keyword-based classification
- * For Pro+ tiers: Uses a fast current model for intelligent classification
+ * For Pro and above: Uses a fast current model for intelligent classification
  *
  * @param message - User's message
  * @param options - Classification options
@@ -794,7 +794,7 @@ export async function classifyIntent(
     return localResult || DEFAULT_CHAT_INTENT;
   }
 
-  // For Pro+ tiers, use LLM if local confidence is low or LLM is available
+  // For Pro and above, use LLM if local confidence is low or LLM is available
   if (localResult && localResult.confidence >= 0.8) {
     return localResult;
   }

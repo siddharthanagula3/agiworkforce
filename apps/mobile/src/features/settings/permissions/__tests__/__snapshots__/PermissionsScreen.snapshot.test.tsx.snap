@@ -530,8 +530,9 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       {
         "alignItems": "center",
         "flexDirection": "row",
-        "height": 50,
+        "minHeight": 50,
         "paddingHorizontal": 8,
+        "paddingVertical": 4,
       }
     }
   >

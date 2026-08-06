@@ -70,7 +70,7 @@ export interface CampaignHeroProps {
 }
 
 const DEFAULT_PANEL_ROWS: LedgerRow[] = [
-  { k: 'Launch', v: LAUNCH.date },
+  { k: 'Launch', v: LAUNCH.shortLabel },
   { k: 'Modes', v: 'Local, BYOK, Cloud (public alpha)' },
   { k: 'Surfaces', v: 'Web, Mobile, Desktop, CLI, Chrome, VS Code' },
   { k: 'Boundary', v: POSITIONING.trustBoundary },
@@ -232,7 +232,7 @@ export function CampaignHero({
       <aside className="agi-campaign-console" aria-label={panelTitle}>
         <div className="agi-console-topline">
           <span>{panelTitle}</span>
-          <span>{LAUNCH.shortDate}</span>
+          <span>{LAUNCH.shortLabel}</span>
         </div>
         <div className="agi-console-stats">
           {stats.map((stat) => (

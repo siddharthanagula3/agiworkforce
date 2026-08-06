@@ -132,9 +132,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  GET_COOKIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  CLEAR_COOKIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
 };
 
 /**

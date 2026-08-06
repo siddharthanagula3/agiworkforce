@@ -10,7 +10,7 @@
  *
  * Note: lower tiers can set us_only=true but the router ignores it because
  *       TierPolicy.usOnlyRoutingAvailable is false. We still let them store
- *       the preference so flipping to Pro+ doesn't lose the setting.
+ *       the preference so a later upgrade doesn't lose the setting.
  */
 
 import 'server-only';

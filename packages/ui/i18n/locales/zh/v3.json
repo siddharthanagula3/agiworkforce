@@ -53,13 +53,16 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "资料库",
       "tasks": "任务",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
-      "routines": "Routines"
+      "routines": "Routines",
+      "design": "设计",
+      "research": "研究"
     },
     "account": "Account"
   },
@@ -296,7 +299,9 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "empty": "No artifacts yet. Run a scheduled task to generate outputs.",
+      "emptyTitle": "No artifacts yet",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "AGI Work projects",
@@ -312,7 +317,16 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "emptyTitle": "No scheduled tasks"
+    },
+    "compose": {
+      "scopeAdd": "添加范围（可选）",
+      "scopeHide": "隐藏范围",
+      "constraintsLabel": "约束",
+      "constraintsPlaceholder": "边界、需避免的内容、优先来源…",
+      "deliverableLabel": "交付物",
+      "deliverablePlaceholder": "你期望的具体产出（文件、表格、摘要等）"
     }
   },
   "time": {
@@ -323,5 +337,8 @@
     "mAgoShort": "{{count}}m ago",
     "daysAgo": "{{count}} days ago",
     "weeksAgo": "{{count}} weeks ago"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "目前草图仅保留在本次会话中 — 关闭应用后画板会被清空。"
   }
 }

@@ -20,6 +20,19 @@ export interface FlagshipCta {
   waitlist?: boolean;
 }
 
+/**
+ * A trust-mode pill in the hero ribbon.
+ *
+ * A bare string renders the label alone (the original behaviour, kept so every
+ * existing caller is unchanged). The object form adds one line saying what
+ * actually CHANGES in that mode — which is the point of the ribbon. Three
+ * unexplained pills reading "Local · on-device / BYOK · your keys / Cloud ·
+ * public alpha" decorate; they do not tell a first-time reader that the choice
+ * of where inference happens is theirs, and the section that explains it sits
+ * several screens down.
+ */
+export type ModeRibbonItem = string | { label: string; note: string };
+
 function CtaButton({ cta, kind }: { cta: FlagshipCta; kind: 'primary' | 'secondary' | 'ghost' }) {
   const className = `agi-fl-cta agi-fl-cta--${kind}`;
   if (cta.waitlist) {
@@ -56,7 +69,7 @@ export function FlagshipHero({
   ctas: FlagshipCta[];
   /** Optional second row of ghost-style platform links. */
   ctas2?: FlagshipCta[];
-  modeRibbon: string[];
+  modeRibbon: ModeRibbonItem[];
   frame?: ProductFrameImage;
   /** Custom hero visual (e.g. HeroAppWindow). Takes precedence over frame. */
   visual?: ReactNode;
@@ -107,10 +120,24 @@ export function FlagshipHero({
             </h1>
           )}
           {lede && <p className="agi-fl-lede">{lede}</p>}
-          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-            {modeRibbon.map((mode) => (
-              <li key={mode}>{mode}</li>
-            ))}
+          <ul
+            className={
+              modeRibbon.some((mode) => typeof mode !== 'string')
+                ? 'agi-fl-mode-ribbon agi-fl-mode-ribbon--explained'
+                : 'agi-fl-mode-ribbon'
+            }
+            aria-label="Trust modes"
+          >
+            {modeRibbon.map((mode) =>
+              typeof mode === 'string' ? (
+                <li key={mode}>{mode}</li>
+              ) : (
+                <li key={mode.label}>
+                  <span className="agi-fl-mode-label">{mode.label}</span>
+                  <span className="agi-fl-mode-note">{mode.note}</span>
+                </li>
+              ),
+            )}
           </ul>
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
@@ -201,6 +228,71 @@ export function StatBand({ items }: { items: StatBandItem[] }) {
           <span className="agi-fl-stat-label">{item.label}</span>
         </Reveal>
       ))}
+    </section>
+  );
+}
+
+/* ────────────────────────── Availability strip ──────────────────── */
+
+export interface AvailabilityItem {
+  name: string;
+  status: string;
+  /** True only when the surface has a published release the reader can get. */
+  available: boolean;
+  href: string;
+}
+
+/**
+ * Six surfaces, each with its real release status.
+ *
+ * This answers the one question the site could not previously answer — "what
+ * can I actually install today?" — and it answers it in the same place for
+ * every surface, so an unreleased surface cannot be quietly presented like a
+ * shipped one. Status strings must come from `SURFACE_STATUS`, which is
+ * sourced from release tags.
+ */
+export function AvailabilityStrip({
+  eyebrow,
+  title,
+  note,
+  items,
+}: {
+  eyebrow: string;
+  title: string;
+  note?: string;
+  items: AvailabilityItem[];
+}) {
+  return (
+    <section className="agi-fl-avail" aria-labelledby="agi-fl-avail-title">
+      <p className="agi-fl-eyebrow">{eyebrow}</p>
+      <h2 id="agi-fl-avail-title" className="agi-fl-avail-title">
+        {title}
+      </h2>
+      <ul className="agi-fl-avail-grid">
+        {items.map((item) => (
+          <li key={item.name} className="agi-fl-avail-item">
+            <Link href={item.href} className="agi-fl-avail-link">
+              <span className="agi-fl-avail-name">{item.name}</span>
+              <span
+                className={
+                  item.available
+                    ? 'agi-fl-avail-status agi-fl-avail-status--live'
+                    : 'agi-fl-avail-status'
+                }
+              >
+                <span
+                  className={
+                    item.available ? 'agi-fl-avail-dot agi-fl-avail-dot--live' : 'agi-fl-avail-dot'
+                  }
+                  aria-hidden="true"
+                />
+                {item.status}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {note ? <p className="agi-fl-avail-note">{note}</p> : null}
     </section>
   );
 }

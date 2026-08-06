@@ -12,6 +12,7 @@ import { RouteFlow } from '@/features/marketing/components/RouteFlow';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
 import {
+  AvailabilityStrip,
   CapabilityGrid,
   DevBand,
   FinalCta,
@@ -21,7 +22,7 @@ import {
   TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { LAUNCH, SURFACE_STATUS } from '../lib/marketing-constants';
+import { SURFACE_STATUS } from '../lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
@@ -69,17 +70,70 @@ export default function Home() {
           eyebrow="the AI application suite"
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
           ]}
           ctas2={[
             { href: '/vscode-extension', label: 'VS Code Extension' },
             { href: '/chrome-extension', label: 'Chrome Extension' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
+          lede="One assistant across six surfaces — and you choose where each request actually runs."
+          modeRibbon={[
+            {
+              label: 'Local',
+              note: 'Models on your own hardware. Works offline. No account needed.',
+            },
+            {
+              label: 'BYOK',
+              note: 'Your provider key. Traffic goes straight to them — we never sit in your spend.',
+            },
+            {
+              label: 'AGI Cloud',
+              note: 'We host and meter it. Public alpha, open by default.',
+            },
+          ]}
           visual={<MobileHeroVisual />}
         />
 
         <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
+
+        <AvailabilityStrip
+          eyebrow="Availability"
+          title="What you can use today, and what is still coming."
+          items={[
+            {
+              name: 'AGI Web',
+              status: SURFACE_STATUS.web,
+              available: true,
+              href: WEB_CHAT_ENTRY_HREF,
+            },
+            {
+              name: 'AGI Desktop',
+              status: SURFACE_STATUS.desktop,
+              available: true,
+              href: '/download',
+            },
+            { name: 'AGI CLI', status: SURFACE_STATUS.cli, available: true, href: '/cli' },
+            {
+              name: 'AGI Mobile',
+              status: SURFACE_STATUS.mobile,
+              available: false,
+              href: '/mobile',
+            },
+            {
+              name: 'AGI in VS Code',
+              status: SURFACE_STATUS.vscode,
+              available: false,
+              href: '/vscode-extension',
+            },
+            {
+              name: 'AGI in Chrome',
+              status: SURFACE_STATUS.chrome,
+              available: false,
+              href: '/chrome-extension',
+            },
+          ]}
+          note="Mobile, VS Code, and Chrome are built and in the repository, but none has a published release yet. Desktop installers vary by platform — /download resolves the current ones."
+        />
 
         <RouteFlow
           eyebrow="Routing"
@@ -104,7 +158,7 @@ export default function Home() {
                 'Artifacts workbench',
                 'Scheduled work with AGI Work',
               ],
-              platforms: 'macOS · Windows · Linux',
+              platforms: 'macOS · Linux',
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Local' },
@@ -138,7 +192,7 @@ export default function Home() {
                 'Privacy modes',
                 'Offline with local models',
               ],
-              platforms: 'macOS · Linux',
+              platforms: 'macOS · Linux · Windows',
               status: SURFACE_STATUS.cli,
               href: '/cli',
               frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
@@ -316,11 +370,12 @@ export default function Home() {
         <section className="agi-fl-section" aria-labelledby="agi-mobile-launch-title">
           <p className="agi-fl-eyebrow">AGI Mobile</p>
           <h2 id="agi-mobile-launch-title" className="agi-fl-h2">
-            Local, on-device AI. Free forever.
+            Local, on-device AI. Built, not yet shipped.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI Mobile runs today, in Local Mode, on your phone, at no cost. We are bringing it to
-            the App Store and Google Play. Leave your email and we will tell you the day it is live.
+            AGI Mobile is built around Local Mode: chats and memory stay on the phone unless you
+            move them. It is not on the App Store or Google Play yet, so there is nothing to install
+            today. Leave your email and we will tell you the day it lands.
           </p>
           <div className="agi-fl-launch-form">
             <PublicWaitlistForm
@@ -332,14 +387,14 @@ export default function Home() {
         </section>
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Start where you work."
-          body="Try the web app now. Get notified when Desktop and the CLI open for Local and BYOK work."
+          body="AGI Web runs in the browser today. Desktop and the CLI are released for Local and BYOK work — no platform bill, and nothing leaves your machine unless you route it there."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/cli', label: 'Install the CLI' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
         <MarketingFooter />

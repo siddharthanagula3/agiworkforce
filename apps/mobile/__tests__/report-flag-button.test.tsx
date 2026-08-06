@@ -101,12 +101,12 @@ describe('ReportFlagButton', () => {
     expect(getByLabelText('Email this report to support')).toBeTruthy();
   });
 
-  it('says up front that the report stays on the device', () => {
+  it('says up front where the report goes — on device, and to the safety team when connected', () => {
     const { getByLabelText, getByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
 
     expect(getByText(/saved on this device/i)).toBeTruthy();
-    expect(getByText(/nothing is sent unless you email it/i)).toBeTruthy();
+    expect(getByText(/sent to the AGI safety team for review/i)).toBeTruthy();
   });
 
   it('disables Save until a category is selected, then saves the chosen category', async () => {

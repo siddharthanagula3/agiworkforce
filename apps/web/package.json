@@ -16,6 +16,8 @@
     "test:e2e:ui": "playwright test --ui",
     "a11y:audit": "node scripts/a11y-audit.mjs",
     "check:no-hex-web": "node scripts/check-no-hex-colors.mjs",
+    "build:support-corpus": "node scripts/build-support-corpus.mjs",
+    "check:support-corpus": "node scripts/build-support-corpus.mjs --check",
     "analyze": "ANALYZE=true pnpm build:next-only"
   },
   "dependencies": {

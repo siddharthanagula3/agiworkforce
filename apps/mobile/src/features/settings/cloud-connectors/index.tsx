@@ -566,7 +566,10 @@ function ConnectorCard({
               // the screen is unambiguous at a glance.
               <View
                 style={{
-                  height: 30,
+                  // minHeight so the pill grows with Dynamic Type rather than
+                  // clipping its label vertically.
+                  minHeight: 30,
+                  paddingVertical: 4,
                   paddingHorizontal: 16,
                   borderRadius: 15,
                   alignItems: 'center',

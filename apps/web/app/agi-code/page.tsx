@@ -160,7 +160,7 @@ export default function AgiCodePage() {
             { href: '/cli', label: 'See the CLI' },
             { href: '/get-started', label: 'Get Started' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

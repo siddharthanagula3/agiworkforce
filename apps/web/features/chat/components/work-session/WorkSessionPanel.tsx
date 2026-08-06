@@ -489,7 +489,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
         className={cn(
           'fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-border/30 bg-card/95 backdrop-blur-xl',
           'animate-in slide-in-from-right duration-300',
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[380px] sm:shrink-0',
+          'sm:relative sm:inset-auto sm:z-auto sm:w-[380px] sm:min-w-[280px] sm:shrink',
         )}
         aria-label="AGI Work session panel"
       >

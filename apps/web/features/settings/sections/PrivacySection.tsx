@@ -722,8 +722,8 @@ export function PrivacySection() {
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {deleteSuccess ? (
             <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
-              Account deletion scheduled. You will receive a confirmation email with a 24-hour
-              cancellation window.
+              Account deletion scheduled. Your account and all data will be permanently deleted
+              within 24 hours. To stop this, email support@agiworkforce.com before then.
             </p>
           ) : (
             <>

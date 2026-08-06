@@ -46,7 +46,10 @@
       "rename": "Rename",
       "archive": "Archive",
       "delete": "Delete",
-      "confirmDelete": "Confirm delete"
+      "confirmDelete": "Confirm delete",
+      "confirmDeletePermanently": "Confirm permanent delete",
+      "deletePermanently": "Delete permanently",
+      "restore": "Restore"
     },
     "projects": {
       "newChat": "New chat in project",
@@ -76,17 +79,25 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "Library",
       "tasks": "Tasks",
       "customize": "Customize",
       "scheduled": "Schedules",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
-      "routines": "Routines"
+      "routines": "Routines",
+      "design": "Design",
+      "research": "Research"
     },
     "account": "Account",
     "signIn": "Sign in",
-    "cloudSync": "Cloud sync"
+    "cloudSync": "Cloud sync",
+    "archived": "Archived chats",
+    "noArchived": "No archived chats",
+    "noConversations": "No conversations yet",
+    "showActive": "Back to active chats",
+    "showArchived": "Show archived chats ({{count}})"
   },
   "emptyChat": {
     "neutralHeadline": "How can I help you today?",
@@ -325,7 +336,9 @@
       "title": "Artifacts",
       "subtitle": "Saved outputs, generated files, and reusable work.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Generate or save an artifact to see it here."
+      "empty": "No artifacts yet. Generate or save an artifact to see it here.",
+      "emptyTitle": "No artifacts yet",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "Projects",
@@ -348,7 +361,16 @@
       "pauseAria": "Pause scheduled task {{name}}",
       "resumeAria": "Resume scheduled task {{name}}",
       "deleteTitle": "Delete scheduled task?",
-      "deleteDescription": "Delete {{name}}. This cannot be undone."
+      "deleteDescription": "Delete {{name}}. This cannot be undone.",
+      "emptyTitle": "No scheduled tasks"
+    },
+    "compose": {
+      "scopeAdd": "Add scope (optional)",
+      "scopeHide": "Hide scope",
+      "constraintsLabel": "Constraints",
+      "constraintsPlaceholder": "Boundaries, must-avoids, sources to prefer…",
+      "deliverableLabel": "Deliverable",
+      "deliverablePlaceholder": "The concrete output you expect (a file, a table, a summary…)"
     }
   },
   "time": {
@@ -359,5 +381,8 @@
     "mAgoShort": "{{count}}m ago",
     "daysAgo": "{{count}} days ago",
     "weeksAgo": "{{count}} weeks ago"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "Sketches are session-only for now — closing the app clears the board."
   }
 }

@@ -41,6 +41,12 @@ jobs:
       CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
       CLERK_SYNC_HOST: ${{ vars.CLERK_SYNC_HOST }}
       CHROME_EXTENSION_PUBLIC_KEY: ${{ vars.CHROME_EXTENSION_PUBLIC_KEY }}
+      # Web API origin for code redemption and product-update opt-in. The client
+      # (apps/extension/src/lib/waitlistService.ts) defaults to the canonical
+      # production origin, so this is an explicit override rather than a
+      # requirement; it is set here so a release package is never silently
+      # pointed somewhere other than the origin the release is cut for.
+      VITE_AGI_WEB_API_BASE_URL: ${{ vars.AGI_WEB_API_BASE_URL || 'https://agiworkforce.com' }}
     steps:
       - name: Checkout the selected release tag
         uses: actions/checkout@v6

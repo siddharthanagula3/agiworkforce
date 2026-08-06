@@ -12,8 +12,34 @@ export type MobileSupportedScheduleRecurrence =
 
 const MOBILE_SUPPORTED_RECURRENCE_SET = new Set<string>(MOBILE_SUPPORTED_SCHEDULE_RECURRENCES);
 
-export const MOBILE_SCHEDULE_CADENCE_NOTE =
-  'Schedules are checked once daily. The selected time is a preference, and delivery can occur later in the daily Cloud window.';
+/**
+ * Cadence of the Cloud sweep that actually runs due schedules — the
+ * `/api/cron/run-schedules` entry in the repo root `vercel.json`. Mobile cannot
+ * import the web's `SWEEP_INTERVAL_MS`, so `__tests__/schedule-policy.test.ts`
+ * pins this constant to that cron instead; if the deployed sweep changes speed
+ * the test fails until this follows it.
+ */
+export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * The sweep cadence in words, derived from the constant so the user-facing copy
+ * cannot outlive it. These strings were hardcoded as "once daily" and kept
+ * claiming a daily window long after the deployed cron moved to hourly.
+ */
+export function describeCloudScheduleSweep(): { cadence: string; window: string } {
+  const hours = CLOUD_SCHEDULE_SWEEP_INTERVAL_MS / (60 * 60 * 1000);
+  if (hours >= 24) {
+    const days = hours / 24;
+    return days === 1
+      ? { cadence: 'once a day', window: 'daily' }
+      : { cadence: `every ${days} days`, window: `${days}-day` };
+  }
+  return hours === 1
+    ? { cadence: 'once an hour', window: 'hourly' }
+    : { cadence: `every ${hours} hours`, window: `${hours}-hour` };
+}
+
+export const MOBILE_SCHEDULE_CADENCE_NOTE = `Schedules are checked ${describeCloudScheduleSweep().cadence}. The selected time is a preference, and delivery can occur later in the ${describeCloudScheduleSweep().window} Cloud window.`;
 
 export function isMobileScheduleRecurrenceSupported(
   recurrence: unknown,
@@ -24,7 +50,7 @@ export function isMobileScheduleRecurrenceSupported(
 export function assertMobileScheduleRecurrenceSupported(recurrence: unknown): void {
   if (!isMobileScheduleRecurrenceSupported(recurrence)) {
     throw new Error(
-      'Mobile schedules support Once, Daily, Weekly, or Monthly while Cloud scheduling is checked once daily.',
+      'Mobile schedules support Once, Daily, Weekly, or Monthly. Create interval or custom cron schedules on Web.',
     );
   }
 }

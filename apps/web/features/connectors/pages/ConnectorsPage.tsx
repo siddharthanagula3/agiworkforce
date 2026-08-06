@@ -231,19 +231,26 @@ function InspectMcpServerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-md">
+      <DialogContent className="border-border bg-card sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold text-foreground">
             Inspect MCP server
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Inspect an HTTP MCP-compatible server and review its advertised tools.
+            Inspect an HTTP MCP-compatible server and review its advertised tools. A remote MCP
+            server is a third party you are choosing to trust — AGI does not vet it, it sees the
+            conversation context sent to its tools, and any auth token you enter is transmitted to
+            it.{' '}
+            <a href="/agent-permissions" className="underline hover:text-foreground">
+              How connector permissions work
+            </a>
+            .
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
           {/* Option 1: MCP URL */}
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="rounded-xl border border-border bg-white/[0.02] p-4">
             <div className="mb-3 flex items-center gap-2">
               <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
               <span className="text-sm font-medium text-foreground">MCP server URL</span>
@@ -258,7 +265,7 @@ function InspectMcpServerDialog({
                   setError(null);
                   setInspectResult(null);
                 }}
-                className="h-9 border-white/[0.08] bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
+                className="h-9 border-border bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
                 aria-label="MCP server URL"
               />
               <Input
@@ -266,7 +273,7 @@ function InspectMcpServerDialog({
                 type="password"
                 value={authToken}
                 onChange={(e) => setAuthToken(e.target.value)}
-                className="h-9 border-white/[0.08] bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
+                className="h-9 border-border bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
                 aria-label="MCP auth token"
               />
               {error && <p className="text-xs text-destructive">{error}</p>}
@@ -308,7 +315,7 @@ function InspectMcpServerDialog({
                       </p>
                       <Button
                         size="sm"
-                        className="mt-2 h-8 w-full text-xs bg-emerald-600 text-white hover:bg-emerald-600/90"
+                        className="mt-2 h-8 w-full text-xs bg-emerald-600 text-foreground hover:bg-emerald-600/90"
                         onClick={() => void handleAddConnector()}
                         disabled={isAdding}
                       >
@@ -327,7 +334,7 @@ function InspectMcpServerDialog({
           </div>
 
           {/* Option 2: MCP Directory */}
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="rounded-xl border border-border bg-white/[0.02] p-4">
             <div className="mb-3 flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
               <span className="text-sm font-medium text-foreground">Browse MCP directory</span>
@@ -339,7 +346,7 @@ function InspectMcpServerDialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 flex-1 text-xs border-white/[0.08] hover:border-white/[0.16]"
+                className="h-8 flex-1 text-xs border-border hover:border-border"
                 asChild
               >
                 <a href="/connectors/mcp-directory">Browse directory</a>
@@ -444,7 +451,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   const tools = useConnectorTools(connector.id);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-5">
       {/* Mobile back button */}
       <button
         type="button"
@@ -527,7 +534,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           ) : (
             <Badge
               variant="outline"
-              className="border-white/10 px-2 py-1 text-[11px] text-muted-foreground"
+              className="border-border px-2 py-1 text-[11px] text-muted-foreground"
             >
               {availabilityLabel}
             </Badge>
@@ -547,7 +554,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
       {/* Tools — only shown for connectors that actually work in this deployment,
           so fabricated capability badges never render as product state. */}
       {(isAvailable || connected) && tools.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+        <div className="rounded-xl border border-border bg-white/[0.02] p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
           </div>
@@ -556,7 +563,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
               <Badge
                 key={tool}
                 variant="outline"
-                className="border-white/[0.08] px-2 py-0.5 text-[11px] text-muted-foreground"
+                className="border-border px-2 py-0.5 text-[11px] text-muted-foreground"
               >
                 {tool}
               </Badge>
@@ -763,7 +770,7 @@ export function ConnectorsPage() {
     <ErrorBoundary componentName="ConnectorsPage" compact>
       <div className="min-h-full bg-background">
         {/* Page Header */}
-        <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
+        <div className="border-b border-border bg-muted/20 px-6 py-6">
           <div className="mx-auto max-w-6xl">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -773,10 +780,10 @@ export function ConnectorsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
+                <Badge variant="outline" className="border-border text-xs text-muted-foreground">
                   {visibleConnectedCount} connected
                 </Badge>
-                <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
+                <Badge variant="outline" className="border-border text-xs text-muted-foreground">
                   {VISIBLE_CONNECTORS.length} total
                 </Badge>
                 {/* /api/mcp requires an authenticated user — showing this to
@@ -797,7 +804,7 @@ export function ConnectorsPage() {
             {/* Status filter + Search row */}
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
               {/* Tri-state status filter */}
-              <div className="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5">
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-white/[0.03] p-0.5">
                 {STATUS_FILTERS.map((sf) => (
                   <button
                     key={sf.value}
@@ -822,7 +829,7 @@ export function ConnectorsPage() {
                   placeholder="Search connectors..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
+                  className="h-9 border-border bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
                 />
               </div>
             </div>
@@ -955,7 +962,7 @@ export function ConnectorsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          className="h-7 border-border px-2 text-[11px] disabled:opacity-40"
                           onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                           disabled={currentPage <= 1}
                         >
@@ -967,7 +974,7 @@ export function ConnectorsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          className="h-7 border-border px-2 text-[11px] disabled:opacity-40"
                           onClick={() => setCurrentPage((p) => Math.min(totalBrowsePages, p + 1))}
                           disabled={currentPage >= totalBrowsePages}
                         >
@@ -1030,7 +1037,7 @@ export function ConnectorsPage() {
 
           {/* Roadmap Callout - shown below master-detail (not during an error state, so the retry banner stays the focus) */}
           {!loading && !connectorsError && (
-            <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="mt-6 rounded-xl border border-border bg-white/[0.02] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <Zap className="h-5 w-5 text-primary" />
@@ -1059,14 +1066,14 @@ export function ConnectorsPage() {
                       <Badge
                         key={name}
                         variant="outline"
-                        className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
+                        className="border-border px-2 py-0 text-[10px] text-muted-foreground"
                       >
                         {name}
                       </Badge>
                     ))}
                     <Badge
                       variant="outline"
-                      className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
+                      className="border-border px-2 py-0 text-[10px] text-muted-foreground"
                     >
                       More planned
                     </Badge>

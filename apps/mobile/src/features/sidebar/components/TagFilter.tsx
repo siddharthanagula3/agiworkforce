@@ -69,12 +69,12 @@ function FilterChip({
           },
           isSelected
             ? {
-                backgroundColor: dotColor ? `${dotColor}20` : 'rgba(255, 255, 255, 0.12)',
-                borderColor: dotColor ?? 'rgba(255, 255, 255, 0.3)',
+                backgroundColor: dotColor ? `${dotColor}20` : colors.neutralSurface,
+                borderColor: dotColor ?? colors.neutralBorder,
               }
             : {
                 backgroundColor: 'transparent',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderColor: colors.border,
               },
         ]}
         accessibilityLabel={`Filter by ${label}`}

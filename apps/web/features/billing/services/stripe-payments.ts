@@ -8,7 +8,21 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { loadStripe } from '@stripe/stripe-js';
-import type { SelfServePaidPlanTier } from '@agiworkforce/types';
+import { isPerSeatBillingPlan, type SelfServePaidPlanTier } from '@agiworkforce/types';
+
+/**
+ * Seat count to send with a per-seat plan, or `undefined` for per-account plans.
+ * The server schema REJECTS a seat count on a per-account plan and REQUIRES one
+ * on a per-seat plan, so this must not guess: a Team call without seats is a
+ * client bug and should fail loudly rather than silently bill one seat.
+ */
+function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
+  if (!isPerSeatBillingPlan(plan)) return undefined;
+  if (typeof seats !== 'number' || !Number.isInteger(seats) || seats < 1) {
+    throw new Error(`${plan} is billed per seat; choose how many seats to buy.`);
+  }
+  return seats;
+}
 
 // Employee purchase functions removed - hiring is now free
 
@@ -158,6 +172,7 @@ async function upgradeToPlan(data: {
   userEmail: string;
   plan: SelfServePaidPlanTier;
   billingPeriod?: 'monthly' | 'yearly';
+  seats?: number;
 }): Promise<void> {
   void data.userId;
   void data.userEmail;
@@ -167,6 +182,7 @@ async function upgradeToPlan(data: {
   }
 
   const billingInterval = data.billingPeriod === 'yearly' ? 'yearly' : 'monthly';
+  const seats = seatsForPlan(data.plan, data.seats);
 
   const response = await fetch('/api/checkout', {
     method: 'POST',
@@ -177,6 +193,7 @@ async function upgradeToPlan(data: {
     body: JSON.stringify({
       plan: data.plan,
       billingInterval,
+      ...(seats === undefined ? {} : { seats }),
     }),
   });
 
@@ -200,12 +217,32 @@ async function upgradeToPlan(data: {
 export async function startPlanCheckout(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
+  seats?: number;
 }): Promise<void> {
   return upgradeToPlan({
     userId: '',
     userEmail: '',
     plan: data.plan,
     billingPeriod: data.billingInterval,
+    ...(data.seats === undefined ? {} : { seats: data.seats }),
+  });
+}
+
+/**
+ * Start Team checkout for a chosen number of licensed seats. Team is billed per
+ * seat, so the seat count is mandatory and is charged as the Stripe line-item
+ * quantity.
+ */
+export async function upgradeToTeamPlan(data: {
+  seats: number;
+  billingPeriod?: 'monthly' | 'yearly';
+}): Promise<void> {
+  return upgradeToPlan({
+    userId: '',
+    userEmail: '',
+    plan: 'team',
+    seats: data.seats,
+    ...(data.billingPeriod ? { billingPeriod: data.billingPeriod } : {}),
   });
 }
 
@@ -218,6 +255,7 @@ export async function startPlanCheckout(data: {
 export async function previewUpgrade(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
+  seats?: number;
 }): Promise<{ amountDueNowCents: number; currency: string; previewToken: string }> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
@@ -229,7 +267,14 @@ export async function previewUpgrade(data: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
     }),
-    body: JSON.stringify({ plan: data.plan, billingInterval }),
+    body: JSON.stringify({
+      plan: data.plan,
+      billingInterval,
+      ...(() => {
+        const seats = seatsForPlan(data.plan, data.seats);
+        return seats === undefined ? {} : { seats };
+      })(),
+    }),
   });
 
   const result = (await response.json().catch(() => ({}))) as {
@@ -278,6 +323,7 @@ export async function previewUpgrade(data: {
 export async function upgradePlanMidCycle(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
+  seats?: number;
   previewToken: string;
 }): Promise<{ activation: 'webhook_pending' }> {
   const authToken = await getAuthToken();
@@ -294,6 +340,10 @@ export async function upgradePlanMidCycle(data: {
       plan: data.plan,
       billingInterval,
       previewToken: data.previewToken,
+      ...(() => {
+        const seats = seatsForPlan(data.plan, data.seats);
+        return seats === undefined ? {} : { seats };
+      })(),
     }),
   });
 

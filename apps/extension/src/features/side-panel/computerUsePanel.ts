@@ -20,6 +20,7 @@
  */
 
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
+import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
 
 // ─── CSS injected into the side panel's adoptedStyleSheets ───────────────────
@@ -63,6 +64,13 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-banner-text {
     flex: 1;
     line-height: 1.45;
+    /* min-width:0 is required for a flex child to shrink below its min-content
+       width. Without it a long unbroken error string (a URL, a stack frame, a
+       selector) held the banner wider than the ~320px side panel and the text
+       ran off the edge unrecoverably. .sp-cu-step-body two rules down already
+       had this pair. */
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .sp-cu-banner-title {
@@ -347,6 +355,20 @@ export const COMPUTER_USE_PANEL_CSS = `
     font-size: 12px;
   }
 
+  /* Timed out and auto-denied. Drops the warning tint so it reads as settled
+     history rather than a decision still waiting on the user. */
+  .sp-cu-approval.expired {
+    background: transparent;
+    border-color: var(--agi-ext-border);
+    opacity: 0.7;
+  }
+
+  .sp-cu-approval.expired .sp-cu-approval-allow,
+  .sp-cu-approval.expired .sp-cu-approval-deny {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
   .sp-cu-approval-title {
     font-weight: 600;
     color: var(--agi-ext-text);
@@ -357,6 +379,15 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-text-muted);
     font-size: 11px;
     margin-bottom: 8px;
+    /* Same content shape as .sp-cu-step-detail (tool args and URLs), so it needs
+       the same guards. Without word-break an approval prompt for a long URL
+       pushed its own Allow/Skip buttons out of the card — the user could read
+       what they were approving OR press the button, not both. Capped and
+       scrollable rather than clipped: an approval must stay fully readable. */
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 120px;
+    overflow-y: auto;
   }
 
   .sp-cu-approval-btns {
@@ -823,6 +854,33 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     timeEl.className = 'sp-cu-step-time';
     timeEl.textContent = fmtTime();
 
+    /**
+     * `.sp-cu-step-detail` is capped at 60px with `overflow: hidden`, so any
+     * detail longer than ~3 lines is cut off. Only the tool_call branch used to
+     * wire the toggle, which meant tool RESULTS and ERROR messages — the two a
+     * user most needs to read — were clipped with no way to reveal the rest.
+     * Every branch that sets detail text now goes through here.
+     */
+    const makeExpandable = (): void => {
+      detailEl.title = 'Click to expand';
+      detailEl.style.cursor = 'pointer';
+      detailEl.setAttribute('role', 'button');
+      detailEl.setAttribute('tabindex', '0');
+      detailEl.setAttribute('aria-expanded', 'false');
+      const toggle = (): void => {
+        const nowExpanded = detailEl.classList.toggle('expanded');
+        detailEl.setAttribute('aria-expanded', String(nowExpanded));
+        detailEl.title = nowExpanded ? 'Click to collapse' : 'Click to expand';
+      };
+      detailEl.addEventListener('click', toggle);
+      detailEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      });
+    };
+
     switch (step.kind) {
       case 'tool_call': {
         const emoji = (step.toolName && TOOL_EMOJI[step.toolName]) ?? KIND_EMOJI['tool_call'] ?? '';
@@ -830,11 +888,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         titleEl.textContent = formatToolCallTitle(step.toolName ?? '', step.toolArgs);
         if (step.toolArgs && Object.keys(step.toolArgs).length > 0) {
           detailEl.textContent = formatArgs(step.toolArgs);
-          detailEl.title = 'Click to expand';
-          detailEl.style.cursor = 'pointer';
-          detailEl.addEventListener('click', () => {
-            detailEl.classList.toggle('expanded');
-          });
+          makeExpandable();
         }
         break;
       }
@@ -843,6 +897,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         titleEl.textContent = `✓ ${step.toolName ?? 'result'}`;
         if (step.toolResult) {
           detailEl.textContent = step.toolResult.slice(0, 300);
+          makeExpandable();
         }
         break;
       }
@@ -850,6 +905,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         iconEl.textContent = KIND_EMOJI['error'] ?? '';
         titleEl.textContent = `Error: ${step.toolName ?? 'tool'}`;
         detailEl.textContent = step.errorMessage ?? '';
+        if (detailEl.textContent) makeExpandable();
         stepEl.style.background = 'color-mix(in srgb, var(--agi-ext-danger) 5%, transparent)';
         break;
       }
@@ -997,7 +1053,31 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     denyBtn.className = 'sp-cu-approval-deny';
     denyBtn.textContent = 'Skip';
 
+    /*
+     * The card MUST expire with the loop's gate. agentLoop resolves DENY after
+     * APPROVAL_TIMEOUT_MS, but that only settles its promise — it never touched
+     * this card. So an unattended card stayed on screen with Allow/Skip buttons
+     * that looked live, did nothing when pressed, and stacked up one per action
+     * for the rest of the run. Expire on the same deadline and say so.
+     */
+    let settled = false;
+    const expiry = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(expiry);
+      card.classList.add('expired');
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      cardTitle.textContent = `Skipped (no response): ${toolName}`;
+      cardDesc.textContent =
+        'This action timed out after 30 seconds and was skipped automatically.';
+      // The loop already resolved DENY on its own timer; this is presentation only.
+    }, APPROVAL_TIMEOUT_MS);
+
     function cleanup(allowed: boolean): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(expiry);
       card.remove();
       resolve(allowed);
     }

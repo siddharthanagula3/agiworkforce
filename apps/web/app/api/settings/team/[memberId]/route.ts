@@ -11,6 +11,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '../team-admin-access';
 
 // memberId param format: "<organizationId>:<userId>" · matches the composite
@@ -94,48 +96,71 @@ async function handleRemove(
   const { organizationId, userId: targetUserId } = parseMemberId(memberId);
 
   const db = getNeonDb();
-  await requireTeamAdminAccess(db, requesterId);
+  await requireTeamAdminAccess(db, requesterId, organizationId);
 
-  await db.transaction(async (tx) => {
-    await tx.query(
-      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
-      [organizationId],
-    );
+  const removedRole = await withSeatAccountingErrors(() =>
+    db.transaction(async (tx) => {
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+        [organizationId],
+      );
 
-    const requester = await requireAdminAccess(tx, organizationId, requesterId);
+      const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-    // Prevent self-removal via this endpoint · use a separate leave flow.
-    if (targetUserId === requesterId) {
-      throw createError.validation('You cannot remove yourself. Use the leave organization flow.');
-    }
+      // Prevent self-removal via this endpoint · use a separate leave flow.
+      if (targetUserId === requesterId) {
+        throw createError.validation(
+          'You cannot remove yourself. Use the leave organization flow.',
+        );
+      }
 
-    // Owners cannot be removed by admins.
-    const [targetRow] = await tx.query<OrganizationMemberRow>(
-      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+      // Owners cannot be removed by admins.
+      const [targetRow] = await tx.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
        where organization_id = $1 and user_id = $2
        limit 1`,
-      [organizationId, targetUserId],
-    );
+        [organizationId, targetUserId],
+      );
 
-    if (!targetRow) {
-      throw createError.notFound('Member not found in this organization');
-    }
+      if (!targetRow) {
+        throw createError.notFound('Member not found in this organization');
+      }
 
-    if (targetRow.role === 'owner' && requester.role !== 'owner') {
-      throw createError.forbidden('Only owners can remove other owners');
-    }
+      if (targetRow.role === 'owner' && requester.role !== 'owner') {
+        throw createError.forbidden('Only owners can remove other owners');
+      }
 
-    await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, null);
+      await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, null);
 
-    await tx.execute(
-      `delete from public.organization_members
+      await tx.execute(
+        `delete from public.organization_members
        where organization_id = $1 and user_id = $2`,
-      [organizationId, targetUserId],
-    );
-  });
+        [organizationId, targetUserId],
+      );
+
+      // Removing a member frees their seat: the AFTER DELETE trigger decrements
+      // `organizations.seats_consumed`, and their organization-scoped access ends
+      // with the membership row that every org predicate resolves through.
+      return targetRow.role;
+    }),
+  );
 
   logger.info({ requesterId, organizationId, targetUserId }, 'Team member removed');
+
+  await recordAuditEvent({
+    userId: requesterId,
+    eventType: 'member_removed',
+    request,
+    organizationId,
+    detail: {
+      resourceType: 'organization_member',
+      resourceId: targetUserId,
+      organizationId,
+      targetUserId,
+      previousRole: removedRole,
+    },
+  });
 
   return NextResponse.json({ message: 'Member removed' });
 }
@@ -167,48 +192,76 @@ async function handleUpdateRole(
   const { role: newRole } = parsed.data;
 
   const db = getNeonDb();
-  await requireTeamAdminAccess(db, requesterId);
+  await requireTeamAdminAccess(db, requesterId, organizationId);
 
-  await db.transaction(async (tx) => {
-    await tx.query(
-      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
-      [organizationId],
-    );
+  const previousRole = await withSeatAccountingErrors(() =>
+    db.transaction(async (tx) => {
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+        [organizationId],
+      );
 
-    const requester = await requireAdminAccess(tx, organizationId, requesterId);
+      const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-    // Only owners can assign the owner role.
-    if (newRole === 'owner' && requester.role !== 'owner') {
-      throw createError.forbidden('Only owners can assign the owner role');
-    }
+      // 0085 makes "exactly one owner" a database fact
+      // (idx_org_members_single_owner). Promoting a second owner here could only
+      // ever produce a unique violation, and demote-owner-then-promote-self is
+      // exactly the escalation the transfer flow exists to control. Point the
+      // caller at it instead of failing on a constraint name.
+      if (newRole === 'owner') {
+        throw createError.conflict(
+          'An organization has exactly one owner. Use POST /api/settings/organization/transfer-ownership to move ownership.',
+        );
+      }
 
-    const [targetRow] = await tx.query<OrganizationMemberRow>(
-      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+      const [targetRow] = await tx.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
        where organization_id = $1 and user_id = $2
        limit 1`,
-      [organizationId, targetUserId],
-    );
+        [organizationId, targetUserId],
+      );
 
-    if (!targetRow) {
-      throw createError.notFound('Member not found in this organization');
-    }
+      if (!targetRow) {
+        throw createError.notFound('Member not found in this organization');
+      }
 
-    if (targetRow.role === 'owner' && requester.role !== 'owner') {
-      throw createError.forbidden('Only owners can change the role of another owner');
-    }
+      if (targetRow.role === 'owner' && requester.role !== 'owner') {
+        throw createError.forbidden('Only owners can change the role of another owner');
+      }
 
-    await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, newRole);
+      await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, newRole);
 
-    await tx.execute(
-      `update public.organization_members
+      await tx.execute(
+        `update public.organization_members
        set role = $1
        where organization_id = $2 and user_id = $3`,
-      [newRole, organizationId, targetUserId],
-    );
-  });
+        [newRole, organizationId, targetUserId],
+      );
+
+      return targetRow.role;
+    }),
+  );
 
   logger.info({ requesterId, organizationId, targetUserId, newRole }, 'Team member role updated');
+
+  await recordAuditEvent({
+    userId: requesterId,
+    eventType: 'member_role_changed',
+    request,
+    organizationId,
+    // A privilege escalation is a warning-level event even when it succeeds:
+    // an auditor should be able to filter promotions out of routine churn.
+    severity: newRole === 'owner' || newRole === 'admin' ? 'warning' : 'info',
+    detail: {
+      resourceType: 'organization_member',
+      resourceId: targetUserId,
+      organizationId,
+      targetUserId,
+      previousRole,
+      role: newRole,
+    },
+  });
 
   return NextResponse.json({ message: 'Role updated', role: newRole });
 }

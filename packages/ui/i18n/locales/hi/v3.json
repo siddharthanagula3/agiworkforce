@@ -53,13 +53,16 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "लाइब्रेरी",
       "tasks": "कार्य",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
-      "routines": "Routines"
+      "routines": "Routines",
+      "design": "डिज़ाइन",
+      "research": "रिसर्च"
     },
     "account": "Account"
   },
@@ -296,7 +299,9 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "empty": "No artifacts yet. Run a scheduled task to generate outputs.",
+      "emptyTitle": "No artifacts yet",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "AGI Work projects",
@@ -312,7 +317,16 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "emptyTitle": "No scheduled tasks"
+    },
+    "compose": {
+      "scopeAdd": "दायरा जोड़ें (वैकल्पिक)",
+      "scopeHide": "दायरा छिपाएँ",
+      "constraintsLabel": "बाधाएँ",
+      "constraintsPlaceholder": "सीमाएँ, किनसे बचना है, पसंदीदा स्रोत…",
+      "deliverableLabel": "डिलिवरेबल",
+      "deliverablePlaceholder": "आपको अपेक्षित ठोस परिणाम (एक फ़ाइल, एक तालिका, एक सारांश…)"
     }
   },
   "time": {
@@ -323,5 +337,8 @@
     "mAgoShort": "{{count}}m ago",
     "daysAgo": "{{count}} days ago",
     "weeksAgo": "{{count}} weeks ago"
+  },
+  "canvas": {
+    "sessionOnlyNotice": "फ़िलहाल स्केच सिर्फ़ इसी सत्र तक रहते हैं — ऐप बंद करने पर बोर्ड साफ़ हो जाता है।"
   }
 }

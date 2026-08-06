@@ -30,6 +30,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { cn } from '../../lib/utils';
@@ -96,6 +97,7 @@ const generateId = (): string => {
 };
 
 export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
+  const { t } = useTranslation('v3');
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -855,7 +857,18 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
         )}
         role="region"
         aria-label="Canvas workspace"
+        data-testid="design-workspace"
       >
+        {/* CAP-051 v1 ships without persistence. The board lives in React state
+            only, so the panel has to say so rather than let the user assume a
+            sketch is saved. Non-blocking: it never covers the canvas. */}
+        <p
+          role="status"
+          className="border-b border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          {t('canvas.sessionOnlyNotice')}
+        </p>
+
         {/* Header toolbar */}
         <div className="flex items-center justify-between border-b border-border px-3 py-2 bg-muted/20">
           <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/ui/theme';
 
 const STYLE_OPTIONS: Array<{
@@ -24,6 +25,7 @@ interface StyleSelectorProps {
 
 export function StyleSelector({ openSignal }: StyleSelectorProps) {
   const { colors: themeColors } = useTheme();
+  const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [visible, setVisible] = useState(false);
 
@@ -81,7 +83,10 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             paddingTop: 8,
-            paddingBottom: 34,
+            // Read the real safe area rather than assuming a 34pt home
+            // indicator: that constant is wrong on every device without one
+            // (SE, iPad, Android), leaving a dead band under the sheet.
+            paddingBottom: Math.max(insets.bottom, 12),
             borderTopWidth: 1,
             borderColor: themeColors.border,
           }}

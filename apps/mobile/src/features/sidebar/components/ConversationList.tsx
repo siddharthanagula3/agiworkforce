@@ -131,7 +131,7 @@ export function ConversationList({
             style={{
               fontSize: 11,
               fontWeight: '600',
-              color: 'rgba(255,255,255,0.35)',
+              color: colors.textMuted,
               textTransform: 'uppercase',
               letterSpacing: 0.8,
             }}
@@ -218,12 +218,12 @@ export function ConversationList({
               gap: 5,
             }}
           >
-            {group.label === 'Pinned' && <Pin size={10} color="rgba(255, 255, 255, 0.35)" />}
+            {group.label === 'Pinned' && <Pin size={10} color={colors.textMuted} />}
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: '600',
-                color: 'rgba(255, 255, 255, 0.35)',
+                color: colors.textMuted,
                 textTransform: 'uppercase',
                 letterSpacing: 0.8,
               }}

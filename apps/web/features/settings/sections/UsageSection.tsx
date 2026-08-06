@@ -1,44 +1,29 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import {
+  formatUsageRemaining,
+  formatUsageResetIn,
+  managedUsageBucketLabel,
+} from '@agiworkforce/types';
+import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
 import { getBillingPlanPricing, normalizeUsagePercentage } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 
-const SECOND_MS = 1000;
-const MINUTE_MS = 60 * SECOND_MS;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
+// Only the tick interval is still needed here; the hour/day thresholds moved to
+// formatUsageResetIn in @agiworkforce/types along with the phrasing they served.
+const MINUTE_MS = 60 * 1000;
 
-/**
- * PAR-3: a localizable RELATIVE countdown.
- *
- * `formatReset` only ever produced an absolute timestamp ("Resets Jul 26, 2026,
- * 4:00 PM"), which makes a user work out how long they have to wait. The public
- * contract carries the reset instant (and `seconds_until_reset` on
- * `ManagedUsageBalance`), so the remaining time is derivable — it was simply
- * never shown.
+/*
+ * The local relative-reset formatter was removed: formatUsageResetIn in
+ * @agiworkforce/types now owns that phrasing so web, mobile, desktop and the
+ * Chrome panel cannot describe the same reset instant four different ways.
+ * formatAbsolute stays — it is the verifiable instant PAR-3 added, and it is
+ * genuinely web-specific (mobile has no room for it).
  */
-function formatRelativeReset(value: string | null, nowMs: number): string | null {
-  if (!value) return null;
-  const target = Date.parse(value);
-  if (Number.isNaN(target)) return null;
-
-  const deltaMs = target - nowMs;
-  if (deltaMs <= 0) return 'now';
-
-  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  if (deltaMs < HOUR_MS) {
-    return relative.format(Math.max(1, Math.round(deltaMs / MINUTE_MS)), 'minute');
-  }
-  if (deltaMs < DAY_MS) {
-    return relative.format(Math.round(deltaMs / HOUR_MS), 'hour');
-  }
-  return relative.format(Math.round(deltaMs / DAY_MS), 'day');
-}
-
 function formatAbsolute(value: string): string {
   return new Date(value).toLocaleString(undefined, {
     month: 'short',
@@ -47,18 +32,6 @@ function formatAbsolute(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-/**
- * PAR-3: absolute instant AND relative countdown, so a user can both plan
- * ("in about 3 hours") and verify ("Jul 26, 4:00 PM").
- */
-function formatReset(value: string | null, kind: 'rolling' | 'period', nowMs: number): string {
-  if (!value) return kind === 'rolling' ? 'No usage in this window' : 'No reset scheduled';
-  const relative = formatRelativeReset(value, nowMs);
-  const absolute = formatAbsolute(value);
-  const lead = kind === 'rolling' ? 'Capacity refreshes' : 'Resets';
-  return relative ? `${lead} ${relative} (${absolute})` : `${lead} ${absolute}`;
 }
 
 /**
@@ -93,16 +66,48 @@ function UsageBar({
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{value}</span>
       </div>
+      {/*
+        Colour tracks the SAME severity ladder every other surface uses
+        (getUsageUrgency: >=95 critical, >=90 warning). This bar previously
+        painted the accent colour at every value, so a user one percent from
+        being cut off saw exactly what a user at 5% saw.
+      */}
       <Progress
         value={percent}
         aria-label={`${label} usage`}
         className="h-2"
-        indicatorClassName="bg-[var(--chat-accent-primary)]"
+        indicatorClassName={
+          getUsageUrgency(percent) === 'critical'
+            ? 'bg-[var(--chat-danger,#dc2626)]'
+            : getUsageUrgency(percent) === 'warning'
+              ? 'bg-[var(--chat-warning,#d97706)]'
+              : 'bg-[var(--chat-accent-primary)]'
+        }
         style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
       />
       <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{detail}</span>
     </div>
   );
+}
+
+/**
+ * One detail line for a meter row.
+ *
+ * The label and the relative countdown come from the shared vocabulary so this
+ * surface cannot drift from mobile and desktop again. The ABSOLUTE instant is
+ * kept on top of it, which is what the retired `formatReset` existed to provide
+ * (PAR-3): a user should be able to plan from "Resets in 3 hours" and verify
+ * against "Jul 26, 4:00 PM". Mobile shows only the relative form, and that is a
+ * legitimate difference of space, not of vocabulary.
+ *
+ * The reset clause is dropped entirely when there is nothing meaningful to say,
+ * rather than printing a stale or negative countdown next to a live percentage.
+ */
+function usageDetail(percentRemaining: number, resetAt: string | null, nowMs: number): string {
+  const remaining = formatUsageRemaining(percentRemaining);
+  const resets = formatUsageResetIn(resetAt, nowMs);
+  if (!resets) return remaining;
+  return `${remaining} · ${resets} (${formatAbsolute(resetAt as string)})`;
 }
 
 export function UsageSection() {
@@ -215,29 +220,41 @@ export function UsageSection() {
         </div>
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/*
+            Labels, remaining-phrasing and reset wording all come from the shared
+            vocabulary in @agiworkforce/types. These four buckets are the same
+            server-side numbers mobile, desktop and the Chrome panel render, and
+            each surface previously named them differently — "Rolling 5 hours"
+            here, "Current session" on mobile, "Token Budget Usage" on desktop —
+            so the same limit was unrecognisable between surfaces.
+          */}
           <UsageBar
-            label="Rolling 5 hours"
+            label={managedUsageBucketLabel('session')}
             percent={sessionUsedPercent}
-            value={`${sessionUsedPercent}% used`}
-            detail={`${100 - sessionUsedPercent}% remaining · ${formatReset(usage?.session_reset_at ?? null, 'rolling', nowMs)}`}
+            value={formatUsageRemaining(100 - sessionUsedPercent)}
+            detail={usageDetail(100 - sessionUsedPercent, usage?.session_reset_at ?? null, nowMs)}
           />
           <UsageBar
-            label="Rolling 7 days"
+            label={managedUsageBucketLabel('weekly')}
             percent={weeklyUsedPercent}
-            value={`${weeklyUsedPercent}% used`}
-            detail={`${100 - weeklyUsedPercent}% remaining · ${formatReset(usage?.weekly_reset_at ?? null, 'rolling', nowMs)}`}
+            value={formatUsageRemaining(100 - weeklyUsedPercent)}
+            detail={usageDetail(100 - weeklyUsedPercent, usage?.weekly_reset_at ?? null, nowMs)}
           />
           <UsageBar
-            label="Most capable models · 7 days"
+            label={managedUsageBucketLabel('weeklyFlagship')}
             percent={flagshipWeeklyUsedPercent}
-            value={`${flagshipWeeklyUsedPercent}% used`}
-            detail={`${100 - flagshipWeeklyUsedPercent}% remaining · ${formatReset(usage?.flagship_weekly_reset_at ?? null, 'rolling', nowMs)}`}
+            value={formatUsageRemaining(100 - flagshipWeeklyUsedPercent)}
+            detail={usageDetail(
+              100 - flagshipWeeklyUsedPercent,
+              usage?.flagship_weekly_reset_at ?? null,
+              nowMs,
+            )}
           />
           <UsageBar
-            label="Account month"
+            label={managedUsageBucketLabel('period')}
             percent={usedPercent}
-            value={`${usedPercent}% used`}
-            detail={`${100 - usedPercent}% remaining · ${formatReset(usage?.usage_reset_at ?? null, 'period', nowMs)}`}
+            value={formatUsageRemaining(100 - usedPercent)}
+            detail={usageDetail(100 - usedPercent, usage?.usage_reset_at ?? null, nowMs)}
           />
         </div>
 

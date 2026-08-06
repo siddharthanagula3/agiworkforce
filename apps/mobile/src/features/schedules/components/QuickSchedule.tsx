@@ -291,7 +291,7 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
         >
           <Pressable
             className="flex-1"
-            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={{ backgroundColor: colors.scrim }}
             onPress={handleClose}
           >
             <Pressable

@@ -7,6 +7,7 @@
  * All Tauri invoke() params are camelCase per IPC rules.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useShallow } from 'zustand/react/shallow';
 import { useModelStore } from '../../stores/modelStore';
 import { getDefaultModelFor } from '@agiworkforce/types';
@@ -414,6 +415,25 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
     setForm((prev) => ({ ...prev, config: { expression } as CronConfig }));
   }, []);
 
+  const handleBrowseWatchDirectory = useCallback(async () => {
+    try {
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Select Watch Directory',
+      });
+      // Cancelling the picker returns null; leave the field as the user left it.
+      if (typeof selected !== 'string') return;
+      setForm((prev) => ({
+        ...prev,
+        config: { ...(prev.config as FileWatcherConfig), directory: selected },
+      }));
+    } catch (error) {
+      console.error('Failed to select watch directory:', error);
+      toast.error('Failed to open folder picker');
+    }
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (!form.name.trim()) {
       toast.error('Trigger name is required');
@@ -578,10 +598,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                     type="button"
                     title="Browse for directory"
                     className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-colors hover:text-foreground"
-                    onClick={() => {
-                      // Directory picker not yet wired to Tauri — show info toast
-                      toast.info('Directory picker will be available after Rust command is wired');
-                    }}
+                    onClick={() => void handleBrowseWatchDirectory()}
                   >
                     <FolderOpen className="h-4 w-4" />
                   </button>

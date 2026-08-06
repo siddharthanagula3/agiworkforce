@@ -13,6 +13,7 @@ import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes } from '@/lib/api-key-scopes';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
@@ -95,6 +96,23 @@ async function handleCreate(request: NextRequest) {
   const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name, scopes);
 
   logger.info({ userId, keyId: row.id }, 'API key created');
+
+  // Audit: key creation. `rawKey` is in scope here and MUST NOT be recorded —
+  // only the key id, its user-chosen label and its granted scopes are. The
+  // sanitizer in lib/security-audit.ts additionally redacts any sk_live_/
+  // sk_test_-shaped value that reaches it, so a mistake here cannot persist
+  // key material.
+  await recordAuditEvent({
+    userId,
+    eventType: 'api_key_created',
+    request,
+    detail: {
+      resourceType: 'api_key',
+      resourceId: row.id,
+      resourceName: name,
+      scopes: resolveApiKeyScopes(row.scopes),
+    },
+  });
 
   return NextResponse.json(
     {

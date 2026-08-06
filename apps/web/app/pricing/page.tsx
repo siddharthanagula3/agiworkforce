@@ -12,9 +12,15 @@ import {
   formatPrivacyModeLabel,
   getBillingPlanProductLimits,
   isPlanSelectableOnSurface,
+  isPerSeatBillingPlan,
+  MAX_PURCHASABLE_SEATS,
+  MIN_PURCHASABLE_SEATS,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
+  type BillingInterval,
   type BillingPlanLimit,
   type BillingPlanTier,
+  type SelfServeIndividualPlanTier,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -23,6 +29,7 @@ import {
   upgradeToProPlan,
   upgradeToMaxPlan,
   upgradeToMax15xPlan,
+  upgradeToTeamPlan,
 } from '@features/billing/services/stripe-payments';
 import {
   UpgradeConfirmDialog,
@@ -71,6 +78,7 @@ const localizedPricingCatalogSchema = z.object({
     pro: localizedPlanPricesSchema,
     max: localizedPlanPricesSchema,
     max_15x: localizedPlanPricesSchema,
+    team: localizedPlanPricesSchema,
   }),
 });
 
@@ -80,15 +88,16 @@ function formatLocalizedAmount(
   entry: z.infer<typeof localizedPriceEntrySchema> | undefined,
   fallbackUsd: number,
   divisor = 1,
+  multiplier = 1,
 ): string {
-  if (!entry) return `$${(fallbackUsd / divisor).toFixed(2).replace(/\.00$/, '')}`;
+  if (!entry) return `$${((fallbackUsd * multiplier) / divisor).toFixed(2).replace(/\.00$/, '')}`;
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: entry.currency.toUpperCase(),
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(entry.amountMinor / 100 / divisor);
+  }).format((entry.amountMinor * multiplier) / 100 / divisor);
 }
 
 function CheckIcon() {
@@ -157,11 +166,7 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
       ? 'CLI, Chrome & VS Code'
       : 'No managed access',
-    teamControls: canUseBillingPlanCapability(plan, 'team_admin')
-      ? plan === 'team'
-        ? 'Sales-assisted pilot'
-        : 'Yes'
-      : 'No',
+    teamControls: canUseBillingPlanCapability(plan, 'team_admin') ? 'Yes' : 'No',
   };
 }
 
@@ -176,6 +181,14 @@ export default function PricingPage() {
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
+  // Team is billed per seat. Start at the minimum (the owner's own seat) rather
+  // than a made-up "typical team size" — the buyer picks the real number and the
+  // total below updates from it.
+  const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
+  // Team billing cadence is independent of the individual-plan `annual` toggle
+  // (different section, different product). Defaults to monthly and only becomes
+  // yearly when the yearly Team Price is actually configured and checkout-ready.
+  const [teamAnnual, setTeamAnnual] = useState(false);
 
   // Display the exact same trusted country-derived Stripe prices that Checkout
   // validates server-side. A malformed/unavailable response falls back to the
@@ -221,6 +234,31 @@ export default function PricingPage() {
     localizedPlans?.max_15x.monthly,
     max15x.monthlyPriceUsd,
   );
+  // Per-seat unit price, and the total for the seats currently selected.
+  const teamSeatPrice = formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd);
+  const teamTotalPrice = formatLocalizedAmount(
+    localizedPlans?.team.monthly,
+    team.monthlyPriceUsd,
+    1,
+    teamSeats,
+  );
+  // Yearly Team is offered ONLY when the yearly Price is configured and its
+  // amount matches the catalog (checkoutReady). Absent env → not offered, and
+  // the cadence stays monthly (fail-closed at the display layer; the checkout
+  // route refuses a yearly Team price it cannot resolve regardless).
+  const teamYearlyAvailable = localizedPlans?.team.yearly?.checkoutReady === true;
+  const teamInterval: BillingInterval = teamAnnual && teamYearlyAvailable ? 'yearly' : 'monthly';
+  const teamSavingsPct = annualSavingsPct(team);
+  const teamYearlySeatPrice = formatLocalizedAmount(
+    localizedPlans?.team.yearly,
+    team.yearlyPriceUsd,
+  );
+  const teamYearlyTotalPrice = formatLocalizedAmount(
+    localizedPlans?.team.yearly,
+    team.yearlyPriceUsd,
+    1,
+    teamSeats,
+  );
   const hasActivePaidPlan =
     billing != null &&
     billing.plan !== 'free' &&
@@ -232,7 +270,8 @@ export default function PricingPage() {
     (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
 
   function selectedPriceEntry(plan: CheckoutPlan) {
-    const interval = annual && plan === 'pro' ? 'yearly' : 'monthly';
+    const interval: BillingInterval =
+      plan === 'pro' ? (annual ? 'yearly' : 'monthly') : plan === 'team' ? teamInterval : 'monthly';
     return localizedPlans?.[plan][interval];
   }
 
@@ -248,11 +287,29 @@ export default function PricingPage() {
 
   function planRelationship(plan: CheckoutPlan): 'upgrade' | 'current' | 'lower' {
     if (!hasActivePaidPlan || !billing) return 'upgrade';
+
+    // A per-seat plan you already own is still actionable: the change on offer
+    // is MORE SEATS, which goes through the same mid-cycle upgrade path. Showing
+    // a disabled "Current plan" here would dead-end a growing team.
+    if (plan === 'team' && billing.plan === 'team') return 'upgrade';
     if (billing.plan === plan) return 'current';
 
-    const currentIndex = SELF_SERVE_PAID_PLAN_TIERS.indexOf(billing.plan as SelfServePaidPlanTier);
-    const targetIndex = SELF_SERVE_PAID_PLAN_TIERS.indexOf(plan);
-    return currentIndex < 0 || targetIndex < currentIndex ? 'lower' : 'upgrade';
+    // Moving OFF a per-seat organization plan onto an individual plan is not an
+    // upgrade in any direction — it would convert an org subscription into a
+    // personal one and strand the other seats. Route it through billing.
+    if (billing.plan === 'team') return 'lower';
+
+    // Team has no rank on the individual ladder, but it IS reachable from any
+    // individual plan: the upgrade route accepts pro/basic/max -> team.
+    if (plan === 'team') return 'upgrade';
+
+    const currentIndex = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(
+      billing.plan as SelfServeIndividualPlanTier,
+    );
+    const targetIndex = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(
+      plan as SelfServeIndividualPlanTier,
+    );
+    return currentIndex < 0 || targetIndex < 0 || targetIndex < currentIndex ? 'lower' : 'upgrade';
   }
 
   function renderPlanAction(plan: CheckoutPlan, upgradeLabel: string) {
@@ -305,7 +362,15 @@ export default function PricingPage() {
     if (hasActivePaidPlan) {
       setUpgradeConfirm({
         plan,
-        billingInterval: plan === 'pro' ? (annual ? 'yearly' : 'monthly') : 'monthly',
+        billingInterval:
+          plan === 'pro'
+            ? annual
+              ? 'yearly'
+              : 'monthly'
+            : plan === 'team'
+              ? teamInterval
+              : 'monthly',
+        ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats } : {}),
       });
       return;
     }
@@ -323,6 +388,11 @@ export default function PricingPage() {
         await upgradeToMaxPlan({ userId, userEmail });
       } else if (plan === 'max_15x') {
         await upgradeToMax15xPlan({ userId, userEmail });
+      } else if (plan === 'team') {
+        await upgradeToTeamPlan({
+          seats: teamSeats,
+          ...(teamInterval === 'yearly' ? { billingPeriod: 'yearly' } : {}),
+        });
       }
       toast.dismiss(toastId);
     } catch (err) {
@@ -420,7 +490,7 @@ export default function PricingPage() {
     {
       planId: 'team',
       label: team.label,
-      price: t('custom'),
+      price: t('perSeatPrice', { price: teamSeatPrice }),
       billingInterval: t('compareTeamBilling'),
       usageCapacity: t('compareTeamUsage'),
       ...managedPlanCapabilities('team'),
@@ -553,9 +623,53 @@ export default function PricingPage() {
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
               <h3 className="agi-tier-name">{team.label}</h3>
+              {teamYearlyAvailable ? (
+                <div
+                  className="agi-tier-toggle"
+                  role="group"
+                  aria-label="Team billing cadence"
+                  style={{ marginBottom: 16 }}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={!teamAnnual}
+                    onClick={() => setTeamAnnual(false)}
+                    className={
+                      teamAnnual
+                        ? 'agi-tier-toggle-btn'
+                        : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                    }
+                  >
+                    {t('monthly')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={teamAnnual}
+                    onClick={() => setTeamAnnual(true)}
+                    className={
+                      teamAnnual
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
+                    }
+                  >
+                    {t('annual')}{' '}
+                    {teamSavingsPct > 0 ? (
+                      <span className="agi-tier-toggle-save">
+                        {t('annualSave', { pct: teamSavingsPct })}
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+              ) : null}
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('custom')}</span>
-                <span className="agi-tier-price-sub">{t('salesAssistedPricingSub')}</span>
+                <span className="agi-tier-price-num">
+                  {teamInterval === 'yearly' ? teamYearlySeatPrice : teamSeatPrice}
+                </span>
+                <span className="agi-tier-price-sub">
+                  {teamInterval === 'yearly'
+                    ? t('perSeatPricingSubAnnual')
+                    : t('perSeatPricingSub')}
+                </span>
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
@@ -576,10 +690,44 @@ export default function PricingPage() {
                   {t('teamFeature4')}
                 </li>
               </ul>
+              <div className="agi-tier-seats">
+                <label className="agi-tier-seats-label" htmlFor="team-seat-count">
+                  {t('seatCountLabel')}
+                </label>
+                <input
+                  id="team-seat-count"
+                  className="agi-tier-seats-input"
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_PURCHASABLE_SEATS}
+                  max={MAX_PURCHASABLE_SEATS}
+                  step={1}
+                  value={teamSeats}
+                  onChange={(event) => {
+                    // Clamp here as well as server-side: the number input still
+                    // lets a keyboard user type 0 or a huge value, and the total
+                    // shown must never disagree with what checkout will charge.
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    if (!Number.isFinite(parsed)) {
+                      setTeamSeats(MIN_PURCHASABLE_SEATS);
+                      return;
+                    }
+                    setTeamSeats(
+                      Math.min(Math.max(parsed, MIN_PURCHASABLE_SEATS), MAX_PURCHASABLE_SEATS),
+                    );
+                  }}
+                />
+                <p className="agi-tier-seats-total">
+                  {teamInterval === 'yearly'
+                    ? t('seatTotalAnnual', { total: teamYearlyTotalPrice, seats: teamSeats })
+                    : t('seatTotal', { total: teamTotalPrice, seats: teamSeats })}
+                </p>
+              </div>
               <div className="agi-tier-cta-group">
-                <Link href="/contact-sales?plan=team" className="agi-tier-cta">
-                  {t('talkToSalesCta')}
-                </Link>
+                {renderPlanAction(
+                  'team',
+                  billing?.plan === 'team' ? t('changeSeatsCta') : t('teamCta'),
+                )}
               </div>
             </Reveal>
 

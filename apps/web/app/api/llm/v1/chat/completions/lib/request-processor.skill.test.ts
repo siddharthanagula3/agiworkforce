@@ -13,6 +13,7 @@ function skill(overrides: Partial<Skill> = {}): Skill {
     name: 'design-review',
     description: 'Review UI for release polish.',
     body: 'PRIVATE SKILL BODY',
+    contentHash: `sha256:${'0'.repeat(64)}`,
     filePath: '/srv/private/skills/design-review/SKILL.md',
     source: 'personal',
     metadata: {},

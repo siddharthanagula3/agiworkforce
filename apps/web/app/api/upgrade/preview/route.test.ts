@@ -223,4 +223,108 @@ describe('POST /api/upgrade/preview', () => {
     expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });
+
+  describe('Team seat changes', () => {
+    function teamSubscription(quantity: number) {
+      return {
+        id: 'sub_live123',
+        customer: 'cus_123',
+        status: 'active',
+        currency: 'usd',
+        metadata: { user_id: 'user_123', plan_tier: 'team' },
+        items: {
+          data: [{ id: 'si_123', price: { id: 'price_team_usd' }, quantity }],
+        },
+      };
+    }
+
+    function teamRequest(seats?: number) {
+      return new NextRequest('https://agiworkforce.com/api/upgrade/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: 'team',
+          billingInterval: 'monthly',
+          ...(seats === undefined ? {} : { seats }),
+        }),
+      });
+    }
+
+    beforeEach(() => {
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) {
+          return [
+            {
+              status: 'active',
+              plan_tier: 'team',
+              stripe_subscription_id: 'sub_live123',
+              stripe_customer_id: 'cus_123',
+            },
+          ];
+        }
+        if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+        return [];
+      });
+      stripeMocks.retrieveSubscription.mockResolvedValue(teamSubscription(5));
+      pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+        priceId: 'price_team_usd',
+        currency: 'usd',
+        amountMinor: 2_000,
+      });
+    });
+
+    it('prices a seat increase at the requested quantity, not the current one', async () => {
+      const response = await POST(teamRequest(12));
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subscription_details: expect.objectContaining({
+            items: [{ id: 'si_123', price: 'price_team_usd', quantity: 12 }],
+          }),
+        }),
+      );
+    });
+
+    it('quotes the recurring amount as unit price x seats', async () => {
+      const response = await POST(teamRequest(12));
+
+      // 12 seats at 2000 minor units each. Publishing the unit amount would
+      // understate the org's going-forward bill twelve-fold.
+      expect(await response.json()).toMatchObject({
+        recurringAmountCents: 24_000,
+        seats: 12,
+      });
+    });
+
+    it('refuses a seat reduction rather than issuing an unscoped credit', async () => {
+      const response = await POST(teamRequest(2));
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: expect.stringMatching(/billing management/i) },
+      });
+      expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+    });
+
+    it('refuses a no-op seat change', async () => {
+      const response = await POST(teamRequest(5));
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: expect.stringMatching(/already has 5 seats/i) },
+      });
+      expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+    });
+
+    it('refuses a Team preview with no seat count', async () => {
+      const response = await POST(teamRequest());
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: expect.stringMatching(/seats/i) },
+      });
+      expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+    });
+  });
 });

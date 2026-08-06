@@ -13,8 +13,12 @@ import { normalizeConfiguredModelId } from './features/model-picker/modelConstan
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
 import { buildExtensionStatusBarText } from './core/statusBar';
-import { setupChat } from './core/chatSetup';
-import { setupProviders } from './core/providerSetup';
+import { setupChat, type ChatState } from './core/chatSetup';
+import {
+  setupProviders,
+  createDegradedProviderState,
+  type ProviderState,
+} from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
 import * as telemetry from './core/telemetry';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
@@ -28,6 +32,17 @@ import {
 } from './features/permissions/agentModeConsent';
 
 let activeLocalRuntimes: LocalRuntimePool | undefined;
+
+/**
+ * Record a boot failure in subsystem health *and* put it in front of the user.
+ * The status-bar warning alone is too quiet for the subsystems whose failure
+ * makes the extension look dead rather than degraded.
+ */
+function reportBootFailure(subsystem: string, err: unknown, impact: string): void {
+  recordFailure(subsystem, err);
+  const message = err instanceof Error ? err.message : String(err);
+  void vscode.window.showErrorMessage(`AGI Workforce: ${impact} — ${message}`);
+}
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -61,13 +76,29 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── 1. Code intelligence + diff + inline completion providers ────────────────
   // Runs before chat setup so diffDecorationProvider is available for the sidebar.
-  const providerState = setupProviders(context);
-  const {
-    diffDecorationProvider,
-    diagnosticsProvider,
-    syncCodeLensProvider,
-    syncInlineCompletionProvider,
-  } = providerState;
+  // Guarded because a throw here used to abort activate() before step 2 ever
+  // registered the sidebar webview view provider — VS Code then draws the AGI
+  // container as an empty "no data provider registered" placeholder, which reads
+  // to the user as "the chat panel will not open" rather than "one subsystem
+  // failed". The degraded state keeps chat and commands wired up.
+  let providerState: ProviderState | undefined;
+  try {
+    providerState = setupProviders(context);
+  } catch (err) {
+    reportBootFailure(
+      'providers',
+      err,
+      'Code intelligence (hover, CodeLens, inline completions, diagnostics) is unavailable',
+    );
+    try {
+      providerState = createDegradedProviderState(context);
+    } catch (fallbackErr) {
+      recordFailure('providers-degraded', fallbackErr);
+    }
+  }
+  const diffDecorationProvider = providerState?.diffDecorationProvider;
+  const syncCodeLensProvider = providerState?.syncCodeLensProvider;
+  const syncInlineCompletionProvider = providerState?.syncInlineCompletionProvider;
 
   // One Rust app-server per workspace root. The pool is lazy, so activation
   // never launches a process until a local developer session is actually used.
@@ -83,26 +114,39 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(localRuntimes);
 
   // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
-  const chatState = setupChat(context, localRuntimes, diffDecorationProvider);
-  const {
-    sidebarProvider,
-    conversationTreeProvider,
-    contextPanelProvider,
-    memoryTreeProvider,
-    nativeChatAvailable,
-  } = chatState;
+  // This is where registerWebviewViewProvider('agi-workforce.sidebar') happens.
+  // A silent throw here is the single worst activation failure in the extension,
+  // so it gets an explicit error toast rather than a console warning.
+  let chatState: ChatState | undefined;
+  try {
+    chatState = setupChat(context, localRuntimes, diffDecorationProvider);
+  } catch (err) {
+    reportBootFailure(
+      'chat',
+      err,
+      'The AGI chat view failed to register and the panel will stay empty. Reload the window to retry',
+    );
+  }
+  const sidebarProvider = chatState?.sidebarProvider;
+  const conversationTreeProvider = chatState?.conversationTreeProvider;
 
   // ── 3. Commands ──────────────────────────────────────────────────────────────
-  setupCommands(context, {
-    sidebarProvider,
-    conversationTreeProvider,
-    localRuntimes,
-    contextPanelProvider,
-    memoryTreeProvider,
-    diffDecorationProvider,
-    diagnosticsProvider,
-    nativeChatAvailable,
-  });
+  if (chatState !== undefined && providerState !== undefined) {
+    try {
+      setupCommands(context, {
+        sidebarProvider: chatState.sidebarProvider,
+        conversationTreeProvider: chatState.conversationTreeProvider,
+        localRuntimes,
+        contextPanelProvider: chatState.contextPanelProvider,
+        memoryTreeProvider: chatState.memoryTreeProvider,
+        diffDecorationProvider: providerState.diffDecorationProvider,
+        diagnosticsProvider: providerState.diagnosticsProvider,
+        nativeChatAvailable: chatState.nativeChatAvailable,
+      });
+    } catch (err) {
+      reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
+    }
+  }
 
   // ── 4. Status bar ────────────────────────────────────────────────────────────
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -140,7 +184,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration('agiWorkforce.cliPath')) {
         void localRuntimes
           .restartAll()
-          .then(() => conversationTreeProvider.refresh())
+          .then(() => conversationTreeProvider?.refresh())
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(
@@ -166,21 +210,21 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.apiKey')
       ) {
         if (e.affectsConfiguration('agiWorkforce.model')) {
-          sidebarProvider.syncModelFromConfiguration();
+          sidebarProvider?.syncModelFromConfiguration();
         }
-        sidebarProvider.pushUsageMeter();
+        sidebarProvider?.pushUsageMeter();
       }
 
       if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
-        syncInlineCompletionProvider();
+        syncInlineCompletionProvider?.();
       }
 
       if (e.affectsConfiguration('agiWorkforce.codeLensEnabled')) {
-        syncCodeLensProvider();
+        syncCodeLensProvider?.();
       }
 
       if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
-        sidebarProvider.pushFollowUpBehavior();
+        sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();
       }
 

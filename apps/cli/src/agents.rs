@@ -915,6 +915,49 @@ pub fn format_agent_list(agents: &[AgentDefinition]) -> String {
     out
 }
 
+/// Render the `/subagents` management view: each configured subagent
+/// (agent definition) with its model override, tool restrictions, and the
+/// description that tells the model when to use it. Read-only.
+pub fn format_subagents(agents: &[AgentDefinition]) -> String {
+    if agents.is_empty() {
+        return "No configured subagents found.\n\n\
+                Define subagents as agent files in:\n  \
+                .agiworkforce/agents/ or .claude/agents/ (project)\n  \
+                ~/.agiworkforce/agents/ or ~/.claude/agents/ (global)"
+            .to_string();
+    }
+
+    let mut lines = vec![format!("Configured subagents ({})", agents.len())];
+    for agent in agents {
+        lines.push(String::new());
+        lines.push(format!("  {}", agent.name));
+        let when = if agent.description.trim().is_empty() {
+            "(no description — add one so the model knows when to delegate)"
+        } else {
+            agent.description.trim()
+        };
+        lines.push(format!("    when to use: {when}"));
+        lines.push(format!(
+            "    model:       {}",
+            agent.model.as_deref().unwrap_or("(inherits parent)")
+        ));
+        let tools = match &agent.tools {
+            Some(list) if !list.is_empty() => list.join(", "),
+            _ => "(inherits parent toolset)".to_string(),
+        };
+        lines.push(format!("    tools:       {tools}"));
+        if let Some(disallowed) = &agent.disallowed_tools {
+            if !disallowed.is_empty() {
+                lines.push(format!("    disallowed:  {}", disallowed.join(", ")));
+            }
+        }
+        if let Some(mode) = &agent.permission_mode {
+            lines.push(format!("    permission:  {mode}"));
+        }
+    }
+    lines.join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -922,6 +965,56 @@ pub fn format_agent_list(agents: &[AgentDefinition]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_subagents_renders_model_tools_and_when_to_use() {
+        let agents = vec![
+            AgentDefinition {
+                name: "researcher".to_string(),
+                description: "Use for deep multi-source research".to_string(),
+                model: Some("claude-sonnet-5".to_string()),
+                tools: Some(vec!["web_search".to_string(), "read_file".to_string()]),
+                disallowed_tools: None,
+                max_turns: Some(20),
+                permission_mode: Some("plan".to_string()),
+                system_prompt: "You research.".to_string(),
+                path: std::path::PathBuf::from(".agiworkforce/agents/researcher.md"),
+            },
+            AgentDefinition {
+                name: "minimal".to_string(),
+                description: String::new(),
+                model: None,
+                tools: None,
+                disallowed_tools: None,
+                max_turns: None,
+                permission_mode: None,
+                system_prompt: String::new(),
+                path: std::path::PathBuf::from(".agiworkforce/agents/minimal.md"),
+            },
+        ];
+
+        let out = format_subagents(&agents);
+        assert!(out.contains("Configured subagents (2)"), "{out}");
+        assert!(out.contains("researcher"), "{out}");
+        assert!(
+            out.contains("when to use: Use for deep multi-source research"),
+            "{out}"
+        );
+        assert!(out.contains("model:       claude-sonnet-5"), "{out}");
+        assert!(out.contains("web_search, read_file"), "{out}");
+        assert!(out.contains("permission:  plan"), "{out}");
+        // Minimal agent falls back to inherited defaults, not fabricated data.
+        assert!(out.contains("model:       (inherits parent)"), "{out}");
+        assert!(
+            out.contains("tools:       (inherits parent toolset)"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn format_subagents_handles_empty() {
+        assert!(format_subagents(&[]).contains("No configured subagents found."));
+    }
 
     #[test]
     fn test_parse_agent_frontmatter_full() {

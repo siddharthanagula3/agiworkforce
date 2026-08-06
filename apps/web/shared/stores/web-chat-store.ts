@@ -28,8 +28,10 @@ import type {
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
+import type { InteractiveCard, ResearchStep } from '@agiworkforce/types';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
+import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
 
 /**
  * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options, isolated PER
@@ -106,6 +108,19 @@ export interface MessageResearchState {
   startedAt?: string;
   /** Honest error summary when the run failed mid-way. */
   error?: string;
+  /**
+   * The run's research plan (additive `x_research_plan` SSE event, CAP-045
+   * slice 2): the queries the planning turn committed to, plus the follow-up
+   * and synthesis steps the loop really executed, each with live status.
+   * Absent for a run that predates the event or whose plan could not be parsed.
+   */
+  steps?: ResearchStep[];
+  /**
+   * Sources this run gathered, carried forward when the user retries an
+   * errored/interrupted run so the retry does not re-search what already
+   * succeeded (CAP-045 slice 4).
+   */
+  sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string }>;
 }
 
 // Types
@@ -196,6 +211,16 @@ export interface MessageMetadata {
   /** Durable server run + replay cursor for reconnecting this Cloud turn. */
   cloudAgentRun?: ManagedCloudAgentRunReference;
   /**
+   * Structured, answerable transcript cards produced by a server tool call.
+   *
+   * Typed as the parsed union, so an entry is either `recognized: true` with a
+   * validated body or `recognized: false` carrying only its envelope and the
+   * server-authored `fallback`. A card this build cannot render still persists
+   * and still renders its fallback text — a validation gap costs the user the
+   * widget, never the answer.
+   */
+  interactiveCards?: InteractiveCard[];
+  /**
    * Safe cross-surface projection of a suspended approval checkpoint. The
    * server-owned run remains authoritative; null explicitly clears stale
    * approval cards after the run advances.
@@ -203,6 +228,13 @@ export interface MessageMetadata {
   cloudApproval?: CloudToolApprovalProjection | null;
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
+  /**
+   * AGI Work plan queue (additive `x_agiwork_plan` SSE event, CAP-048): the
+   * steps the planning turn committed to, with live status as execution
+   * proceeds. Whole-plan, last-write-wins. Absent for a run that predates the
+   * event or whose plan could not be parsed.
+   */
+  agiWorkPlan?: AgiWorkPlanStep[];
   /** Code execution result from server-managed code_execution_20260120 tool */
   codeExecutionResult?: {
     stdout: string;
@@ -495,6 +527,8 @@ interface ChatState {
   setToolTimeline: (id: string, tools: MessageToolEntry[], conversationId?: string) => void;
   /** Merge Deep Research run state into the message metadata. */
   setResearchState: (id: string, research: MessageResearchState, conversationId?: string) => void;
+  /** Replace the AGI Work plan queue on the message metadata (last-write-wins). */
+  setAgiWorkPlan: (id: string, agiWorkPlan: AgiWorkPlanStep[], conversationId?: string) => void;
   /** Update a single tool entry by toolCallId within the message's tool timeline. */
   updateToolEntry: (
     messageId: string,
@@ -895,6 +929,13 @@ export const useChatStore = create<ChatState>()(
             (state) => patchMessageMetadata(state, conversationId, id, { research }),
             undefined,
             'chat/setResearchState',
+          ),
+
+        setAgiWorkPlan: (id, agiWorkPlan, conversationId) =>
+          set(
+            (state) => patchMessageMetadata(state, conversationId, id, { agiWorkPlan }),
+            undefined,
+            'chat/setAgiWorkPlan',
           ),
 
         updateToolEntry: (messageId, toolCallId, updates, conversationId) =>

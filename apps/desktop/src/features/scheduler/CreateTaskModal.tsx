@@ -30,7 +30,7 @@ const DEFAULT_SCHEDULE: TaskSchedule = {
 
 function fieldClass(extra?: string) {
   return cn(
-    'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white',
+    'w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground',
     'placeholder-slate-500 outline-none transition',
     'focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
     extra,
@@ -155,21 +155,21 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
 
       {/* Modal */}
       <div
-        className="relative z-10 w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0c14] shadow-2xl"
+        className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-popover shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-task-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <h2 id="create-task-title" className="text-sm font-semibold text-white">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 id="create-task-title" className="text-sm font-semibold text-foreground">
             {isEditing ? 'Edit Scheduled Task' : 'Create Scheduled Task'}
           </h2>
           <button
             type="button"
             onClick={handleClose}
             disabled={isSaving}
-            className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1 text-slate-400 transition hover:bg-muted hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
@@ -263,12 +263,12 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSaving}
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
@@ -279,8 +279,8 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
               isSaving
-                ? 'cursor-not-allowed bg-teal-600/50 text-white/70'
-                : 'bg-teal-600 text-white hover:bg-teal-500',
+                ? 'cursor-not-allowed bg-teal-600/50 text-foreground/70'
+                : 'bg-teal-600 text-foreground hover:bg-teal-500',
             )}
           >
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -1,3 +1,4 @@
+import { resolveScreenDir } from '../support/dom';
 // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01 regression: drives the real
 // composer end-to-end to prove an attached file's *content* is delivered to
 // the backend, not just that the send IPC call doesn't error.
@@ -25,12 +26,8 @@
 //     'secret-memo.txt' (115 chars)` — 115 being the exact byte length of
 //     the in-memory file content this spec generates — followed by
 //     `[Chat] Added 1 document(s) to context (115 total chars)`.
-import * as fs from 'node:fs';
 
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
 describe('AGI Desktop attachment delivery (via drag-drop into the live composer)', () => {
   it('delivers a dropped file attachment through to a real chat turn', async () => {

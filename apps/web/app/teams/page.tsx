@@ -103,7 +103,7 @@ export default function TeamsPage() {
             { href: '/contact-sales', label: 'Contact Sales' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

@@ -1,4 +1,4 @@
-name: Test Priority Levels 1-2 (Blocking)
+name: Test Priority Levels 1-2 (Blocking when populated)
 
 on:
   pull_request:

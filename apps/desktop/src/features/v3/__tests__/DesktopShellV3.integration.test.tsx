@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useAppModeStore } from '../../../stores/appModeStore';
 import { DesktopShellV3 } from '../DesktopShellV3';
 
 vi.mock('react-i18next', () => ({
@@ -20,6 +21,11 @@ vi.mock('react-i18next', () => ({
         'sidebar.modes.chat': 'Chat',
         'sidebar.nav.projects': 'Projects',
         'sidebar.nav.artifacts': 'Artifacts',
+        'sidebar.nav.code': 'Code',
+        'sidebar.nav.design': 'Design',
+        'sidebar.nav.research': 'Research',
+        'canvas.sessionOnlyNotice':
+          'Sketches are session-only for now — closing the app clears the board.',
         'sidebar.nav.tasks': 'Tasks',
         'sidebar.nav.scheduled': 'Scheduled',
         'sidebar.nav.customize': 'Customize',
@@ -52,6 +58,9 @@ vi.mock('react-i18next', () => ({
 describe('DesktopShellV3 real render', () => {
   afterEach(() => {
     cleanup();
+    // `setMode` refuses Local outside Tauri, so the mode is set directly; reset
+    // it the same way so one test's trust boundary does not leak into the next.
+    useAppModeStore.setState({ mode: 'cloud' });
   });
 
   it('renders the mounted desktop shell without the app error boundary', () => {
@@ -86,5 +95,151 @@ describe('DesktopShellV3 real render', () => {
 
     expect(screen.getByLabelText('Select model')).toBeInTheDocument();
     expect(screen.getByText('New chat')).toBeInTheDocument();
+  });
+
+  // The code workspace reads and writes real files through the native FS, so
+  // all three trust-boundary layers are asserted here: nav visibility, the
+  // navigate guard that mounts the panel, and eviction on a switch to Cloud.
+  describe('AGI Code panel is Local-only', () => {
+    it('shows the Code nav entry in Local mode and opens the workspace', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      const codeNav = container.querySelector('[data-nav-id="code"]');
+      expect(codeNav).not.toBeNull();
+
+      fireEvent.click(codeNav as Element);
+
+      expect(await screen.findByTestId('code-workspace')).toBeInTheDocument();
+    });
+
+    it('hides the Code nav entry in Managed Cloud mode', () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      expect(container.querySelector('[data-nav-id="code"]')).toBeNull();
+      expect(screen.queryByTestId('code-workspace')).not.toBeInTheDocument();
+    });
+
+    it('evicts an open code workspace when the session switches to Managed Cloud', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      fireEvent.click(container.querySelector('[data-nav-id="code"]') as Element);
+      expect(await screen.findByTestId('code-workspace')).toBeInTheDocument();
+
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('code-workspace')).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  // CAP-051. The design board keeps every stroke in device-side React state and
+  // has no persistence at all, so it lives on the Local trust boundary next to
+  // the code workspace — and it has to say out loud that nothing is saved.
+  describe('Design panel is Local-only and honest about persistence', () => {
+    it('opens the board from the Local nav with the session-only notice', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      const designNav = container.querySelector('[data-nav-id="design"]');
+      expect(designNav).not.toBeNull();
+
+      fireEvent.click(designNav as Element);
+
+      expect(await screen.findByTestId('design-workspace')).toBeInTheDocument();
+      expect(
+        screen.getByText('Sketches are session-only for now — closing the app clears the board.'),
+      ).toBeInTheDocument();
+    });
+
+    it('hides the Design nav entry in Managed Cloud mode', () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      expect(container.querySelector('[data-nav-id="design"]')).toBeNull();
+      expect(screen.queryByTestId('design-workspace')).not.toBeInTheDocument();
+    });
+
+    it('evicts an open design board when the session switches to Managed Cloud', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      fireEvent.click(container.querySelector('[data-nav-id="design"]') as Element);
+      expect(await screen.findByTestId('design-workspace')).toBeInTheDocument();
+
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('design-workspace')).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  // CAP-045. `useResearchStore.startResearch` invokes the native `research_start`
+  // command, which runs the on-device orchestrator in src-tauri/src/core/research
+  // against the local LLM router — no managed cloud route is involved, so this
+  // panel is gated exactly like the other device surfaces.
+  describe('Deep research panel is Local-only', () => {
+    it('opens deep research from the Local nav', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      const researchNav = container.querySelector('[data-nav-id="research"]');
+      expect(researchNav).not.toBeNull();
+
+      fireEvent.click(researchNav as Element);
+
+      expect(await screen.findByTestId('research-workspace')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /start research/i })).toBeInTheDocument();
+    });
+
+    it('hides the Research nav entry in Managed Cloud mode', () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      expect(container.querySelector('[data-nav-id="research"]')).toBeNull();
+      expect(screen.queryByTestId('research-workspace')).not.toBeInTheDocument();
+    });
+
+    it('evicts an open research panel when the session switches to Managed Cloud', async () => {
+      act(() => {
+        useAppModeStore.setState({ mode: 'local' });
+      });
+      const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+      fireEvent.click(container.querySelector('[data-nav-id="research"]') as Element);
+      expect(await screen.findByTestId('research-workspace')).toBeInTheDocument();
+
+      act(() => {
+        useAppModeStore.setState({ mode: 'cloud' });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('research-workspace')).not.toBeInTheDocument();
+      });
+    });
   });
 });

@@ -406,7 +406,17 @@ export function InlineToolCall({
           )}
         >
           <BadgeIcon config={badgeConfig} />
-          <span className={cn('inline-tool-call__label text-sm font-normal shrink-0', colorClass)}>
+          {/* Tool names are arbitrary-length — MCP servers namespace them
+              ("mcp__filesystem__read_text_file"). shrink-0 with no ellipsis made
+              the label hold its full intrinsic width and push the status dot and
+              chevron off the row's right edge. */}
+          <span
+            className={cn(
+              'inline-tool-call__label min-w-0 truncate text-sm font-normal',
+              colorClass,
+            )}
+            title={typeof label === 'string' ? label : undefined}
+          >
             {label}
           </span>
           {argSummary ? (

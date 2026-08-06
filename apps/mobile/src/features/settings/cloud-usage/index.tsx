@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { View, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
@@ -325,7 +326,7 @@ export default function CloudUsageScreen() {
                   }}
                 >
                   <UsagePercentBar
-                    label="Current session"
+                    label={managedUsageBucketLabel('session')}
                     percentage={snapshot.sessionUsagePercentage}
                     resetLabel={
                       formatResetsInDuration(snapshot.sessionResetAt) === null
@@ -362,7 +363,7 @@ export default function CloudUsageScreen() {
                   >
                     <View style={{ padding: 16 }}>
                       <UsagePercentBar
-                        label="All models"
+                        label={managedUsageBucketLabel('weekly')}
                         percentage={snapshot.weeklyUsagePercentage}
                         resetLabel={formatResetWeekday(snapshot.weeklyResetAt)}
                       />
@@ -376,7 +377,7 @@ export default function CloudUsageScreen() {
                         }}
                       >
                         <UsagePercentBar
-                          label="Flagship models"
+                          label={managedUsageBucketLabel('weeklyFlagship')}
                           percentage={snapshot.flagshipWeeklyUsagePercentage}
                           resetLabel={formatResetWeekday(snapshot.flagshipWeeklyResetAt)}
                         />
@@ -427,7 +428,7 @@ export default function CloudUsageScreen() {
 
                 <View style={{ padding: 16, gap: 20 }}>
                   <UsagePercentBar
-                    label="This period"
+                    label={managedUsageBucketLabel('period')}
                     percentage={snapshot.usagePercentage}
                     resetLabel={periodResetLabel}
                   />

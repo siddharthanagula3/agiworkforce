@@ -137,10 +137,15 @@ describe('SendButton · queue mode', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('applies amber-500 background class', () => {
+  it('uses the same brand fill as Send, not a second primary colour', () => {
+    // Queue is Send, deferred — the same primary action in a later state. It
+    // used amber while Send used terra-cotta one row away, which put two
+    // different colours on one role in a single composer and borrowed the
+    // product's warning hue for a non-warning.
     const { container } = renderButton({ mode: 'queue', onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-amber-500');
+    expect(btn?.className).toContain('bg-terra-cotta-500');
+    expect(btn?.className).not.toContain('bg-amber');
   });
 
   it('has the queue title', () => {

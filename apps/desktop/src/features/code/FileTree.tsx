@@ -161,7 +161,16 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
-  const initialLoadRef = useRef(true);
+  // Read through a ref so `loadDirectory` stays referentially stable.
+  // Depending on `expandedPaths` directly re-minted the callback on every
+  // load (loadDirectory itself calls setExpandedPaths), which re-fired the
+  // root-load effect below in a loop until React threw max-update-depth —
+  // the "Code panel crashes into the error boundary" bug the WDIO sweep
+  // caught (3-of-5 native runs).
+  const expandedPathsRef = useRef(expandedPaths);
+  useEffect(() => {
+    expandedPathsRef.current = expandedPaths;
+  }, [expandedPaths]);
 
   const loadDirectory = useCallback(
     async (
@@ -173,7 +182,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         const expandSet = options?.expansionOverride
           ? new Set(options.expansionOverride)
           : options?.preserveExpansion
-            ? new Set(expandedPaths)
+            ? new Set(expandedPathsRef.current)
             : new Set<string>();
 
         expandSet.add(normalizePath(path));
@@ -187,18 +196,11 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         setLoading(false);
       }
     },
-    [expandedPaths, buildTree],
+    [buildTree],
   );
 
   useEffect(() => {
-    if (initialLoadRef.current) {
-      initialLoadRef.current = false;
-      setExpandedPaths(new Set([normalizedRoot]));
-      void loadDirectory(normalizedRoot);
-    } else {
-      setExpandedPaths(new Set([normalizedRoot]));
-      void loadDirectory(normalizedRoot);
-    }
+    void loadDirectory(normalizedRoot);
   }, [normalizedRoot, loadDirectory]);
 
   useEffect(() => {
@@ -499,10 +501,17 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
       <div key={node.path}>
         <div
           className={cn(
-            'flex items-center gap-2 px-2 py-1 cursor-pointer rounded-md group transition-colors select-none',
+            'flex min-w-0 items-center gap-2 px-2 py-1 cursor-pointer rounded-md group transition-colors select-none',
             isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
           )}
-          style={{ paddingLeft: `${level * 12 + 8}px` }}
+          /*
+           * Cap the indent. The sidebar is a fixed 280px and each level added
+           * 12px unconditionally, so a node ~10 levels deep (routine in this
+           * repo: apps/web/app/api/llm/v1/chat/completions/lib/...) spent the
+           * whole width on whitespace and truncated the filename to nothing.
+           * VS Code caps indentation for the same reason.
+           */
+          style={{ paddingLeft: `${Math.min(level, 8) * 12 + 8}px` }}
           onClick={() => {
             if (node.isDirectory) {
               void toggleDirectory(node);
@@ -513,7 +522,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
           onContextMenu={(event) => handleContextMenu(event, node)}
         >
           {node.isDirectory ? (
-            <span className="text-muted-foreground">
+            <span className="shrink-0 text-muted-foreground">
               {isExpanded ? (
                 <ChevronDown className="h-4 w-4" />
               ) : (
@@ -521,11 +530,15 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
               )}
             </span>
           ) : (
-            <span className="w-4" />
+            <span className="w-4 shrink-0" />
           )}
 
-          <span className="text-muted-foreground">{getFileIcon(node)}</span>
-          <span className="flex-1 text-sm truncate font-mono">{node.name}</span>
+          <span className="shrink-0 text-muted-foreground">{getFileIcon(node)}</span>
+          {/* min-w-0 so `truncate` actually resolves inside the flex row, and the
+              full name stays reachable on hover once it is truncated. */}
+          <span className="min-w-0 flex-1 truncate font-mono text-sm" title={node.name}>
+            {node.name}
+          </span>
         </div>
 
         {node.isDirectory &&

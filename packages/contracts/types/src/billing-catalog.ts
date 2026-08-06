@@ -12,17 +12,43 @@ export type BillingInterval = 'monthly' | 'yearly';
 
 /**
  * Plans that can be purchased without sales-assisted provisioning.
- * Team remains a real catalog/entitlement tier for existing and manually
- * provisioned customers, but it must not enter the personal checkout path
- * until organization ownership, licensed seats, and member lifecycle exist.
+ *
+ * Team joined this set once organization ownership, licensed seats, and member
+ * lifecycle became real (founder decision 2026-08-04). It is billed PER SEAT:
+ * `BILLING_PLAN_PRICING.team.perSeat` is true and every checkout/upgrade call
+ * for Team MUST carry an explicit seat quantity. Enterprise stays sales-assisted
+ * because its price is negotiated, not published.
+ *
+ * This is a SET, not an ordering. Team is an organization plan bought by the
+ * seat, so it has no position on the individual upgrade ladder — use
+ * `SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER` for anything that means "the next plan
+ * up". Ranking Team against Pro/Max here would tell an individual their next
+ * step is a per-seat org plan, or tell a Team admin that Max is a downgrade.
  */
 export const SELF_SERVE_PAID_PLAN_TIERS = [
   'basic',
   'pro',
   'max',
   'max_15x',
+  'team',
 ] as const satisfies readonly BillingPlanTier[];
 export type SelfServePaidPlanTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
+
+/**
+ * The ordered ladder of INDIVIDUAL self-serve plans, lowest to highest.
+ *
+ * Deliberately excludes Team: Team is per-seat and organization-scoped, so
+ * "the next plan up from Pro" is Max, not Team, and "buy more seats" is not a
+ * rung on this ladder. Keep every index/rank comparison on this array and keep
+ * `SELF_SERVE_PAID_PLAN_TIERS` as the purchasable SET.
+ */
+export const SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER = [
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+] as const satisfies readonly SelfServePaidPlanTier[];
+export type SelfServeIndividualPlanTier = (typeof SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER)[number];
 
 export function isSelfServePaidPlanTier(
   value: string | null | undefined,
@@ -32,20 +58,36 @@ export function isSelfServePaidPlanTier(
   );
 }
 
+/** Whether `value` has a rank on the individual upgrade ladder (Team does not). */
+export function isSelfServeIndividualPlanTier(
+  value: string | null | undefined,
+): value is SelfServeIndividualPlanTier {
+  return (
+    typeof value === 'string' &&
+    (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(value)
+  );
+}
+
 /**
- * Whether a self-serve upgrade still exists for this tier — i.e. whether an
- * "Upgrade" affordance should be offered at all.
+ * Whether a one-click INDIVIDUAL upgrade still exists for this tier — i.e.
+ * whether a generic "Upgrade" affordance should be offered at all.
  *
- * False for `max_15x` (the top self-serve plan, so there is nothing above it to
- * buy) and for `team`/`enterprise` (sales-assisted; a checkout CTA would be
- * wrong). Offering "Upgrade" to someone already on the highest plan reads as a
- * billing error and undermines trust in what they are paying for.
+ * False for `max_15x` (top of the individual ladder, nothing above it to buy),
+ * for `enterprise` (negotiated, not purchasable), and for `team`. Team is now
+ * self-serve, but its only "more" is MORE SEATS, which the generic upgrade
+ * affordance cannot express — it opens the individual plan dialog, which has no
+ * seat control and would silently re-bill an org at one seat. Seat count is
+ * changed from organization billing, so answering `true` here would hand a Team
+ * admin a control that does the wrong thing.
+ *
+ * Derived from `getNextUpgradeTier` so the affordance and the concrete target
+ * can never disagree.
  *
  * Shared rather than inlined per surface so web, desktop and mobile cannot
  * drift on who is shown an upgrade prompt.
  */
 export function hasSelfServeUpgradePath(value: string | null | undefined): boolean {
-  return value !== 'max_15x' && value !== 'team' && value !== 'enterprise';
+  return getNextUpgradeTier(value) !== null;
 }
 
 export interface BillingPlanPricing {
@@ -55,6 +97,36 @@ export interface BillingPlanPricing {
   yearlyPriceUsd: number;
   /** India-specific monthly price in INR, when it differs from a straight USD conversion. */
   monthlyPriceInr?: number;
+  /**
+   * True when the published price is PER SEAT rather than per account. Every
+   * price-rendering surface must say "/seat" and every checkout must send a
+   * quantity; a bare `monthlyPriceUsd` on a per-seat plan would otherwise read
+   * as the whole org's bill.
+   */
+  perSeat?: boolean;
+}
+
+/** Whether `plan` is billed per seat (quantity-aware checkout is mandatory). */
+export function isPerSeatBillingPlan(plan: string | null | undefined): boolean {
+  return BILLING_PLAN_PRICING[normalizeBillingPlanTier(plan)].perSeat === true;
+}
+
+/**
+ * Seat-quantity bounds for per-seat checkout.
+ *
+ * The floor is 1 because an organization always has at least its owner. The
+ * ceiling is Stripe's documented maximum quantity for a subscription line item
+ * — it is an API bound, NOT a product claim about team size, and exists so an
+ * unvalidated client integer cannot reach Stripe.
+ */
+export const MIN_PURCHASABLE_SEATS = 1;
+export const MAX_PURCHASABLE_SEATS = 999_999;
+
+/** Clamp/validate a requested seat count; returns null when it is not a usable quantity. */
+export function normalizePurchasableSeats(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null;
+  if (value < MIN_PURCHASABLE_SEATS || value > MAX_PURCHASABLE_SEATS) return null;
+  return value;
 }
 
 export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> = {
@@ -107,10 +179,28 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
   team: {
     id: 'team',
     label: 'Team',
-    // Team is sales-assisted. Zero means there is no public self-serve price;
-    // contracted amounts must come from the customer's invoice.
-    monthlyPriceUsd: 0,
-    yearlyPriceUsd: 0,
+    // PER SEAT. $25/seat/mo and $240/seat/yr (founder decision 2026-08-05,
+    // Decision #22, superseding the 2026-08-04 Pro-pinned $20): a Team seat
+    // carries exactly Pro's managed-usage allowance
+    // (apps/web/lib/server/managed-usage-policy.ts keeps the `team` budget
+    // byte-identical to `pro`) — the $5-over-Pro premium prices the
+    // organization layer (central billing, seat management, member lifecycle),
+    // not extra allowance. Yearly USD is now wired end-to-end; live checkout
+    // still needs the founder to create the $240/seat/yr Stripe Price behind
+    // STRIPE_PRICE_TEAM_YEARLY_USD (absent env → yearly fails closed). Team INR
+    // (monthly and yearly) is founder-undecided; ₹1,999 remains the configured
+    // monthly amount and there is no INR yearly Price.
+    //
+    // monthlyPriceUsd MUST equal the unit_amount of the Stripe Price behind
+    // STRIPE_PRICE_TEAM_MONTHLY_USD (and the INR Price behind
+    // STRIPE_PRICE_TEAM_MONTHLY_INR); yearlyPriceUsd MUST equal the
+    // STRIPE_PRICE_TEAM_YEARLY_USD Price. getPriceSelectionForCurrency compares
+    // each and refuses checkout on a mismatch, so a drift fails closed rather
+    // than charging an amount the customer did not see.
+    monthlyPriceUsd: 25,
+    yearlyPriceUsd: 240,
+    monthlyPriceInr: 1999,
+    perSeat: true,
   },
   enterprise: {
     id: 'enterprise',
@@ -264,6 +354,21 @@ export interface BillingPlanProductLimits {
   /**
    * GOV-7 / GOV-8: maximum scheduled tasks a user may own. Every firing runs an
    * unattended managed turn, so this is a spend ceiling, not a UI nicety.
+   *
+   * These values are ALSO bounded by what the platform can actually execute, and
+   * that is the tighter constraint. Due schedules run only when
+   * `/api/cron/run-schedules` fires (`vercel.json`), and each invocation claims at
+   * most `processDueScheduleRuns({ limit })` rows — a bound set by Vercel's
+   * `maxDuration`, not by choice. Total daily throughput is therefore
+   * `invocations/day * limit`, shared across ALL users.
+   *
+   * Sizing these above that ceiling does not fail loudly: unclaimed rows stay due
+   * and are picked up FIFO, so the symptom is a silently growing backlog and runs
+   * landing days late. Founder decision 2026-08-04 lowered these to fit an hourly
+   * sweep (24 * 10 = 240 runs/day). If the deployed cron cadence or the per-invocation
+   * limit changes, re-derive these numbers — and update `SWEEP_INTERVAL_MS` in
+   * `apps/web/lib/schedules/schedule-time.ts`, which `schedule-cadence.test.ts` pins
+   * to `vercel.json`.
    */
   maxScheduledTasks: BillingPlanLimit;
 }
@@ -310,7 +415,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: 2,
     sandboxTtlMs: 10 * MINUTE_MS,
     maxConnectorTools: 50,
-    maxScheduledTasks: 5,
+    maxScheduledTasks: 2,
   },
   pro: {
     projects: 25,
@@ -319,7 +424,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: 5,
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
-    maxScheduledTasks: 25,
+    maxScheduledTasks: 5,
   },
   max: {
     projects: 'unlimited',
@@ -328,7 +433,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 30 * MINUTE_MS,
     maxConnectorTools: 300,
-    maxScheduledTasks: 100,
+    maxScheduledTasks: 10,
   },
   max_15x: {
     projects: 'unlimited',
@@ -337,7 +442,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 500,
-    maxScheduledTasks: 250,
+    maxScheduledTasks: 25,
   },
   team: {
     projects: 25,
@@ -346,7 +451,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxSandboxes: 5,
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
-    maxScheduledTasks: 25,
+    maxScheduledTasks: 5,
   },
   enterprise: {
     projects: 'custom',
@@ -409,22 +514,31 @@ export function getPlanMaxScheduledTasks(plan: string | null | undefined): numbe
 }
 
 /**
- * GOV-20: the next self-serve tier above `plan`, or null when there is none
- * (already on the top self-serve tier, or on a sales-assisted tier).
- * Lets a paywall render a concrete upgrade target instead of a generic link.
+ * GOV-20: the next INDIVIDUAL self-serve tier above `plan`, or null when there
+ * is none. Lets a paywall render a concrete upgrade target instead of a generic
+ * link.
+ *
+ * Ranks against `SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER`, not against the
+ * purchasable set: Team is self-serve but per-seat and organization-scoped, so
+ * it is neither a step above Pro nor a plan with an individual step above it.
+ * A Team admin who wants "more" buys more seats, which is a different control.
  */
-export function getNextUpgradeTier(plan: string | null | undefined): SelfServePaidPlanTier | null {
+export function getNextUpgradeTier(
+  plan: string | null | undefined,
+): SelfServeIndividualPlanTier | null {
   const current = normalizeBillingPlanTier(plan);
-  const index = (SELF_SERVE_PAID_PLAN_TIERS as readonly BillingPlanTier[]).indexOf(current);
+  const index = (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly BillingPlanTier[]).indexOf(
+    current,
+  );
   if (index === -1) {
-    // Free / local / byok have no rank in the paid ladder: the first paid tier
-    // is the upgrade. Team and Enterprise are sales-assisted — no self-serve
-    // step exists above them.
+    // Free / local / byok have no rank on the ladder: the first paid tier is the
+    // upgrade. Team is per-seat (see above) and Enterprise is negotiated — no
+    // individual self-serve step exists above either.
     return current === 'team' || current === 'enterprise'
       ? null
-      : (SELF_SERVE_PAID_PLAN_TIERS[0] ?? null);
+      : (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0] ?? null);
   }
-  return SELF_SERVE_PAID_PLAN_TIERS[index + 1] ?? null;
+  return SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[index + 1] ?? null;
 }
 
 /**

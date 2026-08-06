@@ -1,0 +1,115 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { withRateLimit } from '@/lib/rate-limit';
+import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
+import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  PLUGIN_REGISTRY_DEFAULT_LIMIT,
+  PLUGIN_REGISTRY_MAX_LIMIT,
+  listPluginRegistryEntries,
+} from '@/lib/services/plugin-registry-service';
+import {
+  PLUGIN_REGISTRY_STATUSES,
+  PLUGIN_SOURCE_KINDS,
+  type PluginRegistryListResponse,
+} from '@agiworkforce/types';
+
+/**
+ * Hosted plugin registry — list (CAP-046 slice 2).
+ *
+ *   GET /api/plugins                      - the whole catalogue (paged)
+ *   GET /api/plugins?category=Developer   - one category
+ *   GET /api/plugins?status=published     - only distributable entries
+ *   GET /api/plugins?source=marketplace   - by provenance
+ *
+ * PUBLIC and unauthenticated by design: the marketplace page renders for
+ * signed-out visitors and the CLI resolves against this endpoint before a user
+ * has any account. Migration 0096 makes catalogue rows world-readable and grants
+ * the app role SELECT only, so there is no write surface to protect here.
+ *
+ * Rate limiting reuses the `model-catalog` bucket — the other public, cached,
+ * read-only catalogue endpoint with the same abuse profile. A dedicated
+ * `plugin-registry` key belongs in lib/rate-limit.ts and is tracked as a
+ * follow-up rather than duplicated here.
+ */
+
+export const runtime = 'nodejs';
+// The catalogue lives in the database, so the response cannot be baked at build
+// time; it is CDN-cacheable instead (see Cache-Control below).
+export const dynamic = 'force-dynamic';
+
+const QuerySchema = z.object({
+  category: z.string().trim().min(1).max(100).optional(),
+  status: z.enum(PLUGIN_REGISTRY_STATUSES as unknown as [string, ...string[]]).optional(),
+  source: z.enum(PLUGIN_SOURCE_KINDS as unknown as [string, ...string[]]).optional(),
+  limit: z.coerce.number().int().min(1).max(PLUGIN_REGISTRY_MAX_LIMIT).optional(),
+  offset: z.coerce.number().int().min(0).max(10_000).optional(),
+});
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflightRequest(request);
+  if (preflight) return preflight;
+
+  const rateLimited = await withRateLimit(request, 'model-catalog');
+  if (rateLimited) return rateLimited;
+
+  const headers = { ...getCorsHeaders(request), ...getSecurityHeaders() };
+  const url = new URL(request.url);
+  const parsed = QuerySchema.safeParse({
+    category: url.searchParams.get('category') ?? undefined,
+    status: url.searchParams.get('status') ?? undefined,
+    source: url.searchParams.get('source') ?? undefined,
+    limit: url.searchParams.get('limit') ?? undefined,
+    offset: url.searchParams.get('offset') ?? undefined,
+  });
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'INVALID_QUERY',
+          message: 'Invalid plugin registry query',
+          details: parsed.error.flatten(),
+        },
+      },
+      { status: 400, headers },
+    );
+  }
+
+  try {
+    const { entries, total } = await listPluginRegistryEntries(getNeonDb(), {
+      category: parsed.data.category,
+      status: parsed.data.status as PluginRegistryListResponse['entries'][number]['status'],
+      source: parsed.data.source as PluginRegistryListResponse['entries'][number]['source'],
+      limit: parsed.data.limit ?? PLUGIN_REGISTRY_DEFAULT_LIMIT,
+      offset: parsed.data.offset ?? 0,
+    });
+
+    const body: PluginRegistryListResponse = { entries, total };
+    return NextResponse.json(body, {
+      status: 200,
+      headers: {
+        // Short public cache: the catalogue changes rarely, and a stale entry
+        // for a minute is harmless because nothing here is user-specific.
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+        ...headers,
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, 'Plugin registry list failed');
+    return NextResponse.json(
+      { error: { code: 'PLUGIN_REGISTRY_UNAVAILABLE', message: 'Plugin registry unavailable' } },
+      { status: 503, headers },
+    );
+  }
+}
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return (
+    handleCorsPreflightRequest(request) ??
+    new NextResponse(null, { status: 204, headers: getSecurityHeaders() })
+  );
+}

@@ -56,5 +56,12 @@
   "agentModeDisabled": "Agenten-Modus deaktiviert",
   "compactMode": "Kompakt-Modus",
   "compactModeEnabled": "Kompakt-Modus aktiviert",
-  "compactModeDisabled": "Kompakt-Modus deaktiviert"
+  "compactModeDisabled": "Kompakt-Modus deaktiviert",
+  "artifactPublish": {
+    "untitled": "Veröffentlichtes Artefakt",
+    "publishedOn": "Veröffentlicht am {{date}}",
+    "sharedFrom": "Geteilt über AGI",
+    "renderFailed": "Dieses Artefakt konnte nicht dargestellt werden: {{error}}",
+    "svgUnavailable": "Dieses SVG enthielt nichts, was sicher angezeigt werden konnte."
+  }
 }

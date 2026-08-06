@@ -11,22 +11,31 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { describe, it, expect } from 'vitest';
 
-const privacySource = readFileSync(resolve(__dirname, '../app/privacy/page.tsx'), 'utf-8');
+/**
+ * Collapse whitespace before matching. These assertions substring-match raw TSX,
+ * and Prettier wraps JSX text across lines — so "…via Google\n Analytics." made
+ * a correct, published disclosure look absent. Four of these checks were failing
+ * for that reason alone.
+ */
+function readNormalized(relativePath: string): string {
+  return readFileSync(resolve(__dirname, relativePath), 'utf-8').replace(/\s+/g, ' ');
+}
 
-const termsSource = readFileSync(resolve(__dirname, '../app/terms/page.tsx'), 'utf-8');
+const privacySource = readNormalized('../app/privacy/page.tsx');
 
-// Minimum number of distinct AI provider names required in the privacy policy.
-// Locked to the currently supported provider disclosures plus Local options.
-const MIN_PROVIDER_COUNT = 9;
+const termsSource = readNormalized('../app/terms/page.tsx');
 
 describe('Privacy Policy required disclosures (FIX-008)', () => {
   it('discloses Sentry error reporting', () => {
     expect(privacySource).toContain('Sentry');
   });
 
-  it('discloses Google Analytics / Google Tag Manager', () => {
+  it('discloses Google Analytics', () => {
+    // Google Analytics is real: shared/components/GoogleAnalytics.tsx loads
+    // gtag.js behind the consent gate. Google Tag Manager is NOT — no container
+    // is loaded anywhere — so it is deliberately not required here. Requiring it
+    // is what kept a false vendor name in a compliance document.
     expect(privacySource).toContain('Google Analytics');
-    expect(privacySource).toContain('Google Tag Manager');
   });
 
   it('states data hosting region (United States)', () => {
@@ -58,24 +67,33 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
     expect(privacySource).toContain('Stripe');
   });
 
-  it(`lists at least ${MIN_PROVIDER_COUNT} distinct AI provider names`, () => {
-    const providers = [
-      'Anthropic',
-      'OpenAI',
-      'Google',
-      'xAI',
-      'DeepSeek',
-      'Mistral',
-      'Groq',
-      'NVIDIA',
-      'Bedrock',
-      'OpenRouter',
-      'Ollama',
-      'Perplexity',
-      'Moonshot',
-    ];
-    const found = providers.filter((p) => privacySource.includes(p));
-    expect(found.length).toBeGreaterThanOrEqual(MIN_PROVIDER_COUNT);
+  it('names no AI provider that is absent from the model catalog', () => {
+    // This replaces a "list at least N provider names" assertion, which was
+    // actively harmful: it rewarded padding the list and was satisfied by Groq
+    // and Mistral — two providers DELETED from the catalog (see the R26
+    // canonicalization test in packages/contracts/types). A compliance document
+    // naming a processor that processes nothing is a false disclosure, and the
+    // test demanded it.
+    //
+    // The honest invariant is the opposite one: every provider named must exist.
+    const retired = ['Groq', 'Mistral'];
+    for (const name of retired) {
+      expect(
+        privacySource.includes(name),
+        `${name} was removed from the model catalog and must not be disclosed as a processor`,
+      ).toBe(false);
+    }
+  });
+
+  it('names the managed-cloud providers that are actually reachable', () => {
+    // Direct providers, per MANAGED_CLOUD_ORIGIN_PROVIDERS, plus OpenRouter,
+    // through which aggregator-routing.ts sends MiniMax, Qwen and Zhipu.
+    for (const name of ['Anthropic', 'OpenAI', 'Google', 'DeepSeek', 'Perplexity', 'OpenRouter']) {
+      expect(
+        privacySource,
+        `${name} is in the managed prompt path and must be disclosed`,
+      ).toContain(name);
+    }
   });
 
   it('does not claim "no logging" of conversations', () => {

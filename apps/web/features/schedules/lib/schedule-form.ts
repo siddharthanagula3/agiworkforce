@@ -1,6 +1,7 @@
 import {
   assertDeliverableCadence,
   buildCronExpression,
+  describeSweepCadence,
   SWEEP_INTERVAL_MS,
   validateTimeZone,
   type ProductRecurrence,
@@ -302,7 +303,13 @@ export function validateAndBuildScheduleRequest(
       intervalMs < SWEEP_INTERVAL_MS ||
       intervalMs > MAX_INTERVAL_MS
     ) {
-      addError(errors, 'intervalValue', 'Use an interval from 1 day to 365 days.');
+      // Lower bound is the deployed sweep, not a fixed "1 day" — the message is
+      // derived so it cannot keep naming a floor the platform no longer enforces.
+      addError(
+        errors,
+        'intervalValue',
+        `Use an interval from ${describeSweepCadence().minimum} to 365 days.`,
+      );
     }
   } else {
     try {

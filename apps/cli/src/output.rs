@@ -583,9 +583,11 @@ mod tests {
 
     #[test]
     fn test_model_pricing_openai_luna() {
+        // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the
+        // official pricing page: $0.20/M input, $1.20/M output.
         let (i, o) = model_pricing("gpt-5.6-luna");
-        assert_eq!(i, 1.0);
-        assert_eq!(o, 6.0);
+        assert_eq!(i, 0.2);
+        assert_eq!(o, 1.2);
     }
 
     #[test]

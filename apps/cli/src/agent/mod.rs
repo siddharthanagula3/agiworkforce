@@ -1739,8 +1739,8 @@ mod tests {
     // Loop-guard primitives moved to `agiworkforce-agent-core` (Wave 5e1); the
     // `tool_call_to_legacy` conversion helper stays app-local in `executor`.
     use agiworkforce_agent_core::{
-        CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD, LOOP_DETECTION_THRESHOLD,
-        detect_content_loop, hash_tool_call,
+        detect_content_loop, hash_tool_call, CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD,
+        LOOP_DETECTION_THRESHOLD,
     };
     use executor::tool_call_to_legacy;
     use history::build_assistant_message;
@@ -2133,14 +2133,12 @@ mod tests {
         assert!(!report.already_present);
         assert!(report.instructions_loaded);
         assert_eq!(session.additional_context_dirs.len(), 1);
-        assert!(
-            session
-                .messages
-                .last()
-                .unwrap()
-                .text_content()
-                .contains("Use careful tests.")
-        );
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Use careful tests."));
         crate::path_security::clear_additional_workspace_roots_for_tests();
     }
 
@@ -2180,22 +2178,18 @@ mod tests {
         assert_eq!(report.added.len(), 1);
         assert!(report.failed.is_empty());
         assert_eq!(session.attached_context_files.len(), 1);
-        assert!(
-            session
-                .messages
-                .last()
-                .unwrap()
-                .text_content()
-                .contains("attached body")
-        );
-        assert!(
-            session
-                .messages
-                .last()
-                .unwrap()
-                .text_content()
-                .contains("Apply the Rust file rule.")
-        );
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("attached body"));
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Apply the Rust file rule."));
     }
 
     #[test]
@@ -2212,14 +2206,12 @@ mod tests {
         let before = session.messages.len();
         session.activate_rules_from_user_input("Please update src/core/main.rs:42.");
         assert_eq!(session.messages.len(), before + 1);
-        assert!(
-            session
-                .messages
-                .last()
-                .unwrap()
-                .text_content()
-                .contains("Use the project Rust convention.")
-        );
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Use the project Rust convention."));
 
         session.activate_rules_from_user_input("Re-check src/core/main.rs.");
         assert_eq!(session.messages.len(), before + 1);
@@ -2303,35 +2295,29 @@ mod tests {
         let draft = "You are continuing an AGI Local chat in BYOK mode.\nPrivacy boundary: the user explicitly selected this handoff.";
 
         session.arm_byok_handoff(draft).expect("arm BYOK preview");
-        assert!(
-            session
-                .complete_pending_privacy_handoff_with_store(
-                    &format!("{draft}\nedited after preview"),
-                    &store,
-                )
-                .expect("edited draft is safely rejected")
-                .is_none()
-        );
+        assert!(session
+            .complete_pending_privacy_handoff_with_store(
+                &format!("{draft}\nedited after preview"),
+                &store,
+            )
+            .expect("edited draft is safely rejected")
+            .is_none());
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
         assert_eq!(session.managed_session_id(), Some("local-source"));
 
         session.arm_byok_handoff(draft).expect("re-arm preview");
-        assert!(
-            session
-                .complete_pending_privacy_handoff_with_store("unrelated local message", &store)
-                .expect("unrelated send remains Local")
-                .is_none()
-        );
+        assert!(session
+            .complete_pending_privacy_handoff_with_store("unrelated local message", &store)
+            .expect("unrelated send remains Local")
+            .is_none());
         assert_eq!(session.managed_session_id(), Some("local-source"));
 
         session.arm_byok_handoff(draft).expect("re-arm preview");
         session.clear();
-        assert!(
-            session
-                .complete_pending_privacy_handoff_with_store(draft, &store)
-                .expect("cancelled preview remains Local")
-                .is_none()
-        );
+        assert!(session
+            .complete_pending_privacy_handoff_with_store(draft, &store)
+            .expect("cancelled preview remains Local")
+            .is_none());
 
         session.arm_byok_handoff(draft).expect("final preview");
         let completion = session
@@ -2366,11 +2352,9 @@ mod tests {
             "Local Auto metadata must not survive into a BYOK continuation"
         );
         assert_eq!(destination.messages[0].role, "system");
-        assert!(
-            !destination.messages[0]
-                .text_content()
-                .contains("local secret that must not be inherited")
-        );
+        assert!(!destination.messages[0]
+            .text_content()
+            .contains("local secret that must not be inherited"));
         assert_eq!(
             destination
                 .fork
@@ -2602,11 +2586,9 @@ mod tests {
             ManagedSession::load_from_path(&destination_resolved.path).expect("load destination");
         assert_eq!(destination.messages.len(), 1);
         assert_eq!(destination.messages[0].role, "system");
-        assert!(
-            !destination.messages[0]
-                .text_content()
-                .contains("local secret that must not be inherited")
-        );
+        assert!(!destination.messages[0]
+            .text_content()
+            .contains("local secret that must not be inherited"));
         assert_eq!(
             destination
                 .routing_authority
@@ -2684,12 +2666,10 @@ mod tests {
         session.messages.push(Message::text("user", draft));
         assert_eq!(session.messages.len(), 2);
         assert_eq!(session.messages[1].text_content(), draft);
-        assert!(
-            !session
-                .messages
-                .iter()
-                .any(|message| message.text_content().contains(local_marker))
-        );
+        assert!(!session
+            .messages
+            .iter()
+            .any(|message| message.text_content().contains(local_marker)));
 
         let destination = store
             .load(

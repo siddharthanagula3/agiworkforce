@@ -1,3 +1,4 @@
+import { resolveScreenDir } from '../support/dom';
 // Live-interaction QA pass over the full desktop Settings surface (local mode):
 // App.tsx -> SettingsPanel (gear icon in the v3 sidebar). Opens the modal for
 // real, walks every nav section, and records DOM evidence (text snapshot +
@@ -7,19 +8,14 @@
 // DESKTOP-PLAN-TIER-DISPLAY-STALE-01, DESKTOP-BYOK-PROVIDER-UI-COVERAGE-01,
 // DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01, DESKTOP-MISC-CRITICAL-GAPS-01).
 
-import * as fs from 'node:fs';
-
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/settings';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('settings');
 
 // Canonical order from packages/ui/ui/src/settings-nav.ts (SETTINGS_NAV).
 const NAV_LABELS = [
   'General',
-  'Account',
-  'Billing',
-  'Usage',
+  // Account, Billing, and Usage are LOCAL_HIDDEN_TABS (SettingsPanel.tsx):
+  // this tour runs the LOCAL shell, where those sections intentionally do not
+  // exist — the cloud modal's sections are toured by cloud-settings-tour.
   'Personalization',
   'Privacy',
   'Models & Keys',
@@ -77,12 +73,19 @@ describe('AGI Desktop Settings — full live tour', () => {
   it('opens via the sidebar gear icon and shows General by default', async () => {
     await browser.pause(1500);
 
+    // A prior spec's failure can leave the settings dialog open on an
+    // arbitrary tab — possibly DIRTY, in which case Escape raises the discard
+    // confirmation. Close through the shared helper so the gear opens fresh
+    // on General.
+    const { closeAnySettingsDialog } = await import('../support/close-settings');
+    expect(await closeAnySettingsDialog()).toBe(true);
+
     const gear = await $('button[aria-label="Settings"]');
     await gear.waitForDisplayed({ timeout: 15000 });
     await gear.click();
 
-    const nav = await $('nav[aria-label="Settings sections"]');
-    await nav.waitForDisplayed({ timeout: 10000 });
+    const { waitForSettingsReady } = await import('../support/close-settings');
+    await waitForSettingsReady();
 
     const snap = await getContentSnapshot();
     console.log('SETTINGS OPEN — active section:', snap.activeLabel);

@@ -30,11 +30,18 @@ const requiredReadmeMarkers = ['Status:', 'Owner', 'Purpose'];
 function childDirs(relativeRoot) {
   const absoluteRoot = path.join(root, relativeRoot);
   if (!fs.existsSync(absoluteRoot)) return [];
-  return fs
-    .readdirSync(absoluteRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => `${relativeRoot}/${entry.name}`)
-    .sort();
+  return (
+    fs
+      .readdirSync(absoluteRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      // Installed dependencies are not ours to document. A workspace package that
+      // has its own nested node_modules (pnpm does this whenever a dependency
+      // cannot be hoisted) would otherwise be reported as a missing ownership
+      // README for third-party code.
+      .filter((entry) => entry.name !== 'node_modules')
+      .map((entry) => `${relativeRoot}/${entry.name}`)
+      .sort()
+  );
 }
 
 function requireReadmeOwnership(dir) {

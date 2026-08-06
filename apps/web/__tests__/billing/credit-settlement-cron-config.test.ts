@@ -31,6 +31,11 @@ describe('credit settlement recovery schedule', () => {
       (cron) => cron.path === '/api/cron/run-schedules',
     );
     expect(entry).toBeDefined();
-    expect(entry?.schedule).toBe('15 0 * * *');
+    // Hourly since 2026-08-04. Total scheduled-run throughput is
+    // invocations/day * the per-invocation claim limit, shared across all users,
+    // and BILLING_PLAN_PRODUCT_LIMITS.maxScheduledTasks is sized against it.
+    // Changing this cadence means re-deriving those catalog limits and
+    // SWEEP_INTERVAL_MS in apps/web/lib/schedules/schedule-time.ts.
+    expect(entry?.schedule).toBe('0 * * * *');
   });
 });

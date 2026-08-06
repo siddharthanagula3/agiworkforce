@@ -393,7 +393,11 @@ export function ChatsListScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View
         style={{
-          height: 52,
+          // Two stacked lines (title + mode subtitle) in a fixed 52pt box clipped
+          // the subtitle at accessibility text sizes. minHeight lets the header
+          // grow with the type instead.
+          minHeight: 52,
+          paddingVertical: 4,
           paddingHorizontal: 12,
           flexDirection: 'row',
           alignItems: 'center',
@@ -402,8 +406,13 @@ export function ChatsListScreen() {
       >
         <DrawerButton onPress={() => openNearestDrawer(navigation)} />
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>Chats</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+          <Text
+            maxFontSizeMultiplier={1.4}
+            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+          >
+            Chats
+          </Text>
+          <Text maxFontSizeMultiplier={1.4} style={{ color: colors.textMuted, fontSize: 11 }}>
             {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
           </Text>
         </View>

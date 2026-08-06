@@ -163,10 +163,21 @@ export function ResearchSettings() {
       setPrefStatus('saving');
       try {
         await Promise.all([
-          invoke('set_user_preference', { key: 'research_mode', value: next.mode }),
+          // `category` and `data_type` are required (non-Option) by the Rust
+          // command and must satisfy its CHECK constraints; omitting them made
+          // every research preference fail to persist. 'behavior'/'string' are
+          // the allowed values for a free-form behavior toggle.
+          invoke('set_user_preference', {
+            key: 'research_mode',
+            value: next.mode,
+            category: 'behavior',
+            dataType: 'string',
+          }),
           invoke('set_user_preference', {
             key: 'research_max_sources',
             value: String(next.maxSources),
+            category: 'behavior',
+            dataType: 'string',
           }),
         ]);
         setPrefStatus('saved');
@@ -374,6 +385,8 @@ function CitationToggle() {
       await invoke('set_user_preference', {
         key: 'research_citations',
         value: String(val),
+        category: 'behavior',
+        dataType: 'boolean',
       });
     } catch (err) {
       console.error('[ResearchSettings] Failed to save citations preference:', err);

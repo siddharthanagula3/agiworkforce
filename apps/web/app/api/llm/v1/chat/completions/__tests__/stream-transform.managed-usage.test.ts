@@ -160,3 +160,125 @@ describe('buildStreamResponse managed-usage terminal ordering', () => {
     expect(lifecycle.delivered).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * CPST Stage-0 telemetry, managed cloud only
+ * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1).
+ *
+ * `finalize_managed_usage_request` REPLACES the usage jsonb wholesale, so these
+ * tests pin two things at once: the CPST keys ride the same single finalize
+ * call, and the pre-existing token keys are still there afterwards.
+ */
+describe('buildStreamResponse CPST usage telemetry', () => {
+  async function drain(response: Response): Promise<void> {
+    const reader = response.body!.getReader();
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+    }
+  }
+
+  function finalizedUsage(): Record<string, unknown> {
+    const call = lifecycle.finalize.mock.calls[0]?.[0] as { usage: Record<string, unknown> };
+    // The service JSON.stringifies this object into a jsonb parameter, so the
+    // assertions run against what actually reaches the column.
+    return JSON.parse(JSON.stringify(call.usage));
+  }
+
+  it('adds the CPST keys alongside the token counters in one finalize call', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    const processed = managedProcessed();
+    processed.routePlanId = 'interim:anthropic/messages:route-1:preferred_slot';
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        processed,
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    expect(lifecycle.finalize).toHaveBeenCalledOnce();
+    const usage = finalizedUsage();
+
+    // Pre-existing accounting keys survive the additive change.
+    expect(usage['inputTokens']).toBe(4);
+    expect(usage['outputTokens']).toBe(2);
+
+    // A successful CHARGE is not a successful TASK.
+    expect(usage['taskOutcome']).toBe('unknown');
+    expect(usage['verifierResult']).toBe('skipped');
+    expect(usage['fallbackUsed']).toBe(false);
+    expect(usage['routePlanId']).toBe('interim:anthropic/messages:route-1:preferred_slot');
+    expect(usage['taskFamily']).toBe('general');
+    expect(usage['taskFamilyConfidence']).toBe(1);
+  });
+
+  it('keeps unknown fields absent rather than defaulting them', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        // No routePlanId and no rotation: both must be absent, not zero/empty.
+        managedProcessed(),
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    const usage = finalizedUsage();
+    expect('routePlanId' in usage).toBe(false);
+    expect('retries' in usage).toBe(false);
+    expect('fallbackReason' in usage).toBe(false);
+  });
+
+  it('records a rotated attempt with its retry count and fallback reason', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    const processed = managedProcessed();
+    processed.usedFallback = true;
+    processed.fallbackReason = 'managed_failover';
+    processed.retries = 1;
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        processed,
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    const usage = finalizedUsage();
+    expect(usage['fallbackUsed']).toBe(true);
+    expect(usage['fallbackReason']).toBe('managed_failover');
+    expect(usage['retries']).toBe(1);
+  });
+});

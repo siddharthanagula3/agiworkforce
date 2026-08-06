@@ -18,11 +18,11 @@ Local-mode egress guards.
 - Surface guards own mode resolution, blocking errors, configuration-derived
   hosts, request execution, and user-facing recovery.
 - BYOK provider hosts do not belong in the AGI-owned host set.
-- This package has zero production dependencies and must not import apps or the
-  transitional `@agiworkforce/services` facade.
+- This package has zero production dependencies and must not import apps.
 
-`@agiworkforce/services` temporarily re-exports this package for downstream
-compatibility. New first-party code imports this owner directly.
+Import this package directly. The transitional `@agiworkforce/services` facade that
+once re-exported it was deleted at M8 (2026-07-15); `scripts/check-artifact-sync-ownership.mjs`
+guards against it reappearing.
 
 ## Commands
 

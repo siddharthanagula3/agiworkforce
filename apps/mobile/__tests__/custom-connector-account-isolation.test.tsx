@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 jest.mock('../lib/mmkv', () => ({
   storage: {
@@ -45,6 +46,15 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
+// The sheet reads safe-area insets to clear the home indicator (it is bottom-
+// anchored and flush to the edge). Supply real metrics rather than mocking the
+// hook, so a missing provider stays a visible failure — matching
+// voice-inline-bar.test.tsx.
+const METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
 describe('AddCustomConnectorModal account isolation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -68,7 +78,11 @@ describe('AddCustomConnectorModal account isolation', () => {
     );
     const onClose = jest.fn();
     const onAdded = jest.fn();
-    const screen = render(<AddCustomConnectorModal visible onClose={onClose} onAdded={onAdded} />);
+    const screen = render(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <AddCustomConnectorModal visible onClose={onClose} onAdded={onAdded} />
+      </SafeAreaProvider>,
+    );
 
     fireEvent.changeText(screen.getByLabelText('Connector name'), 'Account A tools');
     fireEvent.changeText(
@@ -86,7 +100,11 @@ describe('AddCustomConnectorModal account isolation', () => {
     act(() => {
       activateCloudAccount('account-b');
       mockClerkUserId = 'account-b';
-      screen.rerender(<AddCustomConnectorModal visible onClose={onClose} onAdded={onAdded} />);
+      screen.rerender(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <AddCustomConnectorModal visible onClose={onClose} onAdded={onAdded} />
+        </SafeAreaProvider>,
+      );
     });
 
     expect(screen.getByLabelText('Connector name').props.value).toBe('');

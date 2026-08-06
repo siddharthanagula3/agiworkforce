@@ -62,7 +62,17 @@ const ARTIFACT_SCHEME = 'artifact';
 const INTERACTIVE_ARTIFACT_HTML =
   '<!DOCTYPE html><html><head><title>Live counter</title></head><body>' +
   '<p id="target">not-yet-run</p>' +
-  '<script>document.getElementById("target").textContent = "script-ran-in-preview";</script>' +
+  '<script>' +
+  'document.getElementById("target").textContent = "script-ran-in-preview";' +
+  // The embedded WebDriver evaluates in the app document and cannot reach
+  // into the cross-origin preview (its element/execute calls throw), so the
+  // artifact reports its own outcomes to the parent probe instead: DOM
+  // mutation proof plus the connect-src egress probe result.
+  'parent.postMessage({type:"artifact-script-probe",targetText:document.getElementById("target").textContent},"*");' +
+  'fetch("https://example.com/agi-artifact-egress-probe",{mode:"no-cors"}).then(' +
+  'function(){parent.postMessage({type:"artifact-egress-probe",egress:"allowed"},"*")},' +
+  'function(){parent.postMessage({type:"artifact-egress-probe",egress:"blocked"},"*")});' +
+  '</script>' +
   '</body></html>';
 
 /** Id given to the frame we mount, so `switchToFrame` can find it again. */
@@ -77,6 +87,8 @@ interface ProbeState {
   ready: boolean;
   complete: boolean;
   error: string | null;
+  scriptTargetText: string | null;
+  egress: 'allowed' | 'blocked' | null;
 }
 
 /** Read the in-page probe's current state. */
@@ -130,6 +142,8 @@ describe('DES-C15 · artifact previews have their own origin in the packaged app
           ready: false,
           complete: false,
           error: null as string | null,
+          scriptTargetText: null as string | null,
+          egress: null as 'allowed' | 'blocked' | null,
         };
         w[key] = state;
 
@@ -186,6 +200,15 @@ describe('DES-C15 · artifact previews have their own origin in the packaged app
           }
           if (data.type === 'render-error') {
             state.error = data.error ?? 'unknown render error';
+            return;
+          }
+          const probeData = data as { type?: string; targetText?: string; egress?: string };
+          if (probeData.type === 'artifact-script-probe') {
+            state.scriptTargetText = probeData.targetText ?? null;
+            return;
+          }
+          if (probeData.type === 'artifact-egress-probe') {
+            state.egress = probeData.egress === 'allowed' ? 'allowed' : 'blocked';
           }
         });
 
@@ -222,24 +245,21 @@ describe('DES-C15 · artifact previews have their own origin in the packaged app
     // THE assertion this whole cluster exists for. Before the artifact origin,
     // the inherited `script-src 'self' 'wasm-unsafe-eval'` meant this element
     // stayed on `not-yet-run` forever, with nothing on screen explaining why.
-    const frame = await $(`#${FRAME_ID}`);
-    await frame.waitForExist({ timeout: HANDSHAKE_TIMEOUT_MS });
-
-    await browser.switchToFrame(frame);
-    try {
-      const target = await $('#target');
-      await target.waitForExist({ timeout: HANDSHAKE_TIMEOUT_MS });
-      await browser.waitUntil(async () => (await target.getText()) === 'script-ran-in-preview', {
-        timeout: HANDSHAKE_TIMEOUT_MS,
-        interval: 250,
-        timeoutMsg:
-          'The artifact rendered but its own script never ran — the preview document is still ' +
-          'inheriting a policy that forbids inline scripts.',
-      });
-      expect(await target.getText()).toBe('script-ran-in-preview');
-    } finally {
-      await browser.switchToParentFrame();
-    }
+    //
+    // Proven via the artifact's own postMessage rather than switchToFrame:
+    // the embedded WebDriver evaluates in the app document and every
+    // element/execute call inside the cross-origin preview throws a
+    // JavaScript SecurityError (measured on 2026-08-03; that isolation is
+    // itself the sandbox working as designed).
+    await browser.waitUntil(async () => (await readProbe())?.scriptTargetText !== null, {
+      timeout: HANDSHAKE_TIMEOUT_MS,
+      interval: 250,
+      timeoutMsg:
+        'The artifact rendered but its own script never reported — the preview document is ' +
+        'still inheriting a policy that forbids inline scripts.',
+    });
+    const state = await readProbe();
+    expect(state?.scriptTargetText).toBe('script-ran-in-preview');
 
     await browser.saveScreenshot('/tmp/agi-desktop-artifact-origin-interactive.png');
   });
@@ -247,43 +267,15 @@ describe('DES-C15 · artifact previews have their own origin in the packaged app
   it('keeps the artifact origin egress-blocked', async () => {
     // `connect-src 'none'` in the renderer's policy is what stops a malicious or
     // careless artifact phoning home with whatever it was handed. Running
-    // scripts must not have bought that back.
-    const egressKey = '__wdioArtifactEgressProbe';
-    const frame = await $(`#${FRAME_ID}`);
-    await browser.switchToFrame(frame);
-    try {
-      await browser.execute((key: string) => {
-        const w = window as unknown as Record<string, unknown>;
-        w[key] = 'pending';
-        fetch('https://example.com/agi-artifact-egress-probe', { mode: 'no-cors' })
-          .then(() => {
-            w[key] = 'allowed';
-          })
-          .catch(() => {
-            w[key] = 'blocked';
-          });
-      }, egressKey);
-
-      await browser.waitUntil(
-        async () =>
-          (await browser.execute(
-            (key: string) => (window as unknown as Record<string, unknown>)[key],
-            egressKey,
-          )) !== 'pending',
-        {
-          timeout: 15_000,
-          interval: 250,
-          timeoutMsg: 'The egress probe inside the artifact sandbox never settled',
-        },
-      );
-
-      const outcome = await browser.execute(
-        (key: string) => (window as unknown as Record<string, unknown>)[key],
-        egressKey,
-      );
-      expect(outcome).toBe('blocked');
-    } finally {
-      await browser.switchToParentFrame();
-    }
+    // scripts must not have bought that back. The probe fetch runs INSIDE the
+    // preview (part of INTERACTIVE_ARTIFACT_HTML's own script) and reports its
+    // outcome via postMessage — same cross-origin-driver rationale as above.
+    await browser.waitUntil(async () => (await readProbe())?.egress !== null, {
+      timeout: 15_000,
+      interval: 250,
+      timeoutMsg: 'The egress probe inside the artifact sandbox never settled',
+    });
+    const state = await readProbe();
+    expect(state?.egress).toBe('blocked');
   });
 });

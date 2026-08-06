@@ -179,6 +179,7 @@ dependencies = [
  "tokio-tungstenite 0.24.0",
  "toml 0.8.2",
  "tracing",
+ "tracing-subscriber",
  "two-face",
  "urlencoding",
  "uuid 1.20.0",

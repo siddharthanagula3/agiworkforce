@@ -92,8 +92,8 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
 
       if (file.path) {
         await invoke('file_copy', {
-          sourcePath: file.path,
-          destinationPath: savePath,
+          src: file.path,
+          dest: savePath,
         });
         downloadPath = savePath;
       } else if (file.content) {

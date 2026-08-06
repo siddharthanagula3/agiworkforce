@@ -400,13 +400,16 @@ export interface ModelSelectorProps {
   /** Called when the user toggles thinking on/off. ON = 'medium', OFF = null. */
   onEffortChange?: (effort: Effort | null) => void;
   /**
-   * Called when a non-Pro+ user attempts to switch to a model from a
-   * different provider mid-thread. Receives the attempted provider id and
-   * the conversation's current provider. The host typically opens billing
-   * or shows ProPlusUpgradePrompt. When omitted, the gate falls open
-   * (back-compat — host hasn't wired Pro+ gating yet).
+   * Called when a user whose tier cannot switch provider mid-thread attempts
+   * to pick a model from a different provider. Receives the attempted provider
+   * id and the conversation's current provider. The host typically opens
+   * billing or shows MaxUpgradePrompt. When omitted, the gate falls open
+   * (back-compat — host hasn't wired tier gating yet).
+   *
+   * The admitting tier is owned by `canSwitchProviderInThread()`, not by this
+   * prop's name — keep the name tier-agnostic so it survives pricing changes.
    */
-  onProPlusRequired?: (info: {
+  onProviderSwitchUpgradeRequired?: (info: {
     attemptedProvider: string;
     currentProvider: string;
     attemptedModelId: string;
@@ -475,7 +478,7 @@ export function ModelSelector({
   allowFallbackModels = true,
   effort,
   onEffortChange,
-  onProPlusRequired,
+  onProviderSwitchUpgradeRequired,
   disabled = false,
 }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
@@ -531,15 +534,16 @@ export function ModelSelector({
     selectedModelId,
   ]);
 
-  // Pro+ gate — when a non-Pro+ user picks a model from a different provider
-  // than the conversation's current provider, fire onProPlusRequired instead
-  // of switching. The conversation's provider is set by the host once the
-  // first message is sent (see tierStore.setCurrentConversationProvider).
+  // Provider-switch gate — when a user whose tier cannot switch provider
+  // mid-thread picks a model from a different provider than the conversation's
+  // current one, fire onProviderSwitchUpgradeRequired instead of switching.
+  // The conversation's provider is set by the host once the first message is
+  // sent (see tierStore.setCurrentConversationProvider).
   const guardedSelectModel = (modelId: string) => {
     if (disabled) return;
     const target = displayModels.find((m) => m.id === modelId);
     if (!target || !isChatModelSelectable(target)) return;
-    if (!onProPlusRequired) {
+    if (!onProviderSwitchUpgradeRequired) {
       selectModel(modelId);
       if (activeConversation?.id) {
         hostBridge?.setConversationModel?.(activeConversation.id, modelId);
@@ -549,7 +553,7 @@ export function ModelSelector({
     const tierState = useTierStore.getState();
     const gate = selectProviderSwitchGate(tierState, target.provider);
     if (gate === 'upgrade-required' && tierState.currentConversationProvider) {
-      onProPlusRequired({
+      onProviderSwitchUpgradeRequired({
         attemptedProvider: target.provider,
         currentProvider: tierState.currentConversationProvider,
         attemptedModelId: modelId,

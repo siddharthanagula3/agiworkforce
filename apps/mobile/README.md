@@ -9,7 +9,7 @@ Criticality: high
 ## Purpose
 
 Expo 55 + React Native 0.83.10 + React 19 mobile app for **AGI** (iOS + Android).
-Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4` for EAS/release signing.
+Target launch: **TBD** — the 2026-08-06 target slipped (founder, 2026-08-05); mobile ships when it reaches zero in the shortest-remaining-work-first order (Decision #20). Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4` for EAS/release signing.
 
 Authoritative specs (read these before non-trivial changes):
 

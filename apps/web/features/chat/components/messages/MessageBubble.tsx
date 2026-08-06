@@ -82,6 +82,8 @@ import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ComparisonResponse } from './ComparisonResponse';
 import { InlineSourceTags, type Citation } from './InlineSourceTags';
+import type { InteractiveCard } from '@agiworkforce/types';
+import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
@@ -312,6 +314,12 @@ interface Message {
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /** Paywall feature that triggered a capability gate message. */
     paywall?: { feature: string; requiredTier: string };
+    /**
+     * Parsed interactive cards. The union already encodes whether a body was
+     * validated, so this renderer never sees an unvalidated payload — an
+     * unrecognized card carries only its envelope and its authored fallback.
+     */
+    interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
   };
@@ -321,6 +329,13 @@ interface MessageBubbleProps {
   message: Message;
   onEdit?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
+  /**
+   * Re-run a Deep Research turn that errored or was stopped (CAP-045 slice 4).
+   * Absent when the surface cannot send, so no dead Retry control is rendered.
+   */
+  onRetryResearch?: (messageId: string) => void;
+  /** True while a research retry for THIS message is in flight. */
+  isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
@@ -357,6 +372,8 @@ const MessageBubbleComponent = function MessageBubble({
   message,
   onEdit,
   onRegenerate,
+  onRetryResearch,
+  isRetryingResearch = false,
   onDelete,
   onPin,
   onBranch,
@@ -904,6 +921,8 @@ const MessageBubbleComponent = function MessageBubble({
             <ResearchActivity
               research={message.metadata.research}
               isStreaming={message.isStreaming ?? false}
+              isRetrying={isRetryingResearch}
+              {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}
             />
           )}
 
@@ -1076,6 +1095,14 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && inlineCitations.length > 0 && (
             <InlineSourceTags citations={inlineCitations} />
           )}
+
+          {/* Interactive cards sit AFTER the prose that motivated them and
+              before the artifact chip, matching where the model emitted them.
+              A card that fails to render its kind still renders its authored
+              fallback, so this block never leaves a gap in the answer. */}
+          {!isUser && message.metadata?.interactiveCards?.length ? (
+            <InteractiveCardBlock cards={message.metadata.interactiveCards} />
+          ) : null}
 
           {/* Compact chip while an artifact block streams into the panel — the raw
               fence is stripped from the body above; this is its in-transcript stand-in. */}
@@ -1829,6 +1856,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.collaborationMessages === next?.collaborationMessages &&
     prev?.isMultiAgent === next?.isMultiAgent &&
     prev?.paywall === next?.paywall &&
+    prev?.interactiveCards === next?.interactiveCards &&
     prev?.imageUrl === next?.imageUrl &&
     prev?.imageData === next?.imageData &&
     prev?.imageGenPrompt === next?.imageGenPrompt &&

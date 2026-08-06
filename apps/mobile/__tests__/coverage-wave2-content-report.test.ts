@@ -34,6 +34,15 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+// Server intake client. Default: reject (offline / Local Mode) so the on-device
+// fallback path is exercised; individual tests override for the online path.
+const mockApiPost = jest.fn();
+jest.mock('@/services/api', () => ({
+  api: {
+    post: (...args: unknown[]) => mockApiPost(...args),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Imports — jest-expo preset already stubs TurboModules so Linking works.
 // We spy on Linking methods after import rather than re-mocking all of
@@ -84,6 +93,9 @@ let openUrlSpy: jest.SpyInstance;
 
 beforeEach(() => {
   mockStorage.clear();
+  // Default to offline so existing on-device-fallback assertions hold.
+  mockApiPost.mockReset();
+  mockApiPost.mockRejectedValue(new Error('offline'));
   canOpenSpy = jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
   openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
 });
@@ -285,6 +297,61 @@ describe('saveContentReport — sendEmail=false', () => {
 // ---------------------------------------------------------------------------
 // openSupportEmail — the post-save hand-off offered from the confirmation
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Server intake — POST /api/mobile/content-report with on-device fallback
+// (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01)
+// ---------------------------------------------------------------------------
+
+describe('saveContentReport — server intake', () => {
+  it('POSTs the report to the intake route with the mobile-generated report id', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    const { report, delivery } = await saveContentReport(
+      makeParams({ messageId: 'msg-x', conversationId: 'conv-x', category: 'harmful' }),
+    );
+
+    expect(mockApiPost).toHaveBeenCalledWith('/api/mobile/content-report', {
+      reportId: report.id,
+      messageId: 'msg-x',
+      conversationId: 'conv-x',
+      category: 'harmful',
+      contentExcerpt: report.contentExcerpt,
+      userNote: report.userNote,
+    });
+    expect(delivery).toEqual({ kind: 'submitted-to-server' });
+    expect(report.serverAcknowledged).toBe(true);
+    // Persisted copy records the server acknowledgement too.
+    expect(getContentReports()[0]?.serverAcknowledged).toBe(true);
+  });
+
+  it('falls back to on-device storage when the server POST fails (offline / Local Mode)', async () => {
+    mockApiPost.mockRejectedValueOnce(new Error('EgressBlocked'));
+
+    const { report, delivery } = await saveContentReport(makeParams({ sendEmail: false }));
+
+    // The report is still attempted against the server, then kept on device.
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(delivery).toEqual({ kind: 'stored-on-device' });
+    expect(report.serverAcknowledged).toBe(false);
+    expect(getContentReports().length).toBe(1);
+    expect(getContentReports()[0]?.serverAcknowledged).toBe(false);
+  });
+
+  it('reports submitted-to-server even if the optional email hand-off has no mail client', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+    canOpenSpy.mockResolvedValueOnce(false);
+
+    const { delivery } = await saveContentReport(makeParams({ sendEmail: true }));
+
+    expect(delivery).toEqual({ kind: 'submitted-to-server' });
+  });
+
+  it('never throws out of saveContentReport when the server POST rejects', async () => {
+    mockApiPost.mockRejectedValueOnce(new Error('boom'));
+    await expect(saveContentReport(makeParams())).resolves.toBeDefined();
+  });
+});
 
 describe('openSupportEmail', () => {
   it('opens the mail client for an already-stored report and marks the record', async () => {

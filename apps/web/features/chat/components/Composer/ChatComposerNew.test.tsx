@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
+import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
 import { getSelectableModels, isAutoModeModelId } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
@@ -1036,7 +1036,10 @@ describe('ChatComposerNew', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
-        expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing');
+        // The picked video model rides along; see the picker tests below.
+        expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
+          modelId: VIDEO_MODELS[0]!.id,
+        });
       });
       // The prompt goes to the media harness, never to the chat turn.
       expect(onSend).not.toHaveBeenCalled();
@@ -1066,6 +1069,54 @@ describe('ChatComposerNew', () => {
       expect(
         screen.queryByRole('button', { name: /exit video generation mode/i }),
       ).not.toBeInTheDocument();
+    });
+
+    it('shows a video model picker instead of the text model selector', async () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);
+
+      // Text model selector is present in normal mode...
+      expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create video'));
+
+      // ...and is replaced by the video picker, never left showing a text model
+      // beside "Describe the video you want".
+      expect(screen.queryByTestId('composer-footer')).not.toBeInTheDocument();
+      const picker = screen.getByRole('button', { name: /select video model/i });
+      expect(picker).toBeInTheDocument();
+      expect(picker).not.toHaveTextContent(/no video model available/i);
+    });
+
+    it('offers only catalog video models, and only from enabled providers', () => {
+      // Veo is the launch route; Runway is registered in the catalog but its
+      // provider is not enabled, so it must not appear as a selectable option.
+      expect(VIDEO_MODELS.length).toBeGreaterThan(0);
+      expect(VIDEO_MODELS.every((m) => m.provider === 'google')).toBe(true);
+      expect(VIDEO_MODELS.some((m) => /veo/i.test(m.label))).toBe(true);
+      expect(VIDEO_MODELS.some((m) => m.provider === 'runway')).toBe(false);
+    });
+
+    it('sends the picked video model to the generation handler', async () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      const onGenerateVideo = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create video'));
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'a cat surfing');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      // The picker is a real control: its selection reaches the route, which
+      // validates it. A dead picker would call through with no options at all.
+      await waitFor(() => {
+        expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
+          modelId: VIDEO_MODELS[0]!.id,
+        });
+      });
     });
 
     it('leaves image mode when video mode is entered so one send path owns the prompt', () => {

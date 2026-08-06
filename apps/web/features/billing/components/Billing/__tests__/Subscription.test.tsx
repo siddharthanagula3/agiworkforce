@@ -124,18 +124,26 @@ describe('Subscription', () => {
     expect(screen.getByRole('button', { name: /Manage/ })).toBeEnabled();
   });
 
-  it('shows Team as custom and routes provisioning to sales', () => {
+  it('shows Team at its per-seat price and routes to the seat selector', () => {
     const onUpgrade = vi.fn();
     renderSubscription('pro', 'yearly', onUpgrade);
 
     expect(screen.getByText('Team')).toBeTruthy();
-    expect(screen.getAllByText('Custom')).not.toHaveLength(0);
-    expect(screen.getByText('sales-assisted pricing')).toBeTruthy();
-    expect(screen.queryByText('/seat/month')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Contact sales' })).toHaveAttribute(
+    // Per SEAT, stated as such. A bare "$20" here would read as the whole
+    // organization's monthly bill.
+    expect(screen.getByText('per seat / month')).toBeTruthy();
+    expect(screen.queryByText('sales-assisted pricing')).toBeNull();
+
+    // NOT a direct buy button: checkout refuses a Team request that carries no
+    // seat count, so the CTA must land where seats can be chosen.
+    expect(screen.getByRole('link', { name: 'Choose seats' })).toHaveAttribute(
       'href',
-      '/contact-sales?plan=team',
+      '/pricing#pricing-team-title',
     );
+    expect(screen.queryByRole('link', { name: 'Contact sales' })).toBeNull();
+
+    // The per-account upgrade callback still must not be handed a per-seat plan
+    // without a seat count.
     expect(onUpgrade).not.toHaveBeenCalledWith('team', 'yearly');
   });
 });

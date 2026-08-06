@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
+  getNextUpgradeTier,
+  hasSelfServeUpgradePath,
+  isPerSeatBillingPlan,
+  normalizePurchasableSeats,
+  MAX_PURCHASABLE_SEATS,
+  MIN_PURCHASABLE_SEATS,
   getPlanPriceCents,
   getPlanPriceInr,
   getBillingPlanProductLimits,
@@ -18,16 +25,60 @@ import {
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
-  it('keeps Team sales-assisted until organization-linked seat billing exists', () => {
-    expect(SELF_SERVE_PAID_PLAN_TIERS).toEqual(['basic', 'pro', 'max', 'max_15x']);
-    expect(SELF_SERVE_PAID_PLAN_TIERS).not.toContain('team');
+  it('admits Team to self-serve checkout while Enterprise stays sales-assisted', () => {
+    expect(SELF_SERVE_PAID_PLAN_TIERS).toEqual(['basic', 'pro', 'max', 'max_15x', 'team']);
+    expect(SELF_SERVE_PAID_PLAN_TIERS).not.toContain('enterprise');
+  });
+
+  it('keeps Team off the individual upgrade ladder because it is per seat', () => {
+    // The purchasable SET and the upgrade ORDER are different things. If Team
+    // were ranked here, a Pro user's paywall would name a per-seat org plan as
+    // their next step, and Max would read as a downgrade from Team.
+    expect(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER).toEqual(['basic', 'pro', 'max', 'max_15x']);
+    expect(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER).not.toContain('team');
+
+    expect(getNextUpgradeTier('pro')).toBe('max');
+    expect(getNextUpgradeTier('max')).toBe('max_15x');
+    expect(getNextUpgradeTier('max_15x')).toBeNull();
+    expect(getNextUpgradeTier('free')).toBe('basic');
+    expect(getNextUpgradeTier('team')).toBeNull();
+    expect(getNextUpgradeTier('enterprise')).toBeNull();
+  });
+
+  it('offers no generic upgrade affordance on Team, whose only "more" is seats', () => {
+    expect(hasSelfServeUpgradePath('free')).toBe(true);
+    expect(hasSelfServeUpgradePath('basic')).toBe(true);
+    expect(hasSelfServeUpgradePath('max')).toBe(true);
+    expect(hasSelfServeUpgradePath('max_15x')).toBe(false);
+    expect(hasSelfServeUpgradePath('enterprise')).toBe(false);
+    // Team IS self-serve, but the generic affordance opens the individual plan
+    // dialog, which has no seat control and would re-bill the org at one seat.
+    expect(hasSelfServeUpgradePath('team')).toBe(false);
   });
 
   it('recognizes only plans that may enter self-serve checkout', () => {
     expect(isSelfServePaidPlanTier('max')).toBe(true);
     expect(isSelfServePaidPlanTier('max_15x')).toBe(true);
-    expect(isSelfServePaidPlanTier('team')).toBe(false);
+    expect(isSelfServePaidPlanTier('team')).toBe(true);
+    expect(isSelfServePaidPlanTier('enterprise')).toBe(false);
     expect(isSelfServePaidPlanTier('local-only')).toBe(false);
+  });
+
+  it('marks Team as per-seat so no surface renders its price as an account price', () => {
+    expect(isPerSeatBillingPlan('team')).toBe(true);
+    for (const plan of ['free', 'basic', 'pro', 'max', 'max_15x', 'enterprise']) {
+      expect(isPerSeatBillingPlan(plan)).toBe(false);
+    }
+  });
+
+  it('bounds a purchasable seat count so an unvalidated integer never reaches Stripe', () => {
+    expect(normalizePurchasableSeats(1)).toBe(1);
+    expect(normalizePurchasableSeats(25)).toBe(25);
+    expect(normalizePurchasableSeats(MIN_PURCHASABLE_SEATS - 1)).toBeNull();
+    expect(normalizePurchasableSeats(MAX_PURCHASABLE_SEATS + 1)).toBeNull();
+    expect(normalizePurchasableSeats(2.5)).toBeNull();
+    expect(normalizePurchasableSeats('4')).toBeNull();
+    expect(normalizePurchasableSeats(Number.NaN)).toBeNull();
   });
 
   it('keeps the public catalog limited to customer-facing prices', () => {
@@ -36,8 +87,14 @@ describe('billing catalog', () => {
     expect(getPlanPriceCents('max')).toBe(10000);
     expect(getPlanPriceCents('max_15x')).toBe(20000);
     expect(getPlanPriceCents('basic')).toBe(700);
-    expect(getPlanPriceCents('team')).toBe(0);
-    expect(getPlanPriceCents('team', 'yearly')).toBe(0);
+    // PER SEAT. $25/seat/mo and $240/seat/yr (Decision #22, 2026-08-05): a seat
+    // carries Pro's managed-usage allowance, and the $5-over-Pro premium prices
+    // the organization layer (central billing, seat management, member
+    // lifecycle). Yearly is now wired end-to-end (STRIPE_PRICE_TEAM_YEARLY_USD);
+    // live checkout still needs the founder to create the $240/seat/yr Stripe
+    // Price, which fails closed until it exists.
+    expect(getPlanPriceCents('team')).toBe(2500);
+    expect(getPlanPriceCents('team', 'yearly')).toBe(24000);
     for (const plan of Object.values(BILLING_PLAN_PRICING)) {
       expect(plan).not.toHaveProperty('monthlyUsageBudgetUsd');
       expect(plan).not.toHaveProperty('weeklyUsageBudgetUsd');
@@ -50,7 +107,9 @@ describe('billing catalog', () => {
     expect(getPlanPriceInr('pro')).toBe(1999);
     expect(getPlanPriceInr('max')).toBe(9999);
     expect(getPlanPriceInr('max_15x')).toBe(24999);
-    expect(getPlanPriceInr('team')).toBeNull();
+    // Team INR is founder-undecided (2026-08-05); ₹1,999 remains the configured
+    // amount until a Team-specific INR price is decided.
+    expect(getPlanPriceInr('team')).toBe(1999);
   });
 
   describe('plan surface visibility', () => {

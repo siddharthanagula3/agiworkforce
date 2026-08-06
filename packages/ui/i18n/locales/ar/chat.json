@@ -56,5 +56,12 @@
   "agentModeDisabled": "تم إلغاء تفعيل وضع الوكيل",
   "compactMode": "الوضع المضغوط",
   "compactModeEnabled": "تم تفعيل الوضع المضغوط",
-  "compactModeDisabled": "تم إلغاء تفعيل الوضع المضغوط"
+  "compactModeDisabled": "تم إلغاء تفعيل الوضع المضغوط",
+  "artifactPublish": {
+    "untitled": "عنصر منشور",
+    "publishedOn": "نُشر في {{date}}",
+    "sharedFrom": "تمت المشاركة من AGI",
+    "renderFailed": "تعذّر عرض هذا العنصر: {{error}}",
+    "svgUnavailable": "لا يحتوي ملف SVG هذا على أي محتوى يمكن عرضه بأمان."
+  }
 }

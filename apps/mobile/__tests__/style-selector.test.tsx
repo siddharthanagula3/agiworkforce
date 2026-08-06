@@ -10,6 +10,7 @@
  */
 
 import { render, fireEvent } from '@testing-library/react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be before component import
@@ -82,6 +83,14 @@ jest.mock('../services/streaming', () => ({
 import { StyleSelector } from '../src/features/chat/components/StyleSelector';
 import { useChatStore } from '../stores/chatStore';
 
+// The sheet reads the real safe area for its bottom inset (it previously
+// hardcoded a 34pt home indicator). Provide metrics rather than mocking the
+// hook, so a missing provider stays a visible failure.
+const METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -91,7 +100,11 @@ function resetChatStore() {
 }
 
 function renderOpenStyleSelector() {
-  return render(<StyleSelector openSignal={1} />);
+  return render(
+    <SafeAreaProvider initialMetrics={METRICS}>
+      <StyleSelector openSignal={1} />
+    </SafeAreaProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------

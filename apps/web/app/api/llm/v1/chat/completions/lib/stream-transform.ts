@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
@@ -43,6 +44,13 @@ async function settleStreamBilling(input: {
   model: string;
   usage: StreamBillingUsage;
   outcome?: 'completed' | 'failed';
+  /**
+   * CPST Stage-0 (managed cloud only): true only for the stream `cancel()`
+   * path, where the client went away before a terminal answer existed. That is
+   * an unambiguous abandonment, which `taskOutcome` distinguishes from a
+   * provider failure. Any other caller leaves it unset.
+   */
+  cancelled?: boolean;
 }): Promise<void> {
   const { processed, userId, provider, model, usage } = input;
   const totalTokens = usage.inputTokens + usage.outputTokens;
@@ -90,6 +98,13 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        // CPST Stage-0 telemetry, MANAGED CLOUD ONLY (design doc §4.3 phase 1).
+        // Spread into the SAME call because finalize replaces the usage jsonb
+        // wholesale; a follow-up write would erase the token counters above.
+        ...buildCpstUsageFields(processed, {
+          billingOutcome: input.outcome ?? 'completed',
+          ...(input.cancelled === true ? { cancelled: true } : {}),
+        }),
       },
     });
     if (input.outcome !== 'failed') {
@@ -568,13 +583,20 @@ export async function buildStreamResponse(
           cacheCreationInputTokens,
           cacheCreation1hInputTokens,
         };
-        recordModelUsage(userId, modelUsed, usage);
+        // Bill at the request's own date so dated catalog rates resolve here.
+        recordModelUsage(userId, modelUsed, usage, new Date());
         logger.info(
           {
             event: 'gen_ai_usage_recorded',
             userId,
             requestId,
-            ...toOtelAttributes(providerUsed, modelUsed, usage),
+            ...toOtelAttributes(
+              providerUsed,
+              modelUsed,
+              usage,
+              // Mirror of the ledger keys settled just above (managed cloud only).
+              buildCpstUsageFields(processed, { billingOutcome: 'completed' }),
+            ),
           },
           'GenAI usage attributes recorded (streaming)',
         );
@@ -938,13 +960,22 @@ export async function buildAdapterStreamResponse(
           cacheCreationInputTokens: usage.cacheCreationInputTokens,
           cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
         };
-        recordModelUsage(userId, modelUsed, usageForTracking);
+        // Bill at the request's own date so dated catalog rates resolve here.
+        recordModelUsage(userId, modelUsed, usageForTracking, new Date());
         logger.info(
           {
             event: 'gen_ai_usage_recorded',
             userId,
             requestId,
-            ...toOtelAttributes(providerUsed, modelUsed, usageForTracking),
+            ...toOtelAttributes(
+              providerUsed,
+              modelUsed,
+              usageForTracking,
+              // Mirror of the ledger keys settled just above (managed cloud only).
+              buildCpstUsageFields(processed, {
+                billingOutcome: assembler.lastError === null ? 'completed' : 'failed',
+              }),
+            ),
           },
           'GenAI usage attributes recorded (streaming)',
         );
@@ -968,6 +999,9 @@ export async function buildAdapterStreamResponse(
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
           },
           outcome: 'failed',
+          // The client aborted (tab close, Stop, dropped connection). CPST
+          // records that as an abandoned task, not a failed one.
+          cancelled: true,
         });
       }
       // AUDIT-FIX BUG-10/STR-5: an aborted stream (tab close, Stop, dropped

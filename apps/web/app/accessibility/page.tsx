@@ -32,8 +32,11 @@ export default function AccessibilityPage() {
               <tr>
                 <td>Keyboard</td>
                 <td>
-                  Every interactive element is reachable and operable from the keyboard. Skip-link
-                  at the top of each page.
+                  A skip-link is mounted on every page, and keyboard reachability is a requirement
+                  we hold new interactive components to. We have <em>not</em> completed a
+                  keyboard-operability audit across all six surfaces and hold no VPAT, so we do not
+                  claim every element passes &mdash; if you find one that does not, it is a bug and
+                  we will treat it as one.
                 </td>
               </tr>
               <tr>

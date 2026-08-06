@@ -34,8 +34,121 @@ import {
   normalizeSubscriptionAccessTier,
   requireProviderDefaultModel,
   resolveAutoModeModel,
+  resolveEffectiveModelPricing,
   SLOT_REGISTRY,
 } from '../model-catalog';
+
+describe('resolveEffectiveModelPricing', () => {
+  /**
+   * SYNTHETIC fixture — a constructed model object with an arbitrary dated
+   * window, not any shipped model's price. The mechanism is proved here so it
+   * stays covered no matter which (if any) catalog model currently schedules a
+   * price; what the catalog actually publishes is asserted separately below.
+   *
+   * Both bounds are inclusive UTC calendar days and both are optional; the
+   * first covering window wins and the model's top-level fields are the
+   * fallback. Dates are always passed explicitly so nothing here depends on
+   * when the suite runs.
+   */
+  const scheduled = {
+    inputCost: 3,
+    outputCost: 15,
+    cached_input: 0.3,
+    cached_write: 3.75,
+    cached_write_1h: 6,
+    pricingSchedule: [
+      {
+        effectiveUntil: '2030-03-31',
+        inputCost: 2,
+        outputCost: 10,
+        cached_input: 0.2,
+        cached_write: 2.5,
+        cached_write_1h: 4,
+      },
+      { effectiveFrom: '2030-04-01' },
+    ],
+  };
+
+  it('selects the window covering the given date', () => {
+    expect(resolveEffectiveModelPricing(scheduled, new Date('2030-02-15T00:00:00Z'))).toEqual({
+      inputCost: 2,
+      outputCost: 10,
+      cached_input: 0.2,
+      cached_write: 2.5,
+      cached_write_1h: 4,
+    });
+  });
+
+  it('treats effectiveUntil as inclusive and effectiveFrom as the next day', () => {
+    // UTC calendar days: the changeover happens at UTC midnight, so the last
+    // instant of 2030-03-31 UTC is still the first window.
+    expect(
+      resolveEffectiveModelPricing(scheduled, new Date('2030-03-31T23:59:59.999Z')).inputCost,
+    ).toBe(2);
+    expect(
+      resolveEffectiveModelPricing(scheduled, new Date('2030-04-01T00:00:00.000Z')).inputCost,
+    ).toBe(3);
+  });
+
+  it('falls back to the model fields for keys a window does not override', () => {
+    // The second window declares only its start, so every rate comes from the
+    // top-level (enduring) fields.
+    expect(resolveEffectiveModelPricing(scheduled, new Date('2031-01-01T00:00:00Z'))).toEqual({
+      inputCost: 3,
+      outputCost: 15,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: 6,
+    });
+  });
+
+  it('returns the base rates for a model with no schedule, on any date', () => {
+    const flat = { inputCost: 5, outputCost: 25, cached_input: 0.5 };
+    expect(resolveEffectiveModelPricing(flat, new Date('2020-01-01T00:00:00Z'))).toEqual(
+      resolveEffectiveModelPricing(flat, new Date('2099-12-31T00:00:00Z')),
+    );
+  });
+
+  it('falls back to the base rates when no window covers the date', () => {
+    const gapped = {
+      inputCost: 5,
+      outputCost: 25,
+      pricingSchedule: [{ effectiveFrom: '2030-01-01', inputCost: 1, outputCost: 2 }],
+    };
+    expect(resolveEffectiveModelPricing(gapped, new Date('2026-08-15T00:00:00Z')).inputCost).toBe(
+      5,
+    );
+  });
+
+  it('falls back to the base rates for an unusable date', () => {
+    expect(resolveEffectiveModelPricing(scheduled, new Date(Number.NaN)).inputCost).toBe(3);
+  });
+
+  /**
+   * Founder pin, Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
+   * 2026-08-05): Sonnet 5 bills users the founder-selected standard $3/$15 per
+   * MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date. A
+   * provider's introductory window is a provider-cost fact for the registry's
+   * verificationLog, never a product price — so the shipped model carries no
+   * schedule and the resolver must return the same rates on any date.
+   */
+  it('resolves identical Sonnet 5 rates on every date — no shipped schedule', () => {
+    const sonnet = getModelMetadataById('claude-sonnet-5');
+    expect(sonnet).not.toBeNull();
+    expect(sonnet?.pricingSchedule).toBeUndefined();
+
+    const standard = {
+      inputCost: 3,
+      outputCost: 15,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: 6,
+    };
+    for (const day of ['2020-01-01', '2026-08-15', '2026-09-15', '2099-12-31']) {
+      expect(resolveEffectiveModelPricing(sonnet!, new Date(`${day}T00:00:00Z`))).toEqual(standard);
+    }
+  });
+});
 
 describe('model catalog helpers', () => {
   it('keeps Max 15x on the Max model-access roster', () => {
@@ -211,11 +324,13 @@ describe('model catalog helpers', () => {
 
     expect(openaiCatalog.map((model) => model.id)).toEqual(expectedKeys);
     expect(openaiCatalog.every((model) => model.provider === 'openai')).toBe(true);
+    // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the
+    // official pricing page: $0.20/M in, $1.20/M out.
     expect(openaiCatalog.find((model) => model.id === 'gpt-5.6-luna')).toMatchObject({
       contextWindow: 1_050_000,
       maxOutputTokens: 128_000,
-      inputCostPerMillion: 1,
-      outputCostPerMillion: 6,
+      inputCostPerMillion: 0.2,
+      outputCostPerMillion: 1.2,
       capabilities: { streaming: true, tools: true, vision: true },
     });
     expect(getProviderModelCatalog('not-a-provider')).toEqual([]);

@@ -20,9 +20,16 @@ import { createObservedProviderUsage } from '@/lib/services/managed-usage-accoun
 import {
   runResearchLoop,
   researchStatusEvent,
+  researchPlanEvent,
+  parsePlanQueries,
+  extractReportOutline,
+  extractUserQuery,
   SourceAggregator,
   READY_MARKER,
+  type ResearchRunReport,
 } from './research-loop';
+import { saveResearchReport } from '@/lib/services/research-report-service';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ProcessedRequest } from './request-processor';
 
 // buildToolLoopStream(provider, processed, stepRequest, responseModel) -- the
@@ -76,6 +83,28 @@ function usageEvent(promptTokens: number, completionTokens: number) {
 
 function finishEvent() {
   return { choices: [{ delta: {}, finish_reason: 'stop', index: 0 }] };
+}
+
+/**
+ * The planning turn's stream (CAP-045 slice 2). The loop runs one tool-free
+ * planning call before gathering whenever the iteration budget allows it
+ * (maxIterations >= 3, which includes the default), so every multi-round
+ * expectation below queues this first.
+ */
+const PLAN_QUERIES = ['query one', 'query two', 'query three'];
+
+function planStream(queries: string[] = PLAN_QUERIES) {
+  return sseStream([contentEvent(JSON.stringify(queries)), finishEvent()]);
+}
+
+function researchPlans(run: CollectedRun): Array<Record<string, unknown>> {
+  return run.events
+    .map((e) => delta(e)['x_research_plan'])
+    .filter((p): p is Record<string, unknown> => !!p);
+}
+
+function planSteps(plan: Record<string, unknown> | undefined): Array<Record<string, unknown>> {
+  return (plan?.['steps'] ?? []) as Array<Record<string, unknown>>;
 }
 
 function makeProcessed(): ProcessedRequest {
@@ -237,8 +266,9 @@ describe('runResearchLoop', () => {
     expect(run.doneCount).toBe(1);
   });
 
-  it('runs gather -> synthesis, suppresses notes, forwards the report, and emits cumulative deduped sources', async () => {
+  it('runs plan -> gather -> synthesis, suppresses notes, forwards the report, and emits cumulative deduped sources', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(
         sseStream([
           contentEvent(`secret gathering notes\n${READY_MARKER}`),
@@ -257,8 +287,9 @@ describe('runResearchLoop', () => {
 
     const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
 
-    // Exactly 2 provider calls: one gathering round (READY marker) + synthesis.
-    expect(streamRequestMock).toHaveBeenCalledTimes(2);
+    // Exactly 3 provider calls: planning + one gathering round (READY marker)
+    // + synthesis.
+    expect(streamRequestMock).toHaveBeenCalledTimes(3);
 
     // Gathering notes never reach the client; the report does.
     expect(run.raw).not.toContain('secret gathering notes');
@@ -282,7 +313,7 @@ describe('runResearchLoop', () => {
     expect(run.doneCount).toBe(1);
 
     // Synthesis turn saw the gathered notes and the numbered source list.
-    const synthesisRequest = streamRequestMock.mock.calls[1]?.[2] as {
+    const synthesisRequest = streamRequestMock.mock.calls[2]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     const synthDirective = synthesisRequest.messages[synthesisRequest.messages.length - 1];
@@ -299,6 +330,7 @@ describe('runResearchLoop', () => {
 
   it('emits web_search tool running/completed status events per gathering round', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
@@ -312,8 +344,9 @@ describe('runResearchLoop', () => {
   });
 
   it('stops gathering at the iteration cap and still synthesizes', async () => {
-    // Model never signals READY: with maxIterations=3, expect 2 gathering
-    // rounds + 1 synthesis = 3 provider calls total.
+    // Model never signals READY: with maxIterations=3, expect 1 planning turn +
+    // 1 gathering round + 1 synthesis = 3 provider calls total. The plan reply
+    // is unparseable here, which must not stop the run.
     streamRequestMock.mockImplementation(async () =>
       sseStream([contentEvent('more notes, never ready'), finishEvent()]),
     );
@@ -348,9 +381,10 @@ describe('runResearchLoop', () => {
     await collectRun(
       runResearchLoop(makeProcessed(), BILLING, { maxIterations: 8, maxSearches: 3 }),
     );
-    // Round 1: searches=2 (<3, continue). Round 2: searches=4 (>=3, stop). +synthesis.
-    expect(streamRequestMock).toHaveBeenCalledTimes(3);
-    const synthesisRequest = streamRequestMock.mock.calls[2]?.[2] as {
+    // Planning turn, then round 1: searches=2 (<3, continue). Round 2:
+    // searches=4 (>=3, stop). +synthesis.
+    expect(streamRequestMock).toHaveBeenCalledTimes(4);
+    const synthesisRequest = streamRequestMock.mock.calls[3]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     const directive = synthesisRequest.messages[synthesisRequest.messages.length - 1];
@@ -389,10 +423,12 @@ describe('runResearchLoop', () => {
   });
 
   it('surfaces an honest error and stops when the FIRST gathering turn fails', async () => {
-    streamRequestMock.mockRejectedValueOnce(new Error('provider exploded'));
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockRejectedValueOnce(new Error('provider exploded'));
 
     const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
-    expect(streamRequestMock).toHaveBeenCalledTimes(1);
+    expect(streamRequestMock).toHaveBeenCalledTimes(2);
     const phases = researchStatuses(run).map((s) => s['phase']);
     expect(phases[phases.length - 1]).toBe('error');
     expect(forwardedContent(run)).toContain('provider exploded');
@@ -401,6 +437,7 @@ describe('runResearchLoop', () => {
 
   it('keeps partial material and synthesizes when a LATER gathering round fails', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://kept.com', title: 'Kept' }]),
@@ -414,10 +451,10 @@ describe('runResearchLoop', () => {
     const run = await collectRun(
       runResearchLoop(makeProcessed(), BILLING, { maxIterations: 6, maxSearches: 15 }),
     );
-    expect(streamRequestMock).toHaveBeenCalledTimes(3);
+    expect(streamRequestMock).toHaveBeenCalledTimes(4);
     expect(forwardedContent(run)).toBe('partial report [1]');
     expect(lastSearchResults(run)?.[0]).toMatchObject({ url: 'https://kept.com', position: 1 });
-    const synthesisRequest = streamRequestMock.mock.calls[2]?.[2] as {
+    const synthesisRequest = streamRequestMock.mock.calls[3]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     expect(synthesisRequest.messages[synthesisRequest.messages.length - 1]?.content).toContain(
@@ -429,6 +466,7 @@ describe('runResearchLoop', () => {
 
   it('reports an honest error (keeping sources) when the synthesis turn fails', async () => {
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
@@ -449,6 +487,9 @@ describe('runResearchLoop', () => {
   it('exposes accumulated multi-turn usage for the route-owned settlement', async () => {
     streamRequestMock
       .mockResolvedValueOnce(
+        sseStream([contentEvent(JSON.stringify(PLAN_QUERIES)), usageEvent(10, 5), finishEvent()]),
+      )
+      .mockResolvedValueOnce(
         sseStream([contentEvent(READY_MARKER), usageEvent(100, 50), finishEvent()]),
       )
       .mockResolvedValueOnce(
@@ -458,17 +499,20 @@ describe('runResearchLoop', () => {
     const usage = createObservedProviderUsage();
     await collectRun(runResearchLoop(makeProcessed(), BILLING, { usage }));
 
+    // The planning turn is billed like every other turn -- it is a real call.
     expect(usage).toMatchObject({
-      providerCalls: 2,
-      inputTokens: 300,
-      outputTokens: 130,
+      providerCalls: 3,
+      inputTokens: 310,
+      outputTokens: 135,
     });
   });
 
   it('preserves observed usage when cancelled mid-stream (generator.return)', async () => {
-    streamRequestMock.mockResolvedValueOnce(
-      sseStream([usageEvent(100, 50), contentEvent('notes'), finishEvent()]),
-    );
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([usageEvent(100, 50), contentEvent('notes'), finishEvent()]),
+      );
 
     const usage = createObservedProviderUsage();
     const gen = runResearchLoop(makeProcessed(), BILLING, { usage });
@@ -494,11 +538,459 @@ describe('runResearchLoop', () => {
       function: { name: 'custom_tool', parameters: {} },
     });
     streamRequestMock
+      .mockResolvedValueOnce(planStream())
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
     await collectRun(runResearchLoop(processed, BILLING));
-    const firstRequest = streamRequestMock.mock.calls[0]?.[2] as { tools?: unknown[] };
-    expect(firstRequest.tools).toEqual([{ google_search: {} }]);
+    // The planning turn is deliberately tool-free; gathering keeps the
+    // provider-native search tool and drops the client's custom function tool.
+    const planRequest = streamRequestMock.mock.calls[0]?.[2] as { tools?: unknown[] };
+    expect(planRequest.tools).toBeUndefined();
+    const gatheringRequest = streamRequestMock.mock.calls[1]?.[2] as { tools?: unknown[] };
+    expect(gatheringRequest.tools).toEqual([{ google_search: {} }]);
+  });
+});
+
+// ─── CAP-045 slice 2: plan surface ────────────────────────────────────────────
+
+describe('researchPlanEvent', () => {
+  it('emits the additive x_research_plan delta with snake_case wire fields', () => {
+    const line = researchPlanEvent(
+      [
+        {
+          id: 'plan-1',
+          type: 'search',
+          description: 'query one',
+          status: 'completed',
+          startedAt: '2026-08-05T10:00:00.000Z',
+          completedAt: '2026-08-05T10:00:02.000Z',
+          durationMs: 2000,
+          sourcesConsulted: 4,
+        },
+        { id: 'plan-2', type: 'search', description: 'query two', status: 'pending' },
+      ],
+      'test-model',
+    );
+    const parsed = JSON.parse(line.replace(/^data: /, '')) as Record<string, unknown>;
+    const plan = delta(parsed)['x_research_plan'] as Record<string, unknown>;
+    expect(plan['steps']).toEqual([
+      {
+        id: 'plan-1',
+        type: 'search',
+        description: 'query one',
+        status: 'completed',
+        started_at: '2026-08-05T10:00:00.000Z',
+        completed_at: '2026-08-05T10:00:02.000Z',
+        duration_ms: 2000,
+        sources_consulted: 4,
+      },
+      { id: 'plan-2', type: 'search', description: 'query two', status: 'pending' },
+    ]);
+    expect(parsed['model']).toBe('test-model');
+  });
+});
+
+describe('parsePlanQueries', () => {
+  it('parses a JSON array, trims, dedupes case-insensitively, and caps at 6', () => {
+    expect(parsePlanQueries('["  a  ", "b", "A", "c", "d", "e", "f", "g"]')).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+    ]);
+  });
+
+  it('falls back to a markdown or numbered list when the model ignores JSON', () => {
+    expect(parsePlanQueries('Here is my plan:\n- first query\n2. second query\n')).toEqual([
+      'first query',
+      'second query',
+    ]);
+  });
+
+  it('returns an empty plan rather than inventing queries', () => {
+    expect(parsePlanQueries('I will research this thoroughly.')).toEqual([]);
+    expect(parsePlanQueries('[not json')).toEqual([]);
+    expect(parsePlanQueries('[1, 2, 3]')).toEqual([]);
+  });
+});
+
+describe('research plan emission', () => {
+  it('emits the plan before any gathering and drives each step to completed', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('# Report\n\nBody [1]'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const plans = researchPlans(run);
+    expect(plans.length).toBeGreaterThan(0);
+
+    // The FIRST plan event precedes the first web_search running status.
+    const firstPlanIndex = run.events.findIndex((e) => !!delta(e)['x_research_plan']);
+    const firstSearchIndex = run.events.findIndex(
+      (e) =>
+        (delta(e)['x_tool_status'] as Record<string, unknown> | undefined)?.['name'] ===
+        'web_search',
+    );
+    expect(firstPlanIndex).toBeGreaterThanOrEqual(0);
+    expect(firstPlanIndex).toBeLessThan(firstSearchIndex);
+
+    // Planned queries appear as search steps, in order.
+    const first = planSteps(plans[0]);
+    expect(first.map((s) => s['description'])).toEqual(['alpha query', 'beta query']);
+    expect(first.every((s) => s['type'] === 'search')).toBe(true);
+    expect(first.every((s) => s['status'] === 'running')).toBe(true);
+
+    // The final plan has every search step completed plus a synthesize step.
+    const last = planSteps(plans[plans.length - 1]);
+    expect(last.map((s) => s['status'])).toEqual(['completed', 'completed', 'completed']);
+    expect(last[last.length - 1]).toMatchObject({ type: 'synthesize', status: 'completed' });
+  });
+
+  it('sends the planned queries into the round-1 gathering directive', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query', 'beta query']))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const gathering = streamRequestMock.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const directive = gathering.messages[gathering.messages.length - 1]?.content ?? '';
+    expect(directive).toContain('- alpha query');
+    expect(directive).toContain('- beta query');
+  });
+
+  it('falls back to an honest round step when the plan cannot be parsed', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(sseStream([contentEvent('I will look into it.'), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const first = planSteps(researchPlans(run)[0]);
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ id: 'round-1', description: 'Initial web searches' });
+  });
+
+  it('marks the plan failed when the first gathering round dies', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query']))
+      .mockRejectedValueOnce(new Error('provider exploded'));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const last = planSteps(researchPlans(run).at(-1));
+    expect(last).toHaveLength(1);
+    expect(last[0]).toMatchObject({ status: 'failed' });
+  });
+
+  it('stays additive: the pre-existing event shapes are untouched', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(READY_MARKER),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    // A client that ignores x_research_plan still sees the full legacy run.
+    const legacy = run.events.filter((e) => !delta(e)['x_research_plan']);
+    const phases = legacy
+      .map((e) => (delta(e)['x_research_status'] as Record<string, unknown> | undefined)?.['phase'])
+      .filter(Boolean);
+    expect(phases[0]).toBe('planning');
+    expect(phases[phases.length - 1]).toBe('complete');
+    expect(legacy.map((e) => delta(e)['content']).filter((c) => typeof c === 'string')).toEqual([
+      'report',
+    ]);
+    // Every plan event carries ONLY the new key -- it never rides on an
+    // existing delta whose shape old clients depend on.
+    for (const event of run.events) {
+      if (!delta(event)['x_research_plan']) continue;
+      expect(Object.keys(delta(event))).toEqual(['x_research_plan']);
+    }
+  });
+});
+
+// ─── CAP-045 slice 1: report persistence ──────────────────────────────────────
+
+describe('extractReportOutline', () => {
+  it('pulls the title, summary, and key findings out of a real report', () => {
+    const outline = extractReportOutline(
+      '# Node.js release status\n\nNode 24 is the active LTS line [1].\n\n## Key findings\n\n- v24.18.0 is LTS\n- v26.5.0 is Current\n',
+    );
+    expect(outline.title).toBe('Node.js release status');
+    expect(outline.summary).toBe('Node 24 is the active LTS line [1].');
+    expect(outline.keyFindings).toEqual(['v24.18.0 is LTS', 'v26.5.0 is Current']);
+  });
+
+  it('degrades to empty fields instead of inventing them', () => {
+    expect(extractReportOutline('')).toEqual({ title: '', summary: '', keyFindings: [] });
+  });
+});
+
+describe('extractUserQuery', () => {
+  it('takes the last user turn, including multimodal text parts', () => {
+    expect(
+      extractUserQuery([
+        { role: 'user', content: 'old question' },
+        { role: 'assistant', content: 'answer' },
+        { role: 'user', content: [{ type: 'text', text: 'new question' }, { type: 'image' }] },
+      ] as ProcessedRequest['llmRequest']['messages']),
+    ).toBe('new question');
+  });
+
+  it('returns an empty string when no user turn carries text', () => {
+    expect(
+      extractUserQuery([
+        { role: 'system', content: 'be helpful' },
+      ] as ProcessedRequest['llmRequest']['messages']),
+    ).toBe('');
+  });
+});
+
+describe('durable report persistence', () => {
+  function reportDatabase(): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
+    const db = {
+      query: vi.fn(async (_sql: string, params: unknown[]) => [
+        {
+          id: 'row-1',
+          user_id: params[0],
+          request_id: params[1],
+          conversation_id: params[2],
+          query: params[3],
+          title: params[4],
+          summary: params[5],
+          content: params[6],
+          citations: JSON.parse(params[7] as string),
+          steps: JSON.parse(params[8] as string),
+          key_findings: JSON.parse(params[9] as string),
+          status: params[10],
+          sources_consulted: params[11],
+          duration_ms: params[12],
+          error: params[13],
+          model: params[14],
+          provider: params[15],
+          created_at: '2026-08-05T10:00:00.000Z',
+          updated_at: '2026-08-05T10:00:00.000Z',
+          completed_at: params[10] === 'completed' ? '2026-08-05T10:00:00.000Z' : null,
+        },
+      ]),
+      execute: vi.fn(),
+      transaction: vi.fn(),
+      withUser: vi.fn(),
+      dispose: vi.fn(),
+    };
+    return db as unknown as DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
+  }
+
+  it('writes a completed row through the real service when a run finishes', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent('# Findings\n\nPrices rose [1].\n\n## Key findings\n\n- Prices rose\n'),
+          finishEvent(),
+        ]),
+      );
+
+    const db = reportDatabase();
+    await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        persistReport: (report) =>
+          saveResearchReport(db, {
+            userId: BILLING.userId,
+            requestId: 'req-1',
+            conversationId: null,
+            model: 'gemini-3.6-flash',
+            provider: 'google',
+            ...report,
+          }),
+      }),
+    );
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('insert into public.research_reports');
+    expect(params[0]).toBe('user-1');
+    expect(params[1]).toBe('req-1');
+    expect(params[3]).toBe('research the topic'); // the user's question
+    expect(params[4]).toBe('Findings'); // derived title
+    expect(params[10]).toBe('completed');
+    expect(params[11]).toBe(1); // one deduped source
+    expect(JSON.parse(params[7] as string)).toEqual([
+      expect.objectContaining({ id: '1', url: 'https://a.com', title: 'A' }),
+    ]);
+    // Plan steps ride along so a later retry knows what already ran.
+    expect(JSON.parse(params[8] as string)).toEqual([
+      expect.objectContaining({ id: 'plan-1', status: 'completed' }),
+      expect.objectContaining({ type: 'synthesize', status: 'completed' }),
+    ]);
+    expect(JSON.parse(params[9] as string)).toEqual(['Prices rose']);
+  });
+
+  it('persists a failed run with its gathered sources so a retry can resume', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['alpha query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://kept.com', title: 'Kept' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockRejectedValueOnce(new Error('synthesis died'));
+
+    const reports: ResearchRunReport[] = [];
+    await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        persistReport: async (report) => {
+          reports.push(report);
+        },
+      }),
+    );
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ status: 'failed', error: 'synthesis died' });
+    expect(reports[0]?.citations).toEqual([
+      expect.objectContaining({ url: 'https://kept.com', id: '1' }),
+    ]);
+  });
+
+  it('persists an interrupted run when the request is cancelled', async () => {
+    const reports: ResearchRunReport[] = [];
+    await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        isCancellationRequested: async () => true,
+        persistReport: async (report) => {
+          reports.push(report);
+        },
+      }),
+    );
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.status).toBe('interrupted');
+  });
+
+  it('never lets a persistence failure break the stream', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report body'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        persistReport: async () => {
+          throw new Error('neon is down');
+        },
+      }),
+    );
+
+    expect(forwardedContent(run)).toBe('report body');
+    const phases = researchStatuses(run).map((s) => s['phase']);
+    expect(phases[phases.length - 1]).toBe('complete');
+    expect(run.doneCount).toBe(1);
+  });
+
+  it('writes the report exactly once per run', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report body'), finishEvent()]));
+
+    const persistReport = vi.fn(async () => undefined);
+    await collectRun(runResearchLoop(makeProcessed(), BILLING, { persistReport }));
+
+    expect(persistReport).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── CAP-045 slice 4: retry with carried-forward material ─────────────────────
+
+describe('retry with carried sources', () => {
+  it('pre-seeds prior sources with stable leading positions and skips finished queries', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['fresh query']))
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://new.com', title: 'New' }]),
+          contentEvent(READY_MARKER),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        priorSources: [{ url: 'https://prior.com', title: 'Prior' }],
+        priorSteps: [
+          { id: 'plan-1', type: 'search', description: 'already ran', status: 'completed' },
+          { id: 'plan-2', type: 'search', description: 'never ran', status: 'pending' },
+        ],
+      }),
+    );
+
+    // Prior source keeps position 1; the new one is appended.
+    const sources = lastSearchResults(run);
+    expect(sources?.[0]).toMatchObject({ url: 'https://prior.com', position: 1 });
+    expect(sources?.[1]).toMatchObject({ url: 'https://new.com', position: 2 });
+
+    // The planning turn is told not to repeat the completed query.
+    const planRequest = streamRequestMock.mock.calls[0]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const planDirective = planRequest.messages[planRequest.messages.length - 1]?.content ?? '';
+    expect(planDirective).toContain('do NOT repeat them');
+    expect(planDirective).toContain('- already ran');
+
+    // The restored completed step is carried into the plan surface as-is; the
+    // pending step from the previous attempt is NOT resurrected as completed.
+    const firstPlan = planSteps(researchPlans(run)[0]);
+    expect(firstPlan[0]).toMatchObject({ id: 'plan-1', status: 'completed' });
+    expect(firstPlan.some((s) => s['description'] === 'never ran')).toBe(false);
+  });
+
+  it('drops a replanned query that duplicates a completed one', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream(['Already Ran', 'fresh query']))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        priorSteps: [
+          { id: 'plan-1', type: 'search', description: 'already ran', status: 'completed' },
+        ],
+      }),
+    );
+
+    const firstPlan = planSteps(researchPlans(run)[0]);
+    expect(firstPlan.map((s) => s['description'])).toEqual(['already ran', 'fresh query']);
   });
 });

@@ -8,6 +8,13 @@ export type AgentTaskState = CloudAgentRun['state'];
 // so the state→label/tone mapping and the cancellable predicate are unit-tested
 // independently of the React panel.
 
+/** The original goal a re-run re-sends, reconstructed from the run journal. */
+export interface AgiWorkRerunGoal {
+  goal: string;
+  constraints?: string;
+  deliverable?: string;
+}
+
 export function workModeLabel(mode: CloudAgentWorkMode): string {
   switch (mode) {
     case 'agiwork':
@@ -86,5 +93,21 @@ export function isCancellableState(state: AgentTaskState): boolean {
     state === 'awaiting_input' ||
     state === 'ready_for_review' ||
     state === 'paused'
+  );
+}
+
+/**
+ * Is this run still capable of appending to its journal?
+ *
+ * Narrower than {@link isCancellableState} on purpose: this drives the detail
+ * panel's background refresh, and polling a run that will never emit another
+ * event is pure waste. `ready_for_review` is excluded — the agent loop emits it
+ * as its FINAL state, so the journal is already complete. `awaiting_input` IS
+ * included: another device can answer the approval, after which this run starts
+ * producing events again without anything happening on this client.
+ */
+export function isLiveTaskState(state: AgentTaskState): boolean {
+  return (
+    state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'
   );
 }

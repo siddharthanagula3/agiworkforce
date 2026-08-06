@@ -53,6 +53,7 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "Bibliothek",
       "tasks": "Aufgaben",
       "customize": "Customize",

@@ -215,3 +215,44 @@ describe('handleNotificationResponse — auth gate', () => {
     expect(mockRouterPush).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// MOBILE-AGENT-NOTIF-DEADEND-01 — agent lifecycle notifications must land on a
+// LIVE screen, never the FEATURES.agents-gated <FeatureUnavailable/> dead end.
+// ---------------------------------------------------------------------------
+
+describe('handleNotificationResponse — no dead-end deep links', () => {
+  function signIn(): void {
+    setCurrentSession({
+      access_token: 't',
+      refresh_token: 'r',
+      expires_in: 3600,
+      expires_at: Date.now() / 1000 + 3600,
+      token_type: 'bearer',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }
+
+  for (const type of ['agent_failed', 'emergency_stop_triggered', 'agent_paused']) {
+    it(`routes ${type} to the live /(app)/agents runs list (not the agents-gated detail)`, () => {
+      signIn();
+      fireNotification({ type, agentId: 'agent-1' });
+      expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
+      // Must never deep-link to the FEATURES.agents-gated dead-end screens.
+      for (const call of mockRouterPush.mock.calls) {
+        const target = call[0] as { pathname?: string } | string;
+        const pathname = typeof target === 'string' ? target : target?.pathname;
+        expect(pathname).not.toBe('/(app)/companion/agent/[id]');
+        expect(pathname).not.toBe('/(app)/agents/[id]');
+      }
+    });
+  }
+
+  it('routes agent lifecycle notifications to /(app)/agents even without an agentId', () => {
+    signIn();
+    fireNotification({ type: 'agent_failed' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
+  });
+});

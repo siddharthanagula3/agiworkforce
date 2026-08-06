@@ -106,6 +106,29 @@ const nextConfig: NextConfig = {
       { source: '/library', destination: '/chat/library', permanent: false },
       { source: '/schedules', destination: '/chat/schedules', permanent: false },
       { source: '/customize', destination: '/chat/customize', permanent: false },
+
+      // ---------------------------------------------------------------------
+      // Legal policy aliases. ONE canonical page per policy.
+      //
+      // `/terms-of-service`, `/privacy-policy` and `/cookie-policy` each used to
+      // be an app-router page whose only job was to call `redirect()`. That
+      // works, but it emits a 307 (temporary), renders a React route on every
+      // hit, and carries no canonical metadata — so search engines and archive
+      // tools kept treating the alias as a live, indexable legal document. These
+      // are permanent aliases of a canonical policy, so they belong here as 308s
+      // alongside the aliases above, and the stub pages are deleted.
+      //
+      // Duplicate legal text that drifts is a liability, not a convenience: keep
+      // exactly one page per policy and alias everything else to it. Aliases are
+      // excluded from `app/sitemap.ts` by design.
+      // ---------------------------------------------------------------------
+      { source: '/terms-of-service', destination: '/terms', permanent: true },
+      { source: '/privacy-policy', destination: '/privacy', permanent: true },
+      { source: '/cookie-policy', destination: '/cookies', permanent: true },
+      // Acceptable use is commonly linked as /aup in security questionnaires and
+      // vendor forms; both short forms resolve to the canonical page.
+      { source: '/aup', destination: '/acceptable-use', permanent: true },
+      { source: '/acceptable-use-policy', destination: '/acceptable-use', permanent: true },
     ];
   },
 

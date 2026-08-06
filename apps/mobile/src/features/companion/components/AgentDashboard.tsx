@@ -804,7 +804,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
                 <View
                   style={{
                     height: 1,
-                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    backgroundColor: colors.borderLight,
                     marginVertical: 6,
                   }}
                 />

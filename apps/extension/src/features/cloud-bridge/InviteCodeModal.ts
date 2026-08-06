@@ -1,6 +1,5 @@
 import { getExtensionTokensCssAuto } from '../../tokens';
 import { waitlistService } from '../../lib/waitlistService';
-import { setCloudUnlocked } from './desktopBridge';
 import type { InviteCodeError, InviteCodeModalProps, InviteCodeTab } from './types';
 
 // ---------------------------------------------------------------------------
@@ -699,7 +698,9 @@ export class InviteCodeModal {
     }
 
     if (result.inviteId) {
-      await setCloudUnlocked(result.inviteId);
+      // Cloud access is gated solely by a valid Clerk token (see callCloud); the
+      // former `agi_cloud_unlocked` flag was vestigial — nothing consumed it — so
+      // the redeem path no longer writes an unlock flag. Just notify the caller.
       this.props.onRedeemed?.(result.inviteId);
     }
 

@@ -316,39 +316,77 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     }
   });
 
-  it('has no free-trial model that can trip the capability gate today', async () => {
-    // This replaces a test that sent `code_execution: true` to Haiku, which had
-    // codeExecution:false. Haiku was retired on 2026-07-27 and no admitted
-    // free-trial model has taken its place: the gate gua8rds web search, code
-    // execution, extended thinking and image input, and every model the free
-    // trial admits now supports all four.
-    //
-    // So the gate is presently inert — not broken, but unreachable, and a
-    // rejection case that cannot be written with a real model. Asserting that
-    // directly is more honest than mocking a capability nobody has, and this
-    // fails the moment a free model lacks one of the four, which is exactly
-    // when the rejection path needs testing again.
-    const { FREE_TRIAL_MODELS } = await import('@/lib/free-trial-config');
+  it('refuses a free-trial capability the selected model lacks, naming the way out', async () => {
+    // The gate was unreachable while every Free model supported all four gated
+    // capabilities, and the previous test asserted exactly that. Adding
+    // gpt-5.6-luna to the Free roster on 2026-08-04 made it live again: Luna
+    // carries codeExecution:false while gpt-5.4-mini and gemini-3.5-flash-lite
+    // carry true. This is the rejection path that assertion was holding a place for.
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'gpt-5.6-luna',
+          messages: [{ role: 'user', content: 'Run this snippet and show the output.' }],
+          code_execution: true,
+          stream: false,
+        },
+        'free-cap-luna-code-exec-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const body = (await result.response.json()) as {
+        error: { code: string; message: string };
+      };
+      expect(result.response.status).toBe(400);
+      expect(body.error.code).toBe('free_trial_model_capability');
+      // The refusal must stay actionable — it is the only signal a Free user gets.
+      expect(body.error.message).toContain('code execution');
+      expect(body.error.message).toMatch(/Pick a model that does|turn that option off/i);
+    }
+  });
+
+  it('keeps the other Free models able to satisfy every gated capability', async () => {
+    // Narrower than the old blanket assertion, and it still fails loudly if a
+    // future roster change quietly strands a capability the composer offers.
     const { getModelMetadataById } = await import('@agiworkforce/types');
     const GATED = ['search', 'codeExecution', 'thinking', 'vision'] as const;
 
-    expect(FREE_TRIAL_MODELS.length).toBeGreaterThan(0);
-    for (const modelId of FREE_TRIAL_MODELS) {
-      const caps = getModelMetadataById(modelId)?.capabilities as
-        | Record<string, boolean>
-        | undefined;
-      for (const cap of GATED) {
-        expect(caps?.[cap], `${modelId} lacks ${cap} — the gate is reachable again`).toBe(true);
-      }
+    for (const cap of GATED) {
+      const supported = ['gemini-3.5-flash-lite', 'gpt-5.4-mini', 'gpt-5.6-luna'].filter(
+        (modelId) =>
+          (getModelMetadataById(modelId)?.capabilities as Record<string, boolean> | undefined)?.[
+            cap
+          ] === true,
+      );
+      expect(
+        supported.length,
+        `no Free model supports ${cap} — the composer offers a dead end`,
+      ).toBeGreaterThan(0);
     }
   });
 });
 
 describe('resolveManagedUsageLeaseSeconds', () => {
-  it('keeps ordinary chat leases short and protects long AGI Work workflows from recovery', () => {
-    expect(resolveManagedUsageLeaseSeconds(undefined)).toBe(900);
-    expect(resolveManagedUsageLeaseSeconds('chat')).toBe(900);
-    expect(resolveManagedUsageLeaseSeconds('agiwork')).toBe(86_400);
+  it('keeps ordinary chat leases short', () => {
+    expect(resolveManagedUsageLeaseSeconds({})).toBe(900);
+    expect(resolveManagedUsageLeaseSeconds({ work_mode: 'chat' })).toBe(900);
+  });
+
+  it('protects every turn that can run as a durable workflow from premature recovery', () => {
+    // A run that chains bounded workflow invocations outlives a 900 s lease, and
+    // the recovery job would refund it mid-execution without ever saying so.
+    expect(resolveManagedUsageLeaseSeconds({ work_mode: 'agiwork' })).toBe(86_400);
+    expect(resolveManagedUsageLeaseSeconds({ work_mode: 'chat', web_search: true })).toBe(86_400);
+    expect(resolveManagedUsageLeaseSeconds({ code_execution: true })).toBe(86_400);
+    expect(
+      resolveManagedUsageLeaseSeconds({
+        tools: [{ type: 'function', function: { name: 'read_file' } }],
+      }),
+    ).toBe(86_400);
+    expect(resolveManagedUsageLeaseSeconds({ tools: [] })).toBe(900);
   });
 });
 
@@ -549,5 +587,56 @@ describe('isFreeTierBlockedAddOn', () => {
   it('keeps the developer-level AGI Work agent on paid plans', () => {
     expect(isFreeTierBlockedAddOn({ work_mode: 'agiwork' })).toBe(true);
     expect(isFreeTierBlockedAddOn({ work_mode: 'chat' })).toBe(false);
+  });
+});
+
+/**
+ * CPST Stage-0 telemetry, managed cloud only
+ * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2, field 5).
+ * The resolver's route identity used to be computed and thrown away; the
+ * processed request now carries it so the finalize call sites can persist it.
+ */
+describe('processRequest CPST route identity', () => {
+  const freeSubscription = {
+    id: 'sub-free',
+    user_id: 'user-free',
+    plan_tier: 'free',
+    status: 'active' as const,
+    current_period_start: new Date('2026-07-01T00:00:00Z'),
+    current_period_end: new Date('2026-08-01T00:00:00Z'),
+    stripe_subscription_id: 'stripe-sub-free',
+    stripe_price_id: 'stripe-price-free',
+  };
+
+  it('carries an interim-labelled route plan id and the classified task family', async () => {
+    const result = await processRequest(
+      new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'free-cpst-route-1',
+          'x-agi-surface': 'web',
+        },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          messages: [{ role: 'user', content: 'Say hello.' }],
+          stream: false,
+        }),
+      }),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Self-labelled `interim:` because ExecutionPlan (design doc §3) does not
+      // exist yet — no consumer may treat this as a real plan id.
+      expect(result.routePlanId).toMatch(/^interim:/);
+      // harnessId, routeId, and the resolver's selection reason, in that order.
+      expect(result.routePlanId?.split(':').length).toBeGreaterThanOrEqual(4);
+      expect(result.resolvedTaskType).toBeTruthy();
+      expect(typeof result.classifierConfidence).toBe('number');
+      // Nothing rotated, so the retry counter stays absent (unknown, not zero).
+      expect(result.retries).toBeUndefined();
+    }
   });
 });

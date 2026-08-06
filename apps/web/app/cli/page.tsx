@@ -221,7 +221,7 @@ export default function CliPage() {
             { href: '/agi-code', label: 'Explore AGI Code' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

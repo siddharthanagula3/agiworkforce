@@ -15,6 +15,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from '../session-principal';
 
 const CLERK_SESSION_ID = /^sess_[A-Za-z0-9]+$/;
@@ -56,6 +57,18 @@ async function handleRevoke(
   // own: `isCurrent` stays false and the client is not told to sign itself out.
   const isCurrent = currentSessionId !== null && target.id === currentSessionId;
   logger.info({ userId, sessionId: target.id, isCurrent }, 'Account session revoked');
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'session_revoked',
+    request,
+    detail: {
+      resourceType: 'session',
+      isCurrent,
+      status: target.status === 'active' ? 'revoked' : 'already_inactive',
+    },
+  });
+
   return NextResponse.json({
     message: target.status === 'active' ? 'Session revoked' : 'Session was already inactive',
     isCurrent,

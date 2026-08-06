@@ -43,7 +43,7 @@ jest.mock('../services/authSession', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { useSettingsStore } from '../stores/settingsStore';
+import { useSettingsStore, migratePersistedSettings } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 
@@ -207,6 +207,32 @@ describe('settingsStore (device-global)', () => {
     it('setTemporaryChat toggles the flag', () => {
       useSettingsStore.getState().setTemporaryChat(true);
       expect(useSettingsStore.getState().isTemporaryChat).toBe(true);
+    });
+  });
+
+  describe('migratePersistedSettings — dead TTS provider (MOBILE-TTS-CLOUD-DEADSTATE-01)', () => {
+    it("migrates a persisted 'cloud' ttsProvider to 'system'", () => {
+      const migrated = migratePersistedSettings({ ttsProvider: 'cloud', speechRate: 1.5 }, 0);
+      expect(migrated.ttsProvider).toBe('system');
+      // Unrelated persisted fields are preserved.
+      expect(migrated.speechRate).toBe(1.5);
+    });
+
+    it("leaves a valid 'system' ttsProvider untouched", () => {
+      const persisted = { ttsProvider: 'system', hapticsEnabled: false };
+      const migrated = migratePersistedSettings(persisted, 1);
+      expect(migrated.ttsProvider).toBe('system');
+      expect(migrated.hapticsEnabled).toBe(false);
+    });
+
+    it("defaults a missing ttsProvider to 'system'", () => {
+      const migrated = migratePersistedSettings({ speechPitch: 1.2 }, 0);
+      expect(migrated.ttsProvider).toBe('system');
+    });
+
+    it('tolerates null/undefined persisted state', () => {
+      expect(migratePersistedSettings(null, 0).ttsProvider).toBe('system');
+      expect(migratePersistedSettings(undefined, 0).ttsProvider).toBe('system');
     });
   });
 });

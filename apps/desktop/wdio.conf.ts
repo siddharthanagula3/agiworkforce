@@ -172,6 +172,19 @@ export const config: WebdriverIO.Config = {
   // plausible-looking UI, so fail loudly here rather than let every command pay
   // the plugin's 5s timeout.
   before: async () => {
+    // One app instance serves every spec file, so a spec that fails while an
+    // owned webview is open (e.g. the `cloud-sign-in` window, which shows an
+    // http(s) page) leaves that webview as the CURRENT WebDriver context for
+    // the next spec file — measured directly: 0-10's fresh session reported
+    // getWindowHandle() === 'cloud-sign-in' and the probe read that window's
+    // `http:` document, refusing the whole file with a bogus "built without
+    // custom-protocol" error that then cascaded through 20+ files on
+    // 2026-08-03. `browser.tauri.switchWindow` is NOT usable this early (the
+    // service's own before() runs concurrently and its plugin may not be
+    // attached), so re-target `main` with the raw WebDriver window switch —
+    // the embedded driver uses window labels as handles — inside the probe
+    // loop below.
+
     // WDIO runs service and config `before` hooks concurrently. The embedded
     // driver can therefore attach while WebKit still exposes its initial
     // about:blank document. Poll the renderer instead of misdiagnosing that
@@ -183,6 +196,15 @@ export const config: WebdriverIO.Config = {
     };
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
+      try {
+        const handles = await browser.getWindowHandles();
+        if (handles.includes('main') && (await browser.getWindowHandle()) !== 'main') {
+          await browser.switchToWindow('main');
+        }
+      } catch {
+        // Window enumeration can race the renderer swap; probe anyway and
+        // retry on the next iteration.
+      }
       try {
         runtime = await browser.execute(() => {
           const harnessWindow = window as typeof window & {
@@ -234,6 +256,102 @@ export const config: WebdriverIO.Config = {
     // ordinary waits into a command storm. Explicit selection is the service's
     // supported way to keep focus management from undoing the caller's target.
     await browser.tauri.switchWindow('main');
+
+    // Close owned webviews leaked by a prior spec file's mid-flight failure
+    // (see the cascade note at the top of this hook). Runs from the `main`
+    // context so WebDriver's session-killing `closeWindow()` is never needed.
+    try {
+      await browser.execute(async () => {
+        const tauri = (
+          window as unknown as {
+            __TAURI__?: {
+              webviewWindow?: {
+                WebviewWindow?: {
+                  getAll(): Promise<Array<{ label: string; close(): Promise<void> }>>;
+                };
+              };
+            };
+          }
+        ).__TAURI__;
+        // Only transient auth webviews: the app pre-creates hidden `overlay`
+        // and `floating` windows at startup, and closing those would break
+        // the features (and specs) that summon them.
+        const leakProne = new Set(['cloud-sign-in']);
+        const all = (await tauri?.webviewWindow?.WebviewWindow?.getAll()) ?? [];
+        for (const owned of all) {
+          if (leakProne.has(owned.label)) {
+            await owned.close().catch(() => {});
+          }
+        }
+      });
+    } catch {
+      // Leaked-window cleanup is best-effort; specs re-assert their own state.
+    }
+
+    // Normalize a prior file's leaked signed-out Cloud selection back to the
+    // Local shell. Specs share one profile, and a cloud spec that fails
+    // mid-journey (its `after` may not fully run) leaves `mode: 'cloud'`
+    // persisted — the next file then boots into AuthPage, which has no
+    // Settings gear, no composer, and no sidebar, so every selector it waits
+    // for times out. Every file's canonical baseline is the Local shell (the
+    // same state the onPrepare profile wipe produces after onboarding).
+    try {
+      const authHeading = await $('h1=Sign in to AGI Cloud');
+      if (await authHeading.isExisting()) {
+        await browser.execute(() => {
+          const raw = window.localStorage.getItem('app-mode-store');
+          let version = 3;
+          let previous: Record<string, unknown> = {};
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as {
+                state?: Record<string, unknown>;
+                version?: number;
+              };
+              previous = parsed.state ?? {};
+              if (typeof parsed.version === 'number') version = parsed.version;
+            } catch {
+              // Rewrite from scratch below.
+            }
+          }
+          window.localStorage.setItem(
+            'app-mode-store',
+            JSON.stringify({
+              state: { ...previous, mode: 'local', hasSelectedMode: true },
+              version,
+            }),
+          );
+          window.location.reload();
+        });
+        await browser.waitUntil(
+          async () =>
+            (await $('button=New chat').isExisting()) ||
+            (await $('button=Use Local Mode').isExisting()) ||
+            (await $('button[aria-label="Settings"]').isExisting()),
+          {
+            timeout: 45_000,
+            interval: 250,
+            timeoutMsg: 'Local shell did not come back after resetting a leaked Cloud selection',
+          },
+        );
+      }
+    } catch {
+      // Best-effort: a spec that needs a specific mode still sets it itself.
+    }
+
+    // Close a settings dialog left open by a prior file's mid-test failure.
+    // Reopening while it is already open is a state no-op (`open` and
+    // `initialTab` are both unchanged), so the next spec sees whatever tab
+    // the failed spec was on — measured: local-model-install died with the
+    // dialog on Models & Keys and main-window-close then couldn't find the
+    // General tab's #keepInMenuBar toggle. Escape may raise the
+    // "Discard unsaved changes?" confirmation; take the discard path.
+    try {
+      const { closeAnySettingsDialog } = await import('./wdio/support/close-settings');
+      await closeAnySettingsDialog();
+    } catch {
+      // Best-effort; the spec's own waits surface any remaining dialog.
+    }
   },
 
   framework: 'mocha',

@@ -9,7 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CheckoutRequestSchema } from '@/lib/validations/checkout';
+import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -21,22 +21,12 @@ import {
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
-
-// Tier order MUST match app/api/upgrade/route.ts so preview and apply agree on
-// what counts as an upgrade.
-const TIER_ORDER: Record<string, number> = {
-  free: 0,
-  basic: 0.5,
-  pro: 1,
-  team: 1.5,
-  max: 2,
-  max_15x: 3,
-  enterprise: 4,
-};
-
-function isUpgrade(from: string, to: string): boolean {
-  return (TIER_ORDER[to] ?? -1) > (TIER_ORDER[from] ?? -1);
-}
+import {
+  classifyPlanChange,
+  currentSeatsFromStripeItem,
+  isUpgrade,
+} from '@/lib/server/stripe-plan-change';
+import { isPerSeatBillingPlan } from '@agiworkforce/types';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -77,6 +67,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.validation(`Invalid request: ${msg}`);
   }
   const { plan: targetPlan, billingInterval } = parsed.data;
+  const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
   const db = getNeonDb();
   const stripe = getStripe();
@@ -117,9 +108,11 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
           code: 'checkout_required',
         },
         checkout: {
-          amountDueNowCents: checkoutPrice.amountMinor,
+          // Per-seat plans are quoted per seat; the org's bill is unit x seats.
+          amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
           currency: checkoutPrice.currency,
-          recurringAmountCents: checkoutPrice.amountMinor,
+          recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
+          seats: requestedSeats,
         },
       },
       { status: 409 },
@@ -127,7 +120,11 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
 
   const currentTier = sub.plan_tier ?? 'free';
-  if (!isUpgrade(currentTier, targetPlan)) {
+  // A same-tier request is a SEAT change on a per-seat plan and must survive the
+  // cheap pre-check; how many seats it actually adds is only knowable once the
+  // Stripe item is resolved below, where `classifyPlanChange` decides for real.
+  const sameTierSeatChange = currentTier === targetPlan && isPerSeatBillingPlan(targetPlan);
+  if (!sameTierSeatChange && !isUpgrade(currentTier, targetPlan)) {
     throw createError.validation(
       `Cannot upgrade from ${currentTier} to ${targetPlan}. Use the billing portal to change or downgrade your plan.`,
     );
@@ -154,6 +151,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   let stripeItemId: string | null = null;
   let customerId: string | null = null;
   let subscriptionCurrency = 'usd';
+  let currentSeats = 1;
   try {
     const resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
@@ -182,9 +180,11 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
             code: 'checkout_required',
           },
           checkout: {
-            amountDueNowCents: checkoutPrice.amountMinor,
+            // Per-seat plans are quoted per seat; the org's bill is unit x seats.
+            amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
             currency: checkoutPrice.currency,
-            recurringAmountCents: checkoutPrice.amountMinor,
+            recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
+            seats: requestedSeats,
           },
         },
         { status: 409 },
@@ -204,6 +204,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       );
     }
     stripeItemId = stripeSub.items.data[0]?.id ?? null;
+    currentSeats = currentSeatsFromStripeItem(stripeSub.items.data[0]?.quantity);
     customerId =
       typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
     subscriptionCurrency = stripeSub.currency;
@@ -212,6 +213,16 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
+
+  const planChange = classifyPlanChange({
+    currentTier,
+    targetPlan,
+    requestedSeats,
+    currentSeats,
+  });
+  if (!planChange.allowed) {
+    throw createError.validation(planChange.reason);
+  }
 
   const priceSelection = await getPriceSelectionForCurrency(
     targetPlan,
@@ -232,7 +243,10 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       customer: customerId,
       subscription: stripeSubId,
       subscription_details: {
-        items: [{ id: stripeItemId, price: newPriceId }],
+        // Quantity is the seat count. Omitting it makes Stripe price the change
+        // at the item's CURRENT quantity, so an org adding seats would confirm a
+        // proration for the seats it already had.
+        items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
         proration_behavior: 'always_invoice',
         billing_cycle_anchor: 'now',
         // Pin the calculation instant into the signed preview token. The apply
@@ -254,13 +268,17 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     // the old plan. This is the ONLY figure the server must compute — the going-
     // forward recurring price is a static catalog value the client already knows.
     amountDueNowCents: preview.amount_due,
-    recurringAmountCents: priceSelection.amountMinor,
+    // Per-seat plans recur at unit price x seats. Publishing the unit amount
+    // here would understate a Team org's going-forward bill by a factor of N.
+    recurringAmountCents: priceSelection.amountMinor * requestedSeats,
+    seats: requestedSeats,
     previewToken: createUpgradePreviewToken(
       {
         userId,
         plan: targetPlan,
         billingInterval,
         stripeSubscriptionId: stripeSubId,
+        seats: requestedSeats,
         prorationDate,
       },
       requireEnv('STRIPE_SECRET_KEY'),

@@ -61,5 +61,6 @@
   "upgradeRequired": "アップグレードが必要",
   "upgradeMessage": "この機能には上位のサブスクリプションプランが必要です。",
   "limitReached": "上限に達しました",
-  "limitMessage": "{{limit}} の上限に達しました。"
+  "limitMessage": "{{limit}} の上限に達しました。",
+  "heroLedePart2": "AGIのマネージドクラウドは個人利用向けにパブリックアルファとして公開されています。Teamはセルフサービスでシートごとの課金です。Enterpriseは、組織独自のガバナンスや個別条件が必要な場合に営業担当がご案内します。"
 }

@@ -43,13 +43,39 @@ beforeEach(() => {
 
 describe('public Desktop download surfaces', () => {
   it('offers only the verified Linux AppImage from the shared download API', async () => {
+    // Two DIFFERENT endpoints are queried: the Tauri channel manifest and
+    // /api/releases/desktop-cloud/latest. A single mockResolvedValue handed the
+    // Linux manifest to BOTH, so the cloud lookup received a payload that is not
+    // a valid cloud-desktop manifest and the macOS card rendered its red error
+    // state — the component behaving correctly on a bad fixture. Answer per URL:
+    // Linux publishes, macOS cloud does not (404 = not published).
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('desktop-cloud')) {
+        return Promise.resolve(
+          Response.json(
+            { error: { code: 'NOT_FOUND', message: 'No release found' } },
+            { status: 404 },
+          ),
+        );
+      }
+      return Promise.resolve(Response.json(signedLinuxManifest()));
+    });
+
     render(<DownloadPage />);
 
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     expect(
       within(region).getByRole('link', { name: 'Download Linux x64 AppImage' }),
     ).toHaveAttribute('href', '/api/download?platform=linux');
-    expect(within(region).getByText('macOS installer not published')).toBeInTheDocument();
+    // macOS is state-driven from the release manifest (loading / available /
+    // empty / error), not a static line like Windows. This mock ships a
+    // Linux-only manifest, so macOS must resolve to its empty state. The
+    // previous assertion looked for 'macOS installer not published', a string
+    // that exists nowhere in the component — the test failed on a clean tree.
+    expect(
+      within(region).getByText('No signed macOS installer is available right now.'),
+    ).toBeInTheDocument();
     expect(within(region).getByText('Windows installer not published')).toBeInTheDocument();
     expect(within(region).queryByRole('link', { name: /macOS|Windows/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/July 12, 2026|July 12/i)).not.toBeInTheDocument();
@@ -84,9 +110,7 @@ describe('public Desktop download surfaces', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('link', { name: 'Download Linux x64 AppImage' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Download Linux x64 AppImage' })).toBeInTheDocument();
     });
   });
 

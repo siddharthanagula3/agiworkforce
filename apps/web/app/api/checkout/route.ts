@@ -10,7 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CheckoutRequestSchema } from '@/lib/validations/checkout';
+import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -18,6 +18,7 @@ import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { isSelfServePaidPlanTier, tierAtLeast } from '@agiworkforce/types';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -109,6 +110,10 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const { plan, billingInterval } = validationResult.data;
+  // Per-seat plans (Team) bill unit price x quantity. The schema has already
+  // refused a seat count on per-account plans and required one on per-seat
+  // plans, so this is 1 for everything except a validated Team purchase.
+  const quantity = resolveCheckoutQuantity(validationResult.data);
   const requestIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
   if (requestIdempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(requestIdempotencyKey)) {
     throw createError.validation('Idempotency-Key must be 8-128 URL-safe characters.');
@@ -270,6 +275,11 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const checkoutMetadata = {
     user_id: user.id,
     plan_tier: plan,
+    // Advisory only — the webhook reads the authoritative seat count from the
+    // Stripe subscription ITEM quantity, never from metadata. Carried so a
+    // support engineer can see what the customer asked for versus what Stripe
+    // recorded.
+    requested_seats: String(quantity),
     ...(replacesUnlinkedEntitlement
       ? {
           upgrade_from: existingSubscription.plan_tier,
@@ -289,7 +299,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       line_items: [
         {
           price: priceId,
-          quantity: 1,
+          quantity,
         },
       ],
       success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
@@ -311,13 +321,31 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {
-          idempotencyKey: `checkout:${user.id}:${requestIdempotencyKey}`,
+          // Plan and quantity are part of the key: a client that reuses one
+          // Idempotency-Key while changing the seat count must NOT be replayed
+          // the earlier session, or the org pays for seats it did not choose.
+          idempotencyKey: `checkout:${user.id}:${plan}:${quantity}:${requestIdempotencyKey}`,
         })
       : await stripe.checkout.sessions.create(checkoutSessionParams);
 
     if (!checkoutSession.url) {
       throw createError.internal('Failed to generate checkout URL');
     }
+
+    // Audit: a paid-plan purchase was initiated. The checkout URL is a
+    // single-use credential-bearing link and is never recorded; the resulting
+    // entitlement change is audited separately from the Stripe webhook.
+    await recordAuditEvent({
+      userId: user.id,
+      eventType: 'checkout_started',
+      request,
+      detail: {
+        resourceType: 'subscription',
+        planTier: plan,
+        billingInterval,
+        source: 'checkout',
+      },
+    });
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {

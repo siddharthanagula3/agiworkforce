@@ -116,6 +116,87 @@ export async function saveSessionTimeout(minutes: SessionTimeoutMinutes): Promis
   await saveAccountSettings({ session_timeout: minutes });
 }
 
+/** One active account session, mirroring `serializeSession` in the web route. */
+export interface AccountSessionRow {
+  id: string;
+  device: string;
+  browser: string | null;
+  location: string | null;
+  lastActiveAt: string | null;
+  /** True only when the server matched this row to THIS app's Clerk session. */
+  isCurrent: boolean;
+}
+
+export interface AccountSessions {
+  sessions: AccountSessionRow[];
+  /**
+   * Whether the server could identify the caller's own row. Mobile sends a Clerk
+   * session JWT, so this is normally true; false means "no row is known to be
+   * this device", never "this device is missing from the list".
+   */
+  currentSessionKnown: boolean;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function parseAccountSessionRow(value: unknown): AccountSessionRow | null {
+  if (!isRecord(value)) return null;
+  const id = value['id'];
+  // A row with no id cannot be revoked, so it must not be offered as a device.
+  if (typeof id !== 'string' || !id) return null;
+  const device = value['device'];
+  return {
+    id,
+    device: typeof device === 'string' && device ? device : 'Unknown device',
+    browser: optionalString(value['browser']),
+    location: optionalString(value['location']),
+    lastActiveAt: optionalString(value['lastActiveAt']),
+    isCurrent: value['isCurrent'] === true,
+  };
+}
+
+export function parseAccountSessions(value: unknown): AccountSessions {
+  const rows = isRecord(value) ? value['sessions'] : null;
+  if (!Array.isArray(rows)) {
+    throw new Error('Account sessions returned an invalid response.');
+  }
+  return {
+    sessions: rows
+      .map(parseAccountSessionRow)
+      .filter((row): row is AccountSessionRow => row !== null),
+    // Anything but an explicit true means "we could not tell", which the UI has
+    // to say out loud rather than marking an arbitrary row as this device.
+    currentSessionKnown: isRecord(value) && value['currentSessionKnown'] === true,
+  };
+}
+
+/**
+ * The account's active sessions across every surface.
+ *
+ * This is a real server read, not a guess made from the local Clerk session:
+ * `apps/web/app/api/settings/sessions/route.ts` resolves the caller through
+ * `getClerkAuthUser`, which accepts the same Clerk session JWT bearer this app
+ * already sends on `/api/settings/2fa`, and marks the caller's own row from that
+ * token's `sid` claim.
+ */
+export async function fetchAccountSessions(signal?: AbortSignal): Promise<AccountSessions> {
+  const response = await api.get<unknown>(
+    '/api/settings/sessions',
+    signal ? { signal } : undefined,
+  );
+  return parseAccountSessions(response);
+}
+
+/**
+ * End one other device's session. The server re-checks that the session belongs
+ * to this account and 404s otherwise, so a stale id fails closed.
+ */
+export async function revokeAccountSession(sessionId: string): Promise<void> {
+  await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`);
+}
+
 /**
  * Recent security activity for this account. Web renders the same rows with
  * filtering and paging; mobile shows the most recent page, which is what the

@@ -2,11 +2,18 @@
  * GET    /api/settings/sessions · list this account's active Clerk sessions
  * DELETE /api/settings/sessions · end every active session ("log out everywhere")
  *
- * Callers: the web Account section (Clerk cookie), Mobile (Clerk session JWT),
- * and Desktop (first-party HS256 device bearer). Identity and the
- * current-session marker are resolved in `./session-principal`; read that file
- * for why a device-token caller is honestly told no listed row is itself
- * instead of having one guessed for it.
+ * Callers of GET: the web Account section
+ * (`apps/web/features/settings/sections/AccountSection.tsx`, Clerk cookie),
+ * Mobile Account Security
+ * (`apps/mobile/src/features/settings/account-security/service.ts`, Clerk
+ * session JWT), and Desktop (`apps/desktop/src/api/cloudAccountSettings.ts`,
+ * first-party HS256 device bearer). DELETE ("log out everywhere") is called by
+ * web and Desktop only — Mobile revokes individual devices through
+ * `./[sessionId]` and ends its own session through the Clerk sign-out flow.
+ *
+ * Identity and the current-session marker are resolved in `./session-principal`;
+ * read that file for why a device-token caller is honestly told no listed row is
+ * itself instead of having one guessed for it.
  */
 import 'server-only';
 
@@ -18,6 +25,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from './session-principal';
 
 const PAGE_SIZE = 100;
@@ -173,6 +181,21 @@ async function handleRevokeAll(request: NextRequest) {
   }
 
   logger.info({ userId, revokedCount: result.revoked.length }, 'All active sessions revoked');
+
+  // Audit: "log out everywhere". Only the count is recorded — session ids are
+  // bearer-adjacent handles and stay out of the audit row.
+  await recordAuditEvent({
+    userId,
+    eventType: 'logout',
+    request,
+    detail: {
+      source: 'revoke_all_sessions',
+      resourceType: 'session',
+      count: result.revoked.length,
+      isCurrent: currentSession !== undefined,
+    },
+  });
+
   return NextResponse.json({
     message: 'All active sessions revoked',
     revokedCount: result.revoked.length,

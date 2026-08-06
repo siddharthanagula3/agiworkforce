@@ -805,22 +805,6 @@ export default [
       // white; the same reasoning tailwind.config.js:69 records for the voice
       // gradient and the camera preview.
       'apps/mobile/src/features/voice/**',
-
-      // BASELINE — pre-dating sites outside the Dispatch surface this rule
-      // shipped with. Each is a modal scrim (→ `colors.scrim`) or a subtle
-      // surface tint (→ `colors.neutralSurface` / `colors.borderLight`).
-      // FIXME: PAR-M13-SWEEP — migrate and delete the entry so the rule
-      // starts enforcing on the file again.
-      'apps/mobile/src/features/sidebar/components/TagFilter.tsx',
-      'apps/mobile/src/features/sidebar/components/ConversationList.tsx',
-      'apps/mobile/src/features/sidebar/components/ConversationItem.tsx',
-      'apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx',
-      'apps/mobile/src/features/edge-cases/components/*.tsx',
-      'apps/mobile/src/features/schedules/components/QuickSchedule.tsx',
-      'apps/mobile/src/features/agents/components/ToolTimeline.tsx',
-      'apps/mobile/src/features/companion/components/ExecutionStream.tsx',
-      'apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx',
-      'apps/mobile/src/features/companion/components/AgentDashboard.tsx',
     ],
     rules: {
       'no-restricted-syntax': [
