@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StartupRecoveryBootstrap, type StartupRecoveryInvoke } from './StartupRecoveryBootstrap';
 
@@ -79,6 +79,73 @@ describe('StartupRecoveryBootstrap', () => {
     unmount();
     expect(document.documentElement.style.backgroundColor).toBe(originalHtmlBackground);
     expect(document.body.style.backgroundColor).toBe(originalBodyBackground);
+  });
+
+  it('escapes to recovery when the native startup check never answers', async () => {
+    // Regression: a `tauri dev` session sat on "Opening encrypted local data…"
+    // indefinitely while the backend was provably idle in its event loop. The
+    // invoke promise neither resolved nor rejected, so the existing catch-based
+    // fallback could not fire and the user had no retry, diagnostics, or quit.
+    vi.useFakeTimers();
+    try {
+      const neverSettles = vi.fn(() => new Promise<never>(() => {})) as StartupRecoveryInvoke;
+      const normalAppMounted = vi.fn();
+
+      function NormalApplication() {
+        normalAppMounted();
+        return <div>Normal application</div>;
+      }
+
+      render(
+        <StartupRecoveryBootstrap nativeRuntime invokeCommand={neverSettles} timeoutMs={10_000}>
+          <NormalApplication />
+        </StartupRecoveryBootstrap>,
+      );
+
+      expect(screen.getByRole('status')).toHaveTextContent('Opening encrypted local data');
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      expect(
+        screen.getByRole('heading', { name: 'AGI could not verify local data' }),
+      ).toBeInTheDocument();
+      // The recovery screen is the escape hatch: it must never fall through to
+      // the normal app when local data could not be verified.
+      expect(normalAppMounted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not escape to recovery when the native check answers before the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const invokeCommand = vi.fn().mockResolvedValue(null) as StartupRecoveryInvoke;
+
+      render(
+        <StartupRecoveryBootstrap nativeRuntime invokeCommand={invokeCommand} timeoutMs={10_000}>
+          <div>Normal application</div>
+        </StartupRecoveryBootstrap>,
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Normal application')).toBeInTheDocument();
+
+      // Firing the (now cancelled) timer must not tear a healthy app down.
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(screen.getByText('Normal application')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'AGI could not verify local data' }),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not call native startup commands in browser-only rendering', () => {
