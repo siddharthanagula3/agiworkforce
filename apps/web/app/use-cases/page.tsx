@@ -3,7 +3,6 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { FeatureGrid, RouteMap } from '@/features/marketing/components/LandingSections';
 import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Use Cases: Startups, consultants, sales, and IT providers',
@@ -24,9 +23,9 @@ export default function UseCasesPage() {
           em="you already work."
           lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop and CLI, and managed cloud, open in public alpha, when you're ready to scale."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
             { href: '/solutions', label: 'See the Solutions Map' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/pricing', label: 'See Plans' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -104,15 +103,14 @@ export default function UseCasesPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Start with your job, not our feature list."
           body="Each use-case page gives you the shortest path from a real problem to the AGI surface you should try first."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
             { href: '/business', label: 'See AGI for Business' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/pricing', label: 'See Plans' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
         <MarketingFooter />

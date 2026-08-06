@@ -11,6 +11,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 /**
  * DELETE /api/settings/api-keys/[keyId]
@@ -53,6 +54,13 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
   await ApiKeyService.revokeApiKey(db, keyId, userId);
 
   logger.info({ userId, keyId }, 'API key revoked');
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'api_key_revoked',
+    request,
+    detail: { resourceType: 'api_key', resourceId: keyId },
+  });
 
   return NextResponse.json({ message: 'API key revoked' });
 }

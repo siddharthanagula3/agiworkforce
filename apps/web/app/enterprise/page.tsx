@@ -3,12 +3,11 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'Enterprise: controls your security team needs',
+  title: 'Enterprise: evaluate without exposing your data',
   description:
-    'SSO, SCIM, audit export, custom retention, BYOK enforcement, and a named support contact. Scoped on a contract, with compliance status reported honestly.',
+    'Run AGI fully local or on your own provider keys, so no conversation content reaches our infrastructure. Identity, audit, and retention controls are contract-scoped, with build status stated honestly.',
   path: '/enterprise',
 });
 
@@ -20,48 +19,84 @@ export default function EnterprisePage() {
 
         <FlagshipHero
           eyebrow="AGI for enterprise"
-          titleLines={['The same product.', 'Enterprise controls.']}
-          em="Enterprise controls."
-          lede="SSO, SCIM provisioning, audit export, retention windows, and org-wide BYOK enforcement. Scoped on a contract that names you. Compliance status reported honestly. Local and BYOK adoption can start before any managed compute spend exists."
+          titleLines={['Pass the security review', 'before you spend anything.']}
+          em="before you spend anything."
+          lede="Most AI tools require you to accept their data boundary to evaluate them at all. AGI does not: run it fully local, or on your own provider keys, and no conversation content reaches our infrastructure — so the hardest question in your review is answered by architecture rather than by a promise. Identity, audit, and retention controls are scoped on a contract, and this page states plainly which of them are built and which are commitments."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/trust', label: 'See Trust & Compliance' },
             { href: '/byok', label: 'Read the BYOK Posture' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · enforceable', 'Cloud · public alpha']}
-        />
-
-        <LedgerSection
-          eyebrow="What an enterprise contract covers"
-          title="The controls, named one by one."
-          rows={[
+          modeRibbon={[
             {
-              k: 'SSO',
-              v: 'SAML 2.0 and OIDC. Okta, Azure AD, Google Workspace. Scoped per contract.',
+              label: 'Local',
+              note: 'Runs on your hardware. No content reaches us. No account needed.',
             },
             {
-              k: 'SCIM',
-              v: 'User and group provisioning from your IdP, scoped per contract.',
+              label: 'BYOK',
+              note: 'Your provider contract governs the data. We are not in the path.',
+            },
+            {
+              label: 'AGI Cloud',
+              note: 'Hosted and metered by us. Public alpha, not generally available.',
+            },
+          ]}
+        />
+
+        {/*
+          These rows previously read as SHIPPED controls ("Org-level retention
+          windows. You set them.", "SAML 2.0 and OIDC. Okta, Azure AD, Google
+          Workspace."). A security reviewer treats that as a product claim and
+          tests it. Two rows were cut outright rather than softened:
+
+            - Residency ("United States by default. EU on the roadmap; custom
+              regions by contract") — there is NO residency or region-pinning
+              mechanism anywhere in the codebase. Where the infrastructure
+              happens to run is not a control we offer, and "custom regions by
+              contract" promised a capability with nothing behind it.
+            - The bare four-hour SLA promise — /sla states that number as a
+              PLANNED target and explicitly "not a binding commitment". The same
+              number cannot be planned on one page and promised on another, so
+              this page now defers to /sla instead of restating it.
+
+          The remaining identity/audit rows are scoped as contract commitments in
+          progress, not as features you can switch on today, and the section
+          carries a visible status date. CROSS-WORKFLOW DEPENDENCY: the SSO,
+          directory-sync and audit-logging implementations are owned by a
+          concurrent workstream; this wording must be reconciled with whatever
+          that work actually lands before any of it is described as available.
+        */}
+        <LedgerSection
+          eyebrow="What an enterprise contract covers"
+          title="Scoped on a contract, stated without inflation."
+          rows={[
+            {
+              k: 'Status',
+              v: 'Enterprise controls are being built and are scoped per contract. Nothing below is a self-serve toggle you can enable today — treat each as a commitment we make in writing, with dates, during procurement.',
+            },
+            {
+              k: 'SSO',
+              v: 'SAML 2.0 and OIDC single sign-on, scoped and dated in your contract. Ask us for current implementation status before you plan a rollout around it.',
+            },
+            {
+              k: 'Directory provisioning',
+              v: 'SCIM user and group provisioning from your IdP, scoped and dated in your contract.',
             },
             {
               k: 'Audit',
-              v: 'Provider labels, tool approvals, and session records, with export scoped to your review.',
+              v: 'Administrative and session audit records with export, scoped in your contract. We will tell you precisely which events are captured today rather than implying full coverage.',
             },
             {
               k: 'Retention',
-              v: 'Org-level retention windows. You set them.',
+              v: 'There is no per-organization retention setting today — retention follows the published platform schedule in the privacy policy. Organization-configurable windows are a contract-scoped commitment, not a shipped control.',
             },
             {
               k: 'BYOK enforcement',
-              v: 'Require BYOK across the org. Zero managed-cloud spend unless you opt in.',
+              v: 'The strongest control available today, and it needs no feature work from us: run the org on your own provider keys, or fully local, and no conversation content reaches AGI infrastructure at all.',
             },
             {
-              k: 'Residency',
-              v: 'United States by default. EU on the roadmap; custom regions by contract.',
-            },
-            {
-              k: 'SLA',
-              v: 'Four-hour response target with a named support contact.',
+              k: 'Service levels',
+              v: 'Managed cloud is a public alpha. Response and uptime numbers are planned targets rather than binding commitments — see the SLA page for exactly which is which.',
             },
             {
               k: 'MSA',
@@ -93,15 +128,14 @@ export default function EnterprisePage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Security review"
           title="Bring your security review."
-          body="A real human answers, on a real contract. Evaluate Local, BYOK, and public-alpha managed cloud today. Enterprise controls (org seats, SSO, admin) are rolling out — request access."
+          body="Send us the questionnaire. You will get direct answers, including the ones where the answer is 'not yet' — and you can start evaluating on Local or BYOK immediately, without a contract, a trial, or any data reaching us."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Get notified' },
-            { label: 'Request Enterprise Access', waitlist: true },
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/trust', label: 'See Trust & Compliance' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
         <MarketingFooter />

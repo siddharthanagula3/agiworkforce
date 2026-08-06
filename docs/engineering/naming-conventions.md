@@ -42,7 +42,7 @@ Keep only these active control files at repo root:
 
 - `AGI_WORKFORCE.md` - compact platform entry point and locked product/architecture summary.
 - `PLAN.md` - active strategy and transition plan.
-- `TODO.md` - active execution checklist.
+- `TODO.md` - retired (commit `906fe5cda`); the active execution queue lives in `PLAN.md` §Exact Resume Point.
 - `CHANGELOG.md` - completed work log.
 - `README.md`, `BUILD.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `NOTICE`.
 
@@ -51,11 +51,11 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 ## Planning And Work Logs
 
 - Use `PLAN.md` for active strategic plan and phase structure.
-- Use `TODO.md` for current executable tasks.
+- Add current executable tasks to `PLAN.md` §Exact Resume Point (root `TODO.md` is retired).
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.
-- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `audit/`, `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28 — do not cite them as existing or route new work there without a current decision doc.)
+- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28 — do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/capability-gaps.csv`.)
 
 ## Directory Names
 
@@ -74,7 +74,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Markdown docs: lowercase kebab-case, except root all-caps convention files such as `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CODEOWNERS`.
 - Active plan docs: `docs/plans/<topic>.md`.
 - Historical archive folders (if a future archiving need arises; `docs/archive/` does not currently exist — removed 2026-06-28): `docs/archive/YYYY-MM-DD-<reason>/`.
-- Durable findings currently belong in `docs/agent-context/known-flaws.md`, not a standalone `audit/` directory (removed 2026-06-28).
+- Durable findings belong in `docs/agent-context/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
 - Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.
 - TypeScript/React source files should follow the local app's existing convention; new domain feature files should prefer kebab-case filenames and PascalCase exported React components.

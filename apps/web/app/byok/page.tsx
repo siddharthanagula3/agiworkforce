@@ -193,7 +193,7 @@ export default function ByokPage() {
             { href: '/download', label: 'Get notified' },
             { href: '/cli', label: 'Explore the CLI' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

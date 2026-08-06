@@ -1,4 +1,12 @@
-import { Download, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Download,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
@@ -6,6 +14,7 @@ import {
   type AgentActivityArtifactEntry,
   type AgentActivityContextEntry,
   type AgentActivityEntry,
+  type AgentActivityErrorEntry,
   type AgentActivityProgressEntry,
   type AgentActivityState,
   type AgentActivityToolEntry,
@@ -13,11 +22,35 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
+  type AgiWorkRerunGoal,
+  isLiveTaskState,
   taskStateLabel,
   taskStateTone,
   TASK_TONE_BADGE_CLASS,
   workModeLabel,
 } from './task-display';
+
+/**
+ * Split a goal's stored detail ("Constraints: …\nDeliverable: …") back into
+ * structured fields for a faithful re-run. The server writes these labels in a
+ * fixed English form (see `agiWorkGoalProgressEvent`), so matching them here is
+ * exact, not a guess; anything unrecognised is simply dropped rather than
+ * re-sent as noise.
+ */
+function parseGoalDetail(detail: string | undefined): {
+  constraints?: string;
+  deliverable?: string;
+} {
+  if (!detail) return {};
+  const result: { constraints?: string; deliverable?: string } = {};
+  for (const line of detail.split('\n')) {
+    const constraints = line.match(/^Constraints:\s*(.+)$/);
+    if (constraints?.[1]) result.constraints = constraints[1].trim();
+    const deliverable = line.match(/^Deliverable:\s*(.+)$/);
+    if (deliverable?.[1]) result.deliverable = deliverable[1].trim();
+  }
+  return result;
+}
 
 export function projectTaskJournal(events: AgentEventEnvelope[]): AgentActivityState | undefined {
   return events.reduce<AgentActivityState | undefined>(
@@ -25,6 +58,17 @@ export function projectTaskJournal(events: AgentEventEnvelope[]): AgentActivityS
     undefined,
   );
 }
+
+/**
+ * Progress ids AGI Work reserves for the run's goal + plan (CAP-048). These are
+ * ordinary `progress-update` events on the durable journal — no new event
+ * variant, no migration — that `/tasks` lifts out of the progress list into
+ * dedicated Goal and Plan sections. The literals mirror the server's wire
+ * contract (`agiwork-plan.ts`); a guard test on each side keeps them in step,
+ * the same way the `x_research_plan` snake_case contract is mirrored.
+ */
+const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
+const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
 
 function isSafeGeneratedFilePath(uri: string): boolean {
   return /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/.test(uri);
@@ -107,9 +151,17 @@ export interface TaskDetailPanelProps {
   loading: boolean;
   error: string | null;
   truncated?: boolean;
+  /** The host is polling this run's journal because it is still live. */
+  autoRefreshing?: boolean;
   onRefresh(): void;
   onClose(): void;
   onOpenConversation(conversationId: string): void;
+  /**
+   * Re-run this AGI Work task from its original goal. Provided only when the
+   * host can start a run AND the run is a terminal AGI Work task whose goal was
+   * recorded; the button is otherwise absent.
+   */
+  onRerun?(goal: AgiWorkRerunGoal): void;
 }
 
 export function TaskDetailPanel({
@@ -118,9 +170,11 @@ export function TaskDetailPanel({
   loading,
   error,
   truncated = false,
+  autoRefreshing = false,
   onRefresh,
   onClose,
   onOpenConversation,
+  onRerun,
 }: TaskDetailPanelProps) {
   if (!run) {
     return (
@@ -135,15 +189,37 @@ export function TaskDetailPanel({
 
   const activity = projectTaskJournal(events);
   const entries = activity?.entries ?? [];
+  // CAP-048: the run's goal + plan ride the journal as progress events under
+  // reserved ids. Lift them out first so they render as their own sections and
+  // never double up inside the generic Progress list below.
+  const goalEntry = entries.find(
+    (entry): entry is AgentActivityProgressEntry =>
+      entry.kind === 'progress' && entry.progressId === AGIWORK_GOAL_PROGRESS_ID,
+  );
+  const planSteps = entries.filter(
+    (entry): entry is AgentActivityProgressEntry =>
+      entry.kind === 'progress' && entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX),
+  );
   const progress = entries.filter(
     (entry): entry is Extract<AgentActivityEntry, { kind: 'progress' } | { kind: 'tool' }> =>
-      entry.kind === 'progress' || entry.kind === 'tool',
+      (entry.kind === 'progress' &&
+        entry.progressId !== AGIWORK_GOAL_PROGRESS_ID &&
+        !entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX)) ||
+      entry.kind === 'tool',
   );
   const outputs = entries.filter(
     (entry): entry is AgentActivityArtifactEntry => entry.kind === 'artifact',
   );
   const context = entries.filter(
     (entry): entry is AgentActivityContextEntry => entry.kind === 'context',
+  );
+  // Why a task failed was recorded in the journal all along — `error` events are
+  // already reduced into AgentActivityErrorEntry — but this panel rendered only
+  // Progress/Outputs/Context, so a failed run showed a red "Failed" badge and no
+  // reason. A failed task with no stated cause is indistinguishable from a
+  // broken product, so the reason is now shown first.
+  const failures = entries.filter(
+    (entry): entry is AgentActivityErrorEntry => entry.kind === 'error',
   );
   const tone = taskStateTone(run.state);
 
@@ -165,6 +241,15 @@ export function TaskDetailPanel({
           >
             {taskStateLabel(run.state)}
           </span>
+          {autoRefreshing ? (
+            <span
+              data-testid="task-auto-refreshing"
+              className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              Updating automatically
+            </span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -197,6 +282,105 @@ export function TaskDetailPanel({
         <div role="alert" className="m-4 rounded-md border border-destructive/40 p-3 text-xs">
           {error}
         </div>
+      ) : null}
+
+      {goalEntry ? (
+        <section
+          data-testid="task-goal"
+          aria-label="Task goal"
+          className="m-4 rounded-md border border-border/70 bg-muted/30 p-3"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Goal
+          </p>
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-foreground">
+            {goalEntry.summary}
+          </p>
+          {goalEntry.detail ? (
+            <p className="mt-1.5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+              {goalEntry.detail}
+            </p>
+          ) : null}
+          {onRerun && !isLiveTaskState(run.state) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 h-7 text-xs"
+              onClick={() =>
+                onRerun({ goal: goalEntry.summary, ...parseGoalDetail(goalEntry.detail) })
+              }
+            >
+              <RotateCcw className="mr-1.5 h-3 w-3" />
+              Re-run this task
+            </Button>
+          ) : null}
+        </section>
+      ) : null}
+
+      {planSteps.length > 0 ? (
+        <section
+          data-testid="task-plan"
+          aria-label="Task plan"
+          className="mx-4 mb-4 rounded-md border border-border/70 p-3"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Plan · {planSteps.length}
+          </p>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {planSteps.map((step) => (
+              <li key={step.id} className="flex gap-2 text-xs text-foreground">
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mt-1 h-1.5 w-1.5 shrink-0 rounded-full',
+                    step.status === 'completed' && 'bg-emerald-500',
+                    step.status === 'failed' && 'bg-destructive',
+                    step.status === 'cancelled' && 'bg-muted-foreground',
+                    step.status === 'running' && 'bg-primary',
+                  )}
+                />
+                <span className="min-w-0 break-words">{step.summary}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {failures.length > 0 || run.state === 'failed' ? (
+        <section
+          data-testid="task-failure-reason"
+          aria-label="Why this task failed"
+          className="m-4 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+        >
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+            Why this task failed
+          </p>
+          {failures.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-2">
+              {failures.map((failure) => (
+                <li key={failure.id} className="min-w-0">
+                  <span className="block break-words text-xs text-foreground">
+                    {failure.message}
+                  </span>
+                  {failure.code || failure.retryable ? (
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      {failure.code ? failure.code : null}
+                      {failure.code && failure.retryable ? ' · ' : null}
+                      {failure.retryable ? 'Temporary — safe to run again' : null}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {loading
+                ? 'Loading the failure reason…'
+                : 'The engine recorded no reason for this failure. Open the source chat for the full transcript.'}
+            </p>
+          )}
+        </section>
       ) : null}
 
       <div className="flex flex-col divide-y">

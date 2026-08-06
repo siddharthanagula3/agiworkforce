@@ -151,6 +151,21 @@ interface ResearchActions {
   initialize: () => Promise<void>;
 }
 
+/**
+ * `initialize()` runs from a component effect (DeepResearchPage), so every time
+ * the panel is mounted it would register another pair of native listeners on
+ * this app-lifetime singleton store — one progress update would then be applied
+ * once per past mount. The listeners are never torn down (the store outlives
+ * any panel), so registration has to happen exactly once per process.
+ */
+let nativeListenersRegistered = false;
+
+// Session ids the user cancelled, consulted when the corresponding
+// research_start promise settles (the orchestrator resolves Ok on
+// cancellation). Process-lifetime like the listener guard — deliberately not
+// part of persisted store state.
+const cancelRequestedSessions = new Set<string>();
+
 const DEFAULT_CONFIG: ResearchConfig = {
   default_mode: 'standard',
   enable_web_search: true,
@@ -200,6 +215,7 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
               startedAt: Date.now(),
             };
           });
+          cancelRequestedSessions.clear();
 
           try {
             const result = await invoke<ResearchResponse>('research_start', {
@@ -208,6 +224,21 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
                 mode: researchMode,
               },
             });
+
+            // The Rust orchestrator resolves Ok even when the run was
+            // cancelled (handle_cancellation returns a "Research cancelled"
+            // summary), so without this guard a cancelled run would overwrite
+            // cancelResearch's idle state with 'complete' and pollute Recent
+            // Research with a phantom entry.
+            if (cancelRequestedSessions.has(result.session_id)) {
+              cancelRequestedSessions.delete(result.session_id);
+              set((state) => {
+                state.activeSession.status = 'idle';
+                state.activeSession.progress = null;
+                state.activeSession.result = null;
+              });
+              return result;
+            }
 
             set((state) => {
               state.activeSession.id = result.session_id;
@@ -276,6 +307,10 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
 
           try {
             await invoke('research_cancel', { sessionId });
+            // Remember the cancellation so the still-pending research_start
+            // promise (which resolves Ok with a cancellation summary) does not
+            // re-mark this session as completed. See startResearch.
+            cancelRequestedSessions.add(sessionId);
             set((state) => {
               state.activeSession.status = 'idle';
               state.activeSession.progress = null;
@@ -431,7 +466,10 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           // Load config, availability, and modes in parallel
           await Promise.all([get().loadConfig(), get().checkAvailability(), get().loadModes()]);
 
-          // Set up event listeners
+          // Set up event listeners (once per process — see the flag's docstring)
+          if (nativeListenersRegistered) return;
+          nativeListenersRegistered = true;
+
           listen<ResearchProgress>('research:progress', (event) => {
             get().updateProgress(event.payload);
           });

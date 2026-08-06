@@ -72,7 +72,10 @@ export function AgiWorkScheduled() {
   }, [fetchTasks]);
 
   return (
-    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
+    <div
+      data-testid="agi-work-scheduled"
+      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
+    >
       <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

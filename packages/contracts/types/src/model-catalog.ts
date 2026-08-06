@@ -209,6 +209,98 @@ export interface ModelTierPolicy {
   keepForBudgetTier?: boolean;
 }
 
+/**
+ * One dated pricing window from a model's `pricingSchedule`. Field names match
+ * the catalog's cost fields so a window reads as a dated `costOverride`.
+ */
+export interface ModelPricingWindow {
+  /** Inclusive ISO `YYYY-MM-DD` start. Absent = open-ended in the past. */
+  effectiveFrom?: string;
+  /** Inclusive ISO `YYYY-MM-DD` end. Absent = open-ended in the future. */
+  effectiveUntil?: string;
+  /** Provenance note for the window (source + verification date). */
+  note?: string;
+  inputCost?: number;
+  outputCost?: number;
+  cached_input?: number;
+  cached_write?: number;
+  cached_write_1h?: number;
+}
+
+/** Per-million rates that apply to a model on a specific date. */
+export interface EffectiveModelPricing {
+  inputCost: number;
+  outputCost: number;
+  // Explicitly `| undefined`: under exactOptionalPropertyTypes the resolver
+  // below passes a model's cache rates straight through, and a model that
+  // prices no cache tier carries them as present-but-undefined rather than
+  // absent. A bare `?:` would reject that pass-through.
+  cached_input?: number | undefined;
+  cached_write?: number | undefined;
+  cached_write_1h?: number | undefined;
+}
+
+/** Pricing-carrying subset of {@link ModelMetadata} that the resolver needs. */
+export type PricedModel = Pick<
+  ModelMetadata,
+  | 'inputCost'
+  | 'outputCost'
+  | 'cached_input'
+  | 'cached_write'
+  | 'cached_write_1h'
+  | 'pricingSchedule'
+>;
+
+function toIsoDay(asOf: Date): string | null {
+  const time = asOf?.getTime?.();
+  if (typeof time !== 'number' || Number.isNaN(time)) return null;
+  return asOf.toISOString().slice(0, 10);
+}
+
+/**
+ * Resolve the rates that apply to a model on `asOf`.
+ *
+ * `asOf` is REQUIRED and must be supplied by the caller: no clock is read here,
+ * so the same inputs always produce the same rates and tests can pin either
+ * side of a price change without touching wall-clock time. The first window
+ * whose inclusive `[effectiveFrom, effectiveUntil]` range contains `asOf` wins;
+ * when no window matches (or the model has no schedule) the model's top-level
+ * fields are returned unchanged.
+ */
+export function resolveEffectiveModelPricing(
+  model: PricedModel,
+  asOf: Date,
+): EffectiveModelPricing {
+  const base: EffectiveModelPricing = {
+    inputCost: model.inputCost,
+    outputCost: model.outputCost,
+    cached_input: model.cached_input,
+    cached_write: model.cached_write,
+    cached_write_1h: model.cached_write_1h,
+  };
+
+  const schedule = model.pricingSchedule;
+  if (!Array.isArray(schedule) || schedule.length === 0) return base;
+
+  const day = toIsoDay(asOf);
+  if (day === null) return base;
+
+  const window = schedule.find(
+    (entry) =>
+      (entry.effectiveFrom === undefined || entry.effectiveFrom <= day) &&
+      (entry.effectiveUntil === undefined || day <= entry.effectiveUntil),
+  );
+  if (!window) return base;
+
+  return {
+    inputCost: window.inputCost ?? base.inputCost,
+    outputCost: window.outputCost ?? base.outputCost,
+    cached_input: window.cached_input ?? base.cached_input,
+    cached_write: window.cached_write ?? base.cached_write,
+    cached_write_1h: window.cached_write_1h ?? base.cached_write_1h,
+  };
+}
+
 /** Full model metadata entry as defined in models.json. */
 export interface ModelMetadata {
   id: string;
@@ -264,6 +356,24 @@ export interface ModelMetadata {
   videoPerSecondCostByResolution?: Partial<Record<'720p' | '1080p' | '4k', number>>;
   /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
   pricingNote?: string;
+  /**
+   * Dated pricing windows. Each entry is a dated cost override that applies
+   * while `effectiveFrom <= date <= effectiveUntil` (both bounds inclusive and
+   * both optional; an absent bound is open-ended on that side). The top-level
+   * cost fields stay the enduring/standard price so a consumer that is NOT
+   * date-aware still reads a published rate. Resolve with
+   * {@link resolveEffectiveModelPricing}, never by reading the array directly.
+   */
+  pricingSchedule?: ModelPricingWindow[];
+  /**
+   * Whether the provider publishes downloadable weights. OPTIONAL and absent
+   * when unverified — absent means "unknown", never "closed".
+   */
+  openWeight?: boolean;
+  /** SPDX-style license id, or `proprietary` for closed API-only models. Absent = unverified. */
+  license?: string;
+  /** Verified commercial-use restriction note. Absent = none recorded, not "none exists". */
+  commercialRestrictions?: string;
   /** ISO date after which the model is deprecated; null/absent = not scheduled. */
   deprecation_date?: string | null;
   /** ISO timestamp after which promotional pricing reverts to post_promo_prices. */
@@ -1453,16 +1563,51 @@ export function getMinimumRequiredTier(modelId: string): 'basic' | 'pro' | 'max'
   return null;
 }
 
-/** True if a user on `subscriptionTier` can use `modelId`, per the shared catalog gate. */
+/**
+ * True if a user on `subscriptionTier` can use `modelId`, per the shared catalog gate.
+ *
+ * Free resolves through each model's own `tierPolicy.minTier` rather than roster
+ * membership. The two are NOT the same axis: every Economy model reports a
+ * minimum of `basic` via `getMinimumRequiredTier` (which is roster-based), while
+ * only the subset carrying `tierPolicy.minTier === 'free'` is actually sold to
+ * the Free plan.
+ *
+ * This function previously returned false for Free against every model, which
+ * made it unusable as the Free gate and pushed each surface to invent its own:
+ * apps/web filtered Economy by `tierPolicy.minTier` (correct), while the
+ * api-gateway admitted Free to the entire Economy roster via a local
+ * `minimumTier === 'basic'` special case (too broad). The two surfaces then
+ * disagreed about which models a Free user could select. Resolving Free here,
+ * from the same field `FREE_TRIAL_MODELS` derives from, leaves one authority.
+ */
 export function canAccessModelForSubscriptionTier(
   modelId: string,
   subscriptionTier: string,
 ): boolean {
+  const rawTier = typeof subscriptionTier === 'string' ? subscriptionTier.trim().toLowerCase() : '';
   const tier = normalizeSubscriptionAccessTier(subscriptionTier);
-  if (tier === 'free') return false;
 
   const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return false;
+
+  if (tier === 'free') {
+    // FAIL CLOSED before granting anything. `normalizeSubscriptionAccessTier`
+    // routes every unrecognized value to 'free' through its default case — which
+    // includes 'local-only' and 'byok', SEPARATE TRUST BOUNDARIES that must never
+    // receive a managed roster, and any corrupted or missing plan string. Only an
+    // explicit Free plan may pass.
+    if (rawTier !== 'free') return false;
+
+    // Both conditions are load-bearing, and this mirrors FREE_TRIAL_MODELS
+    // (apps/web/lib/free-trial-config.ts) exactly. `tierPolicy.minTier` alone is
+    // NOT sufficient: `sonar` carries minTier 'free' while sitting outside every
+    // selectable roster, so checking the field on its own would sell Free a model
+    // no roster offers. Keep these two in lockstep with free-trial-config.ts.
+    return (
+      getAllowedModelsForTier('economy').includes(canonicalModelId) &&
+      getModelMetadataById(canonicalModelId)?.tierPolicy?.minTier === 'free'
+    );
+  }
 
   if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) {
     return tier === 'max' || tier === 'enterprise';

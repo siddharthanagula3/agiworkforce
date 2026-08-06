@@ -429,6 +429,176 @@ describe('TauriRuntime', () => {
     });
   });
 
+  // DESKTOP-ARTIFACT-TOKEN-STREAMING: `create_artifact` arguments stream in
+  // over `chat:artifact-progress` before the tool executes. The runtime must
+  // surface a display-only draft (panel open, title/type, growing content) and
+  // hand off to the durable artifact when `chat:artifact` lands.
+  it('renders a progressive artifact draft while create_artifact arguments stream', async () => {
+    const argsChunks = [
+      '{"artifact_type":"markdown"',
+      ',"title":"Release No',
+      'tes","content":"# Hel',
+      'lo\\nWorld"}',
+    ];
+
+    const { useArtifactStore } = await import('../../stores/artifactStore');
+    type Draft = ReturnType<typeof useArtifactStore.getState>['draft'];
+    const draftSnapshots: Draft[] = [];
+    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          argsChunks.forEach((delta, seq) => {
+            listenHandlers.get('chat:artifact-progress')?.({
+              payload: {
+                conversation_id: 42,
+                message_id: 'assistant-1',
+                tool_call_index: 0,
+                seq,
+                delta,
+              },
+            });
+          });
+          draftSnapshots.push(useArtifactStore.getState().draft);
+          listenHandlers.get('chat:artifact')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: null,
+              artifact: {
+                id: 'artifact-final',
+                type: 'markdown',
+                title: 'Release Notes',
+                content: '# Hello\nWorld',
+                language: null,
+                metadata: {},
+              },
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write release notes');
+
+    // While streaming: a display-only draft with the partial content.
+    expect(draftSnapshots).toHaveLength(1);
+    expect(draftSnapshots[0]).toMatchObject({
+      key: 'assistant-1:0',
+      title: 'Release Notes',
+      artifactType: 'markdown',
+      content: '# Hello\nWorld',
+      complete: true,
+    });
+
+    // After the real artifact lands: draft gone, panel points at the artifact.
+    const finalState = useArtifactStore.getState();
+    expect(finalState.draft).toBeNull();
+    expect(finalState.activeArtifactId).toBe('artifact-final');
+    expect(finalState.panelOpen).toBe(true);
+  });
+
+  it('discards the artifact draft when the turn ends without an artifact', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact-progress')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-1',
+              tool_call_index: 0,
+              seq: 0,
+              delta: '{"artifact_type":"code","title":"Broken',
+            },
+          });
+          listenHandlers.get('chat:stream-error')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-1',
+              error: 'provider failed',
+            },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { useArtifactStore } = await import('../../stores/artifactStore');
+    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
+
+    const finalState = useArtifactStore.getState();
+    expect(finalState.draft).toBeNull();
+    // The preview opened the panel, so abandoning it must close the panel too.
+    expect(finalState.panelOpen).toBe(false);
+    expect(finalState.activeArtifactId).toBeNull();
+  });
+
+  it('ignores a chat:artifact-progress event for a different conversation', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact-progress')?.({
+            payload: {
+              conversation_id: 99,
+              message_id: 'assistant-1',
+              tool_call_index: 0,
+              seq: 0,
+              delta: '{"artifact_type":"code","title":"Other conversation"',
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { useArtifactStore } = await import('../../stores/artifactStore');
+    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
+
+    expect(useArtifactStore.getState().draft).toBeNull();
+    expect(useArtifactStore.getState().panelOpen).toBe(false);
+  });
+
   it('projects native Local thinking and iteration events into the shared activity stream', async () => {
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'chat_send_message') {

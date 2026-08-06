@@ -1,7 +1,7 @@
 {
   "name": "agiworkforce",
-  "version": "1.1.7",
   "private": true,
+  "//version": "Intentionally no version field. This is a private workspace manifest, not a shippable product. Each app owns its own version and the release workflows read those directly (e.g. release-desktop.yml reads apps/desktop/package.json). A root version drifted to 1.1.7 while desktop/mobile/extension shipped 1.2.0, which read as a product version and was wrong everywhere. Founder decision 2026-08-04.",
   "description": "AGI Workforce monorepo (Tauri + React + Rust)",
   "homepage": "https://agiworkforce.com",
   "repository": {
@@ -72,6 +72,7 @@
     "lint:extension": "turbo run lint --filter=@agiworkforce/extension",
     "lint:fix": "turbo run lint --filter='!@agiworkforce/extension' -- --fix",
     "check:agent-context": "node scripts/check-agent-context.mjs",
+    "check:i18n-parity": "node scripts/check-i18n-parity.mjs",
     "check:connector-logos": "node scripts/check-connector-logos.mjs",
     "check:audit-inventory": "node scripts/check-audit-inventory.mjs",
     "check:capability-gaps": "node scripts/check-capability-gaps.mjs",
@@ -110,6 +111,7 @@
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
     "check:readme-ownership": "node scripts/check-readme-ownership.mjs",
     "check:doc-status": "node scripts/check-doc-status.mjs",
+    "check:reference-integrity": "node --test scripts/check-reference-integrity.test.mjs && node scripts/check-reference-integrity.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:hook-fire-sites": "node apps/cli/scripts/check-hook-fire-sites.mjs",
     "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
@@ -149,7 +151,7 @@
     "build:desktop": "turbo run build --filter=@agiworkforce/desktop",
     "build:docs": "pnpm docs:check",
     "dev:desktop": "turbo run dev --filter=@agiworkforce/desktop",
-    "docs:check": "pnpm check:doc-status && pnpm check:agent-context && pnpm check:non-md-artifacts",
+    "docs:check": "pnpm check:doc-status && pnpm check:agent-context && pnpm check:non-md-artifacts && pnpm check:reference-integrity",
     "typecheck:all": "turbo run typecheck",
     "demo:multi-provider": "tsx examples/multi-provider-chat.ts",
     "generate:protocol-types": "node scripts/generate-protocol-types.mjs --write",

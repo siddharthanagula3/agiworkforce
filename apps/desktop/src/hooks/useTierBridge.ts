@@ -3,7 +3,7 @@
  *
  * Mount once at app top-level. Whenever the user's plan_tier changes
  * (subscription update, sign-in/out, BYOK toggle), the unified-chat
- * tierStore is patched so ModelSelector can gate the Pro+ in-thread
+ * tierStore is patched so ModelSelector can gate the Max in-thread
  * provider switch correctly.
  */
 import { useEffect } from 'react';

@@ -30,6 +30,13 @@ vi.mock('@/lib/client/csrf', () => ({
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 vi.mock('../sections/AccountSection', () => ({ AccountSection: () => null }));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
+// The Team section also renders the organization's SHARED ecosystem (0086).
+// Stubbed here for the same reason every other section is: this file tests the
+// modal's section routing, not the sections themselves. Its own behaviour is
+// covered by OrganizationSharingSection.test.tsx.
+vi.mock('../sections/OrganizationSharingSection', () => ({
+  OrganizationSharingSection: () => <div>Organization sharing content</div>,
+}));
 vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
 vi.mock('../sections/PrivacySection', () => ({ PrivacySection: () => null }));

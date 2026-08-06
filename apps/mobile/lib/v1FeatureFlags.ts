@@ -134,7 +134,7 @@ export const FEATURES = {
 
   /** Image generation via cloud API.
    *  2026-06-27: enabled — `/image` and the AddToChatSheet toggle call
-   *  `POST /api/media/image/generate` (image/services/imagegen.ts). Pro+ gating is
+   *  `POST /api/media/image/generate` (image/services/imagegen.ts). Tier gating is
    *  enforced server-side and surfaced via ApiPaywallError → PaywallBottomSheet. */
   imageGen: true,
 

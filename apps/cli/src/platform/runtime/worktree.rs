@@ -21,13 +21,11 @@ pub struct WorktreeOptions {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // M35 — fields consumed by /worktree dispatch + tool catalog wiring (deferred to integration step)
 pub struct Worktree {
     pub branch: String,
     pub path: PathBuf,
 }
 
-#[allow(dead_code)]
 pub async fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
     let target = opts.target_dir.unwrap_or_else(|| {
         let parent = repo.parent().unwrap_or(repo);
@@ -82,7 +80,6 @@ pub async fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktr
     })
 }
 
-#[allow(dead_code)]
 pub async fn exit_worktree(repo: &Path, worktree_path: &Path) -> Result<()> {
     let mut command = Command::new("git");
     command
@@ -102,7 +99,6 @@ pub async fn exit_worktree(repo: &Path, worktree_path: &Path) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 pub async fn list_worktrees(repo: &Path) -> Result<Vec<Worktree>> {
     let mut command = Command::new("git");
     command

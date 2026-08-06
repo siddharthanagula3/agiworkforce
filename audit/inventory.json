@@ -3266,8 +3266,8 @@
   {
     "item": "scim",
     "surface": "packages/auth",
-    "status": "missing",
-    "evidence": "First-party SCIM provisioning is absent. Migration 0076 and apps/web/app/api/admin/directory-sync/route.ts retain guarded directory-connection metadata CRUD, but there is no SCIM service-provider base route, Users or Groups resource endpoint, bearer-token lifecycle, filter/patch/bulk implementation, inbound provisioning handler, or synchronization worker. The former unconsumed webhook that returned HTTP 501 was removed. AdminConsolePage, CAP-028, and docs/adr/wire-or-cut.md explicitly defer provisioning to Phase 3. Connection metadata is an adjacent foundation, not a partial SCIM runtime."
+    "status": "partial",
+    "evidence": "A first-party SCIM 2.0 service provider ships at apps/web/app/api/scim/v2 (ServiceProviderConfig, ResourceTypes, Schemas, Users and Groups with GET/POST/PUT/PATCH/DELETE), backed by apps/web/lib/server/scim/* and migration 0084_scim_provisioning.sql (scim_tokens, scim_provisioned_users, scim_groups, scim_group_members, directory_sync_events). Bearer tokens are CSPRNG-generated, Argon2id-hashed, prefix-indexed, revocable and never logged. Every request re-checks canUseBillingPlanCapability(plan,'enterprise_controls') against the issuing admin and fails closed. Provisioning writes organization_members with provisioning_source='scim'; deprovisioning removes the membership and can never touch an owner. Filter (eq on allowlisted attributes), 1-based pagination, ListResponse/Error envelopes and both Okta and Entra PATCH shapes are implemented; bulk, sort and ETag are advertised as unsupported rather than stubbed. Remaining gap, hence partial: a pending SCIM resource for a person with no AGI account is linked on the next SCIM write rather than at sign-in, because sign-in-time linking requires a shared identity path outside this change. See docs/enterprise/directory-sync.md."
   },
   {
     "item": "mfa-totp",

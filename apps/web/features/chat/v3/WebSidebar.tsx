@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { shortcutLabel } from '@agiworkforce/ui';
 import {
   MessageSquare,
-  Plus,
+  SquarePen,
   Search,
   FolderOpen,
   Box,
@@ -159,6 +160,11 @@ export function WebSidebar({
 }: WebSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Platform-correct shortcut label. This was a hardcoded "Ctrl+K", which told
+  // every Mac visitor to press a key their keyboard does not have — while the
+  // desktop sidebar hardcoded "⌘K" and was wrong for Windows and Linux. The
+  // handler already accepts either modifier; only the label was wrong.
+  const searchShortcut = useMemo(() => shortcutLabel('K'), []);
 
   const user = useBillingStore((s) => s.user);
   // PER-3/PER-8: `user` is finally populated (refreshUser writes it now) and
@@ -321,6 +327,7 @@ export function WebSidebar({
         <button
           onClick={onNewChat}
           title={newLabel}
+          className="transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
           style={{
             width: '100%',
             display: 'flex',
@@ -329,15 +336,21 @@ export function WebSidebar({
             padding: collapsed ? '7px 0' : '7px 10px',
             justifyContent: collapsed ? 'center' : 'flex-start',
             borderRadius: 8,
-            border: '1px solid var(--chat-border)',
-            background: 'var(--chat-surface-elevated)',
+            // Ghost row, matching the desktop sidebar: transparent, borderless,
+            // hover-fill. Both shells put "New chat" in the same slot, but web
+            // drew a boxed elevated control with a Plus while desktop drew a
+            // borderless row with a SquarePen — the same primary action reading
+            // as two different controls between surfaces. Desktop is the
+            // reference-correct one; its own comment says so.
+            border: 'none',
+            background: 'transparent',
             cursor: 'pointer',
             color: 'var(--chat-text-primary)',
             fontSize: 13,
             fontWeight: 500,
           }}
         >
-          <Plus size={14} />
+          <SquarePen size={14} />
           {!collapsed && <span>{newLabel}</span>}
         </button>
       </div>
@@ -347,7 +360,7 @@ export function WebSidebar({
         <div style={{ padding: '2px 8px 4px', flexShrink: 0 }}>
           <button
             onClick={onOpenSearch}
-            title="Search (Ctrl+K)"
+            title={`Search (${searchShortcut})`}
             style={{
               width: '100%',
               display: 'flex',
@@ -376,7 +389,7 @@ export function WebSidebar({
                     padding: '1px 5px',
                   }}
                 >
-                  Ctrl+K
+                  {searchShortcut}
                 </span>
               </>
             )}

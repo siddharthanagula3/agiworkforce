@@ -36,7 +36,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'Cloud conversations are retained for 90 days after account deletion. You can export or delete your data at any time.',
+    body: 'Cloud conversations are permanently deleted within 24 hours of an account deletion request. You can export or delete your data at any time.',
   },
 ] as const;
 

@@ -42,9 +42,7 @@ export type NativeMessageType =
   | 'RESOLVE_CHAT_APPROVAL'
   | 'CANCEL_COMPUTER_USE'
   | 'OPEN_SIDE_PANEL'
-  | 'GET_COOKIES'
   | 'SET_COOKIE'
-  | 'CLEAR_COOKIES'
   | 'GET_ALL_TABS'
   | 'CREATE_TAB'
   | 'CLOSE_TAB'
@@ -68,8 +66,6 @@ export type NativeMessageType =
   | 'WEBMCP_CALL_TOOL'
   | 'WEBMCP_TOOLS_CHANGED'
   | 'NLWEB_DETECTED'
-  | 'GET_CONSOLE_LOGS'
-  | 'CLEAR_CONSOLE_LOGS'
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
@@ -246,6 +242,8 @@ export interface GetPageInfoResponse {
   title?: string;
   html?: string;
   selectedText?: string;
+  /** Structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.) — data, not instructions. */
+  metadata?: import('./page-metadata').PageMetadata;
   error?: string;
 }
 
@@ -591,17 +589,6 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
 
-export interface GetCookiesMessage extends BaseMessage {
-  type: 'GET_COOKIES';
-  url: string;
-}
-
-export interface GetCookiesResponse {
-  success: boolean;
-  data?: chrome.cookies.Cookie[];
-  error?: string;
-}
-
 export interface CookieDetails {
   name: string;
   value: string;
@@ -619,17 +606,6 @@ export interface SetCookieMessage extends BaseMessage {
 
 export interface SetCookieResponse {
   success: boolean;
-  error?: string;
-}
-
-export interface ClearCookiesMessage extends BaseMessage {
-  type: 'CLEAR_COOKIES';
-  url: string;
-}
-
-export interface ClearCookiesResponse {
-  success: boolean;
-  cleared?: number;
   error?: string;
 }
 
@@ -836,31 +812,6 @@ export interface RemoveTabFromGroupMessage extends BaseMessage {
 export interface TabGroupResponse {
   success: boolean;
   grouped?: boolean;
-  error?: string;
-}
-
-export interface ConsoleLogEntry {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  message: string;
-  timestamp: number;
-}
-
-export interface GetConsoleLogsMessage extends BaseMessage {
-  type: 'GET_CONSOLE_LOGS';
-}
-
-export interface GetConsoleLogsResponse {
-  success: boolean;
-  logs?: ConsoleLogEntry[];
-  error?: string;
-}
-
-export interface ClearConsoleLogsMessage extends BaseMessage {
-  type: 'CLEAR_CONSOLE_LOGS';
-}
-
-export interface ClearConsoleLogsResponse {
-  success: boolean;
   error?: string;
 }
 
@@ -1078,9 +1029,7 @@ export type ExtensionMessage =
   | ResumeChatRunMessage
   | ResolveChatApprovalMessage
   | OpenSidePanelMessage
-  | GetCookiesMessage
   | SetCookieMessage
-  | ClearCookiesMessage
   | GetAllTabsMessage
   | CreateTabMessage
   | CloseTabMessage
@@ -1106,8 +1055,6 @@ export type ExtensionMessage =
   | NLWebDetectedMessage
   | AddTabToGroupMessage
   | RemoveTabFromGroupMessage
-  | GetConsoleLogsMessage
-  | ClearConsoleLogsMessage
   | SaveShortcutMessage
   | ListShortcutsMessage
   | DeleteShortcutMessage
@@ -1146,9 +1093,7 @@ export type ExtensionResponse =
   | ElementInfoResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
-  | GetCookiesResponse
   | SetCookieResponse
-  | ClearCookiesResponse
   | GetAllTabsResponse
   | CreateTabResponse
   | CloseTabResponse
@@ -1158,8 +1103,6 @@ export type ExtensionResponse =
   | WebMCPDiscoverToolsResponse
   | WebMCPCallToolResponse
   | TabGroupResponse
-  | GetConsoleLogsResponse
-  | ClearConsoleLogsResponse
   | ShortcutResponse
   | ScheduledTaskResponse
   | GetQuickModeResponse

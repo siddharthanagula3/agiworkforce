@@ -61,5 +61,6 @@
   "upgradeRequired": "需要升级",
   "upgradeMessage": "此功能需要更高的订阅计划。",
   "limitReached": "已达到限制",
-  "limitMessage": "您已达到 {{limit}} 的限制。"
+  "limitMessage": "您已达到 {{limit}} 的限制。",
+  "heroLedePart2": "AGI 托管云已面向个人使用开放公测（Public Alpha）。Team 为自助购买、按席位计费；当您的组织需要定制化治理与协商条款时，Enterprise 由销售协助提供。"
 }

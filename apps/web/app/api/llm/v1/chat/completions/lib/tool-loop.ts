@@ -74,6 +74,16 @@ import {
 } from '@/lib/e2b/generated-files';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import {
+  type AgiWorkPlanStep,
+  advanceAgiWorkPlan,
+  agiWorkGoalProgressEvent,
+  agiWorkPlanEvent,
+  agiWorkPlanProgressEvents,
+  agiWorkPlanningDirective,
+  buildAgiWorkPlan,
+  parseAgiWorkPlanSteps,
+} from './agiwork-plan';
+import {
   collectGeneratedFileRefs,
   persistGeneratedFiles,
   type GeneratedFileRef,
@@ -1366,6 +1376,13 @@ export async function* runToolLoop(
     initialSequence: options.initialEventSequence,
   });
   const showWorkPhases = processed.chatRequest?.work_mode === 'agiwork';
+  // CAP-048 AGI Work goal + plan. The goal is stored on the run's journal and
+  // threaded into a tool-free planning turn; the resulting plan is surfaced live
+  // (`x_agiwork_plan`) and durably (progress events). Plan is visibility-only —
+  // it never gates tool execution. Held in loop scope so the terminal path can
+  // re-emit the plan's final status.
+  const agiWorkGoal = showWorkPhases ? processed.chatRequest?.agi_work_goal : undefined;
+  let agiWorkPlan: AgiWorkPlanStep[] = [];
   const taskId = turnId;
   let taskState: AgentTaskState | undefined = options.resume
     ? 'awaiting_input'
@@ -1663,6 +1680,7 @@ export async function* runToolLoop(
           baseline: e2bBaseline,
           userId: options.userId,
           model: responseModel,
+          ...(conversationId ? { conversationId } : {}),
         });
         files.push(...harvest.files);
         failedCount += harvest.failedCount;
@@ -1683,6 +1701,9 @@ export async function* runToolLoop(
           provider: 'e2b',
           origin: 'e2b-execution-result',
           model: responseModel,
+          // Provenance for the Library (migration 0081). Deleting the
+          // conversation nulls this; it never removes the file.
+          ...(conversationId ? { conversationId } : {}),
         });
         if (outcome.ok) {
           files.push(outcome.file);
@@ -1747,6 +1768,19 @@ export async function* runToolLoop(
   ): AsyncGenerator<Uint8Array> {
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
+    }
+    // CAP-048: close out the live plan queue honestly. `tool-use` is a mid-loop
+    // suspend (approval), not a terminal state, so the plan keeps its in-flight
+    // status; every real terminal resolves it.
+    if (agiWorkPlan.length > 0 && reason !== 'tool-use') {
+      const transition =
+        reason === 'cancelled'
+          ? 'cancel'
+          : reason === 'error' || reason === 'refusal'
+            ? 'fail'
+            : 'complete';
+      agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, transition);
+      yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
     }
     if (reason === 'cancelled') {
       yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
@@ -1968,6 +2002,63 @@ export async function* runToolLoop(
     if (await shouldStopForCancellation()) {
       yield* flushTerminal('cancelled');
       return;
+    }
+
+    // ── AGI Work goal + planning turn (CAP-048) ──────────────────────────────
+    // Runs once, at the start of a FRESH AGI Work run (never on a resume or a
+    // durable-invocation continuation, which already carry the plan in their
+    // replayed journal). The goal is stored on the journal; a tool-free model
+    // call then commits to the plan the user watches. Both are additive and
+    // visibility-only — a failed or empty plan is NEVER fatal and NEVER gates
+    // tool execution, so the run proceeds exactly as it does today.
+    if (showWorkPhases && agiWorkGoal && !options.resume && !options.invocationContinuation) {
+      yield encoder.encode(eventStream.emit(agiWorkGoalProgressEvent(agiWorkGoal)));
+
+      try {
+        const planTurn = await runProviderStepWithFailover(0, {
+          ...llmRequest,
+          messages: [...messages, { role: 'user', content: agiWorkPlanningDirective(agiWorkGoal) }],
+          // A plan is a decision, not tool work: the model must answer with the
+          // step list, not start calling tools. Never appended to `messages`, so
+          // the run's real context is not polluted by the planning JSON.
+          tools: undefined,
+          tool_choice: undefined,
+          stream: true,
+        });
+        // The planning turn is a real billed provider call — meter it exactly
+        // like every loop step so its tokens are never free.
+        mergeObservedUsage(observedUsage, planTurn.usage);
+        if (await shouldStopForCancellation()) {
+          yield* flushTerminal('cancelled');
+          return;
+        }
+        // Prefer the thinking-stripped public text; fall back to the raw
+        // accumulated content when the provider adapter did not populate it.
+        const planText = planTurn.canonicalText || planTurn.textContent || '';
+        agiWorkPlan = buildAgiWorkPlan(parseAgiWorkPlanSteps(planText));
+        if (agiWorkPlan.length > 0) {
+          // Live queue: whole plan, pending, then the first step in progress.
+          agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, 'start');
+          yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+          // Durable record: one progress event per committed step.
+          for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+            yield encoder.encode(eventStream.emit(planEvent));
+          }
+        } else {
+          logger.warn(
+            { provider: processed.provider, requestId: processed.requestId },
+            '[tool-loop] AGI Work planning turn produced no parseable steps',
+          );
+        }
+      } catch (err) {
+        logger.error(
+          {
+            provider: processed.provider,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          '[tool-loop] AGI Work planning turn failed; continuing without a plan',
+        );
+      }
     }
 
     // ── Manual-approval resume preamble ──────────────────────────────────────

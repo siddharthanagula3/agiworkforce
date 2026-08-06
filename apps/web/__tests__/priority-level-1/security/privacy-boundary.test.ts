@@ -4,14 +4,17 @@
  * Local, BYOK, and Managed Cloud are separate trust boundaries (CLAUDE.md).
  * These tests exercise the REAL boundary logic:
  *   - apps/web/lib/byok-access.ts        → Local provider classification
- *   - apps/web/lib/managed-compute-gate.ts → Managed Cloud is gated until the
- *                                            private-beta flag is set
+ *   - apps/web/lib/managed-compute-gate.ts → Managed Cloud is open by default
+ *                                            (public alpha, 2026-06-27); the
+ *                                            AGI_MANAGED_COMPUTE_PRIVATE_BETA
+ *                                            env is an incident kill-switch
  *
  * They verify that:
  *   1. Local providers are classified as Local (run on-device), never folded
  *      into a remote/BYOK bucket.
- *   2. Managed Cloud requests are blocked (403) unless the private-beta flag is
- *      explicitly enabled — i.e. no silent public routing to managed compute.
+ *   2. Managed Cloud requests are blocked (403) only when the kill-switch env
+ *      re-gates access ('0'/'false'/'off'); open by default otherwise — and
+ *      Local is never silently routed to managed compute.
  *   3. The only exception (free-trial economy prompts) is opt-in per request.
  */
 

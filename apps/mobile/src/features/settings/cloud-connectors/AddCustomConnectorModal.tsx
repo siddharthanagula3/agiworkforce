@@ -8,7 +8,16 @@
  * authoritative and its error message is surfaced verbatim.
  */
 import { useState, useCallback, useLayoutEffect, useRef } from 'react';
-import { Modal, View, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import {
+  Modal,
+  View,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { addCustomConnector, type CustomConnectorResult } from '@/services/connectors';
@@ -37,6 +46,7 @@ export function AddCustomConnectorModal({
   onAdded,
 }: AddCustomConnectorModalProps) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const appMode = useChatAppModeStore((state) => state.appMode);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const [name, setName] = useState('');
@@ -133,13 +143,26 @@ export function AddCustomConnectorModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
+      {/*
+       * KeyboardAvoidingView belongs INSIDE <Modal> — RN renders a Modal into its
+       * own native window, so an ancestor outside it does nothing. This sheet is
+       * bottom-anchored and every one of its three fields sits below the fold of
+       * an open keyboard, so without this the user could not see what they were
+       * typing nor reach the Add button, and there is no tap-outside dismiss.
+       */}
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View
           style={{
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            padding: 20,
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            // Clear the home indicator: this sheet is flush to the bottom edge.
+            paddingBottom: 20 + insets.bottom,
             gap: 12,
           }}
         >
@@ -226,7 +249,7 @@ export function AddCustomConnectorModal({
             </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

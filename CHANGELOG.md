@@ -6,6 +6,111 @@ Last updated: 2026-08-04
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — enterprise directory sync (SCIM 2.0)] — 2026-08-05
+
+### Added
+
+- **First-party SCIM 2.0 service provider (`/api/scim/v2`).** The Enterprise
+  page has been selling "user and group provisioning from your IdP" against a
+  control plane that stored a directory id and provisioned nothing. It now
+  provisions: `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
+  and `/Groups` with GET/POST/PUT/PATCH/DELETE, `userName eq` / `externalId eq`
+  / `emails.value eq` filtering, 1-based `startIndex`/`count` pagination,
+  ListResponse and Error envelopes on `application/scim+json`, and both the
+  Okta (`{"op":"replace","path":"active"}`) and Entra (`{"value":{"active":…}}`)
+  PATCH shapes. Bulk, sort and ETag are advertised as UNSUPPORTED in
+  ServiceProviderConfig rather than stubbed. Migration
+  `0084_scim_provisioning.sql` (additive; `0076` untouched) adds `scim_tokens`,
+  `scim_provisioned_users`, `scim_groups`, `scim_group_members`, and
+  `directory_sync_events` — the last of which had a TypeScript row type in
+  `neon-types.ts` with no table behind it.
+- **SCIM bearer credentials with a real lifecycle.** `scim_<16hex>_<48hex>`,
+  CSPRNG-generated, Argon2id-hashed (64MB/t3/p4), prefix-indexed so
+  verification is one row read and one Argon2 pass, returned exactly once at
+  mint, revocable, expirable, `last_used_at`-tracked, constant-time compared,
+  and never logged. Minted and revoked at
+  `/api/admin/directory-sync/tokens`.
+- **Admin surface at `/admin/directory-sync`.** Before this, `grep` found ZERO
+  callers of `/api/admin/directory-sync` anywhere in the repo — a control plane
+  no human could reach. Connections, token mint/revoke, the SCIM base URL to
+  paste into the IdP, and recent IdP activity are all live.
+- `docs/enterprise/directory-sync.md` — the shipped behaviour, including what
+  is deliberately not implemented.
+
+### Fixed
+
+- **Directory sync had no entitlement gate at all.** A free-tier org owner could
+  register an identity-provider connection. Every directory-sync and SCIM route
+  now gates on `canUseBillingPlanCapability(plan, 'enterprise_controls')` and
+  fails closed — including on a plan string the catalog does not recognise.
+  Because subscriptions are per-user with no org-level plan, the entitlement
+  subject is pinned at mint time (`scim_tokens.created_by_user_id`) and
+  re-evaluated on EVERY request, so a lapsed subscription or an issuer who
+  loses their admin role stops provisioning immediately instead of a cached
+  decision outliving the plan. Both refusals are recorded to
+  `directory_sync_events` so the outage is explainable.
+- **First-membership-wins organization resolution.** The route resolved the
+  caller's org with `where user_id = $1 and role in ('owner','admin') limit 1`
+  and no organization filter, so an admin of two organizations silently
+  operated on whichever row came back first. Harmless while it only stored a
+  directory id; not harmless once a SCIM token can be minted against the wrong
+  tenant. The caller now names the organization, and an implicit resolution is
+  accepted only when it is unambiguous.
+
+### Notes
+
+- SCIM carries no app user, so RLS cannot be the tenant boundary for it: the
+  routes run on the owner connection and every statement carries an explicit
+  `connection_id`/`organization_id` predicate. `check:db-isolation` would not
+  catch a mistake there, so cross-tenant isolation is covered by tests.
+- This product cannot mint identities (no Clerk user-creation call, no
+  invitation table, `profiles` rows are lazy), so a SCIM user with no AGI
+  account is created as an honest PENDING resource that grants no membership
+  and says so in the response. It links on the next SCIM write once the account
+  exists; sign-in-time linking is a tracked gap. Deprovisioning has no such gap.
+- An IdP group can never map to `owner` (database CHECK), and SCIM never
+  removes an owner's membership.
+
+## [Unreleased — demo-ready desktop wave: AGI Code, durable agent sessions, Electron garnish, WDIO sweep] — 2026-08-04
+
+### Added
+
+- **AGI Code mounted (Local-only).** `CodeWorkspace` (real 3-pane IDE: file
+  tree with live FS watching, Monaco tabs, diff viewer) moved out of the
+  excluded `experimental/` dir and mounted in `DesktopShellV3` behind three
+  trust-boundary layers (nav visibility, navigate guard, Managed-mode
+  eviction). Fixed the FileTree unstable-callback render loop the WDIO sweep
+  caught (max-update-depth crash on open, 3-of-5 runs; regression test
+  mutation-checked).
+- **Durable cloud agent sessions.** Initial agentic turns now run on the
+  Vercel Workflow transport (kill-switch `AGI_DURABLE_INITIAL_TURNS`): close
+  the laptop and the run continues server-side; the workflow persists the
+  assistant turn on every outcome; the runs list exposes pending approvals
+  (TTL-guarded); TasksPage (desktop+web) and mobile can approve/deny from any
+  device via the existing checkpoint endpoint; desktop detaches on quit
+  (explicit Stop still cancels) and reattaches on conversation open with
+  cursor-safe replay; Tasks nav badge counts runs waiting on the user.
+  Fixed a real billing defect en route: tool-loop turns now get the 24h
+  usage-reservation lease (was 900s → silent mid-run refunds).
+- **Electron shell garnish.** Global quick-ask panel (Alt+Shift+Space,
+  keep-alive, cursor-display positioning), screenshot-to-chat
+  (Cmd+Shift+2: capture → clipboard → composer paste, windows hidden during
+  capture), tray with menu, JSON settings, shortcut-collision fallbacks.
+  Fixed the focus bug where pastes/summons landed on the skip-link, and the
+  Tauri floating-window hotkey double-toggle (appeared dead).
+- **Honest UI wiring.** Connectors grid shows only server-available or
+  connected connectors (48 "Coming soon" tiles removed); AutomationBuilder
+  folder-browse opens a real directory picker; lazy panels show a spinner
+  instead of a blank void; collapsed Local rail regained its missing
+  Scheduled entry (nav parity now pinned by test).
+- **WDIO click-sweep audit** (`nav-click-sweep.spec.ts` + `wdio/support/dom.ts`):
+  drives the real binary through every nav item, rail button, and settings
+  tab asserting panel identity, no dead-control toasts, no raw i18n keys —
+  3 consecutive clean runs post-fixes. Screenshot set feeds the parity review;
+  remaining findings recorded in known-flaws.
+- Docs: source-of-truth/decision-register/roadmap corrected (CodeModeHome was
+  deleted; no Dispatch subpanel exists); D5 resolved as mounted.
+
 ## [Unreleased — cloud-only Electron desktop shell (macOS)] — 2026-08-04
 
 ### Added

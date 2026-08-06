@@ -267,4 +267,76 @@ describe('managed Cloud agent-run client', () => {
       ManagedCloudAgentRunAbortError,
     );
   });
+
+  describe('answering an approval from a surface that is not watching the run', () => {
+    function resumeClient(response: Response) {
+      const fetchImpl = vi.fn(async () => response);
+      const client = createManagedCloudAgentRunClient({
+        fetchImpl,
+        getAuthToken: async () => 'token-1',
+        decorateMutationHeaders: (headers) => ({ ...headers, 'x-csrf-token': 'csrf-1' }),
+      });
+      return { client, fetchImpl };
+    }
+
+    it('posts the decisions and releases the continuation stream it will not read', async () => {
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new TextEncoder().encode('data: {}\n\n'));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const { client, fetchImpl } = resumeClient(
+        new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+      );
+
+      await client.resumeRun(RUN_ID, [{ toolCallId: 'call-1', decision: 'approved' }]);
+
+      expect(fetchImpl).toHaveBeenCalledWith(
+        '/api/llm/v1/chat/completions/approve',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            run_id: RUN_ID,
+            tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+          }),
+          headers: expect.objectContaining({ 'x-csrf-token': 'csrf-1' }),
+        }),
+      );
+      // The continuation is durable, so nothing is lost by letting go — and a
+      // stream left open from a list view would be pinned forever.
+      expect(cancelled).toBe(true);
+    });
+
+    it('names the two outcomes a person can act on instead of a generic HTTP failure', async () => {
+      const conflict = resumeClient(
+        jsonResponse(
+          { error: { message: 'This approval is already being resumed.' } },
+          {
+            status: 409,
+          },
+        ),
+      );
+      await expect(
+        conflict.client.resumeRun(RUN_ID, [{ toolCallId: 'call-1', decision: 'approved' }]),
+      ).rejects.toMatchObject({ name: 'ManagedCloudAgentRunAlreadyResumingError', status: 409 });
+
+      const expired = resumeClient(
+        jsonResponse({ error: { message: 'This approval request expired.' } }, { status: 410 }),
+      );
+      await expect(
+        expired.client.resumeRun(RUN_ID, [{ toolCallId: 'call-1', decision: 'rejected' }]),
+      ).rejects.toMatchObject({ name: 'ManagedCloudAgentRunApprovalExpiredError', status: 410 });
+    });
+
+    it('rejects a malformed decision set before it reaches the network', async () => {
+      const { client, fetchImpl } = resumeClient(jsonResponse({}));
+
+      await expect(client.resumeRun(RUN_ID, [])).rejects.toBeTruthy();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
 });

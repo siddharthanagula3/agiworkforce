@@ -227,6 +227,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     estimateCost: vi.fn(() => 5),
     calculateCost: vi.fn(() => 4),
     getInputCostPerMtok: vi.fn(() => 3.0),
+    getCacheWriteCostPerMtok: vi.fn(() => 3.0),
   },
 }));
 

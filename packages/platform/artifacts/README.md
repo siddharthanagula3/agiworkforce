@@ -24,11 +24,12 @@ persistence, transport, and platform I/O adapters.
 - Managed-cloud wire schemas stay in `@agiworkforce/cloud-contracts`.
 - Surface persistence, transport, rendering, and privileged file I/O stay in
   the owning application.
-- This package must not depend on applications, `@agiworkforce/services`,
-  `@agiworkforce/stores`, or `@agiworkforce/sync`.
+- This package must not depend on applications or `@agiworkforce/sync`.
 
-`@agiworkforce/services` and `@agiworkforce/stores` temporarily re-export this
-package for compatibility. New first-party code imports this owner directly.
+Import this package directly. The transitional `@agiworkforce/services` and
+`@agiworkforce/stores` facades that once re-exported it were deleted at M8
+(2026-07-15); `scripts/check-artifact-sync-ownership.mjs` guards against them
+reappearing.
 
 ## Commands
 

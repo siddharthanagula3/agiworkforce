@@ -252,7 +252,53 @@ export interface DeviceAuthorizationMockOptions {
  * (`requestDeviceAuthorization` / `pollDeviceAuthorization`), which is what the
  * desktop client parses.
  */
+/**
+ * Commands whose mocks MUST be live in the page before a sign-in is driven.
+ * If any is missing, the app performs REAL device authorization over HTTP —
+ * and with a web dev server running on localhost:3000 that produces a real
+ * device code plus an endless (never-approved) poll loop, which is exactly
+ * the "owned Cloud sign-in window never closed" hang measured on 2026-08-04.
+ */
+const DEVICE_AUTH_MOCKED_COMMANDS = [
+  'account_store_api_base_url',
+  'account_start_device_authorization',
+  'account_poll_device_authorization',
+];
+
+/** Page-side mock entries the app's invoke seam will actually consult. */
+async function missingPageMocks(commands: string[]): Promise<string[]> {
+  return browser.execute((names: string[]) => {
+    const mocks =
+      (window as unknown as { __wdio_mocks__?: Record<string, unknown> }).__wdio_mocks__ ?? {};
+    return names.filter((name) => typeof mocks[name] !== 'function');
+  }, commands);
+}
+
 export async function mockDeviceAuthorization(
+  options: DeviceAuthorizationMockOptions = {},
+): Promise<void> {
+  await registerDeviceAuthorizationMocks(options);
+
+  // The service's own per-session mock-store clear reliably fails ("A
+  // sessionId is required for this command" at every session end), so a later
+  // spec file's registration can hit the stale Node-side cache and never be
+  // pushed into the fresh document. Verify the page seam and re-register once
+  // through a full reset before letting a sign-in run against real HTTP.
+  let missing = await missingPageMocks(DEVICE_AUTH_MOCKED_COMMANDS);
+  if (missing.length > 0) {
+    await browser.tauri.restoreAllMocks().catch(() => {});
+    await registerDeviceAuthorizationMocks(options);
+    missing = await missingPageMocks(DEVICE_AUTH_MOCKED_COMMANDS);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Device-authorization mocks never reached the page seam (missing: ${missing.join(', ')}). ` +
+        'Driving sign-in now would perform REAL device authorization.',
+    );
+  }
+}
+
+async function registerDeviceAuthorizationMocks(
   options: DeviceAuthorizationMockOptions = {},
 ): Promise<void> {
   const subject = options.subject ?? 'user_wdio';

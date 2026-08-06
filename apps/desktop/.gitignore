@@ -1,1 +1,5 @@
 .vercel
+
+# Native WDIO evidence: screenshots written by wdio/support/dom.ts
+# resolveScreenDir(). Review artifacts, never repository content.
+wdio/screenshots/

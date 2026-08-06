@@ -22,6 +22,7 @@ import type {
   ScheduledTask,
 } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
 import {
   loadShortcuts,
@@ -130,7 +131,11 @@ import {
   findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
 } from './features/cloud-bridge/managedRunControl';
-import { getManagedCloudAuthContext } from './features/cloud-bridge/freeTrialClient';
+import {
+  getManagedCloudAuthContext,
+  getManagedModelAccess,
+} from './features/cloud-bridge/freeTrialClient';
+import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
   isCurrentManagedCloudOperation,
@@ -3227,19 +3232,9 @@ async function handleMessageAsync(
       }
     }
 
-    case 'GET_COOKIES': {
-      const cookieMsg = message as import('./types').GetCookiesMessage;
-      return handleGetCookies(cookieMsg);
-    }
-
     case 'SET_COOKIE': {
       const cookieMsg = message as import('./types').SetCookieMessage;
       return handleSetCookie(cookieMsg);
-    }
-
-    case 'CLEAR_COOKIES': {
-      const cookieMsg = message as import('./types').ClearCookiesMessage;
-      return handleClearCookies(cookieMsg);
     }
 
     case 'GET_ALL_TABS': {
@@ -3460,19 +3455,6 @@ async function handleMessageAsync(
         // Tab may not be in a group
       }
       return { success: true, grouped: false } as ExtensionResponse;
-    }
-
-    case 'GET_CONSOLE_LOGS':
-    case 'CLEAR_CONSOLE_LOGS': {
-      let resolvedTabId = tabId;
-      if (!resolvedTabId) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        resolvedTabId = activeTab?.id;
-      }
-      if (!resolvedTabId) {
-        return { success: false, error: 'No tab ID' } as ExtensionResponse;
-      }
-      return forwardToContentScript(resolvedTabId, message);
     }
 
     case 'SAVE_SHORTCUT':
@@ -3921,6 +3903,20 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
+      // Resolve the automation model this account is entitled to. A Max /
+      // Enterprise plan allows the premium computer-use slot; every other tier
+      // resolves back to the balanced one. This read is advisory — a failure
+      // must not block a run the user is otherwise allowed to start, so it
+      // degrades to the tier-agnostic default rather than failing closed.
+      const computerUseModel = resolveComputerUseModel(
+        await getManagedModelAccess(authContext.token)
+          .then((access) => access.subscriptionTier)
+          .catch(() => null),
+      );
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+
       clearPendingComputerUseStart(cuRunId);
       const lease = computerUseRuns.begin({
         runId: cuRunId,
@@ -3957,9 +3953,9 @@ async function handleMessageAsync(
               type: 'AGI_CU_APPROVE_REQUEST',
               requestId,
               toolName,
-              description: `${toolName}(${Object.entries(args)
-                .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-                .join(', ')})`,
+              // A sentence the user can actually consent to, not a stringified
+              // function call. See describeAction.ts for why.
+              description: describeComputerUseAction(toolName, args),
             });
             // Wait for the side panel's response (or timeout after 30 s → DENY)
             const decision = await new Promise<boolean>((resolve, reject) => {
@@ -4027,6 +4023,7 @@ async function handleMessageAsync(
         : undefined; // allow-all (no gate)
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
+        model: computerUseModel,
         signal: lease.controller.signal,
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
         resolveOwnedCredential: () => assertComputerUseOwnership(lease),
@@ -4290,38 +4287,6 @@ function isCookieDomainAllowed(urlOrDomain: string): boolean {
   return !BLOCKED_COOKIE_DOMAINS.some((entry) => matchCookieBlock(hostname, entry));
 }
 
-async function handleGetCookies(
-  message: import('./types').GetCookiesMessage,
-): Promise<ExtensionResponse> {
-  try {
-    let { url } = message;
-    if (!url) {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      url = activeTab?.url ?? '';
-    }
-    if (!url) {
-      return {
-        success: false,
-        error: 'Could not resolve a URL for cookie access.',
-      } as ExtensionResponse;
-    }
-    if (!isCookieDomainAllowed(url)) {
-      return {
-        success: false,
-        error: 'Cookie access for this domain is blocked for security.',
-      } as ExtensionResponse;
-    }
-    const cookies = await chrome.cookies.getAll({ url });
-    return { success: true, data: cookies } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to get cookies', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get cookies',
-    } as ExtensionResponse;
-  }
-}
-
 async function handleSetCookie(
   message: import('./types').SetCookieMessage,
 ): Promise<ExtensionResponse> {
@@ -4355,46 +4320,6 @@ async function handleSetCookie(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to set cookie',
-    } as ExtensionResponse;
-  }
-}
-
-async function handleClearCookies(
-  message: import('./types').ClearCookiesMessage,
-): Promise<ExtensionResponse> {
-  try {
-    let { url } = message;
-    if (!url) {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      url = activeTab?.url ?? '';
-    }
-    if (!url) {
-      return {
-        success: false,
-        error: 'Could not resolve a URL for cookie clearing.',
-      } as ExtensionResponse;
-    }
-    if (!isCookieDomainAllowed(url)) {
-      return {
-        success: false,
-        error: 'Cookie access for this domain is blocked for security.',
-      } as ExtensionResponse;
-    }
-    const cookies = await chrome.cookies.getAll({ url });
-    await Promise.all(
-      cookies.map((cookie) =>
-        chrome.cookies.remove({
-          url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain}${cookie.path}`,
-          name: cookie.name,
-        }),
-      ),
-    );
-    return { success: true, cleared: cookies.length } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to clear cookies', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to clear cookies',
     } as ExtensionResponse;
   }
 }

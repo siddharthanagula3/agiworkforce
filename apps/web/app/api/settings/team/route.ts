@@ -11,12 +11,24 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
+import { expirePendingInvitations } from '@/lib/services/organization-invitation-service';
 import { requireTeamAdminAccess } from './team-admin-access';
 
+/**
+ * `owner` is deliberately absent.
+ *
+ * 0085_organization_seats_lifecycle.sql makes "exactly one owner" a database
+ * fact (idx_org_members_single_owner). Ownership therefore moves only through
+ * POST /api/settings/organization/transfer-ownership, which demotes and
+ * promotes atomically. Accepting `owner` here could only ever produce a unique
+ * violation, so it is rejected at the edge with an actionable message.
+ */
 const AddMemberSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
   email: z.string().email('Invalid email address'),
-  role: z.enum(['owner', 'admin', 'member', 'viewer']).default('member'),
+  role: z.enum(['admin', 'member', 'viewer']).default('member'),
 });
 
 type MemberWithProfile = OrganizationMemberRow & {
@@ -113,98 +125,120 @@ async function handleAddMember(request: NextRequest) {
   const { organizationId, email, role } = parsed.data;
 
   const db = getNeonDb();
-  const access = await requireTeamAdminAccess(db, userId);
+  await requireTeamAdminAccess(db, userId, organizationId);
 
-  const member = await db.transaction(async (tx) => {
-    // Serialize membership mutations so a future persisted seat limit and
-    // ownership rules remain race-safe.
-    await tx.query(
-      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
-      [organizationId],
-    );
+  const member = await withSeatAccountingErrors(() =>
+    db.transaction(async (tx) => {
+      // Ordering nicety only. Correctness rests on the
+      // `organizations_seats_within_license` CHECK and the row lock the seat
+      // trigger takes on the organization row (0085) — this advisory lock is
+      // NOT the guarantee, because not every membership writer takes it.
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+        [organizationId],
+      );
 
-    const [requesterMembership] = await tx.query<OrganizationMemberRow>(
-      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+      const [requesterMembership] = await tx.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
        where organization_id = $1 and user_id = $2
        limit 1`,
-      [organizationId, userId],
-    );
+        [organizationId, userId],
+      );
 
-    if (!requesterMembership) {
-      throw createError.forbidden('You are not a member of this organization');
-    }
-    if (!['owner', 'admin'].includes(requesterMembership.role)) {
-      throw createError.forbidden('Only owners and admins can add team members');
-    }
-    if (role === 'owner' && requesterMembership.role !== 'owner') {
-      throw createError.forbidden('Only owners can add another owner');
-    }
+      if (!requesterMembership) {
+        throw createError.forbidden('You are not a member of this organization');
+      }
+      if (!['owner', 'admin'].includes(requesterMembership.role)) {
+        throw createError.forbidden('Only owners and admins can add team members');
+      }
 
-    const [targetProfile] = await tx.query<
-      Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
-    >(
-      `select id, email, display_name, avatar_url
+      // Release seats held by invitations that have already lapsed, so a dead
+      // invitation can never block a live seat grant.
+      await expirePendingInvitations(tx, organizationId);
+
+      const [targetProfile] = await tx.query<
+        Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
+      >(
+        `select id, email, display_name, avatar_url
        from public.profiles
        where lower(email) = lower($1)
        limit 1`,
-      [email],
-    );
-
-    if (!targetProfile) {
-      throw createError.validation(
-        'No AGI account uses that email. Ask them to create an AGI account, then try again. No invitation was sent.',
+        [email],
       );
-    }
 
-    const [existing] = await tx.query<OrganizationMemberRow>(
-      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+      if (!targetProfile) {
+        // This route adds an EXISTING account directly. Onboarding someone who
+        // has no account yet is what the invitation lifecycle is for, so point
+        // there rather than dead-ending. No email is sent from either path —
+        // the invitation endpoint returns a link the inviter delivers.
+        throw createError.validation(
+          'No AGI account uses that email. Send an invitation instead: POST /api/settings/team/invitations returns a link you deliver yourself. No email was sent.',
+        );
+      }
+
+      const [existing] = await tx.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
        where organization_id = $1 and user_id = $2
        limit 1`,
-      [organizationId, targetProfile.id],
-    );
-
-    if (existing) {
-      throw createError.conflict('This user is already a member of the organization');
-    }
-
-    if (access.maxMembers !== null) {
-      const [countRow] = await tx.query<{ member_count: string }>(
-        `select count(*)::text as member_count
-         from public.organization_members
-         where organization_id = $1`,
-        [organizationId],
+        [organizationId, targetProfile.id],
       );
-      if (Number.parseInt(countRow?.member_count ?? '0', 10) >= access.maxMembers) {
-        throw createError.conflict('This organization has reached its licensed member limit');
-      }
-    }
 
-    const [created] = await tx.query<MemberWithProfile>(
-      `insert into public.organization_members
+      if (existing) {
+        throw createError.conflict('This user is already a member of the organization');
+      }
+
+      // NO read-then-write seat check here. `organizations.seats_consumed` is
+      // moved by an AFTER INSERT trigger and bounded by the
+      // `organizations_seats_within_license` CHECK, so the INSERT below is what
+      // enforces the ceiling. Two admins racing for the last seat serialize on
+      // the organization row lock and the loser aborts with 23514, which
+      // withSeatAccountingErrors turns into an actionable 409. A count read here
+      // would let both of them pass.
+      const [created] = await tx.query<MemberWithProfile>(
+        `insert into public.organization_members
          (organization_id, user_id, role, provisioning_source, provisioned_at, joined_at)
        values ($1, $2, $3, 'manual', now(), now())
        returning
          organization_id, user_id, role, provisioning_source, provisioned_at, joined_at,
          $4::text as email, $5::text as display_name, $6::text as avatar_url`,
-      [
-        organizationId,
-        targetProfile.id,
-        role,
-        targetProfile.email ?? email,
-        targetProfile.display_name ?? targetProfile.email ?? email,
-        targetProfile.avatar_url,
-      ],
-    );
+        [
+          organizationId,
+          targetProfile.id,
+          role,
+          targetProfile.email ?? email,
+          targetProfile.display_name ?? targetProfile.email ?? email,
+          targetProfile.avatar_url,
+        ],
+      );
 
-    if (!created) {
-      throw createError.conflict('The team member could not be added');
-    }
-    return created;
-  });
+      if (!created) {
+        throw createError.conflict('The team member could not be added');
+      }
+      return created;
+    }),
+  );
 
   logger.info({ userId, organizationId, targetUserId: member.user_id }, 'Team member added');
+
+  // Audit: membership grant. Org-scoped, so it is dual-written to
+  // enterprise_audit_events for the org-admin audit export. The target's email
+  // is intentionally omitted — the stable user id is enough to trace, and an
+  // audit trail should not become a second copy of the directory.
+  await recordAuditEvent({
+    userId,
+    eventType: 'member_invited',
+    request,
+    organizationId,
+    detail: {
+      resourceType: 'organization_member',
+      resourceId: member.user_id,
+      organizationId,
+      targetUserId: member.user_id,
+      role: member.role,
+    },
+  });
 
   return NextResponse.json({ member: formatMember(member, userId) }, { status: 201 });
 }

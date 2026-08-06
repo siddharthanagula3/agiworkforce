@@ -102,6 +102,7 @@ export default function TasksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState ?? 'active');
+  const [resolvingRunId, setResolvingRunId] = useState<string | null>(null);
   const isCloudMode = appMode === 'cloud';
   const isForeground = appState === 'active';
 
@@ -196,6 +197,43 @@ export default function TasksScreen() {
       if (timeout) clearTimeout(timeout);
     };
   }, [clerkUserId, cloudUnlocked, fetchRuns, isCloudMode, isForeground]);
+
+  /**
+   * Answer a run's outstanding approval from the phone.
+   *
+   * The point of a durable run is that the device that started it does not have
+   * to be the device that unblocks it. One decision covers every pending call
+   * because the server only accepts a complete decision set.
+   */
+  const handleResolveApproval = useCallback(
+    async (run: CloudAgentRun, decision: 'approved' | 'rejected') => {
+      const pending = run.pendingApproval;
+      if (!pending) return;
+      const account = captureCloudAccountEpoch();
+      if (!account) return;
+      setResolvingRunId(run.id);
+      try {
+        await createMobileCloudAgentRunClient().resumeRun(
+          run.id,
+          pending.toolCalls.map((call) => ({ toolCallId: call.toolCallId, decision })),
+        );
+      } catch (cause) {
+        if (!isCloudAccountEpochCurrent(account)) return;
+        setError(
+          cause instanceof Error && cause.name === 'ManagedCloudAgentRunAlreadyResumingError'
+            ? 'Another device already answered this approval'
+            : cause instanceof Error && cause.name === 'ManagedCloudAgentRunApprovalExpiredError'
+              ? 'This approval expired and the task cannot continue from it'
+              : 'Your decision could not be sent',
+        );
+      } finally {
+        if (isCloudAccountEpochCurrent(account)) setResolvingRunId(null);
+        // Whether it worked or raced, the list is now stale.
+        await fetchRuns().catch(() => undefined);
+      }
+    },
+    [fetchRuns],
+  );
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -381,6 +419,8 @@ export default function TasksScreen() {
                         })
                     : undefined
                 }
+                onResolveApproval={(decision) => void handleResolveApproval(item, decision)}
+                resolving={resolvingRunId === item.id}
               />
             );
           }}
@@ -443,14 +483,19 @@ function TaskCard({
   title,
   colors,
   onPress,
+  onResolveApproval,
+  resolving,
 }: {
   run: CloudAgentRun;
   title: string;
   colors: ColorScheme;
   onPress?: () => void;
+  onResolveApproval?: (decision: 'approved' | 'rejected') => void;
+  resolving?: boolean;
 }) {
   const presentation = statePresentation(run.state, colors);
   const Icon = presentation.Icon;
+  const pendingApproval = run.state === 'awaiting_input' ? run.pendingApproval : undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -495,6 +540,68 @@ function TaskCard({
         </View>
         {onPress ? <ChevronRight size={18} color={colors.textMuted} /> : null}
       </View>
+
+      {pendingApproval && onResolveApproval ? (
+        <View
+          style={{
+            marginTop: 14,
+            paddingTop: 14,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>
+            Waiting for your approval
+          </Text>
+          {pendingApproval.toolCalls.map((call) => (
+            <View key={call.toolCallId} style={{ marginTop: 8 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 13 }} numberOfLines={1}>
+                {call.name}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={2}>
+                {call.argsPreview}
+              </Text>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <Pressable
+              onPress={() => onResolveApproval('approved')}
+              disabled={resolving}
+              accessibilityRole="button"
+              accessibilityLabel={`Approve task: ${title}`}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: resolving ? 0.5 : 1,
+                backgroundColor: colors.textPrimary,
+              }}
+            >
+              <Text style={{ color: colors.accentText, fontWeight: '700' }}>Approve</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onResolveApproval('rejected')}
+              disabled={resolving}
+              accessibilityRole="button"
+              accessibilityLabel={`Deny task: ${title}`}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: resolving ? 0.5 : 1,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>Deny</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

@@ -92,7 +92,8 @@ const sendCloudApprovalResume = vi.fn();
 const generateCloudImage = vi.fn();
 const followRun = vi.fn();
 const cancelRun = vi.fn();
-const createCleanupClient = vi.fn((_credential?: unknown) => ({ followRun, cancelRun }));
+const getRun = vi.fn();
+const createCleanupClient = vi.fn((_credential?: unknown) => ({ followRun, cancelRun, getRun }));
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
   // Declared inside the factory: vi.mock is hoisted above module scope.
@@ -118,7 +119,7 @@ vi.mock('../../api/cloudApi', () => ({
   generateCloudImage: (...args: unknown[]) => generateCloudImage(...args),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   sendCloudApprovalResume: (...args: unknown[]) => sendCloudApprovalResume(...args),
-  createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun }),
+  createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun, getRun }),
   createDesktopCloudAgentRunCleanupClient: (credential: unknown) => createCleanupClient(credential),
 }));
 
@@ -877,7 +878,7 @@ describe('CloudRuntime', () => {
   });
 
   describe('runtime lifecycle', () => {
-    it('disposes an active Cloud turn without emitting or persisting a synthetic failure', async () => {
+    it('detaches from a durable run on dispose instead of stopping work the user paid for', async () => {
       sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
         const signal = args[6] as AbortSignal;
         const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
@@ -897,17 +898,9 @@ describe('CloudRuntime', () => {
       await runtime.dispose();
       await send;
 
-      expect(cancelRun).toHaveBeenCalledWith(
-        MANAGED_RUN_ID,
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-      expect(createCleanupClient).toHaveBeenCalledWith(
-        expect.objectContaining({
-          accountId: 'user-desktop',
-          accessToken: 'desktop-cloud-token',
-          sessionEpoch: 1,
-        }),
-      );
+      // Closing the window, remounting, or signing out is not the user
+      // pressing Stop. The run keeps going server-side and is reattachable.
+      expect(cancelRun).not.toHaveBeenCalled();
       expect(saveMessage).toHaveBeenCalledTimes(savesBeforeDispose);
       expect(events).toEqual(eventsBeforeDispose);
       await expect(runtime.sendMessage('conv_after_dispose', 'must not send')).rejects.toThrow(
@@ -915,33 +908,179 @@ describe('CloudRuntime', () => {
       );
     });
 
-    it('cancels a durable run with the bearer used after same-account rotation', async () => {
+    it('still cancels the run when the user explicitly stops the turn', async () => {
       sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
         const signal = args[6] as AbortSignal;
         const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
-        const onCredential = args[15] as (credential: {
-          accountId: string;
-          accessToken: string;
-        }) => void;
-        onCredential({ accountId: 'user-desktop', accessToken: 'rotated-token-2' });
         onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
         await new Promise<void>((resolve) => {
           signal.addEventListener('abort', () => resolve(), { once: true });
         });
       });
-      cancelRun.mockResolvedValue({ id: MANAGED_RUN_ID, state: 'cancelled' });
 
       const runtime = new CloudRuntime('user-desktop');
-      const send = runtime.sendMessage('conv_rotated_cleanup', 'keep working');
+      const send = runtime.sendMessage('conv_explicit_stop', 'keep working');
       await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
 
-      await runtime.dispose();
+      runtime.stopGeneration('conv_explicit_stop');
       await send;
 
-      expect(createCleanupClient).toHaveBeenCalledWith({
-        accountId: 'user-desktop',
-        accessToken: 'rotated-token-2',
+      await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
+    });
+  });
+
+  describe('reattaching to a run this client never streamed', () => {
+    const persisted = {
+      assistantMessageId: 'assistant-reattach',
+      model: 'claude-sonnet-5',
+      content: 'Analysing the repository.',
+      runReference: { runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH, lastSequence: 4 },
+    };
+
+    it('resumes strictly after the persisted cursor so nothing already on screen is said twice', async () => {
+      getRun.mockResolvedValue({
+        run: managedRun('running', 6),
+        events: [],
+        nextAfterSequence: 4,
       });
+      followRun.mockImplementation(
+        async (
+          _runId: string,
+          options: TestFollowOptions,
+        ): Promise<ManagedCloudAgentRunFollowResult> => {
+          options.onEvent({
+            schemaVersion: 3,
+            sessionId: 'session-reattach',
+            turnId: 'turn-reattach',
+            sequence: 5,
+            emittedAtMs: 5_000,
+            event: { type: 'text-delta', delta: ' Found three problems.' },
+          });
+          const run = managedRun('completed', 5);
+          options.onSnapshot({ run, events: [], nextAfterSequence: 5 });
+          return { run, lastSequence: 5 };
+        },
+      );
+
+      const runtime = new CloudRuntime('user-desktop');
+      const events = collectEvents(runtime);
+      await runtime.reattachConversation('conv_reattach', persisted);
+
+      // The cursor, not text comparison, is what prevents duplicate prose: the
+      // replay is only ever asked for events the stored message does not cover.
+      expect(followRun).toHaveBeenCalledWith(
+        MANAGED_RUN_ID,
+        expect.objectContaining({ afterSequence: 4 }),
+      );
+      expect(events.filter((event) => event.type === 'content')).toEqual([
+        expect.objectContaining({ content: ' Found three problems.' }),
+      ]);
+      // The saved turn is the prose already stored plus only what was new.
+      expect(saveMessage).toHaveBeenCalledWith(
+        'conv_reattach',
+        expect.objectContaining({
+          id: 'assistant-reattach',
+          content: 'Analysing the repository. Found three problems.',
+        }),
+      );
+    });
+
+    it('does nothing for a run that already finished', async () => {
+      getRun.mockResolvedValue({
+        run: managedRun('completed', 4),
+        events: [],
+        nextAfterSequence: 4,
+      });
+
+      const runtime = new CloudRuntime('user-desktop');
+      await runtime.reattachConversation('conv_terminal', persisted);
+
+      expect(followRun).not.toHaveBeenCalled();
+      expect(saveMessage).not.toHaveBeenCalled();
+    });
+
+    it('rebuilds a live approval card for a turn the server saved with no approval metadata', async () => {
+      const run = managedRun('awaiting_input', 7);
+      getRun.mockResolvedValue({
+        run: {
+          ...run,
+          pendingApproval: {
+            requestedAt: '2026-07-17T20:00:05.000Z',
+            toolCalls: [
+              {
+                toolCallId: 'call_write',
+                name: 'fs_write',
+                argsPreview: '{"path":"./report.md"}',
+              },
+            ],
+          },
+        },
+        events: [],
+        nextAfterSequence: 7,
+      });
+
+      const runtime = new CloudRuntime('user-desktop');
+      const events = collectEvents(runtime);
+      await runtime.reattachConversation('conv_awaiting', persisted);
+
+      // Nothing was streamed to this client, so there is no persisted
+      // `cloudApproval` projection to hydrate from — the card is rebuilt from
+      // the server's own account of what it is blocked on.
+      expect(events).toEqual([
+        expect.objectContaining({
+          type: 'tool_approval_request',
+          toolCallId: 'call_write',
+          name: 'fs_write',
+          args: { path: './report.md' },
+        }),
+      ]);
+      expect(runtime.hasLiveApprovalTurn('conv_awaiting')).toBe(true);
+      expect(followRun).not.toHaveBeenCalled();
+    });
+
+    it('leaves an already-hydrated approval alone rather than rendering the card twice', async () => {
+      getRun.mockResolvedValue({
+        run: {
+          ...managedRun('awaiting_input', 7),
+          pendingApproval: {
+            requestedAt: '2026-07-17T20:00:05.000Z',
+            toolCalls: [
+              { toolCallId: 'call_write', name: 'fs_write', argsPreview: '{"path":"./x"}' },
+            ],
+          },
+        },
+        events: [],
+        nextAfterSequence: 7,
+      });
+
+      const runtime = new CloudRuntime('user-desktop');
+      const events = collectEvents(runtime);
+      await runtime.reattachConversation('conv_hydrated', {
+        ...persisted,
+        hasPersistedApproval: true,
+      });
+
+      expect(events).toEqual([]);
+    });
+
+    it('refuses to reattach over a turn this session is already streaming', async () => {
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const signal = args[6] as AbortSignal;
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+
+      const runtime = new CloudRuntime('user-desktop');
+      const send = runtime.sendMessage('conv_live', 'do the work');
+      await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+
+      await runtime.reattachConversation('conv_live', persisted);
+
+      // Two writers of one assistant message is how a transcript forks.
+      expect(getRun).not.toHaveBeenCalled();
+      runtime.stopGeneration('conv_live');
+      await send;
     });
   });
 
@@ -1311,66 +1450,67 @@ describe('CloudRuntime', () => {
       ).toBe(true);
     });
 
-    it.each(['stop', 'dispose'] as const)(
-      'cancels an in-flight approved durable run on %s with its dispatched bearer',
-      async (action) => {
-        const runtime = new CloudRuntime('user-desktop');
-        runtime.hasLiveApprovalTurn('conv_approval_cancel', {
-          assistantMessageId: 'assistant-approval',
+    function arrangeResolvingApproval(runtime: CloudRuntime) {
+      runtime.hasLiveApprovalTurn('conv_approval_cancel', {
+        assistantMessageId: 'assistant-approval',
+        runId: MANAGED_RUN_ID,
+        runReference: {
           runId: MANAGED_RUN_ID,
-          runReference: {
-            runId: MANAGED_RUN_ID,
-            runPath: MANAGED_RUN_PATH,
-            lastSequence: 3,
-          },
-          model: 'gpt-5',
-          assistantContent: 'Waiting.',
-          calls: [{ toolCallId: 'call_approve', name: 'write_file', args: {} }],
+          runPath: MANAGED_RUN_PATH,
+          lastSequence: 3,
+        },
+        model: 'gpt-5',
+        assistantContent: 'Waiting.',
+        calls: [{ toolCallId: 'call_approve', name: 'write_file', args: {} }],
+      });
+      sendCloudApprovalResume.mockImplementationOnce(async (...args: unknown[]) => {
+        const onError = args[4] as (error: Error) => void;
+        const signal = args[5] as AbortSignal;
+        const onCredential = args[8] as (credential: {
+          accountId: string;
+          accessToken: string;
+        }) => void;
+        onCredential({ accountId: 'user-desktop', accessToken: 'approval-token-2' });
+        await new Promise<void>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              onError(new DOMException('Stopped', 'AbortError'));
+              resolve();
+            },
+            { once: true },
+          );
         });
-        sendCloudApprovalResume.mockImplementationOnce(async (...args: unknown[]) => {
-          const onError = args[4] as (error: Error) => void;
-          const signal = args[5] as AbortSignal;
-          const onCredential = args[8] as (credential: {
-            accountId: string;
-            accessToken: string;
-          }) => void;
-          onCredential({ accountId: 'user-desktop', accessToken: 'approval-token-2' });
-          await new Promise<void>((resolve) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                onError(new DOMException('Stopped', 'AbortError'));
-                resolve();
-              },
-              { once: true },
-            );
-          });
-        });
+      });
+      return runtime.resolveToolApproval('conv_approval_cancel', 'call_approve', 'approved');
+    }
 
-        const resolution = runtime.resolveToolApproval(
-          'conv_approval_cancel',
-          'call_approve',
-          'approved',
-        );
-        await vi.waitFor(() => expect(sendCloudApprovalResume).toHaveBeenCalledOnce());
+    it('cancels an in-flight approved durable run on stop with its dispatched bearer', async () => {
+      const runtime = new CloudRuntime('user-desktop');
+      const resolution = arrangeResolvingApproval(runtime);
+      await vi.waitFor(() => expect(sendCloudApprovalResume).toHaveBeenCalledOnce());
 
-        if (action === 'stop') runtime.stopGeneration('conv_approval_cancel');
-        else await runtime.dispose();
+      runtime.stopGeneration('conv_approval_cancel');
 
-        await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
-        await vi.waitFor(() =>
-          expect(cancelRun).toHaveBeenCalledWith(
-            MANAGED_RUN_ID,
-            ...(action === 'dispose'
-              ? [expect.objectContaining({ signal: expect.any(AbortSignal) })]
-              : []),
-          ),
-        );
-        expect(createCleanupClient).toHaveBeenCalledWith({
-          accountId: 'user-desktop',
-          accessToken: 'approval-token-2',
-        });
-      },
-    );
+      await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
+      expect(createCleanupClient).toHaveBeenCalledWith({
+        accountId: 'user-desktop',
+        accessToken: 'approval-token-2',
+      });
+    });
+
+    it('leaves an approved continuation running when the runtime is merely disposed', async () => {
+      const runtime = new CloudRuntime('user-desktop');
+      const resolution = arrangeResolvingApproval(runtime);
+      await vi.waitFor(() => expect(sendCloudApprovalResume).toHaveBeenCalledOnce());
+
+      await runtime.dispose();
+
+      await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
+      // The approved tools may already be executing server-side; tearing down
+      // this client must not retract a decision the user deliberately made.
+      expect(cancelRun).not.toHaveBeenCalled();
+    });
   });
 });

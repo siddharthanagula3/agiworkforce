@@ -49,28 +49,28 @@ The detailed current frontend contract is `docs/current/frontend-experience-cont
 
 The table below records production mounts and end-to-end reality found by the 2026-07-16 source audit. It supersedes older optimistic row text elsewhere in this file when they conflict. A source file, mock route, feature flag, or component is not capability evidence without a production mount and runtime path.
 
-| Capability                  | W                    | D                                                            | M                          | CLI                                      | VSC                                       | CHR                                      |
-| --------------------------- | -------------------- | ------------------------------------------------------------ | -------------------------- | ---------------------------------------- | ----------------------------------------- | ---------------------------------------- |
-| Primary shell               | Present              | Present                                                      | Present                    | Present                                  | Present                                   | Present                                  |
-| Chat/history                | Present              | Present across Local/BYOK/Cloud, Cloud path still incomplete | Present across Local/Cloud | Developer sessions, not consumer history | Developer sessions through CLI app-server | Separate browser-task history            |
-| First-class Work/Cowork run | Missing              | Missing                                                      | Missing                    | N/A                                      | N/A                                       | Workflow UI is not Cloud Work            |
-| Projects                    | Present              | Present                                                      | Present                    | Workspace only                           | Workspace only                            | N/A                                      |
-| General file ingestion      | Partial              | Partial/Present                                              | Partial                    | Developer files                          | Developer context                         | Images/screenshots only                  |
-| Artifacts/viewers           | Present/Partial      | Present/Partial                                              | Partial                    | Developer files/diffs only               | Developer files/diffs only                | Missing                                  |
-| Search/research             | Present/Partial      | Present/Partial                                              | Partial                    | Tool-driven                              | Workspace search                          | Page operations, no research run         |
-| Tools/approvals             | Present/Partial      | Present/Partial                                              | Present/Partial            | Present                                  | Present                                   | Present/Partial                          |
-| Voice                       | Dictation input only | Composer voice plus broken system-wide claim                 | Voice conversation present | Missing                                  | Missing                                   | Speech input only                        |
-| Remote developer control    | Missing              | Companion components unmounted                               | Missing                    | Host relay missing                       | Host relay missing                        | Native bridge is not Code Remote Control |
+| Capability                  | W                    | D                                                            | M                          | CLI                                                                                                                                   | VSC                                       | CHR                                      |
+| --------------------------- | -------------------- | ------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------- |
+| Primary shell               | Present              | Present                                                      | Present                    | Present                                                                                                                               | Present                                   | Present                                  |
+| Chat/history                | Present              | Present across Local/BYOK/Cloud, Cloud path still incomplete | Present across Local/Cloud | Developer sessions, not consumer history                                                                                              | Developer sessions through CLI app-server | Separate browser-task history            |
+| First-class Work/Cowork run | Missing              | Missing                                                      | Missing                    | N/A                                                                                                                                   | N/A                                       | Workflow UI is not Cloud Work            |
+| Projects                    | Present              | Present                                                      | Present                    | Workspace only                                                                                                                        | Workspace only                            | N/A                                      |
+| General file ingestion      | Partial              | Partial/Present                                              | Partial                    | Developer files                                                                                                                       | Developer context                         | Images/screenshots only                  |
+| Artifacts/viewers           | Present/Partial      | Present/Partial                                              | Partial                    | Developer files/diffs only                                                                                                            | Developer files/diffs only                | Missing                                  |
+| Search/research             | Present/Partial      | Present/Partial                                              | Partial                    | Tool-driven                                                                                                                           | Workspace search                          | Page operations, no research run         |
+| Tools/approvals             | Present/Partial      | Present/Partial                                              | Present/Partial            | Present                                                                                                                               | Present                                   | Present/Partial                          |
+| Voice                       | Dictation input only | Composer voice plus broken system-wide claim                 | Voice conversation present | Present (REPL voice: cpal capture, Whisper API/local binary, Local-mode egress gate — corrected 2026-08-05, cell was stale "Missing") | Missing                                   | Speech input only                        |
+| Remote developer control    | Missing              | Companion components unmounted                               | Missing                    | Host relay missing                                                                                                                    | Host relay missing                        | Native bridge is not Code Remote Control |
 
 Critical evidence:
 
 - Web production chat is `apps/web/features/chat/pages/WebChatPage.tsx`; `UnifiedChatPage.tsx` and `features/chat/v3/WebShellV3.tsx` are unmounted alternatives.
-- Desktop production shell is `apps/desktop/src/features/v3/DesktopShellV3.tsx`; its `V3Mode` is currently only `chat`.
+- Desktop production shell is `apps/desktop/src/features/v3/DesktopShellV3.tsx`. AGI Code (`CodeWorkspace`, 3-pane IDE) was mounted into it on 2026-08-04, Local-only. CORRECTED 2026-08-05: `cowork` is no longer "a placeholder" — the restructure removed it entirely (`V3Mode` is literally `'chat'`); a Cowork mode is future scope, not a mounted stub.
 - Mobile no longer advertises the hardcoded-empty Code Sessions surface. Managed
   Cloud code execution remains available inside chat and generated output remains
   available through Artifacts; cross-device developer-session control is missing.
 - VS Code's primary chat uses the CLI app-server while code-action/provider-stream settings retain a second execution path.
-- Chrome's production `apps/extension/src/side_panel.ts` is a 7,728-line ownership hotspot. Quick mode's previously cosmetic persistence is fixed: outgoing turns carry the preference and the Managed Cloud boundary applies the admitted `auto-economy` route without mutating the saved picker selection. The monolith split remains open.
+- Chrome's production `apps/extension/src/side_panel.ts` is a 9,359-line ownership hotspot (count refreshed 2026-08-05; the split remains open tracked debt — the 2026-08-05 Class-1 pass fixed its 9 user-facing defects without attempting the split). Quick mode's previously cosmetic persistence is fixed: outgoing turns carry the preference and the Managed Cloud boundary applies the admitted `auto-economy` route without mutating the saved picker selection. The monolith split remains open.
 - Chrome restricted-page UX now keeps Managed Cloud chat usable, shows an accessible restriction notice, and disables only page context/browser automation instead of silently removing the visible state.
 - `packages/ai/model-registry/catalog/harnesses.json` remains the authority for `wired`, `partial`, and `unwired` runtime capability states.
 
@@ -139,6 +139,113 @@ taken with it:
   independent sweeps keep finding live counterexamples. The ledger is corrected
   to match verified code at the end of this program, and the checker then
   enforces reality.
+
+## 2026-08-05 Class-1 Closure Status (autonomous pass, fastest-first)
+
+Per-item detail and evidence live in `docs/agent-context/known-flaws.md`
+(dated 2026-08-05 sections); this records surface status only. Every closure
+was independently verified (build + tests + code-read; web additionally driven
+live via Playwright).
+
+- **CLI — autonomous Class-1 at zero** (7/7: dead composable router cut per
+  Decision #23/OQ-1; `/worktree` `/approve` `/raw` `/subagents` `/task` wired;
+  verbose/debug real; session archive/unarchive/delete with confirmation;
+  MCP add/remove/enable/disable with input validation; 1,838 tests green).
+- **Chrome — autonomous Class-1 at zero** (9/9 user-facing fixed/cut; 1,429
+  tests green; monolith split remains tracked debt, not a defect).
+- **Web — autonomous Class-1 at zero** (theme toggle re-verified working —
+  earlier "dead control" report retracted as a render-timing false alarm;
+  Team-yearly wired fail-closed pending Stripe Price; `/agi-work` rewritten to
+  the shipped feature).
+- **Desktop — batch-1 at zero** (honest local-whisper gating, dead speech
+  module cut, memory-decay bridge fixed, PdfEditor + Google Batch fully cut,
+  symbol indexer cut, customize-nav premise stale/locked with test; `/git`
+  slash panel NOT actionable — surface archived, product decision pending).
+  Batch-2 (Fn-dictation honesty, progressive artifact streaming, CAP-032
+  orphan sweep) in flight.
+- **Mobile — autonomous Class-1 at zero** (7/7 incl. notification dead-end
+  repoint, canonical provider-switch gate, privacy-manifest correction
+  [code-read only — verify on next prebuild], rgba sweep + lint enforcement,
+  TTS dead-state migration, content-report intake end-to-end, real fork/branch
+  relation). Remaining Mobile items are external-gated (StoreKit, HealthKit,
+  background-voice entitlement, device-grants host-relay, connector OAuth
+  backend).
+- **VS Code — autonomous side complete** (the one stub is unreachable and
+  fail-closed by design, annotated in-code 2026-08-05; the substantive gap is
+  the signed-CLI-distribution/bootstrap story — release infrastructure, not
+  extension code).
+
+Open cross-surface blockers awaiting the consolidated founder decision round
+are tracked in the Class-1 task ledger, not re-listed here.
+
+## 2026-08-05 Founder Decisions (Sequencing, Scope, Work-Run Correction)
+
+Decided by the founder on 2026-08-05:
+
+- **Ordering supersession:** the six surfaces are completed
+  shortest-remaining-work-first — estimate remaining Class-1
+  (partial/unwired/stub/broken) work per surface, complete the fastest surface
+  first, then the next fastest, until all six are at zero. Supersedes this
+  file's 2026-08-01 "Desktop to zero first" bullet and Decision #20's old
+  serial order. The routing substrate (registry dated pricing + OpenAI
+  cache-write billing, ExecutionPlan/CPST design doc, CPST telemetry,
+  rules-based router) completes before surface closure begins.
+- **Electron cloud-only shell is in scope** for the completion bar alongside
+  Tauri (kept per the "one surface, two shells" architecture).
+- **Class-2 scope:** dedicated deep research and a hosted plugin registry are
+  approved builds (`audit/capability-gaps.csv` CAP-045/CAP-046), starting after
+  Class-1 closure; in-chat commerce/checkout is declined (CAP-047). The
+  2026-08-01 mobile Build list (incl. Apple Health MS-1) stands.
+- **Work-run row correction (2026-08-05 code audit; runtime verification
+  pending):** the 2026-07-16 "First-class Work/Cowork run: Missing" W cell is
+  stale. Web AGI Work is production-mounted and substantially working: the
+  composer Chat|AGI Work toggle in `ChatComposerNew.tsx` is gated by the
+  `agi_work` billing capability client- and server-side; `applyWorkMode()`
+  (request-processor.ts) forces web_search/web_fetch/code_execution into the
+  real tool loop; durable initial turns are on by default; run history is
+  mounted at `/tasks` backed by `cloud_agent_runs`; approvals UI exists inline
+  and on Tasks; deliverables surface in `WorkSessionPanel`; Mobile and Desktop
+  consume the same contract. Remaining gaps: no structured goal-intake UI; the
+  visible "plan" is generic phase text, not a model-authored editable plan;
+  custom E2B execution stays staged behind `AGI_E2B_EXECUTION` per Decision
+  #22 (provider-native sandboxes serve by default); the `/agi-work` marketing
+  page describes a separate, unshipped Desktop dispatch product (waitlist
+  CTAs) — a naming collision to resolve. The row flips to Present/Partial only
+  after runtime/UI verification per the Definition Of Done.
+- **AGI Work scope (founder, 2026-08-05):** complete the Work shape on Web —
+  structured goal-intake UI, model-authored editable plan surface, `/agi-work`
+  naming-collision fix (executes within the web Class-1 pass, CAP-048) — AND
+  build the Desktop dispatch/scheduled-routines product the `/agi-work` page
+  advertises (CAP-049, after Class-1; depends on the host-relay/remote-control
+  contract MS-3/MS-18).
+- **Creation-four approvals (founder, 2026-08-05, all after Class-1):**
+  Sites-style publishing (CAP-015 resolved as Wire: CloudPublisher + public
+  serving route + web share UI on the existing `publishArtifact` service);
+  Live artifacts (CAP-050); Design workspace v1 — mount the orphaned
+  `CanvasWorkspace` whiteboard (CAP-051; full artboard/layers/prototype/deck
+  parity remains a separate future decision); AI-powered artifacts (CAP-052 —
+  approved despite security sensitivity; a security design review proving
+  WEB-13 stays closed is a hard precondition).
+- **Full-localization requirement (founder, 2026-08-05):** switching the app
+  language must translate the ENTIRE surface — every user-facing string routes
+  through i18n, every supported locale carries every bundle and key, no
+  hardcoded UI literals. Audit at decision time (web): locales en/es/hi; es is
+  key-complete vs en; hi is missing 4 of 7 bundles (`auth`, `chat`, `models`,
+  `pricing`); only 5 of 490 TSX component files use i18n at all, so the
+  settings LanguageSelector currently changes a small fraction of visible text
+  — a false control under the completion standard. Mechanical guard added:
+  `pnpm check:i18n-parity` (scripts/check-i18n-parity.mjs) enforces
+  bundle/key parity per locale (currently red on hi, truthfully); hardcoded
+  literals need the Class-1 i18n wiring pass plus a jsx-no-literals-style lint
+  scoped to user-facing components. Mobile and desktop carry i18n dependencies
+  with unaudited coverage — same requirement applies per surface.
+  confirmed by founder same day):\*_ Team is $25/seat/mo and $240/seat/yr
+  (Decision #22, founder-confirmed 2026-08-05 — superseding the earlier
+  $30/$299 figure and the Pro-pinned $20 working-tree value). Yearly checkout
+  is not yet wired: add `STRIPE*PRICE_TEAM_YEARLY*_`support end-to-end in the
+web Class-1 pass, and verify the Stripe dashboard unit_amount behind`STRIPE_PRICE_TEAM_MONTHLY_USD` is $25.00 (catalog/Stripe mismatch fails
+  checkout closed). Team INR remains founder-undecided (₹1,999 currently
+  configured; flag, not a contradiction).
 
 ## Global Product Rules
 
@@ -294,15 +401,15 @@ Code anchors: `apps/desktop/src/features/settings`, `apps/mobile/src/features/se
 
 ## Desktop Surface
 
-| Mode / component      | Required behavior                                                                                                                                                                | Current AGI status                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Chat mode             | Full local/BYOK/managed-gated chat with unified composer, artifacts, files, model selector, settings, sidebar.                                                                   | Partial/strongest current desktop area.                                                |
-| Cowork mode           | Home, projects, scheduled tasks, live artifacts, dispatch, customize, task list/status, onboarding checklist, task composer.                                                     | Partial: Cowork pages exist but `DesktopShellV3` still shows placeholder for `cowork`. |
-| Code mode / AGI Code  | Repo/folder dashboard, local folder add, branch/worktree, permissions, model/effort, usage plan, sessions, PRs, routines, terminal/actions, diff review.                         | Partial/Missing: `DesktopShellV3` still shows placeholder for `code`.                  |
-| Sidebar               | Search, collapse/expand, new chat, projects, artifacts, recent chats, modes, account.                                                                                            | Partial.                                                                               |
-| Desktop app controls  | Run on startup, quick access, voice shortcut, menu bar, keep awake, browser use, computer use, accessibility, screen recording, extensions.                                      | Partial.                                                                               |
-| Local compute host    | File generation, MCP, local models, native messaging, browser/computer-use approvals.                                                                                            | Partial.                                                                               |
-| Cloud mode onboarding | Managed cloud is public alpha on Web, Mobile, and Desktop. Desktop DCL-4 selects the shared `CloudRuntime` only for explicit signed-in Cloud mode; Local + BYOK remain isolated. | Public alpha; shared backend wired.                                                    |
+| Mode / component      | Required behavior                                                                                                                                                                | Current AGI status                                                                                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat mode             | Full local/BYOK/managed-gated chat with unified composer, artifacts, files, model selector, settings, sidebar.                                                                   | Partial/strongest current desktop area.                                                                                                                                      |
+| Cowork mode           | Home, projects, scheduled tasks, live artifacts, dispatch, customize, task list/status, onboarding checklist, task composer.                                                     | Partial: Cowork pages exist but `DesktopShellV3` still shows placeholder for `cowork`.                                                                                       |
+| Code mode / AGI Code  | Repo/folder dashboard, local folder add, branch/worktree, permissions, model/effort, usage plan, sessions, PRs, routines, terminal/actions, diff review.                         | Partial: `CodeWorkspace` (file tree, Monaco tabs, diff viewer) mounted in `DesktopShellV3` 2026-08-04, Local-only; dashboard, PRs, routines, terminal/actions remain absent. |
+| Sidebar               | Search, collapse/expand, new chat, projects, artifacts, recent chats, modes, account.                                                                                            | Partial.                                                                                                                                                                     |
+| Desktop app controls  | Run on startup, quick access, voice shortcut, menu bar, keep awake, browser use, computer use, accessibility, screen recording, extensions.                                      | Partial.                                                                                                                                                                     |
+| Local compute host    | File generation, MCP, local models, native messaging, browser/computer-use approvals.                                                                                            | Partial.                                                                                                                                                                     |
+| Cloud mode onboarding | Managed cloud is public alpha on Web, Mobile, and Desktop. Desktop DCL-4 selects the shared `CloudRuntime` only for explicit signed-in Cloud mode; Local + BYOK remain isolated. | Public alpha; shared backend wired.                                                                                                                                          |
 
 Primary paths: `apps/desktop/src/features/v3`, `apps/desktop/src/features/settings`, `apps/desktop/src/features/connectors`, `apps/desktop/src-tauri`, `packages/ui/unified-chat`.
 
@@ -334,17 +441,17 @@ Primary paths: `apps/mobile/app`, `apps/mobile/src/features`, `apps/mobile/store
 
 ## CLI And AGI Code
 
-| Component / option   | Competitive target                                   | AGI requirement                                                                                                          | Current AGI status                          |
-| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| Interactive REPL/TUI | Claude Code/Codex CLI interactive prompt.            | Slash commands, model/mode, memory, tools, permissions, hooks, sessions, voice, status.                                  | Partial.                                    |
-| Privacy modes        | AGI differentiator plus Claude/Codex permissions.    | `/privacy-mode`, local block, `/continue-with-byok`, managed gate.                                                       | Present/Partial.                            |
-| Slash commands       | Claude Code slash commands and Codex slash commands. | Built-ins plus custom project/user commands; discoverable `/` menu; MCP prompt commands.                                 | Partial.                                    |
-| Permissions          | Claude Code permissions and Codex approvals.         | allow/ask/deny/workspace/network/bypass modes; sensitive file deny; per-tool audit.                                      | Partial.                                    |
-| Hooks                | Claude Code hook events.                             | Pre/Post tool, notification, prompt submit, stop, subagent stop, compact, session start/end, config change where needed. | Partial/strong: hook coverage check passes. |
-| Subagents            | Claude Code/Codex subagents.                         | User/project subagents with separate context, tools, model, when-to-use metadata.                                        | Partial.                                    |
-| MCP/plugins/skills   | Claude/Codex integrations.                           | Install/update/config/list/status, OAuth, logs, managed allow/deny, slash prompts.                                       | Partial.                                    |
-| Sessions/worktrees   | Codex projects/worktrees and Claude sessions.        | Resume/fork/branch, worktree isolation, PR creation/review, diff preview, local/cloud continuation.                      | Partial.                                    |
-| Voice                | Claude Code voice and AGI voice requirement.         | Dictation/transcription, local fallback, voice settings.                                                                 | Partial.                                    |
+| Component / option   | Competitive target                                   | AGI requirement                                                                                                          | Current AGI status                                                                                                      |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Interactive REPL/TUI | Claude Code/Codex CLI interactive prompt.            | Slash commands, model/mode, memory, tools, permissions, hooks, sessions, voice, status.                                  | Partial.                                                                                                                |
+| Privacy modes        | AGI differentiator plus Claude/Codex permissions.    | `/privacy-mode`, local block, `/continue-with-byok`, managed gate.                                                       | Present/Partial.                                                                                                        |
+| Slash commands       | Claude Code slash commands and Codex slash commands. | Built-ins plus custom project/user commands; discoverable `/` menu; MCP prompt commands.                                 | Partial; `/worktree`, `/subagents`, `/task list`, `/approve`, `/raw` wired 2026-08-05.                                  |
+| Permissions          | Claude Code permissions and Codex approvals.         | allow/ask/deny/workspace/network/bypass modes; sensitive file deny; per-tool audit.                                      | Partial; `/approve` alias over `PermissionStore` added 2026-08-05.                                                      |
+| Hooks                | Claude Code hook events.                             | Pre/Post tool, notification, prompt submit, stop, subagent stop, compact, session start/end, config change where needed. | Partial/strong: hook coverage check passes.                                                                             |
+| Subagents            | Claude Code/Codex subagents.                         | User/project subagents with separate context, tools, model, when-to-use metadata.                                        | Partial; read-only `/subagents` (model/tools/when-to-use) + `/task list` views added 2026-08-05.                        |
+| MCP/plugins/skills   | Claude/Codex integrations.                           | Install/update/config/list/status, OAuth, logs, managed allow/deny, slash prompts.                                       | Partial; `/mcp add/remove/enable/disable/reconfigure/restart` over a validated writable registry added 2026-08-05.      |
+| Sessions/worktrees   | Codex projects/worktrees and Claude sessions.        | Resume/fork/branch, worktree isolation, PR creation/review, diff preview, local/cloud continuation.                      | Partial; `agi session archive/unarchive/delete` (confirmation-gated) + `/worktree` list/create/remove wired 2026-08-05. |
+| Voice                | Claude Code voice and AGI voice requirement.         | Dictation/transcription, local fallback, voice settings.                                                                 | Partial.                                                                                                                |
 
 Primary paths: `apps/cli/src`, `crates/agiworkforce-*`, `packages/contracts/types/src/suite-contracts.ts`.
 

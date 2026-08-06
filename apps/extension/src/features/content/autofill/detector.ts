@@ -38,6 +38,45 @@ import {
 } from './greenhouse';
 import { isAshbyUrl, findAshbyFormContainer, collectResolvableAshbyFields } from './ashby';
 
+/**
+ * Builds a document-resolvable, unique CSS selector for `el` by walking up the
+ * ancestor chain and emitting a `tag:nth-child(k)` segment per level, stopping at
+ * the nearest ancestor carrying an id.
+ *
+ * `:nth-child` counts position among ALL element siblings, so it is correct for
+ * an element picked out of a mixed input/textarea/select set. `:nth-of-type`
+ * (the previous approach) counts position among siblings of the SAME tag, so an
+ * index into a mixed-tag array pointed at the wrong element. The returned
+ * selector resolves back to `el` via `document.querySelector`.
+ */
+function cssEscapeIdent(value: string): string {
+  const g = globalThis as { CSS?: { escape?: (v: string) => string } };
+  if (g.CSS && typeof g.CSS.escape === 'function') return g.CSS.escape(value);
+  // Fallback for environments without CSS.escape (e.g. jsdom): backslash-escape
+  // anything outside a plain CSS identifier so the selector stays valid.
+  return value.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+}
+
+export function uniqueCssSelector(el: Element): string {
+  const segments: string[] = [];
+  let node: Element | null = el;
+  while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement) {
+    if (node.id) {
+      segments.unshift(`#${cssEscapeIdent(node.id)}`);
+      return segments.join(' > ');
+    }
+    const parent: Element | null = node.parentElement;
+    if (!parent) {
+      segments.unshift(node.tagName.toLowerCase());
+      break;
+    }
+    const index = Array.prototype.indexOf.call(parent.children, node) + 1;
+    segments.unshift(`${node.tagName.toLowerCase()}:nth-child(${index})`);
+    node = parent;
+  }
+  return segments.join(' > ');
+}
+
 // ─── LinkedIn URL patterns ────────────────────────────────────────────────────
 
 const LINKEDIN_URL_PATTERNS = [/linkedin\.com\/jobs\//i, /linkedin\.com\/job\//i];
@@ -112,11 +151,11 @@ function detectLinkedInFields(container: Element): DetectedField[] {
     if (name) return `[name="${CSS.escape(name)}"]`;
     const testId = el.getAttribute('data-test-text-entity-list-form-input');
     if (testId) return `[data-test-text-entity-list-form-input="${CSS.escape(testId)}"]`;
-    // Use position relative to the container
-    const allInputs = Array.from(container.querySelectorAll('input, textarea, select'));
-    const idx = allInputs.indexOf(el);
-    if (idx >= 0) return `input:nth-of-type(${idx + 1})`;
-    return '';
+    // Fall back to a structural nth-child path that resolves uniquely from the
+    // document (see uniqueCssSelector). The previous `input:nth-of-type(idx+1)`
+    // indexed into a mixed input/textarea/select array with a per-tag counter,
+    // targeting the wrong element.
+    return uniqueCssSelector(el);
   }
 
   // ── Standard input/textarea/select elements ──────────────────────────────

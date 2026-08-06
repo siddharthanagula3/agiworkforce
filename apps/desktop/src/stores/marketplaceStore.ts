@@ -3,7 +3,6 @@
  * Workflow Marketplace Store (Global)
  *
  * Wires all 36 marketplace Tauri commands via the api/marketplace.ts layer.
- * Local feature store lives at features/marketplace/marketplaceStore.ts.
  *
  * Uses types from types/marketplace.ts (snake_case fields — matches Tauri serde output).
  * All invoke() params use camelCase per Tauri IPC rules.
@@ -441,12 +440,15 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        // popularTags is deliberately NOT persisted: nothing outside this store
+        // reads it, so writing it to localStorage only produced stale disk state
+        // no surface could ever render. It remains in-memory state, so a future
+        // consumer can still use fetchPopularTags without a schema change.
         partialize: (state) => ({
           featured: state.featured,
           trending: state.trending,
           templates: state.templates,
           categoryCounts: state.categoryCounts,
-          popularTags: state.popularTags,
         }),
       },
     ),

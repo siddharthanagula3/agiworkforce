@@ -47,6 +47,13 @@ export interface ModelPickerOption {
 //
 // Phase B: replace this stub with real availability checks (e.g. query the
 // managed-compute beta status from the bridge or desktop agent).
+//
+// 2026-08-05 Class-1 review: intentionally NOT wired. No model in
+// packages/contracts/types/src/models.json sets `requiresEnvironment`, so this
+// path is unreachable today, and fail-closed ({ configured: false }) is the
+// correct default for a gate awaiting a real signal — wiring it to a bridge
+// query nothing exercises would be speculative. Revisit when the first
+// environment-gated model ships in the catalog.
 export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
   return { configured: false };
 }

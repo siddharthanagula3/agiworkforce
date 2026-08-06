@@ -189,6 +189,27 @@ export interface TwoFactorStatus {
   backupCodesRemaining?: number;
 }
 
+/**
+ * Read the failure message out of an API error body.
+ *
+ * `withErrorHandler` (lib/error-handler.ts) responds with
+ * `{ error: { code, message }, requestId }`, but the 2FA callers below used to
+ * read `body.error` as a string · that produced "[object Object]" in the UI for
+ * every rejected TOTP code. Both shapes are handled so a route that returns the
+ * flat `{ error: string }` form (e.g. the CSRF 403) still reads correctly.
+ */
+async function readTwoFactorError(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as {
+    error?: string | { message?: string };
+  } | null;
+  const raw = body?.error;
+  if (typeof raw === 'string' && raw.trim()) return raw;
+  if (raw && typeof raw === 'object' && typeof raw.message === 'string' && raw.message.trim()) {
+    return raw.message;
+  }
+  return `HTTP ${res.status}`;
+}
+
 export interface UserProfile {
   id: string;
   email?: string;
@@ -940,8 +961,15 @@ class SettingsService {
 
   // ===========================================================================
   // Two-Factor Authentication (TOTP) Methods
-  // TODO: All TOTP methods require a dedicated /api/settings/2fa server route
-  // so that TOTP secrets never transit the browser in plaintext.
+  //
+  // The TOTP secret never transits the browser in plaintext for storage: the
+  // server encrypts it before writing and only hands back the enrollment copy
+  // (secret + otpauth URL) that the authenticator app has to receive anyway.
+  //
+  // Every mutating call sends `x-csrf-token`. requireCsrfToken() waives the
+  // check for a cryptographically valid Bearer credential, but these routes
+  // also accept a Clerk cookie session, so a browser whose Clerk token fetch
+  // returns nothing would otherwise get a 403 it cannot explain.
   // ===========================================================================
 
   /**
@@ -956,7 +984,7 @@ class SettingsService {
 
       const res = await fetch('/api/settings/2fa', { headers });
       if (!res.ok) {
-        return { data: { enabled: false }, error: `HTTP ${res.status}` };
+        return { data: { enabled: false }, error: await readTwoFactorError(res) };
       }
       const json = (await res.json()) as {
         enabled: boolean;
@@ -983,7 +1011,7 @@ class SettingsService {
    * Calls POST /api/settings/2fa/setup
    * The secret is never stored in plaintext; the server encrypts before saving.
    */
-  async setup2FA(): Promise<{ data?: TOTPSetupResult; error?: string }> {
+  async setup2FA(): Promise<{ data?: TOTPSetupResult; error?: string; status?: number }> {
     try {
       const token = await getAuthToken();
       if (!token) return { error: 'User not authenticated' };
@@ -993,13 +1021,13 @@ class SettingsService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-csrf-token': await getCsrfToken(),
         },
         body: JSON.stringify({}),
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { error: err.error ?? `HTTP ${res.status}` };
+        return { error: await readTwoFactorError(res), status: res.status };
       }
 
       const json = (await res.json()) as {
@@ -1023,7 +1051,7 @@ class SettingsService {
    * Verify a TOTP code and enable 2FA on the account.
    * Must be called after setup2FA(). Calls POST /api/settings/2fa/verify
    */
-  async verify2FA(code: string): Promise<{ success: boolean; error?: string }> {
+  async verify2FA(code: string): Promise<{ success: boolean; error?: string; status?: number }> {
     try {
       const token = await getAuthToken();
       if (!token) return { success: false, error: 'User not authenticated' };
@@ -1033,13 +1061,13 @@ class SettingsService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-csrf-token': await getCsrfToken(),
         },
         body: JSON.stringify({ code }),
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { success: false, error: err.error ?? `HTTP ${res.status}` };
+        return { success: false, error: await readTwoFactorError(res), status: res.status };
       }
       return { success: true };
     } catch (error) {
@@ -1055,6 +1083,7 @@ class SettingsService {
     valid: boolean;
     usedBackupCode?: boolean;
     error?: string;
+    status?: number;
   }> {
     try {
       const token = await getAuthToken();
@@ -1065,19 +1094,19 @@ class SettingsService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-csrf-token': await getCsrfToken(),
         },
         body: JSON.stringify({ code }),
       });
 
+      if (!res.ok) {
+        return { valid: false, error: await readTwoFactorError(res), status: res.status };
+      }
+
       const json = (await res.json().catch(() => ({}))) as {
         valid?: boolean;
         used_backup_code?: boolean;
-        error?: string;
       };
-
-      if (!res.ok) {
-        return { valid: false, error: json.error ?? `HTTP ${res.status}` };
-      }
       return { valid: json.valid ?? false, usedBackupCode: json.used_backup_code };
     } catch (error) {
       return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -1089,7 +1118,7 @@ class SettingsService {
    * Requires the current TOTP code (or a backup code) to authorize.
    * Calls DELETE /api/settings/2fa
    */
-  async disable2FA(code: string): Promise<{ success: boolean; error?: string }> {
+  async disable2FA(code: string): Promise<{ success: boolean; error?: string; status?: number }> {
     try {
       const token = await getAuthToken();
       if (!token) return { success: false, error: 'User not authenticated' };
@@ -1099,13 +1128,13 @@ class SettingsService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-csrf-token': await getCsrfToken(),
         },
         body: JSON.stringify({ code }),
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { success: false, error: err.error ?? `HTTP ${res.status}` };
+        return { success: false, error: await readTwoFactorError(res), status: res.status };
       }
       return { success: true };
     } catch (error) {
@@ -1120,6 +1149,7 @@ class SettingsService {
   async regenerateBackupCodes(totpCode: string): Promise<{
     backupCodes?: string[];
     error?: string;
+    status?: number;
   }> {
     try {
       const token = await getAuthToken();
@@ -1130,13 +1160,13 @@ class SettingsService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-csrf-token': await getCsrfToken(),
         },
         body: JSON.stringify({ code: totpCode }),
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { error: err.error ?? `HTTP ${res.status}` };
+        return { error: await readTwoFactorError(res), status: res.status };
       }
       const json = (await res.json()) as { backup_codes: string[] };
       return { backupCodes: json.backup_codes };

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-30",
+  "lastUpdated": "2026-08-03",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -260,7 +260,6 @@
         "apps/desktop",
         "apps/mobile",
         "packages/platform/artifacts",
-        "packages/services",
         "packages/client/sync"
       ],
       "deployability": "cross-surface-contract-library",
@@ -276,14 +275,7 @@
       "path": "packages/platform/artifacts",
       "kind": "package",
       "canonicalOwner": "Artifact domain",
-      "consumers": [
-        "apps/desktop",
-        "apps/mobile",
-        "apps/web",
-        "packages/services",
-        "packages/stores",
-        "packages/client/sync"
-      ],
+      "consumers": ["apps/desktop", "apps/mobile", "apps/web", "packages/client/sync"],
       "deployability": "cross-surface-domain-library",
       "trustBoundary": "artifact derivation, client state, managed publish and cloud merge/apply",
       "status": "active-canonical-owner",
@@ -298,7 +290,7 @@
       "path": "packages/client/sync",
       "kind": "package",
       "canonicalOwner": "Cross-surface synchronization",
-      "consumers": ["apps/desktop", "apps/mobile", "packages/services"],
+      "consumers": ["apps/desktop", "apps/mobile"],
       "deployability": "cross-surface-domain-library",
       "trustBoundary": "typed managed-cloud delta validation and local apply mechanics",
       "status": "active-canonical-owner",
@@ -313,7 +305,7 @@
       "path": "packages/contracts/trust-boundaries",
       "kind": "package",
       "canonicalOwner": "Security and privacy platform",
-      "consumers": ["apps/desktop", "apps/mobile", "packages/services"],
+      "consumers": ["apps/desktop", "apps/mobile"],
       "deployability": "platform-neutral-policy-library",
       "trustBoundary": "classification of AGI-owned Managed Cloud hosts; no network I/O",
       "status": "active-canonical-owner",
@@ -327,7 +319,7 @@
       "path": "packages/contracts/licensing",
       "kind": "package",
       "canonicalOwner": "Enterprise platform and security",
-      "consumers": ["packages/services"],
+      "consumers": [],
       "deployability": "offline-verification-library",
       "trustBoundary": "signed enterprise license and policy verification",
       "status": "active-partial-adoption",
@@ -347,9 +339,7 @@
         "packages/ai/providers/anthropic",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/google",
-        "packages/ai/providers/groq",
         "packages/ai/providers/lmstudio",
-        "packages/ai/providers/mistral",
         "packages/ai/providers/moonshot",
         "packages/ai/providers/openai",
         "packages/ai/providers/openrouter",
@@ -380,9 +370,7 @@
         "packages/ai/providers/anthropic",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/google",
-        "packages/ai/providers/groq",
         "packages/ai/providers/lmstudio",
-        "packages/ai/providers/mistral",
         "packages/ai/providers/moonshot",
         "packages/ai/providers/ollama",
         "packages/ai/providers/openai",
@@ -515,20 +503,6 @@
       ]
     },
     {
-      "path": "packages/ai/providers/groq",
-      "kind": "package",
-      "canonicalOwner": "Provider platform",
-      "consumers": ["packages/ai/providers/factory"],
-      "deployability": "provider-adapter-library",
-      "trustBoundary": "Groq API egress",
-      "status": "active-single-composition-consumer",
-      "action": "keep",
-      "evidence": [
-        "packages/ai/providers/groq/src/index.ts",
-        "packages/ai/providers/factory/src/index.ts"
-      ]
-    },
-    {
       "path": "packages/ai/providers/lmstudio",
       "kind": "package",
       "canonicalOwner": "Provider platform",
@@ -539,20 +513,6 @@
       "action": "keep",
       "evidence": [
         "packages/ai/providers/lmstudio/src/index.ts",
-        "packages/ai/providers/factory/src/index.ts"
-      ]
-    },
-    {
-      "path": "packages/ai/providers/mistral",
-      "kind": "package",
-      "canonicalOwner": "Provider platform",
-      "consumers": ["packages/ai/providers/factory"],
-      "deployability": "provider-adapter-library",
-      "trustBoundary": "Mistral API egress",
-      "status": "active-single-composition-consumer",
-      "action": "keep",
-      "evidence": [
-        "packages/ai/providers/mistral/src/index.ts",
         "packages/ai/providers/factory/src/index.ts"
       ]
     },
@@ -592,9 +552,7 @@
         "apps/web",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/factory",
-        "packages/ai/providers/groq",
         "packages/ai/providers/lmstudio",
-        "packages/ai/providers/mistral",
         "packages/ai/providers/moonshot",
         "packages/ai/providers/openrouter",
         "packages/ai/providers/perplexity",
@@ -691,7 +649,6 @@
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
-        "packages/services",
         "packages/ui/unified-chat"
       ],
       "deployability": "pure-library",
@@ -710,7 +667,7 @@
       "path": "packages/ai/search",
       "kind": "package",
       "canonicalOwner": "Search platform",
-      "consumers": ["apps/web", "packages/services"],
+      "consumers": ["apps/web"],
       "deployability": "registry-query-library",
       "trustBoundary": "implemented web-search harness availability; no search execution or credentials",
       "status": "active-canonical-owner",
@@ -777,9 +734,7 @@
         "packages/ai/providers/anthropic",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/google",
-        "packages/ai/providers/groq",
         "packages/ai/providers/lmstudio",
-        "packages/ai/providers/mistral",
         "packages/ai/providers/moonshot",
         "packages/ai/providers/ollama",
         "packages/ai/providers/openai",

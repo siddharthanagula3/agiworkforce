@@ -39,7 +39,16 @@ export function SettingsScreenShell({
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <StatusBar style={statusBarStyle} />
       <View
-        style={{ height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
+        style={{
+          // minHeight, not height: the title below scales with Dynamic Type while
+          // a fixed box does not, and RN Views default to overflow:visible — so
+          // the text overlapped the content beneath instead of clipping cleanly.
+          minHeight: 50,
+          paddingVertical: 4,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 8,
+        }}
       >
         <Pressable
           onPress={goBack}

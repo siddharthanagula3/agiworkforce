@@ -61,5 +61,6 @@
   "upgradeRequired": "Upgrade erforderlich",
   "upgradeMessage": "Diese Funktion erfordert einen höheren Abonnementplan.",
   "limitReached": "Limit erreicht",
-  "limitMessage": "Sie haben Ihr {{limit}}-Limit erreicht."
+  "limitMessage": "Sie haben Ihr {{limit}}-Limit erreicht.",
+  "heroLedePart2": "Die verwaltete AGI-Cloud ist für die individuelle Nutzung in der offenen Public Alpha. Team ist Self-Service und wird pro Lizenz abgerechnet; Enterprise erfolgt mit Vertriebsbegleitung, wenn Ihre Organisation individuelle Governance und ausgehandelte Konditionen benötigt."
 }

@@ -171,12 +171,19 @@ export function attachScrollBehaviour(host: HTMLElement): () => void {
       hidden = true;
       host.style.opacity = '0';
       host.style.transform = 'translateY(16px)';
+      // `pointer-events:none` on the host does NOT block the button: it lives in
+      // a closed shadow root and sets `pointer-events:all`, which re-enables hit
+      // testing on itself regardless of the host. `visibility:hidden` removes the
+      // whole subtree (button included) from hit testing, so the invisible FAB is
+      // not a clickable target while hidden.
       host.style.pointerEvents = 'none';
+      host.style.visibility = 'hidden';
     } else if (hidden && delta < -20) {
       hidden = false;
       host.style.opacity = '1';
       host.style.transform = 'translateY(0)';
       host.style.pointerEvents = 'none'; // pointer-events on host stays none; button has 'all'
+      host.style.visibility = 'visible';
     }
 
     lastY = currentY;

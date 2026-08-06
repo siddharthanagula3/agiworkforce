@@ -1,17 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { useChatUIStore } from '@agiworkforce/unified-chat';
 import type { SharedArtifact } from '@agiworkforce/types';
+import {
+  publishArtifact as publishArtifactService,
+  type PublishResult,
+} from '@agiworkforce/artifacts';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
+import { createWebCloudPublisher } from './publishArtifactClient';
 import { toast } from 'sonner';
 
 // ============================================================================
@@ -73,10 +78,12 @@ function ArtifactViewer({
   artifact,
   versionHistory,
   onClose,
+  publishArtifact,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
   onClose: () => void;
+  publishArtifact?: () => Promise<PublishResult>;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -86,6 +93,7 @@ function ArtifactViewer({
         className="mt-0 rounded-none border-0"
         variant="panel"
         onClose={onClose}
+        {...(publishArtifact ? { publishArtifact } : {})}
       />
     </div>
   );
@@ -179,6 +187,43 @@ export function ArtifactsPanel() {
   const layout = useOverlayLayout();
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // CAP-015 slice 3: this panel is the host that finally supplies a
+  // `CloudPublisher`.
+  //
+  // `@agiworkforce/artifacts` has carried the injection point since AUDIT-FIX
+  // ART-27 with nothing behind it ("No surface ships a CloudPublisher yet"), so
+  // Publish degraded to a clipboard copy everywhere. Injecting the web adapter
+  // here — rather than importing the endpoint inside ArtifactPreview — keeps
+  // the viewer transport-free and lets tests drive it with a fake.
+  //
+  // `privacyMode: 'managed'` describes the publish DESTINATION (an AGI-hosted
+  // public page), not the provider that generated the artifact: the bytes are
+  // leaving the user's browser for AGI-managed storage no matter which model
+  // wrote them. That crossing is never silent — it happens only on an explicit
+  // Publish click and the resulting public URL is shown in the viewer.
+  // ---------------------------------------------------------------------------
+  const cloudPublisher = useMemo(
+    () => createWebCloudPublisher({ conversationId: activeConversationId ?? null }),
+    [activeConversationId],
+  );
+  const makePublishHandler = useCallback(
+    (artifact: Artifact) => () =>
+      publishArtifactService({
+        artifact: {
+          id: artifact.id,
+          title: artifact.title,
+          content: artifact.content,
+          type: artifact.type,
+          ...(artifact.language ? { language: artifact.language } : {}),
+        },
+        privacyMode: 'managed',
+        surface: 'web',
+        cloudPublisher,
+      }),
+    [cloudPublisher],
+  );
 
   // Only show artifacts that belong to the current conversation.
   // When there is no active conversation (new/empty chat), the list is empty.
@@ -378,7 +423,7 @@ export function ArtifactsPanel() {
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
           // Desktop: inline panel · width comes from the shared UI store
-          'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
+          'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:min-w-[280px] sm:shrink',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
         )}
@@ -522,6 +567,7 @@ export function ArtifactsPanel() {
                   artifact={selectedArtifact}
                   versionHistory={getArtifactVersions(selectedArtifact.id)}
                   onClose={() => setPanelOpen(false)}
+                  publishArtifact={makePublishHandler(selectedArtifact)}
                 />
               ) : (
                 <EmptyState />

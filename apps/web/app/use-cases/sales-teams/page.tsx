@@ -7,7 +7,6 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Sales teams: AGI',
@@ -45,7 +44,7 @@ export default function SalesTeamsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get notified
+              Get AGI Desktop
             </Link>
             <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
               Set Up BYOK
@@ -112,11 +111,11 @@ export default function SalesTeamsPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Brief better, route deliberately."
-          body="Get notified, bring your keys, and keep account context under your control while the team works."
+          body="Bring your own keys on Desktop and the CLI, and keep account context under your control while the team works."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
             { href: '/byok', label: 'Set Up BYOK' },
             { href: '/apps', label: 'Browse Apps & Connectors' },
           ]}

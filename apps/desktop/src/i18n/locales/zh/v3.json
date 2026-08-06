@@ -53,6 +53,7 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "code": "Code",
       "library": "资料库",
       "tasks": "任务",
       "customize": "Customize",

@@ -208,6 +208,44 @@ describe('attempt view (attribution + single reservation)', () => {
     expect(processed.chatRequest.model).toBe('primary-model');
     expect(processed.usedFallback).toBe(false);
   });
+
+  /**
+   * CPST Stage-0 telemetry (managed cloud only,
+   * docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2). This is
+   * the only place an additional provider attempt is created inside one billed
+   * request, so it is the only honest source of the `retries` counter.
+   */
+  it('counts each rotation as one retry and leaves the un-rotated request unknown', () => {
+    const processed = makeProcessed();
+    expect(processed.retries).toBeUndefined();
+
+    const first = buildFailoverAttemptView(processed, 'candidate-a', 'openai');
+    expect(first.retries).toBe(1);
+
+    const second = buildFailoverAttemptView(first, 'candidate-b', 'openai');
+    expect(second.retries).toBe(2);
+
+    // The primary view is never mutated, so a request that never rotated keeps
+    // reporting the counter as absent (unknown), not as zero.
+    expect(processed.retries).toBeUndefined();
+    expect(first.retries).toBe(1);
+  });
+
+  it('increments retries across successive plan rotations (production call shape)', () => {
+    // Regression: the plan previously built every attempt from the ORIGINAL
+    // request view, so `retries` evaluated to 1 on every rotation. This test
+    // rotates through the plan the way route.ts actually does.
+    const plan = makePlan(makeProcessed());
+
+    const first = plan.next(httpError(503));
+    expect(first).not.toBeNull();
+    expect(first!.processed.retries).toBe(1);
+
+    const second = plan.next(httpError(503));
+    expect(second).not.toBeNull();
+    expect(second!.model).not.toBe(first!.model);
+    expect(second!.processed.retries).toBe(2);
+  });
 });
 
 /**

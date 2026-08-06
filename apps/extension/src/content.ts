@@ -38,14 +38,13 @@ import { makeEscalationDecision } from './features/computer-use/escalationEngine
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
 import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
 import { detectNLWeb } from './nlweb';
+import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
   sanitizePageText,
 } from './background/policy';
-
-import type { ConsoleLogEntry } from './types';
 
 // MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19).
 // MAX_CONSOLE_BUFFER removed with the patchConsole feature (M-13 audit 2026-05-19).
@@ -116,8 +115,6 @@ function extractPageHtmlSafely(): string {
   }
 }
 
-const consoleLogBuffer: ConsoleLogEntry[] = [];
-
 interface ActionExecutionResult {
   success?: boolean;
   error?: string;
@@ -164,24 +161,22 @@ function initialize(): void {
   // only through the side-panel's explicit redacted preview and approval flow.
   void notifyTabReady();
 
-  // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely.
-  //
-  // The previous design monkey-patched `console.*` on allowlisted pages so
-  // GET_CONSOLE_LOGS could return buffered output. Two problems remained
-  // even with the chrome-SUB-5 allowlist gate:
+  // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely, and STAYS
+  // removed. The previous design monkey-patched `console.*` on allowlisted pages
+  // so a console-log buffer could be read back. Two problems made it unsafe even
+  // behind the allowlist gate:
   //   1. Page scripts can detect the patch (`console.log.toString()` differs)
   //      — a fingerprint of "AGI Workforce is recording this page".
   //   2. Replacing the page's own `console` interferes with any page-level
   //      tool that hooks `console` (Babel-loader source-map injectors,
   //      logging libraries, dev-tool extensions).
   //
-  // Console-log capture is now opt-out by default. If a future product
-  // flow needs the data, it can request via chrome.debugger / DevTools
-  // Protocol which is a documented per-tab API the user must explicitly
-  // attach to.
-  //
-  // Existing GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS handlers still answer
-  // (returning the empty buffer) so callers don't crash.
+  // The vestigial GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS handlers and the empty
+  // buffer they answered were removed too (CHR-INPAGE-CONSOLE-PANEL-DEAD): with
+  // patching gone they could only ever return an empty list, and the side-panel
+  // Console viewer that consumed them has been deleted. Do NOT re-add console
+  // patching. If a future flow needs console data, use chrome.debugger / the
+  // DevTools Protocol — a documented per-tab API the user explicitly attaches to.
 
   try {
     initWebMCP();
@@ -339,13 +334,6 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'WEBMCP_CALL_TOOL':
       return handleWebMCPCallTool(message as import('./types').WebMCPCallToolMessage);
-
-    case 'GET_CONSOLE_LOGS':
-      return { success: true, logs: [...consoleLogBuffer] } as ExtensionResponse;
-
-    case 'CLEAR_CONSOLE_LOGS':
-      consoleLogBuffer.length = 0;
-      return { success: true } as ExtensionResponse;
 
     case 'AGI_RUN_AUTOFILL' as ExtensionMessage['type']:
       return handleRunAutofill();
@@ -1161,12 +1149,27 @@ function handleGetPageInfo(): GetPageInfoResponse {
 
     const html = extractPageHtmlSafely();
 
+    // Structured page metadata (JSON-LD, Open Graph, Twitter Card, canonical,
+    // headings, …) rides along the explicit GET_PAGE_INFO capture so synced page
+    // context actually carries it. This is DATA describing the page, never
+    // instructions — the untrusted-page boundary is unchanged: extractPageMetadata
+    // caps per-block JSON-LD size and recursion depth, and callers must treat the
+    // fields as page content. The disabled implicit SYNC_PAGE_CONTEXT path stays
+    // disabled; metadata only travels the approved page-info channel.
+    let metadata: ReturnType<typeof extractPageMetadata> | undefined;
+    try {
+      metadata = extractPageMetadata();
+    } catch (metaErr) {
+      logger.debug('extractPageMetadata failed (non-fatal)', metaErr);
+    }
+
     return {
       success: true,
       url: window.location.href,
       title: document.title,
       html,
       selectedText,
+      ...(metadata ? { metadata } : {}),
     };
   } catch (error) {
     return {
@@ -1908,10 +1911,10 @@ function handleStopRecording(): ExtensionResponse {
   hideRecordingIndicator();
 
   const actions = [..._userRecordedActions];
-  chrome.storage.local.set({ agi_recorded_actions: actions }).catch(() => {
-    // Storage errors are non-fatal
-  });
-
+  // The recording consumer (side panel Save flow) reads actions back through the
+  // STOP_RECORDING response and GET_RECORDED_ACTIONS, then persists them as a
+  // saved shortcut via SAVE_SHORTCUT. Nothing ever read `agi_recorded_actions`
+  // from chrome.storage.local, so that write was a persistence illusion — removed.
   chrome.runtime
     .sendMessage({
       type: 'STOP_RECORDING',
@@ -1949,9 +1952,9 @@ async function checkConnectionStatus(): Promise<void> {
 let _indicatorShadow: ShadowRoot | null = null;
 
 // SECURITY (M-13 audit 2026-05-19): patchConsole / patchConsoleIfAllowlisted
-// removed. See the comment in initialize() for the rationale. The
-// `consoleLogBuffer` and GET_CONSOLE_LOGS handlers remain so existing
-// callers continue to receive a (now always empty) buffer.
+// removed and STAY removed. The `consoleLogBuffer` and GET_CONSOLE_LOGS /
+// CLEAR_CONSOLE_LOGS handlers that fed the (deleted) side-panel Console viewer
+// were removed too — see the comment in initialize() for the rationale.
 
 /** Shadow DOM prevents page CSS/JS from hiding or detecting the indicator. */
 function addAutomationIndicator(): void {
@@ -2152,9 +2155,6 @@ const VALID_MESSAGE_TYPES = new Set([
   // WebMCP
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
-  // Console log reading (forwarded from background)
-  'GET_CONSOLE_LOGS',
-  'CLEAR_CONSOLE_LOGS',
   // Autofill + escalation orchestration (side panel → content script)
   'AGI_RUN_AUTOFILL',
 ]);

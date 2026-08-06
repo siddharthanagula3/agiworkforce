@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { getModelMetadataById, normalizeModelId, type StreamChunkUsage } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  normalizeModelId,
+  resolveEffectiveModelPricing,
+  type StreamChunkUsage,
+} from '@agiworkforce/types';
 import { isPromoExpired } from '@agiworkforce/routing';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -174,21 +179,24 @@ export function calculateManagedUsageCostCents(
   // canonicalize first, or an alias-referenced model would never be detected
   // as expired.
   const canonicalModelId = normalizeModelId(model) ?? model;
-  // Once promo_expires_at has passed, bill every rate field -- input, output,
-  // cached_input, cached_write -- from post_promo_prices together, not just
-  // input/output (matches apps/web/lib/services/llm-cost-calculator.ts's
-  // getPricing fix: a partial swap would keep undercharging cache reads/
-  // writes after the headline rate already reverted). The 1h cache-write
-  // rate is never read from the catalog at all -- it's derived below as 2x
-  // whatever inputRate resolves to, so it inherits the switch automatically.
+  // Dated pricing resolves FIRST: a model may carry `pricingSchedule` windows
+  // (UTC calendar days, both bounds inclusive), and every rate field moves
+  // together -- input, output, cache read, and both cache-write tiers. No model
+  // schedules a price today; the mechanism exists for an announced PRODUCT
+  // price change. The older two-phase promo block is layered on top for models
+  // that still use one. This mirrors apps/web/lib/services/llm-cost-calculator
+  // .ts's getPricing exactly: the ledger and the product must resolve the same
+  // rate for the same date.
+  const effective = resolveEffectiveModelPricing(metadata, now);
   const postPromo =
     metadata.post_promo_prices && isPromoExpired(canonicalModelId, now)
       ? metadata.post_promo_prices
       : undefined;
-  const inputRate = postPromo?.input ?? metadata.inputCost;
-  const outputRate = postPromo?.output ?? metadata.outputCost;
-  const cachedInputRate = postPromo?.cached_input ?? metadata.cached_input;
-  const cachedWriteRate = postPromo?.cached_write ?? metadata.cached_write;
+  const inputRate = postPromo?.input ?? effective.inputCost;
+  const outputRate = postPromo?.output ?? effective.outputCost;
+  const cachedInputRate = postPromo?.cached_input ?? effective.cached_input;
+  const cachedWriteRate = postPromo?.cached_write ?? effective.cached_write;
+  const cachedWrite1hRate = postPromo?.cached_write_1h ?? effective.cached_write_1h;
 
   const inputTokens = finiteNonNegative(usage.inputTokens);
   const outputTokens = finiteNonNegative(usage.outputTokens);
@@ -201,14 +209,22 @@ export function calculateManagedUsageCostCents(
   const cacheWrite5mTokens = cacheWriteTokens - cacheWrite1hTokens;
 
   // Anthropic reports ordinary input disjoint from cache counters. OpenAI and
-  // compatible providers report cache reads as a subset of input.
-  const ordinaryInputTokens =
-    metadata.provider === 'anthropic'
-      ? inputTokens
-      : Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
+  // compatible providers report cache reads AND writes as a subset of input.
+  const disjoint = metadata.provider === 'anthropic';
+  const ordinaryInputTokens = disjoint
+    ? inputTokens
+    : Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
   const cacheReadRate = cachedInputRate ?? inputRate * 0.1;
-  const cacheWrite5mRate = cachedWriteRate ?? inputRate * 1.25;
-  const cacheWrite1hRate = inputRate * 2;
+  // Catalog-declared write rates win. The fallback is provider-shaped: with
+  // disjoint accounting the written tokens are billed ONLY here, so an
+  // undeclared rate falls back to Anthropic's published 1.25x (5m) / 2x (1h)
+  // surcharges. With subset accounting the written tokens were just removed
+  // from ordinaryInputTokens, so an undeclared rate falls back to the plain
+  // input rate -- billed once, no surcharge. That is the free-cache-write case
+  // every pre-GPT-5.6 OpenAI model is in; the GPT-5.6 family declares
+  // cached_write (1.25x uncached input) and is charged for it.
+  const cacheWrite5mRate = cachedWriteRate ?? (disjoint ? inputRate * 1.25 : inputRate);
+  const cacheWrite1hRate = cachedWrite1hRate ?? (disjoint ? inputRate * 2 : inputRate);
 
   return dollarsToLedgerCents(
     (ordinaryInputTokens * inputRate +

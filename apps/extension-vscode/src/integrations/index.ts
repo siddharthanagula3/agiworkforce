@@ -1,7 +1,7 @@
 /**
  * integrations/ — Cross-provider routing, patch apply engine, and subscription tier resolution.
  * providerStreamClient: provider-specific stream adapters (Anthropic, OpenAI, Ollama, Google).
- * providerSwitchGuard: Pro+ paywall guard for cross-provider conversation switching.
+ * providerSwitchGuard: Max paywall guard for cross-provider conversation switching.
  * patchEngine: LLM diff parser + fuzzy apply + batch undo for agent-mode edits.
  * tierResolver: subscription tier resolution (settings → bridge → cache → fallback).
  */

@@ -20,6 +20,7 @@ import {
   Folder,
   FolderOpen,
   Telescope,
+  ListChecks,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -52,6 +53,7 @@ import {
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import {
   canUseBillingPlanCapability,
@@ -65,6 +67,7 @@ import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/co
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
 import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
+import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 
 /**
  * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
@@ -115,6 +118,11 @@ interface ChatComposerProps {
       styleInstruction?: string;
       /** Exact server-catalog skill name; the server resolves and loads its body. */
       skillName?: string;
+      /**
+       * CAP-048: structured AGI Work goal (objective + optional scope /
+       * deliverable). Present only on an AGI Work send with non-empty content.
+       */
+      agiWorkGoal?: AgiWorkGoalInput;
     },
   ) => void | false;
   /**
@@ -181,7 +189,7 @@ interface ChatComposerProps {
    * `onGenerateImage`: the composer clears its state, the parent owns the async
    * task (POST + status polling) and the message injection.
    */
-  onGenerateVideo?: (prompt: string) => void;
+  onGenerateVideo?: (prompt: string, options?: { modelId?: string }) => void;
   /** Website free-plan state. The server owns the unpublished usage ceiling. */
   freeTrial?: {
     enabled: boolean;
@@ -274,6 +282,37 @@ export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'
 // Default = the first image model in catalog order (the founder controls the
 // default purely by ordering the curation file — no id referenced in code).
 const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]?.id ?? '';
+
+export interface VideoModelOption {
+  id: string;
+  label: string;
+  provider: 'google' | 'runway';
+}
+
+// Providers the video picker offers, mirroring IMAGE_API_TO_PROVIDER: the only
+// place the catalog's `provider` vocabulary meets the set of routes we are
+// willing to expose. `/api/media/video/generate` can execute BOTH google (Veo)
+// and runway (Gen-4) and already validates a caller-supplied model — but runway
+// additionally requires RUNWAY_API_KEY, and shipping a picker entry whose
+// generation would fail on a missing key is the fake-availability defect the
+// capability-honesty rule forbids. So launch offers the Google/Veo line only.
+// Enabling Runway later is one entry here — no model id appears in code.
+const VIDEO_PICKER_PROVIDERS: ReadonlySet<VideoModelOption['provider']> = new Set(['google']);
+
+// Video-generation models for the in-composer picker, derived entirely from the
+// canonical catalog (single source of truth) — never hardcoded. Adding a video
+// model is a model-registry curation edit (set modelType:'video'); it then shows
+// up here automatically once its provider is offered above.
+export const VIDEO_MODELS: VideoModelOption[] = getModels({ modelTypes: ['video'] })
+  .map((m) =>
+    VIDEO_PICKER_PROVIDERS.has(m.provider as VideoModelOption['provider'])
+      ? { id: m.id, label: m.name, provider: m.provider as VideoModelOption['provider'] }
+      : null,
+  )
+  .filter((m): m is VideoModelOption => m !== null);
+
+// Default = first video model in catalog order, same contract as images.
+const VIDEO_MODEL_DEFAULT = VIDEO_MODELS[0]?.id ?? '';
 
 /**
  * AUDIT-FIX CMP-9: split a leading `/token` off the composer text.
@@ -370,6 +409,12 @@ const ChatComposerNewComponent = ({
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  // CAP-048: optional AGI Work scope fields. Lightweight inline inputs shown
+  // only in AGI Work mode; the composed message is the objective itself.
+  const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
+  const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
+  const [agiWorkFieldsOpen, setAgiWorkFieldsOpen] = useState(false);
+  const { t: tAgiWork } = useTranslation('v3');
   /**
    * AUDIT-FIX STR-23: mirror of `message` readable from effects without adding
    * it to their dependency arrays -- used to park the outgoing conversation's
@@ -557,6 +602,10 @@ const ChatComposerNewComponent = ({
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
   const [showCompatibleModels, setShowCompatibleModels] = useState(false);
+
+  // Video generation mode state (videoMode itself is per-conversation, above).
+  const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
+  const [showVideoModelMenu, setShowVideoModelMenu] = useState(false);
 
   const trialExhausted = isFreeTrial && (freeTrial?.limitReached ?? false);
 
@@ -817,6 +866,10 @@ const ChatComposerNewComponent = ({
     // skill selection and image mode are one-shot composer modes.
     setComposerToggles({ selectedSkillName: null, imageMode: false, videoMode: false });
     setLocalNotice(null);
+    // The AGI Work scope fields belong to a single send, like the skill pick.
+    setAgiWorkConstraints('');
+    setAgiWorkDeliverable('');
+    setAgiWorkFieldsOpen(false);
     setImageAspectRatio('auto');
     setImageModelId(IMAGE_MODEL_DEFAULT);
     setShowCompatibleModels(false);
@@ -1385,7 +1438,11 @@ const ChatComposerNewComponent = ({
       if (isTurnActive) return;
       const prompt = outgoingContent.trim();
       if (!prompt) return;
-      onGenerateVideo?.(prompt);
+      // Carry the picked model so the picker is a real control: the route at
+      // /api/media/video/generate already validates a caller-supplied model
+      // (modelType must be 'video', must be live, provider must be executable)
+      // and falls back to the catalog's video_generation slot when omitted.
+      onGenerateVideo?.(prompt, videoModelId ? { modelId: videoModelId } : undefined);
       clearComposerState();
       return;
     }
@@ -1411,6 +1468,15 @@ const ChatComposerNewComponent = ({
         // is never empty, so out-of-the-box turns finally carry real guidance.
         styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
         skillName: selectedSkillName ?? undefined,
+        // CAP-048: attach the structured goal on an AGI Work send. The objective
+        // is the composed message; the optional scope fields ride alongside.
+        agiWorkGoal:
+          canUseAgiWork && workMode === 'agiwork'
+            ? buildAgiWorkGoalInput(outgoingContent, {
+                constraints: agiWorkConstraints,
+                deliverable: agiWorkDeliverable,
+              })
+            : undefined,
       },
     ];
 
@@ -1450,6 +1516,7 @@ const ChatComposerNewComponent = ({
     imageModelId,
     onGenerateImage,
     videoMode,
+    videoModelId,
     onGenerateVideo,
     conversationId,
     workMode,
@@ -1471,6 +1538,8 @@ const ChatComposerNewComponent = ({
     modelSupportsThinkingCap,
     codeExecutionEnabled,
     officeCreationEnabled,
+    agiWorkConstraints,
+    agiWorkDeliverable,
     onSend,
     clearComposerState,
     activeToolLabels,
@@ -2550,15 +2619,18 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Video-mode pill. Video has no aspect/model picker: the route
-              resolves the model from the catalog's video-generation slot and
-              defaults duration/resolution, so a picker here would be a control
-              with nothing behind it. Exit works exactly like the image pill. */}
+            {/* Video-mode pill. Video has no ASPECT picker — the route defaults
+              duration/resolution — but it does have a model picker (below), and
+              the route accepts the selection. Exit works like the image pill and
+              resets the model the same way. */}
             {videoMode && (
               <div className={cn('flex shrink-0 items-center gap-1')}>
                 <button
                   type="button"
-                  onClick={() => setVideoMode(false)}
+                  onClick={() => {
+                    setVideoMode(false);
+                    setVideoModelId(VIDEO_MODEL_DEFAULT);
+                  }}
                   className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
                   aria-label="Exit video generation mode"
                   title="Click to exit video generation mode"
@@ -2574,8 +2646,19 @@ const ChatComposerNewComponent = ({
               the send button. In image mode the image-model picker takes its place —
               both use `ml-auto` so they right-align and push the mic + send to the
               right edge of the toolbar. In the flex-nowrap control row the footer is
-              the only shrinkable item (min-w-0), so it truncates instead of wrapping. */}
-            {!imageMode && (
+              the only shrinkable item (min-w-0), so it truncates instead of wrapping.
+
+              Video mode is excluded for the same reason as image mode, and it used
+              not to be: the video pill above documents that video resolves its model
+              from the catalog's `video_generation` slot (currently `veo-3.1`) rather
+              than from this picker, but the picker still rendered, so entering video
+              mode left a TEXT model — e.g. "Gemini 3.5 Flash-Lite" — displayed beside
+              "Describe the video you want". That label named a model which had no part
+              in the generation the send button would actually run, which is exactly the
+              stale-model-label class the capability-honesty rule forbids. Showing no
+              model here is strictly better than showing the wrong one; surfacing the
+              resolved video model as a read-only label is the follow-up. */}
+            {!imageMode && !videoMode && (
               <ComposerFooter
                 inline
                 className="ml-auto min-w-0"
@@ -2626,6 +2709,57 @@ const ChatComposerNewComponent = ({
                       >
                         <span className="flex-1 text-left">{m.label}</span>
                         {imageModelId === m.id && (
+                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Video model picker. Mirrors the image picker above and takes the
+                place of the text-model ComposerFooter, which is hidden in video
+                mode. Before this existed, entering video mode left the TEXT
+                selector on screen, so "Describe the video you want" sat beside a
+                model like "Gemini 3.5 Flash-Lite" that had no part in the
+                generation the send button ran — a stale model label. */}
+            {videoMode && (
+              <div className="relative ml-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowVideoModelMenu((p) => !p)}
+                  className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                  aria-label="Select video model"
+                >
+                  {/* Same contract as the image label: the catalog is the only
+                      source, so an empty catalog says so instead of naming a
+                      model that cannot run. */}
+                  <span className="max-w-[120px] truncate">
+                    {VIDEO_MODELS.find((m) => m.id === videoModelId)?.label ??
+                      'No video model available'}
+                  </span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+                {showVideoModelMenu && (
+                  <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                    {VIDEO_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setVideoModelId(m.id);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                          videoModelId === m.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="flex-1 text-left">{m.label}</span>
+                        {videoModelId === m.id && (
                           <Check className="h-3 w-3 shrink-0 text-primary" />
                         )}
                       </button>
@@ -2810,6 +2944,73 @@ const ChatComposerNewComponent = ({
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* CAP-048 AGI Work goal intake. The composed message is the objective;
+          these optional inline fields let the user pin down scope + deliverable
+          without a modal wall. Shown only in paid AGI Work mode. */}
+      {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && (
+        <div className="mt-2">
+          {agiWorkFieldsOpen ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 p-2.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  {tAgiWork('agiWork.compose.constraintsLabel')} ·{' '}
+                  {tAgiWork('agiWork.compose.deliverableLabel')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAgiWorkFieldsOpen(false)}
+                  className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                >
+                  {tAgiWork('agiWork.compose.scopeHide')}
+                </button>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {tAgiWork('agiWork.compose.constraintsLabel')}
+                </span>
+                <input
+                  type="text"
+                  value={agiWorkConstraints}
+                  onChange={(e) => setAgiWorkConstraints(e.target.value.slice(0, 1000))}
+                  placeholder={tAgiWork('agiWork.compose.constraintsPlaceholder')}
+                  disabled={isTurnActive || composerDisabled}
+                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {tAgiWork('agiWork.compose.deliverableLabel')}
+                </span>
+                <input
+                  type="text"
+                  value={agiWorkDeliverable}
+                  onChange={(e) => setAgiWorkDeliverable(e.target.value.slice(0, 1000))}
+                  placeholder={tAgiWork('agiWork.compose.deliverablePlaceholder')}
+                  disabled={isTurnActive || composerDisabled}
+                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                />
+              </label>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAgiWorkFieldsOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            >
+              <ListChecks className="h-3 w-3" />
+              {tAgiWork('agiWork.compose.scopeAdd')}
+              {agiWorkConstraints.trim() || agiWorkDeliverable.trim() ? (
+                <span
+                  aria-hidden
+                  className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--chat-accent-primary)]"
+                />
+              ) : null}
+            </button>
           )}
         </div>
       )}

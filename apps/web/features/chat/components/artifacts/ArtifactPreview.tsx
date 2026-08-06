@@ -26,7 +26,9 @@ import {
   ChevronRight,
   AlertTriangle,
   FileText,
+  Globe,
 } from 'lucide-react';
+import type { PublishResult } from '@agiworkforce/artifacts';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -143,6 +145,16 @@ interface ArtifactPreviewProps {
    * the chip.
    */
   versionHistory?: SharedArtifact[];
+  /**
+   * CAP-015 slice 3: host-injected publish action.
+   *
+   * `ArtifactsPanel` supplies one backed by `@agiworkforce/artifacts`
+   * `publishArtifact()` + the web `CloudPublisher`, which is what turns the
+   * Publish menu item from a clipboard copy into a real public URL. Left
+   * undefined (inline cards, tests), no Publish item renders at all — an
+   * action that cannot work must not be offered.
+   */
+  publishArtifact?: () => Promise<PublishResult>;
 }
 
 /**
@@ -197,6 +209,7 @@ export function ArtifactPreview({
   variant = 'card',
   onClose,
   versionHistory,
+  publishArtifact,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
@@ -204,6 +217,11 @@ export function ArtifactPreview({
   // Preview render failure surfaced by the cross-origin sandbox (production
   // path only). Reset on refresh / version change. Drives the error state.
   const [renderError, setRenderError] = useState<string | null>(null);
+  // CAP-015 slice 3: publish-in-flight flag and the last public URL minted for
+  // THIS artifact. Both are cleared on an artifact swap (see the reset effect)
+  // so one artifact's link can never be shown under another's title.
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
 
   // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
@@ -448,6 +466,9 @@ export function ArtifactPreview({
     setPdfError(false);
     setImageError(false);
     setCopied(false);
+    // CAP-015: a published URL belongs to one artifact id. Leaving it up after
+    // a swap would offer the previous artifact's public link under this title.
+    setPublishedUrl(null);
   }, [artifact.id, versionCount]);
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
@@ -658,6 +679,53 @@ if (__AgiApp) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // ---------------------------------------------------------------------------
+  // CAP-015 slice 3: publish to a public URL.
+  //
+  // The result is the discriminated union from `@agiworkforce/artifacts`, and
+  // each arm is reported for what it is:
+  //   cloud       → a real hosted URL; copy it and say so.
+  //   local       → a file:// export (desktop host); state the path, do not
+  //                 pretend a link was shared.
+  //   unavailable → no publisher on this host; fall back to copying the SOURCE
+  //                 to the clipboard, which is the honest degradation the panel
+  //                 shipped before any publisher existed.
+  // A throw is surfaced verbatim — including "this type has no public
+  // renderer", which is a real answer, not a failure to hide.
+  // ---------------------------------------------------------------------------
+  const handlePublish = useCallback(async () => {
+    if (!publishArtifact || isPublishing) return;
+    setIsPublishing(true);
+    try {
+      const result = await publishArtifact();
+      if (result.kind === 'cloud') {
+        setPublishedUrl(result.shareUrl);
+        if (await writeToClipboard(result.shareUrl)) {
+          toast.success('Published · link copied to clipboard');
+        } else {
+          toast.success('Published. Copy the link from the bar below.');
+        }
+        return;
+      }
+      if (result.kind === 'local') {
+        setPublishedUrl(result.shareUrl);
+        toast.success('Exported to a local file');
+        return;
+      }
+      setPublishedUrl(null);
+      if (await writeToClipboard(activeContent)) {
+        toast.message(result.reason, { description: 'Artifact source copied to the clipboard.' });
+      } else {
+        toast.error(result.reason);
+      }
+    } catch (error) {
+      setPublishedUrl(null);
+      toast.error(error instanceof Error ? error.message : 'Failed to publish artifact');
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [publishArtifact, isPublishing, activeContent]);
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
     const content = activeContent;
@@ -1196,6 +1264,27 @@ if (__AgiApp) {
               </DropdownMenu>
             )}
 
+            {/* Publish — only rendered when a host injected a real publisher
+                (CAP-015 slice 3). No publisher, no button: offering a Publish
+                action that can only copy to the clipboard is the behaviour
+                AUDIT-FIX ART-27 called out. */}
+            {publishArtifact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void handlePublish()}
+                disabled={isPublishing}
+                className="h-7 px-2"
+                aria-label="Publish artifact to a public link"
+                title="Publish"
+              >
+                <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs sm:inline">
+                  {isPublishing ? 'Publishing…' : 'Publish'}
+                </span>
+              </Button>
+            )}
+
             {/* Refresh — renderable previews and PDFs (re-mounts the frame). */}
             {(canPreview || isPdf || isImage) && (
               <Button
@@ -1252,6 +1341,38 @@ if (__AgiApp) {
             )}
           </div>
         </div>
+
+        {/* CAP-015: the live public link for this artifact. Shown only after a
+            publish actually returned a URL — never as an aspirational bar. */}
+        {publishedUrl && (
+          <div
+            className="flex shrink-0 items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
+            data-testid="artifact-published-url"
+          >
+            <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 flex-1 truncate text-xs text-primary underline-offset-2 hover:underline"
+            >
+              {publishedUrl}
+            </a>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => {
+                void writeToClipboard(publishedUrl).then((ok) => {
+                  if (ok) toast.success('Link copied');
+                  else toast.error('Could not copy the link');
+                });
+              }}
+            >
+              Copy link
+            </Button>
+          </div>
+        )}
 
         {/* AUDIT-FIX ART-6: honest, per-renderer security notice (see
             securityNotice above). */}

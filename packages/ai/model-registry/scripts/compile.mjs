@@ -139,6 +139,7 @@ const CANONICAL_ORDER = [
   'deprecation_date',
   'promo_expires_at',
   'post_promo_prices',
+  'pricingSchedule',
   'supersedes',
   'supersedes_effective_date',
   'supersedes_note',
@@ -150,6 +151,9 @@ const CANONICAL_ORDER = [
   'videoPerSecondCost',
   'videoPerSecondCostByResolution',
   'pricingNote',
+  'openWeight',
+  'license',
+  'commercialRestrictions',
 ];
 
 // Top-level key order of models.json (models sits 5th).
@@ -451,6 +455,111 @@ function positiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Normalize a curation `pricingSchedule` into the registry's dated pricing
+ * windows. A schedule entry is a dated `costOverride`: it carries the rates that
+ * apply while `effectiveFrom <= date <= effectiveUntil` (both bounds inclusive,
+ * both optional — an absent bound means "open ended on that side"). The
+ * top-level pricing fields stay the enduring/standard price, so a consumer that
+ * is not date-aware keeps reading a real published rate instead of a window that
+ * silently expires.
+ *
+ * `effectiveFrom`/`effectiveUntil` are UTC CALENDAR DAYS, inclusive on both
+ * sides: a changeover happens at UTC midnight, so a window ending 2030-03-31
+ * covers every instant of that UTC day and the next window starts 2030-04-01.
+ *
+ * Windows must not overlap. Every consumer resolves a date by taking the FIRST
+ * covering window, so an overlap would make the billed price depend on authoring
+ * order rather than on the dates — a silent, order-dependent price.
+ */
+export function normalizePricingSchedule(modelKey, schedule) {
+  if (schedule === undefined) return undefined;
+  assert.ok(
+    Array.isArray(schedule) && schedule.length > 0,
+    `${modelKey} pricingSchedule must be a non-empty array when present`,
+  );
+  const normalizedSchedule = schedule.map((entry, index) => {
+    const label = `${modelKey} pricingSchedule[${index}]`;
+    assert.ok(
+      entry.effectiveFrom !== undefined || entry.effectiveUntil !== undefined,
+      `${label} must declare effectiveFrom, effectiveUntil, or both`,
+    );
+    for (const bound of ['effectiveFrom', 'effectiveUntil']) {
+      if (entry[bound] === undefined) continue;
+      assert.ok(ISO_DATE.test(entry[bound]), `${label}.${bound} must be a YYYY-MM-DD date`);
+    }
+    if (entry.effectiveFrom !== undefined && entry.effectiveUntil !== undefined) {
+      assert.ok(
+        entry.effectiveFrom <= entry.effectiveUntil,
+        `${label} effectiveFrom must not be after effectiveUntil`,
+      );
+    }
+    const normalized = defined({
+      effectiveFrom: entry.effectiveFrom,
+      effectiveUntil: entry.effectiveUntil,
+      note: entry.note,
+      inputPerMillion: entry.inputCost,
+      outputPerMillion: entry.outputCost,
+      cacheReadPerMillion: entry.cached_input,
+      cacheWritePerMillion: entry.cached_write,
+      cacheWrite1hPerMillion: entry.cached_write_1h,
+    });
+    const unknownKeys = Object.keys(entry).filter(
+      (key) =>
+        ![
+          'effectiveFrom',
+          'effectiveUntil',
+          'note',
+          'inputCost',
+          'outputCost',
+          'cached_input',
+          'cached_write',
+          'cached_write_1h',
+        ].includes(key),
+    );
+    assert.equal(unknownKeys.length, 0, `${label} has unsupported keys: ${unknownKeys.join(', ')}`);
+    return normalized;
+  });
+  assertNoOverlappingPricingWindows(modelKey, normalizedSchedule);
+  return normalizedSchedule;
+}
+
+/**
+ * Reject a schedule whose windows intersect.
+ *
+ * Bounds are inclusive UTC calendar days and each side is optional, so a missing
+ * `effectiveFrom` is open to the past and a missing `effectiveUntil` is open to
+ * the future — both are modelled as sentinel days here. ISO `YYYY-MM-DD` strings
+ * sort lexicographically in date order, so plain string comparison is exact.
+ * Two windows intersect when each one starts on or before the other one ends.
+ */
+function assertNoOverlappingPricingWindows(modelKey, schedule) {
+  const OPEN_PAST = '0000-01-01';
+  const OPEN_FUTURE = '9999-12-31';
+  const bounds = schedule.map((entry) => ({
+    from: entry.effectiveFrom ?? OPEN_PAST,
+    until: entry.effectiveUntil ?? OPEN_FUTURE,
+  }));
+  const describe = (index) => {
+    const entry = schedule[index];
+    return `[${index}] ${entry.effectiveFrom ?? '(open)'}..${entry.effectiveUntil ?? '(open)'}`;
+  };
+  for (let i = 0; i < bounds.length; i += 1) {
+    for (let j = i + 1; j < bounds.length; j += 1) {
+      const overlaps = bounds[i].from <= bounds[j].until && bounds[j].from <= bounds[i].until;
+      assert.ok(
+        !overlaps,
+        `${modelKey} pricingSchedule windows must not overlap: ${describe(i)} intersects ` +
+          `${describe(j)}. Both bounds are inclusive UTC calendar days and consumers take the ` +
+          `FIRST covering window, so overlapping windows make the billed price depend on ` +
+          `authoring order instead of on the date.`,
+      );
+    }
+  }
+}
+
 function formatRoutingSlotLabel(slotId) {
   return slotId
     .split('_')
@@ -514,6 +623,68 @@ function validateAutoPolicy(autoPolicy, models, capabilities) {
   for (const [tier, slots] of Object.entries(autoPolicy.tierAllowedSlots)) {
     for (const slotId of slots) {
       assert.ok(autoPolicy.slots[slotId], `Tier ${tier} references unknown routing slot ${slotId}`);
+    }
+  }
+  validateAutoTaskFamilies(autoPolicy, capabilities);
+}
+
+/**
+ * Task families narrow the canonical task taxonomy for the deterministic
+ * task-family ordering stage (packages/ai/routing/src/task-family-routing.ts).
+ *
+ * They never widen admission: a family only reorders the candidate set that
+ * its declared task type already produced. The checks below enforce exactly
+ * that — every referenced task must exist, and every floor must be expressed
+ * against metadata the registry already carries. An unresolvable floor is a
+ * build failure rather than a silent no-op, because an absent policy value is
+ * not permissive.
+ */
+function validateAutoTaskFamilies(autoPolicy, capabilities) {
+  const taskFamilies = autoPolicy.taskFamilies;
+  if (taskFamilies === undefined) return;
+
+  const capabilityNames = Object.keys(Object.values(capabilities)[0] ?? {});
+  for (const [familyId, family] of Object.entries(taskFamilies)) {
+    assert.ok(familyId.length > 0, 'Task family ids must be non-empty');
+    assert.ok(
+      Array.isArray(family.appliesToTaskTypes) && family.appliesToTaskTypes.length > 0,
+      `Task family ${familyId} must declare at least one canonical task type`,
+    );
+    for (const taskType of family.appliesToTaskTypes) {
+      assert.ok(
+        autoPolicy.tasks[taskType],
+        `Task family ${familyId} references unknown routing task ${taskType}`,
+      );
+    }
+    assert.ok(
+      family.riskLabel === 'low' || family.riskLabel === 'high',
+      `Task family ${familyId} riskLabel must be 'low' or 'high'`,
+    );
+
+    const floor = family.qualityFloor ?? {};
+    if (floor.minimumSlotBand !== undefined) {
+      assert.ok(
+        autoPolicy.profileOrder.includes(floor.minimumSlotBand),
+        `Task family ${familyId} minimumSlotBand ${floor.minimumSlotBand} is not a routing profile`,
+      );
+    }
+    for (const capability of floor.requiredCapabilities ?? []) {
+      assert.ok(
+        capabilityNames.includes(capability),
+        `Task family ${familyId} references unknown capability ${capability}`,
+      );
+    }
+    if (floor.minimumContextTokens !== undefined) {
+      assert.ok(
+        Number.isInteger(floor.minimumContextTokens) && floor.minimumContextTokens > 0,
+        `Task family ${familyId} minimumContextTokens must be a positive integer`,
+      );
+    }
+    for (const [benchmark, minimum] of Object.entries(floor.minimumBenchmarkScores ?? {})) {
+      assert.ok(
+        typeof minimum === 'number' && minimum >= 0,
+        `Task family ${familyId} benchmark floor ${benchmark} must be a non-negative number`,
+      );
     }
   }
 }
@@ -624,6 +795,11 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
         providerModelId: model.apiModelId ?? model.id ?? modelKey,
         kind: model.modelType,
         familyPartner: model.variantPartner,
+        // Openness metadata is curation-owned and OPTIONAL: an absent field
+        // means "not verified", never "closed" or "unrestricted".
+        openWeight: model.openWeight,
+        license: model.license,
+        commercialRestrictions: model.commercialRestrictions,
       }),
       lifecycle,
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
@@ -655,6 +831,7 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
       videoPerSecondByResolution: model.videoPerSecondCostByResolution,
       promoExpiresAt: model.promo_expires_at,
       postPromoPrices: model.post_promo_prices,
+      schedule: normalizePricingSchedule(modelKey, model.pricingSchedule),
     });
     limits[modelKey] = defined({
       contextTokens: positiveIntegerOrUndefined(model.contextWindow),
@@ -901,7 +1078,14 @@ async function main() {
   return generate();
 }
 
-main().catch((err) => {
-  console.error('[sync] fatal:', err);
-  process.exitCode = 1;
-});
+// Run only when invoked as a script. Importing this file (the pricing-schedule
+// validators are unit-tested directly) must not compile or write anything.
+const isEntrypoint =
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error('[sync] fatal:', err);
+    process.exitCode = 1;
+  });
+}

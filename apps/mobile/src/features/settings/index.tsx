@@ -148,8 +148,15 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       >
         {row.label}
       </Text>
+      {/* A hard 130pt cut most real email addresses off mid-domain. Let the value
+          take the space the label does not need, and cap font scaling so the row
+          still fits at accessibility sizes. */}
       {row.value ? (
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, maxWidth: 130 }}>
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{ color: colors.textMuted, fontSize: 13, flexShrink: 1, textAlign: 'right' }}
+        >
           {row.value}
         </Text>
       ) : null}

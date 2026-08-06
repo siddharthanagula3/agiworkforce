@@ -141,3 +141,53 @@ export async function revokeSharedLink(token: string): Promise<void> {
     throw await responseError(response, 'Failed to revoke shared link');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Published artifacts (CAP-015 slice 4)
+//
+// A published artifact has NO expiry — migration 0095 ships no TTL because no
+// expiry policy has been approved — so unpublishing here is the user's only way
+// to take a public page down. That makes this list a requirement of the
+// feature, not a nicety.
+// ---------------------------------------------------------------------------
+
+const PublishedArtifactSchema = z.object({
+  token: z.string().min(1),
+  artifactId: z.string(),
+  title: z.string(),
+  kind: z.enum(['html', 'react', 'svg', 'mermaid', 'markdown', 'text', 'code']),
+  language: z.string().nullable(),
+  contentChars: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  shareUrl: z.string().url(),
+  /** True when the page serves this artifact inside the cross-origin sandbox. */
+  sandboxed: z.boolean(),
+});
+
+const PublishedArtifactListResponseSchema = z.object({
+  artifacts: z.array(PublishedArtifactSchema),
+});
+
+export type PublishedArtifactSummary = z.infer<typeof PublishedArtifactSchema>;
+
+export async function listPublishedArtifacts(
+  signal?: AbortSignal,
+): Promise<PublishedArtifactSummary[]> {
+  const response = await fetch('/api/artifacts/publish', { credentials: 'include', signal });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to load published artifacts');
+  }
+  return PublishedArtifactListResponseSchema.parse(await response.json()).artifacts;
+}
+
+export async function unpublishArtifact(token: string): Promise<void> {
+  const response = await fetch(`/api/artifacts/publish/${encodeURIComponent(token)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: await addCsrfHeaders(),
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to unpublish artifact');
+  }
+}

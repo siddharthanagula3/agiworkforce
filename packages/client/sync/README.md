@@ -26,11 +26,12 @@ preserve cross-language behavior.
   each surface.
 - Artifact delta behavior is owned by `@agiworkforce/artifacts`; the sync test
   corpus consumes it only to replay a complete pull page.
-- This package must not depend on applications, `@agiworkforce/services`, or
-  `@agiworkforce/stores`.
+- This package must not depend on applications.
 
-`@agiworkforce/services` temporarily re-exports this package for compatibility.
-New first-party code imports this owner directly.
+Import this package directly. The transitional `@agiworkforce/services` and
+`@agiworkforce/stores` facades that once re-exported it were deleted at M8
+(2026-07-15); `scripts/check-artifact-sync-ownership.mjs` guards against them
+reappearing.
 
 ## Commands
 

@@ -24,6 +24,7 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
+import { saveResearchReport } from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
@@ -32,7 +33,10 @@ import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan } from './lib/managed-failover';
+import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
+import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
   loadConnectorToolPermissions,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
@@ -72,12 +76,17 @@ export const maxDuration = 300;
  * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  *
- * Agentic extension: every AGI Work stream enters the managed request-scoped
- * tool-loop driver, including turns that begin without an explicit tool. Normal
- * chat enters that loop only when MCP/platform tools are present. Run state and
- * canonical events remain journaled durably; the Vercel Workflow transport is
- * intentionally not on this initial dispatch path because a poisoned callback
- * can prevent `start()` from returning and leave the client at startup forever.
+ * Agentic extension: every AGI Work stream enters the managed tool-loop driver,
+ * including turns that begin without an explicit tool. Normal chat enters that
+ * loop only when MCP/platform tools are present. Run state and canonical events
+ * are journaled durably either way.
+ *
+ * Transport: a turn that holds a managed-usage reservation starts on the Vercel
+ * Workflow transport (`AGI_DURABLE_INITIAL_TURNS`, on by default) so the run
+ * outlives the request that started it — the client can disconnect and later
+ * reattach through the run journal, and its approvals stay claimable from any
+ * surface. Free-trial turns and a workflow that fails to start use the
+ * request-scoped inline stream, which emits the identical SSE wire.
  * The approval_mode query parameter controls gating: ?approval_mode=auto skips
  * the per-tool prompt; the default 'manual' persists a signed checkpoint before
  * emitting x_tool_approval_request events.
@@ -115,7 +124,13 @@ async function refundFailedReservation(
         ...processed.managedUsage,
         outcome: 'failed',
         actualCostCents: 0,
-        usage: { reason },
+        // CPST Stage-0 telemetry, MANAGED CLOUD ONLY
+        // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3).
+        // This is the one unambiguous terminal failure signal on the web path:
+        // the attempt died and its reservation is being released, so the task
+        // did not succeed. Additive keys only; the release contract itself is
+        // untouched.
+        usage: { reason, ...buildCpstUsageFields(processed, { billingOutcome: 'failed' }) },
       });
     } catch (settlementError) {
       logger.error(
@@ -317,6 +332,33 @@ async function dispatchChatCompletions(
         { userId, token },
         {
           usage: researchUsage,
+          // CAP-045 slice 1: durable report persistence. `runDb` is the same
+          // RLS-scoped adapter the run journal uses, so the row is tenant-
+          // isolated in the database. Persistence failures are swallowed by the
+          // loop (logged, never fatal) -- a storage outage must not destroy a
+          // report the user is already reading.
+          persistReport: (report) =>
+            saveResearchReport(runDb, {
+              userId,
+              requestId: processed.requestId,
+              conversationId: processed.conversationId ?? null,
+              model: processed.chatRequest.model,
+              provider: processed.provider,
+              ...report,
+            }),
+          // CAP-045 slice 4: retry carries the previous attempt's material.
+          // It arrives on the NORMAL request path, so this run reserved and
+          // metered exactly like a first attempt -- there is no bypass here.
+          ...(processed.researchResume
+            ? {
+                priorSources: processed.researchResume.sources.map((source) => ({
+                  url: source.url,
+                  title: source.title ?? source.url,
+                  ...(source.snippet ? { snippet: source.snippet } : {}),
+                })),
+                priorSteps: processed.researchResume.steps,
+              }
+            : {}),
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
@@ -432,6 +474,73 @@ async function dispatchChatCompletions(
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
 
+      const baseAgentHeaders = (): Record<string, string> => {
+        const headers: Record<string, string> = {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        };
+        addAgentRunHeaders(headers, run);
+        if (processed.quotaWarningHeader) {
+          headers['X-Quota-Warning'] = processed.quotaWarningHeader;
+        }
+        // GOV-7: name the connectors whose tools did not fit under this plan's
+        // ceiling so the client can surface it. Header-encoded because this is
+        // decided before the first SSE frame and applies to the whole turn.
+        if (connectorCatalog.dropped.length > 0) {
+          headers['X-AGI-Connector-Tools-Dropped'] = JSON.stringify({
+            limit: connectorCatalog.limit,
+            connectors: connectorCatalog.dropped,
+          });
+        }
+        return headers;
+      };
+
+      // DURABLE INITIAL TURNS: a paid managed turn runs on the Workflow
+      // transport, so closing the laptop no longer kills work the user is being
+      // charged for — the run continues server-side, its approval is claimable
+      // from any surface, and the client reattaches through the run journal.
+      //
+      // The module docstring above used to say the Workflow transport was
+      // deliberately kept off this path because a poisoned `start()` could hang
+      // before returning and strand the client at startup. That is handled by
+      // ordering rather than avoidance: nothing has been generated, streamed, or
+      // consumed at this point, so a `start()` that THROWS falls through to the
+      // inline path below with no double execution possible
+      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
+      // durable attach fails). `approve/route.ts` has awaited the same call on a
+      // request path since durable resumes shipped.
+      //
+      // Free-trial turns never qualify: they carry no managed-usage reservation,
+      // which `buildCloudAgentWorkflowInput` requires to replay billing.
+      if (processed.managedUsage && areDurableInitialTurnsEnabled()) {
+        try {
+          const workflow = await startCloudAgentWorkflowExecution({
+            db: runDb,
+            runId: run.id,
+            userId,
+            processed,
+            mcpTools,
+            approvalMode: loopInputs.approvalMode,
+          });
+          const durableHeaders = baseAgentHeaders();
+          durableHeaders['X-AGI-Tool-Loop'] = 'durable';
+          durableHeaders['X-AGI-Workflow-Run-Id'] = workflow.workflowRunId;
+          return new NextResponse(withSseHeartbeat(workflow.readable), {
+            headers: durableHeaders,
+          });
+        } catch (error) {
+          // Degrade, do not fail: the inline path below produces the same SSE
+          // wire and the same journal. The turn is merely no longer detachable.
+          logger.error(
+            { error, userId, requestId: processed.requestId, runId: run.id },
+            'Durable initial agent turn could not start; falling back to the request-scoped stream',
+          );
+        }
+      }
+
       // Approval mode:
       //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,
       //     url_fetch is read-only + SSRF-guarded, and web_search uses the configured
@@ -511,27 +620,8 @@ async function dispatchChatCompletions(
         preserveAwaitingInputOnCancel: () => approvalCheckpointSaved,
       });
 
-      const streamHeaders: Record<string, string> = {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-AGI-Tool-Loop': 'active',
-        ...getCorsHeaders(request),
-        ...getSecurityHeaders(),
-      };
-      addAgentRunHeaders(streamHeaders, run);
-      if (processed.quotaWarningHeader) {
-        streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
-      }
-      // GOV-7: name the connectors whose tools did not fit under this plan's
-      // ceiling so the client can surface it. Header-encoded because this is
-      // decided before the first SSE frame and applies to the whole turn.
-      if (connectorCatalog.dropped.length > 0) {
-        streamHeaders['X-AGI-Connector-Tools-Dropped'] = JSON.stringify({
-          limit: connectorCatalog.limit,
-          connectors: connectorCatalog.dropped,
-        });
-      }
+      const streamHeaders = baseAgentHeaders();
+      streamHeaders['X-AGI-Tool-Loop'] = 'active';
 
       // AUDIT-FIX BUG-8: same gap as the research branch -- the agentic stream
       // can sit silent through a 120 s tool call with no keepalive at all.

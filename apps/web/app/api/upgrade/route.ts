@@ -9,7 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { UpgradeApplyRequestSchema } from '@/lib/validations/checkout';
+import { UpgradeApplyRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -18,20 +18,13 @@ import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-ser
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
 import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
-
-const TIER_ORDER: Record<string, number> = {
-  free: 0,
-  basic: 0.5,
-  pro: 1,
-  team: 1.5,
-  max: 2,
-  max_15x: 3,
-  enterprise: 4,
-};
-
-function isUpgrade(from: string, to: string): boolean {
-  return (TIER_ORDER[to] ?? -1) > (TIER_ORDER[from] ?? -1);
-}
+import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  classifyPlanChange,
+  currentSeatsFromStripeItem,
+  isUpgrade,
+} from '@/lib/server/stripe-plan-change';
+import { isPerSeatBillingPlan } from '@agiworkforce/types';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -63,6 +56,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(`Invalid request: ${msg}`);
   }
   const { plan: targetPlan, billingInterval, previewToken } = parsed.data;
+  const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
   const db = getNeonDb();
   const stripe = getStripe();
@@ -94,7 +88,11 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   const currentTier = sub.plan_tier ?? 'free';
-  if (!isUpgrade(currentTier, targetPlan)) {
+  // Mirrors app/api/upgrade/preview/route.ts: a same-tier request on a per-seat
+  // plan is a seat change and is decided below, once Stripe has told us how many
+  // seats the subscription currently bills.
+  const sameTierSeatChange = currentTier === targetPlan && isPerSeatBillingPlan(targetPlan);
+  if (!sameTierSeatChange && !isUpgrade(currentTier, targetPlan)) {
     throw createError.validation(
       `Cannot upgrade from ${currentTier} to ${targetPlan}. Use the billing portal to change or downgrade your plan.`,
     );
@@ -164,6 +162,16 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
   if (!stripeItem) throw createError.internal('Subscription has no items');
 
+  const planChange = classifyPlanChange({
+    currentTier,
+    targetPlan,
+    requestedSeats,
+    currentSeats: currentSeatsFromStripeItem(stripeItem.quantity),
+  });
+  if (!planChange.allowed) {
+    throw createError.validation(planChange.reason);
+  }
+
   let prorationDate: number;
   try {
     prorationDate = verifyUpgradePreviewToken(
@@ -173,6 +181,9 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         plan: targetPlan,
         billingInterval,
         stripeSubscriptionId: stripeSubId,
+        // Binds the seat count the customer actually saw priced. A token issued
+        // for N seats cannot be replayed to apply a different N.
+        seats: requestedSeats,
       },
       requireEnv('STRIPE_SECRET_KEY'),
     ).prorationDate;
@@ -199,7 +210,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     updatedSubscription = await stripe.subscriptions.update(
       stripeSubId,
       {
-        items: [{ id: stripeItem.id, price: newPriceId }],
+        items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
         // A replacement cycle charges the full target plan now and lets Stripe
         // credit only the unused TIME on the old plan.
         billing_cycle_anchor: 'now',
@@ -211,10 +222,18 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         // Stripe applies the plan change only after the immediate invoice is paid.
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
-        metadata: { plan_tier: targetPlan, user_id: userId, upgrade_from: currentTier },
+        metadata: {
+          plan_tier: targetPlan,
+          user_id: userId,
+          upgrade_from: currentTier,
+          requested_seats: String(requestedSeats),
+        },
       },
       {
-        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${prorationDate}`,
+        // Quantity is part of the key. Without it, "5 seats -> 10" and
+        // "5 seats -> 25" collide whenever they share a proration second, and
+        // Stripe replays the first result for the second request.
+        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${requestedSeats}:${prorationDate}`,
       },
     );
   } catch (err) {
@@ -241,11 +260,21 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const appliedPriceId = updatedSubscription.items.data[0]?.price.id;
-  if (appliedPriceId !== newPriceId) {
+  const appliedItem = updatedSubscription.items.data[0];
+  const appliedPriceId = appliedItem?.price.id;
+  const appliedSeats = currentSeatsFromStripeItem(appliedItem?.quantity);
+  if (appliedPriceId !== newPriceId || appliedSeats !== requestedSeats) {
     logger.error(
-      { userId, stripeSubId, targetPlan, expectedPriceId: newPriceId, appliedPriceId },
-      'Stripe returned an upgrade without the target price applied',
+      {
+        userId,
+        stripeSubId,
+        targetPlan,
+        expectedPriceId: newPriceId,
+        appliedPriceId,
+        expectedSeats: requestedSeats,
+        appliedSeats,
+      },
+      'Stripe returned an upgrade without the target price and seat count applied',
     );
     throw createError.internal('Upgrade payment status could not be verified');
   }
@@ -254,10 +283,28 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     { userId, stripeSubId, newPriceId, targetPlan },
     'Stripe upgrade paid; awaiting canonical webhook activation',
   );
+
+  // Audit: user-initiated plan change. Plan slugs and the billing interval only
+  // — no Stripe ids, invoice urls or client secrets reach the audit row.
+  await recordAuditEvent({
+    userId,
+    eventType: 'plan_changed',
+    request,
+    detail: {
+      resourceType: 'subscription',
+      previousPlanTier: currentTier,
+      planTier: targetPlan,
+      billingInterval,
+      source: 'upgrade',
+      status: 'webhook_pending',
+    },
+  });
+
   return NextResponse.json({
     success: true,
     newPlan: targetPlan,
     billingInterval,
+    seats: requestedSeats,
     activation: 'webhook_pending',
   });
 }

@@ -1,5 +1,5 @@
 /**
- * FontSelector — "Chat Font" section for GeneralSettings / Appearance tab.
+ * FontSelector — "Chat Font" section for the Settings Appearance tab.
  *
  * Renders 4 clickable "Aa" tiles. Selected tile gets a blue border and a
  * Check icon overlay. Unselected tiles have a subtle border that brightens on

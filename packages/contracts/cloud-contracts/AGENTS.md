@@ -10,8 +10,7 @@ Read root `AGENTS.md`, then this file, then `packages/contracts/cloud-contracts/
 
 `packages/contracts/cloud-contracts` owns the canonical managed-cloud wire contracts
 for AGI Workforce: Zod schemas, endpoint paths, stream deltas, and typed
-clients shared by Web, Desktop, Mobile, and the transitional
-`@agiworkforce/services` facade. Contracts only — no persistence, sync-apply
+clients shared by Web, Desktop, and Mobile. Contracts only — no persistence, sync-apply
 mechanics, artifact derivation, provider execution, auth, billing, or
 product policy.
 
@@ -20,8 +19,7 @@ product policy.
 - Primary lane: `contracts-types`.
 - Owned write path: `packages/contracts/cloud-contracts/**`.
 - Production dependencies are limited to `@agiworkforce/types` and `zod`; do
-  not add dependencies on applications, `@agiworkforce/services`, or
-  `packages/contracts/licensing`.
+  not add dependencies on applications or `packages/contracts/licensing`.
 
 ## High-Risk Areas
 
@@ -33,9 +31,9 @@ product policy.
   or renaming a module requires updating the hardcoded list in
   `scripts/check-cloud-contract-ownership.mjs` in the same change, or
   `pnpm check:cloud-contract-ownership` fails.
-- `@agiworkforce/services` only re-exports this package for compatibility;
-  new first-party consumers must import `@agiworkforce/cloud-contracts`
-  directly, never through the facade.
+- All consumers must import `@agiworkforce/cloud-contracts` directly. The
+  transitional `@agiworkforce/services` facade was deleted at M8 (2026-07-15)
+  and `scripts/check-artifact-sync-ownership.mjs` guards against its return.
 - Managed cloud is public alpha and open by default (root `AGENTS.md`) —
   contracts here must not reintroduce a waitlist/private-beta gate.
 

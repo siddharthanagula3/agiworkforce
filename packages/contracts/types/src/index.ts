@@ -92,6 +92,10 @@ export * from './user';
 
 // Billing plan pricing and included-usage budget helpers
 export * from './billing-catalog';
+export * from './usage-vocabulary';
+export * from './quick-start-intents';
+export * from './paywall-vocabulary';
+export * from './interactive-cards';
 
 // Shared subscription-status entitlement policy
 export * from './subscription-entitlement';
@@ -111,6 +115,9 @@ export * from './memory';
 // Research types (ResearchQuery, ResearchReport, Citation)
 export * from './research';
 
+// Hosted plugin registry types (PluginManifest, PluginRegistryEntry, guards)
+export * from './plugins';
+
 // Council types (CouncilQuery, CouncilResponse, ModelVote)
 export * from './council';
 
@@ -121,7 +128,6 @@ export * from './audit';
 export * from './event-triggers';
 
 // MCP Apps types (interactive tool UIs in chat)
-export * from './mcp-apps';
 
 // A2A protocol types (agent-to-agent communication)
 export * from './a2a';

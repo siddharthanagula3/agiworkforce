@@ -10,6 +10,22 @@ export const metadata = buildMetadata({
   path: '/subprocessors',
 });
 
+/*
+ * REMOVED 2026-08-05 — "Resend · Transactional email (account, billing, support)".
+ *
+ * No transactional email provider is wired anywhere in this repository: there is
+ * no resend/sendgrid/postmark/mailgun/nodemailer/SES dependency in the web
+ * manifest and no send call site. Two production files state the same thing in
+ * terms — app/api/user/delete-account/route.ts ("there is no transactional email
+ * provider anywhere in this repository") and
+ * lib/services/organization-invitation-service.ts.
+ *
+ * Listing a processor that receives nothing is a defect in the opposite
+ * direction from an omission: it makes the list unreliable, and it propped up
+ * three separate promises of emailed notice that could not be performed. Do not
+ * re-add the entry until an email provider is actually wired — and when it is,
+ * add it here in the same change.
+ */
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {
     name: 'Neon',
@@ -26,16 +42,66 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     purpose: 'Hosting and edge delivery for the web surface (agiworkforce.com).',
     region: 'Global edge',
   },
-  { name: 'Fly.io', purpose: 'API gateway and signaling-server runtime.', region: 'us-east' },
+  {
+    name: 'Fly.io',
+    purpose:
+      'Runtime for the real-time signaling server used by collaborative and multi-device sessions.',
+    region: 'United States (San Jose)',
+  },
   { name: 'Stripe', purpose: 'Payment processing for paid tiers.', region: 'United States' },
   {
-    name: 'Resend',
-    purpose: 'Transactional email (account, billing, support).',
+    name: 'Cloudflare',
+    purpose:
+      'Two roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here, and are served from permanent public URLs — see the privacy policy. (2) Edge delivery and DDoS protection for the marketing site.',
+    region: 'Global edge',
+  },
+  //
+  // The five entries below were absent while the services were live in
+  // production. A subprocessor list that omits a processor of personal data is a
+  // compliance defect, not a documentation gap — each of these is wired today:
+  //
+  {
+    name: 'Sentry',
+    purpose:
+      'Error and performance monitoring. Receives crash reports and diagnostic context from the web surface and server routes.',
     region: 'United States',
   },
   {
-    name: 'Cloudflare',
-    purpose: 'DDoS protection, edge caching for the marketing site.',
+    name: 'E2B',
+    purpose:
+      'Managed sandbox runtime. Executes code and processes files you supply during a Managed Cloud session. Sandbox execution is gated behind an explicit operator flag and is off by default; while it is off, nothing is sent here.',
+    region: 'United States',
+  },
+  {
+    name: 'Google Analytics',
+    purpose:
+      'Product analytics for the marketing site. Receives page views and device/browser metadata.',
+    region: 'United States',
+  },
+  {
+    name: 'Model providers (Managed Cloud)',
+    purpose:
+      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select. This applies to Managed Cloud only — in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
+    region: 'United States and other regions, per provider',
+  },
+  {
+    // Not optional to disclose: aggregator-routing.ts routes MiniMax, Qwen and
+    // Zhipu through OpenRouter on AGI's own keys, so prompt content for those
+    // models passes through OpenRouter as well as the model provider.
+    name: 'OpenRouter',
+    purpose:
+      'Inference routing for the MiniMax, Qwen and Zhipu models on Managed Cloud. Prompt content for those models passes through OpenRouter on its way to the model provider.',
+    region: 'United States',
+  },
+  {
+    name: 'MiniMax, Qwen and Zhipu',
+    purpose:
+      'Inference for their own models on Managed Cloud, reached through OpenRouter rather than directly.',
+    region: 'Outside the United States, per provider',
+  },
+  {
+    name: 'Upstash',
+    purpose: 'Rate limiting and ephemeral request state.',
     region: 'Global edge',
   },
 ];
@@ -50,8 +116,15 @@ export default function SubprocessorsPage() {
           <p className="agi-page-lede">
             Third parties that process customer data on our behalf.{' '}
             <strong>
-              When this list changes, we update it here and notify customers on Enterprise contracts
-              30 days in advance.
+              This page is Annex III to our{' '}
+              <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+                data processing addendum
+              </Link>
+              . When the list changes we update it here and record the change on{' '}
+              <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+                /changelog
+              </Link>
+              , and customers have 30 days from publication to object.
             </strong>
           </p>
         </section>
@@ -75,6 +148,27 @@ export default function SubprocessorsPage() {
               ))}
             </tbody>
           </table>
+        </section>
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How you find out about a change</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Additions and replacements are published on this page and recorded on{' '}
+            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+              /changelog
+            </Link>
+            , which you can subscribe to. We deliberately do not promise emailed notice:{' '}
+            <strong>
+              there is no transactional email system in this product today, so a commitment to email
+              you is one we could not perform
+            </strong>
+            . To object to a new subprocessor on reasonable data protection grounds, write to us
+            within 30 days of publication — the objection and termination route is in section 05 of
+            the{' '}
+            <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+              DPA
+            </Link>
+            .
+          </p>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">What about LLM providers?</p>

@@ -103,3 +103,25 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
     syncInlineCompletionProvider,
   };
 }
+
+/**
+ * Provider objects with no VS Code registrations, for the degraded path where
+ * `setupProviders` threw. Chat setup and command setup both hold references to
+ * these, so rebuilding them keeps the sidebar chat view and the command palette
+ * alive instead of losing the whole surface to one failed registration.
+ */
+export function createDegradedProviderState(context: vscode.ExtensionContext): ProviderState {
+  const diagnosticsProvider = new AgiDiagnosticsProvider();
+  const diffDecorationProvider = new DiffDecorationProvider();
+  context.subscriptions.push(diagnosticsProvider, diffDecorationProvider);
+
+  return {
+    diffDecorationProvider,
+    diagnosticsProvider,
+    codeLensProvider: new AgiCodeLensProvider(),
+    // Nothing was registered, so there is nothing for a settings change to
+    // toggle on or off.
+    syncCodeLensProvider: () => {},
+    syncInlineCompletionProvider: () => {},
+  };
+}

@@ -105,7 +105,12 @@ export function ConversationRow({
     if (!rect) return;
     const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
     const openUp = rect.bottom + MENU_EST_HEIGHT > window.innerHeight;
-    const top = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
+    const preferredTop = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
+    // Clamp to the viewport. The horizontal axis was already clamped, but the
+    // vertical was not: flipping up from a row near the top of the window
+    // produced a NEGATIVE top, so the menu opened above the viewport edge and
+    // Pin/Rename were cut off with nothing to scroll.
+    const top = Math.max(8, Math.min(preferredTop, window.innerHeight - MENU_EST_HEIGHT - 8));
     setMenuPos({ top, left });
     setConfirmDelete(false);
     setMenuOpen(true);

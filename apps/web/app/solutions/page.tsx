@@ -7,7 +7,6 @@ import {
   FinalCta,
   FlagshipHero,
 } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Solutions: AI workflows for teams, developers, and operators',
@@ -28,9 +27,9 @@ export default function SolutionsPage() {
           em="Many ways in."
           lede="Developers come for the terminal. Teams come for governance. Operators come for scheduled desktop work. Everyone gets the same rule: Local, BYOK, and AGI Cloud are separate, visible routes. Nothing moves between them silently."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
             { href: '/business', label: 'See AGI for Business' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/pricing', label: 'See Plans' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -103,7 +102,7 @@ export default function SolutionsPage() {
             {
               meta: 'Procurement',
               title: 'Enterprise rollout',
-              body: 'SSO, audit, retention, and BYOK enforcement scoped by contract.',
+              body: 'BYOK enforcement today; identity, audit, and retention scoped by contract.',
               href: '/enterprise',
             },
             {
@@ -116,15 +115,14 @@ export default function SolutionsPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="Start now"
           title="Pick a door. The workspace is the same inside."
           body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a managed cloud in public alpha, open by default."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get AGI Desktop' },
             { href: '/use-cases', label: 'Browse Use Cases' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/pricing', label: 'See Plans' },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
         <MarketingFooter />

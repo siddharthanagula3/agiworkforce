@@ -7,6 +7,7 @@ import {
   revokeSharedLink,
   type SharedLinkSummary,
 } from '../services/conversation-data-service';
+import { PublishedArtifactsSection } from './PublishedArtifactsSection';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -108,7 +109,7 @@ export function SharedLinksSection() {
           Shared links
         </h1>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Review and revoke conversation links created from Web chat.
+          Review and revoke conversation links and published artifact pages created from Web chat.
         </p>
       </div>
 
@@ -216,6 +217,11 @@ export function SharedLinksSection() {
           })
         )}
       </section>
+
+      {/* CAP-015 slice 4: the other thing a user can make public from chat.
+          Kept on this screen so "what of mine is public?" has one answer
+          instead of two screens that each tell half of it. */}
+      <PublishedArtifactsSection />
     </div>
   );
 }

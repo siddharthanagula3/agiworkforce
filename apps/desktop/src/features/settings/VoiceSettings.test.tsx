@@ -12,6 +12,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VoiceCapabilities } from '../../api/voice';
 
 const mocks = vi.hoisted(() => {
+  const api = {
+    voiceCheckLocalWhisper: vi.fn().mockResolvedValue(false),
+  };
   const voiceInput = {
     hotkey: 'option',
     voiceProvider: 'local_whisper',
@@ -44,8 +47,12 @@ const mocks = vi.hoisted(() => {
     listPiperVoices: vi.fn().mockResolvedValue([]),
     downloadPiperVoice: vi.fn(),
   };
-  return { voiceInput, voiceMode };
+  return { api, voiceInput, voiceMode };
 });
+
+vi.mock('../../api/voice', () => ({
+  voiceCheckLocalWhisper: mocks.api.voiceCheckLocalWhisper,
+}));
 
 vi.mock('../../stores/settingsStore', () => ({
   useVoiceInputStore: (selector: (state: typeof mocks.voiceInput) => unknown) =>
@@ -84,6 +91,30 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     vi.clearAllMocks();
     mocks.voiceMode.capabilities = null;
     mocks.voiceMode.globalPttActive = false;
+    mocks.voiceInput.voiceProvider = 'local_whisper';
+    mocks.api.voiceCheckLocalWhisper.mockResolvedValue(false);
+  });
+
+  it('warns when Local Whisper is selected but not compiled into this build', async () => {
+    mocks.voiceInput.voiceProvider = 'local_whisper';
+    mocks.api.voiceCheckLocalWhisper.mockResolvedValue(false);
+    render(<VoiceSettings />);
+    expect(
+      await screen.findByText(/Local Whisper is not compiled into this build/i),
+    ).toBeInTheDocument();
+  });
+
+  it('does not warn about Local Whisper when the backend reports it available', async () => {
+    mocks.voiceInput.voiceProvider = 'local_whisper';
+    mocks.api.voiceCheckLocalWhisper.mockResolvedValue(true);
+    render(<VoiceSettings />);
+    // Let the availability probe resolve.
+    await screen.findByText('Transcription Provider');
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByText(/Local Whisper is not compiled into this build/i),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('presents system dictation as unavailable while the capability probe is false', () => {

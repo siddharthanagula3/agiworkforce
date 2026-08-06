@@ -192,8 +192,9 @@ export default function MobileLegalPage() {
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
-            . An EU representative per Art. 27 GDPR will be appointed before the 2026-07-12 launch
-            date; contact details will be published at{' '}
+            . AGI Automation LLC has not yet designated an EU representative under Art. 27 GDPR.
+            Until it does, address privacy requests to AGI Automation LLC directly; the
+            representative&rsquo;s details will be published at{' '}
             <Link href="/legal/eu-representative" style={{ color: 'var(--agi-amber)' }}>
               agiworkforce.com/legal/eu-representative
             </Link>

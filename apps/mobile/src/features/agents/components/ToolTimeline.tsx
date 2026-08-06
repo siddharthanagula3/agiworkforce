@@ -182,7 +182,7 @@ function TimelineRow({ step, index, isLast, timestamp }: TimelineRowProps) {
               flex: 1,
               width: 1,
               marginTop: 4,
-              backgroundColor: 'rgba(255,255,255,0.1)',
+              backgroundColor: colors.border,
             }}
           />
         )}

@@ -1161,6 +1161,10 @@ export default function ChatScreen() {
                 borderRadius: radii.full,
                 backgroundColor: colors.inputSurface,
                 maxWidth: 120,
+                // Yield before the mode toggle does. Without this the header's
+                // fixed-size children fought for a slot narrower than their sum
+                // on a 375pt device and the toggle overlapped this chip.
+                flexShrink: 1,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
               accessibilityRole="button"

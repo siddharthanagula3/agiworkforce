@@ -75,6 +75,7 @@ function makeSkill(root: string): Skill {
     name: 'design-review',
     description: 'Review UI for release polish.',
     body: 'Inspect the rendered interface and cite concrete defects.',
+    contentHash: `sha256:${'0'.repeat(64)}`,
     filePath: join(root, 'design-review', 'SKILL.md'),
     source: 'personal',
     metadata: {},

@@ -13,7 +13,13 @@
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */
 
-import { Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
+import { Code2, Film, Image as ImageIcon, Monitor, PenLine, Search } from 'lucide-react';
+import {
+  QUICK_START_INTENTS,
+  quickStartIntentLabel,
+  quickStartIntentPrompt,
+  type QuickStartIntent,
+} from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useGreeting } from './useGreeting';
 
@@ -23,33 +29,30 @@ interface SuggestionChip {
   icon: React.ReactNode;
 }
 
-const CHIPS: SuggestionChip[] = [
-  {
-    label: 'Code',
-    prompt: 'Help me write code for ',
-    icon: <Code2 size={13} />,
-  },
-  {
-    label: 'Write',
-    prompt: 'Help me write ',
-    icon: <PenLine size={13} />,
-  },
-  {
-    label: 'Learn',
-    prompt: 'Help me learn about ',
-    icon: <GraduationCap size={13} />,
-  },
-  {
-    label: 'Life stuff',
-    prompt: 'Help me with ',
-    icon: <Coffee size={13} />,
-  },
-  {
-    label: "AGI's pick",
-    prompt: 'What should I focus on today? Give me an interesting challenge or idea to explore.',
-    icon: <Lightbulb size={13} />,
-  },
-];
+/**
+ * Icons are per-surface (they are React nodes); the labels and composer stems
+ * come from the shared vocabulary so web, desktop and mobile stop introducing
+ * the product with three different sets of starting points.
+ *
+ * Web PREFILLS rather than toggling a mode: its chat store is separate from
+ * unified-chat's, so rendering desktop's mode-toggling QuickChips here would
+ * flip a store this surface never reads — a chip that looks live and does
+ * nothing. Shared words, surface-appropriate action.
+ */
+const INTENT_ICONS: Record<QuickStartIntent, React.ReactNode> = {
+  code: <Code2 size={13} />,
+  write: <PenLine size={13} />,
+  research: <Search size={13} />,
+  image: <ImageIcon size={13} />,
+  video: <Film size={13} />,
+  computer: <Monitor size={13} />,
+};
+
+const CHIPS: SuggestionChip[] = QUICK_START_INTENTS.map((intent) => ({
+  label: quickStartIntentLabel(intent),
+  prompt: quickStartIntentPrompt(intent),
+  icon: INTENT_ICONS[intent],
+}));
 
 interface GreetingBannerProps {
   /** Called when the user clicks a suggestion chip. */

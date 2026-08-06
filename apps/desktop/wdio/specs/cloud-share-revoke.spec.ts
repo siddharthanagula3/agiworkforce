@@ -331,7 +331,10 @@ describe('AGI Desktop Cloud conversation sharing', () => {
     await cloudTab.waitForDisplayed({ timeout: 20_000 });
     await cloudTab.click();
 
-    const signInButton = await $('button=Sign in to AGI Cloud');
+    // Post-redesign (a3b1005c8): the owned-window device flow is behind the
+    // explicit browser-fallback action; "Sign in to AGI Cloud" is now only
+    // the card heading.
+    const signInButton = await $('button=Sign in through your browser instead');
     await signInButton.waitForDisplayed({ timeout: 20_000 });
     await signInButton.click();
 

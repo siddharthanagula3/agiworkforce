@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { SchedulesPage } from './SchedulesPage';
 import type { ScheduleApi } from '../services/schedule-api';
 import type { ScheduleRun, ScheduleTask } from '../types';
@@ -185,6 +186,39 @@ describe('SchedulesPage', () => {
     ).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Schedule Name')).toHaveFocus();
     expect(api.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('offers only interval units the deployed sweep can deliver and names its real cadence', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    await screen.findByText('No schedules yet');
+
+    await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    await user.selectOptions(within(dialog).getByLabelText('Frequency'), 'interval');
+
+    const unitSelect = within(dialog).getByLabelText<HTMLSelectElement>('Interval Unit');
+    const offered = [...unitSelect.options].map((option) => option.value);
+    // Derived from the sweep, not pinned to a literal list: the form used to
+    // offer "Days" alone while the sweep was hourly and the draft defaulted to
+    // hours, so the control showed a unit the draft did not hold.
+    expect(offered).toEqual(
+      ['minutes', 'hours', 'days'].filter(
+        (unit) =>
+          ({ minutes: 60_000, hours: 60 * 60_000, days: 24 * 60 * 60_000 })[unit]! >=
+          SWEEP_INTERVAL_MS,
+      ),
+    );
+    expect(offered).toContain(unitSelect.value);
+    expect(
+      within(dialog).getByText(new RegExp(`swept ${describeSweepCadence().cadence}`)),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(within(dialog).getByLabelText('Frequency'), 'custom');
+    expect(
+      within(dialog).getByText(new RegExp(`swept ${describeSweepCadence().cadence}`)),
+    ).toBeInTheDocument();
   });
 
   it('creates a supported schedule, updates the list, and announces success', async () => {

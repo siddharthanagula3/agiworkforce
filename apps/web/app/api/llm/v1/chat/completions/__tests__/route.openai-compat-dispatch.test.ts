@@ -17,7 +17,7 @@
  * up," one assertion per provider.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 // GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
@@ -258,6 +258,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     estimateCost: vi.fn(() => 5),
     calculateCost: vi.fn(() => 4),
     getInputCostPerMtok: vi.fn(() => 3.0),
+    getCacheWriteCostPerMtok: vi.fn(() => 3.0),
   },
 }));
 
@@ -410,8 +411,14 @@ describe('Managed Web conversation ownership', () => {
   });
 });
 
+/**
+ * Transport matrix for a paid agentic turn. The durable Workflow transport is
+ * what lets a run outlive the request that started it; the request-scoped
+ * inline stream is the fallback, and both must emit the same run headers so a
+ * client cannot tell which one it got except by looking for the workflow id.
+ */
 describe('Managed Web AGI Work dispatch', () => {
-  it('starts the request-scoped tool loop without waiting on the broken workflow callback', async () => {
+  function arrangePaidAgenticTurn(): void {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
@@ -453,12 +460,36 @@ describe('Managed Web AGI Work dispatch', () => {
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
+  }
+
+  function durableWorkflowStream() {
+    return {
+      workflowRunId: 'wrun_durable_1',
+      readable: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      }),
+    };
+  }
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('runs a paid agentic turn on the durable transport so it survives the client', async () => {
+    arrangePaidAgenticTurn();
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
     const response = await POST(makeAgiWorkRequest('minimax-m3'));
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_durable_1');
+    // Same run handle either way: reattachment must not depend on transport.
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
-    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+    expect(workflowRouteMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: 'run-durable-1', userId: 'user-1' }),
+    );
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
       // GOV-7: the per-plan ceiling input.
@@ -466,7 +497,44 @@ describe('Managed Web AGI Work dispatch', () => {
       // CON-1: denied tools must be filtered before they are advertised.
       isToolDenied: expect.any(Function),
     });
+  });
+
+  it('reverts to the request-scoped stream when the kill-switch is off', async () => {
+    arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '0');
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    const response = await POST(makeAgiWorkRequest('minimax-m3'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+    expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('degrades to the request-scoped stream instead of failing the turn when the workflow will not start', async () => {
+    arrangePaidAgenticTurn();
+    workflowRouteMocks.start.mockRejectedValue(new Error('workflow storage unavailable'));
+
+    const response = await POST(makeAgiWorkRequest('minimax-m3'));
+
+    // Nothing was generated or consumed before the start attempt, so the inline
+    // path picks the turn up whole — the user loses detachability, not the turn.
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+  });
+
+  it('leaves an ordinary chat turn with no tools off the durable transport entirely', async () => {
+    arrangePaidAgenticTurn();
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    const response = await POST(makeRequest('minimax-m3', undefined, true));
+
+    expect(response.status).toBe(200);
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+    expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
   });
 });
 

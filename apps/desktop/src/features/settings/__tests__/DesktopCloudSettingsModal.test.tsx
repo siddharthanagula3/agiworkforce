@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agiworkforce/ui', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
   return {
+    // Spread the real module so a new export (e.g. shortcutLabel) does not break
+    // every consumer's test; the explicit entries below still override it.
+    ...actual,
     SettingsModal: mocks.settingsModal,
     SETTINGS_NAV_GROUPS_WEB: actual.SETTINGS_NAV_GROUPS_WEB,
   };

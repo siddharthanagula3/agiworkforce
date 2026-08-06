@@ -5,7 +5,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Changelog',
-  description: `A dated archive of what shipped and what is aligned to the ${LAUNCH.date} public release.`,
+  description: `A dated archive of what shipped and what is aligned to the public release.`,
   alternates: { canonical: '/changelog' },
   openGraph: {
     title: 'Changelog',
@@ -53,23 +53,23 @@ const RELEASES: Release[] = [
     date: '2026-02 to 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      `Tauri + React desktop with release signing and installer publishing aligned to the ${LAUNCH.date} public release path.`,
+      `Tauri + React desktop with release signing and installer publishing aligned to the public release path.`,
       'Public download links open only after verified GitHub release assets or configured signed-asset URLs are available.',
     ],
   },
 ];
 
 const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
-  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: LAUNCH.date },
+  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: LAUNCH.shortLabel },
   {
     item: 'Chrome extension',
     detail: 'CWS submission once visual review clears.',
-    quarter: LAUNCH.date,
+    quarter: LAUNCH.shortLabel,
   },
   {
     item: 'VS Code extension',
     detail: 'Marketplace listing planned for public launch.',
-    quarter: LAUNCH.date,
+    quarter: LAUNCH.shortLabel,
   },
 ];
 

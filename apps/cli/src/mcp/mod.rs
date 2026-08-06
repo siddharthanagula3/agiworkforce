@@ -35,6 +35,7 @@ use agiworkforce_mcp::{
 pub mod connection_pool;
 pub mod elicitation;
 mod oauth_store;
+pub mod registry;
 pub mod resources;
 pub mod status;
 pub mod tui_handler;

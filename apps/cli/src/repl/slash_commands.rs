@@ -65,6 +65,14 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    // `/mcp <subcommand>` mutates the writable MCP registry (add/remove/enable/
+    // disable/reconfigure/restart). Bare `/mcp` falls through to the shared
+    // live-status renderer below.
+    if cmd == "/mcp" && !arg.is_empty() {
+        registry::handle_mcp(arg, session).await;
+        return SlashResult::Handled;
+    }
+
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
             persist_shared_ui_config(cmd.as_str(), arg, session, config);
@@ -150,8 +158,13 @@ pub(super) async fn handle_slash_command(
         "/setup" => {
             dialogs::handle_setup(config);
         }
-        "/permissions" | "/perms" | "/approvals" => {
+        "/permissions" | "/perms" | "/approvals" | "/approve" => {
+            // `/approve` is a thin alias to the approvals surface — the same
+            // PermissionStore the top-level `agi approvals` subcommand mutates.
             registry::handle_permissions(arg);
+        }
+        "/raw" => {
+            eprintln!("{}", registry::render_raw_last_response(session, arg));
         }
         "/models" => {
             eprintln!("{}", crate::provider::format_model_list());
@@ -192,6 +205,27 @@ pub(super) async fn handle_slash_command(
         "/hooks" => {
             let hcfg = crate::hooks::load_hooks().unwrap_or_default();
             eprintln!("{}", crate::hooks::format_hooks_list(&hcfg));
+        }
+        "/subagents" => {
+            let agents = crate::agents::discover_agents();
+            eprintln!("{}", crate::agents::format_subagents(&agents));
+        }
+        "/task" | "/tasks" => {
+            let sub = arg.split_whitespace().next().unwrap_or("list");
+            match sub {
+                "" | "list" | "ls" => {
+                    let tasks = match &session.subagent_manager {
+                        Some(manager) => manager.list().await,
+                        None => Vec::new(),
+                    };
+                    eprintln!("{}", crate::subagent::format_task_list(&tasks));
+                }
+                other => {
+                    output::print_warn(&format!(
+                        "Unknown /task subcommand '{other}'. Use: /task list"
+                    ));
+                }
+            }
         }
         "/context" | "/ctx" => {
             eprintln!("{}", session.context_report());
@@ -350,6 +384,9 @@ pub(super) async fn handle_slash_command(
         }
         "/diff" => {
             registry::handle_diff();
+        }
+        "/worktree" | "/wt" => {
+            eprintln!("{}", registry::handle_worktree(arg).await);
         }
         "/batch" => {
             let batch_parts: Vec<&str> = arg.splitn(2, ' ').collect();
@@ -512,6 +549,13 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "permissions",
         "perms",
         "approvals",
+        "approve",
+        "raw",
+        "worktree",
+        "wt",
+        "subagents",
+        "task",
+        "tasks",
         "models",
         "skills",
         "hooks",
@@ -622,6 +666,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn approve_and_raw_aliases_dispatch_and_are_handled() {
+        let ctx = crate::context::gather_system_context();
+        let mut session =
+            crate::agent::AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        session.messages.push(crate::models::Message::text(
+            "assistant",
+            "raw dispatch payload",
+        ));
+        let mut config = crate::config::CliConfig::default();
+
+        // `/approve help` routes into the approvals surface (prints help, no store
+        // mutation) and is Handled — not reported as an unknown command.
+        let approve = handle_slash_command("/approve help", &mut session, &mut config).await;
+        assert!(matches!(approve, SlashResult::Handled));
+
+        // `/raw` dispatches to the raw-output renderer and is Handled.
+        let raw = handle_slash_command("/raw", &mut session, &mut config).await;
+        assert!(matches!(raw, SlashResult::Handled));
     }
 
     #[tokio::test]

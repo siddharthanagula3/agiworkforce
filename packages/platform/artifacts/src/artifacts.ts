@@ -42,10 +42,15 @@
  *   - Versioning: `publishedArtifact.version` is always 1 in the current path.
  *   - Inline editor / edit-in-place is not wired; the panel accepts content
  *     as-is from the artifact store.
- *   - No surface ships a {@link CloudPublisher} yet, so byok/managed publish
- *     currently resolves to `{ kind: 'unavailable' }` everywhere. Retention,
- *     deletion, billing and abuse controls must land with the first adapter —
- *     they are a requirement ON that adapter, not a gate in this module.
+ *   - Web ships the first {@link CloudPublisher} (CAP-015): the ArtifactsPanel
+ *     injects `createWebCloudPublisher()`, which POSTs to
+ *     `/api/artifacts/publish` and returns a `/shared-artifact/<token>` URL.
+ *     Desktop and Mobile still inject nothing, so byok/managed publish on those
+ *     surfaces continues to resolve to `{ kind: 'unavailable' }` — accurately.
+ *   - Deletion IS implemented for the web adapter (unpublish, plus a management
+ *     list in settings). Retention/TTL, per-user quota and abuse controls are
+ *     still founder-pending for that adapter; they are a requirement ON the
+ *     adapter, not a gate in this module.
  *
  * @module artifacts
  */

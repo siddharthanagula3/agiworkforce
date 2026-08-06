@@ -224,6 +224,14 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         cacheReadTokens: 10,
         cacheWriteTokens: undefined,
         cacheWrite1hTokens: undefined,
+        // CPST Stage-0 additive telemetry (design doc §4.3, phase 1). Asserted
+        // exactly, so an unreviewed key cannot reach the ledger unnoticed. This
+        // fixture carries a null task type and never rotated, so taskFamily,
+        // taskFamilyConfidence, routePlanId, retries, and fallbackReason must
+        // all stay absent.
+        taskOutcome: 'unknown',
+        verifierResult: 'skipped',
+        fallbackUsed: false,
       },
     });
   });
@@ -332,6 +340,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         cacheCreation1hInputTokens: 300,
         reasoningOutputTokens: 20,
       }),
+      expect.any(Date),
     );
   });
 });

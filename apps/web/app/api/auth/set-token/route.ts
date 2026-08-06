@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
   // Validate the access token is a real Clerk JWT before writing it as a session cookie.
   // This blocks forged-auth-cookie attacks that could arise from a valid CSRF token + this
   // endpoint being reached with an attacker-supplied JWT.
+  // Only ever set from a signature-VERIFIED claim (never from a decoded
+  // payload) so the audit row cannot be attributed to a forged subject.
+  let verifiedUserId: string | null = null;
+
   if (parsed.token) {
     try {
       const { verifyToken } = await import('@clerk/backend');
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest) {
       if (!claims.sub) {
         return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
       }
+      verifiedUserId = claims.sub;
     } catch {
       return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
     }
@@ -83,6 +89,16 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30, // 30 days
     });
   }
+
+  // Audit: successful sign-in. Only the verified subject and the transport are
+  // recorded — the raw Clerk JWT in `parsed.token` must never reach a log row.
+  // recordAuditEvent never throws, so a failed write cannot fail the sign-in.
+  await recordAuditEvent({
+    userId: verifiedUserId,
+    eventType: 'login',
+    request,
+    detail: { source: 'session_cookie', resourceType: 'session' },
+  });
 
   return NextResponse.json({ ok: true });
 }

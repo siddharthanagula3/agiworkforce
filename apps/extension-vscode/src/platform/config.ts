@@ -16,6 +16,7 @@
  * receive a sensitive endpoint value through the webview.
  */
 
+import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   enforceAgentModeConsent,
@@ -69,6 +70,17 @@ export type ConfigSettingUpdate = {
   [K in MutableConfigKey]: { key: K; value: MutableConfigValues[K] };
 }[MutableConfigKey];
 
+/**
+ * Canonical display label for a resolved tier. `unknown` and any unrecognised
+ * value stay literal rather than being normalised to "Free" — this is a
+ * diagnostic surface, and silently showing a plan the user may not have would be
+ * worse than showing that we could not resolve one.
+ */
+function currentTierLabel(tier: string): string {
+  if (!tier || tier === 'unknown') return 'Unknown';
+  return isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : tier;
+}
+
 export const SETTINGS_PANEL_SETTING_KEYS = [
   'apiEndpoint',
   'model',
@@ -96,7 +108,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
 ] as const satisfies readonly MutableConfigKey[];
 
 export interface ExtensionSettingsSnapshot {
-  values: MutableConfigValues & { currentTier: string };
+  values: MutableConfigValues & { currentTier: string; currentTierLabel: string };
   workspaceOverrides: MutableConfigKey[];
   workspaceTrusted: boolean;
 }
@@ -318,6 +330,11 @@ export const Config = {
         gatewayUrl: this.gatewayUrl(),
         tier: this.tier(),
         currentTier: this.currentTier(),
+        // Human label resolved from the shared billing catalog, NOT by
+        // string-munging the tier id. The settings webview used to render
+        // `currentTier.replace(/_/g, ' ')`, which printed "max 15x" where every
+        // other surface says "Max 15x", and "local only" for "Local Mode".
+        currentTierLabel: currentTierLabel(this.currentTier()),
       },
       workspaceOverrides: workspaceOverrides(),
       workspaceTrusted: vscode.workspace.isTrusted,

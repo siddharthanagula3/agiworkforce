@@ -11,6 +11,7 @@ import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
   resolveCloudChatSurface,
+  type AuthenticatedSurfaceClass,
 } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 
@@ -19,6 +20,8 @@ export type AuthGateSuccess = {
   userId: string;
   token: string;
   subscription: SubscriptionInfo;
+  /** Surface class proved by the credential; see AuthResult.surfaceClass. */
+  surfaceClass?: AuthenticatedSurfaceClass;
 };
 
 type AuthGateFailure = {
@@ -36,7 +39,10 @@ function enforceManagedCloudSurface(
   success: AuthGateSuccess,
 ): AuthGateResult {
   const isApiKey = success.token.startsWith('sk_live_') || success.token.startsWith('sk_test_');
-  const surface = isApiKey ? 'api' : resolveCloudChatSurface(request);
+  // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01: pass the credential-proved class so a
+  // developer token cannot claim `desktop` via `x-agi-surface` and be admitted
+  // under `managed_chat` instead of the Pro-only `developer_surfaces`.
+  const surface = isApiKey ? 'api' : resolveCloudChatSurface(request, success.surfaceClass);
   if (canUseManagedCloudChatSurface(success.subscription.plan_tier, surface)) return success;
 
   const capability = getCloudChatSurfaceCapability(surface);
@@ -110,8 +116,11 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const token = authHeader.substring(7);
 
   let userId: string;
+  let surfaceClass: AuthenticatedSurfaceClass | undefined;
   try {
-    ({ userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' }));
+    ({ userId, surfaceClass } = await getClerkAuthUser(request, {
+      apiKeyScope: 'inference:write',
+    }));
   } catch (error) {
     const insufficientScope = isApiKeyScopeError(error);
     return {
@@ -148,6 +157,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       userId,
       token,
       subscription: buildFreeWebsiteSubscription(userId),
+      ...(surfaceClass ? { surfaceClass } : {}),
     });
   }
 
@@ -162,6 +172,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
           ...subscription,
           status: 'active',
         },
+        ...(surfaceClass ? { surfaceClass } : {}),
       });
     }
 
@@ -180,5 +191,11 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  return enforceManagedCloudSurface(request, { ok: true, userId, token, subscription });
+  return enforceManagedCloudSurface(request, {
+    ok: true,
+    userId,
+    token,
+    subscription,
+    ...(surfaceClass ? { surfaceClass } : {}),
+  });
 }

@@ -1,19 +1,23 @@
 'use client';
 
 /**
- * SecuritySection — wires the previously-orphaned TwoFactorPanel (2FA toggle
- * + session timeout + change password) into the reachable in-app Settings
- * modal. TwoFactorPanel itself was fully built (features/settings/components/
+ * SecuritySection — wires the previously-orphaned TwoFactorPanel (session
+ * timeout + change password) into the reachable in-app Settings modal.
+ * TwoFactorPanel itself was fully built (features/settings/components/
  * Settings/TwoFactor.tsx) and backed by real Neon/Clerk endpoints, but was
  * only ever imported by features/settings/pages/UserSettings.tsx, which is
  * not mounted by any route — making the whole security tab unreachable.
+ *
+ * Authenticator (TOTP) enrollment lives in TwoFactorEnrollmentPanel below.
+ * This route is the product's only 2FA enrollment surface — the mobile app
+ * links here (WEB_SECURITY_URL) rather than enrolling on device.
  *
  * Same fix pattern as NotificationsSection.tsx: a section component owning
  * its own form + query wiring, added to WebSettingsModal's sectionContent
  * map and the shared SettingsModal nav config.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -28,7 +32,9 @@ import {
   type SecuritySettingsFormData,
 } from '@features/settings/schemas/settings-validation';
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
+import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
+import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 
 export function SecuritySection() {
   const { data: serverSettings, isLoading } = useUserSettings();
@@ -54,10 +60,18 @@ export function SecuritySection() {
     mode: 'onBlur',
   });
 
+  // `user_settings.two_factor_enabled` is a mirror column; the authority is
+  // `user_two_factor.enabled` behind GET /api/settings/2fa. Once
+  // TwoFactorEnrollmentPanel has read that route, its answer wins over the
+  // mirror — the two disagree for any account enrolled before the mirror was
+  // last written, and a form save must not persist the stale value.
+  const authoritativeTwoFactor = useRef<boolean | null>(null);
+
   useEffect(() => {
     if (serverSettings) {
       securityForm.reset({
-        two_factor_enabled: serverSettings.two_factor_enabled ?? false,
+        two_factor_enabled:
+          authoritativeTwoFactor.current ?? serverSettings.two_factor_enabled ?? false,
         session_timeout: serverSettings.session_timeout ?? 60,
       });
     }
@@ -70,6 +84,16 @@ export function SecuritySection() {
       updateSettingsMutation.mutate(data);
     },
     [updateSettingsMutation],
+  );
+
+  // Feed the real value into the form without marking it dirty, so saving the
+  // session timeout cannot silently write `false` over a live enrollment.
+  const handleTwoFactorStatus = useCallback(
+    (status: TwoFactorStatus) => {
+      authoritativeTwoFactor.current = status.enabled;
+      securityForm.setValue('two_factor_enabled', status.enabled, { shouldDirty: false });
+    },
+    [securityForm],
   );
 
   const handlePasswordChange = useCallback(
@@ -119,10 +143,12 @@ export function SecuritySection() {
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
           Passkeys, security keys, SMS MFA, trusted-device lists, and cross-device session
-          revocation are not available in the current account contract. Authenticator enrollment
-          also remains read-only until its verification and recovery flow is mounted.
+          revocation are not available in the current account contract. Authenticator app codes
+          (TOTP) with recovery backup codes are the supported second factor.
         </p>
       </section>
+
+      <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
 
       {isLoading ? (
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Loading security settings...</div>

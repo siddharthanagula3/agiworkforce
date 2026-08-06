@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  X,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 import type {
@@ -420,10 +421,27 @@ function AuthenticatedDesktopCloudSchedules({
   const [nextOffset, setNextOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+
   const [editing, setEditing] = useState<ManagedCloudScheduleTask | null>(null);
   const [draft, setDraft] = useState<ScheduleDraft>(() => initialDraft());
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Escape closes the editor. Without it the only exits were a backdrop click
+  // and a Cancel button that sits below the fold — the dialog is
+  // max-h-[90vh] with internal scroll, so on a short window Cancel is not
+  // visible when the dialog opens. Guarded on `saving` for the same reason the
+  // backdrop handler is: dismissing mid-save would strand the request.
+  useEffect(() => {
+    if (!editorOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) {
+        event.stopPropagation();
+        setEditorOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [editorOpen, saving]);
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
@@ -710,7 +728,10 @@ function AuthenticatedDesktopCloudSchedules({
               : undefined;
 
   return (
-    <div className="h-full overflow-y-auto px-6 py-6 text-[var(--chat-text-primary)]">
+    <div
+      data-testid="desktop-cloud-schedules"
+      className="h-full overflow-y-auto px-6 py-6 text-[var(--chat-text-primary)]"
+    >
       <div className="mx-auto flex max-w-4xl flex-col gap-5">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -881,7 +902,10 @@ function AuthenticatedDesktopCloudSchedules({
                           </span>
                         </div>
                         {schedule.description ? (
-                          <p className="mt-1 text-xs text-[var(--chat-text-muted)]">
+                          // Clamped to match the prompt below it, which is
+                          // line-clamp-2. An unclamped description made a long
+                          // one push the prompt and metadata out of the card.
+                          <p className="mt-1 line-clamp-2 text-xs text-[var(--chat-text-muted)] [overflow-wrap:anywhere]">
                             {schedule.description}
                           </p>
                         ) : null}
@@ -981,8 +1005,12 @@ function AuthenticatedDesktopCloudSchedules({
                         {rowErrors[schedule.id]}
                       </p>
                     ) : null}
+                    {/* Server error strings are arbitrary length and often contain
+                        unbreakable tokens (URLs, ids), so without a wrap rule they
+                        ran outside the card. Clamped as well: a stack-trace-length
+                        error should not push the card's actions off screen. */}
                     {schedule.lastError ? (
-                      <p className="mt-3 rounded-lg bg-[var(--chat-destructive)]/5 px-3 py-2 text-xs text-[var(--chat-destructive)]">
+                      <p className="mt-3 line-clamp-4 rounded-lg bg-[var(--chat-destructive)]/5 px-3 py-2 text-xs text-[var(--chat-destructive)] [overflow-wrap:anywhere]">
                         Last error: {schedule.lastError}
                       </p>
                     ) : null}
@@ -1095,10 +1123,21 @@ function AuthenticatedDesktopCloudSchedules({
             aria-labelledby="cloud-schedule-editor-title"
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-5 shadow-2xl"
           >
-            <div className="mb-5">
+            <div className="mb-5 flex items-start justify-between gap-3">
               <h2 id="cloud-schedule-editor-title" className="text-base font-semibold">
                 {editing ? 'Edit schedule' : 'Create schedule'}
               </h2>
+              {/* Always-visible dismissal. Cancel lives at the bottom of a
+                  scrollable dialog, so it is not reachable without scrolling. */}
+              <button
+                type="button"
+                onClick={() => setEditorOpen(false)}
+                disabled={saving}
+                aria-label="Close"
+                className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:opacity-50"
+              >
+                <X size={16} />
+              </button>
               <p className="mt-1 text-sm text-[var(--chat-text-muted)]">
                 The task runs in Managed Cloud without chat memory or tools.
               </p>
@@ -1398,7 +1437,10 @@ function AuthenticatedDesktopCloudSchedules({
 
 function SignedOutDesktopCloudSchedules() {
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center px-6 text-center">
+    <div
+      data-testid="desktop-cloud-schedules"
+      className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center px-6 text-center"
+    >
       <CalendarClock className="mb-3 h-8 w-8 text-[var(--chat-text-muted)]" aria-hidden />
       <p className="text-base font-semibold text-[var(--chat-text-primary)]">
         Sign in to manage Cloud schedules

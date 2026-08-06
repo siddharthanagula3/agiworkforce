@@ -24,12 +24,10 @@
 //     Connect opens the API-key dialog instead of erupting into an
 //     "Unknown provider: linear" OAuth error.
 
-import * as fs from 'node:fs';
+import { waitForSettingsReady } from '../support/close-settings';
+import { resolveScreenDir } from '../support/dom';
 
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/connector-mapping-drift';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('connector-mapping-drift');
 
 type InvokeOutcome<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -155,8 +153,9 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
     await gear.waitForDisplayed({ timeout: 30000 });
     await gear.click();
 
-    const nav = await $('nav[aria-label="Settings sections"]');
-    await nav.waitForDisplayed({ timeout: 30000 });
+    // Nav buttons are disabled while Settings loads; wait for interactivity
+    // before clicking or the click is a silent no-op.
+    await waitForSettingsReady();
 
     const clickedConnectors = await clickButtonWithText(
       'nav[aria-label="Settings sections"]',

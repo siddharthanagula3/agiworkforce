@@ -17,6 +17,12 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import {
+  buildPurchasedSeatRecord,
+  persistPurchasedSeatsOnOrganization,
+  resolveCheckoutSessionSeats,
+  resolveSubscriptionSeats,
+} from './seats';
 
 export async function ensureProfileExists(
   db: DatabaseAdapter,
@@ -386,6 +392,10 @@ export async function upsertSubscriptionFromSession(
   let cancelAtPeriodEnd: boolean = false;
   let canceledAt: Date | null = null;
   let stripeCouponId: string | null = null;
+  // Seat count Stripe is actually billing. Read from the subscription item when
+  // the subscription is available (authoritative), otherwise from the session
+  // line item, and never from metadata.
+  let billedSeats: number | null = resolveCheckoutSessionSeats(session);
 
   if (stripeSubId) {
     try {
@@ -400,6 +410,7 @@ export async function upsertSubscriptionFromSession(
 
       cancelAtPeriodEnd = subscription.cancel_at_period_end;
       canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
+      billedSeats = resolveSubscriptionSeats(subscription);
 
       const firstItem = subscription.items?.data?.[0];
       if (!stripePriceId && firstItem) {
@@ -547,6 +558,34 @@ export async function upsertSubscriptionFromSession(
     { sessionId: session.id, resolvedUserId, planTier, stripeCustomerId, stripeSubId },
     'Session details',
   );
+
+  const purchasedSeats = buildPurchasedSeatRecord(planTier, {
+    items: { data: [{ quantity: billedSeats }] },
+  });
+  if (purchasedSeats.perSeat) {
+    const requestedSeats = session.metadata?.['requested_seats'];
+    if (requestedSeats && Number(requestedSeats) !== purchasedSeats.seats) {
+      logger.warn(
+        {
+          sessionId: session.id,
+          resolvedUserId,
+          requestedSeats,
+          billedSeats: purchasedSeats.seats,
+        },
+        'Checkout metadata seat count differs from the seat count Stripe is billing; the Stripe quantity is authoritative',
+      );
+    }
+    // The purchased seat count is a BILLING fact and belongs on the org, not on
+    // the buyer's personal subscription row. `seats_consumed` stays
+    // trigger-maintained by membership; billing only ever writes what was bought.
+    await persistPurchasedSeatsOnOrganization(db, {
+      ownerUserId: resolvedUserId,
+      seats: purchasedSeats.seats,
+      planTier,
+      stripeSubscriptionId: stripeSubId,
+      stripeCustomerId,
+    });
+  }
 
   if (!stripeCouponId && session.id) {
     try {
@@ -766,6 +805,8 @@ export async function updateSubscriptionFromStripeSubscription(
   const periodEnd = period?.end;
   const stripeCouponId = getSubscriptionCouponId(subscription);
 
+  const purchasedSeats = buildPurchasedSeatRecord(planTier, subscription);
+
   const updateData = {
     status: subscription.status,
     stripe_price_id: stripePriceId,
@@ -879,6 +920,18 @@ export async function updateSubscriptionFromStripeSubscription(
         });
 
       const updatedRow = updated[0];
+
+      if (updatedRow && purchasedSeats.perSeat) {
+        // Covers seat changes made in Stripe's hosted billing portal, which
+        // reach us only as customer.subscription.updated.
+        await persistPurchasedSeatsOnOrganization(db, {
+          ownerUserId: resolvedUserId,
+          seats: purchasedSeats.seats,
+          planTier,
+          stripeSubscriptionId: stripeSubId,
+          stripeCustomerId,
+        });
+      }
 
       if (
         updatedRow &&
@@ -1122,6 +1175,19 @@ export async function updateSubscriptionFromStripeSubscription(
             { subscriptionId: upsertedRow.id, userId: resolvedUserId },
             'Successfully upserted subscription',
           );
+        }
+
+        if (upsertedRow && purchasedSeats.perSeat) {
+          // customer.subscription.created can beat checkout.session.completed.
+          // Both paths persist seats identically so the stored count does not
+          // depend on Stripe's delivery order.
+          await persistPurchasedSeatsOnOrganization(db, {
+            ownerUserId: resolvedUserId,
+            seats: purchasedSeats.seats,
+            planTier,
+            stripeSubscriptionId: stripeSubId,
+            stripeCustomerId,
+          });
         }
 
         if (

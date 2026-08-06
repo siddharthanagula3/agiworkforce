@@ -41,6 +41,7 @@
 
 import 'server-only';
 
+import type { Citation, ResearchReportStatus, ResearchStep } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import type { ToolLoopFailoverPlan } from './tool-loop';
@@ -101,6 +102,42 @@ const CONTINUE_MARKER = 'CONTINUE_RESEARCH';
 
 export type ResearchPhase = 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
 
+/** Planned search queries the planning turn may commit to. */
+const PLAN_MIN_STEPS = 3;
+const PLAN_MAX_STEPS = 6;
+/** One planned query description is capped so a runaway plan cannot bloat SSE. */
+const MAX_PLAN_QUERY_CHARS = 300;
+/**
+ * A dedicated planning turn only runs when the iteration budget can afford it
+ * (plan + at least one gathering round + synthesis). Below that the loop keeps
+ * its pre-plan shape exactly, so the tightest budgets are unchanged.
+ */
+const MIN_ITERATIONS_FOR_PLANNING_TURN = 3;
+
+/**
+ * The report a finished (or abandoned) run hands to the durable sink.
+ *
+ * Shaped by the `ResearchReport` contract; the caller supplies the row's
+ * identity (user, request, conversation) since the loop has no database handle.
+ */
+export interface ResearchRunReport {
+  /** The research question the run was started from. */
+  query: string;
+  title: string;
+  summary: string;
+  content: string;
+  citations: Citation[];
+  steps: ResearchStep[];
+  keyFindings: string[];
+  status: ResearchReportStatus;
+  sourcesConsulted: number;
+  durationMs: number;
+  error?: string;
+}
+
+/** Durable sink for {@link ResearchRunReport}; failures never break the stream. */
+export type ResearchReportSink = (report: ResearchRunReport) => Promise<unknown>;
+
 export interface ResearchLoopOptions {
   maxIterations?: number;
   maxSearches?: number;
@@ -122,6 +159,25 @@ export interface ResearchLoopOptions {
    * import-graph reason as the tool loop. Absent means no rotation.
    */
   failover?: ToolLoopFailoverPlan;
+  /**
+   * CAP-045 slice 1: durable report persistence. Injected rather than imported
+   * so the loop keeps no database handle of its own (the route owns the
+   * RLS-scoped adapter and the run's identity). Called at most once per run, on
+   * every terminal path — completed, failed, and interrupted — so a retry
+   * always has gathered material to resume from.
+   */
+  persistReport?: ResearchReportSink;
+  /**
+   * CAP-045 slice 4: sources carried forward from a previous attempt at the
+   * SAME question. Pre-seeded into the aggregator so a retry keeps their stable
+   * citation numbers and the model is told not to re-run those searches.
+   */
+  priorSources?: ResearchSourceEntry[];
+  /**
+   * Plan steps a previous attempt already completed. Completed steps are
+   * restored as-is (never re-run) and the remainder becomes this run's plan.
+   */
+  priorSteps?: ResearchStep[];
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -169,6 +225,176 @@ export function researchStatusEvent(
     ],
     model: responseModel,
   });
+}
+
+/**
+ * Build the additive `x_research_plan` SSE event (CAP-045 slice 2).
+ *
+ * Carries the WHOLE plan every time (last-write-wins, exactly like
+ * `x_search_results`), so a client that joins late or drops an event still
+ * renders the complete queue. Wire fields are snake_case to match the
+ * `x_research_status` convention; the client maps them back onto `ResearchStep`.
+ *
+ * Additive by construction: a client that ignores unknown `x_` deltas sees the
+ * run exactly as it did before this event existed.
+ */
+export function researchPlanEvent(steps: ResearchStep[], responseModel: string): string {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_research_plan: {
+            steps: steps.map((step) => ({
+              id: step.id,
+              type: step.type,
+              description: step.description,
+              status: step.status,
+              ...(step.startedAt ? { started_at: step.startedAt } : {}),
+              ...(step.completedAt ? { completed_at: step.completedAt } : {}),
+              ...(typeof step.durationMs === 'number' ? { duration_ms: step.durationMs } : {}),
+              ...(typeof step.sourcesConsulted === 'number'
+                ? { sources_consulted: step.sourcesConsulted }
+                : {}),
+            })),
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/**
+ * Parse the planning turn's reply into concrete search queries.
+ *
+ * Preferred shape is a JSON array of strings; a plain markdown/numbered list is
+ * accepted as a fallback because models drift. Anything else yields an empty
+ * plan — the loop then shows the round it really runs instead of inventing
+ * queries the model never committed to.
+ */
+export function parsePlanQueries(text: string): string[] {
+  const queries: string[] = [];
+  const push = (value: unknown): void => {
+    if (typeof value !== 'string') return;
+    const query = value.trim().replace(/\s+/g, ' ');
+    if (!query || queries.length >= PLAN_MAX_STEPS) return;
+    if (queries.some((existing) => existing.toLowerCase() === query.toLowerCase())) return;
+    queries.push(query.slice(0, MAX_PLAN_QUERY_CHARS));
+  };
+
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start !== -1 && end > start) {
+    try {
+      const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(parsed)) {
+        for (const entry of parsed) push(entry);
+        if (queries.length > 0) return queries;
+      }
+    } catch {
+      // Fall through to the list parser below.
+    }
+  }
+
+  for (const line of text.split('\n')) {
+    const match = /^\s*(?:[-*]|\d+[.)])\s+(.*\S)\s*$/.exec(line);
+    if (match) push(match[1]?.replace(/^["'`]|["'`,]+$/g, ''));
+    if (queries.length >= PLAN_MAX_STEPS) break;
+  }
+  return queries;
+}
+
+/**
+ * Split a synthesized report into the outline fields the contract stores
+ * separately. Purely derived from real report text — nothing is invented; every
+ * field degrades to an empty value when the report does not contain it.
+ */
+export function extractReportOutline(content: string): {
+  title: string;
+  summary: string;
+  keyFindings: string[];
+} {
+  const lines = content.split('\n');
+  let title = '';
+  const summaryParts: string[] = [];
+  const keyFindings: string[] = [];
+  let sawTitle = false;
+  let inFindingsSection = false;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      if (summaryParts.length > 0) break;
+      continue;
+    }
+    const heading = /^#{1,6}\s+(.*\S)\s*$/.exec(line);
+    if (heading) {
+      if (!sawTitle) {
+        title = heading[1] ?? '';
+        sawTitle = true;
+        continue;
+      }
+      if (summaryParts.length > 0) break;
+      inFindingsSection = /key\s+findings?|takeaways?|highlights?/i.test(heading[1] ?? '');
+      continue;
+    }
+    const bullet = /^(?:[-*]|\d+[.)])\s+(.*\S)\s*$/.exec(line);
+    if (bullet) {
+      if (inFindingsSection && keyFindings.length < 10) keyFindings.push(bullet[1] ?? '');
+      continue;
+    }
+    if (!sawTitle && summaryParts.length === 0) {
+      // No heading at all: the first line is the best honest title we have.
+      title = line.replace(/^\*+|\*+$/g, '');
+      sawTitle = true;
+      continue;
+    }
+    summaryParts.push(line);
+  }
+
+  // Second pass for key findings: a report may list them before any heading.
+  if (keyFindings.length === 0) {
+    for (const raw of lines) {
+      const bullet = /^\s*(?:[-*]|\d+[.)])\s+(.*\S)\s*$/.exec(raw);
+      if (!bullet) continue;
+      keyFindings.push(bullet[1] ?? '');
+      if (keyFindings.length >= 5) break;
+    }
+  }
+
+  return {
+    title: title.slice(0, 300),
+    summary: summaryParts.join(' ').slice(0, 4_000),
+    keyFindings,
+  };
+}
+
+/**
+ * The research question, taken from the LAST user message in the thread (the
+ * turn that started this run). Multimodal content blocks contribute only their
+ * text parts, so an image-bearing turn still yields a readable query.
+ */
+export function extractUserQuery(messages: ProcessedRequest['llmRequest']['messages']): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i] as { role?: string; content?: unknown } | undefined;
+    if (message?.role !== 'user') continue;
+    const content = message.content;
+    if (typeof content === 'string') return content.trim().slice(0, 4_000);
+    if (Array.isArray(content)) {
+      const text = content
+        .map((part) =>
+          part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+            ? (part as { text: string }).text
+            : '',
+        )
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+      if (text) return text.slice(0, 4_000);
+    }
+  }
+  return '';
 }
 
 function toolStatusEvent(
@@ -256,6 +482,20 @@ export class SourceAggregator {
       ],
       model: responseModel,
     });
+  }
+
+  /**
+   * The cumulative sources as contract `Citation`s, numbered by the SAME stable
+   * positions the report's inline `[n]` markers use.
+   */
+  toCitations(accessedAt: string): Citation[] {
+    return this.list().map((source) => ({
+      id: String(source.position),
+      title: source.title,
+      url: source.url,
+      ...(source.snippet ? { snippet: source.snippet } : {}),
+      accessedAt,
+    }));
   }
 
   /** Numbered source list for the synthesis directive. */
@@ -446,15 +686,43 @@ async function* collectTurn(
 
 // ─── Directives ───────────────────────────────────────────────────────────────
 
+/**
+ * The planning turn's directive. Deliberately tool-free and machine-readable:
+ * the loop turns the reply into the `x_research_plan` queue the user sees, so a
+ * free-form answer would leave the plan surface empty rather than guessed at.
+ */
+function planningDirective(carriedQueries: string[]): string {
+  const carried =
+    carriedQueries.length > 0
+      ? `\n\nA previous attempt already completed these searches — do NOT repeat them:\n${carriedQueries
+          .map((query) => `- ${query}`)
+          .join('\n')}`
+      : '';
+  return (
+    'Planning phase: before searching, list the web searches you will run to answer the request.' +
+    ` Reply with ONLY a JSON array of ${PLAN_MIN_STEPS}-${PLAN_MAX_STEPS} short search query strings` +
+    ' covering distinct angles of the question, e.g. ["query one", "query two", "query three"].' +
+    ' No prose, no markdown fences, no explanation. Do not search yet.' +
+    carried
+  );
+}
+
 function gatheringDirective(
   round: number,
   maxRounds: number,
   sources: SourceAggregator,
   canFetch: boolean,
+  plannedQueries: string[] = [],
 ): string {
+  const planned =
+    plannedQueries.length > 0
+      ? `\n\nRun these planned searches now:\n${plannedQueries.map((query) => `- ${query}`).join('\n')}\n`
+      : '';
   const base =
     round === 1
-      ? 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
+      ? plannedQueries.length > 0
+        ? `Research phase, round 1: run the searches you planned.${planned}`
+        : 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
       : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
   const fetchNote = canFetch
     ? ' When a specific page matters (the user provided a URL, or a search result looks central to the question), call the url_fetch tool to read that page in full before writing your notes.'
@@ -534,7 +802,17 @@ export async function* runResearchLoop(
   const budgetMs =
     options.budgetMs ??
     envInt('AGI_RESEARCH_BUDGET_MS', DEFAULT_RESEARCH_BUDGET_MS, 30_000, 10 * 60_000);
-  const maxGatherRounds = maxIterations - 1; // the last iteration is always synthesis
+  /**
+   * CAP-045 slice 2: a REAL planning turn now backs the `planning` phase, which
+   * previously emitted a label while doing no work at all. It costs one model
+   * call, so the gathering budget shrinks by one and the run's total provider
+   * calls stay within `maxIterations` exactly as before. Budgets too small to
+   * afford it (< 3 iterations) keep the original plan-free shape.
+   */
+  const planningTurnEnabled = maxIterations >= MIN_ITERATIONS_FOR_PLANNING_TURN;
+  const maxGatherRounds = planningTurnEnabled
+    ? Math.max(1, maxIterations - 2) // plan + gathering rounds + synthesis
+    : maxIterations - 1; // the last iteration is always synthesis
 
   // Managed failover state for this run (AUDIT-FIX SYS-21). The caller's plan
   // returns null for anything that is not an availability-class failure, so
@@ -548,6 +826,94 @@ export async function* runResearchLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
   let cancellationEmitted = false;
 
+  // CAP-045 slice 4: a retry carries the previous attempt's sources forward so
+  // their citation numbers stay stable and the model is told not to redo the
+  // searches that already succeeded. Seeded FIRST so prior sources keep the
+  // lowest positions.
+  for (const priorSource of options.priorSources ?? []) {
+    sources.add(priorSource);
+  }
+  /** Queries a previous attempt already completed — never re-run. */
+  const carriedQueries = (options.priorSteps ?? [])
+    .filter((step) => step.type === 'search' && step.status === 'completed')
+    .map((step) => step.description)
+    .filter((description) => description.trim().length > 0)
+    .slice(0, PLAN_MAX_STEPS);
+
+  /**
+   * The live research plan (CAP-045 slice 2). Completed steps carried in from a
+   * retry are restored verbatim; new steps come from this run's planning turn.
+   */
+  const plan: ResearchStep[] = (options.priorSteps ?? [])
+    .filter((step) => step.status === 'completed')
+    .map((step) => ({ ...step }));
+  const planEvent = (): Uint8Array => encoder.encode(researchPlanEvent(plan, responseModel));
+
+  /** Move every step in `ids` to `status`, stamping honest timing. */
+  const markPlanSteps = (ids: string[], status: ResearchStep['status']): void => {
+    const stamp = new Date(now()).toISOString();
+    for (const step of plan) {
+      if (!ids.includes(step.id)) continue;
+      step.status = status;
+      if (status === 'running') {
+        step.startedAt = stamp;
+      } else if (status === 'completed' || status === 'failed') {
+        step.completedAt = stamp;
+        if (step.startedAt) {
+          const started = Date.parse(step.startedAt);
+          if (Number.isFinite(started)) step.durationMs = Math.max(0, now() - started);
+        }
+        step.sourcesConsulted = sources.size;
+      }
+    }
+  };
+
+  const pendingPlanStepIds = (): string[] =>
+    plan.filter((step) => step.status === 'pending').map((step) => step.id);
+
+  // ── Durable report persistence (CAP-045 slice 1) ──
+  let reportPersisted = false;
+  const userQuery = extractUserQuery(processed.llmRequest.messages);
+
+  /**
+   * Persist the run exactly once. Never throws into the stream: a storage
+   * outage must not destroy a report the user is already reading, so the
+   * failure is logged and the run continues.
+   */
+  async function persistRun(
+    status: ResearchReportStatus,
+    content: string,
+    error?: string,
+  ): Promise<void> {
+    if (reportPersisted || !options.persistReport) return;
+    reportPersisted = true;
+    const outline = extractReportOutline(content);
+    try {
+      await options.persistReport({
+        query: userQuery,
+        title: outline.title,
+        summary: outline.summary,
+        content,
+        citations: sources.toCitations(new Date(now()).toISOString()),
+        steps: plan.map((step) => ({ ...step })),
+        keyFindings: outline.keyFindings,
+        status,
+        sourcesConsulted: sources.size,
+        durationMs: Math.max(0, now() - startedAt),
+        ...(error ? { error } : {}),
+      });
+    } catch (persistError) {
+      logger.error(
+        {
+          requestId: processed.requestId,
+          status,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+        },
+        '[research-loop] research report could not be persisted',
+      );
+    }
+  }
+
   /**
    * AUDIT-FIX BUG-1: a plain client abort now stops the run at the next
    * boundary, in addition to the durable cancellation poll.
@@ -560,6 +926,9 @@ export async function* runResearchLoop(
   async function* flushCancellationIfRequested(): AsyncGenerator<Uint8Array, boolean> {
     if (cancellationEmitted || !(await isCancelled())) return false;
     cancellationEmitted = true;
+    // A cancelled run keeps whatever it really gathered so a retry can resume
+    // from it instead of re-searching from zero.
+    await persistRun('interrupted', '', 'Research was cancelled.');
     yield encoder.encode(
       eventStream.emit({
         type: 'task-state-changed',
@@ -615,12 +984,17 @@ export async function* runResearchLoop(
   async function* runTurn(
     turnMessages: typeof messages,
     forwardContent: boolean,
+    turnOptions: { withoutTools?: boolean } = {},
   ): AsyncGenerator<Uint8Array, TurnResult> {
     // Bound accumulated tool-result history so a long multi-round research run can't
     // overflow the model context window (shared with the main tool loop). In place +
     // message-preserving, so tool_call/result pairing stays valid.
     trimToolResultHistory(turnMessages);
-    const stepRequest = { ...baseRequest, messages: turnMessages };
+    // The planning turn must not search: it plans the searches the gathering
+    // rounds then really run, so offering tools would burn search budget here.
+    const stepRequest = turnOptions.withoutTools
+      ? { ...baseRequest, tools: undefined, messages: turnMessages }
+      : { ...baseRequest, messages: turnMessages };
     const callsBefore = observedUsage.providerCalls;
     const stepSink: ToolLoopStepSink = {
       thinkingBlocks: [],
@@ -763,11 +1137,84 @@ export async function* runResearchLoop(
     if (yield* flushCancellationIfRequested()) return;
     yield status('planning', 'Planning research');
 
+    // ── Planning turn (CAP-045 slice 2) ──
+    // One tool-free model call that commits to the searches this run will make.
+    // Its output becomes the `x_research_plan` queue the user watches. A failed
+    // or unparseable plan is NEVER fatal and is never guessed at: the run falls
+    // back to showing the round it actually executes.
+    if (planningTurnEnabled) {
+      iteration = 1;
+      try {
+        if (yield* flushCancellationIfRequested()) return;
+        const planTurn = yield* runTurn(
+          [...messages, { role: 'user', content: planningDirective(carriedQueries) }],
+          false,
+          { withoutTools: true },
+        );
+        if (yield* flushCancellationIfRequested()) return;
+        const queries = parsePlanQueries(planTurn.text).filter(
+          (query) =>
+            !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
+        );
+        for (const [index, query] of queries.entries()) {
+          plan.push({
+            id: `plan-${plan.length + index + 1}`,
+            type: 'search',
+            description: query,
+            status: 'pending',
+          });
+        }
+        if (queries.length === 0) {
+          logger.warn(
+            { provider: processed.provider, requestId: processed.requestId },
+            '[research-loop] planning turn produced no parseable queries',
+          );
+        }
+      } catch (err) {
+        logger.error(
+          {
+            provider: processed.provider,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          '[research-loop] planning turn failed; continuing without a query plan',
+        );
+      }
+    }
+
     let cutShortReason: string | null = null;
 
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
-      iteration = round;
+      iteration = planningTurnEnabled ? round + 1 : round;
+
+      // Plan bookkeeping. Round 1 executes the planned queries as one batch:
+      // provider-native search does not attribute results back to an individual
+      // query, so per-query completion cannot be observed and is not claimed —
+      // the batch moves together. Later rounds are gap-filling work the plan did
+      // not contain, so each appends its own honest step.
+      let roundStepIds: string[];
+      if (round === 1) {
+        if (plan.every((step) => step.status !== 'pending')) {
+          plan.push({
+            id: `round-${round}`,
+            type: 'search',
+            description: 'Initial web searches',
+            status: 'pending',
+          });
+        }
+        roundStepIds = pendingPlanStepIds();
+      } else {
+        plan.push({
+          id: `round-${round}`,
+          type: 'search',
+          description: `Follow-up searches to close remaining gaps (round ${round})`,
+          status: 'pending',
+        });
+        roundStepIds = [`round-${round}`];
+      }
+      markPlanSteps(roundStepIds, 'running');
+      yield planEvent();
+
       yield status(
         'searching',
         round === 1 ? 'Searching the web' : `Searching the web (round ${round})`,
@@ -785,7 +1232,17 @@ export async function* runResearchLoop(
           ...messages,
           {
             role: 'user',
-            content: gatheringDirective(round, maxGatherRounds, sources, fetchAvailable),
+            content: gatheringDirective(
+              round,
+              maxGatherRounds,
+              sources,
+              fetchAvailable,
+              round === 1
+                ? plan
+                    .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
+                    .map((step) => step.description)
+                : [],
+            ),
           },
         ];
         turn = yield* runTurn(turnMessages, false);
@@ -821,6 +1278,8 @@ export async function* runResearchLoop(
           '[research-loop] gathering turn failed',
         );
         yield encoder.encode(toolStatusEvent('failed', responseModel, round));
+        markPlanSteps(roundStepIds, 'failed');
+        yield planEvent();
         if (round === 1) {
           // Nothing gathered: surface an honest error and stop.
           yield status('error', 'Research failed before any results were gathered');
@@ -837,6 +1296,7 @@ export async function* runResearchLoop(
               model: responseModel,
             }),
           );
+          await persistRun('failed', '', msg);
           yield encoder.encode(sseDone());
           return;
         }
@@ -847,6 +1307,8 @@ export async function* runResearchLoop(
 
       totalSearches += Math.max(1, roundSearchEvents);
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
+      markPlanSteps(roundStepIds, 'completed');
+      yield planEvent();
 
       // Append the model's notes (truncated) so later turns build on them.
       const notes = stripMarkers(turn.text).slice(0, MAX_NOTE_CHARS);
@@ -872,6 +1334,17 @@ export async function* runResearchLoop(
 
     // ── Synthesis turn (always runs when any gathering succeeded) ──
     iteration = Math.min(iteration + 1, maxIterations);
+    // Any plan step still pending never ran (the gathering phase was cut short
+    // by a budget or the READY marker); leaving it pending is the honest state.
+    const synthesisStepId = 'synthesize';
+    plan.push({
+      id: synthesisStepId,
+      type: 'synthesize',
+      description: 'Write the cited report',
+      status: 'pending',
+    });
+    markPlanSteps([synthesisStepId], 'running');
+    yield planEvent();
     yield status('synthesizing', 'Writing report');
     try {
       if (yield* flushCancellationIfRequested()) return;
@@ -889,6 +1362,8 @@ export async function* runResearchLoop(
           { provider: processed.provider, requestId: processed.requestId, sources: sources.size },
           '[research-loop] synthesis turn produced no text',
         );
+        markPlanSteps([synthesisStepId], 'failed');
+        yield planEvent();
         yield status('error', 'Report generation returned no text');
         yield encoder.encode(
           sseData({
@@ -907,15 +1382,23 @@ export async function* runResearchLoop(
         );
         const cumulativeOnEmpty = sources.toSearchResultsEvent(responseModel);
         if (cumulativeOnEmpty) yield encoder.encode(cumulativeOnEmpty);
+        // Gathered sources are real and worth resuming from, so the row is
+        // persisted even though the report body is empty.
+        await persistRun('failed', '', 'The model returned an empty report.');
         yield encoder.encode(sseDone());
         return;
       }
+      markPlanSteps([synthesisStepId], 'completed');
+      yield planEvent();
+      await persistRun('completed', synthesis.text);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(
         { provider: processed.provider, error: msg },
         '[research-loop] synthesis failed',
       );
+      markPlanSteps([synthesisStepId], 'failed');
+      yield planEvent();
       yield status('error', 'Report generation failed');
       yield encoder.encode(
         sseData({
@@ -932,6 +1415,7 @@ export async function* runResearchLoop(
       );
       const cumulative = sources.toSearchResultsEvent(responseModel);
       if (cumulative) yield encoder.encode(cumulative);
+      await persistRun('failed', '', msg);
       yield encoder.encode(sseDone());
       return;
     }
@@ -942,6 +1426,13 @@ export async function* runResearchLoop(
     yield status('complete', 'Research complete');
     yield encoder.encode(sseDone());
   } finally {
+    // Abrupt teardown (client abort finalizes the generator mid-yield) skips
+    // every terminal path above. Whatever the run really gathered is still
+    // persisted as `interrupted` so a retry can resume from it. `persistRun`
+    // is a no-op once a terminal path already wrote the row.
+    if (!reportPersisted && options.persistReport) {
+      await persistRun('interrupted', '', 'Research stopped before the report was written.');
+    }
     // Financial settlement and every enforced usage window belong to the
     // route's single managed-usage lifecycle. This block only preserves the
     // observed provider usage that lifecycle settles on normal completion,

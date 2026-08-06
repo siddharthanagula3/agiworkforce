@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SETTINGS_NAV, SETTINGS_NAV_GROUPS } from '@agiworkforce/ui';
+import { SETTINGS_NAV, SETTINGS_NAV_GROUPS, type SettingsNavKey } from '@agiworkforce/ui';
 
 /**
  * DESK-1 / DESK-2 settings IA contract: the settings navigation and its renderer
@@ -64,5 +64,43 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
     for (const entry of SETTINGS_NAV) {
       expect(grouped, `nav key "${entry.key}" is not placed in any group`).toContain(entry.key);
     }
+  });
+});
+
+describe('desktop settings IA · legacy tab aliases', () => {
+  // Callers all over the app still open settings with pre-IA tab ids
+  // (openSettingsDialog('mcp'), deep links, stored preferences). resolveTab in
+  // SettingsPanel.tsx maps them through LEGACY_TAB_MAP, so every alias target
+  // must be a live SETTINGS_NAV entry or the panel silently renders nothing.
+  const canonical = new Set(SETTINGS_NAV.map((e) => e.key));
+
+  it('every legacy alias lands on a canonical, rendered nav entry', async () => {
+    const { LEGACY_TAB_MAP } = await import('../../../stores/settings/dialog');
+    for (const [alias, target] of Object.entries(LEGACY_TAB_MAP)) {
+      expect(canonical, `alias "${alias}" maps to unknown tab "${target}"`).toContain(target);
+    }
+  });
+
+  it('no legacy alias shadows a canonical tab id', async () => {
+    const { LEGACY_TAB_MAP } = await import('../../../stores/settings/dialog');
+    for (const alias of Object.keys(LEGACY_TAB_MAP)) {
+      expect(
+        canonical.has(alias as SettingsNavKey),
+        `canonical tab "${alias}" must not be remapped`,
+      ).toBe(false);
+    }
+  });
+
+  it('pins the alias targets callers depend on', async () => {
+    const { LEGACY_TAB_MAP } = await import('../../../stores/settings/dialog');
+    expect(LEGACY_TAB_MAP.skills).toBe('capabilities');
+    expect(LEGACY_TAB_MAP.customize).toBe('capabilities');
+    expect(LEGACY_TAB_MAP.mcp).toBe('connectors');
+    expect(LEGACY_TAB_MAP['mcp-server']).toBe('connectors');
+    expect(LEGACY_TAB_MAP.analytics).toBe('privacy');
+    expect(LEGACY_TAB_MAP.themes).toBe('appearance');
+    expect(LEGACY_TAB_MAP.keybindings).toBe('general');
+    expect(LEGACY_TAB_MAP['api-keys']).toBe('models-keys');
+    expect(LEGACY_TAB_MAP['task-routing']).toBe('models-keys');
   });
 });

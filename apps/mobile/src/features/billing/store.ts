@@ -68,7 +68,8 @@ interface TierState {
    * Provider id of the first model used in the current conversation (e.g.
    * 'anthropic', 'openai').  Set to null when no conversation is active or
    * when a new conversation begins.  Used by the provider-switch guard to
-   * detect cross-provider switches mid-thread and enforce the Pro+ gate.
+   * detect cross-provider switches mid-thread and enforce the provider-switch
+   * gate (see `features/model-picker/tierGuard.ts`).
    */
   currentConversationProvider: string | null;
 

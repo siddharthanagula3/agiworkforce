@@ -56,5 +56,12 @@
   "agentModeDisabled": "एजेंट मोड अक्षम",
   "compactMode": "कॉम्पैक्ट मोड",
   "compactModeEnabled": "कॉम्पैक्ट मोड सक्षम",
-  "compactModeDisabled": "कॉम्पैक्ट मोड अक्षम"
+  "compactModeDisabled": "कॉम्पैक्ट मोड अक्षम",
+  "artifactPublish": {
+    "untitled": "प्रकाशित आर्टिफ़ैक्ट",
+    "publishedOn": "{{date}} को प्रकाशित",
+    "sharedFrom": "AGI से साझा किया गया",
+    "renderFailed": "यह आर्टिफ़ैक्ट प्रस्तुत नहीं किया जा सका: {{error}}",
+    "svgUnavailable": "इस SVG में ऐसा कुछ नहीं था जिसे सुरक्षित रूप से दिखाया जा सके।"
+  }
 }

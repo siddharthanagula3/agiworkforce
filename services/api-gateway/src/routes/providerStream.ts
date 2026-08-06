@@ -39,6 +39,39 @@ import { classifyError } from '@agiworkforce/provider-runtime';
 
 const router: Router = Router();
 
+/**
+ * GATEWAY-PROVIDER-STREAM-UNMETERED-01 — fail-closed billing guard.
+ *
+ * `/:providerId/stream` calls real, paid providers but performs NO usage
+ * accounting. The metered path in `routes/llm.ts` parses `Idempotency-Key`
+ * and runs the managed-usage reserve → settle cycle around every provider
+ * call; this route does neither, so a turn served here costs real provider
+ * money and is never reserved, settled, or counted against any allowance.
+ * `requireManagedComputeEligibility` below gates WHO may call it — it does
+ * not meter WHAT they spend.
+ *
+ * Until this route reuses the same reserve/settle path, it must not be
+ * reachable by default. Operators who understand the exposure can opt in with
+ * `AGI_GATEWAY_PROVIDER_STREAM_UNMETERED=1`; everyone else gets an honest 503
+ * instead of free paid inference. The VS Code client that calls it already
+ * defaults its `useProviderStream` setting to off, so failing closed here
+ * matches the shipped client default rather than removing working behavior.
+ */
+const PROVIDER_STREAM_UNMETERED_ENV = 'AGI_GATEWAY_PROVIDER_STREAM_UNMETERED';
+
+function providerStreamEnabled(): boolean {
+  return process.env[PROVIDER_STREAM_UNMETERED_ENV] === '1';
+}
+
+function requireProviderStreamEnabled(): void {
+  if (providerStreamEnabled()) return;
+  throw new AppError(
+    'Direct provider streaming is disabled because it performs no usage accounting. ' +
+      'Use the metered chat completions endpoint.',
+    503,
+  );
+}
+
 router.use(authenticateToken);
 router.use(createRateLimiter('default'));
 
@@ -186,6 +219,10 @@ router.post(
     model: typeof req.body?.model === 'string' ? req.body.model : 'unknown',
   })),
   async (req: Request, res: Response) => {
+    // Billing guard first: refuse before any provider work is done or any
+    // credential is touched. See GATEWAY-PROVIDER-STREAM-UNMETERED-01.
+    requireProviderStreamEnabled();
+
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);

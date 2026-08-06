@@ -123,7 +123,7 @@
       "severity": "medium",
       "owner": "Web + Desktop",
       "paths": [
-        "apps/sandbox",
+        "infrastructure/sandbox",
         "apps/web/features/chat",
         "apps/desktop/src",
         "packages/ui/unified-chat"

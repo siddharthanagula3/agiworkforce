@@ -2,23 +2,53 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
+import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
+import { isPluginEntryInstallable, type PluginRegistryEntry } from '@agiworkforce/types';
 import { WaitlistForm } from '../byok/WaitlistForm';
+
+/**
+ * The plugin catalogue (CAP-046 slice 3).
+ *
+ * This page used to render a TypeScript fixture. It now renders the hosted
+ * registry (`public.plugin_registry_entries`), so the catalogue is real data
+ * with real failure modes — hence the explicit unavailable/empty branches
+ * below and `loading.tsx` alongside this file.
+ *
+ * The copy tracks the DATA rather than a hardcoded launch claim: entries carry
+ * a status, and only a `published` entry with a real artifact is installable.
+ * Today every row is `preview`, so the page says installation is not open — but
+ * it says it because `installableCount === 0`, not because a sentence was
+ * pasted in.
+ */
 
 export const metadata = buildMetadata({
   title: 'Plugins',
   description:
-    'Plugin workflow packs that bundle skills and connectors. Browse the catalogue preview; hosted marketplace installation opens through the account-bound cloud access flow.',
+    'Plugin workflow packs that bundle skills and connectors. Browse the hosted catalogue; each pack states whether it is installable yet.',
   path: '/plugins',
 });
 
-function sourceLabel(source: string): string {
+// The catalogue lives in the database, so this route cannot be baked at build
+// time. Requests render against the live registry.
+export const dynamic = 'force-dynamic';
+
+function sourceLabel(source: PluginRegistryEntry['source']): string {
   if (source === 'builtin') return 'Built-in';
   if (source === 'marketplace') return 'Marketplace';
   return 'Custom';
 }
 
-export default function PluginsPage() {
+function statusLabel(entry: PluginRegistryEntry): string {
+  if (isPluginEntryInstallable(entry)) return 'Installable';
+  if (entry.status === 'deprecated') return 'Deprecated';
+  return 'Declared — not installable yet';
+}
+
+export default async function PluginsPage() {
+  const catalog = await loadPluginCatalog();
+  const entries = catalog.status === 'ok' ? catalog.entries : [];
+  const installableCount = entries.filter(isPluginEntryInstallable).length;
+
   return (
     <div data-design="agi">
       <main className="agi-shell">
@@ -29,12 +59,19 @@ export default function PluginsPage() {
             Workflow packs, <em>not loose parts.</em>
           </h1>
           <p className="agi-page-lede">
-            Plugins bundle skills and connectors into a single install.{' '}
-            <strong>
-              This is a preview of the catalogue shape — hosted marketplace installation is not open
-              yet.
-            </strong>{' '}
-            It opens through the same account-bound cloud access flow as everything else.
+            Plugins bundle skills and connectors into a single install. The catalogue below is the
+            live hosted registry.{' '}
+            {installableCount === 0 ? (
+              <strong>
+                No pack is installable yet — every entry is a declared pack with no published
+                artifact.
+              </strong>
+            ) : (
+              <strong>
+                {installableCount} of {entries.length} packs are installable today; the rest are
+                declared and not yet published.
+              </strong>
+            )}
           </p>
         </section>
 
@@ -59,44 +96,58 @@ export default function PluginsPage() {
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Launch preview</h3>
+              <h3 className="agi-reason-h">What a status means</h3>
               <p className="agi-reason-p">
-                Browse the packs below while installation and permission enforcement are finalized.
-                Nothing here installs yet.
+                A pack is only marked installable once a signed-off manifest is published and its
+                checksum is recorded. Until then it is listed as declared, and nothing pretends to
+                install it.
               </p>
             </li>
           </ul>
         </section>
 
         <section className="agi-section" aria-labelledby="agi-plugins-catalog-title">
-          <p className="agi-section-eyebrow">Catalogue preview</p>
+          <p className="agi-section-eyebrow">Catalogue</p>
           <h2 id="agi-plugins-catalog-title" className="agi-section-h2">
             The first packs.
           </h2>
-          <div className="agi-route-grid">
-            {PLUGIN_CATALOG.map((plugin) => (
-              <Link key={plugin.id} href={`/plugins/${plugin.id}`} className="agi-route-card">
-                <span className="agi-route-meta">
-                  {plugin.category} · {sourceLabel(plugin.source)}
-                </span>
-                <span className="agi-route-title">{plugin.name}</span>
-                <span className="agi-route-body">{plugin.description}</span>
-                {plugin.skills.length > 0 ? (
-                  <span
-                    className="agi-chip-row"
-                    style={{ marginTop: 18 }}
-                    aria-label={`Skills in ${plugin.name}`}
-                  >
-                    {plugin.skills.slice(0, 3).map((skill) => (
-                      <span key={skill} className="agi-chip">
-                        {skill}
-                      </span>
-                    ))}
+
+          {catalog.status === 'unavailable' ? (
+            <p className="agi-reason-p" style={{ margin: 0 }} role="status">
+              The plugin registry is temporarily unreachable, so the catalogue cannot be shown right
+              now. Nothing is wrong with your account — reload in a moment.
+            </p>
+          ) : entries.length === 0 ? (
+            <p className="agi-reason-p" style={{ margin: 0 }}>
+              No packs are published to the registry yet. This page will list them as soon as the
+              first one lands.
+            </p>
+          ) : (
+            <div className="agi-route-grid">
+              {entries.map((entry) => (
+                <Link key={entry.id} href={`/plugins/${entry.id}`} className="agi-route-card">
+                  <span className="agi-route-meta">
+                    {entry.category} · {sourceLabel(entry.source)} · {statusLabel(entry)}
                   </span>
-                ) : null}
-              </Link>
-            ))}
-          </div>
+                  <span className="agi-route-title">{entry.name}</span>
+                  <span className="agi-route-body">{entry.description}</span>
+                  {entry.declaredSkills.length > 0 ? (
+                    <span
+                      className="agi-chip-row"
+                      style={{ marginTop: 18 }}
+                      aria-label={`Skills in ${entry.name}`}
+                    >
+                      {entry.declaredSkills.slice(0, 3).map((skill) => (
+                        <span key={skill} className="agi-chip">
+                          {skill}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
         <section

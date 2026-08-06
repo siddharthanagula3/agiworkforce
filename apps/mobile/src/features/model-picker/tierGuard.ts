@@ -5,9 +5,19 @@
  * Lives here (rather than unified-chat-rn) because unified-chat-rn does not
  * exist yet — Phase C will extract and share this.
  *
- * Rule: switching to a different provider mid-thread requires Pro+ or higher.
+ * Rule: switching to a different provider mid-thread requires `max` or higher
+ * on this surface (see `PROVIDER_SWITCH_MIN_TIER`).
  * Auto-modes (ids starting with "auto-") are provider-agnostic and never
  * trigger the gate.  An identical provider switch is always allowed.
+ *
+ * CANONICAL ALIGNMENT (2026-08-05, MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01) —
+ * this guard now delegates to the shared `canSwitchProviderInThread()` in
+ * `packages/contracts/types/src/design-system/user-identity.ts`, which admits
+ * only `max` / `max_15x` / `enterprise` and denies `pro` / `team`. Mobile maps
+ * `enterprise` / `max_15x` → `max` in {@link mapBillingPlanToUIPlan}, so the
+ * mapped gate admits exactly those canonical tiers. This matches web, desktop,
+ * and the VS Code guard (`apps/extension-vscode/src/integrations/
+ * providerSwitchGuard.ts`). The prior `pro`-tier divergence is closed.
  *
  * Contract drift fix (2026-05-08): the guard now operates on the canonical
  * {@link UIPlanTier}. Mobile still persists a {@link BillingPlanTier}
@@ -15,7 +25,11 @@
  * {@link mapBillingPlanToUIPlan} at the boundary.
  */
 
-import { type BillingPlanTier, type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
+import {
+  type BillingPlanTier,
+  type UIPlanTier,
+  canSwitchProviderInThread,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,8 +68,8 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
       return 'local';
     case 'basic':
       // Basic has real cloud access but a small credit budget — same
-      // restrictive gate as free for mid-thread provider switching (Pro+
-      // only), not the "no cloud at all" local-only case.
+      // restrictive gate as free for mid-thread provider switching, not the
+      // "no cloud at all" local-only case.
       return 'local';
     case 'pro':
       return 'pro';
@@ -82,8 +96,13 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
 // Guard
 // ---------------------------------------------------------------------------
 
-/** The minimum UIPlanTier required to switch providers mid-thread. */
-const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'pro';
+/**
+ * The minimum UIPlanTier required to switch providers mid-thread. Aligned with
+ * the canonical `canSwitchProviderInThread()` gate (max / max_15x /
+ * enterprise). Mobile maps max_15x/enterprise → `max`, so `max` is the mapped
+ * threshold. The actual gate check delegates to the shared contract below.
+ */
+const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'max';
 
 /**
  * Determine whether a user may switch providers mid-thread.
@@ -100,7 +119,8 @@ const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'pro';
  *  - There is no established conversation provider (new thread)
  *  - The next provider is the same as the current provider
  *  - Either provider id starts with "auto-" (auto-mode switches are free)
- *  - The user has Pro+ or higher
+ *  - The user's mapped tier passes the canonical `canSwitchProviderInThread`
+ *    gate (max / max_15x / enterprise)
  *
  * Returns 'upgrade-required' otherwise.
  */
@@ -118,9 +138,12 @@ export function guardProviderSwitch(
   // Same provider — no cross-provider switch.
   if (currentProvider === nextProvider) return 'allow';
 
-  // Cross-provider switch: map to UIPlanTier and gate against pro_plus minimum.
+  // Cross-provider switch: map to UIPlanTier and delegate to the canonical
+  // shared gate (max / max_15x / enterprise). PROVIDER_SWITCH_MIN_TIER documents
+  // the mapped threshold; canSwitchProviderInThread is the source of truth.
+  void PROVIDER_SWITCH_MIN_TIER;
   const uiTier = mapBillingPlanToUIPlan(tier);
-  if (tierAtLeast(uiTier, PROVIDER_SWITCH_MIN_TIER)) return 'allow';
+  if (canSwitchProviderInThread(uiTier)) return 'allow';
 
   return 'upgrade-required';
 }

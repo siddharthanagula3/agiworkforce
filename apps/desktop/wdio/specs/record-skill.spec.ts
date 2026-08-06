@@ -26,6 +26,20 @@ describe('AGI Desktop Record a skill', () => {
     this.timeout(120_000);
     await waitForDesktopShell();
 
+    // "Record a skill" is a LOCAL-only composer affordance
+    // (DesktopShellV3: onRecordSkill is undefined unless privacyMode==='local').
+    // A prior spec can leave the shared profile in Cloud; enter Local first.
+    const useLocal = await $('button=Use Local Mode');
+    if ((await useLocal.isExisting()) && (await useLocal.isDisplayed())) {
+      await useLocal.click();
+      await waitForDesktopShell();
+    }
+    const cloudToLocal = await $('aside[data-v3-sidebar] [role="tab"]=Local');
+    if (await cloudToLocal.isExisting()) {
+      await cloudToLocal.click();
+      await browser.pause(500);
+    }
+
     const plus = await $('button[aria-label="Add attachment"]');
     await plus.waitForDisplayed({ timeout: 20_000 });
     await plus.click();

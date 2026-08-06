@@ -28,6 +28,7 @@ import {
   decryptTOTPSecret,
 } from '@/features/settings/services/user-preferences';
 import { readJsonBody } from '@/lib/read-json-body';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 // ---------------------------------------------------------------------------
 // Shared DB helper
@@ -151,6 +152,22 @@ async function handleDisable2FA(request: NextRequest) {
   }
 
   logger.info({ userId }, '2FA disabled successfully');
+
+  // Audit: a second factor was removed — a downgrade of the account's own
+  // security posture, so it is warning-level. The submitted TOTP/backup code
+  // is in scope here and is never recorded; only WHICH factor authorised the
+  // change is.
+  await recordAuditEvent({
+    userId,
+    eventType: 'two_factor_disabled',
+    severity: 'warning',
+    request,
+    detail: {
+      resourceType: 'two_factor',
+      source: backupCodeIndex !== -1 ? 'backup_code' : 'totp_code',
+    },
+  });
+
   return NextResponse.json({ success: true });
 }
 

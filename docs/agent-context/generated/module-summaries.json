@@ -122,22 +122,10 @@
       "purpose": "Google/Gemini provider adapter for AGI-owned model/provider contracts."
     },
     {
-      "name": "groq",
-      "path": "packages/ai/providers/groq",
-      "kind": "package",
-      "purpose": "unknown"
-    },
-    {
       "name": "@agiworkforce/providers-lmstudio",
       "path": "packages/ai/providers/lmstudio",
       "kind": "package",
       "purpose": "LM Studio local/OpenAI-compatible provider adapter for AGI-owned model/provider contracts."
-    },
-    {
-      "name": "mistral",
-      "path": "packages/ai/providers/mistral",
-      "kind": "package",
-      "purpose": "unknown"
     },
     {
       "name": "@agiworkforce/providers-moonshot",
@@ -221,7 +209,7 @@
       "name": "@agiworkforce/cloud-contracts",
       "path": "packages/contracts/cloud-contracts",
       "kind": "package",
-      "purpose": "Canonical managed-cloud wire contracts for AGI Workforce. This package owns the Zod schemas, endpoint paths, custom stream deltas, and typed clients shared by Web, Desktop, Mobile, and the transitional `@agiworkforce/services` facade."
+      "purpose": "Canonical managed-cloud wire contracts for AGI Workforce. This package owns the Zod schemas, endpoint paths, custom stream deltas, and typed clients shared by Web, Desktop, and Mobile."
     },
     {
       "name": "@agiworkforce/compliance",
@@ -329,7 +317,7 @@
       "name": "skill-vetting",
       "path": "tools/skill-vetting",
       "kind": "tool",
-      "purpose": "unknown"
+      "purpose": "Pre-install security scanner for agent **skills / plugins / MCP servers**. This is the trust differentiator for a privacy-first marketplace: every skill/plugin/MCP is scanned _before_ install and again at install-time (rug-pull diff), an..."
     }
   ]
 }

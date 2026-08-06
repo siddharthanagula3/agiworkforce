@@ -1,51 +1,28 @@
+import 'server-only';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { AppError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import type { OrganizationMemberRow, DirectorySyncConnectionRow } from '@/lib/server/neon-types';
+import type { DirectorySyncConnectionRow, DirectorySyncEventRow } from '@/lib/server/neon-types';
 import { readJsonBody } from '@/lib/read-json-body';
+import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from './directory-sync-access';
 
-// ---------------------------------------------------------------------------
-// Admin auth verification
-// ---------------------------------------------------------------------------
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-async function verifyAdminAccess(
-  request: NextRequest,
-): Promise<{ isAdmin: boolean; userId?: string; organizationId?: string; error?: string }> {
-  let userId: string;
-  try {
-    ({ userId } = await getClerkAuthUser(request));
-  } catch {
-    return { isAdmin: false, error: 'Invalid or expired token' };
-  }
+const VALID_PROVIDERS = ['okta', 'azure_ad', 'google', 'onelogin', 'generic_scim'] as const;
 
-  const db = getNeonDb();
-
-  // Check if caller is an org owner/admin.
-  const rows = await db
-    .query<
-      Pick<OrganizationMemberRow, 'organization_id' | 'role'>
-    >("select organization_id, role from organization_members where user_id = $1 and role in ('owner', 'admin') limit 1", [userId])
-    .catch(() => [] as Pick<OrganizationMemberRow, 'organization_id' | 'role'>[]);
-
-  const membership = rows[0];
-
-  if (!membership) {
-    return { isAdmin: false, error: 'Insufficient privileges - org admin or owner required' };
-  }
-
-  return {
-    isAdmin: true,
-    userId,
-    organizationId: membership.organization_id,
-  };
+/** The base URL an admin pastes into their IdP's SCIM configuration. */
+function scimBaseUrl(request: NextRequest): string {
+  return `${new URL(request.url).origin}/api/scim/v2`;
 }
 
 // ---------------------------------------------------------------------------
-// GET - List directory sync connections for the admin's organization
+// GET - connections, recent sync activity, and the SCIM base URL
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -53,31 +30,37 @@ export async function GET(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const { isAdmin, organizationId, error: authError } = await verifyAdminAccess(request);
-
-    if (!isAdmin) {
-      logger.warn({ error: authError }, 'Unauthorized directory sync access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'No organization found for your account' },
-        { status: 400 },
-      );
-    }
+    const requestedOrgId = new URL(request.url).searchParams.get('organizationId');
+    const access = await requireDirectorySyncAdmin(request, requestedOrgId);
+    if (isDirectorySyncAccessFailure(access)) return access.response;
 
     const db = getNeonDb();
 
     let connections: DirectorySyncConnectionRow[];
+    let events: DirectorySyncEventRow[];
     try {
       connections = await db.query<DirectorySyncConnectionRow>(
-        'select id, provider, directory_id, display_name, is_active, last_sync_at, created_at, updated_at from directory_sync_connections where organization_id = $1 order by created_at desc',
-        [organizationId],
+        `select id, organization_id, provider, directory_id, display_name, is_active,
+                last_sync_at, created_at, updated_at
+           from directory_sync_connections
+          where organization_id = $1
+          order by created_at desc`,
+        [access.organizationId],
+      );
+      // Recent IdP activity, so an admin can see what directory sync actually
+      // did rather than trusting that it did anything.
+      events = await db.query<DirectorySyncEventRow>(
+        `select id, connection_id, organization_id, event_type, user_email, raw_payload,
+                processed_at, error, created_at
+           from directory_sync_events
+          where organization_id = $1
+          order by created_at desc
+          limit 50`,
+        [access.organizationId],
       );
     } catch (fetchError) {
       logger.error(
-        { error: fetchError, organizationId },
+        { error: fetchError, organizationId: access.organizationId },
         'Failed to fetch directory sync connections',
       );
       return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 });
@@ -85,7 +68,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       connections,
-      organization_id: organizationId,
+      events,
+      organization_id: access.organizationId,
+      scim_base_url: scimBaseUrl(request),
     });
   } catch (error) {
     logger.error({ error }, 'Error in directory sync GET');
@@ -108,26 +93,20 @@ export async function POST(request: NextRequest) {
   if (csrfError) return csrfError;
 
   try {
-    const { isAdmin, userId, organizationId, error: authError } = await verifyAdminAccess(request);
-
-    if (!isAdmin) {
-      logger.warn({ error: authError }, 'Unauthorized directory sync creation attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'No organization found for your account' },
-        { status: 400 },
-      );
-    }
-
     const body = await readJsonBody(request);
-    const { provider, directory_id, display_name } = body as {
-      provider?: string;
-      directory_id?: string;
-      display_name?: string;
+    const { provider, directory_id, display_name, organizationId } = body as {
+      provider?: unknown;
+      directory_id?: unknown;
+      display_name?: unknown;
+      organizationId?: unknown;
     };
+
+    if (organizationId !== undefined && typeof organizationId !== 'string') {
+      return NextResponse.json({ error: 'organizationId must be a string' }, { status: 400 });
+    }
+
+    const access = await requireDirectorySyncAdmin(request, organizationId ?? null);
+    if (isDirectorySyncAccessFailure(access)) return access.response;
 
     // AUDIT-FIX STB-15: `provider` was correctly allowlisted, but `directory_id`
     // had only a truthiness check and `display_name` had none at all — no type,
@@ -165,10 +144,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const validProviders = ['okta', 'azure_ad', 'google', 'onelogin', 'generic_scim'];
-    if (!validProviders.includes(provider)) {
+    if (!(VALID_PROVIDERS as readonly string[]).includes(provider)) {
       return NextResponse.json(
-        { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
+        { error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` },
         { status: 400 },
       );
     }
@@ -179,7 +157,7 @@ export async function POST(request: NextRequest) {
     try {
       const rows = await db.query<DirectorySyncConnectionRow>(
         'insert into directory_sync_connections (organization_id, provider, directory_id, display_name, is_active) values ($1, $2, $3, $4, true) returning *',
-        [organizationId, provider, directory_id, display_name ?? null],
+        [access.organizationId, provider, directory_id, display_name ?? null],
       );
       connection = rows[0]!;
     } catch (err: unknown) {
@@ -190,12 +168,15 @@ export async function POST(request: NextRequest) {
           { status: 409 },
         );
       }
-      logger.error({ error: err, organizationId }, 'Failed to create directory sync connection');
+      logger.error(
+        { error: err, organizationId: access.organizationId },
+        'Failed to create directory sync connection',
+      );
       return NextResponse.json({ error: 'Failed to create connection' }, { status: 500 });
     }
 
     await logSecurityEvent({
-      userId,
+      userId: access.userId,
       eventType: 'admin_action',
       severity: 'medium',
       ipAddress: getClientIp(request),
@@ -205,17 +186,25 @@ export async function POST(request: NextRequest) {
         connectionId: connection.id,
         provider,
         directoryId: directory_id,
-        organizationId,
+        organizationId: access.organizationId,
       },
     });
 
     logger.info(
-      { userId, organizationId, provider, directoryId: directory_id },
+      {
+        userId: access.userId,
+        organizationId: access.organizationId,
+        provider,
+        directoryId: directory_id,
+      },
       'Directory sync connection created',
     );
 
-    return NextResponse.json({ connection }, { status: 201 });
+    return NextResponse.json({ connection, scim_base_url: scimBaseUrl(request) }, { status: 201 });
   } catch (error) {
+    if (error instanceof AppError && error.statusCode < 500) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     logger.error({ error }, 'Error in directory sync POST');
     if (error instanceof Error && error.message.includes('fetch failed')) {
       return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
@@ -236,21 +225,10 @@ export async function DELETE(request: NextRequest) {
   if (csrfError) return csrfError;
 
   try {
-    const { isAdmin, userId, organizationId, error: authError } = await verifyAdminAccess(request);
-
-    if (!isAdmin) {
-      logger.warn({ error: authError }, 'Unauthorized directory sync deletion attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'No organization found for your account' },
-        { status: 400 },
-      );
-    }
-
     const { searchParams } = new URL(request.url);
+    const access = await requireDirectorySyncAdmin(request, searchParams.get('organizationId'));
+    if (isDirectorySyncAccessFailure(access)) return access.response;
+
     const connectionId = searchParams.get('id');
 
     if (!connectionId) {
@@ -262,31 +240,33 @@ export async function DELETE(request: NextRequest) {
 
     const db = getNeonDb();
 
+    // Scoped by organization in the predicate itself: a connection belonging to
+    // another tenant is indistinguishable from one that does not exist.
     const existing = await db
       .query<
         Pick<DirectorySyncConnectionRow, 'id' | 'organization_id' | 'provider' | 'directory_id'>
-      >('select id, organization_id, provider, directory_id from directory_sync_connections where id = $1 limit 1', [connectionId])
+      >(
+        `select id, organization_id, provider, directory_id
+           from directory_sync_connections
+          where id = $1 and organization_id = $2
+          limit 1`,
+        [connectionId, access.organizationId],
+      )
       .then((rows) => rows[0] ?? null);
 
     if (!existing) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    if (existing.organization_id !== organizationId) {
-      logger.warn(
-        {
-          userId,
-          connectionId,
-          requestedOrg: organizationId,
-          actualOrg: existing.organization_id,
-        },
-        'Unauthorized attempt to delete directory sync connection from another organization',
-      );
-      return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
-    }
-
     try {
-      await db.execute('delete from directory_sync_connections where id = $1', [connectionId]);
+      // Deleting the connection cascades to its SCIM tokens, provisioned users,
+      // groups and sync events (0084). Provisioned `organization_members` rows
+      // are deliberately NOT cascaded — removing a connection is a
+      // configuration change, not a mass deprovisioning event.
+      await db.execute(
+        'delete from directory_sync_connections where id = $1 and organization_id = $2',
+        [connectionId, access.organizationId],
+      );
     } catch (deleteError) {
       logger.error(
         { error: deleteError, connectionId },
@@ -296,7 +276,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     await logSecurityEvent({
-      userId,
+      userId: access.userId,
       eventType: 'admin_action',
       severity: 'high',
       ipAddress: getClientIp(request),
@@ -306,11 +286,14 @@ export async function DELETE(request: NextRequest) {
         connectionId,
         provider: existing.provider,
         directoryId: existing.directory_id,
-        organizationId,
+        organizationId: access.organizationId,
       },
     });
 
-    logger.info({ userId, organizationId, connectionId }, 'Directory sync connection deleted');
+    logger.info(
+      { userId: access.userId, organizationId: access.organizationId, connectionId },
+      'Directory sync connection deleted',
+    );
 
     return NextResponse.json({
       success: true,

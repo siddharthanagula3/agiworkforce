@@ -153,19 +153,59 @@ pub fn handle_history() {
 }
 
 pub(super) fn handle_delete(arg: &str) {
-    if arg.is_empty() {
-        output::print_warn("Usage: /delete <id>  (use /history to see IDs)");
+    // Parse an explicit bypass flag (`--force` / `--yes` / `-y`) out of the
+    // argument so scripted callers can delete without a prompt; everything else
+    // is treated as the session id.
+    let mut force = false;
+    let mut id_tokens: Vec<&str> = Vec::new();
+    for token in arg.split_whitespace() {
+        match token {
+            "--force" | "--yes" | "-y" => force = true,
+            other => id_tokens.push(other),
+        }
+    }
+    let id = id_tokens.join(" ");
+
+    if id.is_empty() {
+        output::print_warn("Usage: /delete <id> [--force]  (use /history to see IDs)");
         return;
     }
 
-    if crate::runtime::session_control::delete_managed_session(arg).is_ok() {
-        output::print_info(&format!("Deleted managed session: {}", arg));
+    // Deletion is destructive and irreversible — gate it with the same
+    // confirmation contract as `agi session delete`.
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && std::io::IsTerminal::is_terminal(&std::io::stderr());
+    match crate::resolve_destructive_decision(force, interactive) {
+        crate::DestructiveDecision::Refuse => {
+            output::print_warn(&format!(
+                "Refusing to delete '{id}' without confirmation. Re-run as `/delete {id} --force` to delete non-interactively."
+            ));
+            return;
+        }
+        crate::DestructiveDecision::Prompt => {
+            let confirmed = dialoguer::Confirm::new()
+                .with_prompt(format!(
+                    "Permanently delete session '{id}'? This cannot be undone."
+                ))
+                .default(false)
+                .interact()
+                .unwrap_or(false);
+            if !confirmed {
+                output::print_info(&format!("Aborted. '{id}' was not deleted."));
+                return;
+            }
+        }
+        crate::DestructiveDecision::Proceed => {}
+    }
+
+    if crate::runtime::session_control::delete_managed_session(&id).is_ok() {
+        output::print_info(&format!("Deleted managed session: {}", id));
         return;
     }
 
-    match conversations::delete_conversation(arg) {
+    match conversations::delete_conversation(&id) {
         Ok(()) => {
-            output::print_info(&format!("Deleted conversation: {}", arg));
+            output::print_info(&format!("Deleted conversation: {}", id));
         }
         Err(e) => {
             output::print_error(&format!("Failed to delete: {:#}", e));
@@ -699,6 +739,289 @@ pub(super) fn handle_diff() {
 }
 
 // ---------------------------------------------------------------------------
+// MCP management
+// ---------------------------------------------------------------------------
+
+/// Handle `/mcp <subcommand>` mutations over the writable global MCP registry
+/// (`~/.agiworkforce/mcp.json`). Bare `/mcp` stays on the live-status renderer;
+/// this covers add/remove/enable/disable/list plus restart (reconnect the live
+/// session manager) and reconfigure (replace an existing entry).
+pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
+    use crate::mcp::registry::McpRegistry;
+
+    let tokens: Vec<&str> = arg.split_whitespace().collect();
+    let sub = tokens.first().copied().unwrap_or("list");
+    let rest = &tokens[1..];
+
+    match sub {
+        "list" | "ls" => {
+            let reg = match McpRegistry::load() {
+                Ok(reg) => reg,
+                Err(e) => {
+                    output::print_error(&format!("Failed to load MCP registry: {e:#}"));
+                    return;
+                }
+            };
+            let rows = reg.list();
+            if rows.is_empty() {
+                output::print_info(
+                    "No servers in the MCP registry. Add one with `/mcp add <name> <url>`.",
+                );
+                return;
+            }
+            eprintln!("{}", ts::accent_header("Registered MCP servers:"));
+            for row in rows {
+                let state = if row.enabled { "enabled" } else { "disabled" };
+                eprintln!(
+                    "  {:<24} [{}] {:<6} {}",
+                    row.name, state, row.kind, row.target
+                );
+            }
+        }
+        "add" => {
+            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
+                Ok(parsed) => parsed,
+                Err(e) => {
+                    output::print_warn(&format!("{e:#}"));
+                    return;
+                }
+            };
+            mutate_registry(
+                |reg| reg.add(&name, entry.clone(), false),
+                &format!("Added MCP server '{name}'. Run `/mcp restart` to connect it."),
+            );
+        }
+        "reconfigure" | "edit" => {
+            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
+                Ok(parsed) => parsed,
+                Err(e) => {
+                    output::print_warn(&format!("{e:#}"));
+                    return;
+                }
+            };
+            mutate_registry(
+                |reg| reg.add(&name, entry.clone(), true),
+                &format!("Reconfigured MCP server '{name}'. Run `/mcp restart` to apply."),
+            );
+        }
+        "remove" | "rm" | "delete" => {
+            let Some(name) = rest.first().copied() else {
+                output::print_warn("Usage: /mcp remove <name>");
+                return;
+            };
+            let name = name.to_string();
+            mutate_registry_bool(
+                move |reg| reg.remove(&name),
+                &format!("Removed MCP server '{}'.", rest[0]),
+                &format!("No MCP server named '{}' in the registry.", rest[0]),
+            );
+        }
+        "enable" => {
+            let Some(name) = rest.first().copied() else {
+                output::print_warn("Usage: /mcp enable <name>");
+                return;
+            };
+            let name = name.to_string();
+            mutate_registry(
+                move |reg| reg.enable(&name).map(|_| ()),
+                &format!(
+                    "Enabled MCP server '{}'. Run `/mcp restart` to connect it.",
+                    rest[0]
+                ),
+            );
+        }
+        "disable" => {
+            let Some(name) = rest.first().copied() else {
+                output::print_warn("Usage: /mcp disable <name>");
+                return;
+            };
+            let name = name.to_string();
+            mutate_registry(
+                move |reg| reg.disable(&name).map(|_| ()),
+                &format!(
+                    "Disabled MCP server '{}'. Run `/mcp restart` to disconnect it.",
+                    rest[0]
+                ),
+            );
+        }
+        "restart" | "reload" => {
+            output::print_info("Reloading MCP servers and reconnecting...");
+            match crate::attach_mcp_manager_for_session(
+                session,
+                &crate::mcp::McpConfigLoadOptions::default(),
+                true,
+                true,
+            )
+            .await
+            {
+                Ok(()) => {
+                    let count = session.mcp_info().map(|t| t.len()).unwrap_or(0);
+                    output::print_info(&format!("MCP reconnected: {count} tool(s) available."));
+                }
+                Err(e) => output::print_error(&format!("MCP restart failed: {e:#}")),
+            }
+        }
+        other => {
+            output::print_warn(&format!(
+                "Unknown /mcp subcommand '{other}'. Use: list | add <name> <url> | \
+                 remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
+            ));
+        }
+    }
+}
+
+fn mutate_registry<F>(op: F, success: &str)
+where
+    F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> anyhow::Result<()>,
+{
+    let mut reg = match crate::mcp::registry::McpRegistry::load() {
+        Ok(reg) => reg,
+        Err(e) => {
+            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
+            return;
+        }
+    };
+    if let Err(e) = op(&mut reg) {
+        output::print_warn(&format!("{e:#}"));
+        return;
+    }
+    match reg.save() {
+        Ok(()) => output::print_info(success),
+        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+    }
+}
+
+fn mutate_registry_bool<F>(op: F, success: &str, missing: &str)
+where
+    F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> bool,
+{
+    let mut reg = match crate::mcp::registry::McpRegistry::load() {
+        Ok(reg) => reg,
+        Err(e) => {
+            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
+            return;
+        }
+    };
+    if !op(&mut reg) {
+        output::print_warn(missing);
+        return;
+    }
+    match reg.save() {
+        Ok(()) => output::print_info(success),
+        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Raw output alias
+// ---------------------------------------------------------------------------
+
+/// `/raw` — render the most recent assistant response through the same
+/// raw-output path as the headless `--raw` / `--output-format json` modes.
+/// `/raw` prints the response verbatim (no markdown); `/raw json` prints the
+/// canonical one-shot JSON result object built by `oneshot_result_json_value`.
+pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> String {
+    let Some(last) = session
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == "assistant")
+    else {
+        return "No assistant response yet to render.".to_string();
+    };
+    let response = last.text_content();
+
+    if arg.trim().eq_ignore_ascii_case("json") {
+        let cost = crate::output::format_cost(
+            &session.model,
+            session.total_input_tokens,
+            session.total_output_tokens,
+        );
+        let value = crate::oneshot_result_json_value(
+            &session.model,
+            &response,
+            session.total_input_tokens,
+            session.total_output_tokens,
+            false,
+            &cost,
+            0,
+            false,
+        );
+        serde_json::to_string_pretty(&value)
+            .unwrap_or_else(|e| format!("Failed to render JSON: {e}"))
+    } else {
+        // Raw text: no markdown formatting, no cost footer — verbatim payload.
+        response
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Worktree commands
+// ---------------------------------------------------------------------------
+
+/// Render the interactive `/worktree` command over the git-worktree helpers in
+/// `platform::runtime::worktree`. Read/list is always safe; create and remove
+/// shell out to `git worktree`. Returns the rendered output so it is testable
+/// without a terminal.
+pub(super) async fn handle_worktree(arg: &str) -> String {
+    let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    handle_worktree_in(&repo, arg).await
+}
+
+pub(super) async fn handle_worktree_in(repo: &std::path::Path, arg: &str) -> String {
+    let parts: Vec<&str> = arg.split_whitespace().collect();
+    let sub = parts.first().copied().unwrap_or("list");
+
+    match sub {
+        "" | "list" | "ls" => match crate::runtime::worktree::list_worktrees(repo).await {
+            Ok(worktrees) if worktrees.is_empty() => "No git worktrees found.".to_string(),
+            Ok(worktrees) => {
+                let mut lines = vec![format!("Git worktrees ({})", worktrees.len())];
+                for wt in worktrees {
+                    lines.push(format!("  {:<24} {}", wt.branch, wt.path.display()));
+                }
+                lines.join("\n")
+            }
+            Err(e) => format!("Failed to list worktrees: {e:#}"),
+        },
+        "create" | "add" | "new" => {
+            let branch = parts.get(1).copied().unwrap_or_default();
+            if branch.is_empty() {
+                return "Usage: /worktree create <branch> [base-ref]".to_string();
+            }
+            let base = parts.get(2).map(|s| s.to_string());
+            let opts = crate::runtime::worktree::WorktreeOptions {
+                branch: branch.to_string(),
+                base,
+                target_dir: None,
+            };
+            match crate::runtime::worktree::enter_worktree(repo, opts).await {
+                Ok(wt) => format!(
+                    "Created worktree for branch '{}' at {}",
+                    wt.branch,
+                    wt.path.display()
+                ),
+                Err(e) => format!("Failed to create worktree: {e:#}"),
+            }
+        }
+        "remove" | "rm" | "exit" => {
+            let path = parts.get(1).copied().unwrap_or_default();
+            if path.is_empty() {
+                return "Usage: /worktree remove <path>".to_string();
+            }
+            let target = std::path::PathBuf::from(path);
+            match crate::runtime::worktree::exit_worktree(repo, &target).await {
+                Ok(()) => format!("Removed worktree at {}", target.display()),
+                Err(e) => format!("Failed to remove worktree: {e:#}"),
+            }
+        }
+        other => format!(
+            "Unknown /worktree subcommand '{other}'. Use: list | create <branch> [base] | remove <path>"
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Memory commands
 // ---------------------------------------------------------------------------
 
@@ -1049,6 +1372,96 @@ mod tests {
         assert!(
             session.managed_session_id().is_none(),
             "/branch must not create a managed session under --no-session-persistence"
+        );
+    }
+
+    fn init_git_repo(dir: &std::path::Path) {
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec!["config", "user.email", "test@example.invalid"],
+            vec!["config", "user.name", "Test"],
+        ] {
+            std::process::Command::new("git")
+                .current_dir(dir)
+                .args(&args)
+                .status()
+                .expect("git setup");
+        }
+        std::fs::write(dir.join("README.md"), "hi").unwrap();
+        std::process::Command::new("git")
+            .current_dir(dir)
+            .args(["add", "."])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .current_dir(dir)
+            .args(["commit", "-q", "-m", "init"])
+            .status()
+            .unwrap();
+    }
+
+    /// `/raw` must render the last assistant response verbatim, and `/raw json`
+    /// must go through the shared one-shot JSON result shape.
+    #[test]
+    fn raw_alias_renders_last_response_verbatim_and_as_json() {
+        let ctx = empty_context();
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+
+        // No assistant turn yet → explicit message, not a blank line.
+        assert!(render_raw_last_response(&session, "").contains("No assistant response yet"));
+
+        session
+            .messages
+            .push(crate::models::Message::text("user", "hi"));
+        session.messages.push(crate::models::Message::text(
+            "assistant",
+            "**bold** raw payload",
+        ));
+
+        // Raw text is verbatim — markdown is NOT rendered.
+        let raw = render_raw_last_response(&session, "");
+        assert_eq!(raw, "**bold** raw payload");
+
+        // JSON mode uses the canonical one-shot result shape.
+        let json = render_raw_last_response(&session, "json");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["type"], "result");
+        assert_eq!(parsed["response"], "**bold** raw payload");
+        assert_eq!(parsed["is_error"], false);
+        assert_eq!(parsed["model"], session.model);
+    }
+
+    /// `/worktree` dispatch must reach the real git-worktree helpers: list a
+    /// fresh repo, create a branch worktree, and see it appear.
+    #[tokio::test]
+    async fn worktree_command_lists_and_creates() {
+        if std::process::Command::new("git")
+            .arg("--version")
+            .status()
+            .map(|s| !s.success())
+            .unwrap_or(true)
+        {
+            return; // git unavailable — skip rather than fail the suite.
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        init_git_repo(tmp.path());
+
+        // Bare list renders the main worktree.
+        let listed = handle_worktree_in(tmp.path(), "list").await;
+        assert!(listed.contains("Git worktrees"), "{listed}");
+        assert!(listed.contains("main"), "{listed}");
+
+        // Create a new worktree and confirm the branch shows up.
+        let created = handle_worktree_in(tmp.path(), "create wt-feature").await;
+        assert!(created.contains("wt-feature"), "{created}");
+        let after = handle_worktree_in(tmp.path(), "list").await;
+        assert!(after.contains("wt-feature"), "{after}");
+
+        // Unknown subcommand is reported, not silently ignored.
+        let unknown = handle_worktree_in(tmp.path(), "bogus").await;
+        assert!(
+            unknown.contains("Unknown /worktree subcommand"),
+            "{unknown}"
         );
     }
 }

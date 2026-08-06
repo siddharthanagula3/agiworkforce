@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + provider/platform lead
-Last updated: 2026-05-28
+Last updated: 2026-08-05
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
@@ -49,11 +49,10 @@ A recent hosted-open-model measurement paper makes this explicit: production use
 
 ## Current AGI Catalog Position
 
-`packages/contracts/types/src/models.json` currently has:
-
-- 25 providers,
-- 84 model entries,
-- direct model entries for managed cloud, OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, Moonshot, Mistral, Zhipu, Perplexity, Runway, NVIDIA NIM, Groq, and OpenRouter.
+`packages/contracts/types/src/models.json` is the single live source for the
+current provider and model counts and the exact per-provider entries — read it
+directly; do not restate its numbers here (restated counts drift; a prior
+version of this section carried stale totals).
 
 Founder-excluded providers are not catalogue gaps or future targets. They must not appear in provider enums, setup screens, request adapters, fallback labels, or model-sync output. Bedrock remains a separately reviewed enterprise route and cannot be claimed until model entries, capability metadata, request adapters, tests, and current official documentation prove it.
 
@@ -118,7 +117,7 @@ Desktop BYOK should have four clear groups in the model/provider setup:
 3. Local runtimes
    - Ollama, LM Studio, llama.cpp, vLLM, TGI, MLX.
 4. AGI Managed Cloud
-   - waitlist/private beta/invite only.
+   - public alpha, open by default (founder decision 2026-06-27); subscription/entitlement-gated, no waitlist/invite. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only.
 
 The model selector must show:
 

@@ -20,7 +20,7 @@ const PRODUCT = [
   { href: '/byok', label: 'BYOK' },
   { href: '/local', label: 'Local' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/waitlist', label: 'Team & Enterprise' },
+  { href: '/waitlist', label: 'Enterprise early access' },
 ];
 
 const SURFACES = [
@@ -46,7 +46,15 @@ const COMPANY = [
   { href: '/contact', label: 'Contact' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
+  { href: '/acceptable-use', label: 'Acceptable use' },
+  { href: '/agent-permissions', label: 'Agent permissions' },
   { href: '/security', label: 'Security' },
+  // Cookie policy is expected in the footer in the EU, and /legal is the index a
+  // procurement or security reviewer starts from — it links the DPA,
+  // subprocessors, SLA, refunds, accessibility and the EU-representative
+  // statement, none of which were reachable from the footer before.
+  { href: '/cookies', label: 'Cookies' },
+  { href: '/legal', label: 'All legal docs' },
 ];
 
 export function MarketingFooter() {

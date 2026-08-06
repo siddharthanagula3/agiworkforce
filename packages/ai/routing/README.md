@@ -40,6 +40,14 @@ Web, Desktop, services, provider packages, and shared chat/runtime surfaces.
 - `src/classify.ts` - local task classifier and conversation-pivot logic.
 - `src/model-switch-cache.ts` - pure cache-reset warning policy for model changes.
 - `src/pricing.ts` - compatibility pricing and lifecycle helpers.
+- `src/task-family.ts` - deterministic structural task-family fast path
+  (no prose, no LLM, no network); ambiguous requests decline and fall through.
+- `src/task-family-routing.ts` - per-family quality floor plus cost-ranked
+  ordering of the already-admitted candidate set, behind an operator flag.
+- `src/task-family-continuity.ts` - session stickiness and escalation-only
+  switching, built on `assessModelSwitchCache`.
+- `src/__tests__/fixtures/task-family-corpus.ts` - the eval-corpus seed
+  (12 families x 6 labelled rows plus ambiguous rows).
 
 ## Commands
 
@@ -50,6 +58,14 @@ Web, Desktop, services, provider packages, and shared chat/runtime surfaces.
 ## Environment / Secrets
 
 No secrets belong in this package.
+
+`AGI_ROUTING_TASK_FAMILY_STAGE` is the only environment variable this package
+reads. It is an operator-only server flag, **off unless set to exactly `1`**,
+and it gates the task-family ordering stage. Off is the honest default: turning
+it on changes which model a request lands on, and the shadow-mode evidence that
+would justify that change (a CPST baseline per family, a measured router
+decision latency, a written list of shadow/live disagreements) does not exist
+yet. See `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` Section 5.
 
 ## Security, Privacy, Data Boundaries
 
@@ -73,6 +89,21 @@ application call sites and the Rust Desktop/CLI resolver migrate from legacy
 host-discovered Local/BYOK models remain runtime-admitted because they cannot
 be enumerated in the static registry. Harness-dependent tasks fail closed
 until their feature is marked implemented in the registry.
+
+The task-family stage exists in TypeScript only. The Rust resolver
+(`crates/agiworkforce-model-registry/src/lib.rs`) has already diverged from this
+one, and which of the two is canonical is design-doc open question **OQ-1**,
+still undecided. Rust adoption of the task-family stage follows OQ-1; do not
+port it before that question is answered, because doing so doubles the
+divergence surface. The stage's curated policy
+(`auto.taskFamilies` in `packages/ai/model-registry/catalog/routing-policies.json`)
+is compiled into the shared registry and is simply ignored by the Rust
+deserializer today.
+
+Benchmark-based quality floors are supported by the schema but no seeded family
+uses one: benchmark coverage in the registry is partial, and the floor is
+fail-closed, so a benchmark floor would exclude every model with no recorded
+score - including the models most Auto slots point at.
 
 ## CODEOWNERS
 

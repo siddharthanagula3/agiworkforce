@@ -150,7 +150,10 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     expect(stripeMocks.updateSubscription).toHaveBeenCalledWith(
       'sub_1',
       expect.objectContaining({
-        items: [{ id: 'si_1', price: 'price_max_monthly' }],
+        // quantity is explicit on every item since Team introduced per-seat
+        // billing; it is 1 for the individual plans. objectContaining is
+        // shallow, so this array is deep-compared and must carry it.
+        items: [{ id: 'si_1', price: 'price_max_monthly', quantity: 1 }],
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
         payment_behavior: 'pending_if_incomplete',
@@ -204,7 +207,10 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     expect(stripeMocks.updateSubscription).toHaveBeenCalledWith(
       'sub_1',
       expect.objectContaining({
-        items: [{ id: 'si_1', price: 'price_max_monthly_inr' }],
+        // quantity is explicit on every item since Team introduced per-seat
+        // billing; it is 1 for the individual plans. objectContaining is
+        // shallow, so this array is deep-compared and must carry it.
+        items: [{ id: 'si_1', price: 'price_max_monthly_inr', quantity: 1 }],
       }),
       expect.anything(),
     );

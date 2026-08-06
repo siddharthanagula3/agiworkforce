@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
+import { describeSweepCadence } from '@/lib/schedules/schedule-time';
 import {
   INITIAL_SCHEDULE_DRAFT,
   isoToZonedLocalInput,
@@ -158,24 +159,24 @@ describe('schedule form contract', () => {
     ).toEqual({
       ok: false,
       errors: expect.objectContaining({
-        intervalValue: 'Use an interval from 1 day to 365 days.',
+        intervalValue: `Use an interval from ${describeSweepCadence().minimum} to 365 days.`,
       }),
     });
   });
 
-  // The sweep that runs due tasks fires once a day, so anything finer is an
+  // The sweep that runs due tasks fires hourly, so anything finer is an
   // availability the platform does not have. The client refuses it here so the
-  // user is not told "every 6 hours" and then served one run a day.
-  it('refuses a cadence finer than the daily sweep, on both interval and cron', () => {
+  // user is not told "every 5 minutes" and then served one run an hour.
+  it('refuses a cadence finer than the deployed sweep, on both interval and cron', () => {
     expect(
       validateAndBuildScheduleRequest(
-        draft({ recurrence: 'interval', intervalValue: '6', intervalUnit: 'hours' }),
+        draft({ recurrence: 'interval', intervalValue: '5', intervalUnit: 'minutes' }),
         new Date('2026-07-15T12:00:00.000Z'),
       ),
     ).toEqual({
       ok: false,
       errors: expect.objectContaining({
-        intervalValue: 'Use an interval from 1 day to 365 days.',
+        intervalValue: `Use an interval from ${describeSweepCadence().minimum} to 365 days.`,
       }),
     });
 
@@ -187,7 +188,7 @@ describe('schedule form contract', () => {
     ).toMatchObject({
       ok: false,
       errors: expect.objectContaining({
-        cronExpression: expect.stringContaining('once per day'),
+        cronExpression: expect.stringContaining('cannot fire more often'),
       }),
     });
 

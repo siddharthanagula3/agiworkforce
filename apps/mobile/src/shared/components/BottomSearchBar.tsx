@@ -1,5 +1,6 @@
 import type { Ref } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
 import { useThemeColors } from '@/src/ui/theme';
@@ -24,6 +25,38 @@ export const BOTTOM_SEARCH_BAR_MARGIN = 10;
 export function useBottomSearchBarSpace(): number {
   const insets = useSafeAreaInsets();
   return insets.bottom + BOTTOM_SEARCH_BAR_MARGIN + BOTTOM_SEARCH_BAR_HEIGHT;
+}
+
+/**
+ * Height the software keyboard currently covers, or 0 when it is closed.
+ *
+ * iOS ONLY, deliberately. React Native does not resize the root window for the
+ * iOS keyboard, so a bottom-anchored view stays where it is and the keyboard
+ * opens straight over it — which is exactly what happened to this search pill on
+ * Chats, Library, Projects and Connectors: focusing the field (the drawer's
+ * search glyph even auto-focuses it) put the caret under the keyboard and the
+ * user typed blind. Android's default `adjustResize` already shrinks the window,
+ * so applying an offset there would double-count and leave a gap.
+ *
+ * `keyboardWillShow` rather than `keyboardDidShow` so the pill travels with the
+ * keyboard animation instead of snapping after it.
+ */
+export function useKeyboardOverlap(): number {
+  const [overlap, setOverlap] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const show = Keyboard.addListener('keyboardWillShow', (event) => {
+      setOverlap(event.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', () => setOverlap(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  return overlap;
 }
 
 /**
@@ -63,6 +96,7 @@ export function BottomSearchBar({
 }) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const keyboardOverlap = useKeyboardOverlap();
   const hasQuery = value.trim().length > 0;
 
   return (
@@ -71,10 +105,13 @@ export function BottomSearchBar({
       style={{
         minHeight: BOTTOM_SEARCH_BAR_HEIGHT,
         marginHorizontal: 16,
-        // Clear the home indicator. Host screens claim only the top safe-area
-        // edge (their lists scroll under the bottom one), so without this the
-        // pill sits flush against the screen edge.
-        marginBottom: insets.bottom + BOTTOM_SEARCH_BAR_MARGIN,
+        // Clear the home indicator, or the keyboard when it is open. Host
+        // screens claim only the top safe-area edge (their lists scroll under
+        // the bottom one), so without this the pill sits flush against the
+        // screen edge. When the iOS keyboard is up it already covers the home
+        // indicator, so its height REPLACES the inset rather than adding to it.
+        marginBottom:
+          (keyboardOverlap > 0 ? keyboardOverlap : insets.bottom) + BOTTOM_SEARCH_BAR_MARGIN,
         borderRadius: BOTTOM_SEARCH_BAR_HEIGHT / 2,
         borderWidth: 1,
         borderColor: colors.border,

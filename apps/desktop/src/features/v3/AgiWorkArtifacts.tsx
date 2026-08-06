@@ -55,7 +55,10 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
   }, [listPersistedArtifacts]);
 
   return (
-    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
+    <div
+      data-testid="agi-work-artifacts"
+      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
+    >
       <div className="mx-auto max-w-3xl px-6 py-8 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -133,7 +136,12 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
                     </span>
                   </div>
 
-                  <div className="text-sm font-medium text-[var(--chat-text-primary)] leading-snug">
+                  {/* Generated artifact filenames are long and unbroken; without a
+                      clamp the title escaped the card and overlapped its neighbour. */}
+                  <div
+                    className="line-clamp-2 text-sm font-medium leading-snug text-[var(--chat-text-primary)] [overflow-wrap:anywhere]"
+                    title={a.title}
+                  >
                     {a.title}
                   </div>
 

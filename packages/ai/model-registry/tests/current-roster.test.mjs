@@ -23,17 +23,21 @@ const currentOpenAI = {
     cacheWrite: 6.25,
     output: 30,
   },
+  // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the official
+  // pricing page. Cache WRITES bill at 1.25x the uncached input rate for the
+  // whole GPT-5.6 family (a billing change introduced with 5.6 — pre-5.6 OpenAI
+  // models declare no write price and keep free writes).
   'gpt-5.6-terra': {
-    input: 2.5,
-    cacheRead: 0.25,
-    cacheWrite: 3.125,
-    output: 15,
+    input: 2,
+    cacheRead: 0.2,
+    cacheWrite: 2.5,
+    output: 12,
   },
   'gpt-5.6-luna': {
-    input: 1,
-    cacheRead: 0.1,
-    cacheWrite: 1.25,
-    output: 6,
+    input: 0.2,
+    cacheRead: 0.02,
+    cacheWrite: 0.25,
+    output: 1.2,
   },
 };
 
@@ -163,6 +167,76 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
 
   assert.equal(compatibility.models['claude-sonnet-5'].promo_expires_at, undefined);
   assert.equal(compatibility.models['claude-sonnet-5'].post_promo_prices, undefined);
+});
+
+/**
+ * The dated-pricing MECHANISM is proved against synthetic fixtures in
+ * `pricing-schedule.test.mjs`; this asserts what the shipped roster actually
+ * publishes. Today no model carries a window: every published price is
+ * date-invariant, so no request can be billed differently for the same tokens
+ * depending on the calendar. Sonnet 5 in particular bills the founder-selected
+ * standard rates on every date (Decision #22, reaffirmed 2026-08-05) — a
+ * provider's introductory window is a provider-cost fact for verificationLog,
+ * not a product price.
+ */
+test('publishes date-invariant prices — no shipped model carries a pricing schedule', () => {
+  const scheduled = Object.entries(registry.pricing)
+    .filter(([, pricing]) => pricing.schedule !== undefined)
+    .map(([modelKey]) => modelKey);
+  assert.deepEqual(
+    scheduled,
+    [],
+    'a shipped pricing schedule is a product price change and needs an explicit founder decision',
+  );
+
+  const sonnet = registry.pricing['claude-sonnet-5'];
+  assert.equal(sonnet.inputPerMillion, 3);
+  assert.equal(sonnet.outputPerMillion, 15);
+  assert.equal(sonnet.cacheReadPerMillion, 0.3);
+  assert.equal(sonnet.cacheWritePerMillion, 3.75);
+  assert.equal(sonnet.cacheWrite1hPerMillion, 6);
+});
+
+test('records only verified openness metadata and leaves the rest unknown', () => {
+  const openness = (modelKey) => {
+    const { openWeight, license, commercialRestrictions } = registry.models[modelKey].identity;
+    return { openWeight, license, commercialRestrictions };
+  };
+
+  for (const modelKey of ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.2']) {
+    assert.deepEqual(openness(modelKey), {
+      openWeight: true,
+      license: 'MIT',
+      commercialRestrictions: undefined,
+    });
+  }
+
+  // Open weights confirmed, exact license id NOT confirmed — it stays absent
+  // instead of being guessed.
+  for (const modelKey of ['kimi-k3', 'minimax-m3']) {
+    assert.deepEqual(openness(modelKey), {
+      openWeight: true,
+      license: undefined,
+      commercialRestrictions: undefined,
+    });
+  }
+
+  for (const modelKey of ['gpt-5.6-sol', 'claude-sonnet-5', 'gemini-3.6-flash', 'grok-4.5']) {
+    assert.deepEqual(openness(modelKey), {
+      openWeight: false,
+      license: 'proprietary',
+      commercialRestrictions: undefined,
+    });
+  }
+
+  // Hosted Qwen variants are unverified on both axes: absent, never guessed.
+  for (const modelKey of ['qwen-3.7-plus', 'qwen-3.5-flash']) {
+    assert.deepEqual(openness(modelKey), {
+      openWeight: undefined,
+      license: undefined,
+      commercialRestrictions: undefined,
+    });
+  }
 });
 
 test('publishes exact multimodal Qwen replacement IDs and limits', () => {

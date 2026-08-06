@@ -3,110 +3,74 @@ import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Code, PenLine, Search, Brain, FileText, Lightbulb } from 'lucide-react-native';
+import { Code, PenLine, Search, Image as ImageIcon, Film, Monitor } from 'lucide-react-native';
+import {
+  QUICK_START_INTENTS,
+  QUICK_START_INTENT_COPY,
+  type QuickStartIntent,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { type ColorScheme, useThemeColors } from '@/src/ui/theme';
 
-type StarterTone = 'active' | 'success' | 'purple' | 'warning' | 'danger' | 'accent';
-
 interface Starter {
   icon: React.ComponentType<{ size: number; color: string }>;
   title: string;
+  /** What the card does, in a phrase. */
+  description: string;
+  /** Composer stem the user continues typing after. */
   prompt: string;
-  tone: StarterTone;
 }
 
-const STARTERS: Starter[] = [
-  {
-    icon: Code,
-    title: 'SwiftUI Auth',
-    prompt:
-      'Write a SwiftUI login screen with biometric unlock (Face ID / Touch ID). Include a clean two-field form, a "Sign in with Biometrics" button, LocalAuthentication integration, and error handling for failed authentication.',
-    tone: 'active',
-  },
-  {
-    icon: FileText,
-    title: 'Summarize PDF',
-    prompt:
-      'Summarize this document and pull out the top action items. Format the summary in 3–5 bullet points followed by a numbered action-item list with owners and due dates where mentioned.',
-    tone: 'danger',
-  },
-  {
-    icon: Search,
-    title: 'Tokyo Itinerary',
-    prompt:
-      'Plan a 3-day Tokyo itinerary with a daily budget of $150 USD per person. Include neighborhoods to explore each day, 2–3 restaurant picks per day (mix of budget and mid-range), must-see spots, and local transit tips.',
-    tone: 'purple',
-  },
-  {
-    icon: Brain,
-    title: 'Startup Pitch',
-    prompt:
-      'Help me brainstorm a 60-second investor pitch for an AI productivity app targeting indie developers. Give me 5 opening hook options, a problem statement, and a one-line value prop I can test with users.',
-    tone: 'warning',
-  },
-  {
-    icon: PenLine,
-    title: 'SQL → Explanation',
-    prompt:
-      'Explain what this SQL query does in plain English, then rewrite it to be more readable and add a short comment block at the top describing its purpose, inputs, and expected output.',
-    tone: 'success',
-  },
-  {
-    icon: Lightbulb,
-    title: 'Debug This Error',
-    prompt:
-      'I am getting this error and I am not sure why. Explain what is causing it, walk me through a mental model of why it happens, and give me 3 concrete fixes ranked by simplicity — paste your error below:',
-    tone: 'accent',
-  },
-];
+/**
+ * The same six intents web and desktop offer, in the same order and under the
+ * same names — see QUICK_START_INTENT_COPY in @agiworkforce/types.
+ *
+ * These cards previously advertised six unrelated canned demos ("SwiftUI Auth",
+ * "Tokyo Itinerary", "Debug This Error"). They read as a feature tour of a
+ * different product than the one web and desktop introduce, and each card
+ * committed the user to a long, oddly specific prompt they then had to delete.
+ * Mobile keeps the richer card layout — it has the vertical space that a chip
+ * row does not — but the words and the prefill stem now match every other
+ * surface.
+ */
+const STARTER_ICONS: Record<
+  QuickStartIntent,
+  React.ComponentType<{ size: number; color: string }>
+> = {
+  code: Code,
+  write: PenLine,
+  research: Search,
+  image: ImageIcon,
+  video: Film,
+  computer: Monitor,
+};
 
-function getStarterTone(colors: ColorScheme, tone: StarterTone) {
-  switch (tone) {
-    case 'active':
-      return {
-        icon: colors.agentActive,
-        background: colors.accentSurface,
-        border: colors.accentBorder,
-        pressed: colors.surfaceHover,
-      };
-    case 'success':
-      return {
-        icon: colors.agentSuccess,
-        background: colors.successSurface,
-        border: colors.successBorder,
-        pressed: colors.surfaceHover,
-      };
-    case 'purple':
-      return {
-        icon: colors.purple,
-        background: colors.purpleSurface,
-        border: colors.accentBorder,
-        pressed: colors.surfaceHover,
-      };
-    case 'warning':
-      return {
-        icon: colors.agentWarning,
-        background: colors.warningSurface,
-        border: colors.warningBorder,
-        pressed: colors.surfaceHover,
-      };
-    case 'danger':
-      return {
-        icon: colors.agentError,
-        background: colors.dangerSurface,
-        border: colors.dangerBorder,
-        pressed: colors.surfaceHover,
-      };
-    case 'accent':
-      return {
-        icon: colors.teal,
-        background: colors.accentSurface,
-        border: colors.accentBorder,
-        pressed: colors.surfaceHover,
-      };
-  }
+const STARTERS: Starter[] = QUICK_START_INTENTS.map((intent) => ({
+  icon: STARTER_ICONS[intent],
+  title: QUICK_START_INTENT_COPY[intent].label,
+  description: QUICK_START_INTENT_COPY[intent].accessibleLabel,
+  prompt: QUICK_START_INTENT_COPY[intent].prompt,
+}));
+
+/**
+ * One surface treatment for every card.
+ *
+ * Each starter previously carried its own tone — red, purple, amber, teal,
+ * green, blue — so the first screen of the app was a six-colour grid. Colour
+ * that does not encode anything is noise, and none of the reference products do
+ * it. The icon carries the accent; the card stays quiet.
+ */
+function getStarterTone(colors: ColorScheme) {
+  return {
+    icon: colors.textPrimary,
+    // The icon well needs its own fill, or the 32px square is invisible against
+    // the card it sits on.
+    iconBackground: colors.accentSurface,
+    background: colors.surfaceElevated,
+    border: colors.border,
+    pressed: colors.surfaceHover,
+  };
 }
 
 interface ConversationStartersProps {
@@ -170,7 +134,7 @@ interface StarterCardProps {
 function StarterCard({ starter, index, onPress }: StarterCardProps) {
   const IconComponent = starter.icon;
   const colors = useThemeColors();
-  const tone = getStarterTone(colors, starter.tone);
+  const tone = getStarterTone(colors);
 
   // Stagger delay: 40ms per card
   const delay = index * 40;
@@ -180,9 +144,9 @@ function StarterCard({ starter, index, onPress }: StarterCardProps) {
       <Pressable
         onPress={() => onPress(starter)}
         accessible
-        accessibilityLabel={`${starter.title} starter`}
+        accessibilityLabel={starter.description}
         accessibilityRole="button"
-        accessibilityHint={`Pre-fills: ${starter.prompt}`}
+        accessibilityHint="Starts a new chat with this prompt ready to edit"
         style={({ pressed }) => ({
           backgroundColor: pressed ? tone.pressed : tone.background,
           borderRadius: 12,
@@ -198,7 +162,7 @@ function StarterCard({ starter, index, onPress }: StarterCardProps) {
             width: 32,
             height: 32,
             borderRadius: 8,
-            backgroundColor: tone.background,
+            backgroundColor: tone.iconBackground,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -211,9 +175,9 @@ function StarterCard({ starter, index, onPress }: StarterCardProps) {
           {starter.title}
         </Text>
 
-        {/* Prompt preview */}
+        {/* What the card does — not the raw stem, which reads as a truncated sentence. */}
         <Text style={{ fontSize: 11, color: colors.textMuted, lineHeight: 16 }} numberOfLines={2}>
-          {starter.prompt}
+          {starter.description}
         </Text>
       </Pressable>
     </Animated.View>

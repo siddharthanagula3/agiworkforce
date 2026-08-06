@@ -129,7 +129,12 @@ function injectStyles(): void {
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      background: white;
+      background: #ffffff;
+      /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
+         the light theme — a plain white knob on it was ~1.05:1 and the OFF
+         state read as an empty pill. An outset ring costs no layout and
+         reads on both grounds. */
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
       top: 3px;
       left: 3px;
       transition: transform 0.2s;
@@ -138,6 +143,19 @@ function injectStyles(): void {
     .opt-toggle:checked::after { transform: translateX(16px); }
     .opt-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
+
+    /* Respect the OS "reduce motion" setting. Five infinite animations (typing
+       dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
+       which is a vestibular-trigger risk and an accessibility failure. Motion is
+       reduced to near-zero rather than removed, so state changes still register. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
     /* Allowlist */
     .opt-allowlist-body {
       padding: 12px 16px;
@@ -339,6 +357,26 @@ function injectStyles(): void {
     .opt-field textarea:focus,
     .opt-field select:focus {
       border-color: var(--agi-ext-accent);
+    }
+
+    /* Inputs have no width, so each 1fr grid track could not shrink below the
+       browser's default input width and the page scrolled horizontally, clipping
+       the right-hand column. There was no @media rule in this file at all. */
+    .opt-field input,
+    .opt-field textarea,
+    .opt-field select {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 520px) {
+      .opt-profile-grid {
+        grid-template-columns: 1fr;
+      }
+      .opt-page {
+        padding: 20px 14px 32px;
+      }
     }
 
     .opt-field textarea {
@@ -606,19 +644,35 @@ function buildPage(): void {
   // options page itself and Add would pollute the allowlist with the extension's
   // own origin. Query the active tab of every window and pick the first real
   // http(s) site instead — the page the user actually came from.
-  chrome.tabs.query({ active: true }, (tabs) => {
-    const siteTab = tabs.find((t) => {
-      if (!t.url) return false;
-      try {
-        const proto = new URL(t.url).protocol;
-        return proto === 'http:' || proto === 'https:';
-      } catch {
-        return false;
-      }
-    });
+  //
+  // `{active: true}` alone is not enough: with a SINGLE browser window the only
+  // active tab IS this options page, it gets filtered out as chrome-extension://,
+  // no site is found, and "Add" — the page's only site-permission control —
+  // stays permanently disabled showing "—". Query every tab and fall back to the
+  // most recently accessed http(s) one, which is the page the user came from.
+  const isHttpTab = (t: chrome.tabs.Tab): boolean => {
+    if (!t.url) return false;
+    try {
+      const proto = new URL(t.url).protocol;
+      return proto === 'http:' || proto === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  chrome.tabs.query({}, (tabs) => {
+    const candidates = tabs.filter(isHttpTab);
+    const siteTab =
+      candidates.find((t) => t.active) ??
+      candidates.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
     if (siteTab?.url) {
       currentOriginLabel.textContent = new URL(siteTab.url).origin;
       addBtn.disabled = false;
+    } else {
+      // Explain the dash instead of leaving a dead control next to it.
+      currentOriginLabel.textContent = 'No site open';
+      addBtn.disabled = true;
+      addBtn.title = 'Open a website in a tab, then reopen Options to approve it.';
     }
     void refreshAllowlist();
   });
@@ -647,10 +701,20 @@ function buildPage(): void {
   accountHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Account'));
   accountSection.appendChild(accountHeader);
 
-  const renderAccountRow = (signedIn: boolean, unavailable = false): void => {
+  const renderAccountRow = (signedIn: boolean, unavailable = false, loading = false): void => {
     accountSection.querySelector('.opt-row')?.remove();
     const accountRow = el('div', { class: 'opt-row' });
     const accountLeft = el('div');
+
+    // Resolve-in-progress: show a non-actionable row rather than asserting
+    // "Sign in" at a user who is already signed in.
+    if (loading) {
+      accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Account'));
+      accountLeft.appendChild(el('div', { class: 'opt-row-hint' }, 'Checking your account…'));
+      accountRow.appendChild(accountLeft);
+      accountSection.appendChild(accountRow);
+      return;
+    }
 
     if (!signedIn) {
       accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Sign in'));
@@ -674,13 +738,33 @@ function buildPage(): void {
       ) as HTMLButtonElement;
       signInBtn.disabled = !isClerkExtensionAuthConfigured();
       signInBtn.addEventListener('click', async () => {
+        const restoreLabel = signInBtn.textContent ?? 'Sign in';
         signInBtn.textContent = 'Opening…';
         signInBtn.disabled = true;
         try {
           await openClerkSignIn();
-          signInBtn.textContent = 'Sign-in opened';
+          // Sign-in completes in ANOTHER tab, so this page never learns about it.
+          // The button used to stop at a permanently disabled "Sign-in opened",
+          // stranding anyone who finished signing in or closed the auth tab —
+          // the row still said "Sign in" and nothing could be clicked. Offer an
+          // explicit re-check instead, matching the side panel.
+          signInBtn.textContent = 'Check sign-in';
+          signInBtn.disabled = false;
+          signInBtn.onclick = async () => {
+            signInBtn.textContent = 'Checking…';
+            signInBtn.disabled = true;
+            try {
+              await beginOptionsAccountRefresh(
+                getAuthToken,
+                ({ signedIn: s2, unavailable: u2, loading: l2 }) => renderAccountRow(s2, u2, l2),
+              );
+            } finally {
+              signInBtn.textContent = 'Check sign-in';
+              signInBtn.disabled = false;
+            }
+          };
         } catch {
-          signInBtn.textContent = 'Try again';
+          signInBtn.textContent = restoreLabel;
           signInBtn.disabled = false;
         }
       });
@@ -923,7 +1007,7 @@ function buildPage(): void {
 
   const table = el('table', { class: 'opt-shortcuts-table' });
   const shortcuts: Array<[string, string[]]> = [
-    ['Open popup', ['Cmd/Ctrl', 'Shift', 'A']],
+    ['Open side panel', ['Cmd/Ctrl', 'Shift', 'A']],
     ['Capture page', ['Cmd/Ctrl', 'Shift', 'C']],
   ];
   for (const [action, keys] of shortcuts) {
@@ -955,7 +1039,7 @@ function buildPage(): void {
   document.body.appendChild(page);
   void beginOptionsAccountRefresh(
     getAuthToken,
-    ({ signedIn, unavailable }) => renderAccountRow(signedIn, unavailable),
+    ({ signedIn, unavailable, loading }) => renderAccountRow(signedIn, unavailable, loading),
     () => console.warn('[Options] AGI account status is temporarily unavailable'),
   );
 }

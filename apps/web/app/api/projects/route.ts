@@ -28,6 +28,7 @@ import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
+import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -44,21 +45,39 @@ async function handleGetProjects(request: NextRequest) {
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
+  // Projects the caller's ORGANIZATION shares with them (migration 0086).
+  //
+  // TENANCY. This route runs on the privileged `getNeonDb()` connection, which
+  // has BYPASSRLS, so the id set below IS the tenant boundary — not merely a
+  // filter. It is resolved entirely server-side from `organization_members`
+  // plus `organization_shared_projects`, honouring an explicit per-member
+  // `access = 'none'` denial. Nothing on the wire influences it, and
+  // `route.cross-org-isolation.test.ts` fails if the scope is dropped or the
+  // predicate stops binding it.
+  //
+  // Shared projects are ADDITIVE to the caller's own. Conversations stay
+  // personal: `conversation_count` still binds `c.user_id = $1`, so a member
+  // opening a shared project sees their own threads in it and nobody else's.
+  const sharedScope = await resolveSharedProjectScope(db, userId);
+  const sharedProjectIds = sharedScope?.projectIds ?? [];
+
   let data: Record<string, unknown>[];
   try {
     data = await db.query<Record<string, unknown>>(
       // Hide soft-deleted projects (deleted_at tombstones from cross-device sync, 0041).
       `select p.*,
+              (p.user_id <> $1) as is_org_shared,
               (select count(*)::int
                  from web_conversations c
                 where c.project_id = p.id::text
                   and c.user_id = $1
                   and c.deleted_at is null) as conversation_count
          from user_projects p
-        where p.user_id = $1 and p.deleted_at is null
+        where p.deleted_at is null
+          and (p.user_id = $1 or p.id = any($4::uuid[]))
        order by p.updated_at desc
        limit $2 offset $3`,
-      [userId, limit, offset],
+      [userId, limit, offset, sharedProjectIds],
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch projects');

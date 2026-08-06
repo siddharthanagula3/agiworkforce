@@ -144,11 +144,7 @@ function StepDots({ total, current }: { total: number; current: number }) {
             width: i === current ? 16 : 6,
             height: 6,
             backgroundColor:
-              i === current
-                ? colors.teal
-                : i < current
-                  ? `${colors.teal}60`
-                  : 'rgba(255,255,255,0.15)',
+              i === current ? colors.teal : i < current ? `${colors.teal}60` : colors.neutralBorder,
           }}
         />
       ))}
@@ -213,7 +209,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
         exiting={FadeOut.duration(150)}
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backgroundColor: colors.scrim,
           justifyContent: 'flex-end',
         }}
       >
@@ -237,7 +233,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             paddingBottom: 40,
             paddingTop: 24,
             borderTopWidth: 1,
-            borderColor: 'rgba(255,255,255,0.08)',
+            borderColor: colors.border,
             maxWidth: screenWidth,
           }}
         >

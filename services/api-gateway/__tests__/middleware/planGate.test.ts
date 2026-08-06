@@ -96,7 +96,7 @@ describe('requireManagedChatPlan tier gate', () => {
     expect(res.status).toHaveBeenCalledWith(503);
   });
 
-  // Trusted developer surface (device-authorization token) requires Pro+.
+  // Trusted developer surface (device-authorization token) requires Pro or above.
   // A Basic caller cannot reach managed developer access via managed_chat.
   it.each(['free', 'basic'])(
     'blocks the developer surface on %s with a Pro upgrade gate',

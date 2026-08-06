@@ -3,8 +3,9 @@
  *
  * Hosts (apps/desktop, apps/web) push the user's current billing tier here
  * via `setTier()`. Components consume via `useTierStore()` or the helper
- * hooks below to gate Pro+ exclusive features (notably: in-thread
- * multi-provider switch).
+ * hooks below to gate Max-exclusive features (notably: in-thread
+ * multi-provider switch, admitted by `canSwitchProviderInThread` for
+ * `max` / `max_15x` / `enterprise` only).
  *
  * Defaults to `'byok'` so a host that hasn't wired billing yet still allows
  * full BYOK functionality (BYOK is free forever).

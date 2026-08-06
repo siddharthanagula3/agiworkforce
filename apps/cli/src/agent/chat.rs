@@ -2,14 +2,14 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 
 use agiworkforce_agent_core::context::{
+    compact_context, context_budget, estimate_context_tokens, format_summary_input,
     ContextCompactionConfig, ContextCompactionResult, ContextSummarizer, ContextUsageAnchor,
-    DEFAULT_SUMMARY_INSTRUCTION, SummaryRequest, compact_context, context_budget,
-    estimate_context_tokens, format_summary_input,
+    SummaryRequest, DEFAULT_SUMMARY_INSTRUCTION,
 };
 use agiworkforce_agent_core::{
-    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, MAX_AGENTIC_ITERATIONS,
-    Prepared, PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent,
-    TurnHost, TurnParams, TurnPhase, run_turn,
+    run_turn, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
+    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
+    TurnParams, TurnPhase, MAX_AGENTIC_ITERATIONS,
 };
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;

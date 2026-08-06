@@ -84,9 +84,17 @@ describe('POST /api/settings/team unknown account honesty', () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mockExecute).not.toHaveBeenCalled();
+    // The only write in the transaction is the lapsed-invitation sweep, which
+    // releases seats and creates nothing. No membership row was added.
+    expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+
     const body = (await response.json()) as { error: { message: string } };
-    expect(body.error.message).toMatch(/create an AGI account/i);
-    expect(body.error.message).toMatch(/no invitation was sent/i);
+    // Now that a real invitation lifecycle exists, the honest answer is to
+    // point at it rather than dead-ending the admin...
+    expect(body.error.message).toMatch(/POST \/api\/settings\/team\/invitations/);
+    // ...while still refusing to claim an email was sent, because no
+    // transactional email provider exists in this repo.
+    expect(body.error.message).toMatch(/no email was sent/i);
   });
 });

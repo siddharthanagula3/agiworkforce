@@ -14,44 +14,29 @@ import {
   type CloudAgentRunListPage,
   type CloudAgentRunSnapshotPage,
 } from './cloud-agent-runs';
+import {
+  ManagedCloudAgentRunReferenceSchema as RunReferenceSchema,
+  type ManagedCloudAgentRunHandle as RunHandle,
+  type ManagedCloudAgentRunReference as RunReference,
+} from './managed-cloud-agent-run-reference';
+import { ToolApprovalResumeRequestSchema } from './tool-approval-resume';
+
+export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
 
 export type ManagedCloudAgentRunHeaders = Record<string, string>;
 export type ManagedCloudAgentRunFetch = (input: string, init?: RequestInit) => Promise<Response>;
 export type ManagedCloudAgentRunWait = (ms: number, signal?: AbortSignal) => Promise<void>;
 
-export interface ManagedCloudAgentRunHandle {
-  runId: string;
-  runPath: string;
-}
-
-/**
- * Serializable client checkpoint stored with an assistant turn. The stable
- * handle identifies the server-owned run while `lastSequence` is the exact
- * replay cursor already projected into that message.
- */
-export interface ManagedCloudAgentRunReference extends ManagedCloudAgentRunHandle {
-  lastSequence: number;
-  state?: CloudAgentRun['state'];
-  cancellationRequestedAt?: string | null;
-}
-
-export const ManagedCloudAgentRunReferenceSchema: z.ZodType<ManagedCloudAgentRunReference> = z
-  .object({
-    runId: z.string().uuid(),
-    runPath: z.string().min(1),
-    lastSequence: z.number().int().min(-1),
-    state: AgentTaskStateSchema.optional(),
-    cancellationRequestedAt: z.string().datetime().nullable().optional(),
-  })
-  .superRefine((reference, context) => {
-    if (reference.runPath !== managedCloudAgentRunPath(reference.runId)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['runPath'],
-        message: 'Managed Cloud agent-run path does not match its run ID',
-      });
-    }
-  });
+// The run handle/reference are declared in a leaf module so
+// `./tool-approval-resume` can validate a persisted reference without importing
+// this file back — see `./managed-cloud-agent-run-reference`. They are
+// re-declared here rather than forwarded with `export … from` so this module
+// stays their exported home for `scripts/check-cloud-contract-ownership.mjs`,
+// which reads exported declarations out of the canonical module list.
+export type ManagedCloudAgentRunHandle = RunHandle;
+export type ManagedCloudAgentRunReference = RunReference;
+export const ManagedCloudAgentRunReferenceSchema: z.ZodType<ManagedCloudAgentRunReference> =
+  RunReferenceSchema;
 
 export interface ManagedCloudAgentRunClientConfig {
   baseUrl?: string;
@@ -93,6 +78,13 @@ export interface ManagedCloudAgentRunFollowResult {
   lastSequence: number;
 }
 
+export type ManagedCloudAgentRunApprovalDecision = 'approved' | 'rejected';
+
+export interface ManagedCloudAgentRunApproval {
+  toolCallId: string;
+  decision: ManagedCloudAgentRunApprovalDecision;
+}
+
 export interface ManagedCloudAgentRunClient {
   listRuns(options?: ManagedCloudAgentRunListOptions): Promise<CloudAgentRunListPage>;
   getRun(
@@ -100,6 +92,16 @@ export interface ManagedCloudAgentRunClient {
     options?: ManagedCloudAgentRunReadOptions,
   ): Promise<CloudAgentRunSnapshotPage>;
   cancelRun(runId: string, options?: { signal?: AbortSignal }): Promise<CloudAgentRun>;
+  /**
+   * Answer a run's outstanding approval and leave. Returns once the server has
+   * accepted the decisions; it does NOT read the continuation stream, because
+   * the continuation is durable — see `resumeRun` in the client factory.
+   */
+  resumeRun(
+    runId: string,
+    approvals: ManagedCloudAgentRunApproval[],
+    options?: { signal?: AbortSignal },
+  ): Promise<void>;
   followRun(
     runId: string,
     options?: ManagedCloudAgentRunFollowOptions,
@@ -147,6 +149,25 @@ export class ManagedCloudAgentRunHttpError extends Error {
   ) {
     super(message);
     this.name = 'ManagedCloudAgentRunHttpError';
+  }
+}
+
+/**
+ * The approval was claimed by another surface between the list read and the
+ * click. Nothing is lost — someone already answered it.
+ */
+export class ManagedCloudAgentRunAlreadyResumingError extends ManagedCloudAgentRunHttpError {
+  constructor(message: string) {
+    super(message, 409);
+    this.name = 'ManagedCloudAgentRunAlreadyResumingError';
+  }
+}
+
+/** The approval aged past the claim window and can no longer be answered. */
+export class ManagedCloudAgentRunApprovalExpiredError extends ManagedCloudAgentRunHttpError {
+  constructor(message: string) {
+    super(message, 410);
+    this.name = 'ManagedCloudAgentRunApprovalExpiredError';
   }
 }
 
@@ -337,6 +358,45 @@ export function createManagedCloudAgentRunClient(
         'cancellation response',
       );
       return body.run;
+    },
+
+    async resumeRun(runId, approvals, options = {}) {
+      const body = ToolApprovalResumeRequestSchema.parse({
+        run_id: runId,
+        tool_approvals: approvals.map((approval) => ({
+          tool_call_id: approval.toolCallId,
+          decision: approval.decision,
+        })),
+      });
+      let response: Response;
+      try {
+        response = await request(TOOL_APPROVAL_RESUME_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
+          body: JSON.stringify(body),
+          signal: options.signal,
+        });
+      } catch (error) {
+        // Two failures a UI must phrase differently from "something broke":
+        // somebody else already answered this, and it aged out.
+        if (error instanceof ManagedCloudAgentRunHttpError) {
+          if (error.status === 409) {
+            throw new ManagedCloudAgentRunAlreadyResumingError(error.message);
+          }
+          if (error.status === 410) {
+            throw new ManagedCloudAgentRunApprovalExpiredError(error.message);
+          }
+        }
+        throw error;
+      }
+
+      // The endpoint answers with the continuation's SSE stream, but the
+      // continuation is DURABLE: every event is journaled, and whoever is
+      // watching the run picks it up from the journal. A Tasks-page click is
+      // not a chat surface and has nowhere to render deltas, so hold the
+      // connection open only long enough to learn the decisions were accepted,
+      // then let go rather than pinning a stream nobody reads.
+      await response.body?.cancel().catch(() => undefined);
     },
 
     async followRun(runId, options = {}) {

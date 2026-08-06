@@ -18,11 +18,19 @@ describe('L1 Security - Auth & Authorization', () => {
     expect(guardProviderSwitch('openai', 'anthropic', 'byok')).toBe('upgrade-required');
   });
 
-  test('SECURITY: Pro and above are authorized for cross-provider switch', () => {
-    expect(guardProviderSwitch('openai', 'anthropic', 'pro')).toBe('allow');
-    expect(guardProviderSwitch('openai', 'anthropic', 'team')).toBe('allow');
+  test('SECURITY: Max and above are authorized for cross-provider switch', () => {
     expect(guardProviderSwitch('openai', 'anthropic', 'max')).toBe('allow');
+    expect(guardProviderSwitch('openai', 'anthropic', 'max_15x')).toBe('allow');
     expect(guardProviderSwitch('openai', 'anthropic', 'enterprise')).toBe('allow');
+  });
+
+  test('SECURITY: Pro and Team do NOT reach the cross-provider switch gate', () => {
+    // The gate was raised from pro to max on 2026-08-05
+    // (MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01) so Mobile matches the
+    // canonical canSwitchProviderInThread() already used by web, desktop, and
+    // the VS Code guard. Pro/Team passing here would be a privilege regression.
+    expect(guardProviderSwitch('openai', 'anthropic', 'pro')).toBe('upgrade-required');
+    expect(guardProviderSwitch('openai', 'anthropic', 'team')).toBe('upgrade-required');
   });
 
   test('SECURITY: no privilege escalation from removed tiers (hobby/pro_plus map to local)', () => {

@@ -326,6 +326,31 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('Loading plugins…')).toBeTruthy();
   });
 
+  // CONNECTOR-FORM-PASSWORD-AUTOFILL-01
+  it('opts the custom-connector fields out of password-manager autofill', () => {
+    renderModal({}, { addCustomConnector: vi.fn(), customConnectorAuthTokenSupported: true });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    const nameInput = screen.getByPlaceholderText('My connector');
+    const tokenInput = screen.getByPlaceholderText('Token is encrypted before storage');
+
+    // A bare text input followed by a password input is the login-form shape
+    // that made Chrome fill the account email + saved ACCOUNT PASSWORD here.
+    expect(nameInput.getAttribute('autocomplete')).toBe('off');
+    // `off` is ignored by managers on login-shaped forms; `new-password` is not.
+    expect(tokenInput.getAttribute('autocomplete')).toBe('new-password');
+
+    for (const el of [nameInput, tokenInput]) {
+      expect(el.hasAttribute('data-1p-ignore')).toBe(true);
+      expect(el.getAttribute('data-lpignore')).toBe('true');
+      expect(el.hasAttribute('data-bwignore')).toBe(true);
+      // Neither field may look like a username/password slot to a manager.
+      expect(el.getAttribute('name')).not.toMatch(/user|email|login|^password$/i);
+    }
+  });
+
   it('Add custom connector can securely forward an optional bearer token and surfaces errors', async () => {
     const addCustomConnector = vi
       .fn()

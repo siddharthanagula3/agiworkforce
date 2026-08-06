@@ -446,7 +446,7 @@ export const window = {
   onDidCloseTerminal: vi.fn(() => new Disposable()),
   onDidOpenTerminal: vi.fn(() => new Disposable()),
   onDidChangeActiveTerminal: vi.fn(() => new Disposable()),
-  // Shell Integration API (stable since 1.93; `engines.vscode` is ^1.106.0).
+  // Shell Integration API (stable since 1.93; `engines.vscode` is ^1.100.0).
   // Tests capture the registered listener from `mock.calls` and fire it.
   onDidChangeTerminalShellIntegration: vi.fn(() => new Disposable()),
   onDidStartTerminalShellExecution: vi.fn(() => new Disposable()),

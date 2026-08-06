@@ -107,6 +107,22 @@ const config = {
       // NSUserActivityTypes declares the activity type identifiers for App Intents / Siri.
       // com.agiworkforce.app.intent is the base namespace for all custom intents.
       NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
+      // Export compliance. Without this key every upload stalls in App Store
+      // Connect on "Missing Compliance" and the founder has to re-answer the
+      // encryption questionnaire per build — TestFlight builds are undeliverable
+      // until they do. `false` is the accurate answer here because every cipher
+      // the app relies on is an Apple OS implementation:
+      //   - transport: HTTPS/TLS only, through URLSession (RN fetch, expo-fetch);
+      //   - DB key storage: expo-secure-store -> iOS Keychain (Security.framework);
+      //   - key material: expo-crypto getRandomBytesAsync -> SecRandomCopyBytes;
+      //   - agi_mobile.db at rest: SQLCipher, but ExpoSQLite.podspec compiles it
+      //     with `-DSQLCIPHER_CRYPTO_CC`, so the codec calls Apple CommonCrypto
+      //     rather than shipping a bundled OpenSSL/libsodium cipher.
+      // Nothing in apps/mobile implements a proprietary or non-standard
+      // algorithm. If that ever changes — a vendored cipher, a hand-rolled
+      // scheme, anything not backed by the OS — this MUST flip to true and the
+      // build needs a real export-compliance code before submission.
+      ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
       ...iosEntitlements,
@@ -118,20 +134,29 @@ const config = {
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
         {
+          // CA92.1 — MMKV / RN AsyncStorage app-container-exclusive config.
+          // C56D.1 — UserDefaults access from a bundled SDK (GoogleUtilities /
+          //          Google Sign-In). Apple pairs C56D.1 with UserDefaults, not
+          //          FileTimestamp; it is genuinely used by that dependency.
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults',
-          NSPrivacyAccessedAPITypeReasons: ['CA92.1'],
+          NSPrivacyAccessedAPITypeReasons: ['CA92.1', 'C56D.1'],
         },
         {
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategorySystemBootTime',
           NSPrivacyAccessedAPITypeReasons: ['35F9.1'],
         },
         {
+          // E174.1 — check free space before writing a model download.
+          // 85F4.1 — display free space to the user in the download UX.
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryDiskSpace',
-          NSPrivacyAccessedAPITypeReasons: ['E174.1'],
+          NSPrivacyAccessedAPITypeReasons: ['E174.1', '85F4.1'],
         },
         {
+          // C617.1 — mtimes on files inside the app container (cache eviction).
+          // 3B52.1 — timestamps on user-provided files (image / document picker).
+          // 0A2A.1 — third-party SDK wrapper (ExpoFileSystem file operations).
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp',
-          NSPrivacyAccessedAPITypeReasons: ['C617.1'],
+          NSPrivacyAccessedAPITypeReasons: ['C617.1', '3B52.1', '0A2A.1'],
         },
       ],
       NSPrivacyCollectedDataTypes: [

@@ -135,6 +135,17 @@ impl ManagedSessionStore {
         Ok(())
     }
 
+    pub fn unarchive(&self, reference: ManagedSessionReference) -> Result<()> {
+        let resolved = self.resolve(reference)?;
+        let mut session = load_session_from_path(&resolved.path)?;
+        if session.archived_at.is_some() {
+            session.archived_at = None;
+            session.touch();
+            self.save(&session)?;
+        }
+        Ok(())
+    }
+
     pub fn delete(&self, reference: ManagedSessionReference) -> Result<()> {
         delete_managed_session_in(&self.base_dir, reference)
     }
@@ -515,6 +526,18 @@ pub fn delete_managed_session(reference: impl AsRef<str>) -> Result<()> {
     ManagedSessionStore::user_config()?.delete(reference)
 }
 
+/// Archive a managed session by id, path, or the `latest` alias. Idempotent.
+pub fn archive_managed_session(reference: impl AsRef<str>) -> Result<()> {
+    let reference = ManagedSessionReference::parse(reference)?;
+    ManagedSessionStore::user_config()?.archive(reference)
+}
+
+/// Unarchive a managed session by id, path, or the `latest` alias. Idempotent.
+pub fn unarchive_managed_session(reference: impl AsRef<str>) -> Result<()> {
+    let reference = ManagedSessionReference::parse(reference)?;
+    ManagedSessionStore::user_config()?.unarchive(reference)
+}
+
 #[cfg(test)]
 mod tests {
     use super::fork_managed_session_in;
@@ -721,6 +744,41 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "valid-neighbor");
         assert_eq!(listed[0].title.as_deref(), Some("Visible history"));
+    }
+
+    #[test]
+    fn archive_and_unarchive_round_trip_via_store() {
+        let temp_dir = tempdir().unwrap();
+        let store = super::ManagedSessionStore::new(temp_dir.path().to_path_buf());
+        let session = ManagedSession::new("archive-me", Utc::now());
+        store.save(&session).expect("save session");
+
+        let reference = || ManagedSessionReference::SessionId("archive-me".to_string());
+
+        // Freshly saved sessions are not archived.
+        let listed = store.list().expect("list");
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].archived_at.is_none());
+
+        store.archive(reference()).expect("archive");
+        let after_archive = store.resolve(reference()).expect("resolve after archive");
+        assert!(
+            after_archive.summary.archived_at.is_some(),
+            "archive must stamp archived_at"
+        );
+
+        // Archive is idempotent — a second call keeps the original stamp.
+        let first_stamp = after_archive.summary.archived_at;
+        store.archive(reference()).expect("archive again");
+        let re_resolved = store.resolve(reference()).expect("resolve");
+        assert_eq!(re_resolved.summary.archived_at, first_stamp);
+
+        store.unarchive(reference()).expect("unarchive");
+        let after_unarchive = store.resolve(reference()).expect("resolve after unarchive");
+        assert!(
+            after_unarchive.summary.archived_at.is_none(),
+            "unarchive must clear archived_at"
+        );
     }
 
     #[test]

@@ -423,11 +423,16 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             }
             contextMessages.push({ role: 'user', content: userText });
             const llmResponse = await invoke<VoiceLLMResponse>('llm_send_message', {
-              messages: contextMessages,
-              model: fallbackModel,
-              provider: fallbackProvider,
-              maxTokens: 300,
-              preferCloudCredits: false,
+              // The command takes a single `request` object; passing the fields
+              // flat (and as camelCase) made every voice LLM call fail to
+              // deserialize. Inner fields are snake_case (no serde rename_all).
+              request: {
+                messages: contextMessages,
+                model: fallbackModel,
+                provider: fallbackProvider,
+                max_tokens: 300,
+                prefer_cloud_credits: false,
+              },
             });
             const aiText = llmResponse?.content?.trim() ?? '';
             if (!aiText) {
@@ -1038,13 +1043,20 @@ export function normalizeDictationProvider(value: unknown): DictationProvider {
 /** Hard cap for one in-app dictation recording (bounded buffering). */
 const MAX_DICTATION_RECORDING_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Dictation hotkey options. The single source of truth for BOTH the settings
+ * picker and any UI that displays the hotkey — `hooks/useVoiceHotkey.ts`
+ * listens for exactly these combos and nothing else.
+ */
+export type VoiceInputHotkey = 'option' | 'ctrl+space' | 'ctrl+shift+v' | 'caps_lock';
+
 interface VoiceInputState {
   voiceMode: VoiceInputMode;
   transcript: string;
   pendingTranscript: string;
   lastTranscriptIsCommand: boolean;
   voiceError: string | null;
-  hotkey: 'option' | 'ctrl+space' | 'ctrl+shift+v' | 'caps_lock';
+  hotkey: VoiceInputHotkey;
   voiceProvider: DictationProvider;
   /** Preferred microphone (browser deviceId); null = system default. */
   inputDeviceId: string | null;
@@ -1284,14 +1296,18 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               ? 'You are a voice command interpreter. Output ONLY the cleaned command instruction. No explanation.'
               : 'You are a voice transcription editor. Clean up dictation: remove fillers, fix run-ons, add punctuation. Output ONLY cleaned text.';
             const response = await invoke<VoiceLLMResponsePayload>('llm_send_message', {
-              messages: [
-                { role: 'system', content: systemContent },
-                { role: 'user', content: raw },
-              ],
-              model: selectedModel ?? 'auto',
-              provider: selectedProvider ?? 'anthropic',
-              max_tokens: 500,
-              prefer_cloud_credits: false,
+              // Wrap in the `request` object the command expects (a flat
+              // payload never deserialized — see the send-message call above).
+              request: {
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user', content: raw },
+                ],
+                model: selectedModel ?? 'auto',
+                provider: selectedProvider ?? 'anthropic',
+                max_tokens: 500,
+                prefer_cloud_credits: false,
+              },
             });
             const cleaned = response?.content?.trim() ?? '';
             return { text: cleaned || cleanupVoiceDictation(raw), isCommand };

@@ -59,8 +59,8 @@ test.describe('Desktop App Smoke Tests', () => {
     );
 
     // The page must have a status banner / error region. The OfflineIndicator
-    // is always mounted even when online (it just renders nothing visible);
-    // the StatusBar is mounted in every layout. Grep for either by role.
+    // is always mounted even when online (it just renders nothing visible).
+    // Grep by role rather than by component.
     const liveRegions = await page.locator('[role="status"], [aria-live]').count();
     expect(
       liveRegions,

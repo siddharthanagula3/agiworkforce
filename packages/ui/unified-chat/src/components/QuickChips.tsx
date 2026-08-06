@@ -1,4 +1,5 @@
 import { Code2, PenLine, Search, Image, Film, Monitor } from 'lucide-react';
+import { quickStartIntentLabel } from '@agiworkforce/types';
 import { useChatStore } from '../stores/chatStore';
 import type { ActiveMode } from '../stores/chatStore';
 
@@ -20,13 +21,24 @@ interface QuickChipsProps {
 
 type ChipDef = { type: NonNullable<ActiveMode>; label: string; icon: React.ReactNode };
 
+/**
+ * Labels come from the shared quick-start vocabulary in @agiworkforce/types so
+ * this surface and the web greeting cannot introduce the product with different
+ * words again. Icons stay here because they are React nodes and the vocabulary
+ * module is deliberately framework-free (mobile imports it too).
+ *
+ * The ACTION still differs by surface and that is intended: these chips toggle a
+ * mode in the unified-chat store, while web prefills its composer, because the
+ * two surfaces keep separate chat stores. Shared words, surface-appropriate
+ * behaviour.
+ */
 const SIX_CHIPS: ChipDef[] = [
-  { type: 'code', label: 'Code', icon: <Code2 size={13} /> },
-  { type: 'write', label: 'Write', icon: <PenLine size={13} /> },
-  { type: 'research', label: 'Research', icon: <Search size={13} /> },
-  { type: 'image', label: 'Image', icon: <Image size={13} /> },
-  { type: 'video', label: 'Video', icon: <Film size={13} /> },
-  { type: 'computer', label: 'Computer', icon: <Monitor size={13} /> },
+  { type: 'code', label: quickStartIntentLabel('code'), icon: <Code2 size={13} /> },
+  { type: 'write', label: quickStartIntentLabel('write'), icon: <PenLine size={13} /> },
+  { type: 'research', label: quickStartIntentLabel('research'), icon: <Search size={13} /> },
+  { type: 'image', label: quickStartIntentLabel('image'), icon: <Image size={13} /> },
+  { type: 'video', label: quickStartIntentLabel('video'), icon: <Film size={13} /> },
+  { type: 'computer', label: quickStartIntentLabel('computer'), icon: <Monitor size={13} /> },
 ];
 
 const FOUR_CHIPS: ChipDef[] = SIX_CHIPS.slice(0, 4);

@@ -259,7 +259,7 @@ export default function MobilePage() {
             { href: '/download', label: 'Get notified' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp={`iPhone & Android · ${LAUNCH.date}`}
+          stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />
 
         <MarketingFooter />

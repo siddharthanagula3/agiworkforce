@@ -1,7 +1,25 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-25",
+  "lastUpdated": "2026-08-05",
   "verificationLog": [
+    {
+      "date": "2026-08-05",
+      "verifiedBy": "founder-decision-22-sonnet-5-standard-pricing",
+      "status": "POLICY",
+      "notes": "Founder reaffirmed 2026-08-05 (docs/decisions/CURRENT_DECISIONS.md Decision #22) that a provider introductory window is a PROVIDER-COST fact, never a product price. Claude Sonnet 5 is billed to users at the founder-selected standard $3/$15 per MTok with cache read $0.30, 5m write $3.75 and 1h write $6.00 on EVERY date, restoring the 2026-07-15 and 2026-07-18 founder pins. The intro pricingSchedule added earlier the same day (Anthropic's $2/$10 through 2026-08-31) is REMOVED from claude-sonnet-5: Anthropic's promotional rate lowers our cost of goods and does not change what the product charges. The dated pricingSchedule MECHANISM stays in the catalog, compiler, schema, and every consumer for future real product price changes; packages/ai/model-registry/tests/catalog-policy.test.mjs now fails if any Sonnet 5 schedule window prices below the standard top-level rates. Also removed in this pass: the stale longContext blocks on gpt-5.6-terra and gpt-5.6-luna, whose numbers were derived from the pre-2026-07-30 base prices — removed stale derived long-context prices pending verified numbers (no consumer reads longContext; only the optional ModelMetadata field declaration in packages/contracts/types/src/model-catalog.ts references it). gpt-5.6-sol keeps its longContext block: its base price did not change in the cut. No upstream model fact was re-probed in this entry."
+    },
+    {
+      "date": "2026-08-05",
+      "verifiedBy": "official-anthropic-and-openai-pricing-pages",
+      "status": "CORRECTION",
+      "notes": "Pricing verified 2026-08-05 against the official Anthropic and OpenAI pricing pages. (1) SUPERSEDED the same day by Decision #22 (entry above): Anthropic publishes introductory Sonnet 5 rates of $2/$10 per MTok with cache read $0.20, 5m write $2.50 and 1h write $4.00 through 2026-08-31, then $3/$15 with cache read $0.30, 5m write $3.75 and 1h write $6.00. That is a provider-cost fact and is recorded here only; it is NOT a product price and no longer appears as a claude-sonnet-5 pricingSchedule. Batch prices for the two provider windows are $1.00/$5.00 and $1.50/$7.50 per MTok, recorded here because the catalog has no batch-pricing field. (2) OpenAI's 2026-07-30 price cut is applied: gpt-5.6-terra $2/$12 with cached input $0.20 and cache write $2.50, gpt-5.6-luna $0.20/$1.20 with cached input $0.02 and cache write $0.25; gpt-5.6-sol was already correct at $5/$30 with cached input $0.50 and cache write $6.25. (3) OpenAI charges prompt-cache WRITES at 1.25x the uncached input rate starting with the GPT-5.6 family, so gpt-5.4-mini's speculative cached_write was removed — pre-5.6 models publish no write price and their writes stay free. (4) openWeight/license metadata added only where verified or secondary-sourced; hosted Qwen variants and every other unverified model are left absent, which means unknown."
+    },
+    {
+      "date": "2026-08-04",
+      "verifiedBy": "founder-decision-free-roster",
+      "status": "POLICY",
+      "notes": "Founder decision 2026-08-04: gpt-5.6-luna moves to tierPolicy.minTier 'free' following its permanent price reduction. The Free managed-cloud roster is therefore exactly gemini-3.5-flash-lite, gpt-5.4-mini, and gpt-5.6-luna. FREE_TRIAL_MODELS (apps/web/lib/free-trial-config.ts) derives from this field intersected with the economy roster, so no hand-maintained Free model list exists on any surface. This is a product/pricing policy change, not a model-capability verification: no upstream model fact was re-probed and no cost/limit data changed. Paired with a fix to canAccessModelForSubscriptionTier (packages/contracts/types/src/model-catalog.ts), which previously returned false for every model on Free and forced services/api-gateway to carry a divergent free-roster special case that admitted Free to the entire economy roster."
+    },
     {
       "date": "2026-07-25",
       "verifiedBy": "official-anthropic-opus-5-docs",
@@ -550,6 +568,8 @@
       "name": "GPT-5.6 Sol",
       "provider": "openai",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16",
@@ -652,15 +672,11 @@
       "name": "GPT-5.6 Terra",
       "provider": "openai",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16",
-      "longContext": {
-        "inputCost": 5,
-        "cached_input": 0.5,
-        "cached_write": 6.25,
-        "outputCost": 22.5
-      },
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
@@ -724,10 +740,10 @@
         "minTier": "pro"
       },
       "costOverride": {
-        "inputCost": 2.5,
-        "outputCost": 15,
-        "cached_input": 0.25,
-        "cached_write": 3.125
+        "inputCost": 2,
+        "outputCost": 12,
+        "cached_input": 0.2,
+        "cached_write": 2.5
       },
       "contextOverride": 1050000,
       "capabilitiesOverride": {
@@ -754,15 +770,11 @@
       "name": "GPT-5.6 Luna",
       "provider": "openai",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16",
-      "longContext": {
-        "inputCost": 2,
-        "cached_input": 0.2,
-        "cached_write": 2.5,
-        "outputCost": 9
-      },
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
@@ -823,13 +835,13 @@
       },
       "reasoningDots": 3,
       "tierPolicy": {
-        "minTier": "basic"
+        "minTier": "free"
       },
       "costOverride": {
-        "inputCost": 1,
-        "outputCost": 6,
-        "cached_input": 0.1,
-        "cached_write": 1.25
+        "inputCost": 0.2,
+        "outputCost": 1.2,
+        "cached_input": 0.02,
+        "cached_write": 0.25
       },
       "contextOverride": 1050000,
       "capabilitiesOverride": {
@@ -856,6 +868,8 @@
       "name": "GPT-5.4 Mini",
       "provider": "openai",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "maxInputTokens": 272000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2025-08-31",
@@ -884,9 +898,9 @@
       "costOverride": {
         "inputCost": 0.75,
         "outputCost": 4.5,
-        "cached_input": 0.075,
-        "cached_write": 0.9375
+        "cached_input": 0.075
       },
+      "pricingNote": "OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family (1.25x the uncached input rate, automatic and explicit breakpoints alike). GPT-5.4 Mini predates that change and declares no cache-write price, so its writes stay free — its written tokens bill once, at the input rate. Verified 2026-08-05 against the official OpenAI pricing page.",
       "contextOverride": 400000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -912,6 +926,8 @@
       "name": "Claude Fable 5",
       "provider": "anthropic",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "variantPartner": "claude-sonnet-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
@@ -968,6 +984,8 @@
       "name": "Claude Opus 5",
       "provider": "anthropic",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "variantPartner": "claude-sonnet-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
@@ -1032,6 +1050,8 @@
       "name": "Claude Sonnet 5",
       "provider": "anthropic",
       "modelType": "code",
+      "openWeight": false,
+      "license": "proprietary",
       "variantPartner": "claude-opus-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
@@ -1088,6 +1108,8 @@
       "name": "Gemini Embedding 2",
       "provider": "google",
       "modelType": "embedding",
+      "openWeight": false,
+      "license": "proprietary",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "maxInputTokens": 8192,
       "quality": "excellent",
@@ -1124,6 +1146,8 @@
       "name": "Gemini 3.1 Pro",
       "provider": "google",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "variantPartner": "gemini-3.5-flash-lite",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1152,6 +1176,8 @@
       "name": "Gemini 3.5 Flash-Lite",
       "provider": "google",
       "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "variantPartner": "gemini-3.1-pro-preview",
       "quality": "good",
@@ -1182,6 +1208,8 @@
       "name": "Gemini 3.1 Flash Image",
       "provider": "google",
       "modelType": "image",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Image Generation", "Native Gemini Image Gen"],
@@ -1220,6 +1248,8 @@
       "name": "DeepSeek V4 Flash",
       "provider": "deepseek",
       "modelType": "code",
+      "openWeight": true,
+      "license": "MIT",
       "variantPartner": "deepseek-v4-pro",
       "quality": "excellent",
       "qualityTier": "fast",
@@ -1248,6 +1278,8 @@
       "name": "DeepSeek V4 Pro",
       "provider": "deepseek",
       "modelType": "reasoning",
+      "openWeight": true,
+      "license": "MIT",
       "variantPartner": "deepseek-v4-flash",
       "quality": "excellent",
       "qualityTier": "best",
@@ -1341,6 +1373,8 @@
       "name": "Sonar",
       "provider": "perplexity",
       "modelType": "search",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Web Search", "Quick Research", "Citations"],
@@ -1359,6 +1393,8 @@
       "name": "Sonar Reasoning Pro",
       "provider": "perplexity",
       "modelType": "search",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Deep Research", "Complex Analysis", "Citations"],
@@ -1383,6 +1419,8 @@
       "name": "Sonar Pro",
       "provider": "perplexity",
       "modelType": "search",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Professional Research", "Long Context Search"],
@@ -1398,6 +1436,8 @@
       "name": "Sonar Deep Research",
       "provider": "perplexity",
       "modelType": "search",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Deep Research", "Multi-Source Synthesis", "Comprehensive Analysis"],
@@ -1563,6 +1603,8 @@
       "name": "Gemini 3.6 Flash",
       "provider": "google",
       "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "variantPartner": "gemini-3.1-pro-preview",
       "quality": "excellent",
@@ -1599,6 +1641,8 @@
       "name": "GLM-5.2",
       "provider": "zhipu",
       "modelType": "reasoning",
+      "openWeight": true,
+      "license": "MIT",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": [
@@ -1694,6 +1738,7 @@
       "name": "Kimi K3",
       "provider": "moonshot",
       "modelType": "multimodal",
+      "openWeight": true,
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": [
@@ -1725,6 +1770,8 @@
       "name": "Grok 4.5",
       "provider": "xai",
       "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
@@ -1887,6 +1934,7 @@
       "name": "MiniMax M3",
       "provider": "minimax",
       "modelType": "reasoning",
+      "openWeight": true,
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Complex Reasoning", "Open-Weight Deployment"],

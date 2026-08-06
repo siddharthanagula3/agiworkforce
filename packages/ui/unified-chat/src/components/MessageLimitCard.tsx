@@ -8,14 +8,20 @@
  * lifts it. Desktop Cloud previously showed a toast that disappeared over an
  * empty assistant bubble, so a refusal mid-demo looked like the app breaking.
  *
- * Shape mirrors web's `InlinePaywallCard` and reads the same `metadata.paywall`
- * block `classifyManagedQuotaErrorCode` produces. Nothing is synthesised: the
+ * Shape mirrors web's `InlinePaywallCard`, reads the same `metadata.paywall`
+ * block `classifyManagedQuotaErrorCode` produces, and now shares its wording
+ * via PAYWALL_FEATURE_COPY. Nothing is synthesised: the
  * upgrade CTA renders only when a next self-serve tier exists, and the reset
  * line only when the SERVER supplied an instant.
  */
 
 import { Gauge, Timer, Database, Sparkles } from 'lucide-react';
-import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  isBillingPlanTier,
+  paywallLimitHeadline,
+  paywallUpgradeLabel,
+} from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
 export interface MessagePaywallBlock {
@@ -28,20 +34,6 @@ export interface MessagePaywallBlock {
   /** ISO instant reported by the server. Never client-derived. */
   resetAt?: string;
 }
-
-const FEATURE_LIMIT_HEADLINE: Record<string, string> = {
-  token_cap: 'You have reached your usage limit',
-  rolling_capacity: 'You have used your capacity for this window',
-  request_rate: 'You are sending requests too quickly',
-  model_access: 'That model is not available on your plan',
-};
-
-const FEATURE_UPGRADE_LABEL: Record<string, string> = {
-  token_cap: 'higher usage limits',
-  rolling_capacity: 'more capacity per window',
-  request_rate: 'a higher request rate',
-  model_access: 'more models',
-};
 
 /**
  * Read a `metadata.paywall` bag into a typed block, or null when the message
@@ -99,11 +91,13 @@ export interface MessageLimitCardProps {
 
 export function MessageLimitCard({ block, onRetry, onUpgrade, className }: MessageLimitCardProps) {
   const showUpgradeCta = block.showUpgradeCta !== false && Boolean(onUpgrade);
+  // Copy comes from @agiworkforce/types. This card previously carried a
+  // four-feature table of its own, so a refusal web described precisely
+  // ("Upgrade to Pro for video generation") arrived here as the generic
+  // "Upgrade to Pro for this capability" — same server, less information.
   const headline = showUpgradeCta
-    ? `Upgrade to ${tierLabel(block.requiredTier)} for ${
-        FEATURE_UPGRADE_LABEL[block.feature] ?? 'this capability'
-      }`
-    : (FEATURE_LIMIT_HEADLINE[block.feature] ?? 'You have reached a plan limit');
+    ? `Upgrade to ${tierLabel(block.requiredTier)} for ${paywallUpgradeLabel(block.feature)}`
+    : paywallLimitHeadline(block.feature);
   const resetLabel = block.showResetTime === false ? null : formatResetLabel(block.resetAt);
   const Icon =
     block.feature === 'request_rate'

@@ -11,6 +11,11 @@
 #[allow(clippy::module_inception)] // inner mod shares name with parent by design (migration shim)
 pub mod plugins;
 
+/// Hosted plugin registry resolution (CAP-046). Kept as its own module rather
+/// than re-exported through the glob below, so `registry::PluginManifest` can
+/// never shadow the loader's own type.
+pub mod registry;
+
 // Flatten: re-export everything from the inner module so that
 // `crate::features::plugins::PluginsManager` works without an extra segment,
 // and lib.rs can `pub use features::plugins::plugins as plugins;` cleanly.

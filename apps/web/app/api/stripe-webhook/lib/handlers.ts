@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   handleCreditTopUp,
   upsertSubscriptionFromSession,
@@ -87,6 +88,15 @@ export async function dispatchStripeEvent(
         ? new Date(subscription.canceled_at * 1000).toISOString()
         : new Date().toISOString();
 
+      // Resolve the affected account BEFORE the row is downgraded so the audit
+      // row can name a subject. The actor here is Stripe, not a user — there is
+      // no request, no IP and no user-agent to record, and the Stripe event
+      // payload (customer PII, price internals) must never be echoed.
+      const [ownerRow] = await db.query<{ user_id: string | null; plan_tier: string | null }>(
+        'select user_id, plan_tier from subscriptions where stripe_subscription_id = $1 limit 1',
+        [stripeSubId],
+      );
+
       await db.execute(
         // Reset plan_tier to 'free' as well · a deleted subscription must
         // revoke entitlement. Entitlement reads gate on `status` (see
@@ -105,6 +115,20 @@ export async function dispatchStripeEvent(
         "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
         [canceledAt, stripeSubId],
       );
+
+      await recordAuditEvent({
+        userId: ownerRow?.user_id ?? null,
+        eventType: 'plan_changed',
+        endpoint: '/api/stripe-webhook',
+        surface: 'stripe_webhook',
+        detail: {
+          resourceType: 'subscription',
+          previousPlanTier: ownerRow?.plan_tier ?? 'unknown',
+          planTier: 'free',
+          source: 'stripe_webhook',
+          status: 'canceled',
+        },
+      });
       break;
     }
     case 'invoice.payment_failed': {

@@ -28,11 +28,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { waitForSettingsReady } from '../support/close-settings';
+import { resolveScreenDir } from '../support/dom';
 
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/ecosystem-import';
-
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('ecosystem-import');
 
 const UNIQUE_SUFFIX = `wdio-eco-${Date.now()}`;
 const ZED_CONFIG_DIR = path.join(os.homedir(), '.config', 'zed');
@@ -213,8 +212,8 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     await gear.waitForDisplayed({ timeout: 15000 });
     await gear.click();
 
-    const nav = await $('nav[aria-label="Settings sections"]');
-    await nav.waitForDisplayed({ timeout: 10000 });
+    // Nav buttons are disabled while Settings loads; wait for interactivity.
+    await waitForSettingsReady();
 
     const clickedDeveloper = await clickButtonWithText(
       'nav[aria-label="Settings sections"]',
@@ -236,7 +235,21 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     );
     expect(detected.some((t) => t.name === 'Zed')).toBe(true);
 
-    const clickedImport = await clickButtonWithText('body', 'Import MCP Servers');
+    // The Ecosystem section (DotfileSettings) is lazy-loaded inside the
+    // Developer tab's Suspense boundary, so a one-shot click can race the
+    // chunk load — retry until the button exists.
+    let clickedImport = false;
+    await browser.waitUntil(
+      async () => {
+        clickedImport = await clickButtonWithText('body', 'Import MCP Servers');
+        return clickedImport;
+      },
+      {
+        timeout: 20_000,
+        interval: 500,
+        timeoutMsg: 'The "Import MCP Servers" button never rendered in the Developer tab',
+      },
+    );
     console.log('Clicked "Import MCP Servers":', clickedImport);
     expect(clickedImport).toBe(true);
 

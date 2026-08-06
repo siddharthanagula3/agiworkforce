@@ -19,7 +19,11 @@ import {
   parseCombo,
   type ShortcutDefinition,
 } from '../../constants/shortcuts';
-import { useSettingsStore } from '../../stores/settingsStore';
+import {
+  useSettingsStore,
+  useVoiceInputStore,
+  type VoiceInputHotkey,
+} from '../../stores/settingsStore';
 import { Button } from '@/components/ui/Button';
 
 // ---------------------------------------------------------------------------
@@ -55,23 +59,32 @@ const INLINE_SECTIONS: InlineSection[] = [
     shortcuts: [{ description: 'Copy code block', keys: ['Click copy'] }],
   },
   {
-    category: 'voice-inline',
-    label: 'Voice',
-    shortcuts: [
-      { description: 'Push to talk', keys: ['Space'] },
-      { description: 'Toggle voice mode', keys: ['Cmd', 'Shift', 'V'] },
-    ],
-  },
-  {
     category: 'agent-inline',
     label: 'Agent',
     shortcuts: [
       { description: 'Approve action', keys: ['Enter'] },
       { description: 'Deny action', keys: ['Escape'] },
-      { description: 'Open sidecar', keys: ['Cmd', 'E'] },
     ],
   },
 ];
+
+/**
+ * The dictation hotkey is a user setting, not a fixed key, and it is the ONLY
+ * voice shortcut the app actually listens for (`hooks/useVoiceHotkey.ts`
+ * registers exactly these combos on the document). This section is derived from
+ * that setting so the cheatsheet can never advertise a key nothing handles.
+ */
+export function voiceInlineSection(hotkey: VoiceInputHotkey): InlineSection {
+  const entry: InlineShortcut =
+    hotkey === 'caps_lock'
+      ? { description: 'Toggle dictation (in app)', keys: ['Caps Lock'] }
+      : hotkey === 'ctrl+space'
+        ? { description: 'Hold to dictate (in app)', keys: ['Ctrl/Cmd', 'Space'] }
+        : hotkey === 'ctrl+shift+v'
+          ? { description: 'Hold to dictate (in app)', keys: ['Ctrl/Cmd', 'Shift', 'V'] }
+          : { description: 'Hold to dictate (in app)', keys: ['Alt/Option'] };
+  return { category: 'voice-inline', label: 'Voice', shortcuts: [entry] };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -169,6 +182,7 @@ export function KeyboardShortcutsOverlay({
   onOpenSettings,
 }: KeyboardShortcutsOverlayProps) {
   const customKeybindings = useSettingsStore((state) => state.customKeybindings);
+  const voiceHotkey = useVoiceInputStore((state) => state.hotkey);
 
   // Escape key closes the overlay — copies the ref to local var for cleanup safety
   const handleKeyDown = useCallback(
@@ -248,7 +262,7 @@ export function KeyboardShortcutsOverlay({
             <div className="overflow-y-auto flex-1 p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Inline sections */}
-                {INLINE_SECTIONS.map((section) => (
+                {[...INLINE_SECTIONS, voiceInlineSection(voiceHotkey)].map((section) => (
                   <SectionCard key={section.category} title={section.label}>
                     {section.shortcuts.map((s) => (
                       <ShortcutRow key={s.description} description={s.description} keys={s.keys} />

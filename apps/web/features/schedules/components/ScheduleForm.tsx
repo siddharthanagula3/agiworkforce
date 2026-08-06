@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
 import { CalendarClock, Loader2 } from 'lucide-react';
-import type { ScheduleDraft, ScheduleFormErrors } from '../types';
+import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
+import type { IntervalUnit, ScheduleDraft, ScheduleFormErrors } from '../types';
 import { AVAILABLE_MODELS, DAYS_OF_WEEK } from '../types';
 
 interface ScheduleFormProps {
@@ -55,6 +56,21 @@ function describedBy(field: keyof ScheduleDraft, errors: ScheduleFormErrors, hel
 
 const nativeSelectClass =
   'h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const INTERVAL_UNITS: { value: IntervalUnit; label: string; ms: number }[] = [
+  { value: 'minutes', label: 'Minutes', ms: 60_000 },
+  { value: 'hours', label: 'Hours', ms: 60 * 60_000 },
+  { value: 'days', label: 'Days', ms: 24 * 60 * 60_000 },
+];
+
+/**
+ * Only units the deployed sweep can actually deliver are offered, filtered by
+ * `SWEEP_INTERVAL_MS` rather than a hardcoded list. The list used to name "Days"
+ * alone, which both outlived the sweep going hourly and left the default draft
+ * unit (`hours`) with no matching option — the control showed "Days" while the
+ * draft still said hours.
+ */
+const OFFERED_INTERVAL_UNITS = INTERVAL_UNITS.filter((unit) => unit.ms >= SWEEP_INTERVAL_MS);
 
 export function ScheduleForm({
   draft,
@@ -249,7 +265,8 @@ export function ScheduleForm({
               />
               <FieldError field="intervalValue" errors={errors} />
               <p id="schedule-cadence-helper" className="text-xs text-muted-foreground">
-                Scheduled tasks are swept once a day, so a task runs at most daily.
+                Scheduled tasks are swept {describeSweepCadence().cadence}, so the shortest
+                supported interval is {describeSweepCadence().minimum}.
               </p>
             </div>
             <div className="space-y-2">
@@ -265,9 +282,11 @@ export function ScheduleForm({
                 }
                 aria-describedby="schedule-cadence-helper"
               >
-                {/* Minutes and hours are not offered: due tasks are swept once a
-                    day, so the server rejects any interval under 1 day. */}
-                <option value="days">Days</option>
+                {OFFERED_INTERVAL_UNITS.map((unit) => (
+                  <option key={unit.value} value={unit.value}>
+                    {unit.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -357,7 +376,8 @@ export function ScheduleForm({
             />
             <p id="schedule-cron-helper" className="text-xs text-muted-foreground">
               Five fields only: minute, hour, day of month, month, and day of week. Tasks are swept
-              once a day, so an expression that fires more often than daily is rejected.
+              {` ${describeSweepCadence().cadence}`}, so an expression that fires more often than
+              that is rejected.
             </p>
             <FieldError field="cronExpression" errors={errors} />
           </div>

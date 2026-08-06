@@ -5,11 +5,14 @@
   ====================================================================
 
   Canonical source consumed by Xcode at build time:
-    /ios/agiworkforce/PrivacyInfo.xcprivacy
+    apps/mobile/ios/<AppName>/PrivacyInfo.xcprivacy
+  That path is generated output — the tracked ios/ tree was deleted
+  2026-07-16 and `expo prebuild` recreates it from
+  `ios.privacyManifests` in apps/mobile/app.config.js.
 
-  This file is the LOCKED submission copy. The Expo plugin in
-  apps/mobile/app.config.js regenerates the canonical file from the
-  same declarations on every `expo prebuild`. Keep both in sync.
+  This file is the LOCKED submission copy. app.config.js is the source
+  of truth; it regenerates the canonical file from the same
+  declarations on every prebuild. Keep both in sync.
 
   Reason codes are from Apple TN3183 ("Adding required reason API
   entries to your privacy manifest") and the per-category index at
@@ -21,25 +24,10 @@
   purposes. NSPrivacyTracking is false. AGI does not include the
   AdSupport / IDFA APIs.
 
-  *** OPEN GAP as of 2026-07-04 — escalate to engineering before
-  submission ***: `app.config.js`'s HealthKit config plugin
-  (`withHealthKitBackgroundDeliveryFix` + the entitlement injection
-  around line 251) declares the `com.apple.developer.healthkit`
-  entitlement and `NSHealthShareUsageDescription`, and
-  `src/features/integrations/services/healthKitQuery.ts` reads real
-  step/sleep/workout samples from HealthKit for the optional Apple
-  Health connector. Neither this file nor the generated
-  `NSPrivacyCollectedDataTypes` array in `app.config.js` (~line 136)
-  declares a Health & Fitness collected-data-type entry. Apple's
-  privacy-manifest guidance requires declaring data types the app
-  accesses via HealthKit, separate from whether that data is
-  transmitted off-device. This needs an engineering + product decision
-  on whether Health data is linked to the user's identity, used for
-  tracking (it is not, per current code), and its retention, before
-  adding the correct `NSPrivacyCollectedDataTypeHealth` entry to the
-  config-plugin source of truth. Do not add it here without that
-  decision — this file is a generated mirror of `app.config.js`, not
-  the source of truth.
+  There is deliberately no Health & Fitness entry: the Apple Health
+  connector, its entitlement, and its usage description were all
+  removed in 93ca123df (2026-07-04). apps/mobile reads no health data
+  and links no health framework, so nothing here is under-declared.
 -->
 <plist version="1.0">
 <dict>
@@ -50,6 +38,9 @@
           configuration (selected provider, last-used model id,
           consent timestamp). All writes are exclusive to AGI's
           container; no shared-app-group reads or writes.
+            CA92.1 — app-container-exclusive read/write (MMKV / AsyncStorage).
+            C56D.1 — UserDefaults access from a bundled SDK (GoogleUtilities /
+                     Google Sign-In). Apple pairs C56D.1 with UserDefaults.
         -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
@@ -57,6 +48,7 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+                <string>C56D.1</string>
             </array>
         </dict>
 
@@ -94,13 +86,15 @@
         </dict>
 
         <!--
-          FileTimestamp: two distinct use cases.
+          FileTimestamp: three distinct use cases.
             C617.1 — access timestamps on files inside the app's own
                      container (SQLCipher / MMKV / model cache mtimes
                      used for cache eviction).
             3B52.1 — access timestamps on files the user provided to
                      the app (image attachments selected from photo
                      library, document picker results).
+            0A2A.1 — third-party SDK wrapper (ExpoFileSystem file
+                     operations that read file timestamps).
         -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
@@ -109,6 +103,7 @@
             <array>
                 <string>C617.1</string>
                 <string>3B52.1</string>
+                <string>0A2A.1</string>
             </array>
         </dict>
     </array>

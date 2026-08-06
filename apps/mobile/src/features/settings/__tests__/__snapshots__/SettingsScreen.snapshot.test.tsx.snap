@@ -309,12 +309,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Email
             </Text>
             <Text
+              maxFontSizeMultiplier={1.3}
               numberOfLines={1}
               style={
                 {
                   "color": "#777",
+                  "flexShrink": 1,
                   "fontSize": 13,
-                  "maxWidth": 130,
+                  "textAlign": "right",
                 }
               }
             >
@@ -481,12 +483,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Subscription
             </Text>
             <Text
+              maxFontSizeMultiplier={1.3}
               numberOfLines={1}
               style={
                 {
                   "color": "#777",
+                  "flexShrink": 1,
                   "fontSize": 13,
-                  "maxWidth": 130,
+                  "textAlign": "right",
                 }
               }
             >
@@ -776,12 +780,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Appearance
             </Text>
             <Text
+              maxFontSizeMultiplier={1.3}
               numberOfLines={1}
               style={
                 {
                   "color": "#777",
+                  "flexShrink": 1,
                   "fontSize": 13,
-                  "maxWidth": 130,
+                  "textAlign": "right",
                 }
               }
             >
@@ -856,12 +862,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Accent Color
             </Text>
             <Text
+              maxFontSizeMultiplier={1.3}
               numberOfLines={1}
               style={
                 {
                   "color": "#777",
+                  "flexShrink": 1,
                   "fontSize": 13,
-                  "maxWidth": 130,
+                  "textAlign": "right",
                 }
               }
             >
@@ -2605,12 +2613,14 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               About
             </Text>
             <Text
+              maxFontSizeMultiplier={1.3}
               numberOfLines={1}
               style={
                 {
                   "color": "#777",
+                  "flexShrink": 1,
                   "fontSize": 13,
-                  "maxWidth": 130,
+                  "textAlign": "right",
                 }
               }
             >
