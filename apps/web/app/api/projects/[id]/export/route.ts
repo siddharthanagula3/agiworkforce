@@ -116,4 +116,8 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleExportProject));
-export const OPTIONS = handleCorsPreflightRequest;
+// See the note in ../duplicate/route.ts: the preflight helper's signature does
+// not satisfy Next 16's typed-route constraint when exported directly.
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
