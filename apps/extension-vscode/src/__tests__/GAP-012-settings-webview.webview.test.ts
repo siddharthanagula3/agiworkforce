@@ -147,11 +147,21 @@ describe('settings webview', () => {
       expect(row.querySelector('.capability-availability-status')?.textContent).toBe(
         'Unavailable in this context',
       );
-      expect(row.title).toMatch(/^Available in .+\.$/u);
+      // Availability used to be a hover-only `title` tooltip. It is now a
+      // visible second column (.surface-availability), which is why the grid
+      // caps that column's width — see settingsWebviewContent.ts:685-692.
+      // Hover-only disclosure was unreachable by keyboard and touch.
+      expect(row.querySelector('.surface-availability')?.textContent).toMatch(
+        /^Available in .+\.$/u,
+      );
     }
 
-    expect(rows[1]?.title).toBe('Available in Desktop app and Chrome extension.');
-    expect(rows[2]?.title).toBe('Available in Desktop app and Chrome extension.');
+    expect(rows[1]?.querySelector('.surface-availability')?.textContent).toBe(
+      'Available in Desktop app and Chrome extension.',
+    );
+    expect(rows[2]?.querySelector('.surface-availability')?.textContent).toBe(
+      'Available in Desktop app and Chrome extension.',
+    );
     expect(doc.querySelector('[aria-label="Capability availability in VS Code"]')).not.toBeNull();
   });
 
