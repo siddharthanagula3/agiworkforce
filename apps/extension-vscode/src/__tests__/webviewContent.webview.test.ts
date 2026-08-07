@@ -172,15 +172,22 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain("'Effort · ' +");
   });
 
-  it('uses theme-aware code colors and exposes Copy to keyboard focus', () => {
+  it('colours code from the fixed panel palette and exposes Copy to keyboard focus', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const styles = Array.from(doc.querySelectorAll('style'))
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    expect(styles).toContain('var(--vscode-textPreformat-foreground');
-    expect(styles).toContain('var(--vscode-textCodeBlock-background');
+    // This asserted --vscode-textPreformat-foreground / -textCodeBlock-background
+    // until the 2026-07-27 founder decision fixed the panel palette so it renders
+    // identically in VS Code, Cursor, Windsurf and Antigravity. Host-themed text
+    // on a fixed background is precisely the mixed-family pairing that produced
+    // #ececec on pale yellow at ~1.10:1, and panelPaletteConsistency.test.ts now
+    // rejects it — so the old expectation had become the bug.
+    expect(styles).toContain('pre code { color: var(--text-primary)');
+    expect(styles).toContain('pre { background: var(--bg-overlay)');
+    expect(styles).not.toContain('var(--vscode-textPreformat-foreground');
     expect(styles).toContain('.copy-btn:focus-visible');
   });
 
