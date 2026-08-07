@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -168,11 +168,12 @@ describe('ActionRecorder', () => {
     await user.click(await screen.findByRole('button', { name: 'Done' }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Name'), 'Investor demo');
-    await user.type(
-      screen.getByLabelText('When should AGI use it?'),
-      'Use this for the investor walkthrough.',
-    );
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Investor demo' },
+    });
+    fireEvent.change(screen.getByLabelText('When should AGI use it?'), {
+      target: { value: 'Use this for the investor walkthrough.' },
+    });
     await user.click(screen.getByRole('button', { name: 'Create skill' }));
 
     await waitFor(() => {

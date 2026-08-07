@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   getHeaders: vi.fn(),
   isOpen: true,
+  isTauri: true,
   privacyMode: 'managed',
   sessionEpoch: 1,
   signedIn: true,
@@ -58,7 +59,13 @@ vi.mock('../../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://agiworkforce.com',
 }));
 
-vi.mock('@agiworkforce/unified-chat', () => ({ useReducedMotion: () => true }));
+vi.mock('@agiworkforce/unified-chat', () => ({ useReducedMotion: () => false }));
+
+vi.mock('../../../lib/runtimeEnvironment', () => ({
+  get isTauri() {
+    return mocks.isTauri;
+  },
+}));
 
 import { SearchModal } from '../SearchModal';
 
@@ -107,6 +114,7 @@ describe('SearchModal Managed Cloud library boundary', () => {
     vi.clearAllMocks();
     mocks.accountId = 'account-a';
     mocks.isOpen = true;
+    mocks.isTauri = true;
     mocks.privacyMode = 'managed';
     mocks.sessionEpoch = 1;
     mocks.signedIn = true;
@@ -122,6 +130,59 @@ describe('SearchModal Managed Cloud library boundary', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+  it('enters the bundled native host fully visible without waiting for an animation frame', () => {
+    render(<SearchModal />);
+
+    expect(screen.getByTestId('search-modal-panel')).toHaveStyle({
+      opacity: '1',
+      transform: 'none',
+      willChange: 'auto',
+    });
+    expect(screen.getByRole('searchbox')).toHaveFocus();
+  });
+
+  it.each([
+    ['Tauri', true],
+    ['web', false],
+  ])(
+    'traps focus, closes with Escape, and restores the opener in %s',
+    (_surface, runtimeIsTauri) => {
+      mocks.isTauri = runtimeIsTauri;
+      const opener = document.createElement('button');
+      opener.textContent = 'Open search';
+      document.body.append(opener);
+      opener.focus();
+
+      const rendered = render(<SearchModal />);
+      const searchbox = screen.getByRole('searchbox');
+      if (runtimeIsTauri) {
+        expect(searchbox).toHaveFocus();
+      } else {
+        expect(opener).toHaveFocus();
+      }
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+
+      const lastFilter = screen.getByRole('button', { name: 'files' });
+      expect(searchbox).toHaveFocus();
+
+      fireEvent.keyDown(searchbox, { key: 'Tab', shiftKey: true });
+      expect(lastFilter).toHaveFocus();
+
+      fireEvent.keyDown(lastFilter, { key: 'Tab' });
+      expect(searchbox).toHaveFocus();
+
+      fireEvent.keyDown(searchbox, { key: 'Escape' });
+      expect(mocks.close).toHaveBeenCalledTimes(1);
+
+      mocks.isOpen = false;
+      rendered.rerender(<SearchModal />);
+      expect(opener).toHaveFocus();
+      opener.remove();
+    },
+  );
 
   it('searches only while open and sends the captured account bearer', async () => {
     render(<SearchModal />);

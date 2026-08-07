@@ -75,10 +75,16 @@ jobs:
           const graph = JSON.parse(fs.readFileSync('turbo.json', 'utf8'));
           const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
-          for (const script of ['build', 'build:all', 'build:desktop', 'lint', 'lint:extension', 'test', 'typecheck', 'typecheck:all']) {
+          for (const script of ['build', 'build:all', 'build:desktop', 'lint', 'lint:extension', 'test', 'test:affected', 'typecheck', 'typecheck:all']) {
             if (!root.scripts?.[script]?.startsWith('turbo run ')) {
               throw new Error(`root script ${script} must delegate to turbo run`);
             }
+          }
+          if (root.scripts.test !== 'turbo run test --concurrency=2') {
+            throw new Error('root test must bound outer Turbo concurrency');
+          }
+          if (root.scripts['test:affected'] !== 'turbo run test --affected --concurrency=2') {
+            throw new Error('affected CI tests must bound outer Turbo concurrency');
           }
           for (const task of ['build', 'lint', 'test', 'typecheck']) {
             if (!graph.tasks?.[task]) throw new Error(`turbo task ${task} is required`);
@@ -97,7 +103,7 @@ jobs:
           for (const command of [
             'turbo run lint --affected',
             'turbo run typecheck --affected',
-            'turbo run test --affected',
+            'pnpm test:affected',
             'turbo run build --affected',
           ]) {
             if (!ci.includes(command)) throw new Error(`CI must invoke ${command}`);

@@ -72,17 +72,14 @@ describe('schedule cadence floor', () => {
     }
   });
 
-  it('accepts hourly and twice-daily crons now that the sweep is hourly', () => {
-    // These were refused under the old once-daily sweep. They are deliverable
-    // now, and this test is what would catch the cadence floor being loosened
-    // without vercel.json actually getting faster.
+  it('rejects hourly and twice-daily crons while the deployed sweep is daily', () => {
     for (const expression of ['0 * * * *', '0 0,12 * * *']) {
       expect(() =>
         assertDeliverableCadence(
           { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
           new Date('2026-07-26T00:00:00Z'),
         ),
-      ).not.toThrow();
+      ).toThrow(/cannot fire more often/);
     }
   });
 
@@ -92,6 +89,24 @@ describe('schedule cadence floor', () => {
         assertDeliverableCadence(
           { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
           new Date('2026-07-26T00:00:00Z'),
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  it('treats a local daily cron as daily across daylight-saving transitions', () => {
+    for (const now of [
+      new Date('2026-03-01T00:00:00.000Z'),
+      new Date('2026-10-25T00:00:00.000Z'),
+    ]) {
+      expect(() =>
+        assertDeliverableCadence(
+          {
+            scheduleType: 'cron',
+            cronExpression: '30 9 * * *',
+            timezone: 'America/Chicago',
+          },
+          now,
         ),
       ).not.toThrow();
     }

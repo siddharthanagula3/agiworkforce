@@ -131,7 +131,7 @@ describe('collapsed rail keeps every expanded nav destination', () => {
   // Same trust boundary as Code: the design board holds sketches in device
   // memory and deep research drives the on-device swarm engine, so neither may
   // be reachable from a Managed Cloud session in either layout.
-  it.each(['design', 'research'] as const)(
+  it.each(['design', 'research', 'automation'] as const)(
     'keeps %s on the Local nav and off the managed nav in both layouts',
     (navId) => {
       expect(renderNavIds('local', false)).toContain(navId);

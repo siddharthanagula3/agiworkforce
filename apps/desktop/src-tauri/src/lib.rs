@@ -235,7 +235,7 @@ pub fn run() {
                             .try_state::<AppState>()
                             .ok_or_else(|| anyhow::anyhow!("Window state is not available"))
                             .and_then(|state| {
-                                crate::ui::window::request_main_window_close(&app_handle, &state)
+                                crate::ui::window::request_main_window_close(app_handle, &state)
                             });
                         if let Err(err) = close_result {
                             tracing::error!("[window] failed to hide main window: {err:?}");

@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { enableMapSet } from 'immer';
+import { getAllowedModelsForTier, getModelMetadata } from '../constants/llm';
+import { useUnifiedAuthStore } from '../stores/auth';
+import { useModelStore } from '../stores/modelStore';
+import { useUIStore } from '../stores/ui';
 
 // Enable Immer MapSet plugin for stores that use Map/Set (e.g. toolStore.approvalTimeoutTimers)
 enableMapSet();
@@ -10,12 +14,9 @@ enableMapSet();
 // ============================================
 
 describe('modelStore', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     // Reset the store state before each test
-    const { useModelStore } = await import('../stores/modelStore');
-    const { useUnifiedAuthStore } = await import('../stores/auth');
-    const { useUIStore } = await import('../stores/ui');
     useModelStore.setState({
       selectedModel: 'auto',
       selectedProvider: 'managed_cloud',
@@ -65,15 +66,12 @@ describe('modelStore', () => {
   });
 
   describe('selectModel', () => {
-    beforeEach(async () => {
+    beforeEach(() => {
       // Set plan to 'max' so model selection is not blocked by tier restrictions
-      const { useUnifiedAuthStore } = await import('../stores/auth');
       useUnifiedAuthStore.setState({ plan: 'max' });
     });
 
     it('should select a model and provider', async () => {
-      const { getAllowedModelsForTier, getModelMetadata } = await import('../constants/llm');
-      const { useModelStore } = await import('../stores/modelStore');
       const modelId = getAllowedModelsForTier('max').find(
         (candidate) => getModelMetadata(candidate)?.provider === 'openai',
       );

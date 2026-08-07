@@ -25,7 +25,7 @@ name = "agiworkforce_cli"
 path = "src/lib.rs"
 
 [lints.rust]
-warnings = "warn"
+warnings = "deny"
 unsafe_code = "deny"
 unused = "deny"
 unused_imports = "deny"

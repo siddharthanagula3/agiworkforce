@@ -237,11 +237,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             }
 
             // Core React ecosystem - loaded immediately
-            if (
-              id.includes('/react/') ||
-              id.includes('/react-dom/') ||
-              id.includes('/react-router-dom/')
-            ) {
+            if (id.includes('/react/') || id.includes('/react-dom/')) {
               return 'react-vendor';
             }
 
@@ -372,7 +368,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       include: [
         'react',
         'react-dom',
-        'react-router-dom',
         'zustand',
         ...(isBrowserBundle ? [] : ['@tauri-apps/api']),
         'framer-motion',

@@ -128,25 +128,6 @@ pub fn sandbox_disabled() -> bool {
     SANDBOX_DISABLED.load(Ordering::Relaxed) || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok()
 }
 
-/// Validate a workspace path before embedding it in a Seatbelt SBPL profile.
-///
-/// SECURITY (CRIT-2): the previous implementation used `to_string_lossy()` and
-/// interpolated the result raw into `format!(... "(allow file-read* (subpath \"{ws}\"))" ...)`.
-/// A workspace path `/tmp/x") (allow default) ;#` broke out of the string literal
-/// and injected an `(allow default)` rule — a complete macOS sandbox escape.
-///
-/// Apple provides no parameterised quoting mechanism for Seatbelt profiles.
-/// The only safe strategy is to reject any path character that is meaningful
-/// in SBPL or could break the string literal:
-///   - `"` — closes the string literal the path is embedded in
-///   - `(` / `)` — open/close s-expressions; could inject new rules even if `"` is intact
-///   - `\` — introduces escape sequences; the escaping strategy itself is
-///             implementation-defined and not guaranteed safe across macOS versions
-///   - Control chars (< 0x20): NUL terminates C strings; newline/CR split rules
-///   - Unicode line/paragraph separators (U+2028, U+2029): treated as newline by
-///             some parsers
-///   - Leading/trailing whitespace: would silently change the matched subpath
-///   - Root `/`: too broad (would allow write everywhere)
 /// Quote one argv element for a POSIX shell.
 ///
 /// `agi sandbox` takes argv but the sandbox executors run `sh -c <string>`, so
@@ -181,6 +162,25 @@ pub fn shell_join(args: &[String]) -> String {
         .join(" ")
 }
 
+/// Validate a workspace path before embedding it in a Seatbelt SBPL profile.
+///
+/// SECURITY (CRIT-2): the previous implementation used `to_string_lossy()` and
+/// interpolated the result raw into `format!(... "(allow file-read* (subpath \"{ws}\"))" ...)`.
+/// A workspace path `/tmp/x") (allow default) ;#` broke out of the string literal
+/// and injected an `(allow default)` rule — a complete macOS sandbox escape.
+///
+/// Apple provides no parameterised quoting mechanism for Seatbelt profiles.
+/// The only safe strategy is to reject any path character that is meaningful
+/// in SBPL or could break the string literal:
+///   - `"` — closes the string literal the path is embedded in
+///   - `(` / `)` — open/close s-expressions; could inject new rules even if `"` is intact
+///   - `\` — introduces escape sequences; the escaping strategy itself is
+///             implementation-defined and not guaranteed safe across macOS versions
+///   - Control chars (< 0x20): NUL terminates C strings; newline/CR split rules
+///   - Unicode line/paragraph separators (U+2028, U+2029): treated as newline by
+///             some parsers
+///   - Leading/trailing whitespace: would silently change the matched subpath
+///   - Root `/`: too broad (would allow write everywhere)
 ///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());

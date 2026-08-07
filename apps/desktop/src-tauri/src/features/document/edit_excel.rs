@@ -1,4 +1,4 @@
-use calamine::{open_workbook_auto, DataType, Reader};
+use calamine::{open_workbook_auto, Data, ExcelDateTime, ExcelDateTimeType, Reader};
 use rust_xlsxwriter::*;
 use serde::{Deserialize, Serialize};
 
@@ -74,42 +74,49 @@ impl ExcelEditor {
             Ok(mut source_wb) => {
                 let sheet_names: Vec<String> = source_wb.sheet_names().to_vec();
                 for sheet_name in &sheet_names {
-                    if let Some(Ok(range)) = source_wb.worksheet_range(sheet_name) {
+                    if let Ok(range) = source_wb.worksheet_range(sheet_name) {
                         let worksheet = sheets.entry(sheet_name.clone()).or_default();
                         for (row_idx, row) in range.rows().enumerate() {
                             for (col_idx, cell) in row.iter().enumerate() {
                                 match cell {
-                                    DataType::Int(n) => {
+                                    Data::Int(n) => {
                                         let _ = worksheet.write_number(
                                             row_idx as u32,
                                             col_idx as u16,
                                             *n as f64,
                                         );
                                     }
-                                    DataType::Float(n) => {
+                                    Data::Float(n) => {
                                         let _ = worksheet.write_number(
                                             row_idx as u32,
                                             col_idx as u16,
                                             *n,
                                         );
                                     }
-                                    DataType::String(s) => {
+                                    Data::String(s) => {
                                         let _ = worksheet.write_string(
                                             row_idx as u32,
                                             col_idx as u16,
                                             s,
                                         );
                                     }
-                                    DataType::Bool(b) => {
+                                    Data::Bool(b) => {
                                         let _ = worksheet.write_boolean(
                                             row_idx as u32,
                                             col_idx as u16,
                                             *b,
                                         );
                                     }
-                                    DataType::Empty => {}
+                                    Data::Empty => {}
+                                    Data::DateTime(datetime) => {
+                                        let _ = worksheet.write_string(
+                                            row_idx as u32,
+                                            col_idx as u16,
+                                            excel_datetime_serial_for_copy(datetime),
+                                        );
+                                    }
                                     _ => {
-                                        // DateTime, Duration, Error — write as string representation
+                                        // ISO date/duration and error cells retain their string representation.
                                         let _ = worksheet.write_string(
                                             row_idx as u32,
                                             col_idx as u16,
@@ -303,6 +310,28 @@ impl ExcelEditor {
     }
 }
 
+/// Preserve the serial value that calamine 0.21 exposed when copying existing
+/// workbooks. Calamine 0.36 keeps the 1904 epoch flag inside `ExcelDateTime`, so
+/// `as_f64()` alone is 1,462 days lower for those workbooks. Duration serials
+/// remain day-based here because this path reconstructs workbook cell values;
+/// converting them to seconds would change their Excel value.
+fn excel_datetime_serial_for_copy(datetime: &ExcelDateTime) -> String {
+    let value = datetime.as_f64();
+    if datetime.is_duration() {
+        return value.to_string();
+    }
+
+    let same_value_in_1900_epoch = ExcelDateTime::new(value, ExcelDateTimeType::DateTime, false);
+    let adjusted_value =
+        if datetime.to_ymd_hms_milli() == same_value_in_1900_epoch.to_ymd_hms_milli() {
+            value
+        } else {
+            value + 1_462.0
+        };
+
+    adjusted_value.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,5 +339,26 @@ mod tests {
     #[test]
     fn test_excel_editor_creation() {
         let _editor = ExcelEditor::new();
+    }
+
+    #[test]
+    fn preserves_1904_epoch_serial_when_copying_datetime() {
+        let datetime = ExcelDateTime::new(24_107.0, ExcelDateTimeType::DateTime, true);
+
+        assert_eq!(excel_datetime_serial_for_copy(&datetime), "25569");
+    }
+
+    #[test]
+    fn preserves_1900_epoch_serial_when_copying_datetime() {
+        let datetime = ExcelDateTime::new(25_569.0, ExcelDateTimeType::DateTime, false);
+
+        assert_eq!(excel_datetime_serial_for_copy(&datetime), "25569");
+    }
+
+    #[test]
+    fn preserves_day_based_duration_serial_when_copying() {
+        let duration = ExcelDateTime::new(0.5, ExcelDateTimeType::TimeDelta, false);
+
+        assert_eq!(excel_datetime_serial_for_copy(&duration), "0.5");
     }
 }

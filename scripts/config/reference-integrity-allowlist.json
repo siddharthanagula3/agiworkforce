@@ -35,7 +35,6 @@
     "md-link::docs/surfaces/desktop.md::cli.md",
     "md-link::docs/surfaces/desktop.md::web.md",
     "md-link::packages/ai/provider-protocol/README.md::../../THIRD_PARTY_LICENSES.md",
-    "md-path::AGENTS.md::apps/sandbox",
     "md-path::PLAN.md::docs/plans/monorepo-restructure-2026-07-08.md",
     "md-path::README.md::apps/sandbox",
     "md-path::README.md::crates/sandbox-policy",

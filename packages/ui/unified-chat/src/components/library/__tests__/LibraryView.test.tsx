@@ -13,6 +13,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LibraryView, type LibraryTransport } from '../LibraryView';
 
+// Root CI executes many package suites concurrently. This mount-effect test is
+// fast when focused, but its jsdom worker can be scheduler-starved beyond the
+// 5 s default. Keep the extra budget on this test rather than the whole suite.
+const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
+const ACTIVE_FILTERS_TEST = 'passes the active filters to the host rather than filtering locally';
+
 function jsonResponse(body: unknown, ok = true): Response {
   return {
     ok,
@@ -72,15 +78,19 @@ describe('shared LibraryView', () => {
     expect(transport.listPage).not.toHaveBeenCalled();
   });
 
-  it('passes the active filters to the host rather than filtering locally', async () => {
-    const transport = makeTransport();
-    render(<LibraryView transport={transport} />);
+  it(
+    ACTIVE_FILTERS_TEST,
+    async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} />);
 
-    await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
-    const params = (transport.listPage as ReturnType<typeof vi.fn>).mock
-      .calls[0]![0] as URLSearchParams;
-    expect(params.get('limit')).toBeTruthy();
-  });
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+      const params = (transport.listPage as ReturnType<typeof vi.fn>).mock
+        .calls[0]![0] as URLSearchParams;
+      expect(params.get('limit')).toBeTruthy();
+    },
+    ROOT_GRAPH_TEST_TIMEOUT_MS,
+  );
 
   it('surfaces a load failure with a retry instead of an empty grid', async () => {
     const transport = makeTransport({ listPage: vi.fn(async () => jsonResponse({}, false)) });

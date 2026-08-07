@@ -102,19 +102,19 @@ allow-workspace = false
 # https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
 [sources]
 unknown-registry = "deny"
-# Deny by default (crates-io only, per the W5 guardrail-batch spec); the two
-# git-sourced crates below are an intentional, documented exception — see
-# root Cargo.toml's `[patch.crates-io]` (websocket-handshake-hardening forks
-# consumed by current WebSocket clients), not an unreviewed drive-by git dep.
+# Deny by default (crates-io only, per the W5 guardrail-batch spec); the three
+# git-sourced crates below are intentional, documented exceptions — see root
+# Cargo.toml's `[patch.crates-io]` (the websocket-handshake-hardening forks and
+# xcb's upstream quick-xml security migration), not unreviewed drive-by deps.
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/openai-oss-forks/tokio-tungstenite",
     "https://github.com/openai-oss-forks/tungstenite-rs",
+    "https://github.com/rust-x-bindings/rust-xcb",
 ]
 
 # No [sources.allow-org] entry: the exact allow-git URLs above already cover
-# both openai-oss-forks repos. An `allow-org` entry for the same org was
-# tried and dropped — it triggered `warning[unmatched-organization]` because
-# nothing needs the broader org-level allowance once the specific repos are
-# listed.
+# each reviewed repository. An `allow-org` entry was deliberately avoided:
+# exact repository URLs keep the exception narrower than organization-wide
+# trust.

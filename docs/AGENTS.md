@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Docs/platform
-Last updated: 2026-07-11
+Last updated: 2026-08-07
 
 Read root `AGENTS.md` before this file. This file applies to documentation work under `docs/`.
 
@@ -10,7 +10,7 @@ Read root `AGENTS.md` before this file. This file applies to documentation work 
 
 - Current product truth lives in `docs/current/`, `docs/decisions/CURRENT_DECISIONS.md`, root `PLAN.md`, root `TODO.md`, and `docs/agent-context/`.
 - Durable evidence and findings live in `docs/agent-context/known-flaws.md`; dated point-in-time research lives in `docs/research/`. Promote only verified durable conclusions into current docs.
-- The former `audit/`, `reports/`, `tasks/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28 (clean-repo pass). Do not cite them as existing; do not recreate them without a current decision doc. If a future archiving need arises, use `docs/archive/<date>-<reason>/` per `docs/engineering/naming-conventions.md`.
+- The former `reports/`, `tasks/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28 (clean-repo pass). Do not cite them as existing or recreate them without a current decision doc. Root `audit/` has since been reintroduced as the live evidence-ledger and triage root; treat its entries as claims to verify in code, never as proof that work is complete. If a future archiving need arises, use `docs/archive/<date>-<reason>/` per `docs/engineering/naming-conventions.md`.
 
 ## High-Risk Areas
 

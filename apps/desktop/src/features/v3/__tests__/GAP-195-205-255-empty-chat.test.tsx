@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInterface, useChatStore } from '@agiworkforce/unified-chat';
+import { ChatInterface, type ChatRuntime, useChatStore } from '@agiworkforce/unified-chat';
 
 import { EmptyChat } from '../EmptyChat';
 
@@ -43,18 +43,27 @@ describe('GAP-195, GAP-205, and GAP-255 desktop empty chat', () => {
     expect(onOpenScheduled).toHaveBeenCalledOnce();
   });
 
-  it('keeps capability-aware category chips below the composer and seeds their prompts', () => {
+  it('does not restore removed composer quick-action chips around the desktop empty state', () => {
+    const runtime = {
+      supportsCodeExecution: true,
+      supportsResearch: true,
+      supportsImageGeneration: true,
+      supportsVideoGeneration: true,
+      supportsComputerUse: true,
+    } as ChatRuntime;
+
     render(
       <ChatInterface
-        runtime={null}
+        runtime={runtime}
         sidebarSlot={null}
         emptyStateSlot={<div>Desktop empty chat</div>}
         enableSearchOverlay={false}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Code' }));
-
-    expect(useChatStore.getState().draftContent).toBe('Help me write code for ');
+    expect(screen.getByText('Desktop empty chat')).toBeInTheDocument();
+    for (const label of ['Code', 'Research', 'Image', 'Video', 'Computer']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+    }
   });
 });

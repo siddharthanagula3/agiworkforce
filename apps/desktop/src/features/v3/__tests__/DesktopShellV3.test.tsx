@@ -194,6 +194,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
             'Review what leaves this device',
           )
         : null,
+    useReducedMotion: () => false,
     useChatStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,
     selectBudgetPercentage: (state: typeof unifiedChatMock.budgetState) => state.percentage,

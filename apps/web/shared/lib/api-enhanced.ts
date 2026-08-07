@@ -54,8 +54,11 @@ class DefaultErrorHandler implements ErrorHandler {
 class AuthErrorHandler implements ErrorHandler {
   handle(error: APIException): void {
     if (error.code === 'AUTH_FAILED' || error.code === 'REFRESH_FAILED') {
-      // Auth is managed by Clerk session cookies - just redirect to login.
-      window.location.href = '/login';
+      // Auth is managed by Clerk session cookies. A full navigation clears any
+      // stale in-memory client state after auth fails; the absolute same-origin
+      // URL preserves that reload behavior without treating this as a relative
+      // App Router destination.
+      window.location.assign(new URL('/login', window.location.origin));
     } else {
       toast.error('Authentication error. Please log in again.');
     }

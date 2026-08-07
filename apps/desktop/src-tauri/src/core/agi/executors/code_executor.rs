@@ -323,9 +323,11 @@ impl CodeExecutor {
     /// - `code` (required): Code to execute
     /// - `timeout` / `timeout_secs` (optional): Execution timeout in seconds (default: 30, max: 60)
     /// - `stdin` (optional): Input to provide to the program
+    ///
     /// Agent-owned execution is always network-disabled. The separate
     /// user-initiated `execute_code` Tauri command is the only entry point that
     /// can request network access, and it presents that choice for approval.
+    ///
     /// - `env` / `env_vars` (optional): Environment variables as key-value pairs
     /// - `files` (optional): Additional files to create in sandbox before execution
     ///

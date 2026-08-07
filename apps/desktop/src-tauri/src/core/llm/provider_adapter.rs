@@ -406,13 +406,13 @@ impl OpenAIAdapter {
         let no_desktop_only_fields = request.output_config.is_none()
             && request.response_format.is_none()
             && request.audio_output.is_none();
-        let no_server_tools = request.tools.as_ref().map_or(true, |tools| {
+        let no_server_tools = request.tools.as_ref().is_none_or(|tools| {
             tools
                 .iter()
                 .all(|tool| OpenAIServerTool::from_str(&tool.name).is_none())
         });
         let multimodal_expressible = request.messages.iter().all(|message| {
-            message.multimodal_content.as_ref().map_or(true, |parts| {
+            message.multimodal_content.as_ref().is_none_or(|parts| {
                 let simple = parts.iter().all(|part| match part {
                     super::ContentPart::Text { .. } => true,
                     super::ContentPart::Image { image } => image.detail == super::ImageDetail::Auto,
@@ -602,7 +602,7 @@ impl OpenAIAdapter {
             && request.background.is_none()
             && request.previous_response_id.is_none()
             && request.conversation_id.is_none();
-        let tools_expressible = request.tools.as_ref().map_or(true, |tools| {
+        let tools_expressible = request.tools.as_ref().is_none_or(|tools| {
             tools.iter().all(|tool| {
                 OpenAIServerTool::from_str(&tool.name).is_none() && tool.strict.is_none()
             })
@@ -2130,13 +2130,13 @@ impl AnthropicAdapter {
             && request.background.is_none()
             && request.previous_response_id.is_none()
             && request.conversation_id.is_none();
-        let no_server_tools = request.tools.as_ref().map_or(true, |tools| {
+        let no_server_tools = request.tools.as_ref().is_none_or(|tools| {
             tools
                 .iter()
                 .all(|tool| !server_tools::is_anthropic_server_tool(&tool.name))
         });
         let multimodal_expressible = request.messages.iter().all(|message| {
-            message.multimodal_content.as_ref().map_or(true, |parts| {
+            message.multimodal_content.as_ref().is_none_or(|parts| {
                 parts.iter().all(|part| {
                     matches!(
                         part,
@@ -3064,17 +3064,18 @@ impl GoogleAdapter {
     ///   `parametersJsonSchema` form) — the crate passes schemas verbatim;
     /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Audio, Video,
     ///   Document) have no crate `ContentBlock`.
+    ///
     /// (output_config/response_format/audio are NOT gated: the legacy gemini
     /// arm never serialized them, so dropping them is exact legacy parity.)
     fn crate_expressible(request: &LLMRequest) -> bool {
-        let tools_expressible = request.tools.as_ref().map_or(true, |tools| {
+        let tools_expressible = request.tools.as_ref().is_none_or(|tools| {
             tools.iter().all(|tool| {
                 !Self::requires_google_json_schema(&tool.parameters)
                     && Self::normalize_google_tool_schema(&tool.parameters) == tool.parameters
             })
         });
         let multimodal_expressible = request.messages.iter().all(|message| {
-            message.multimodal_content.as_ref().map_or(true, |parts| {
+            message.multimodal_content.as_ref().is_none_or(|parts| {
                 parts.iter().all(|part| {
                     matches!(
                         part,

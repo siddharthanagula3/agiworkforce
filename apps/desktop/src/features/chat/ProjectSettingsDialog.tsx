@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import {
   useProjectStore,
@@ -138,6 +139,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   mode,
   onCreated,
 }) => {
+  const prefersReducedMotion = useReducedMotion();
+  const disableDialogAnimation = isTauri || prefersReducedMotion;
+
   // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -554,7 +558,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[560px] overflow-hidden border-border bg-card p-0 shadow-2xl">
+        <DialogContent
+          disableAnimation={disableDialogAnimation}
+          className="max-w-[560px] overflow-hidden border-border bg-card p-0 shadow-2xl"
+        >
           <div className="px-7 pb-6 pt-7">
             <DialogHeader className="space-y-2 text-left">
               <DialogTitle className="text-[1.65rem] font-semibold tracking-tight text-foreground">
@@ -704,7 +711,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden border-border bg-card p-0 sm:max-h-[calc(100dvh-3rem)]">
+      <DialogContent
+        disableAnimation={disableDialogAnimation}
+        className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden border-border bg-card p-0 sm:max-h-[calc(100dvh-3rem)]"
+      >
         <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle className="text-foreground flex items-center gap-2">
             <div

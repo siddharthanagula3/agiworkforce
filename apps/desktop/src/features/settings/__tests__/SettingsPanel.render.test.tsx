@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReactElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '../../../components/ui/Tooltip';
 import { useAuthStore } from '../../../stores/auth';
@@ -109,6 +109,13 @@ function render(ui: ReactElement) {
 }
 
 describe('SettingsPanel render stability', () => {
+  beforeAll(async () => {
+    // Settings renders this mocked module through React.lazy. Resolve the module
+    // before assertions start so transform contention cannot strand Suspense on
+    // its fallback during a concurrent root Turbo run.
+    await import('@/features/skill-marketplace/SkillMarketplace');
+  });
+
   beforeEach(() => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === 'llm_check_provider_status') {

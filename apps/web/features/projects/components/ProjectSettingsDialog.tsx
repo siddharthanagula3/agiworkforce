@@ -104,15 +104,6 @@ export function ProjectSettingsDialog({
     }
   };
 
-  /**
-   * Export as JSON. A plain navigation rather than a fetch-and-blob: the route
-   * already sets Content-Disposition, so the browser handles the download and
-   * the file never has to be held in memory.
-   */
-  const handleExport = () => {
-    window.location.href = `/api/projects/${project.id}/export`;
-  };
-
   const handleSave = async () => {
     if (!name.trim()) {
       toast.error('Project name is required');
@@ -301,9 +292,16 @@ export function ProjectSettingsDialog({
                 <Copy className="mr-1.5 h-4 w-4" />
                 {isDuplicating ? 'Duplicating…' : 'Duplicate'}
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleExport}>
-                <Download className="mr-1.5 h-4 w-4" />
-                Export
+              {/*
+                This is intentionally a document link, not App Router
+                navigation: the route returns Content-Disposition: attachment,
+                so the browser streams the file without holding it in memory.
+              */}
+              <Button asChild variant="ghost" size="sm">
+                <a href={`/api/projects/${project.id}/export`}>
+                  <Download className="mr-1.5 h-4 w-4" />
+                  Export
+                </a>
               </Button>
             </div>
 

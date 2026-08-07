@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -423,10 +423,9 @@ For every feature claim:
 - run visual or e2e checks for launch-critical UI,
 - record unresolved risks in `docs/agent-context/known-flaws.md` or the active plan.
 
-Do not reuse the prior green baseline as current evidence. On this 2026-07-14
-reconciliation run, `pnpm check:llm-operability` passed through generated-model
-and CI guardrail checks, then stopped because
-`crates/agiworkforce-model-registry/README.md` lacks the required `Purpose`
-marker. Full `git diff --check` also finds unrelated Mobile documentation
-whitespace. Re-run the authoritative commands and record their exact output
-before making any completion or release-readiness claim.
+Do not reuse any prior green baseline as current evidence. Re-run
+`pnpm check:llm-operability`, the relevant tier, surface, and native commands
+from `docs/agent-context/commands.json`, and the repository diff checks against
+the current tree. Record their exact output before making any completion or
+release-readiness claim; one passing umbrella command does not prove every
+required OS- and surface-specific CI job is green.

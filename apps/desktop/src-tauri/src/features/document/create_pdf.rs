@@ -1,8 +1,6 @@
 use crate::sys::error::{Error, Result};
 use printpdf::*;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,15 +81,9 @@ impl PdfDocumentCreator {
         };
 
         let title = config.title.as_deref().unwrap_or("Document");
-        let (doc, page1, layer1) =
-            PdfDocument::new(title, Mm(page_width), Mm(page_height), "Layer 1");
-
-        let font = doc
-            .add_builtin_font(BuiltinFont::Helvetica)
-            .map_err(|e| Error::Generic(format!("Failed to add font: {}", e)))?;
-        let font_bold = doc
-            .add_builtin_font(BuiltinFont::HelveticaBold)
-            .map_err(|e| Error::Generic(format!("Failed to add bold font: {}", e)))?;
+        let mut doc = PdfDocument::new(title);
+        doc.metadata.info.author = config.author.unwrap_or_default();
+        doc.metadata.info.subject = config.subject.unwrap_or_default();
 
         const MARGIN_TOP: f32 = 20.0;
         const MARGIN_BOTTOM: f32 = 20.0;
@@ -270,46 +262,62 @@ impl PdfDocumentCreator {
             }
         }
 
-        // Render lines onto pages, adding new pages as needed
-        let mut current_layer = doc.get_page(page1).get_layer(layer1);
+        // Render lines into page operation lists, adding new pages as needed.
+        let mut pages = Vec::new();
+        let mut page_ops = Vec::new();
         let mut current_y: f32 = page_height - MARGIN_TOP;
 
         for line in &lines {
             // Handle explicit page break
             if line.force_new_page {
-                let (new_page, new_layer) =
-                    doc.add_page(Mm(page_width), Mm(page_height), "Layer 1");
-                current_layer = doc.get_page(new_page).get_layer(new_layer);
+                pages.push(PdfPage::new(
+                    Mm(page_width),
+                    Mm(page_height),
+                    std::mem::take(&mut page_ops),
+                ));
                 current_y = page_height - MARGIN_TOP;
                 continue;
             }
 
             // Automatic page break when content reaches the bottom margin
             if current_y < MARGIN_BOTTOM && line.advance > 0.0 {
-                let (new_page, new_layer) =
-                    doc.add_page(Mm(page_width), Mm(page_height), "Layer 1");
-                current_layer = doc.get_page(new_page).get_layer(new_layer);
+                pages.push(PdfPage::new(
+                    Mm(page_width),
+                    Mm(page_height),
+                    std::mem::take(&mut page_ops),
+                ));
                 current_y = page_height - MARGIN_TOP;
             }
 
             if !line.text.is_empty() {
-                let selected_font = if line.bold { &font_bold } else { &font };
-                current_layer.use_text(
-                    &line.text,
-                    line.font_size,
-                    Mm(MARGIN_LEFT),
-                    Mm(current_y),
-                    selected_font,
-                );
+                let selected_font = if line.bold {
+                    BuiltinFont::HelveticaBold
+                } else {
+                    BuiltinFont::Helvetica
+                };
+                page_ops.extend([
+                    Op::StartTextSection,
+                    Op::SetTextCursor {
+                        pos: Point::new(Mm(MARGIN_LEFT), Mm(current_y)),
+                    },
+                    Op::SetFont {
+                        font: PdfFontHandle::Builtin(selected_font),
+                        size: Pt(line.font_size),
+                    },
+                    Op::ShowText {
+                        items: vec![TextItem::Text(line.text.clone())],
+                    },
+                    Op::EndTextSection,
+                ]);
             }
             current_y -= line.advance;
         }
 
-        let file = File::create(output_path)
-            .map_err(|e| Error::Generic(format!("Failed to create PDF file: {}", e)))?;
-        let mut buf_writer = BufWriter::new(file);
+        pages.push(PdfPage::new(Mm(page_width), Mm(page_height), page_ops));
+        doc.with_pages(pages);
 
-        doc.save(&mut buf_writer)
+        let bytes = doc.save(&PdfSaveOptions::default(), &mut Vec::new());
+        std::fs::write(output_path, bytes)
             .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         Ok(())
@@ -353,6 +361,7 @@ impl Default for PdfDocumentCreator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lopdf::Document as LopdfDocument;
     use tempfile::TempDir;
 
     #[test]
@@ -374,6 +383,12 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(output_path.exists());
+
+        let document = LopdfDocument::load(&output_path).unwrap();
+        assert_eq!(document.get_pages().len(), 1);
+        let text = pdf_extract::extract_text(&output_path).unwrap();
+        assert!(text.contains("This is the first paragraph."));
+        assert!(text.contains("This is the second paragraph."));
     }
 
     #[test]
@@ -410,6 +425,11 @@ mod tests {
         let result = creator.create(output_path_str, config, contents);
         assert!(result.is_ok());
         assert!(output_path.exists());
+
+        let text = pdf_extract::extract_text(&output_path).unwrap();
+        assert!(text.contains("Main Heading"));
+        assert!(text.contains("Bold text"));
+        assert!(text.contains("Item 1"));
     }
 
     #[test]
@@ -436,5 +456,8 @@ mod tests {
         );
         assert!(result.is_ok());
         assert!(output_path.exists());
+
+        let document = LopdfDocument::load(&output_path).unwrap();
+        assert!(document.get_pages().len() > 1);
     }
 }

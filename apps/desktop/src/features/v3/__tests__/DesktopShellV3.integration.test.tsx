@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { DesktopShellV3 } from '../DesktopShellV3';
@@ -101,6 +101,10 @@ describe('DesktopShellV3 real render', () => {
   // all three trust-boundary layers are asserted here: nav visibility, the
   // navigate guard that mounts the panel, and eviction on a switch to Cloud.
   describe('AGI Code panel is Local-only', () => {
+    beforeAll(async () => {
+      await import('@/features/code/CodeWorkspace');
+    });
+
     it('shows the Code nav entry in Local mode and opens the workspace', async () => {
       act(() => {
         useAppModeStore.setState({ mode: 'local' });

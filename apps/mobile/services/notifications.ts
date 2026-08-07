@@ -247,7 +247,7 @@ export async function registerForPushNotifications(
       // warn for everything else (APNs unreachable, backend token sync failed),
       // where the diagnostic is the whole point.
       if (message.includes('aps-environment')) {
-        console.info('[push] not available in this build (no aps-environment entitlement)');
+        console.debug('[push] not available in this build (no aps-environment entitlement)');
       } else {
         console.warn('[push] registration skipped (non-fatal):', message);
       }

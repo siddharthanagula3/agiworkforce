@@ -194,7 +194,7 @@ fn build_execution_command(
             .arg(&runner.command)
             .args(&runner.args)
             .arg(script_path);
-        return Ok(cmd);
+        Ok(cmd)
     }
 
     #[cfg(target_os = "linux")]

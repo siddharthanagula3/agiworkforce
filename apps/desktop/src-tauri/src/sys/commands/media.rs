@@ -157,6 +157,8 @@ struct ManagedMediaImagePayload<'a> {
     quality: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     n: Option<u32>,
+    operation: &'static str,
+    transparent_background: bool,
 }
 
 fn build_managed_media_image_payload(
@@ -171,6 +173,10 @@ fn build_managed_media_image_payload(
         style: request.style.as_deref(),
         quality: normalize_legacy_desktop_image_quality(request.quality.as_deref()),
         n: request.n,
+        // This command currently exposes text-to-image generation only. Keep
+        // that limitation explicit on the shared managed-media wire contract.
+        operation: "generate",
+        transparent_background: false,
     })
 }
 
@@ -605,7 +611,14 @@ mod tests {
             n: None,
         })
         .unwrap();
-        assert_eq!(minimal, serde_json::json!({ "prompt": "minimal" }));
+        assert_eq!(
+            minimal,
+            serde_json::json!({
+                "prompt": "minimal",
+                "operation": "generate",
+                "transparent_background": false,
+            })
+        );
     }
 
     #[test]
