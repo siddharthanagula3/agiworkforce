@@ -319,10 +319,17 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     // would make restoring a version impossible.
     if (supersedes) {
       await db.query(
+        // Scoped by project_id as well as id. This runs on the Neon owner
+        // connection, which has BYPASSRLS, so no policy narrows it and `id`
+        // alone would be an unconstrained cross-tenant write — the row is
+        // addressed purely by a uuid whose correctness depends on the select
+        // above still being scoped the way it is today. Repeating the tenancy
+        // predicate on the write keeps the guarantee local to the statement
+        // instead of borrowing it from ten lines away.
         `update project_knowledge_files
             set superseded_at = now()
-          where id = $1 and superseded_at is null`,
-        [supersedes.id],
+          where id = $1 and project_id = $2 and superseded_at is null`,
+        [supersedes.id, projectId],
       );
     }
   } catch (error) {
