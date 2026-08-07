@@ -7,9 +7,17 @@ import { ChatCompletionRequestSchema } from './request-processor';
  * parser then failed downstream with nothing pointing at the cause.
  *
  * Accepting a capability we do not honour is the failure mode these tests
- * guard. When structured output is genuinely enforced on this endpoint, delete
- * the rejection and replace these with tests that assert the OUTPUT conforms —
- * not with a re-widened enum.
+ * guard. This file previously said: "when structured output is genuinely
+ * enforced on this endpoint, delete the rejection and replace these with tests
+ * that assert the OUTPUT conforms — not with a re-widened enum."
+ *
+ * That has now happened for `json_object` ONLY. The enum was not re-widened:
+ * `lib/json-object-mode.ts` parses and validates the completion before it is
+ * returned, and `json-object-mode.test.ts` asserts the output conforms —
+ * including that malformed JSON is REJECTED rather than repaired. Streamed
+ * `json_object` and `json_schema` both remain refused, because neither
+ * guarantee can be kept: a stream is delivered before it can be validated, and
+ * a caller-supplied schema has no enforcement path here.
  */
 
 const base = {
@@ -30,9 +38,20 @@ describe('response_format', () => {
     expect(ChatCompletionRequestSchema.safeParse(base).success).toBe(true);
   });
 
-  it('refuses json_object rather than silently returning prose', () => {
+  it('accepts json_object, which the response path now validates', () => {
+    // Backed by real enforcement, not a widened enum — see
+    // `json-object-mode.test.ts` for the output-conformance tests.
     const result = ChatCompletionRequestSchema.safeParse({
       ...base,
+      response_format: { type: 'json_object' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('refuses json_object on a stream, where it cannot be validated', () => {
+    const result = ChatCompletionRequestSchema.safeParse({
+      ...base,
+      stream: true,
       response_format: { type: 'json_object' },
     });
     expect(result.success).toBe(false);
@@ -63,7 +82,7 @@ describe('response_format', () => {
   it('points the error at response_format.type, not the whole request', () => {
     const result = ChatCompletionRequestSchema.safeParse({
       ...base,
-      response_format: { type: 'json_object' },
+      response_format: { type: 'json_schema' },
     });
     expect(result.success).toBe(false);
     if (result.success) return;

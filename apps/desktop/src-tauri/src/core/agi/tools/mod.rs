@@ -2211,6 +2211,48 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "document_edit_excel".to_string(),
+            name: "Edit Excel Spreadsheet".to_string(),
+            description:
+                "Edit an existing Excel spreadsheet (XLSX), preserving the data already in it. \
+                 There is no Word equivalent: the Word backend cannot read an existing .docx and \
+                 would replace it with only the edits."
+                    .to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::DataAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "file_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path of the existing XLSX file to edit".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "output_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description:
+                        "Where to write the result. Defaults to file_path (edit in place)."
+                            .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "edits".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of edit operations to apply to the workbook".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "document_create_pdf".to_string(),
             name: "Create PDF Document".to_string(),
             description: "Create a PDF document with text content (headings, paragraphs, lists)"

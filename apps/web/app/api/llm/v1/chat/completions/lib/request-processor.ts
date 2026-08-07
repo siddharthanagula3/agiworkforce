@@ -81,6 +81,7 @@ import {
   formatProjectSystemPrompt,
   loadProjectContext,
 } from '@/lib/services/project-context-service';
+import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
@@ -117,195 +118,222 @@ import {
 } from '@/lib/services/managed-content-safety-service';
 
 // OpenAI-compatible request schema
-export const ChatCompletionRequestSchema = z.object({
-  model: z.string().min(1),
-  messages: z.array(
-    z.object({
-      role: z.enum(['system', 'user', 'assistant', 'tool', 'function']),
-      content: z.union([
-        z.string(),
-        z.array(
-          z.object({
-            type: z.string(),
-            text: z.string().optional(),
-            image_url: z
-              .object({
-                // AUDIT-FIX: C-3 · schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
-                url: z.string().superRefine((value, ctx) => {
-                  try {
-                    validateUserImageUrl(value);
-                  } catch (err) {
-                    ctx.addIssue({
-                      code: z.ZodIssueCode.custom,
-                      message:
-                        err instanceof EgressPolicyError
-                          ? 'image_url blocked by egress policy'
-                          : 'invalid image_url',
-                    });
-                  }
-                }),
-                detail: z.enum(['auto', 'low', 'high']).optional(),
-              })
-              .optional(),
-            file: z
-              .object({
-                asset_id: z.string().uuid(),
-              })
-              .optional(),
+export const ChatCompletionRequestSchema = z
+  .object({
+    model: z.string().min(1),
+    messages: z.array(
+      z.object({
+        role: z.enum(['system', 'user', 'assistant', 'tool', 'function']),
+        content: z.union([
+          z.string(),
+          z.array(
+            z.object({
+              type: z.string(),
+              text: z.string().optional(),
+              image_url: z
+                .object({
+                  // AUDIT-FIX: C-3 · schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
+                  url: z.string().superRefine((value, ctx) => {
+                    try {
+                      validateUserImageUrl(value);
+                    } catch (err) {
+                      ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message:
+                          err instanceof EgressPolicyError
+                            ? 'image_url blocked by egress policy'
+                            : 'invalid image_url',
+                      });
+                    }
+                  }),
+                  detail: z.enum(['auto', 'low', 'high']).optional(),
+                })
+                .optional(),
+              file: z
+                .object({
+                  asset_id: z.string().uuid(),
+                })
+                .optional(),
+            }),
+          ),
+        ]),
+        name: z.string().optional(),
+        // WEB-21 (audit 2026-05-19): strict tool_calls schema replaces z.unknown.
+        tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
+        tool_call_id: z.string().max(256).optional(),
+      }),
+    ),
+    temperature: z.number().min(0).max(2).optional(),
+    top_p: z.number().min(0).max(1).optional(),
+    n: z.number().int().positive().optional(),
+    stream: z.boolean().optional().default(false),
+    stop: z.union([z.string(), z.array(z.string())]).optional(),
+    // SECURITY: cap output token requests · 64 000 is generous for current frontier models.
+    max_tokens: z.number().int().positive().max(64000).optional(),
+    max_completion_tokens: z.number().int().positive().max(64000).optional(),
+    presence_penalty: z.number().min(-2).max(2).optional(),
+    frequency_penalty: z.number().min(-2).max(2).optional(),
+    logit_bias: z
+      .record(
+        z.string().regex(/^\d+$/, 'logit_bias keys must be token IDs (numeric strings)'),
+        z.number().min(-100).max(100),
+      )
+      .optional(),
+    user: z.string().optional(),
+    tools: z.array(ToolDefinitionSchema).max(64).optional(),
+    tool_choice: ToolChoiceSchema.optional(),
+    /*
+     * CAPABILITY HONESTY: this field was once validated here and read nowhere
+     * else, so a caller could ask for `json_object` / `json_schema`, receive
+     * 200 OK, and get prose. Silently ignoring a structured-output request is
+     * worse than refusing it — the caller's parser fails downstream with no
+     * indication of why.
+     *
+     * `text` and `json_object` are now both REAL: `json_object` appends a
+     * directive and the non-streaming response path parses and validates the
+     * completion before returning it (`lib/json-object-mode.ts`), so a 200 with
+     * `json_object` means the body genuinely parses as a JSON object.
+     *
+     * `json_schema` remains refused. Enforcing a caller-supplied schema needs
+     * either native per-provider support — which differs in shape and coverage
+     * across the providers this gateway routes to — or a validate-and-retry loop
+     * that spends the caller's money on retries they did not ask for. Tool
+     * calling (`tools` + `tool_choice`) IS wired and is the supported way to get
+     * a schema-shaped payload today.
+     */
+    response_format: z
+      .object({
+        type: z.enum(['text', 'json_object', 'json_schema']).optional(),
+        json_schema: z.unknown().optional(),
+      })
+      .refine((value) => value.type !== 'json_schema', {
+        message:
+          "response_format type 'json_schema' is not enforced on this endpoint, and " +
+          'returning unvalidated output for a schema request would be silently wrong. ' +
+          "Use type 'json_object' for a guaranteed JSON object, or `tools` with " +
+          '`tool_choice` for a schema-shaped payload.',
+        path: ['type'],
+      })
+      .optional(),
+    seed: z.number().int().optional(),
+    web_search: z.boolean().optional(),
+    web_fetch: z.boolean().optional(),
+    research: z.boolean().optional(),
+    /**
+     * CAP-045 slice 4: material carried forward when the user retries a research
+     * run that errored or was interrupted. Purely additive and fully bounded —
+     * the loop pre-seeds these sources into its aggregator (keeping their citation
+     * numbers stable) and tells the model not to repeat the completed queries, so
+     * a retry does not pay to re-run work that already succeeded.
+     *
+     * This is a HINT, not a grant: the retry still goes through the normal
+     * request path, so reservation, metering, and every quota gate apply exactly
+     * as they do to a first attempt.
+     */
+    research_resume: z
+      .object({
+        sources: z
+          .array(
+            z.object({
+              url: z.string().trim().url().max(2000),
+              title: z.string().max(500).optional(),
+              snippet: z.string().max(2000).optional(),
+            }),
+          )
+          .max(100)
+          .optional(),
+        steps: z
+          .array(
+            z.object({
+              id: z.string().trim().min(1).max(100),
+              type: z.enum(['search', 'read', 'analyze', 'synthesize', 'verify']),
+              description: z.string().trim().min(1).max(500),
+              status: z.enum(['pending', 'running', 'completed', 'failed']),
+            }),
+          )
+          .max(50)
+          .optional(),
+      })
+      .optional(),
+    code_execution: z.boolean().optional(),
+    // Logical client selection only. The server owns the Office schemas,
+    // generation runtime, storage target, and emitted file descriptors.
+    office_creation: z.boolean().optional(),
+    // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
+    // that exposes AGI's server-owned search/fetch/sandbox tools below.
+    work_mode: z.enum(CLOUD_WORK_MODES).optional(),
+    // CAP-048: the structured goal the composer captures in AGI Work mode. Purely
+    // additive and fully bounded — the server stores it on the run's journal (so
+    // `/tasks` can show WHICH task a run is) and threads it into the tool-free
+    // planning turn. Ignored unless `work_mode === 'agiwork'`.
+    agi_work_goal: AgiWorkGoalSchema.optional(),
+    thinking_mode: z.boolean().optional(),
+    thinking: z
+      .object({
+        type: z.string(),
+        // SECURITY: Anthropic's documented max for extended thinking is 32 000.
+        budget_tokens: z.number().int().positive().max(32000).optional(),
+      })
+      .optional(),
+    effort: z.string().optional(),
+    use_prompt_cache: z.boolean().optional(),
+    // Browser-reported IANA zone is a display/context hint only. The server's
+    // clock remains authoritative and derives the corresponding local instant.
+    client_timezone: z
+      .string()
+      .trim()
+      .max(64)
+      .refine(isValidIanaTimeZone, 'client_timezone must be a valid IANA time zone')
+      .optional(),
+    // Optional, additive: identifies the owned cloud conversation this request belongs to.
+    // The processor verifies it against web_conversations.user_id before billing, provider,
+    // tool, or E2B work. A conversation id is never an authorization token.
+    conversation_id: z.string().uuid().optional(),
+    // BUG-10/STR-5: the row id the CLIENT will use for this turn's assistant
+    // message. Optional and additive. When present the server persists the
+    // assistant turn itself (see assistant-turn-persistence.ts) under the SAME
+    // id, so the server write and the client's own `/api/chat/conversations/
+    // [id]/messages` upsert collapse into one row instead of duplicating the
+    // turn in the transcript. Absent means the caller owns persistence.
+    assistant_message_id: z.string().uuid().optional(),
+    // Composer activation sends only a catalog identity. Host locations and
+    // instruction content are never accepted on the browser contract.
+    skill_name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .refine(
+        (name) =>
+          !name.includes('/') &&
+          !name.includes('\\') &&
+          Array.from(name).every((character) => {
+            const codePoint = character.codePointAt(0) ?? 0;
+            return codePoint > 31 && codePoint !== 127;
           }),
-        ),
-      ]),
-      name: z.string().optional(),
-      // WEB-21 (audit 2026-05-19): strict tool_calls schema replaces z.unknown.
-      tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
-      tool_call_id: z.string().max(256).optional(),
-    }),
-  ),
-  temperature: z.number().min(0).max(2).optional(),
-  top_p: z.number().min(0).max(1).optional(),
-  n: z.number().int().positive().optional(),
-  stream: z.boolean().optional().default(false),
-  stop: z.union([z.string(), z.array(z.string())]).optional(),
-  // SECURITY: cap output token requests · 64 000 is generous for current frontier models.
-  max_tokens: z.number().int().positive().max(64000).optional(),
-  max_completion_tokens: z.number().int().positive().max(64000).optional(),
-  presence_penalty: z.number().min(-2).max(2).optional(),
-  frequency_penalty: z.number().min(-2).max(2).optional(),
-  logit_bias: z
-    .record(
-      z.string().regex(/^\d+$/, 'logit_bias keys must be token IDs (numeric strings)'),
-      z.number().min(-100).max(100),
-    )
-    .optional(),
-  user: z.string().optional(),
-  tools: z.array(ToolDefinitionSchema).max(64).optional(),
-  tool_choice: ToolChoiceSchema.optional(),
-  /*
-   * CAPABILITY HONESTY: this field was validated here and then read nowhere
-   * else in the repo, so a caller could ask for `json_object` / `json_schema`,
-   * receive 200 OK, and get prose. Silently ignoring a structured-output
-   * request is worse than refusing it — the caller's parser fails downstream
-   * with no indication of why.
-   *
-   * `text` is accepted because it is the actual behaviour. The other two are
-   * refused with an actionable message until the response path genuinely
-   * enforces a schema. Tool calling (`tools` + `tool_choice`) IS wired and is
-   * the supported way to get a shaped payload today.
-   */
-  response_format: z
-    .object({
-      type: z.enum(['text', 'json_object', 'json_schema']).optional(),
-      json_schema: z.unknown().optional(),
-    })
-    .refine((value) => value.type === undefined || value.type === 'text', {
-      message:
-        "response_format only supports type 'text' on this endpoint. " +
-        'Structured output is not enforced here yet, and returning prose for a ' +
-        'json_schema request would be silently wrong. Use `tools` with `tool_choice` ' +
-        'to get a schema-shaped payload.',
-      path: ['type'],
-    })
-    .optional(),
-  seed: z.number().int().optional(),
-  web_search: z.boolean().optional(),
-  web_fetch: z.boolean().optional(),
-  research: z.boolean().optional(),
-  /**
-   * CAP-045 slice 4: material carried forward when the user retries a research
-   * run that errored or was interrupted. Purely additive and fully bounded —
-   * the loop pre-seeds these sources into its aggregator (keeping their citation
-   * numbers stable) and tells the model not to repeat the completed queries, so
-   * a retry does not pay to re-run work that already succeeded.
-   *
-   * This is a HINT, not a grant: the retry still goes through the normal
-   * request path, so reservation, metering, and every quota gate apply exactly
-   * as they do to a first attempt.
-   */
-  research_resume: z
-    .object({
-      sources: z
-        .array(
-          z.object({
-            url: z.string().trim().url().max(2000),
-            title: z.string().max(500).optional(),
-            snippet: z.string().max(2000).optional(),
-          }),
-        )
-        .max(100)
-        .optional(),
-      steps: z
-        .array(
-          z.object({
-            id: z.string().trim().min(1).max(100),
-            type: z.enum(['search', 'read', 'analyze', 'synthesize', 'verify']),
-            description: z.string().trim().min(1).max(500),
-            status: z.enum(['pending', 'running', 'completed', 'failed']),
-          }),
-        )
-        .max(50)
-        .optional(),
-    })
-    .optional(),
-  code_execution: z.boolean().optional(),
-  // Logical client selection only. The server owns the Office schemas,
-  // generation runtime, storage target, and emitted file descriptors.
-  office_creation: z.boolean().optional(),
-  // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
-  // that exposes AGI's server-owned search/fetch/sandbox tools below.
-  work_mode: z.enum(CLOUD_WORK_MODES).optional(),
-  // CAP-048: the structured goal the composer captures in AGI Work mode. Purely
-  // additive and fully bounded — the server stores it on the run's journal (so
-  // `/tasks` can show WHICH task a run is) and threads it into the tool-free
-  // planning turn. Ignored unless `work_mode === 'agiwork'`.
-  agi_work_goal: AgiWorkGoalSchema.optional(),
-  thinking_mode: z.boolean().optional(),
-  thinking: z
-    .object({
-      type: z.string(),
-      // SECURITY: Anthropic's documented max for extended thinking is 32 000.
-      budget_tokens: z.number().int().positive().max(32000).optional(),
-    })
-    .optional(),
-  effort: z.string().optional(),
-  use_prompt_cache: z.boolean().optional(),
-  // Browser-reported IANA zone is a display/context hint only. The server's
-  // clock remains authoritative and derives the corresponding local instant.
-  client_timezone: z
-    .string()
-    .trim()
-    .max(64)
-    .refine(isValidIanaTimeZone, 'client_timezone must be a valid IANA time zone')
-    .optional(),
-  // Optional, additive: identifies the owned cloud conversation this request belongs to.
-  // The processor verifies it against web_conversations.user_id before billing, provider,
-  // tool, or E2B work. A conversation id is never an authorization token.
-  conversation_id: z.string().uuid().optional(),
-  // BUG-10/STR-5: the row id the CLIENT will use for this turn's assistant
-  // message. Optional and additive. When present the server persists the
-  // assistant turn itself (see assistant-turn-persistence.ts) under the SAME
-  // id, so the server write and the client's own `/api/chat/conversations/
-  // [id]/messages` upsert collapse into one row instead of duplicating the
-  // turn in the transcript. Absent means the caller owns persistence.
-  assistant_message_id: z.string().uuid().optional(),
-  // Composer activation sends only a catalog identity. Host locations and
-  // instruction content are never accepted on the browser contract.
-  skill_name: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .refine(
-      (name) =>
-        !name.includes('/') &&
-        !name.includes('\\') &&
-        Array.from(name).every((character) => {
-          const codePoint = character.codePointAt(0) ?? 0;
-          return codePoint > 31 && codePoint !== 127;
-        }),
-      'skill_name must be a catalog name',
-    )
-    .optional(),
-});
+        'skill_name must be a catalog name',
+      )
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    /*
+     * json_object cannot be honoured on a stream. A stream hands the caller
+     * bytes as they arrive, so by the time the payload could be parsed it has
+     * already been delivered; buffering the whole response to validate it would
+     * make `stream: true` a lie. Refusing here — with the fix named — is the
+     * only option that does not silently break one promise to keep the other.
+     */
+    if (value.response_format?.type === 'json_object' && value.stream) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['response_format', 'type'],
+        message:
+          "response_format type 'json_object' requires stream: false. A streamed " +
+          'response is delivered before it can be validated as JSON, so the guarantee ' +
+          'could not be kept.',
+      });
+    }
+  });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
@@ -915,6 +943,26 @@ export const RESEARCH_SYSTEM_PROMPT =
  * providers get the platform url_fetch function tool (see the tool injection
  * block below).
  */
+/**
+ * Mutates chatRequest in place: appends the json_object directive to the system
+ * context. Same shape as `applyResearchMode` below.
+ *
+ * The directive is only half the guarantee — models ignore it often enough that
+ * an instruction alone would be exactly the silent-wrongness this mode replaced.
+ * The other half is `extractJsonObject` in the non-streaming response path,
+ * which parses the completion before it is returned. Neither half is optional.
+ */
+export function applyJsonObjectMode(chatRequest: ChatCompletionRequest): void {
+  const firstMessage = chatRequest.messages[0];
+  if (firstMessage?.role === 'system' && typeof firstMessage.content === 'string') {
+    // Appended, not prepended: the closing instruction about output format is
+    // the one the model should read last.
+    firstMessage.content = `${firstMessage.content}\n\n${JSON_OBJECT_DIRECTIVE}`;
+  } else {
+    chatRequest.messages.unshift({ role: 'system', content: JSON_OBJECT_DIRECTIVE });
+  }
+}
+
 export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
   chatRequest.web_search = true;
   chatRequest.web_fetch = true;
@@ -1971,6 +2019,15 @@ export async function processRequest(
         ),
       };
     }
+  }
+
+  // json_object mode: append the output-format directive. Placed BEFORE the
+  // research block reads nothing from it and AFTER validation, so it applies to
+  // exactly the requests that asked for it. The directive alone is not the
+  // guarantee — `extractJsonObject` validates the completion before it is
+  // returned (see `lib/json-object-mode.ts`).
+  if (wantsJsonObject(chatRequest.response_format)) {
+    applyJsonObjectMode(chatRequest);
   }
 
   // Deep Research mode: when the frontend sends research:true and the resolved

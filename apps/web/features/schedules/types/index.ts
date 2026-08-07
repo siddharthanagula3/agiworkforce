@@ -129,3 +129,69 @@ export function scheduleResultText(run: ScheduleRun): string | null {
   const value = run.result?.['text'];
   return typeof value === 'string' && value.trim() ? value : null;
 }
+
+/** What one scheduled run actually consumed. */
+export interface ScheduleRunUsage {
+  model: string | null;
+  provider: string | null;
+  totalTokens: number | null;
+  costCents: number | null;
+}
+
+/**
+ * Read the per-run usage the executor already records.
+ *
+ * `scheduled-agent-executor.ts` has always returned `usage.costCents` alongside
+ * the token counts, and `finalizeScheduleRun` has always persisted the whole
+ * result object into `scheduled_task_runs.result` — so this has been billed,
+ * settled, and stored the entire time while the run history showed only a
+ * duration. A schedule that runs hourly is the single easiest way to spend
+ * money without noticing, which is exactly where "what did this cost" belongs.
+ *
+ * Every field is independently nullable: runs recorded before the executor
+ * emitted usage, and failed runs that never reached the provider, have partial
+ * or absent data. A missing number renders as nothing rather than as zero —
+ * "$0.00" is a claim that the run was free.
+ */
+export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
+  const result = run.result;
+  if (!result) return null;
+  const usage = result['usage'];
+  const usageRecord =
+    usage !== null && typeof usage === 'object' ? (usage as Record<string, unknown>) : null;
+
+  const finiteNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const nonEmptyString = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() ? value : null;
+
+  const summary: ScheduleRunUsage = {
+    model: nonEmptyString(result['model']),
+    provider: nonEmptyString(result['provider']),
+    totalTokens: finiteNumber(usageRecord?.['totalTokens']),
+    costCents: finiteNumber(usageRecord?.['costCents']),
+  };
+
+  const hasAnything = Object.values(summary).some((value) => value !== null);
+  return hasAnything ? summary : null;
+}
+
+/**
+ * Cents as a currency string, keeping sub-cent costs legible.
+ *
+ * A single small run frequently costs a fraction of a cent, and rounding that
+ * to "$0.00" would read as free. Below one cent we show more precision instead.
+ */
+export function formatCostCents(costCents: number): string {
+  if (costCents === 0) return '$0.00';
+  const dollars = costCents / 100;
+  if (dollars < 0.01) return `<$0.01`;
+  return `$${dollars.toFixed(2)}`;
+}
+
+/** Compact token count: 1234 → "1.2K". */
+export function formatTokenCount(tokens: number): string {
+  if (tokens < 1_000) return `${tokens}`;
+  if (tokens < 1_000_000) return `${(tokens / 1_000).toFixed(1)}K`;
+  return `${(tokens / 1_000_000).toFixed(1)}M`;
+}

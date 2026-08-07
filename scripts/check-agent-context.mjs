@@ -291,6 +291,35 @@ if (repoMap) {
     }
   }
 
+  // workspaceUnits[].evidence — the same existence guard already applied to
+  // surfaces, platform areas, and doc-status.json's currentEvidence.
+  //
+  // Without it these citations drift silently: the model-registry unit cited
+  // `apps/desktop/src/api/googleBatch.test.ts` for weeks after that file was
+  // deleted, and nothing failed. An agent reading the map then goes looking for
+  // evidence that does not exist.
+  for (const unit of repoMap.workspaceUnits ?? []) {
+    if (unit.path && !exists(unit.path)) {
+      errors.push(`repo-map.json workspaceUnit path does not exist: ${unit.path}`);
+    }
+    // `evidence` legitimately mixes three kinds of entry: concrete repo paths,
+    // shell commands ("cargo metadata --format-version 1 --no-deps"), and
+    // globs ("packages/ai/providers/*/package.json"). Only the first kind can
+    // be existence-checked, so match conservatively: a slash-bearing token with
+    // no spaces and no glob characters. Anything else is left alone rather than
+    // failed, because a false positive here would push authors to delete real
+    // evidence to get the gate green.
+    for (const evidencePath of unit.evidence ?? []) {
+      if (typeof evidencePath !== 'string') continue;
+      const looksLikeConcretePath = evidencePath.includes('/') && !/[\s*?{}[\]]/.test(evidencePath);
+      if (looksLikeConcretePath && !exists(evidencePath)) {
+        errors.push(
+          `repo-map.json workspaceUnit ${unit.path ?? '<unknown>'} evidence does not exist: ${evidencePath}`,
+        );
+      }
+    }
+  }
+
   // Surface completeness — prevents the missing-surface drift class. apps/sandbox
   // was absent from this map for ~1 month, leaving the machine-readable map a
   // coding agent loads first structurally incomplete (the "AI agent in 5 min: NO"

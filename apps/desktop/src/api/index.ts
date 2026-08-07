@@ -344,9 +344,6 @@ export * from './accountApi';
 // AGI Core - Goal submission, swarm execution, knowledge base
 export * from './agi';
 
-// Autonomous Task Checkpoints - Persistent background task checkpoints
-export * from './autonomousCheckpoint';
-
 // Agent - Autonomous agent lifecycle, task management, approvals
 export {
   agentInit,
@@ -367,24 +364,6 @@ export {
   type TrustedWorkflowMap,
   type ApprovalDecision,
 } from './agent';
-
-// AGI Checkpoints - Task checkpoint persistence and resumption
-export {
-  saveCheckpoint,
-  getLatestCheckpoint,
-  getCheckpoint,
-  listCheckpoints,
-  deleteCheckpoint,
-  getRestoreHistory,
-  recordRestore,
-  cleanupCheckpoints,
-  initializeCheckpoints,
-  useCheckpoints,
-  type Checkpoint,
-  type CheckpointSummary,
-  type CheckpointListResponse,
-  type SaveCheckpointRequest,
-} from './agi_checkpoint';
 
 // Git - Repository operations, branches, conflicts, PRs
 export {
@@ -879,51 +858,6 @@ export {
   type ConnectResponse,
   type CreateTaskResponse,
 } from './productivity';
-
-// Marketplace - Workflow publishing, browsing, social, sharing, analytics, templates (36 commands)
-export {
-  publishWorkflow as marketplacePublishWorkflow,
-  publishWorkflowToMarketplace,
-  unpublishWorkflow as marketplaceUnpublishWorkflow,
-  getMyPublishedWorkflows,
-  getFeaturedWorkflows,
-  getTrendingWorkflows,
-  getPublishedWorkflows,
-  searchMarketplaceWorkflows,
-  getWorkflowById,
-  getWorkflowByShareUrl,
-  getCreatorWorkflows,
-  getWorkflowsByCategory,
-  getCategoryCounts,
-  getPopularTags,
-  cloneMarketplaceWorkflow,
-  forkMarketplaceWorkflow,
-  getUserClones,
-  rateWorkflow as marketplaceRateWorkflow,
-  getUserWorkflowRating,
-  getWorkflowReviews,
-  commentOnWorkflow,
-  getWorkflowComments,
-  deleteWorkflowComment,
-  favoriteWorkflow,
-  unfavoriteWorkflow,
-  isWorkflowFavorited,
-  getUserFavorites,
-  shareWorkflow,
-  getWorkflowShareUrl,
-  getWorkflowEmbedCode,
-  getWorkflowStats,
-  getWorkflowAnalytics,
-  incrementWorkflowViewCount,
-  getWorkflowTemplates,
-  getWorkflowTemplatesByCategory,
-  searchWorkflowTemplates,
-  type WorkflowComment as MarketplaceWorkflowComment,
-  type WorkflowStats as MarketplaceWorkflowStats,
-  type WorkflowTemplate as MarketplaceWorkflowTemplate,
-  type WorkflowClone as MarketplaceWorkflowClone,
-  type MarketplaceSearchParams,
-} from './marketplace';
 
 // Voice - Transcription, TTS, wake word, PTT, Deepgram, barge-in, local models
 export {

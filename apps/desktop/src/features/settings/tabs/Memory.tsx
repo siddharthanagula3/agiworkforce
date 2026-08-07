@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Brain, Trash2 } from 'lucide-react';
+import { Brain, Download, Trash2 } from 'lucide-react';
 import {
   MemoryEditor,
   type MemoryEditorDataAdapter,
@@ -34,6 +34,27 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const exportMemories = useCallback(async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const entries = await useDesktopMemoryStore.getState().exportAll();
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `agi-memories-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Memories could not be exported.');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
 
   const updateMaster = useCallback(
     async (enabled: boolean) => {
@@ -156,7 +177,41 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
               {resetting ? 'Resetting…' : 'Reset memories'}
             </Button>
           </div>
+          {/*
+            Export / import. The store has had `exportAll` and
+            `importJsonString` all along, but the only UI that surfaced them was
+            `MemoryManager` behind `showImportExport`, and its sole caller
+            (`MemoryBrowserModal`) was never mounted — so a user could not get
+            their memories out of the device at all. Local scope only: cloud
+            memories are exported through the account data-export path.
+          */}
+          {scope === 'local' && (
+            <div className="flex items-center justify-between gap-5 rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Export memories</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Download every device memory as JSON.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={adapter.facts.length === 0 || exporting}
+                onClick={() => void exportMemories()}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {exporting ? 'Exporting…' : 'Export JSON'}
+              </Button>
+            </div>
+          )}
         </div>
+
+        {exportError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {exportError}
+          </p>
+        ) : null}
 
         <p className="text-xs text-muted-foreground">
           Turning memory off stops automatic retrieval and generation. You can still review, edit,

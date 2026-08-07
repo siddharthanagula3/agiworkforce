@@ -324,6 +324,16 @@ export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;
   /**
+   * Total bytes of project knowledge files a user may hold across all
+   * projects. Enforced in `apps/web/lib/services/project-context-service.ts`.
+   *
+   * Only a per-file byte cap and a 20-files-per-project count cap existed, so
+   * a user could hold unbounded total storage by spreading large files across
+   * projects — the cost dimension nobody was bounding. `local-only` / `byok`
+   * store nothing on the platform and stay uncapped.
+   */
+  knowledgeStorageBytes: BillingPlanLimit;
+  /**
    * GOV-3: maximum managed turns a single user may have in flight at once
    * (concurrent chats / parallel streams). Enforced by the managed-turn
    * concurrency slots in `apps/web/lib/rate-limit.ts`.
@@ -379,6 +389,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
 > = Object.freeze({
   'local-only': {
     projects: 'unlimited',
+    knowledgeStorageBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
     maxSandboxes: 0,
@@ -388,6 +399,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   byok: {
     projects: 'unlimited',
+    knowledgeStorageBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
     maxSandboxes: 0,
@@ -401,6 +413,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   // rather than a token allowance that would 402 on first use.
   free: {
     projects: 1,
+    knowledgeStorageBytes: 104857600,
     customMcpServers: 1,
     maxConcurrentTurns: 1,
     maxSandboxes: 0,
@@ -410,6 +423,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   basic: {
     projects: 5,
+    knowledgeStorageBytes: 1073741824,
     customMcpServers: 5,
     maxConcurrentTurns: 2,
     maxSandboxes: 2,
@@ -419,6 +433,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   pro: {
     projects: 25,
+    knowledgeStorageBytes: 10737418240,
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxSandboxes: 5,
@@ -428,6 +443,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   max: {
     projects: 'unlimited',
+    knowledgeStorageBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 8,
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
@@ -437,6 +453,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   max_15x: {
     projects: 'unlimited',
+    knowledgeStorageBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 12,
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
@@ -446,6 +463,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   team: {
     projects: 25,
+    knowledgeStorageBytes: 26843545600,
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxSandboxes: 5,
@@ -455,6 +473,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
   enterprise: {
     projects: 'custom',
+    knowledgeStorageBytes: 'custom',
     customMcpServers: 'custom',
     maxConcurrentTurns: 'custom',
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,

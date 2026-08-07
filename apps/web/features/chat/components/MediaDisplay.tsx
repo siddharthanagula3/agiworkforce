@@ -179,7 +179,9 @@ function MediaDisplayComponent({
       </div>
 
       {/* Lightbox */}
-      {lightboxOpen && <ImageLightbox src={src} alt={alt} onClose={() => setLightboxOpen(false)} />}
+      {lightboxOpen && (
+        <ImageLightbox images={[{ src, alt }]} onClose={() => setLightboxOpen(false)} />
+      )}
     </>
   );
 }

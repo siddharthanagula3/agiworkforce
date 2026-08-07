@@ -22,6 +22,7 @@ import {
   type ScheduleTiming,
 } from '@/lib/schedules/schedule-time';
 import { executeScheduledAgent } from './scheduled-agent-executor';
+import { notifyScheduleCompleted } from './schedule-notification-service';
 
 const DEFAULT_LEASE_SECONDS = 45;
 const MAX_BATCH_SIZE = 100;
@@ -1065,6 +1066,34 @@ function errorMessage(error: unknown): string {
   return boundedError(error instanceof Error ? error.message : String(error)) ?? 'Unknown error';
 }
 
+/**
+ * Push notification for a finished run.
+ *
+ * Called AFTER `finalizeScheduleRun` has committed, deliberately: a push issued
+ * inside that transaction would hold the connection across a network call, and
+ * a rollback would leave the user notified about work that was never recorded.
+ *
+ * Never throws — `notifyScheduleCompleted` already swallows its own failures,
+ * and this guard covers an import-time or programming error too. The run
+ * outcome is already durable; a notification problem must not change it.
+ */
+async function announceScheduleRun(
+  claim: ClaimedScheduleRun,
+  status: ScheduleRunStatus,
+): Promise<void> {
+  if (status === 'running') return;
+  try {
+    await notifyScheduleCompleted({
+      userId: claim.task.userId,
+      taskId: claim.task.id,
+      taskName: claim.task.name,
+      status,
+    });
+  } catch (error) {
+    logger.warn({ error, taskId: claim.task.id }, 'Schedule completion notification failed');
+  }
+}
+
 export async function processClaimedScheduleRun(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
@@ -1097,11 +1126,13 @@ export async function processClaimedScheduleRun(
       removeAbortListener = () => signal.removeEventListener('abort', onAbort);
     });
     const result = await Promise.race([execute(claim.task, signal, claim.runId), aborted]);
-    return await finalizeScheduleRun(db, claim, {
+    const run = await finalizeScheduleRun(db, claim, {
       status: 'success',
       result,
       completedAt: now(),
     });
+    await announceScheduleRun(claim, 'success');
+    return run;
   } catch (error) {
     const externallyCancelled = options.signal?.aborted === true;
     const timedOut = timeoutController.signal.aborted && !externallyCancelled;
@@ -1110,11 +1141,13 @@ export async function processClaimedScheduleRun(
       : timedOut
         ? 'timeout'
         : 'failed';
-    return await finalizeScheduleRun(db, claim, {
+    const run = await finalizeScheduleRun(db, claim, {
       status,
       error: errorMessage(error),
       completedAt: now(),
     });
+    await announceScheduleRun(claim, status);
+    return run;
   } finally {
     removeAbortListener();
     clearTimeout(timeout);

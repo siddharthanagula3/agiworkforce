@@ -24,6 +24,12 @@ export interface ChatPreferences {
   chatStorageMode: 'local' | 'cloud';
   sendShortcut?: 'enter' | 'mod-enter';
   autoTTS?: boolean;
+  /**
+   * Start new Managed Cloud conversations as temporary: excluded from history
+   * and purged by the retention cron. Optional for persisted pre-existing
+   * settings; treat missing as off.
+   */
+  temporaryChat?: boolean;
 }
 
 interface ChatPreferencesState {
@@ -39,6 +45,7 @@ interface ChatPreferencesActions {
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setChatAgentMode: (mode: AgentMode) => Promise<void>;
   setAutoTTS: (enabled: boolean) => void;
+  setTemporaryChat: (enabled: boolean) => void;
   setLastInputWasVoice: (wasVoice: boolean) => void;
 }
 
@@ -55,6 +62,7 @@ export const defaultChatPreferences: ChatPreferences = {
   autoSaveMemories: false,
   agentMode: 'build' as AgentMode,
   chatStorageMode: 'local',
+  temporaryChat: false,
   sendShortcut: 'enter',
   autoTTS: true,
 };
@@ -123,6 +131,13 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
             (state) => ({ chatPreferences: { ...state.chatPreferences, autoTTS: enabled } }),
             undefined,
             'chatPreferences/setAutoTTS',
+          );
+        },
+        setTemporaryChat: (enabled) => {
+          set(
+            (state) => ({ chatPreferences: { ...state.chatPreferences, temporaryChat: enabled } }),
+            undefined,
+            'chatPreferences/setTemporaryChat',
           );
         },
         setLastInputWasVoice: (wasVoice) => {

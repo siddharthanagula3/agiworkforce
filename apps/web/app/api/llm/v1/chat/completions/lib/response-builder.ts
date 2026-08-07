@@ -9,6 +9,7 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import type { ProcessedRequest } from './request-processor';
 import {
   ManagedUsageRequestError,
@@ -176,6 +177,47 @@ export async function buildNonStreamResponse(
   // by them; cryptographic uniqueness is a strict superset of "random enough".
   const responseId = `chatcmpl-${Date.now()}-${secureToken(7)}`;
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
+
+  /*
+   * json_object enforcement. The directive in the system prompt is a request,
+   * not a guarantee — models wrap output in code fences and add prose often
+   * enough that shipping the raw completion would recreate exactly the silent
+   * wrongness this mode replaced (200 OK, `json_object` asked for, prose
+   * returned, caller's parser fails downstream with no explanation).
+   *
+   * `extractJsonObject` unwraps fences and surrounding prose but never REPAIRS
+   * malformed JSON: guessing at a missing brace would hand the caller a
+   * document the model did not produce. When it cannot produce an object we
+   * return 502 rather than prose, because the caller asked for a contract this
+   * response does not satisfy.
+   *
+   * Note this runs AFTER settlement above: the provider call happened and was
+   * billed, so failing here does not silently refund — the error names what
+   * went wrong so the caller can retry deliberately.
+   */
+  if (wantsJsonObject(chatRequest.response_format)) {
+    const extraction = extractJsonObject(llmResponse.content ?? '');
+    if (!extraction.ok) {
+      logger.warn(
+        { requestId, model: responseModel, reason: extraction.reason },
+        'json_object mode: model output was not a JSON object',
+      );
+      return NextResponse.json(
+        {
+          error: {
+            message: `${extraction.reason} Retry, or use \`tools\` with \`tool_choice\` for a schema-shaped payload.`,
+            type: 'invalid_response_error',
+            code: 'json_object_not_satisfied',
+          },
+        },
+        {
+          status: 502,
+          headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+        },
+      );
+    }
+    llmResponse.content = extraction.content ?? llmResponse.content;
+  }
 
   const responseHeaders: Record<string, string> = {
     ...getCorsHeaders(request),

@@ -88,7 +88,8 @@
       "dispatch": "Dispatch",
       "routines": "Routines",
       "design": "Design",
-      "research": "Research"
+      "research": "Research",
+      "automation": "Automations"
     },
     "account": "Account",
     "signIn": "Sign in",

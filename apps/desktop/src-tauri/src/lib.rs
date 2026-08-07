@@ -991,13 +991,6 @@ pub fn run() {
                 WorkflowEngineState::new_main_database(main_database_access.clone());
             app.manage(workflow_engine_state);
 
-            let marketplace_conn = main_database_access
-                .open_connection()
-                .map_err(|e| anyhow::anyhow!("Failed to open database for marketplace: {}", e))?;
-            app.manage(crate::sys::commands::marketplace::MarketplaceState {
-                    db: Arc::new(Mutex::new(marketplace_conn)),
-                });
-
             let template_conn = main_database_access.open_connection().map_err(|e| {
                 anyhow::anyhow!("Failed to open database for template manager: {}", e)
             })?;
@@ -1115,31 +1108,6 @@ pub fn run() {
 
             app.manage(crate::sys::commands::PromptEnhancementState::new());
 
-            // CRITICAL FIX: AGICheckpointState must be managed or 9 agi_checkpoint_* commands panic.
-            {
-                let checkpoint_db_path = app_data_dir.join("agi_checkpoints.db");
-                match crate::core::agi::CheckpointStore::new(&checkpoint_db_path) {
-                    Ok(store) => {
-                        app.manage(crate::sys::commands::agi_checkpoint::AGICheckpointState {
-                            store,
-                            config: crate::core::agi::CheckpointConfig::default(),
-                        });
-                        tracing::info!("AGICheckpointState initialized");
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to create AGICheckpointState: {}. Checkpoint commands will be unavailable.", e);
-                        // Still manage a fallback to prevent panics — use temp path
-                        let fallback_path = std::env::temp_dir().join("agi_checkpoints_fallback.db");
-                        if let Ok(fallback_store) = crate::core::agi::CheckpointStore::new(&fallback_path) {
-                            app.manage(crate::sys::commands::agi_checkpoint::AGICheckpointState {
-                                store: fallback_store,
-                                config: crate::core::agi::CheckpointConfig::default(),
-                            });
-                        }
-                    }
-                }
-            }
-
             // Initialize notification center state
             app.manage(crate::sys::commands::NotificationCenterState::new());
 
@@ -1164,39 +1132,6 @@ pub fn run() {
                 crate::features::tasks::start_task_loop(task_manager_loop).await;
             });
             app.manage(TaskManagerState(task_manager));
-
-            // P5D: Autonomous task checkpoint persistence
-            {
-                use crate::core::agent::background_tasks::TaskStorage;
-                use crate::sys::commands::agi_checkpoint::AutonomousCheckpointState;
-                match TaskStorage::new(db_conn_arc.clone()) {
-                    Ok(storage) => {
-                        if let Err(e) = storage.ensure_autonomous_table() {
-                            tracing::warn!("Failed to create autonomous checkpoints table: {}", e);
-                        }
-                        let storage_arc = Arc::new(storage);
-                        app.manage(AutonomousCheckpointState {
-                            storage: storage_arc,
-                        });
-                        tracing::info!("AutonomousCheckpointState initialized");
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to initialize TaskStorage for autonomous checkpoints: {}. \
-                             Checkpoint persistence will be unavailable.",
-                            e
-                        );
-                        // Create a degraded state with a dummy storage that will fail
-                        // gracefully when used. We need to manage *something* so the
-                        // Tauri commands don't panic on missing state.
-                        if let Ok(fallback) = TaskStorage::new(db_conn_arc.clone()) {
-                            app.manage(AutonomousCheckpointState {
-                                storage: Arc::new(fallback),
-                            });
-                        }
-                    }
-                }
-            }
 
             match AppState::load(app.handle()) {
                 Ok(state) => {
@@ -1375,15 +1310,6 @@ pub fn run() {
             crate::sys::commands::checkpoint_delete,
 
             // AGI Checkpoint Management
-            crate::sys::commands::agi_checkpoint_save,
-            crate::sys::commands::agi_checkpoint_get_latest,
-            crate::sys::commands::agi_checkpoint_get,
-            crate::sys::commands::agi_checkpoint_list,
-            crate::sys::commands::agi_checkpoint_delete,
-            crate::sys::commands::agi_checkpoint_restore_history,
-            crate::sys::commands::agi_checkpoint_record_restore,
-            crate::sys::commands::agi_checkpoint_cleanup,
-            crate::sys::commands::agi_checkpoint_init,
 
             // AGI Task Control (pause/resume/abort running tasks)
             crate::sys::commands::agi_pause_task,
@@ -1864,6 +1790,7 @@ pub fn run() {
             crate::sys::commands::document_search,
             crate::sys::commands::document_detect_type,
             crate::sys::commands::document_create_word,
+            crate::sys::commands::document_edit_excel,
             crate::sys::commands::document_create_word_simple,
             crate::sys::commands::document_create_word_simple_manifest,
             crate::sys::commands::document_create_excel,
@@ -2158,35 +2085,6 @@ pub fn run() {
             crate::sys::commands::trigger_workflow_on_event,
             crate::sys::commands::get_next_execution_time,
 
-            crate::sys::commands::publish_workflow,
-            crate::sys::commands::unpublish_workflow,
-            crate::sys::commands::get_featured_workflows,
-            crate::sys::commands::get_trending_workflows,
-            crate::sys::commands::search_marketplace_workflows,
-            crate::sys::commands::get_published_workflows,
-            crate::sys::commands::get_workflow_by_id,
-            crate::sys::commands::get_my_published_workflows,
-            crate::sys::commands::get_category_counts,
-            crate::sys::commands::get_popular_tags,
-            crate::sys::commands::clone_marketplace_workflow,
-            crate::sys::commands::rate_workflow,
-            crate::sys::commands::get_workflow_reviews,
-            crate::sys::commands::get_user_workflow_rating,
-            crate::sys::commands::comment_on_workflow,
-            crate::sys::commands::get_workflow_comments,
-            crate::sys::commands::delete_workflow_comment,
-            crate::sys::commands::favorite_workflow,
-            crate::sys::commands::unfavorite_workflow,
-            crate::sys::commands::is_workflow_favorited,
-            crate::sys::commands::get_user_favorites,
-            crate::sys::commands::get_user_clones,
-            crate::sys::commands::share_workflow,
-            crate::sys::commands::get_workflow_stats,
-            crate::sys::commands::get_workflow_analytics,
-            crate::sys::commands::get_workflow_share_url,
-            crate::sys::commands::get_workflow_embed_code,
-            crate::sys::commands::increment_workflow_view_count,
-            crate::sys::commands::get_workflow_templates,
 
             crate::sys::commands::get_outcome_tracking,
             crate::sys::commands::get_process_statistics,
@@ -2534,8 +2432,6 @@ pub fn run() {
             crate::sys::commands::db_mysql_list_tables,
             crate::sys::commands::db_mysql_test_connection,
             crate::sys::commands::db_validate_query,
-            crate::sys::commands::delete_autonomous_task_checkpoint,
-            crate::sys::commands::delete_autonomous_task_checkpoints,
             crate::sys::commands::project_memory::delete_project_memory,
             crate::sys::commands::design_apply_css,
             crate::sys::commands::design_check_accessibility,
@@ -2551,7 +2447,6 @@ pub fn run() {
             crate::sys::commands::error_get_logs,
             crate::sys::commands::error_get_stats,
             crate::sys::commands::file_get_metadata,
-            crate::sys::commands::fork_marketplace_workflow,
             crate::sys::commands::form_undo_attempt,
             crate::sys::commands::form_undo_can_undo,
             crate::sys::commands::form_undo_clear,
@@ -2570,7 +2465,6 @@ pub fn run() {
             crate::sys::commands::get_available_use_cases,
             crate::sys::commands::get_best_practices,
             crate::sys::commands::project_memory::get_coding_styles,
-            crate::sys::commands::get_creator_workflows,
             crate::sys::commands::get_first_run_session,
             crate::sys::commands::get_first_run_statistics,
             crate::sys::commands::get_inline_completion,
@@ -2591,9 +2485,6 @@ pub fn run() {
             crate::sys::commands::get_user_credits,
             crate::sys::commands::get_user_rewards,
             crate::sys::commands::get_user_tutorial_progress,
-            crate::sys::commands::get_workflow_by_share_url,
-            crate::sys::commands::get_workflow_templates_by_category,
-            crate::sys::commands::get_workflows_by_category,
             crate::sys::commands::has_completed_first_run,
             crate::sys::commands::has_reward,
             crate::sys::commands::has_sample_data,
@@ -2607,8 +2498,6 @@ pub fn run() {
             crate::sys::commands::intent_extract_entities,
             crate::sys::commands::intent_get_categories,
             crate::sys::commands::intent_get_complexity_levels,
-            crate::sys::commands::list_autonomous_task_checkpoints,
-            crate::sys::commands::list_autonomous_task_checkpoints_by_task,
             crate::sys::commands::llm_list_ollama_models,
             crate::sys::commands::memory_decay_single,
             crate::sys::commands::memory_get_decay_candidates,
@@ -2644,7 +2533,6 @@ pub fn run() {
             crate::sys::commands::project_context_validate_path,
             crate::sys::commands::project_has_instructions,
             crate::sys::commands::project_load_instructions,
-            crate::sys::commands::publish_workflow_to_marketplace,
             crate::sys::commands::record_automation_metrics,
             crate::sys::commands::record_demo_results,
             crate::sys::commands::record_step_view,
@@ -2656,13 +2544,11 @@ pub fn run() {
             crate::sys::commands::reset_tutorial,
             crate::sys::commands::resolve_task_approval,
             crate::sys::commands::resume_agent,
-            crate::sys::commands::resume_autonomous_task,
             crate::sys::commands::route_to_best_api,
             crate::sys::commands::run_instant_demo,
             crate::sys::commands::project_memory::save_architectural_decision,
             crate::sys::commands::project_memory::save_coding_style,
             crate::sys::commands::search_chat_history_semantic,
-            crate::sys::commands::search_workflow_templates,
             crate::sys::commands::select_demo,
             crate::sys::commands::set_prompt_enhancement_config,
             crate::sys::commands::settings_v2_delete,

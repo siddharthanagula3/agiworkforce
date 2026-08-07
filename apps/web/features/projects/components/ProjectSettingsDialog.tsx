@@ -20,8 +20,9 @@ import {
   Textarea,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
-import { Smile, Trash2 } from 'lucide-react';
+import { Copy, Download, Smile, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
@@ -65,6 +66,52 @@ export function ProjectSettingsDialog({
     setName(project.name);
     setInstructions(project.instructions ?? '');
   }, [project.id, project.name, project.instructions]);
+
+  const [isDuplicating, setIsDuplicating] = useState(false);
+
+  /**
+   * Duplicate this project. The server copies settings, instructions, and
+   * knowledge files by reference, and deliberately does NOT copy conversations.
+   */
+  const handleDuplicate = async () => {
+    setIsDuplicating(true);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/duplicate`, {
+        method: 'POST',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        // Surface the server's reason verbatim: the common failure is the
+        // project quota, and "something went wrong" would hide that.
+        throw new Error(body.error?.message ?? 'Could not duplicate the project.');
+      }
+      const { copiedKnowledgeFiles } = (await response.json()) as {
+        copiedKnowledgeFiles?: number;
+      };
+      toast.success(
+        copiedKnowledgeFiles
+          ? `Project duplicated with ${copiedKnowledgeFiles} file${copiedKnowledgeFiles === 1 ? '' : 's'}.`
+          : 'Project duplicated.',
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not duplicate the project.');
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
+
+  /**
+   * Export as JSON. A plain navigation rather than a fetch-and-blob: the route
+   * already sets Content-Disposition, so the browser handles the download and
+   * the file never has to be held in memory.
+   */
+  const handleExport = () => {
+    window.location.href = `/api/projects/${project.id}/export`;
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -188,25 +235,27 @@ export function ProjectSettingsDialog({
               />
             </div>
 
-            {/* Memory */}
+            {/*
+              Memory.
+
+              The scope <select> that used to sit here was decorative: one
+              option ("Default"), no onChange, no state, and no persistence — a
+              dropdown the user could open but never change. It implied
+              per-project memory scoping that does not exist anywhere in the
+              product: `user_memories` (migration 0010) has no project column,
+              and `managed-memory-context-service.ts` selects purely by user.
+
+              The sentence below is kept because it is TRUE — memory really is
+              account-wide in both directions — and it is the thing a user
+              opening this dialog needs to know. Re-add a control only when
+              memories can actually be scoped to a project.
+            */}
             <div className="space-y-1.5">
-              <Label
-                htmlFor="ps-memory"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-              >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Memory
-              </Label>
-              <div className="flex items-center gap-3">
-                <select
-                  id="ps-memory"
-                  defaultValue="default"
-                  className="h-9 rounded-lg border border-border/60 bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-                >
-                  <option value="default">Default</option>
-                </select>
-              </div>
+              </p>
               <p className="text-xs text-muted-foreground">
-                Project can access memories from outside chats, and vice versa.
+                This project can access memories from outside chats, and vice versa.
               </p>
             </div>
 
@@ -235,6 +284,28 @@ export function ProjectSettingsDialog({
               <Trash2 className="mr-1.5 h-4 w-4" />
               Delete project
             </Button>
+
+            {/*
+              Duplicate and Export. The routes shipped without a caller, which
+              is the same unwired-backend pattern this codebase keeps getting
+              bitten by — a capability that exists and no user can reach.
+            */}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isDuplicating}
+                onClick={() => void handleDuplicate()}
+              >
+                <Copy className="mr-1.5 h-4 w-4" />
+                {isDuplicating ? 'Duplicating…' : 'Duplicate'}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />
+                Export
+              </Button>
+            </div>
 
             {/* Save */}
             <Button

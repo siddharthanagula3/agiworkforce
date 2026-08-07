@@ -702,8 +702,17 @@ export function ComposerFooter({
         .filter(Boolean)
         .join(' ')}
     >
-      {/* Budget display · renders only when tokens have been used */}
-      {!inline && <BudgetTrackerDisplay className="mx-1" />}
+      {/*
+        Budget display · renders only when tokens have been used.
+        The card variant needs its own block, so inline mode gets the compact
+        pill. Previously this was `!inline &&`, and since the ONLY production
+        mount of ComposerFooter always passes `inline`, it never rendered.
+      */}
+      {inline ? (
+        <BudgetTrackerDisplay variant="compact" className="mr-2" />
+      ) : (
+        <BudgetTrackerDisplay className="mx-1" />
+      )}
 
       <div
         className={

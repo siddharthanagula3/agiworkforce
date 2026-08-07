@@ -49,6 +49,11 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+// Pro tier: 10 GB of knowledge storage, so the aggregate quota check passes
+// and these tests keep exercising what they are actually about.
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
+}));
 vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
@@ -199,6 +204,12 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
     // Active-file count under the cap
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    // Duplicate-checksum probe finds nothing
+    mockNeonQuery.mockResolvedValueOnce([]);
+    // Aggregate storage usage well under the plan's quota
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    // No prior version of this file name
+    mockNeonQuery.mockResolvedValueOnce([]);
     // Insert returns the new row
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
@@ -231,8 +242,14 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       byteCount: 1024,
       checksumSha256: CHECKSUM,
     });
-    expect(mockNeonQuery.mock.calls[2]?.[0]).toContain('extracted_text');
-    expect(mockNeonQuery.mock.calls[2]?.[1]).toContain('The launch date is October 4.');
+    // Located by CONTENT, not call index: this route legitimately gains
+    // queries (the duplicate-checksum probe did), and a positional assertion
+    // breaks on every one of them for no real reason.
+    const insertCall = mockNeonQuery.mock.calls.find((call) =>
+      String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+    );
+    expect(insertCall?.[0]).toContain('extracted_text');
+    expect(insertCall?.[1]).toContain('The launch date is October 4.');
   });
 
   it('returns 409 and does not extract or insert when the project is already at the file cap', async () => {
@@ -255,14 +272,21 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(409);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message ?? '').toContain('maximum');
-    // Fail-fast: no extraction and no insert past the ownership + count queries.
+    // Fail-fast: no extraction, and nothing written.
     expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
-    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
+    expect(
+      mockNeonQuery.mock.calls.some((call) =>
+        String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+      ),
+    ).toBe(false);
   });
 
   it('returns a user-safe 400 and does not insert when extraction rejects the object', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
     mockExtractProjectKnowledgeFile.mockRejectedValue(
       new MockProjectKnowledgeExtractionError('The uploaded file failed its integrity check.'),
     );
@@ -282,8 +306,13 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message).toContain('integrity check');
-    // Ownership check + active-file count ran; extraction rejected before insert.
-    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
+    // Assert the INTENT — nothing was written — rather than a query count,
+    // which changes whenever the route gains a legitimate read.
+    expect(
+      mockNeonQuery.mock.calls.some((call) =>
+        String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+      ),
+    ).toBe(false);
   });
 
   it('returns 400 when sourceSurface is invalid', async () => {
@@ -339,5 +368,75 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message ?? '').toMatch(/not an accepted attachment type/i);
+  });
+
+  // Regression: `checksum_sha256` was stored and passed to the extractor but
+  // never compared, so re-uploading the same file created a second unrelated
+  // row — consuming a file slot and doubling the text stuffed into context.
+  it('rejects a file whose checksum already exists in the project', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'kb-1', file_name: 'spec.pdf' }]);
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec-copy.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(409);
+    // Checked BEFORE extraction so a duplicate never pays for that work.
+    expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
+  });
+
+  // Regression: re-uploading a CORRECTED file created a completely unrelated
+  // row. The old version stayed active, so the model saw both the stale and
+  // the corrected text, and the 20-file budget was consumed twice.
+  it('versions a same-name file with new content instead of duplicating it', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 1 }]);
+    // Different checksum, so not the duplicate case.
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    // An existing v1 of the same file name.
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'kb-old', version: 1 }]);
+    mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: 'Corrected text.' });
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 2048,
+        checksumSha256: 'b'.repeat(64),
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(201);
+
+    const insertCall = mockNeonQuery.mock.calls.find((call) =>
+      String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+    );
+    // Version 2, pointing at the row it replaced.
+    expect(insertCall?.[1]).toContain(2);
+    expect(insertCall?.[1]).toContain('kb-old');
+
+    // The old row is retired only AFTER the replacement exists, and via
+    // superseded_at rather than deleted_at so history survives.
+    const supersedeCall = mockNeonQuery.mock.calls.find((call) =>
+      String(call?.[0] ?? '').includes('set superseded_at = now()'),
+    );
+    expect(supersedeCall?.[1]).toEqual(['kb-old']);
+    expect(String(supersedeCall?.[0] ?? '')).not.toContain('deleted_at');
   });
 });

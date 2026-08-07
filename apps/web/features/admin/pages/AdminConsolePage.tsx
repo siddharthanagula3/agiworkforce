@@ -45,10 +45,10 @@ function buildReadinessRows(managedComputeOpen: boolean) {
     },
     {
       area: 'Identity',
-      status: 'Schema ready — runtime deferred',
+      status: 'Implemented — entitlement-gated',
       owner: 'Enterprise',
       evidence:
-        'Migration 0076 owns SSO and directory-sync configuration with RLS; first-party SSO sign-in and SCIM provisioning remain a Phase 3 runtime decision',
+        'Migration 0076 owns SSO and directory-sync configuration with RLS. First-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts, /api/admin/sso) and SCIM provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls capability by lib/server/sso/sso-route-guard.ts, which is a capability check rather than a tier comparison',
     },
     {
       area: 'Audit logs',

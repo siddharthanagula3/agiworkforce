@@ -373,10 +373,14 @@ export function PrivacySection() {
             Crash reports and anonymized usage counts (no message content) help us fix bugs faster.
             These are disabled by default and can be turned off at any time below.
           </p>
-          <p style={{ margin: 0 }}>
-            If you opt into model-improvement sharing for hosted cloud, your anonymized
-            conversations may be reviewed by our team to improve future models.
-          </p>
+          {/*
+            The "opt into model-improvement sharing" paragraph that used to sit
+            here described a control that does not exist: `improveModelTraining`
+            was deliberately removed from TOGGLES above because nothing consumes
+            it. Telling users to opt into a setting they cannot find, for a
+            pipeline that was never built, is worse than saying nothing. Restore
+            copy here only when the toggle and its consumer both ship.
+          */}
         </ExpandableSection>
       </section>
 
@@ -519,6 +523,39 @@ export function PrivacySection() {
           </div>
           <Link
             href="/settings/archived"
+            style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              padding: '6px 14px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            Manage
+          </Link>
+        </div>
+
+        <div
+          style={{
+            padding: '16px 20px',
+            borderTop: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Recently deleted
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Put back a chat you deleted by mistake.
+            </div>
+          </div>
+          <Link
+            href="/settings/deleted-chats"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',

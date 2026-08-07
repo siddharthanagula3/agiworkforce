@@ -7,23 +7,41 @@
  * - Close with X button or Escape key
  * - Download button
  * - Zoom in / zoom out controls
+ * - Prev/next across the other images in the same message
+ *
+ * A message can carry several images, and opening one used to be a dead end:
+ * the only way to see the next was to close the overlay and click the next
+ * thumbnail. Callers pass the whole set plus which one was clicked, so arrow
+ * keys and the on-screen arrows move through them. Passing a single image is
+ * still valid — the navigation chrome hides itself rather than rendering
+ * disabled controls.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { X, Download, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { X, Download, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface ImageLightboxProps {
+export interface LightboxImage {
   /** The image source URL */
   src: string;
   /** Alt text for the image */
   alt?: string;
-  /** Called when the lightbox should close */
-  onClose: () => void;
   /** Optional filename used for the downloaded file */
   downloadFilename?: string;
+}
+
+interface ImageLightboxProps {
+  /**
+   * Every image in the set. Single-image callers pass one entry; the arrows
+   * and the counter only appear when there is somewhere to go.
+   */
+  images: LightboxImage[];
+  /** Which entry to open on. Out-of-range values clamp rather than blank out. */
+  initialIndex?: number;
+  /** Called when the lightbox should close */
+  onClose: () => void;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -35,13 +53,28 @@ const DEFAULT_ZOOM = 1;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ImageLightbox({
-  src,
-  alt = 'Image preview',
-  onClose,
-  downloadFilename,
-}: ImageLightboxProps) {
+export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightboxProps) {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const count = images.length;
+  // Clamp rather than trust the caller: an index past the end would render an
+  // empty overlay with no way to tell it apart from a broken image.
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(initialIndex, 0), Math.max(count - 1, 0)),
+  );
+
+  const current = images[Math.min(index, Math.max(count - 1, 0))];
+  const canNavigate = count > 1;
+
+  // Moving to another image resets the zoom — carrying a 3x zoom across would
+  // land the next image mid-crop with no indication why.
+  const goTo = useCallback(
+    (next: number) => {
+      if (count === 0) return;
+      setIndex(((next % count) + count) % count); // wraps in both directions
+      setZoom(DEFAULT_ZOOM);
+    },
+    [count],
+  );
 
   // ── Keyboard handling ──────────────────────────────────────────────────
 
@@ -49,6 +82,12 @@ export function ImageLightbox({
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+      } else if (e.key === 'ArrowLeft' && canNavigate) {
+        setIndex((i) => (i - 1 + count) % count);
+        setZoom(DEFAULT_ZOOM);
+      } else if (e.key === 'ArrowRight' && canNavigate) {
+        setIndex((i) => (i + 1) % count);
+        setZoom(DEFAULT_ZOOM);
       } else if (e.key === '+' || e.key === '=') {
         setZoom((z) => Math.min(z + ZOOM_STEP, MAX_ZOOM));
       } else if (e.key === '-') {
@@ -57,7 +96,7 @@ export function ImageLightbox({
         setZoom(DEFAULT_ZOOM);
       }
     },
-    [onClose],
+    [onClose, canNavigate, count],
   );
 
   useEffect(() => {
@@ -75,13 +114,14 @@ export function ImageLightbox({
   // ── Download handler ───────────────────────────────────────────────────
 
   const handleDownload = useCallback(() => {
+    if (!current) return;
     const link = document.createElement('a');
-    link.href = src;
-    link.download = downloadFilename || `image-${Date.now()}.png`;
+    link.href = current.src;
+    link.download = current.downloadFilename || `image-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, [src, downloadFilename]);
+  }, [current]);
 
   // ── Backdrop click ─────────────────────────────────────────────────────
 
@@ -94,6 +134,10 @@ export function ImageLightbox({
     [onClose],
   );
 
+  // Nothing to show. Rendering the chrome over a blank backdrop would look like
+  // a failed load rather than an empty set.
+  if (!current) return null;
+
   return (
     <div
       role="dialog"
@@ -104,6 +148,16 @@ export function ImageLightbox({
     >
       {/* Toolbar */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {/* Position in the set. Only meaningful with somewhere to go. */}
+        {canNavigate && (
+          <span
+            className="mr-1 min-w-[3.5rem] text-center text-xs font-medium text-white/70"
+            aria-live="polite"
+          >
+            {index + 1} of {count}
+          </span>
+        )}
+
         {/* Zoom out */}
         <button
           type="button"
@@ -182,11 +236,45 @@ export function ImageLightbox({
         </button>
       </div>
 
+      {/* Previous / next. Rendered outside the image container so they stay put
+          while the image scrolls under zoom. */}
+      {canNavigate && (
+        <>
+          <button
+            type="button"
+            onClick={() => goTo(index - 1)}
+            className={cn(
+              'absolute left-4 top-1/2 z-10 -translate-y-1/2',
+              'flex h-11 w-11 items-center justify-center rounded-full',
+              'bg-white/10 text-white hover:bg-white/20 transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60',
+            )}
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            onClick={() => goTo(index + 1)}
+            className={cn(
+              'absolute right-4 top-1/2 z-10 -translate-y-1/2',
+              'flex h-11 w-11 items-center justify-center rounded-full',
+              'bg-white/10 text-white hover:bg-white/20 transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60',
+            )}
+            aria-label="Next image"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        </>
+      )}
+
       {/* Image container */}
       <div className="flex max-h-[90vh] max-w-[90vw] items-center justify-center overflow-auto">
         <img
-          src={src}
-          alt={alt}
+          key={current.src}
+          src={current.src}
+          alt={current.alt ?? 'Image preview'}
           className="transition-transform duration-200 ease-out"
           style={{
             transform: `scale(${zoom})`,

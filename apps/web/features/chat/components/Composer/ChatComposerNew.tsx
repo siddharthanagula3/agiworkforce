@@ -52,6 +52,7 @@ import {
 } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
+import { containsSecrets } from '@/lib/security/secrets-audit';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
@@ -67,6 +68,7 @@ import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/co
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
 import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
+import { CameraCaptureDialog } from './CameraCaptureDialog';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 
 /**
@@ -409,6 +411,8 @@ const ChatComposerNewComponent = ({
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  // Reset per message so each new draft gets its own warning.
+  const secretWarningAcknowledgedRef = useRef(false);
   // CAP-048: optional AGI Work scope fields. Lightweight inline inputs shown
   // only in AGI Work mode; the composed message is the objective itself.
   const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
@@ -786,6 +790,14 @@ const ChatComposerNewComponent = ({
     !isSavingIncognito;
 
   // Thinking / effort store
+  // Styles and response length live on the account, not just in localStorage,
+  // so they follow the user to another device. The store renders immediately
+  // from its local cache and reconciles here once per mount.
+  const hydrateStylesFromServer = useStyleStore((s) => s.hydrateFromServer);
+  useEffect(() => {
+    void hydrateStylesFromServer();
+  }, [hydrateStylesFromServer]);
+
   const responseStyle = useStyleStore((s) => s.style);
   const responseLength = useStyleStore((s) => s.length);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
@@ -866,6 +878,8 @@ const ChatComposerNewComponent = ({
     // skill selection and image mode are one-shot composer modes.
     setComposerToggles({ selectedSkillName: null, imageMode: false, videoMode: false });
     setLocalNotice(null);
+    // A new draft gets its own secret warning.
+    secretWarningAcknowledgedRef.current = false;
     // The AGI Work scope fields belong to a single send, like the skill pick.
     setAgiWorkConstraints('');
     setAgiWorkDeliverable('');
@@ -927,6 +941,7 @@ const ChatComposerNewComponent = ({
    * packages/ui/unified-chat/src/components/ChatInput.tsx.
    */
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   /**
    * AUDIT-FIX CMP-10: capture the screen and attach the frame.
@@ -1417,6 +1432,25 @@ const ChatComposerNewComponent = ({
         setMessage(outgoingContent);
         return;
       }
+    }
+
+    // Warn — do not block — when the outgoing text looks like it contains a
+    // credential.
+    //
+    // The scanner existed (`lib/security/secret-patterns`) but was only wired
+    // into the support-handoff transcript path, so a user pasting an API key
+    // straight into chat got no signal at all before it left the device.
+    //
+    // Deliberately non-blocking and one-shot: the check is a synchronous regex
+    // pass, false positives are possible, and refusing to send someone's own
+    // message is a worse failure than warning about it. The second send goes
+    // through.
+    if (!secretWarningAcknowledgedRef.current && containsSecrets(outgoingContent)) {
+      secretWarningAcknowledgedRef.current = true;
+      setLocalNotice(
+        'This message looks like it contains an API key or credential. Send again to continue, or edit it first.',
+      );
+      return;
     }
 
     // Image generation mode: delegate entirely to parent via onGenerateImage.
@@ -2285,6 +2319,25 @@ const ChatComposerNewComponent = ({
                         </button>
                       )}
 
+                      {/* Take a photo — webcam capture. Unlike the screenshot
+                        item above this is NOT desktop-gated: `getUserMedia` is
+                        available in every browser this app supports, and the
+                        camera is the one attachment source a laptop and a phone
+                        both have. The dialog owns the permission prompt and the
+                        preview; nothing is captured until the shutter is
+                        pressed. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowOverflowMenu(false);
+                          setCameraOpen(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span className="flex-1 text-left">Take a photo</span>
+                      </button>
+
                       {/* 4. Select working folder — desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
@@ -3038,6 +3091,15 @@ const ChatComposerNewComponent = ({
         </Link>
         <span aria-hidden="true">·</span>
         <ComposerFeedbackDialog conversationId={conversationId} />
+
+        {/* Webcam capture. Owns its own permission prompt, live preview, and
+            stream teardown; the captured frame joins the same attachment
+            pipeline as a screenshot or a dropped image. */}
+        <CameraCaptureDialog
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => addChatAttachments([file])}
+        />
       </div>
     </div>
   );

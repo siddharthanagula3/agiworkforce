@@ -250,9 +250,9 @@ export default function MobileLegalPage() {
             Children
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
-            AGI Mobile is rated 4+ on the App Store and Teen on Google Play. We do not knowingly
-            collect personal data from children under 13 (US), under 16 (EU), or under 18 (India).
-            If you believe a child has provided personal data, contact{' '}
+            AGI Mobile is not intended for children. We do not knowingly collect personal data from
+            children under 13 (US), under 16 (EU), or under 18 (India). If you believe a child has
+            provided personal data, contact{' '}
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
@@ -460,7 +460,7 @@ export default function MobileLegalPage() {
                     AGI Mobile
                   </Link>
                 </td>
-                <td>Product page with App Store and Google Play links.</td>
+                <td>Product page and release-notification sign-up.</td>
               </tr>
             </tbody>
           </table>

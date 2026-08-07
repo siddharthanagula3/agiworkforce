@@ -21,8 +21,12 @@ export default function AppsPage() {
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      // Unauthenticated: redirect to the public integrations page
-      router.replace('/integrations');
+      // Sign-in, NOT back to /integrations. The primary CTA on /integrations
+      // points here, so bouncing signed-out visitors to /integrations made that
+      // button a dead loop: click → /apps → /integrations, rendering `null` in
+      // between. Sending them to sign-in with a return path completes the
+      // journey the CTA promises.
+      router.replace(`/login?redirectTo=${encodeURIComponent('/apps')}`);
     }
   }, [isLoaded, isSignedIn, router]);
 

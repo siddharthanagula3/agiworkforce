@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  fetchPreferenceNamespace,
+  savePreferenceNamespace,
+} from '@/app/settings/_lib/preferences-client';
 
 /**
  * AUDIT-FIX CMP-6/CMP-7: the ONE response-style vocabulary for the web chat
@@ -48,6 +52,31 @@ interface StyleState {
     updates: Partial<Pick<CustomStyle, 'name' | 'instruction' | 'sampleText'>>,
   ) => void;
   deleteCustomStyle: (id: string) => void;
+  /** Replace local state with the server's copy. Called once on mount. */
+  hydrateFromServer: () => Promise<void>;
+}
+
+/**
+ * Server-side namespace for this store.
+ *
+ * Styles and response length were localStorage-only, so a user who wrote a
+ * custom writing style on their laptop did not have it on their phone, and
+ * clearing site data destroyed it. The account already owns a settings
+ * namespace mechanism (`public.user_settings`, JSONB, atomic `jsonb ||` merge
+ * per namespace) — the same one TimeFocusSection, GeneralSection, and
+ * PrivacySection use — so this needs no new table.
+ *
+ * localStorage stays as an offline-first cache: the store renders instantly
+ * from it, then reconciles with the server. Writes are fire-and-forget; a
+ * failed sync must never block the composer.
+ */
+export const RESPONSE_STYLE_PREFERENCES_NAMESPACE = 'response-style';
+
+interface StylePreferencesPayload {
+  style: ResponseStyle;
+  length: ResponseLength;
+  activeCustomStyleId: string | null;
+  customStyles: CustomStyle[];
 }
 
 export const useStyleStore = create<StyleState>()(
@@ -63,11 +92,20 @@ export const useStyleStore = create<StyleState>()(
       activeCustomStyleId: null,
       customStyles: [],
 
-      setStyle: (style) => set({ style, activeCustomStyleId: style === 'custom' ? null : null }),
+      setStyle: (style) => {
+        set({ style, activeCustomStyleId: style === 'custom' ? null : null });
+        void syncToServer();
+      },
 
-      setLength: (length) => set({ length }),
+      setLength: (length) => {
+        set({ length });
+        void syncToServer();
+      },
 
-      setActiveCustomStyle: (id) => set({ style: 'custom', activeCustomStyleId: id }),
+      setActiveCustomStyle: (id) => {
+        set({ style: 'custom', activeCustomStyleId: id });
+        void syncToServer();
+      },
 
       addCustomStyle: (name, instruction, sampleText) => {
         const id = crypto.randomUUID();
@@ -79,20 +117,48 @@ export const useStyleStore = create<StyleState>()(
           style: 'custom' as ResponseStyle,
           activeCustomStyleId: id,
         }));
+        void syncToServer();
         return id;
       },
 
-      updateCustomStyle: (id, updates) =>
+      updateCustomStyle: (id, updates) => {
         set((state) => ({
           customStyles: state.customStyles.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-        })),
+        }));
+        void syncToServer();
+      },
 
-      deleteCustomStyle: (id) =>
+      deleteCustomStyle: (id) => {
         set((state) => ({
           customStyles: state.customStyles.filter((s) => s.id !== id),
           activeCustomStyleId: state.activeCustomStyleId === id ? null : state.activeCustomStyleId,
           style: state.activeCustomStyleId === id ? 'default' : state.style,
-        })),
+        }));
+        void syncToServer();
+      },
+
+      hydrateFromServer: async () => {
+        try {
+          const state = useStyleStore.getState();
+          const stored = await fetchPreferenceNamespace<StylePreferencesPayload>(
+            RESPONSE_STYLE_PREFERENCES_NAMESPACE,
+            {
+              style: state.style,
+              length: state.length,
+              activeCustomStyleId: state.activeCustomStyleId,
+              customStyles: state.customStyles,
+            },
+          );
+          set({
+            style: stored.style,
+            length: stored.length,
+            activeCustomStyleId: stored.activeCustomStyleId,
+            customStyles: stored.customStyles ?? [],
+          });
+        } catch {
+          // Offline or unauthenticated: the localStorage cache is still valid.
+        }
+      },
     }),
     {
       name: 'agi-response-style',
@@ -117,6 +183,28 @@ export const useStyleStore = create<StyleState>()(
     },
   ),
 );
+
+/**
+ * Push the current value to the account. Debounced so a burst of edits (typing
+ * in the custom-style editor) becomes one write, and deliberately swallowing
+ * errors: a settings sync failure must not surface as a chat error.
+ */
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+function syncToServer(): void {
+  if (typeof window === 'undefined') return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    const { style, length, activeCustomStyleId, customStyles } = useStyleStore.getState();
+    void savePreferenceNamespace<StylePreferencesPayload>(RESPONSE_STYLE_PREFERENCES_NAMESPACE, {
+      style,
+      length,
+      activeCustomStyleId,
+      customStyles,
+    }).catch(() => {
+      // Keep the local value; the next mutation retries.
+    });
+  }, 600);
+}
 
 /**
  * Maps each preset style to its system prompt modifier string.

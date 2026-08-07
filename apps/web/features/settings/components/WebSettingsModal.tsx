@@ -14,7 +14,8 @@
  *   security     -> SecuritySection (2FA, session timeout, change password)
  *   safety       -> SafetySection (strict content admission)
  *   privacy      -> PrivacySection  (toggles, export, delete)
- *   archived     -> ArchivedChatsSection (restore + permanent delete)
+ *   archived      -> ArchivedChatsSection (restore + permanent delete)
+ *   deleted-chats -> DeletedChatsSection (restore soft-deleted conversations)
  *   shared-links -> SharedLinksSection (review + revoke)
  *   billing      -> BillingSection  (plan, payment, invoices)
  *   usage        -> UsageSection    (credit bars, analytics)
@@ -23,6 +24,7 @@
  *   notifications -> NotificationsSection (browser/email/mobile-push toggles)
  *   reflect      -> ReflectSection (on-demand account activity recap)
  *   time-focus   -> TimeFocusSection (account-wide quiet hours + break reminders)
+ *   help         -> HelpSection (docs, support, status, release notes, legal)
  *   connectors   -> ConnectorsPanel (built-in to shared shell via adapter)
  *   skills       -> SkillsPanel     (built-in to shared shell via adapter)
  *   plugins      -> PluginsPanel    (built-in to shared shell via adapter)
@@ -46,6 +48,7 @@ import { SecuritySection } from '../sections/SecuritySection';
 import { SafetySection } from '../sections/SafetySection';
 import { PrivacySection } from '../sections/PrivacySection';
 import { ArchivedChatsSection } from '../sections/ArchivedChatsSection';
+import { DeletedChatsSection } from '../sections/DeletedChatsSection';
 import { SharedLinksSection } from '../sections/SharedLinksSection';
 import { BillingSection } from '../sections/BillingSection';
 import { UsageSection } from '../sections/UsageSection';
@@ -54,6 +57,7 @@ import { MemorySection } from '../sections/MemorySection';
 import { NotificationsSection } from '../sections/NotificationsSection';
 import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
+import { HelpSection } from '../sections/HelpSection';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating
@@ -91,6 +95,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   safety: 'safety',
   privacy: 'privacy',
   archived: 'archived',
+  'deleted-chats': 'deleted-chats',
   'shared-links': 'shared-links',
   billing: 'billing',
   usage: 'usage',
@@ -102,6 +107,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   notifications: 'notifications',
   reflect: 'reflect',
   'time-focus': 'time-focus',
+  help: 'help',
 };
 
 const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
@@ -230,6 +236,11 @@ export function WebSettingsModal({
   const [connectedConnectors, setConnectedConnectors] = useState<
     { connectorId: string; connectedAt?: string }[]
   >([]);
+  // OAuth grants the server reports as expired or revoked. `/api/connectors`
+  // has always returned this per row; nothing outside the Connectors page read
+  // it, so a connector could stop working and the only way to find out was to
+  // open that one page and scroll to the right row.
+  const [expiredConnectorIds, setExpiredConnectorIds] = useState<string[]>([]);
   const [githubInstallations, setGithubInstallations] = useState<
     { installation_id: number; created_at?: string }[]
   >([]);
@@ -263,12 +274,19 @@ export function WebSettingsModal({
       .then(async (res) => {
         if (!res.ok || cancelled) return;
         const json = (await res.json()) as {
-          connectors: Array<{ connectorId: string; connectedAt?: string }>;
+          connectors: Array<{
+            connectorId: string;
+            connectedAt?: string;
+            needsReauthorization?: boolean;
+          }>;
           available?: string[];
         };
         if (!cancelled) {
           setConnectedConnectors(json.connectors ?? []);
           setAvailableIds(json.available ?? []);
+          setExpiredConnectorIds(
+            (json.connectors ?? []).filter((c) => c.needsReauthorization).map((c) => c.connectorId),
+          );
         }
       })
       .catch(() => {
@@ -484,6 +502,24 @@ export function WebSettingsModal({
     [refreshCustomConnectors],
   );
 
+  // Attention badge on the Connectors nav row, so an expired grant is visible
+  // from any settings tab rather than only from inside Connectors.
+  const navBadges = useMemo(
+    () =>
+      expiredConnectorIds.length > 0
+        ? {
+            connectors: {
+              count: expiredConnectorIds.length,
+              description:
+                expiredConnectorIds.length === 1
+                  ? '1 connector needs to be reconnected'
+                  : `${expiredConnectorIds.length} connectors need to be reconnected`,
+            },
+          }
+        : undefined,
+    [expiredConnectorIds],
+  );
+
   const adapter: SettingsDataAdapter = {
     connectors: mergedSettingsConnectors,
     connectedConnectors: mergedConnectedConnectors,
@@ -519,6 +555,7 @@ export function WebSettingsModal({
     safety: <SafetySection />,
     privacy: <PrivacySection />,
     archived: <ArchivedChatsSection />,
+    'deleted-chats': <DeletedChatsSection />,
     'shared-links': <SharedLinksSection />,
     billing: <BillingSection />,
     usage: <UsageSection />,
@@ -527,6 +564,7 @@ export function WebSettingsModal({
     notifications: <NotificationsSection />,
     reflect: <ReflectSection />,
     'time-focus': <TimeFocusSection />,
+    help: <HelpSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };
 
@@ -541,6 +579,7 @@ export function WebSettingsModal({
         navGroups={SETTINGS_NAV_GROUPS_WEB}
         adapter={adapter}
         connectorDisclosure={<ConnectorConsentSummary />}
+        navBadges={navBadges}
         title="Settings"
       />
     </Suspense>

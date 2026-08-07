@@ -26,9 +26,16 @@ const NAMESPACE = 'notifications';
 // dispatcher, and no agent-task-finished listener exists at all) — each
 // persisted a preference that nothing ever read, so toggling them changed
 // nothing. Re-add a group once its underlying send path actually exists.
-// 'browserReplyReady' is the one real, wired notification in this file
-// (consumed in WebChatPage.tsx) and is the only item left below.
-export type NotifKey = 'browserReplyReady';
+// 'browserReplyReady' is consumed in WebChatPage.tsx.
+//
+// 'mobilePushScheduleDone' was RE-ADDED on 2026-08-06 under the rule stated
+// above — its send path now exists. `lib/services/push-notification-service.ts`
+// dispatches to Expo using the `mobile_devices.push_token` rows that
+// `POST /api/mobile/push-token` had been collecting and nothing read, and
+// `lib/services/schedule-notification-service.ts` calls it after a scheduled
+// run is finalized. It defaults to OFF: installing the app registers a device,
+// which is not the same as agreeing to be pushed.
+export type NotifKey = 'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone';
 
 interface NotifSpec {
   id: NotifKey;
@@ -58,6 +65,34 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
         description:
           'Browser notification when a long-running response finishes while the tab is in the background.',
         defaultValue: true,
+      },
+    ],
+  },
+  {
+    heading: 'Email',
+    subheading: 'Sent to the address on your account.',
+    items: [
+      {
+        id: 'emailScheduleDone',
+        label: 'Scheduled task finished',
+        description:
+          'Email when one of your scheduled tasks completes or fails. The email says what finished and links to the run — it never contains the task output.',
+        // OFF by default, like every other notification channel here.
+        defaultValue: false,
+      },
+    ],
+  },
+  {
+    heading: 'Mobile push',
+    subheading: 'Sent to the AGI app on devices you have signed in on.',
+    items: [
+      {
+        id: 'mobilePushScheduleDone',
+        label: 'Scheduled task finished',
+        description:
+          'Push notification when one of your scheduled tasks completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
+        // OFF by default: registering a device is not consent to be pushed.
+        defaultValue: false,
       },
     ],
   },

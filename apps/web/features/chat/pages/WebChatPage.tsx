@@ -78,7 +78,7 @@ import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
-import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
+import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import {
   Sidebar,
   type SidebarSession,
@@ -104,6 +104,7 @@ import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
+import { printConversation } from '../lib/print-conversation';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
@@ -281,11 +282,30 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
   // distinct multi-step breakdown (no thinkingContent present) — when
   // thinkingContent exists, ThinkingBlock already owns showing it.
   const thinkingSteps = thinkingContent ? undefined : m.metadata?.thinkingSteps;
+  // Per-message usage. `messages.input_tokens` / `output_tokens` are written by
+  // the server's assistant-turn persistence and returned by the load path, but
+  // nothing lifted them into metadata — so `tokensUsed` had no producer and
+  // every per-message cost surface rendered empty.
+  //
+  // Sourced from the PERSISTED row rather than a stream frame on purpose: these
+  // are the settled numbers, they survive a reload, and adding a frame to the
+  // stream would break the byte-parity contract between the two response
+  // builders (see stream-transform.byte-parity.test.ts).
+  const inputTokens = typeof m.inputTokens === 'number' ? m.inputTokens : undefined;
+  const outputTokens = typeof m.outputTokens === 'number' ? m.outputTokens : undefined;
+  const tokensUsed =
+    inputTokens !== undefined || outputTokens !== undefined
+      ? (inputTokens ?? 0) + (outputTokens ?? 0)
+      : undefined;
+
   const metadata: Record<string, unknown> | undefined =
-    m.metadata || m.model
+    m.metadata || m.model || tokensUsed !== undefined
       ? {
           ...m.metadata,
           model: m.model ?? m.metadata?.model,
+          ...(inputTokens !== undefined ? { inputTokens } : {}),
+          ...(outputTokens !== undefined ? { outputTokens } : {}),
+          ...(tokensUsed !== undefined ? { tokensUsed } : {}),
           thinkingSteps,
           isThinkingStreaming: m.metadata?.isThinkingStreaming,
           isSearching: m.metadata?.isSearching,
@@ -2713,43 +2733,9 @@ export default function WebChatPage() {
   );
 
   // Keyboard shortcuts definitions forwarded to the shortcuts dialog.
-  const sidebarShortcuts = useMemo<KeyboardShortcut[]>(
-    () => [
-      {
-        key: 'K',
-        ctrl: true,
-        meta: true,
-        action: () => setSearchDialogOpen(true),
-        description: 'Open search',
-        category: 'navigation' as const,
-      },
-      {
-        key: '/',
-        ctrl: true,
-        meta: true,
-        action: () => setKeyboardShortcutsOpen(true),
-        description: 'Show keyboard shortcuts',
-        category: 'ui' as const,
-      },
-      {
-        key: 'N',
-        ctrl: true,
-        meta: true,
-        action: handleNewChat,
-        description: 'New conversation',
-        category: 'conversation' as const,
-      },
-      {
-        key: 'B',
-        ctrl: true,
-        meta: true,
-        action: handleToggleSidebar,
-        description: 'Toggle sidebar',
-        category: 'ui' as const,
-      },
-    ],
-    [handleNewChat, handleToggleSidebar],
-  );
+  // The dialog documents the CANONICAL list (`KEYBOARD_SHORTCUT_DOCS`). This
+  // used to be a separate four-entry array that omitted Escape, Cmd+Shift+C
+  // and Cmd+Shift+R — all bound and working, none of them listed.
 
   // Top-level Chat / Code destinations stay visible in the production sidebar.
   // The rail body still owns chat recents; this Chat item is the stable mode
@@ -2961,7 +2947,7 @@ export default function WebChatPage() {
       <KeyboardShortcutsDialog
         open={keyboardShortcutsOpen}
         onOpenChange={setKeyboardShortcutsOpen}
-        shortcuts={sidebarShortcuts}
+        shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
 
       {/* Sidebar — @agiworkforce/ui shared component. Compact viewports render
@@ -3091,6 +3077,22 @@ export default function WebChatPage() {
                     handleMoveToProjectSession(displayedConversationId, projectId)
                   }
                   onDelete={() => void handleDeleteSession(displayedConversationId)}
+                  // Ctrl+P alone could never work here: the transcript is
+                  // virtualized, so the browser would print only the rows in
+                  // the DOM and the result would look complete.
+                  onPrint={() => void printConversation()}
+                  // Conversation-level fork. The branch API and its hook were
+                  // already live for per-message branching; only this entry
+                  // point was missing. Branching from the LAST message
+                  // duplicates the whole thread.
+                  onFork={
+                    displayedMessages.length > 0
+                      ? () => {
+                          const last = displayedMessages[displayedMessages.length - 1];
+                          if (last?.id) void createBranch(last.id);
+                        }
+                      : undefined
+                  }
                 />
               )}
 

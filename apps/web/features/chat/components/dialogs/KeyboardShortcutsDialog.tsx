@@ -15,12 +15,13 @@ import {
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
-import type { KeyboardShortcut } from '../../hooks/use-keyboard-shortcuts';
+import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  shortcuts: KeyboardShortcut[];
+  /** Documented shortcuts. The dialog only formats and groups — it never invokes. */
+  shortcuts: readonly KeyboardShortcutDoc[];
 }
 
 export function KeyboardShortcutsDialog({
@@ -31,7 +32,7 @@ export function KeyboardShortcutsDialog({
   // Use modern platform detection instead of deprecated navigator.platform
   const isMac = safePlatform.isMac();
 
-  const formatShortcut = (shortcut: KeyboardShortcut) => {
+  const formatShortcut = (shortcut: KeyboardShortcutDoc) => {
     const keys: string[] = [];
 
     if (shortcut.ctrl || shortcut.meta) {
@@ -56,7 +57,7 @@ export function KeyboardShortcutsDialog({
       acc[shortcut.category]!.push(shortcut);
       return acc;
     },
-    {} as Record<string, KeyboardShortcut[]>,
+    {} as Record<string, KeyboardShortcutDoc[]>,
   );
 
   const categoryLabels: Record<string, string> = {

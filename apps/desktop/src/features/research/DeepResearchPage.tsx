@@ -9,22 +9,11 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import {
-  Telescope,
-  Search,
-  X,
-  ChevronRight,
-  BookOpen,
-  Clock,
-  Zap,
-  BarChart2,
-  Layers,
-} from 'lucide-react';
+import { Telescope, Search, X, Zap, BarChart2, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import { Badge } from '@/components/ui/Badge';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { cn } from '@/lib/utils';
 import {
@@ -36,6 +25,8 @@ import {
   type ResearchHistoryEntry,
 } from '@/stores/researchStore';
 import { ResearchProgress } from './ResearchProgress';
+import { ResearchReport } from './ResearchReport';
+import { ResearchHistory } from './ResearchHistory';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -90,13 +81,6 @@ const DEPTH_OPTIONS: DepthOption[] = [
   },
 ];
 
-const MODE_LABELS: Record<string, string> = {
-  quick: 'Quick',
-  standard: 'Standard',
-  deep: 'Deep',
-  exhaustive: 'Exhaustive',
-};
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -132,57 +116,6 @@ function DepthCard({ option, selected, onSelect }: DepthCardProps) {
       </div>
     </button>
   );
-}
-
-interface HistoryItemProps {
-  entry: ResearchHistoryEntry;
-  onClick: (entry: ResearchHistoryEntry) => void;
-}
-
-function HistoryItem({ entry, onClick }: HistoryItemProps) {
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(entry)}
-      className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-muted/60 transition-colors text-left group"
-    >
-      <div className="shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-md bg-muted">
-        <BookOpen className="h-4 w-4 text-primary" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-foreground font-medium truncate">{entry.query}</p>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{entry.summary}</p>
-        <div className="flex items-center gap-2 mt-1.5">
-          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground px-1.5 py-0">
-            {MODE_LABELS[entry.mode] ?? entry.mode}
-          </Badge>
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {formatRelativeTime(entry.timestamp)}
-          </span>
-        </div>
-      </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 mt-1 transition-colors" />
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
-
-function formatRelativeTime(timestamp: number): string {
-  const diffMs = Date.now() - timestamp;
-  const diffMins = Math.floor(diffMs / 60_000);
-  const diffHours = Math.floor(diffMs / 3_600_000);
-  const diffDays = Math.floor(diffMs / 86_400_000);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 // ---------------------------------------------------------------------------
@@ -295,50 +228,17 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
             <ResearchProgress progress={activeSession.progress} onCancel={handleCancel} />
           )}
 
-          {/* Active session: result */}
+          {/*
+            Active session: result.
+            This used to be an inline block that showed only the summary and key
+            findings — the actual report body, its citations, copy, and PDF
+            export were unreachable, even though a complete component for them
+            already existed in this directory taking exactly the store's
+            `ResearchResponse`. A finished research run that will not show you
+            its report is the whole feature failing at the last step.
+          */}
           {showResult && activeSession.result && (
-            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">Research Complete</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground h-7"
-                  onClick={handleNewResearch}
-                >
-                  New Research
-                </Button>
-              </div>
-              <p className="text-sm text-foreground leading-relaxed">
-                {activeSession.result.summary}
-              </p>
-              {activeSession.result.key_findings.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Key Findings
-                  </h4>
-                  <ul className="space-y-1.5">
-                    {activeSession.result.key_findings.map((finding, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-sm text-muted-foreground"
-                      >
-                        <ChevronRight className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                        <span>{finding}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground border-t border-border">
-                <span>{activeSession.result.sources_cited} sources cited</span>
-                <span>{activeSession.result.citations_count} citations</span>
-                <span className="capitalize">{activeSession.result.confidence} confidence</span>
-              </div>
-            </div>
+            <ResearchReport result={activeSession.result} onNewResearch={handleNewResearch} />
           )}
 
           {/* Active session: error */}
@@ -431,22 +331,14 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
         </div>
       </ScrollArea>
 
-      {/* History sidebar */}
+      {/*
+        History sidebar. `ResearchHistory` reads the same store slice the inline
+        list did, and adds the parts the inline version never had: search across
+        past runs, delete-one, clear-all, and a detail dialog.
+      */}
       {recentHistory.length > 0 && (
         <aside className="w-72 border-l border-border flex flex-col shrink-0">
-          <div className="px-4 py-4 border-b border-border">
-            <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              Recent Research
-            </h2>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-2 space-y-0.5">
-              {recentHistory.map((entry) => (
-                <HistoryItem key={entry.id} entry={entry} onClick={handleHistoryClick} />
-              ))}
-            </div>
-          </ScrollArea>
+          <ResearchHistory className="flex-1" onSelectEntry={handleHistoryClick} />
         </aside>
       )}
     </div>

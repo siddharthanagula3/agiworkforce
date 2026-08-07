@@ -19,6 +19,9 @@ import { useBrowserStore } from '../stores/browserStore';
 export function useExecutionSidecarContext(): void {
   const userOverrideContext = useExecutionSidecarStore((s) => s.userOverrideContext);
   const setActiveContext = useExecutionSidecarStore((s) => s.setActiveContext);
+  const isOpen = useExecutionSidecarStore((s) => s.isOpen);
+  const userClosedThisSession = useExecutionSidecarStore((s) => s.userClosedThisSession);
+  const open = useExecutionSidecarStore((s) => s.open);
 
   const pendingApprovals = useToolStore((s) => s.pendingApprovals);
   const activeToolStreams = useToolStore((s) => s.activeToolStreams);
@@ -26,6 +29,28 @@ export function useExecutionSidecarContext(): void {
   const computerUseActive = useComputerUseStore((s) => s.isActive);
   const browserIsStreaming = useBrowserStore((s) => s.isStreaming);
   const browserHasSessions = useBrowserStore((s) => s.sessions.length > 0);
+
+  // Open the sidecar the first time the agent actually does something.
+  //
+  // `open()` previously had no caller anywhere, so the whole sidecar rendered
+  // `null` forever and a running agent gave the user no visual feedback at all.
+  // An approval request is the strongest case: the run is blocked on a decision
+  // the user cannot see.
+  //
+  // `userClosedThisSession` is respected so this never fights someone who
+  // deliberately closed the panel; `stores/executionSidecarStore` clears that
+  // flag on `reset()` when a new agentic session begins.
+  const hasAgentActivity =
+    pendingApprovals.length > 0 ||
+    computerUseActive ||
+    browserIsStreaming ||
+    Array.from(activeToolStreams.values()).some((s) => s.status === 'running');
+
+  useEffect(() => {
+    if (hasAgentActivity && !isOpen && !userClosedThisSession) {
+      open();
+    }
+  }, [hasAgentActivity, isOpen, userClosedThisSession, open]);
 
   useEffect(() => {
     // If user has overridden, defer to their choice

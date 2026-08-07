@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { ShieldCheck, ShieldAlert, Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
@@ -77,9 +77,22 @@ function ApprovalCard({ approval, onApprove, onDeny }: ApprovalCardProps) {
 }
 
 export function ExecutionSidecarApprovals() {
-  const pendingApprovals = useToolStore((s) => s.pendingApprovals);
+  const allPendingApprovals = useToolStore((s) => s.pendingApprovals);
   const approveOperation = useToolStore((s) => s.approveOperation);
   const rejectOperation = useToolStore((s) => s.rejectOperation);
+
+  // Ownership split: `features/chat/McpToolConfirmationPrompt` renders
+  // `mcp_tool` approvals inline in the transcript, where the tool call the user
+  // is judging is visible. This sidecar owns everything else — `tool_execution`
+  // (dangerous tools in manual mode), terminal, filesystem, browser, and UI
+  // automation — which previously had no renderer at all.
+  //
+  // Without this filter both surfaces render the same MCP approval and the user
+  // sees two Approve buttons for one decision.
+  const pendingApprovals = useMemo(
+    () => allPendingApprovals.filter((approval) => approval.type !== 'mcp_tool'),
+    [allPendingApprovals],
+  );
 
   const handleApprove = useCallback(
     (id: string) => {

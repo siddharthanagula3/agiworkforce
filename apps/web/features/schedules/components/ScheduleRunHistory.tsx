@@ -1,9 +1,16 @@
 'use client';
 
 import { Badge, Button, Skeleton } from '@agiworkforce/ui';
-import { AlertCircle, CheckCircle2, Clock3, Loader2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Coins, Loader2, XCircle } from 'lucide-react';
 import type { ScheduleRun } from '../types';
-import { formatDateTime, formatDuration, scheduleResultText } from '../types';
+import {
+  formatCostCents,
+  formatDateTime,
+  formatDuration,
+  formatTokenCount,
+  scheduleResultText,
+  scheduleRunUsage,
+} from '../types';
 
 export interface ScheduleHistoryState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -43,6 +50,8 @@ function runStatusIcon(run: ScheduleRun) {
 
 function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
   const resultText = scheduleResultText(run);
+  // Cost and tokens have always been recorded per run; nothing displayed them.
+  const usage = scheduleRunUsage(run);
   return (
     <li className="rounded-xl border border-border/70 bg-background/70 p-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -60,6 +69,34 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
         </span>
         <span aria-hidden="true">·</span>
         <span className="capitalize">{run.triggerSource}</span>
+        {usage?.costCents !== null && usage?.costCents !== undefined && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span
+              className="inline-flex items-center gap-1 tabular-nums"
+              title={
+                usage.model
+                  ? `${formatCostCents(usage.costCents)} on ${usage.model}`
+                  : formatCostCents(usage.costCents)
+              }
+            >
+              <Coins className="h-3.5 w-3.5" aria-hidden="true" />
+              {formatCostCents(usage.costCents)}
+            </span>
+          </>
+        )}
+        {usage?.totalTokens !== null && usage?.totalTokens !== undefined && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{formatTokenCount(usage.totalTokens)} tokens</span>
+          </>
+        )}
+        {usage?.model && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="truncate">{usage.model}</span>
+          </>
+        )}
       </div>
       {run.error && (
         <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">

@@ -227,6 +227,7 @@ describe('researchStatusEvent', () => {
         iteration: 2,
         maxIterations: 6,
         searches: 3,
+        maxSearches: 12,
         sources: 5,
         elapsedMs: 1234,
       },
@@ -240,6 +241,9 @@ describe('researchStatusEvent', () => {
       iteration: 2,
       max_iterations: 6,
       searches: 3,
+      // The cap the run is actually bounded by, so a count that stops at 12
+      // reads as "budget spent" rather than as the run giving up.
+      max_searches: 12,
       sources: 5,
       elapsed_ms: 1234,
     });

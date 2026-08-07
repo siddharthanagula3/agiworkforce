@@ -285,6 +285,20 @@ impl Default for PlaywrightConfig {
     }
 }
 
+/// First candidate path that exists on disk, else `fallback`.
+///
+/// `fallback` is a bare executable name resolved through `PATH` by the
+/// launcher, matching what the Windows Chrome probe does when none of its
+/// known install locations are present.
+#[cfg(not(windows))]
+fn first_existing_or(candidates: &[String], fallback: &str) -> String {
+    candidates
+        .iter()
+        .find(|path| std::path::Path::new(path).exists())
+        .cloned()
+        .unwrap_or_else(|| fallback.to_string())
+}
+
 pub struct PlaywrightBridge {
     config: PlaywrightConfig,
     process: Arc<Mutex<Option<Child>>>,
@@ -529,9 +543,50 @@ impl PlaywrightBridge {
                         .unwrap_or_else(|| "chrome".to_string())
                 }
 
-                #[cfg(not(windows))]
+                // The non-Windows arm used to be the bare literal "chromium",
+                // which does not exist on a stock macOS install (Chrome ships
+                // inside an .app bundle) — so every browser-tool session
+                // errored on a normal Mac. Mirror the Windows probe instead.
+                #[cfg(target_os = "macos")]
                 {
-                    "chromium".to_string()
+                    let home_app = std::env::var("HOME")
+                        .map(|home| {
+                            format!(
+                                "{home}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                            )
+                        })
+                        .ok();
+
+                    let candidates: Vec<String> = [
+                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+                    ]
+                    .iter()
+                    .map(|p| (*p).to_string())
+                    .chain(home_app)
+                    .collect();
+
+                    first_existing_or(&candidates, "chromium")
+                }
+
+                #[cfg(all(not(windows), not(target_os = "macos")))]
+                {
+                    let candidates: Vec<String> = [
+                        "/usr/bin/google-chrome",
+                        "/usr/bin/google-chrome-stable",
+                        "/usr/bin/chromium",
+                        "/usr/bin/chromium-browser",
+                        "/snap/bin/chromium",
+                        "/usr/bin/microsoft-edge",
+                        "/usr/local/bin/chromium",
+                    ]
+                    .iter()
+                    .map(|p| (*p).to_string())
+                    .collect();
+
+                    first_existing_or(&candidates, "chromium")
                 }
             }
             BrowserType::Firefox => "firefox".to_string(),
@@ -946,6 +1001,38 @@ mod tests {
         let options = BrowserOptions::default();
         let result = bridge.build_browser_command(&BrowserType::Chromium, &options);
         assert!(result.is_ok());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn first_existing_or_prefers_a_real_path_and_falls_back_to_the_bare_name() {
+        // A path that always exists on every unix host this builds for.
+        let real = "/usr/bin".to_string();
+        let missing = "/definitely/not/installed/chrome".to_string();
+
+        assert_eq!(
+            first_existing_or(&[missing.clone(), real.clone()], "chromium"),
+            real
+        );
+        assert_eq!(first_existing_or(&[missing], "chromium"), "chromium");
+        assert_eq!(first_existing_or(&[], "chromium"), "chromium");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn macos_chromium_resolution_is_not_the_bare_literal_when_chrome_is_installed() {
+        // Regression: the non-Windows arm returned "chromium" unconditionally,
+        // so a stock Mac with Chrome in /Applications still failed to launch.
+        let bundled =
+            std::path::Path::new("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
+        if !bundled.exists() {
+            return; // No Chrome on this machine; nothing to assert.
+        }
+        let bridge = PlaywrightBridge::new().await.unwrap();
+        let (exe, _args) = bridge
+            .build_browser_command(&BrowserType::Chromium, &BrowserOptions::default())
+            .unwrap();
+        assert_eq!(exe, bundled.to_string_lossy());
     }
 
     #[test]

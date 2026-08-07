@@ -9,10 +9,11 @@ import { InteractiveCardBlock } from './InteractiveCardBlock';
  * its server-authored fallback inside card chrome, with the assistant's prose
  * intact around it.
  *
- * Every card renders the fallback in this slice, because no kind-specific
- * renderer is registered yet. That is deliberate — the degradation path ships
- * before any producer, so it is exercised while it is the only path there is
- * rather than being retrofitted the first time a body fails validation.
+ * Slice 2 (2026-08-06) registered the `clarify.v1` renderer, so a valid clarify
+ * card now renders as real UI. The degradation path is still exercised here by
+ * every other route into it: an unknown kind, a newer schemaVersion, a body
+ * that fails validation, and a recognized kind that still has no renderer
+ * (`itinerary.v1`).
  *
  * The fixtures are built by running real payloads through the real parser, not
  * by hand-constructing the parsed union. A test that skips the parser would
@@ -63,10 +64,34 @@ describe('InteractiveCardBlock', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders the authored fallback for a recognized card with no renderer yet', () => {
+  it('renders a registered clarify card as real UI, not the fallback', () => {
     render(<InteractiveCardBlock cards={[decodeDelta(envelope)]} />);
+
+    const card = screen.getByTestId('interactive-card-clarify');
+    expect(card).toHaveAttribute('data-card-state', 'pending');
+    // The questions and their options are visible, which the fallback's flat
+    // text block could never show as distinct choices.
+    expect(screen.getByText('What kind of day are you in the mood for?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Relaxed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Packed' })).toBeInTheDocument();
+    expect(screen.queryByTestId('interactive-card-fallback')).not.toBeInTheDocument();
+  });
+
+  it('still renders the fallback for a recognized kind with no renderer yet', () => {
+    // `itinerary.v1` is in the allowlist but has no renderer and no producer.
+    const itinerary = clone(envelope) as Record<string, unknown>;
+    itinerary['kind'] = 'itinerary.v1';
+    render(<InteractiveCardBlock cards={[decodeDelta(itinerary)]} />);
+    expect(screen.getByTestId('interactive-card-fallback')).toBeInTheDocument();
     expect(screen.getByText('A few questions about your trip')).toBeInTheDocument();
-    expect(screen.getByText(/Who is coming along\?/)).toBeInTheDocument();
+  });
+
+  it('renders a clarify card read-only when the surface cannot respond', () => {
+    // VS Code and the CLI render cards but cannot answer them. Options must be
+    // visible and disabled rather than hidden, and no submit control may exist.
+    render(<InteractiveCardBlock cards={[decodeDelta(envelope)]} />);
+    expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
   });
 
   it('renders the fallback for a kind this build has never heard of', () => {
@@ -109,12 +134,16 @@ describe('InteractiveCardBlock', () => {
   });
 
   it('renders the fallback as plain text, not markdown', () => {
+    // Exercised through an unknown kind so this covers the fallback path now
+    // that clarify.v1 has a renderer of its own.
     // `fallback.text` is plain text by contract: the CLI paints it into
     // terminal cells and the Chrome panel sanitises it. Rendering it through
     // markdown here would make an itinerary's literal asterisks into bullets on
     // one surface and leave them visible on another.
-    const literal = clone(envelope);
-    literal.fallback.text = '*8:30* Ferry Building — _not italic_';
+    const literal = clone(envelope) as Record<string, unknown>;
+    literal['kind'] = 'weather.v1';
+    (literal['fallback'] as Record<string, unknown>)['text'] =
+      '*8:30* Ferry Building — _not italic_';
     render(<InteractiveCardBlock cards={[decodeDelta(literal)]} />);
     expect(screen.getByText('*8:30* Ferry Building — _not italic_')).toBeInTheDocument();
     expect(document.querySelector('em')).toBeNull();
@@ -127,6 +156,6 @@ describe('InteractiveCardBlock', () => {
     second.producedBy.toolCallId = 'toolu_02def';
     second.fallback.headline = 'One more thing';
     render(<InteractiveCardBlock cards={[decodeDelta(envelope), decodeDelta(second)]} />);
-    expect(screen.getAllByTestId('interactive-card-fallback')).toHaveLength(2);
+    expect(screen.getAllByTestId('interactive-card-clarify')).toHaveLength(2);
   });
 });

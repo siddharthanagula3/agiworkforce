@@ -51,10 +51,11 @@ interface CustomConnectorSummary {
   updatedAt: string;
 }
 
+import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
 import {
   CATEGORIES,
   CONNECTORS,
-  getConnectorAvailabilityLabel,
+  getConnectorAvailabilityLabelFor,
   type Connector,
   type ConnectorCategory,
 } from '../data/connectors';
@@ -447,6 +448,15 @@ function useConnectorTools(connectorId: string): string[] {
  * (app/api/connectors/route.ts). Every clause below is behavior in that route —
  * do not add a consequence the route does not implement.
  */
+/**
+ * Whether `CONNECTOR_TOOLS[id]` holds real wire tool names — the keys the
+ * permission store and the chat tool loop use — rather than human-readable
+ * capability prose. Only GitHub qualifies today.
+ */
+function hasWireToolNames(connectorId: string): boolean {
+  return connectorId === 'github';
+}
+
 function describeDisconnect(connector: Connector, source?: ConnectorSource): string {
   if (source === 'github-app') {
     return `Your GitHub App installations are unlinked from this account and the per-tool permissions you saved for ${connector.name} are deleted. The app itself stays installed on GitHub until you remove it there.`;
@@ -472,11 +482,15 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   onDisconnect,
 }) => {
   const isAvailable = available;
-  const availabilityLabel = getConnectorAvailabilityLabel(connector);
+  // Label from the SERVER's availability answer, not the static phase/authType
+  // heuristic — otherwise the badge said "Coming soon" for a connector this
+  // deployment can connect right now, and "Ready" for one that would 501.
+  const availabilityLabel = getConnectorAvailabilityLabelFor(connector, available);
   const tools = useConnectorTools(connector.id);
   const isOAuthGrant = connected && source === 'oauth';
   const scopes = grantedScopes ?? [];
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+  const [toolPermissionsOpen, setToolPermissionsOpen] = useState(false);
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">
@@ -533,6 +547,27 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 >
                   Manage on GitHub
                   <ExternalLink className="ml-1 h-3 w-3" aria-hidden="true" />
+                </Button>
+              )}
+              {/*
+                Per-tool permissions. The disconnect copy below already tells
+                users "the per-tool permissions you saved for X are deleted",
+                but there was no UI to save any — the panel existed unmounted.
+
+                Gated to connectors whose CONNECTOR_TOOLS entries are real wire
+                names. Today that is GitHub only (they mirror GITHUB_TOOL_DEFS);
+                every other connector's list is prose with no backing tool, and
+                its real tools are discovered at runtime by
+                catalogToConnectorToolDefs, which a static config cannot mirror.
+              */}
+              {hasWireToolNames(connector.id) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setToolPermissionsOpen(true)}
+                >
+                  Tool permissions
                 </Button>
               )}
               <Button
@@ -677,6 +712,18 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           </div>
         </div>
       )}
+
+      <ToolPermissionsPanel
+        connector={{
+          id: connector.id,
+          name: connector.name,
+          iconEmoji: connector.iconEmoji,
+          iconText: connector.iconText,
+          iconBg: connector.iconBg,
+        }}
+        open={toolPermissionsOpen}
+        onOpenChange={setToolPermissionsOpen}
+      />
 
       <Dialog open={confirmingDisconnect} onOpenChange={setConfirmingDisconnect}>
         <DialogContent className="border-border bg-card sm:max-w-md">
