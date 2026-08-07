@@ -12,7 +12,6 @@ import { RouteFlow } from '@/features/marketing/components/RouteFlow';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
 import {
-  AvailabilityStrip,
   CapabilityGrid,
   DevBand,
   FinalCta,
@@ -77,63 +76,13 @@ export default function Home() {
             { href: '/chrome-extension', label: 'Chrome Extension' },
           ]}
           lede="One assistant across six surfaces — and you choose where each request actually runs."
-          modeRibbon={[
-            {
-              label: 'Local',
-              note: 'Models on your own hardware. Works offline. No account needed.',
-            },
-            {
-              label: 'BYOK',
-              note: 'Your provider key. Traffic goes straight to them — we never sit in your spend.',
-            },
-            {
-              label: 'AGI Cloud',
-              note: 'We host and meter it. Public alpha, open by default.',
-            },
-          ]}
+          modeRibbon={[]}
           visual={<MobileHeroVisual />}
         />
 
         <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
 
-        <AvailabilityStrip
-          eyebrow="Availability"
-          title="What you can use today, and what is still coming."
-          items={[
-            {
-              name: 'AGI Web',
-              status: SURFACE_STATUS.web,
-              available: true,
-              href: WEB_CHAT_ENTRY_HREF,
-            },
-            {
-              name: 'AGI Desktop',
-              status: SURFACE_STATUS.desktop,
-              available: true,
-              href: '/download',
-            },
-            { name: 'AGI CLI', status: SURFACE_STATUS.cli, available: true, href: '/cli' },
-            {
-              name: 'AGI Mobile',
-              status: SURFACE_STATUS.mobile,
-              available: false,
-              href: '/mobile',
-            },
-            {
-              name: 'AGI in VS Code',
-              status: SURFACE_STATUS.vscode,
-              available: false,
-              href: '/vscode-extension',
-            },
-            {
-              name: 'AGI in Chrome',
-              status: SURFACE_STATUS.chrome,
-              available: false,
-              href: '/chrome-extension',
-            },
-          ]}
-          note="Mobile, VS Code, and Chrome are built and in the repository, but none has a published release yet. Desktop installers vary by platform — /download resolves the current ones."
-        />
+
 
         <RouteFlow
           eyebrow="Routing"
