@@ -1,5 +1,6 @@
 import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
+import { resolveMediaModelId } from './mediaMode';
 
 export type MobileImageGenerationBlockCode =
   | 'empty_prompt'
@@ -33,6 +34,8 @@ export type MobileImageGenerationRequestDecision =
 export interface ResolveMobileImageGenerationRequestInput {
   executionMode: 'local' | 'cloud';
   text: string;
+  /** Composer output kind. 'image' means every send this turn is an image request. */
+  mediaMode: 'text' | 'image' | 'video';
   selection: string;
   subscriptionTier?: string | null;
   hasAttachments: boolean;
@@ -97,15 +100,23 @@ export function resolveMobileImageGenerationRequest(
 ): MobileImageGenerationRequestDecision {
   const text = input.text.trim();
   const slashImageRequest = /^\/image(?:\s|$)/i.test(text);
+  // Image mode is an explicit user choice, so it admits EVERY send this turn
+  // and never consults the wording classifier. Without this the composer could
+  // sit in Image mode showing the image model's name while a prompt that did
+  // not happen to contain an image word ("Create an stylist anime MC") fell
+  // through to chat completions and came back as prose — the mode chip and the
+  // model that actually answered disagreeing on screen.
+  const explicitImageMode = input.mediaMode === 'image';
   const cloudDispatch =
-    input.executionMode === 'cloud' && !input.hasAttachments
+    !explicitImageMode && input.executionMode === 'cloud' && !input.hasAttachments
       ? resolveMobileCloudDispatch({
           selection: input.selection,
           message: text,
           subscriptionTier: input.subscriptionTier,
         })
       : null;
-  const imageTaskRequest = slashImageRequest || cloudDispatch?.taskType === 'image_generation';
+  const imageTaskRequest =
+    slashImageRequest || explicitImageMode || cloudDispatch?.taskType === 'image_generation';
 
   if (!imageTaskRequest) return { status: 'not_requested' };
 
@@ -122,6 +133,24 @@ export function resolveMobileImageGenerationRequest(
     return blocked('plan_required');
   }
   if (!input.isOnline) return blocked('offline');
+
+  // In Image mode the model is whatever the user picked in the Add-to-chat
+  // catalog (falling back to the image_generation slot), the same source the
+  // composer chip reads. Routing through the dispatcher here would ignore that
+  // choice and re-derive a model from the prompt's wording.
+  if (explicitImageMode || slashImageRequest) {
+    // The generate route is prompt-only — it accepts no input images. An
+    // explicit request that carries attachments has to fail loudly here;
+    // dropping the attachments and generating from the prompt alone would
+    // silently answer a different question than the one that was asked.
+    if (input.hasAttachments) return blocked('route_unavailable');
+
+    const modelId = resolveMediaModelId('image');
+    if (!modelId || getModelMetadataById(modelId)?.capabilities.imageGen !== true) {
+      return blocked('route_unavailable');
+    }
+    return { status: 'ready', prompt, model: modelId, ownerId: input.ownerId };
+  }
 
   const imageDispatch =
     cloudDispatch?.status === 'selected' &&

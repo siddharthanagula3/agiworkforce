@@ -118,6 +118,44 @@ describe('classifyTaskLocally — image_generation', () => {
     expect(classify('generate the quarterly report').type).not.toBe('image_generation');
   });
 
+  // The original noun list stopped at seven words, so ordinary ways of asking
+  // for a picture ("draw a portrait of…") missed and were answered as prose by
+  // a text model. These pin the widened vocabulary.
+  it.each([
+    'draw a portrait of a fox',
+    'generate some concept artwork',
+    'make me a poster for the show',
+    'create a painting of a harbour at dusk',
+    'draw a sketch of the floor plan',
+    'generate an avatar for my profile',
+    'make a banner for the top of the page',
+    'create a wallpaper of a mountain range',
+    'generate a thumbnail for the video',
+    'make a drawing of a bicycle',
+    'create a photograph of a desert road',
+  ])('matches widened image noun: %s', (message) => {
+    expect(classify(message).type).toBe('image_generation');
+  });
+
+  // The verb list is shared with ordinary requests, so the medium noun is the
+  // only thing separating "make a drawing" from "make a decision". Widening the
+  // nouns must not start capturing these.
+  it.each([
+    'create a report about the logo',
+    'make a function that returns null',
+    'create a plan for the sprint',
+    'generate a summary of the illustration guidelines',
+    'draw up a contract for the vendor',
+  ])('does NOT match non-image request: %s', (message) => {
+    expect(classify(message).type).not.toBe('image_generation');
+  });
+
+  it('allows adjectives between the article and the medium noun', () => {
+    // Two-word gap is the documented ceiling: enough for "detailed anime
+    // portrait", short enough that "a report about the logo" cannot reach.
+    expect(classify('create a detailed anime portrait').type).toBe('image_generation');
+  });
+
   it('does NOT match standalone /imageinfo', () => {
     // word-boundary in regex prevents false positive on prefix words.
     expect(classify('/imageinfo file.png').type).not.toBe('image_generation');

@@ -813,6 +813,71 @@ describe('ChatInput', () => {
     });
   });
 
+  /**
+   * The composer shook on screen: it flipped between the one-line pill and the
+   * stacked card several times a second while a message sat in it untouched.
+   *
+   * The layout was chosen from the input's measured height, but the input's
+   * WIDTH depends on that same choice — stacked hands the text ~26pt more room
+   * than compact, because [+] and the mic leave the row. So a message that
+   * wraps to two lines at the narrow width and fits on one at the wide width
+   * drove a closed loop: measure 38 -> stack -> measure 20 -> unstack -> repeat.
+   * The old 30/34 hysteresis band could not damp it; 4pt of slack cannot absorb
+   * a 26pt change in the measuring stick.
+   *
+   * The fix makes the latch one-way, so these pin BOTH directions of it.
+   */
+  describe('stacked layout stability', () => {
+    /** A single-line height reading, as the wide stacked input would report. */
+    function reportSingleLineHeight(input: ReturnType<typeof renderInput>['getByLabelText']) {
+      fireEvent(input('Message input'), 'contentSizeChange', {
+        nativeEvent: { contentSize: { width: 306, height: 20 } },
+      });
+    }
+
+    it('does not unstack when the wider stacked input remeasures as one line', () => {
+      const { getByLabelText, queryByTestId } = renderInput();
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Create a video of an stylist anime');
+      stackComposer(getByLabelText);
+      expect(queryByTestId('chat.composer.expand')).not.toBeNull();
+
+      // The exact event that used to send it back to the compact row and start
+      // the cycle over again.
+      reportSingleLineHeight(getByLabelText);
+
+      expect(queryByTestId('chat.composer.expand')).not.toBeNull();
+    });
+
+    it('survives repeated alternating measurements without flipping', () => {
+      const { getByLabelText, queryByTestId } = renderInput();
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Create a video of an stylist anime');
+      stackComposer(getByLabelText);
+
+      for (let i = 0; i < 5; i++) {
+        reportSingleLineHeight(getByLabelText);
+        stackComposer(getByLabelText);
+      }
+
+      expect(queryByTestId('chat.composer.expand')).not.toBeNull();
+    });
+
+    it('returns to the one-line pill once the composer is emptied', () => {
+      const { getByLabelText, queryByTestId } = renderInput();
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Create a video of an stylist anime');
+      stackComposer(getByLabelText);
+      expect(queryByTestId('chat.composer.expand')).not.toBeNull();
+
+      // Clearing is the release — send, slash-command clear and draft switch all
+      // land here too, since the effect watches the text rather than the caller.
+      fireEvent.changeText(getByLabelText('Message input'), '');
+
+      expect(queryByTestId('chat.composer.expand')).toBeNull();
+    });
+  });
+
   // ---- PAR-M05: expand a long message into a full-screen editor ----
 
   describe('expand to full-screen editor', () => {
