@@ -6,6 +6,12 @@ import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useUser } from '@clerk/nextjs';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
+import { useTTS } from '@/lib/hooks/useTTS';
+import { useModelStore } from '@shared/stores/model-store';
+import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
+import { useSettingsStore, type ChatTextSize } from '@shared/stores/web-settings-store';
+import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
+import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import {
   fetchStoredPreferenceNamespace,
   refreshProfileConsumers,
@@ -57,9 +63,19 @@ type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
  */
 const PREF_NAMESPACE = 'general';
 
+/**
+ * `voice` USED TO LIVE HERE and was removed, not migrated. It stored the string
+ * 'nova' — an OpenAI TTS voice name — in the server-synced `general` namespace,
+ * while web read-aloud runs entirely on the browser's SpeechSynthesis engine,
+ * which has never heard of it. The value was loaded into state on every mount
+ * and read by nothing. The real control is `ReadAloudVoiceRow` below, and it is
+ * deliberately device-local: installed voices differ per OS and browser, so a
+ * synced choice resolves to nothing on the next machine.
+ *
+ * Any `voice` key still stored on an account is simply ignored.
+ */
 interface PreferenceSettings {
   chatFont: string;
-  voice: string;
 }
 
 interface GeneralSettings extends PreferenceSettings {
@@ -70,7 +86,6 @@ interface GeneralSettings extends PreferenceSettings {
 
 const DEFAULT_PREFS: PreferenceSettings = {
   chatFont: 'serif',
-  voice: 'nova',
 };
 
 /** Trimmed value, or undefined when the stored value carries no information. */
@@ -169,7 +184,6 @@ export function GeneralSection() {
         setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
         setPrefs({
           chatFont: storedText(stored.chatFont) ?? DEFAULT_PREFS.chatFont,
-          voice: storedText(stored.voice) ?? DEFAULT_PREFS.voice,
         });
         setLoadError(null);
       })
@@ -435,9 +449,246 @@ export function GeneralSection() {
           <Row label="Display Language">
             <LanguageSelector />
           </Row>
+
+          {/* Default model */}
+          <DefaultModelRow />
+
+          {/* Reasoning effort */}
+          <ReasoningEffortRow />
+
+          {/* Chat text size */}
+          <ChatTextSizeRow />
+
+          {/* Code block wrapping */}
+          <CodeBlockWrapRow />
+
+          {/* Read-aloud voice */}
+          <ReadAloudVoiceRow />
+
+          {/* Keyboard shortcuts */}
+          <KeyboardShortcutsRow />
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chat defaults
+// ---------------------------------------------------------------------------
+
+const SELECT_CLASS =
+  'h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground';
+
+/**
+ * Default model.
+ *
+ * Writes `model-store.ts`, which is the store the composer actually reads
+ * (`ChatComposerNew.tsx`) and the one persisted across sessions. A previous
+ * attempt put this on `web-settings-store.defaultModel`, a field with no reader
+ * AND no writer — a settings row that looked wired and changed nothing.
+ *
+ * Only selectable models are offered: `coming_soon` catalogue rows exist so the
+ * picker can show them greyed, and defaulting to one would route to a model
+ * that cannot serve the request.
+ */
+function DefaultModelRow() {
+  const selectedModelId = useModelStore((state) => state.selectedModelId);
+  const setSelectedModel = useModelStore((state) => state.setSelectedModel);
+  const availableModels = useModelStore((state) => state.availableModels);
+
+  const selectable = availableModels.filter((model) => model.availability !== 'coming_soon');
+  if (selectable.length === 0) return null;
+
+  return (
+    <Row label="Default model">
+      <select
+        value={selectedModelId}
+        onChange={(event) => setSelectedModel(event.target.value)}
+        aria-label="Default model"
+        className={`${SELECT_CLASS} max-w-[220px]`}
+      >
+        {selectable.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.name}
+          </option>
+        ))}
+      </select>
+    </Row>
+  );
+}
+
+const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/**
+ * Reasoning effort.
+ *
+ * Writes `thinking-store.ts` — the single source of truth the composer pill and
+ * `ComposerFooter` both already read. "Off" maps to `enabled: false` rather
+ * than to a sixth effort level, because that is the shape the store and the
+ * request path actually use.
+ */
+function ReasoningEffortRow() {
+  const enabled = useThinkingStore((state) => state.enabled);
+  const effort = useThinkingStore((state) => state.effort);
+  const setEnabled = useThinkingStore((state) => state.setEnabled);
+  const setEffort = useThinkingStore((state) => state.setEffort);
+
+  return (
+    <Row label="Reasoning effort">
+      <select
+        value={enabled ? effort : 'off'}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (next === 'off') setEnabled(false);
+          else setEffort(next as EffortLevel);
+        }}
+        aria-label="Reasoning effort"
+        className={SELECT_CLASS}
+      >
+        <option value="off">Off</option>
+        {EFFORT_LEVELS.map((level) => (
+          <option key={level} value={level}>
+            {level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1)}
+          </option>
+        ))}
+      </select>
+    </Row>
+  );
+}
+
+/**
+ * Transcript text size.
+ *
+ * Backed by a real stylesheet hook — `html[data-chat-text-size]` in
+ * `globals.css`, stamped by `AppearancePreferences`. The store field and the
+ * CSS rule were added together; a size preference with no rule behind it is a
+ * control that moves and changes nothing.
+ */
+function ChatTextSizeRow() {
+  const chatTextSize = useSettingsStore((state) => state.chatTextSize);
+  const setChatTextSize = useSettingsStore((state) => state.setChatTextSize);
+
+  return (
+    <Row label="Chat text size">
+      <select
+        value={chatTextSize}
+        onChange={(event) => setChatTextSize(event.target.value as ChatTextSize)}
+        aria-label="Chat text size"
+        className={SELECT_CLASS}
+      >
+        <option value="small">Small</option>
+        <option value="default">Default</option>
+        <option value="large">Large</option>
+      </select>
+    </Row>
+  );
+}
+
+/** Soft-wrap fenced code instead of scrolling it horizontally. */
+function CodeBlockWrapRow() {
+  const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
+  const setCodeBlockWrap = useSettingsStore((state) => state.setCodeBlockWrap);
+
+  return (
+    <Row label="Wrap long code lines">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={codeBlockWrap}
+        aria-label="Wrap long code lines"
+        onClick={() => setCodeBlockWrap(!codeBlockWrap)}
+        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
+          codeBlockWrap ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
+            codeBlockWrap ? 'translate-x-[22px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </Row>
+  );
+}
+
+/**
+ * Keyboard shortcuts.
+ *
+ * `KeyboardShortcutsDialog` already existed and was reachable ONLY from a
+ * shortcut inside the chat page — so the list of shortcuts was itself behind a
+ * shortcut you had to already know. Settings is where someone goes to find out.
+ */
+function KeyboardShortcutsRow() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Row label="Keyboard shortcuts">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-8 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
+      >
+        View shortcuts
+      </button>
+      <KeyboardShortcutsDialog
+        open={open}
+        onOpenChange={setOpen}
+        shortcuts={KEYBOARD_SHORTCUT_DOCS}
+      />
+    </Row>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Read-aloud voice
+// ---------------------------------------------------------------------------
+
+/**
+ * Voice picker for the message "Read aloud" action.
+ *
+ * Renders nothing when the browser has no SpeechSynthesis — a picker over an
+ * empty list, or one whose choice can never be heard, is worse than no control.
+ *
+ * The value is device-local by design; see the header of `lib/hooks/useTTS.ts`
+ * for why a `voiceURI` must not be synced across devices.
+ */
+function ReadAloudVoiceRow() {
+  const { isSupported, voices, voiceUri, setVoiceUri, speak, stop, isSpeaking } = useTTS();
+
+  // Cancel any preview when the user navigates away mid-utterance.
+  useEffect(() => () => stop(), [stop]);
+
+  if (!isSupported || voices.length === 0) return null;
+
+  return (
+    <Row label="Read-aloud voice">
+      <div className="flex items-center gap-2">
+        <select
+          value={voiceUri ?? ''}
+          onChange={(event) => setVoiceUri(event.target.value || null)}
+          aria-label="Read-aloud voice"
+          className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+        >
+          <option value="">Browser default</option>
+          {voices.map((voice) => (
+            <option key={voice.voiceURI} value={voice.voiceURI}>
+              {voice.name} ({voice.lang})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() =>
+            isSpeaking ? stop() : speak('This is how messages will sound when read aloud.')
+          }
+          className="h-8 shrink-0 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
+        >
+          {isSpeaking ? 'Stop' : 'Preview'}
+        </button>
+      </div>
+    </Row>
   );
 }
 

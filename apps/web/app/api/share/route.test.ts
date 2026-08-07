@@ -35,7 +35,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-const { GET } = await import('./route');
+const { GET, POST } = await import('./route');
 
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
@@ -119,5 +119,50 @@ describe('GET /api/share', () => {
     const response = await call();
     expect(response.status).toBe(200);
     expect((await response.json()).shares).toEqual([]);
+  });
+});
+
+describe('POST /api/share — link lifetime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+  });
+
+  function post(body: Record<string, unknown>) {
+    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  /** Days between now and the `expires_at` the route passed to the insert. */
+  function insertedExpiryDays(): number {
+    const params = mocks.query.mock.calls[0]?.[1] as unknown[];
+    const expiresAt = new Date(String(params[params.length - 1]));
+    return Math.round((expiresAt.getTime() - Date.now()) / 86_400_000);
+  }
+
+  // Regression: expiry was hardcoded to 7 days with no caller control, so a
+  // transcript shared for one review stayed live for a week.
+  it('defaults to seven days when the caller says nothing', async () => {
+    await post({ title: 'Session' });
+    expect(insertedExpiryDays()).toBe(7);
+  });
+
+  it('honors a caller-supplied lifetime', async () => {
+    await post({ title: 'Session', expires_in_days: 1 });
+    expect(insertedExpiryDays()).toBe(1);
+  });
+
+  // Bounded on purpose: a free-form number would let a caller mint a link that
+  // effectively never expires.
+  it('rejects a lifetime outside the allowed set', async () => {
+    const response = await post({ title: 'Session', expires_in_days: 3650 });
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 });

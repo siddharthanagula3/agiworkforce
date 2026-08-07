@@ -22,6 +22,7 @@ import {
   Settings,
   Archive,
   ArrowLeft,
+  Zap,
 } from 'lucide-react';
 import { useChatStore, useSidecarStore, selectSidebarCollapsed } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
@@ -173,6 +174,7 @@ function navItemsForMode(
     { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
     { id: 'design', label: t('sidebar.nav.design'), icon: Palette },
     { id: 'research', label: t('sidebar.nav.research'), icon: Telescope },
+    { id: 'automation', label: t('sidebar.nav.automation'), icon: Zap },
     { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
@@ -212,6 +214,7 @@ function railItems(
     items.push({ id: 'code', icon: FileCode, title: t('sidebar.nav.code') });
     items.push({ id: 'design', icon: Palette, title: t('sidebar.nav.design') });
     items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
+    items.push({ id: 'automation', icon: Zap, title: t('sidebar.nav.automation') });
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
     // Was missing: collapsing the sidebar in Local mode dropped Scheduled
     // entirely, even though the expanded nav offers it (the managed branch
@@ -259,6 +262,7 @@ const NAV_ID_TO_VIEW: Record<string, string> = {
   code: 'code',
   design: 'design',
   research: 'research',
+  automation: 'automation',
   library: 'library',
   tasks: 'tasks',
   scheduled: 'work-scheduled',

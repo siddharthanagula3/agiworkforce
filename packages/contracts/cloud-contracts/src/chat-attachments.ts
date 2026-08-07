@@ -20,6 +20,10 @@ export const CHAT_ATTACHMENT_MIME_TYPES = [
   'text/html',
   'text/css',
   'application/json',
+  // Jupyter notebooks. Served as JSON by most tools, but given their own type
+  // so the extractor can pull CELLS rather than dumping raw notebook JSON —
+  // which is mostly base64 image outputs and metadata.
+  'application/x-ipynb+json',
   'application/xml',
 ] as const;
 
@@ -28,6 +32,7 @@ const CHAT_ATTACHMENT_EXTENSIONS = [
   '.md',
   '.csv',
   '.json',
+  '.ipynb',
   '.xml',
   '.html',
   '.css',
@@ -66,6 +71,7 @@ export function resolveChatAttachmentMimeType(fileName: string, mimeType: string
   if (lowerName.endsWith('.gif')) return 'image/gif';
   if (lowerName.endsWith('.webp')) return 'image/webp';
   if (lowerName.endsWith('.pdf')) return 'application/pdf';
+  if (lowerName.endsWith('.ipynb')) return 'application/x-ipynb+json';
   if (lowerName.endsWith('.json')) return 'application/json';
   if (lowerName.endsWith('.xml')) return 'application/xml';
   return CHAT_ATTACHMENT_EXTENSIONS.some((extension) => lowerName.endsWith(extension))

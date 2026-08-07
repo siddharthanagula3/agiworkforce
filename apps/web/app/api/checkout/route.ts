@@ -318,6 +318,20 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         metadata: checkoutMetadata,
       },
       allow_promotion_codes: true,
+      // Sales tax / VAT / GST. Nothing collected tax before this, while
+      // `/terms` asserted tax obligations to the customer — so the product
+      // claimed a duty it did not discharge.
+      //
+      // `automatic_tax` requires Stripe Tax to be enabled on the account and a
+      // registered origin address; Stripe determines the rate from the
+      // customer's location. `tax_id_collection` lets a business customer enter
+      // a VAT/GST number, which is what makes B2B reverse-charge work in the EU
+      // and UK. `customer_update.address` is REQUIRED by Stripe whenever
+      // automatic tax runs against an existing customer: without it the session
+      // create call fails for any customer whose address Stripe cannot save.
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true },
+      ...(stripeCustomerId ? { customer_update: { address: 'auto' as const } } : {}),
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {

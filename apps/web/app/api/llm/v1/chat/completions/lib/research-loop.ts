@@ -201,6 +201,13 @@ export function researchStatusEvent(
     iteration: number;
     maxIterations: number;
     searches: number;
+    /**
+     * The search cap this run is actually bounded by (enforced below at the
+     * `totalSearches >= maxSearches` break). Reported so the client can show
+     * how much of the budget is left rather than an open-ended count that
+     * stops for no visible reason.
+     */
+    maxSearches: number;
     sources: number;
     elapsedMs: number;
   },
@@ -216,6 +223,7 @@ export function researchStatusEvent(
             iteration: status.iteration,
             max_iterations: status.maxIterations,
             searches: status.searches,
+            max_searches: status.maxSearches,
             sources: status.sources,
             elapsed_ms: status.elapsedMs,
           },
@@ -973,6 +981,7 @@ export async function* runResearchLoop(
           iteration,
           maxIterations,
           searches: totalSearches,
+          maxSearches,
           sources: sources.size,
           elapsedMs: now() - startedAt,
         },

@@ -145,18 +145,25 @@ describe('persistManagedAutoMemoryFacts', () => {
     const first = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
     const second = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
 
-    expect(first).toEqual({ extracted: 7, inserted: 2 });
-    expect(second).toEqual({ extracted: 7, inserted: 2 });
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(first).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
+    expect(second).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
+    // Selected by CONTENT, not by position. The write path also reads the
+    // account's memory exclusions, so `calls[0]` and `calls[1]` are no longer
+    // the two inserts — indexing positionally made this test depend on how
+    // many queries the function happens to issue rather than on what it wrote.
+    const insertCalls = query.mock.calls.filter((call) =>
+      String(call[0]).includes('insert into user_memories'),
+    );
+    expect(insertCalls).toHaveLength(2);
 
-    const sql = query.mock.calls[0]?.[0] as string;
-    const firstBatch = JSON.parse(query.mock.calls[0]?.[1]?.[1] as string) as Array<{
+    const sql = insertCalls[0]?.[0] as string;
+    const firstBatch = JSON.parse(insertCalls[0]?.[1]?.[1] as string) as Array<{
       id: string;
       content: string;
       category: string;
       normalizedKey: string;
     }>;
-    const secondBatch = JSON.parse(query.mock.calls[1]?.[1]?.[1] as string) as typeof firstBatch;
+    const secondBatch = JSON.parse(insertCalls[1]?.[1]?.[1] as string) as typeof firstBatch;
 
     expect(sql).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
     expect(sql).toContain('on conflict (id) do nothing');
@@ -174,7 +181,7 @@ describe('persistManagedAutoMemoryFacts', () => {
 
     await expect(
       persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates: [] }),
-    ).resolves.toEqual({ extracted: 0, inserted: 0 });
+    ).resolves.toEqual({ extracted: 0, inserted: 0, excluded: 0 });
     expect(query).not.toHaveBeenCalled();
   });
 });

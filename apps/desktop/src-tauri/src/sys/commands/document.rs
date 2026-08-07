@@ -4,10 +4,10 @@ use tauri::State;
 
 use crate::features::document::{
     build_generated_document_manifest, DocumentContent, DocumentManager, DocumentMetadata,
-    ExcelDocumentConfig, ExcelDocumentCreator, ExcelSheet, GeneratedDocumentArtifactManifest,
-    GeneratedDocumentComputeSession, GeneratedDocumentFile, GeneratedDocumentKind, PdfContent,
-    PdfDocumentConfig, PdfDocumentCreator, PresentationConfig, PresentationCreator, SearchResult,
-    WordContent, WordDocumentConfig, WordDocumentCreator,
+    ExcelDocumentConfig, ExcelDocumentCreator, ExcelEdit, ExcelEditor, ExcelSheet,
+    GeneratedDocumentArtifactManifest, GeneratedDocumentComputeSession, GeneratedDocumentFile,
+    GeneratedDocumentKind, PdfContent, PdfDocumentConfig, PdfDocumentCreator, PresentationConfig,
+    PresentationCreator, SearchResult, WordContent, WordDocumentConfig, WordDocumentCreator,
 };
 use crate::sys::error::{Error, Result};
 
@@ -94,6 +94,30 @@ pub async fn document_create_word(
     let creator = WordDocumentCreator::new();
     creator.create(&resolved_path, config, contents)?;
     Ok(resolved_path)
+}
+
+/// Edit an existing spreadsheet, preserving the data already in it.
+///
+/// `ExcelEditor` reads the source workbook through calamine and rewrites it
+/// with the edits applied, so existing sheets and cells survive. That is what
+/// makes this safe to expose.
+///
+/// There is deliberately no `document_edit_word` counterpart: `WordEditor`
+/// cannot parse an existing .docx (docx_rs is write-only) and builds a NEW
+/// document from the edits alone, discarding the source. Exposing that as
+/// "edit your document" would silently destroy the user's content. See
+/// docs/adr/wire-or-cut.md.
+#[tauri::command]
+pub async fn document_edit_excel(
+    file_path: String,
+    output_path: String,
+    edits: Vec<ExcelEdit>,
+) -> Result<String> {
+    let resolved_source = resolve_output_path(&file_path)?;
+    let resolved_output = resolve_output_path(&output_path)?;
+    let editor = ExcelEditor::new();
+    editor.edit_spreadsheet(&resolved_source, edits, &resolved_output)?;
+    Ok(resolved_output)
 }
 
 pub async fn document_create_word_manifest(

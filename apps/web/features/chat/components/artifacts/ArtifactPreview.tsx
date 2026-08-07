@@ -65,6 +65,7 @@ import { SandboxedIframe } from '../SandboxedIframe';
 import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
+import { useArtifactsStore } from '../../stores/artifacts-store';
 
 /**
  * AUDIT-FIX ART-24: single guarded clipboard write.
@@ -225,6 +226,7 @@ export function ArtifactPreview({
 
   // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
+  const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
@@ -1175,6 +1177,29 @@ if (__AgiApp) {
                 >
                   <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
+                {/*
+                  Restore. Version browsing was read-only on web: a user could
+                  page back to an earlier revision and then had no way to act on
+                  it (desktop already had rollback). Restoring APPENDS the older
+                  content as the new latest rather than rewinding, so the
+                  intervening versions survive.
+                */}
+                {shownVersionIndex < versionCount - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (restoreArtifactVersion(artifact.id, shownVersionIndex)) {
+                        setViewedVersionIndex(null);
+                      }
+                    }}
+                    className="flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label={`Restore version ${shownVersionIndex + 1}`}
+                    title={`Restore v${shownVersionIndex + 1} as the latest version`}
+                    data-testid="artifact-restore-version"
+                  >
+                    Restore
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -142,11 +142,21 @@ export interface ThinkingSegment {
  * field may be absent for any given message.
  */
 export interface WebChatMessageMetadata {
+  // Usage and cost. Written by the terminal `x_usage` stream frame
+  // (app/api/llm/v1/chat/completions/lib/stream-transform.ts), which publishes
+  // exactly the numbers the billing settlement used — so what a user is shown
+  // and what they are charged cannot diverge. Absent for non-managed turns.
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
+  cachedInputTokens?: number;
   model?: string;
+  provider?: string;
+  /** Estimated cost of this turn, in cents. */
   cost?: number;
+  /** Wall-clock time from request start to stream completion. */
+  totalDurationMs?: number;
   selectionReason?: string;
 
   // Thinking / reasoning

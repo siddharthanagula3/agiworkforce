@@ -54,6 +54,11 @@ const COMPANY = [
   // subprocessors, SLA, refunds, accessibility and the EU-representative
   // statement, none of which were reachable from the footer before.
   { href: '/cookies', label: 'Cookies' },
+  // A product that hosts user uploads and publishes artifacts at shareable URLs
+  // needs a reachable notice-and-takedown route, and one that routes to
+  // several third-party and open-weight models needs its licence terms stated.
+  { href: '/copyright', label: 'Copyright' },
+  { href: '/model-licenses', label: 'Model licences' },
   { href: '/legal', label: 'All legal docs' },
 ];
 

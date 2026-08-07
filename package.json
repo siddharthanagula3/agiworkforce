@@ -157,7 +157,9 @@
     "generate:protocol-types": "node scripts/generate-protocol-types.mjs --write",
     "check:protocol-types": "node scripts/generate-protocol-types.mjs --check",
     "check:db-isolation": "node scripts/check-db-isolation.mjs",
-    "check:css-tokens": "node scripts/check-css-tokens.mjs"
+    "check:css-tokens": "node scripts/check-css-tokens.mjs",
+    "check:knip": "knip",
+    "check:knip:production": "knip --production"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",

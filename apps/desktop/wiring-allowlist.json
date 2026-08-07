@@ -2,6 +2,10 @@
   "schemaVersion": 1,
   "registeredWithoutFrontendCaller": [
     {
+      "command": "document_edit_excel",
+      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose — see docs/adr/wire-or-cut.md."
+    },
+    {
       "command": "llm_list_llamacpp_models",
       "reason": "Invoked through the runtime-selected local model command table in apps/desktop/src/App.tsx."
     },
@@ -15,22 +19,6 @@
     }
   ],
   "registeredWithoutReachableCaller": [
-    {
-      "command": "agi_checkpoint_cleanup",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "agi_checkpoint_init",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "agi_checkpoint_record_restore",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "agi_checkpoint_restore_history",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
     {
       "command": "api_delete",
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
@@ -132,35 +120,7 @@
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     },
     {
-      "command": "delete_autonomous_task_checkpoint",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "delete_autonomous_task_checkpoints",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
       "command": "delete_project_memory",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "document_create_excel_numbers_manifest",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "document_create_excel_simple_manifest",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "document_create_pdf_simple_manifest",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "document_create_powerpoint_simple_manifest",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "document_create_word_simple_manifest",
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     },
     {
@@ -220,58 +180,6 @@
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     },
     {
-      "command": "google_batch_calculate_cost",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_cancel",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_create",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_create_embeddings",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_create_images",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_create_jsonl",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_delete",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_get",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_get_embeddings",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_get_results",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "google_batch_list",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "list_autonomous_task_checkpoints",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "list_autonomous_task_checkpoints_by_task",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
       "command": "migration_launch_lovable",
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     },
@@ -281,10 +189,6 @@
     },
     {
       "command": "migration_test_lovable_connection",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
-    },
-    {
-      "command": "resume_autonomous_task",
       "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
     },
     {

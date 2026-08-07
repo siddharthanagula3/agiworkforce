@@ -144,4 +144,105 @@ describe('extractProjectKnowledgeFile', () => {
     ).resolves.toEqual({ extractedText: 'Page one\n\nPage two' });
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  // Notebooks were not accepted at all. Accepting them via the plain-text path
+  // would have been worse than useless: it feeds the model the notebook's
+  // entire serialized form — base64 PNG outputs, execution counts, kernel
+  // metadata — which on a notebook with a few plots is megabytes of noise that
+  // crowds out the analysis and burns the project's context budget.
+  describe('Jupyter notebooks', () => {
+    function notebook(cells: unknown[]): Buffer {
+      return Buffer.from(JSON.stringify({ cells, metadata: {}, nbformat: 4 }));
+    }
+
+    async function extract(data: Buffer) {
+      storageMocks.objectKeyFromStorageUri.mockReturnValue(
+        'knowledge-files/projects/project-1/analysis.ipynb',
+      );
+      storageMocks.getObject.mockResolvedValue({
+        data,
+        contentType: 'application/x-ipynb+json',
+      });
+      return extractProjectKnowledgeFile({
+        projectId: 'project-1',
+        storageUri: 'https://files.example.test/knowledge-files/projects/project-1/analysis.ipynb',
+        fileName: 'analysis.ipynb',
+        mimeType: 'application/x-ipynb+json',
+        byteCount: data.byteLength,
+        checksumSha256: checksum(data),
+      });
+    }
+
+    it('keeps markdown prose, source code, and text output in order', async () => {
+      const data = notebook([
+        { cell_type: 'markdown', source: ['# Revenue analysis\n', 'Q3 numbers.'] },
+        {
+          cell_type: 'code',
+          source: 'df.describe()',
+          outputs: [{ output_type: 'stream', text: ['count 42\n'] }],
+        },
+      ]);
+
+      const { extractedText } = await extract(data);
+      expect(extractedText).toContain('# Revenue analysis');
+      expect(extractedText).toContain('df.describe()');
+      expect(extractedText).toContain('count 42');
+      // Sequential meaning: prose before the code it introduces.
+      expect(extractedText!.indexOf('Revenue analysis')).toBeLessThan(
+        extractedText!.indexOf('df.describe()'),
+      );
+    });
+
+    it('drops image outputs rather than feeding the model base64', async () => {
+      const hugeBase64 = 'iVBORw0KGgo' + 'A'.repeat(5000);
+      const data = notebook([
+        {
+          cell_type: 'code',
+          source: 'plot()',
+          outputs: [
+            { output_type: 'display_data', data: { 'image/png': hugeBase64 } },
+            { output_type: 'execute_result', data: { 'text/plain': '<Figure size 640x480>' } },
+          ],
+        },
+      ]);
+
+      const { extractedText } = await extract(data);
+      expect(extractedText).toContain('plot()');
+      expect(extractedText).toContain('<Figure size 640x480>');
+      expect(extractedText).not.toContain('iVBORw0KGgo');
+    });
+
+    it('keeps error output, which is often the most informative cell', async () => {
+      const data = notebook([
+        {
+          cell_type: 'code',
+          source: 'x / 0',
+          outputs: [
+            { output_type: 'error', ename: 'ZeroDivisionError', evalue: 'division by zero' },
+          ],
+        },
+      ]);
+
+      const { extractedText } = await extract(data);
+      expect(extractedText).toContain('ZeroDivisionError');
+      expect(extractedText).toContain('division by zero');
+    });
+
+    it('rejects a file that is not a readable notebook', async () => {
+      await expect(extract(Buffer.from('not json at all'))).rejects.toThrow(
+        /readable Jupyter notebook/,
+      );
+    });
+
+    it('rejects notebook-shaped JSON with no cells array', async () => {
+      await expect(extract(Buffer.from(JSON.stringify({ nbformat: 4 })))).rejects.toThrow(
+        /does not contain notebook cells/,
+      );
+    });
+
+    it('returns null for a notebook with nothing readable in it', async () => {
+      const { extractedText } = await extract(notebook([{ cell_type: 'code', source: '' }]));
+      expect(extractedText).toBeNull();
+    });
+  });
 });

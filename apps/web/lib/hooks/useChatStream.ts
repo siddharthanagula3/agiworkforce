@@ -1380,6 +1380,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                   typeof researchStatus.searches === 'number'
                     ? researchStatus.searches
                     : currentResearch?.searches,
+                maxSearches:
+                  typeof researchStatus.max_searches === 'number'
+                    ? researchStatus.max_searches
+                    : currentResearch?.maxSearches,
                 sources:
                   typeof researchStatus.sources === 'number'
                     ? researchStatus.sources

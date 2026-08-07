@@ -13,4 +13,3 @@ pub mod teams;
 pub mod terminal;
 pub mod tests;
 pub mod webhooks;
-pub mod workflows;

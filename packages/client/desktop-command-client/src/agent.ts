@@ -380,32 +380,6 @@ export async function questionAnswer(id: string, answer: unknown): Promise<void>
   return command<void>('question_answer', { id, answer });
 }
 
-// ---- Checkpoints ----
-
-export async function agiCheckpointSave(
-  request: SaveCheckpointRequest,
-): Promise<CheckpointResponse<Checkpoint>> {
-  return command<CheckpointResponse<Checkpoint>>('agi_checkpoint_save', { request });
-}
-export async function agiCheckpointGetLatest(
-  taskId: string,
-): Promise<CheckpointResponse<Checkpoint | null>> {
-  return command<CheckpointResponse<Checkpoint | null>>('agi_checkpoint_get_latest', { taskId });
-}
-export async function agiCheckpointGet(
-  checkpointId: string,
-): Promise<CheckpointResponse<Checkpoint | null>> {
-  return command<CheckpointResponse<Checkpoint | null>>('agi_checkpoint_get', { checkpointId });
-}
-export async function agiCheckpointList(
-  request: ListCheckpointsRequest,
-): Promise<CheckpointResponse<CheckpointListResponse>> {
-  return command<CheckpointResponse<CheckpointListResponse>>('agi_checkpoint_list', { request });
-}
-export async function agiCheckpointDelete(checkpointId: string): Promise<CheckpointResponse<void>> {
-  return command<CheckpointResponse<void>>('agi_checkpoint_delete', { checkpointId });
-}
-
 // ---- Background Agents ----
 
 export async function backgroundAgentPush(input: PushToBackgroundInput): Promise<PushResponse> {

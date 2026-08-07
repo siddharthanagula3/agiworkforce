@@ -698,6 +698,22 @@ impl ToolExecutionGuard {
             },
         );
 
+        // Editing OVERWRITES a file the user already has, so it carries more
+        // risk than creating a new one and always asks first.
+        allowed_tools.insert(
+            "document_edit_excel".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "file_path".to_string(),
+                    "output_path".to_string(),
+                    "edits".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
         allowed_tools.insert(
             "code_execute".to_string(),
             ToolPolicy {
@@ -1630,6 +1646,19 @@ impl ToolExecutionGuard {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'file_path' parameter".to_string(),
                     ));
+                }
+            }
+            "document_edit_excel" => {
+                // Both paths are attacker-influenceable: validate the source
+                // being read and the destination being written.
+                let Some(file_path) = parameters.get("file_path").and_then(|p| p.as_str()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'file_path' parameter".to_string(),
+                    ));
+                };
+                self.validate_file_path(file_path)?;
+                if let Some(output) = parameters.get("output_path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(output)?;
                 }
             }
             "document_create_pdf" | "document_create_word" | "document_create_excel" => {

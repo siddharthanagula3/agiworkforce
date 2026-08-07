@@ -35,4 +35,17 @@ describe('BudgetTrackerDisplay', () => {
     expect(screen.queryByText(/tokens/i)).toBeNull();
     expect(screen.queryByText(/credit balance/i)).toBeNull();
   });
+
+  // Regression: this component was card-only, so ComposerFooter guarded it
+  // behind `!inline` — and the only production mount always passes `inline`.
+  // It therefore never rendered for a single user. The compact variant is what
+  // actually ships now, so it needs its own coverage.
+  it('renders a compact inline pill without the card chrome', () => {
+    const { container } = render(<BudgetTrackerDisplay variant="compact" />);
+
+    expect(screen.getByText('25%')).toBeTruthy();
+    expect(screen.getByLabelText('Session budget: 25% used')).toBeTruthy();
+    // The card wrapper must not be present in the composer's one-line row.
+    expect(container.querySelector('.rounded-lg')).toBeNull();
+  });
 });

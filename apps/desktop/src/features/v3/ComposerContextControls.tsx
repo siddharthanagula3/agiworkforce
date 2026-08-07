@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Cloud, Folder, GitBranch, Laptop, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Cloud, EyeOff, Folder, GitBranch, Laptop, ShieldCheck } from 'lucide-react';
 import type { PrivacyMode } from '@agiworkforce/types';
 
 import { gitStatus } from '@/api/git';
@@ -35,6 +35,8 @@ export function ComposerContextControls({
 }: ComposerContextControlsProps) {
   const terminalSandbox = useSettingsStore((state) => state.executionPreferences.terminalSandbox);
   const autoApproveTools = useSettingsStore((state) => state.chatPreferences.autoApproveTools);
+  const temporaryChat = useSettingsStore((state) => state.chatPreferences.temporaryChat === true);
+  const setTemporaryChat = useSettingsStore((state) => state.setTemporaryChat);
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
   const [branch, setBranch] = useState<string | null>(null);
 
@@ -109,6 +111,37 @@ export function ComposerContextControls({
         >
           <policy.Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span className="max-w-[9rem] truncate">{policy.label}</span>
+        </button>
+      )}
+
+      {/*
+        Temporary chat. Managed Cloud only: the flag lives on the cloud
+        conversation row and is what the retention cron purges. Desktop sent
+        `is_temporary: false` as a hardcoded constant, so the capability existed
+        on the wire, in the schema, and in the purge job — everywhere except a
+        control that could turn it on.
+      */}
+      {mode === 'managed' && (
+        <button
+          type="button"
+          className={chipClass(temporaryChat ? 'warning' : 'neutral')}
+          aria-pressed={temporaryChat}
+          onClick={() => setTemporaryChat(!temporaryChat)}
+          aria-label={
+            temporaryChat
+              ? 'Temporary chat is on. New chats are excluded from history and deleted automatically.'
+              : 'Temporary chat is off. Turn on to keep new chats out of history.'
+          }
+          title={
+            temporaryChat
+              ? 'New chats stay out of history and are deleted automatically'
+              : 'Start new chats as temporary'
+          }
+        >
+          <EyeOff className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="max-w-[8rem] truncate">
+            {temporaryChat ? 'Temporary: On' : 'Temporary'}
+          </span>
         </button>
       )}
 

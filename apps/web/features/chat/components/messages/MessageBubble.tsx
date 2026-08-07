@@ -39,6 +39,7 @@ import {
   Square,
   Download,
   Video,
+  Flag,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -49,6 +50,8 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 import {
   AgentActivityTimeline,
@@ -227,7 +230,11 @@ interface Message {
     inputTokens?: number;
     outputTokens?: number;
     model?: string;
+    provider?: string;
     cost?: number;
+    reasoningTokens?: number;
+    cachedInputTokens?: number;
+    totalDurationMs?: number;
     selectionReason?: string;
     thinkingSteps?: string[];
     /** Raw extended thinking text (used by ThinkingBlock) */
@@ -473,6 +480,43 @@ const MessageBubbleComponent = function MessageBubble({
   // on it left artifacts with conversationId=undefined → filtered out of every
   // panel. Falls back to message.sessionId when there's no active conversation.
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+
+  const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
+
+  /**
+   * File a trust-and-safety report for this answer.
+   *
+   * Category is 'harmful' by default because that is the report a user most
+   * urgently needs to be able to file; the excerpt gives triage something to
+   * act on without opening the whole conversation. `reportId` is client-
+   * generated and the server treats it as an idempotency key, so a retry after
+   * a flaky network never files the same report twice.
+   */
+  const reportMessage = useCallback(async () => {
+    if (reportState !== 'idle') return;
+    setReportState('sending');
+    try {
+      const response = await fetch('/api/content-report', {
+        method: 'POST',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({
+          reportId: crypto.randomUUID(),
+          messageId: message.id,
+          conversationId: message.sessionId ?? activeConversationId ?? 'unknown',
+          category: 'harmful',
+          contentExcerpt: (message.content ?? '').slice(0, 500),
+          userNote: '',
+        }),
+      });
+      if (!response.ok) throw new Error(`Report failed: ${response.status}`);
+      setReportState('sent');
+      toast.success('Reported. Thank you — our trust and safety team will review it.');
+    } catch {
+      setReportState('idle');
+      toast.error('Could not send the report. Please try again.');
+    }
+  }, [activeConversationId, message.content, message.id, message.sessionId, reportState]);
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
   const storedChoice = useComparisonStore((state) =>
@@ -723,6 +767,26 @@ const MessageBubbleComponent = function MessageBubble({
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
     [message.attachments, generatedFileAttachments],
+  );
+  // The image set the lightbox pages through. Attachments that failed to load
+  // are excluded deliberately: they render as a labelled chip rather than a
+  // thumbnail, so including them would put an un-openable slot in the carousel
+  // between two working images. `id` is carried so the clicked attachment can
+  // be located without depending on position in `displayAttachments`.
+  const lightboxImages = useMemo(
+    () =>
+      displayAttachments
+        .filter(
+          (attachment) =>
+            attachment.type.startsWith('image/') && !brokenAttachmentIds.has(attachment.id),
+        )
+        .map((attachment) => ({
+          id: attachment.id,
+          src: attachment.url,
+          alt: attachment.name,
+          downloadFilename: attachment.name,
+        })),
+    [displayAttachments, brokenAttachmentIds],
   );
   // Generated images already have a purpose-built transcript card/thumbnail.
   // Keep their artifact projection panel-only so the message does not render a
@@ -1233,9 +1297,8 @@ const MessageBubbleComponent = function MessageBubble({
               attachment the user clicked above. */}
           {lightboxAttachment && (
             <ImageLightbox
-              src={lightboxAttachment.url}
-              alt={lightboxAttachment.name}
-              downloadFilename={lightboxAttachment.name}
+              images={lightboxImages}
+              initialIndex={lightboxImages.findIndex((image) => image.id === lightboxAttachment.id)}
               onClose={() => setLightboxAttachment(null)}
             />
           )}
@@ -1700,21 +1763,64 @@ const MessageBubbleComponent = function MessageBubble({
                         Edit
                       </DropdownMenuItem>
                     )}
+                    {/*
+                      Report an answer as harmful or inaccurate. The web app had
+                      no such action: the only routes out were a general
+                      feedback link and a refusal APPEAL, which is the opposite
+                      complaint. Assistant messages only — reporting your own
+                      message to us is not a thing.
+                    */}
+                    {!isUser && (
+                      <DropdownMenuItem
+                        disabled={reportState !== 'idle'}
+                        onClick={() => void reportMessage()}
+                      >
+                        <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+                        {reportState === 'sent'
+                          ? 'Reported'
+                          : reportState === 'sending'
+                            ? 'Reporting…'
+                            : 'Report this response'}
+                      </DropdownMenuItem>
+                    )}
                     {onBranch && (
                       <DropdownMenuItem disabled={isBranching} onClick={() => onBranch(message.id)}>
                         <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
                         {isBranching ? 'Creating branch…' : 'Branch conversation'}
                       </DropdownMenuItem>
                     )}
-                    {message.metadata?.tokensUsed && (
+                    {message.metadata?.tokensUsed ? (
                       <>
                         <DropdownMenuSeparator />
-                        <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                          {message.metadata.tokensUsed.toLocaleString()} tokens
-                          {message.metadata.model && ` · ${message.metadata.model}`}
+                        <div className="px-2 py-1.5">
+                          {/*
+                            Full usage breakdown. Until the server started
+                            publishing a terminal usage frame, `tokensUsed` and
+                            `cost` had no producer at all, so this menu showed
+                            nothing and TokenUsageDisplay sat unused. `cost` is
+                            in CENTS on the wire (matching billing); the display
+                            component formats dollars.
+                          */}
+                          <TokenUsageDisplay
+                            variant="detailed"
+                            tokensUsed={message.metadata.tokensUsed}
+                            inputTokens={message.metadata.inputTokens}
+                            outputTokens={message.metadata.outputTokens}
+                            model={message.metadata.model}
+                            cost={
+                              typeof message.metadata.cost === 'number'
+                                ? message.metadata.cost / 100
+                                : undefined
+                            }
+                          />
+                          {typeof message.metadata.totalDurationMs === 'number' && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {(message.metadata.totalDurationMs / 1000).toFixed(1)}s
+                            </div>
+                          )}
                         </div>
                       </>
-                    )}
+                    ) : null}
                     {onDelete && (
                       <>
                         <DropdownMenuSeparator />

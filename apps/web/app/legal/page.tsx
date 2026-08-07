@@ -48,6 +48,16 @@ const DOCS: { href: string; label: string; body: string }[] = [
   },
   { href: '/cookies', label: 'Cookie policy', body: 'What cookies we set and why.' },
   {
+    href: '/copyright',
+    label: 'Copyright and IP complaints',
+    body: 'How to report infringing material, what a complete notice needs, and how to counter-notify.',
+  },
+  {
+    href: '/model-licenses',
+    label: 'Model licences',
+    body: 'Licence terms for every model this product can route to, generated from the model registry.',
+  },
+  {
     href: '/refund-policy',
     label: 'Refund policy',
     body: 'When refunds are issued and how to request one.',

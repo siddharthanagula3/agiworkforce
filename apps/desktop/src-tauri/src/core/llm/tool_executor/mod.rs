@@ -170,6 +170,7 @@ impl ToolTimeoutConfig {
             | "document_search"
             | "document_create_word"
             | "document_create_excel"
+            | "document_edit_excel"
             | "document_create_pdf" => self.slow,
 
             // Very slow tools (300s)
@@ -212,6 +213,57 @@ fn is_dangerous_tool(tool_id: &str) -> bool {
         || tool_id.starts_with("ui_")
         || tool_id.starts_with("automation_")
         || tool_id.starts_with("browser_")
+}
+
+/// How long a dangerous tool waits on the user before failing closed.
+/// Mirrors `core/agent/autonomous.rs`'s task-level approval timeout.
+const TOOL_APPROVAL_TIMEOUT_SECS: u64 = 300;
+
+/// Map a dangerous tool call onto the approval payload the controller and the
+/// frontend already understand.
+fn build_tool_approval_payload(
+    action_id: &str,
+    tool_id: &str,
+    tool_display_name: &str,
+    arguments: &serde_json::Value,
+) -> crate::core::agent::approval::ApprovalRequestPayload {
+    use crate::core::agent::approval::{ApprovalRequestPayload, ApprovalScope, ApprovalScopeType};
+
+    let scope_type = if tool_id.starts_with("browser_") {
+        ApprovalScopeType::Browser
+    } else if tool_id.starts_with("ui_") || tool_id.starts_with("automation_") {
+        ApprovalScopeType::Ui
+    } else if tool_id.contains("bash")
+        || tool_id.contains("terminal")
+        || tool_id.contains("command")
+    {
+        ApprovalScopeType::Terminal
+    } else if tool_id.contains("file") || tool_id.contains("write") || tool_id.contains("delete") {
+        ApprovalScopeType::Filesystem
+    } else {
+        ApprovalScopeType::Unknown
+    };
+
+    ApprovalRequestPayload {
+        action_id: action_id.to_string(),
+        tool_name: tool_id.to_string(),
+        title: format!("Allow {}?", tool_display_name),
+        description: format!("The agent wants to run {}.", tool_display_name),
+        reason: "This tool can change your system or act on your behalf, and the conversation is in manual mode.".to_string(),
+        risk_level: "high".to_string(),
+        scope: ApprovalScope {
+            scope_type,
+            command: None,
+            cwd: None,
+            path: None,
+            domain: None,
+            description: Some(arguments.to_string()),
+            risk: "high".to_string(),
+        },
+        workflow_hash: None,
+        // Stable per tool so the trust store can remember "always allow this".
+        action_signature: tool_id.to_string(),
+    }
 }
 
 pub struct ToolExecutor {
@@ -1865,32 +1917,30 @@ impl ToolExecutor {
             }
         }
 
+        let mut approved_by_user = false;
         if is_dangerous_tool(&tool_call.name) && self.conversation_mode.as_deref() == Some("manual")
         {
             tracing::warn!(
-                "[Security] Dangerous tool '{}' requested in manual mode. Emitting approval request.",
+                "[Security] Dangerous tool '{}' requested in manual mode. Requesting approval.",
                 tool_call.name
             );
 
+            // Ask the user and WAIT for the answer.
+            //
+            // This used to be a fire-and-forget `emit("approval:request", …)`
+            // followed immediately by a failed `ToolResult` a few lines below,
+            // which made the whole prompt theatre: the tool call had already
+            // been refused before the user saw anything, and answering it hit
+            // `agent_resolve_approval` -> "Approval {id} not pending", because
+            // nothing had ever registered with the controller.
+            //
+            // `ApprovalController::request_approval` is the mechanism that
+            // actually works (see `core/agent/autonomous.rs`): it emits, parks
+            // on a oneshot channel, consults the trust store, and returns the
+            // user's decision. It is managed Tauri state, so it can be pulled
+            // off the app handle this executor already holds — no constructor
+            // change needed.
             if let Some(app_handle) = &self.app_handle {
-                if let Err(e) = app_handle.emit(
-                    "approval:request",
-                    json!({
-                        "id": uuid::Uuid::new_v4().to_string(),
-                        "type": "tool_execution",
-                        "toolName": tool_call.name,
-                        "description": format!("Agent wants to execute: {}", tool.name),
-                        "riskLevel": "high",
-                        "details": {
-                            "tool": tool.name,
-                            "arguments": metadata_snapshot.clone(),
-                        },
-                        "status": "pending",
-                    }),
-                ) {
-                    tracing::error!("Failed to emit approval:request event: {}", e);
-                }
-
                 if let Err(e) = app_handle.emit(
                     "agent:status:update",
                     json!({
@@ -1903,44 +1953,115 @@ impl ToolExecutor {
                 ) {
                     tracing::error!("Failed to emit agent:status:update event: {}", e);
                 }
+
+                if app_handle
+                    .try_state::<crate::core::agent::approval::ApprovalController>()
+                    .is_some()
+                {
+                    let payload = build_tool_approval_payload(
+                        &action_id,
+                        &tool_call.name,
+                        &tool.name,
+                        &metadata_snapshot,
+                    );
+                    let controller =
+                        app_handle.state::<crate::core::agent::approval::ApprovalController>();
+
+                    let resolution = match tokio::time::timeout(
+                        std::time::Duration::from_secs(TOOL_APPROVAL_TIMEOUT_SECS),
+                        controller.request_approval(app_handle, payload),
+                    )
+                    .await
+                    {
+                        Ok(Ok(res)) => res,
+                        Ok(Err(e)) => {
+                            tracing::warn!(
+                                "[Security] Approval request failed for {}: {}",
+                                tool.name,
+                                e
+                            );
+                            crate::core::agent::approval::ApprovalResolution::Rejected {
+                                reason: Some(format!("Approval request failed: {}", e)),
+                            }
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "[Security] Approval timed out after {}s for {}",
+                                TOOL_APPROVAL_TIMEOUT_SECS,
+                                tool.name
+                            );
+                            crate::core::agent::approval::ApprovalResolution::Rejected {
+                                reason: Some(format!(
+                                    "Approval timed out after {}s",
+                                    TOOL_APPROVAL_TIMEOUT_SECS
+                                )),
+                            }
+                        }
+                    };
+
+                    // Approved: fall through to normal execution below instead
+                    // of returning the blocked result.
+                    if let crate::core::agent::approval::ApprovalResolution::Approved { .. } =
+                        resolution
+                    {
+                        tracing::info!(
+                            "[Security] User approved dangerous tool '{}'; executing.",
+                            tool_call.name
+                        );
+                        approved_by_user = true;
+                    }
+                } else {
+                    // No controller managed (headless/test builds): keep the
+                    // historical fail-closed behavior rather than silently
+                    // running a dangerous tool.
+                    tracing::warn!(
+                        "[Security] ApprovalController unavailable; refusing '{}' in manual mode.",
+                        tool_call.name
+                    );
+                }
             }
 
-            let message = format!(
-                "User approval required to execute dangerous tool: {}",
-                tool.name
-            );
-            self.emit_tool_action(
-                &action_id,
-                &tool_call.name,
-                "blocked",
-                &metadata_snapshot,
-                Some(message.clone()),
-            );
-            self.emit_tool_metrics(
-                &action_id,
-                &tool_call.name,
-                start_time.elapsed().as_millis() as u64,
-                false,
-            );
-            if let Some(app_handle) = &self.app_handle {
-                emit_tool_error(
-                    app_handle,
-                    &action_id,
-                    &message,
-                    start_time.elapsed().as_millis() as u64,
-                    true,
+            if approved_by_user {
+                // Approved — skip the blocked-result return and let the normal
+                // execution path below run the tool.
+            } else {
+                let message = format!(
+                    "User approval required to execute dangerous tool: {}",
+                    tool.name
                 );
-            }
+                self.emit_tool_action(
+                    &action_id,
+                    &tool_call.name,
+                    "blocked",
+                    &metadata_snapshot,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    &action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &message,
+                        start_time.elapsed().as_millis() as u64,
+                        true,
+                    );
+                }
 
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "approval_required": true }),
-                error: Some(message),
-                metadata: HashMap::from([
-                    ("requires_approval".to_string(), json!(true)),
-                    ("tool_name".to_string(), json!(tool_call.name)),
-                ]),
-            });
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "approval_required": true }),
+                    error: Some(message),
+                    metadata: HashMap::from([
+                        ("requires_approval".to_string(), json!(true)),
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                    ]),
+                });
+            }
         }
 
         if let Some(app_handle) = &self.app_handle {
@@ -2053,6 +2174,7 @@ impl ToolExecutor {
                 self.execute_document_create_excel_tool(&args, &tool.id)
                     .await
             }
+            "document_edit_excel" => self.execute_document_edit_excel_tool(&args, &tool.id).await,
             "document_create_pdf" => self.execute_document_create_pdf_tool(&args, &tool.id).await,
             "create_artifact" => self.execute_create_artifact_tool(&args, &tool.id).await,
             "image_analyze" => self.execute_image_analyze_tool(&args).await,

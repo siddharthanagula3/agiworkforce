@@ -4,9 +4,16 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type Theme = 'dark' | 'light' | 'system';
-export type ChatFontSize = 'sm' | 'md' | 'lg';
 export type ChatFont = 'default' | 'system' | 'dyslexic';
 export type ResponseStyle = 'concise' | 'balanced' | 'detailed' | 'technical';
+/**
+ * Transcript text scale. Backed by a REAL CSS hook — see the
+ * `html[data-chat-text-size]` rules in `app/globals.css` and the applier in
+ * `shared/components/AppearancePreferences.tsx`. A previous `chatFontSize`
+ * field was removed because it had no reader and no stylesheet behind it, so
+ * changing it did nothing visible.
+ */
+export type ChatTextSize = 'small' | 'default' | 'large';
 
 export interface CustomCommand {
   id: string;
@@ -25,12 +32,12 @@ export interface NotificationPreferences {
 
 interface SettingsState {
   theme: Theme;
-  chatFontSize: ChatFontSize;
   chatFont: ChatFont;
+  chatTextSize: ChatTextSize;
+  /** Soft-wrap long lines in fenced code blocks instead of scrolling them. */
+  codeBlockWrap: boolean;
   showTokenCount: boolean;
   streamingEnabled: boolean;
-  defaultModel: string;
-  defaultModelTier: 'economy' | 'balanced' | 'premium';
   responseStyle: ResponseStyle;
   notifications: NotificationPreferences;
   /**
@@ -39,25 +46,21 @@ interface SettingsState {
    * Only meaningful for tiers where `allowManualSelection === true` (Pro, Max).
    * Persisted to localStorage so the choice survives page refreshes.
    */
-  advancedMode: boolean;
   /**
    * The model ID the user has explicitly chosen in Advanced mode.
    * `null` means "not yet picked" — the chat layer falls back to auto-routing.
    * Only applied when `advancedMode === true`.
    */
-  advancedModelId: string | null;
   customCommands: CustomCommand[];
   // Actions
   setTheme: (theme: Theme) => void;
-  setChatFontSize: (size: ChatFontSize) => void;
   setChatFont: (font: ChatFont) => void;
+  setChatTextSize: (size: ChatTextSize) => void;
+  setCodeBlockWrap: (wrap: boolean) => void;
   setShowTokenCount: (show: boolean) => void;
   setStreamingEnabled: (enabled: boolean) => void;
-  setDefaultModel: (modelId: string, tier: 'economy' | 'balanced' | 'premium') => void;
   setResponseStyle: (style: ResponseStyle) => void;
   setNotification: (key: keyof NotificationPreferences, value: boolean) => void;
-  setAdvancedMode: (enabled: boolean) => void;
-  setAdvancedModelId: (modelId: string | null) => void;
   addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
   updateCustomCommand: (id: string, cmd: Partial<Omit<CustomCommand, 'id'>>) => void;
   deleteCustomCommand: (id: string) => void;
@@ -67,15 +70,12 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       theme: 'dark',
-      chatFontSize: 'md',
       chatFont: 'default',
+      chatTextSize: 'default',
+      codeBlockWrap: false,
       showTokenCount: false,
       streamingEnabled: true,
-      defaultModel: 'auto',
-      defaultModelTier: 'balanced',
       responseStyle: 'balanced',
-      advancedMode: false,
-      advancedModelId: null,
       customCommands: [],
       notifications: {
         emailWeeklySummary: true,
@@ -85,16 +85,14 @@ export const useSettingsStore = create<SettingsState>()(
         pushMention: false,
       },
       setTheme: (theme) => set({ theme }),
-      setChatFontSize: (size) => set({ chatFontSize: size }),
       setChatFont: (font) => set({ chatFont: font }),
+      setChatTextSize: (size) => set({ chatTextSize: size }),
+      setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
       setShowTokenCount: (show) => set({ showTokenCount: show }),
       setStreamingEnabled: (enabled) => set({ streamingEnabled: enabled }),
-      setDefaultModel: (modelId, tier) => set({ defaultModel: modelId, defaultModelTier: tier }),
       setResponseStyle: (style) => set({ responseStyle: style }),
       setNotification: (key, value) =>
         set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
-      setAdvancedMode: (enabled) => set({ advancedMode: enabled }),
-      setAdvancedModelId: (modelId) => set({ advancedModelId: modelId }),
       addCustomCommand: (cmd) =>
         set((s) => ({
           customCommands: [

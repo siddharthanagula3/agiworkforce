@@ -102,6 +102,8 @@ export interface MessageResearchState {
   maxIterations?: number;
   /** Total web searches observed across the run. */
   searches?: number;
+  /** The search cap this run is bounded by, so the count can be shown as progress. */
+  maxSearches?: number;
   /** Deduped source count. */
   sources?: number;
   elapsedMs?: number;
@@ -167,6 +169,23 @@ export interface MessageMetadata {
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
+  /** Provider that served the turn, from the terminal usage frame. */
+  provider?: string;
+  /**
+   * Usage and cost for the turn, published by the server's terminal `x_usage`
+   * stream frame AFTER billing settles. These are the same numbers the
+   * settlement used, so the displayed cost and the charged cost cannot
+   * diverge. Absent on non-managed turns and on turns that errored.
+   */
+  tokensUsed?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  cachedInputTokens?: number;
+  /** Estimated cost of this turn, in cents. */
+  cost?: number;
+  /** Wall-clock time from request start to stream completion, in ms. */
+  totalDurationMs?: number;
   /** Local -> BYOK handoff evidence persisted on the fork system message. */
   handoffDraftId?: string;
   handoffPreviewHashSha256?: string;
@@ -347,6 +366,14 @@ export interface Message {
   content: string;
   createdAt: string;
   model?: string;
+  provider?: string;
+  /**
+   * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
+   * `output_tokens`), written by the server's assistant-turn persistence and
+   * returned by the conversation load path.
+   */
+  inputTokens?: number;
+  outputTokens?: number;
   isStreaming?: boolean;
   attachments?: Attachment[];
   reactions?: { type: 'thumbsUp' | 'thumbsDown'; userId: string }[];

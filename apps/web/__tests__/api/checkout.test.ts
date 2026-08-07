@@ -209,6 +209,27 @@ describe('POST /api/checkout', () => {
     );
   });
 
+  // Regression: no Checkout Session collected sales tax, VAT, or GST, while
+  // /terms told the customer tax was their obligation to us. This is the only
+  // Checkout-Session creation site, so it is the only place the claim can be
+  // made true.
+  it('collects tax and a business tax id on every checkout session', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'pro', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCheckoutCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        automatic_tax: { enabled: true },
+        tax_id_collection: { enabled: true },
+      }),
+    );
+  });
+
   it('rejects a client-supplied currency instead of trusting a spoofable value', async () => {
     const response = await POST(
       new NextRequest('http://localhost/api/checkout', {

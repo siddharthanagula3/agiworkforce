@@ -25,8 +25,12 @@ import {
 
 const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   {
-    url: 'https://www.anthropic.com/news/claude-4-7',
-    title: 'Introducing a new provider model release',
+    // Synthetic layout data, but pointed at a real, stable page: the previous
+    // fixture invented an `/news/claude-4-7` announcement and a release title
+    // that do not exist. A screenshot of this harness is meant to be diffed
+    // against a competitor's UI, so it must not contain a fabricated release.
+    url: 'https://www.anthropic.com/news',
+    title: 'Anthropic · News',
     domain: 'anthropic.com',
     faviconUrl: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=32',
   },

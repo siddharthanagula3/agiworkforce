@@ -1,36 +1,21 @@
 /**
  * Research Module
  *
- * Provides comprehensive research functionality with multi-source
- * investigation capabilities, progress tracking, and report generation.
+ * The mounted Deep Research surface (`DeepResearchPage`) plus the two
+ * components it composes.
+ *
+ * Cut 2026-08-06 (see docs/adr/wire-or-cut.md): `ResearchPanel` was a legacy
+ * pre-store fork that declared its own parallel type set, called
+ * `invoke('research_start')` directly instead of going through
+ * `stores/researchStore`, and shadowed `ResearchReport`'s name. `SourceCard`,
+ * `ResearchProgressPanel`, and `ResearchSourceCard` were unfeedable: the
+ * backend emits `research:source_added` / `research:finding_added` only when
+ * `request.task_id` is set, and the standalone page never sets it.
  */
 
-export { ResearchPanel, default } from './ResearchPanel';
-export type {
-  ResearchPanelProps,
-  ResearchState,
-  ResearchMode,
-  ResearchModeId,
-  ResearchSource,
-  ResearchFinding,
-  ResearchProgress,
-  ResearchResponse,
-} from './ResearchPanel';
-
+export { DeepResearchPage } from './DeepResearchPage';
+export { ResearchProgress } from './ResearchProgress';
 export { ResearchHistory } from './ResearchHistory';
 export type { ResearchHistoryProps } from './ResearchHistory';
-
-export { SourceCard } from './SourceCard';
-export type { SourceCardProps, SourceData, SourceStatus, SourceType } from './SourceCard';
-
-export { ResearchProgressPanel } from './ResearchProgressPanel';
-export type {
-  ResearchProgressPanelProps,
-  ResearchSource as ResearchSourceShape,
-} from './ResearchProgressPanel';
-
-export { ResearchSourceCard } from './ResearchSourceCard';
-export type { ResearchSourceCardProps } from './ResearchSourceCard';
-
 export { ResearchReport, ResearchReportExternalLink } from './ResearchReport';
 export type { ResearchReportProps } from './ResearchReport';

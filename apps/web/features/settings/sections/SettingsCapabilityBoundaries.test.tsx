@@ -47,16 +47,27 @@ describe('Web Settings capability boundaries', () => {
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
   });
 
-  it('does not imply unsupported account factors, device revocation, or trusted contacts', () => {
+  it('does not imply unsupported account factors or trusted contacts', () => {
     render(<SecuritySection />);
 
     expect(screen.getByText('Current account boundary')).toBeInTheDocument();
     expect(
-      screen.getByText(/Passkeys, security keys, SMS MFA, trusted-device lists/),
+      screen.getByText(/Passkeys, security keys, SMS MFA, and trusted-device lists/),
     ).toBeInTheDocument();
     expect(screen.getByText('Trusted contact · Not configured')).toBeInTheDocument();
     expect(
       screen.getByText(/does not monitor conversations to notify another person/),
     ).toBeInTheDocument();
+  });
+
+  // Regression: the boundary copy listed "cross-device session revocation" as
+  // unavailable while AccountSection + /api/settings/sessions implement it (with
+  // their own tests). Under-claiming a shipped security control is still a false
+  // statement, and this test previously locked that claim in.
+  it('does not deny cross-device session revocation, which is implemented', () => {
+    render(<SecuritySection />);
+
+    expect(screen.queryByText(/cross-device session revocation/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/sign out other devices, use\s+Account settings/i)).toBeInTheDocument();
   });
 });

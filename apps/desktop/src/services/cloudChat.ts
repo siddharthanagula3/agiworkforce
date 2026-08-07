@@ -233,6 +233,12 @@ export async function ensureCloudConversation(
   model?: string,
   projectId?: string | null,
   signal?: AbortSignal,
+  // Temporary chats are excluded from history and purged by the retention cron
+  // (`/api/cron/purge-temporary-chats`). The field was declared on the wire
+  // type and hardcoded `false` at both construction sites, so desktop could
+  // never actually start one — the capability existed everywhere except the one
+  // place that decides.
+  isTemporary = false,
 ): Promise<CloudConversation> {
   throwIfAborted(signal);
   const boundary = captureCloudConversationBoundary();
@@ -249,7 +255,7 @@ export async function ensureCloudConversation(
       pinned: false,
       starred: false,
       archived: false,
-      is_temporary: false,
+      is_temporary: isTemporary,
       created_at: now,
       updated_at: now,
       last_message_at: null,
@@ -279,6 +285,7 @@ export async function ensureCloudConversation(
         title,
         ...(model ? { model } : {}),
         ...(projectId !== undefined ? { projectId } : {}),
+        ...(isTemporary ? { isTemporary: true } : {}),
       },
       { signal: controller.signal },
     )

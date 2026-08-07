@@ -70,13 +70,25 @@ describe('0090 shared project knowledge is read-only for org members', () => {
     );
   });
 
-  it('is the highest-numbered migration touching this table, so it wins', () => {
-    // A later migration reinstating a FOR ALL policy would silently undo this.
-    const later = readdirSync(neonDir)
+  it('is the last migration to touch this table POLICIES, so its grants win', () => {
+    // The invariant this protects is narrow and worth stating exactly: no later
+    // migration may create or alter a POLICY on project_knowledge_files,
+    // because a reinstated FOR ALL policy would silently restore the DELETE
+    // escalation 0090 repaired.
+    //
+    // It deliberately does NOT forbid later migrations from touching the table
+    // at all. 0098 adds version-history columns and indexes and defines no
+    // policy; blocking that would have forced either renumbering a migration
+    // behind an applied one, or deleting this guard outright — both worse than
+    // asserting the thing actually meant.
+    const laterPolicyChanges = readdirSync(neonDir)
       .filter((f) => /^\d{4}_.*\.sql$/.test(f))
       .filter((f) => Number.parseInt(f.slice(0, 4), 10) > 90)
-      .filter((f) => readMigration(f).includes('project_knowledge_files'));
+      .filter((f) => {
+        const sqlText = readMigration(f);
+        return /(create|alter|drop)\s+policy[\s\S]{0,400}?project_knowledge_files/i.test(sqlText);
+      });
 
-    expect(later).toEqual([]);
+    expect(laterPolicyChanges).toEqual([]);
   });
 });

@@ -1,37 +1,95 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { useTTS } from './useTTS';
 
-class FakeUtterance {
-  readonly text: string;
-  rate = 1;
-  pitch = 1;
-  volume = 1;
-  onstart: (() => void) | null = null;
-  onend: (() => void) | null = null;
-  onerror: (() => void) | null = null;
+/**
+ * Read-aloud spoke in whatever voice the browser picked and offered no way to
+ * change it, while Settings persisted a `voice: 'nova'` string that nothing
+ * read. These cover the voice selection and the two ways it silently breaks:
+ * Chrome returning an empty voice list on the first `getVoices()` call, and a
+ * stored voice that no longer exists on this device.
+ */
 
-  constructor(text: string) {
-    this.text = text;
-  }
+class FakeVoice {
+  constructor(
+    public name: string,
+    public lang: string,
+    public voiceURI: string,
+  ) {}
+  default = false;
+  localService = true;
 }
 
-const synthesis = {
-  cancel: vi.fn(),
-  speak: vi.fn(),
-};
+const ALICE = new FakeVoice('Alice', 'en-GB', 'urn:voice:alice') as unknown as SpeechSynthesisVoice;
+const BRUNO = new FakeVoice('Bruno', 'de-DE', 'urn:voice:bruno') as unknown as SpeechSynthesisVoice;
+
+let listeners: Record<string, Array<() => void>>;
+let spoken: SpeechSynthesisUtterance[];
+let available: SpeechSynthesisVoice[];
+
+function installSpeechSynthesis() {
+  listeners = {};
+  spoken = [];
+  available = [];
+
+  const synth = {
+    getVoices: () => available,
+    speak: (utterance: SpeechSynthesisUtterance) => spoken.push(utterance),
+    cancel: vi.fn(),
+    addEventListener: (event: string, handler: () => void) => {
+      (listeners[event] ??= []).push(handler);
+    },
+    removeEventListener: (event: string, handler: () => void) => {
+      listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
+    },
+  };
+
+  vi.stubGlobal('speechSynthesis', synth);
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+
+  class Utterance {
+    voice: SpeechSynthesisVoice | null = null;
+    lang = '';
+    rate = 1;
+    pitch = 1;
+    volume = 1;
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(public text: string) {}
+  }
+  vi.stubGlobal('SpeechSynthesisUtterance', Utterance);
+  Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+    value: Utterance,
+    configurable: true,
+  });
+}
+
+/** Chrome fills the list asynchronously and announces it with this event. */
+function emitVoicesChanged(next: SpeechSynthesisVoice[]) {
+  available = next;
+  act(() => {
+    (listeners['voiceschanged'] ?? []).forEach((handler) => handler());
+  });
+}
 
 beforeEach(() => {
-  synthesis.cancel.mockClear();
-  synthesis.speak.mockClear();
-  vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance);
-  Object.defineProperty(window, 'speechSynthesis', {
-    configurable: true,
-    value: synthesis,
-  });
+  installSpeechSynthesis();
+  window.localStorage.clear();
 });
 
-describe('useTTS', () => {
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.localStorage.clear();
+});
+
+/**
+ * Original coverage — behaviour that predates voice selection and must keep
+ * working: Markdown is stripped before speaking, speaking state follows the
+ * ACTIVE utterance, and a superseded utterance's late events are ignored.
+ */
+describe('useTTS — speech content and state', () => {
   it('reads clean prose instead of Markdown syntax or raw code', () => {
     const { result } = renderHook(() => useTTS());
 
@@ -41,19 +99,18 @@ describe('useTTS', () => {
       ),
     );
 
-    const utterance = synthesis.speak.mock.calls[0]?.[0] as FakeUtterance;
-    expect(utterance.text).toBe('Result\nDone here\ncode block omitted.');
+    expect(spoken[0]!.text).toBe('Result\nDone here\ncode block omitted.');
   });
 
   it('tracks start and completion from the active utterance', () => {
     const { result } = renderHook(() => useTTS());
 
     act(() => result.current.speak('Hello'));
-    const utterance = synthesis.speak.mock.calls[0]?.[0] as FakeUtterance;
-    act(() => utterance.onstart?.());
+    const utterance = spoken[0]!;
+    act(() => utterance.onstart?.(undefined as never));
     expect(result.current.isSpeaking).toBe(true);
 
-    act(() => utterance.onend?.());
+    act(() => utterance.onend?.(undefined as never));
     expect(result.current.isSpeaking).toBe(false);
   });
 
@@ -61,15 +118,99 @@ describe('useTTS', () => {
     const { result } = renderHook(() => useTTS());
 
     act(() => result.current.speak('First'));
-    const first = synthesis.speak.mock.calls[0]?.[0] as FakeUtterance;
-    act(() => first.onstart?.());
+    const first = spoken[0]!;
+    act(() => first.onstart?.(undefined as never));
 
     act(() => result.current.speak('Second'));
-    const second = synthesis.speak.mock.calls[1]?.[0] as FakeUtterance;
+    const second = spoken[1]!;
     expect(second.text).toBe('Second');
-    act(() => second.onstart?.());
-    act(() => first.onend?.());
+    act(() => second.onstart?.(undefined as never));
+    // The first utterance finishing AFTER the second started must not clear the
+    // speaking state — the second is still going.
+    act(() => first.onend?.(undefined as never));
 
     expect(result.current.isSpeaking).toBe(true);
+  });
+});
+
+describe('useTTS — voice enumeration', () => {
+  it('picks up voices that arrive after mount', () => {
+    // Chrome returns [] from the first getVoices() call. Reading it once on
+    // mount is why voice pickers render permanently empty.
+    const { result } = renderHook(() => useTTS());
+    expect(result.current.voices).toEqual([]);
+
+    emitVoicesChanged([ALICE, BRUNO]);
+
+    expect(result.current.voices).toHaveLength(2);
+  });
+
+  it('reports voices already present at mount', () => {
+    available = [ALICE];
+    const { result } = renderHook(() => useTTS());
+
+    expect(result.current.voices).toEqual([ALICE]);
+  });
+});
+
+describe('useTTS — voice selection', () => {
+  it('speaks in the selected voice and matches its language', () => {
+    const { result } = renderHook(() => useTTS());
+    emitVoicesChanged([ALICE, BRUNO]);
+
+    act(() => result.current.setVoiceUri(BRUNO.voiceURI));
+    act(() => result.current.speak('hallo'));
+
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]!.voice).toBe(BRUNO);
+    // A mismatched lang lets some engines hand German text to a US voice.
+    expect(spoken[0]!.lang).toBe('de-DE');
+  });
+
+  it('leaves the browser default in place when nothing is selected', () => {
+    const { result } = renderHook(() => useTTS());
+    emitVoicesChanged([ALICE]);
+
+    act(() => result.current.speak('hello'));
+
+    expect(spoken[0]!.voice).toBeNull();
+  });
+
+  it('persists the choice across remounts', () => {
+    const first = renderHook(() => useTTS());
+    emitVoicesChanged([ALICE, BRUNO]);
+    act(() => first.result.current.setVoiceUri(ALICE.voiceURI));
+    first.unmount();
+
+    available = [ALICE, BRUNO];
+    const second = renderHook(() => useTTS());
+    expect(second.result.current.voiceUri).toBe(ALICE.voiceURI);
+  });
+
+  it('clears back to the default', () => {
+    const { result } = renderHook(() => useTTS());
+    emitVoicesChanged([ALICE]);
+
+    act(() => result.current.setVoiceUri(ALICE.voiceURI));
+    act(() => result.current.setVoiceUri(null));
+    act(() => result.current.speak('hello'));
+
+    expect(result.current.voiceUri).toBeNull();
+    expect(spoken[0]!.voice).toBeNull();
+  });
+});
+
+describe('useTTS — missing voice', () => {
+  it('still speaks when the stored voice is not installed here', () => {
+    // The same account on another OS has an entirely different voice set.
+    window.localStorage.setItem('agi:tts-voice-uri', 'urn:voice:not-on-this-device');
+    available = [ALICE];
+
+    const { result } = renderHook(() => useTTS());
+    act(() => result.current.speak('hello'));
+
+    // Falling silent would look like read-aloud is broken.
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]!.voice).toBeNull();
   });
 });

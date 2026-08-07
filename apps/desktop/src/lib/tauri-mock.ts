@@ -939,37 +939,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'inspect_element_at':
       return null as T;
 
-    // Marketplace commands
-    case 'get_published_workflows':
-    case 'get_featured_workflows':
-    case 'get_trending_workflows':
-    case 'get_my_published_workflows':
-    case 'get_workflow_by_id':
-    case 'get_workflow_reviews':
-    case 'get_workflow_comments':
-    case 'get_workflow_analytics':
-    case 'get_workflow_stats':
-    case 'get_category_counts':
-    case 'get_popular_tags':
-    case 'search_marketplace_workflows':
-      return [] as T;
-
-    case 'clone_marketplace_workflow':
-    case 'publish_workflow':
-    case 'unpublish_workflow':
-    case 'rate_workflow':
-    case 'favorite_workflow':
-    case 'unfavorite_workflow':
-    case 'comment_on_workflow':
-    case 'delete_workflow_comment':
-    case 'get_workflow_share_url':
-    case 'share_workflow':
-    case 'get_workflow_embed_code':
-    case 'increment_workflow_view_count':
-    case 'is_workflow_favorited':
-    case 'get_user_workflow_rating':
-      return undefined as T;
-
     // ROI/Metrics commands
     case 'get_today_stats':
     case 'get_week_stats':
@@ -1487,78 +1456,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'voice_transcribe_local':
       return { text: '(mock transcript)', confidence: 0.95 } as T;
 
-    // ── AGI Checkpoint commands ─────────────────────────────────────
-    case 'agi_checkpoint_init':
-      return { success: true, data: undefined, error: undefined } as T;
-
-    case 'agi_checkpoint_save':
-      return {
-        success: true,
-        data: {
-          id: `ckpt_mock_${Date.now()}`,
-          task_id: (args?.['request'] as Record<string, unknown>)?.['task_id'] ?? 'task_mock',
-          goal: {
-            id: 'goal_mock',
-            description: 'Mock goal',
-            priority: 'High',
-            deadline: null,
-            constraints: [],
-            success_criteria: [],
-          },
-          current_step: 0,
-          completed_steps: [],
-          current_state: {},
-          tool_results: [],
-          context_memory: [],
-          available_resources: {
-            cpu_usage_percent: 0,
-            memory_usage_mb: 0,
-            network_usage_mbps: 0,
-            storage_usage_mb: 0,
-            available_tools: [],
-          },
-          created_at_ms: Date.now(),
-          reason: 'interval',
-          metadata: {
-            total_steps: 1,
-            progress_percent: 0,
-            elapsed_time_ms: 0,
-            estimated_remaining_ms: null,
-            tool_calls_executed: 0,
-            failure_count: 0,
-            last_error: null,
-            progress_summary: 'Mock checkpoint saved',
-          },
-          is_latest: true,
-          parent_checkpoint_id: null,
-        },
-        error: undefined,
-      } as T;
-
-    case 'agi_checkpoint_get_latest':
-    case 'agi_checkpoint_get':
-      return { success: true, data: null, error: undefined } as T;
-
-    case 'agi_checkpoint_list':
-      return {
-        success: true,
-        data: {
-          task_id: (args?.['request'] as Record<string, unknown>)?.['task_id'] ?? '',
-          checkpoints: [],
-        },
-        error: undefined,
-      } as T;
-
-    case 'agi_checkpoint_delete':
-    case 'agi_checkpoint_record_restore':
-      return { success: true, data: undefined, error: undefined } as T;
-
-    case 'agi_checkpoint_restore_history':
-      return { success: true, data: [], error: undefined } as T;
-
-    case 'agi_checkpoint_cleanup':
-      return { success: true, data: 0, error: undefined } as T;
-
     // ── Agent/AGI commands ──────────────────────────────────────────
     case 'agent_init':
     case 'agi_init':
@@ -1872,21 +1769,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'has_unlocked_feature':
       return false as T;
 
-    // ── Marketplace (new) ───────────────────────────────────────────
-    case 'fork_marketplace_workflow':
-    case 'publish_workflow_to_marketplace':
     case 'track_workflow_view':
-    case 'get_workflow_by_share_url':
       return undefined as T;
-
-    case 'get_creator_workflows':
-    case 'get_workflows_by_category':
-    case 'get_workflow_templates_by_category':
-    case 'search_workflow_templates':
-    case 'get_workflow_templates':
-    case 'get_user_clones':
-    case 'get_user_favorites':
-      return [] as T;
 
     // Analytics — report generation (returns string content)
     case 'analytics_generate_weekly_report':
@@ -2350,9 +2234,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'composer_start_session':
     case 'composer_apply_session':
     case 'composer_get_session':
-    case 'delete_autonomous_task_checkpoint':
-    case 'delete_autonomous_task_checkpoints':
-    case 'resume_autonomous_task':
       return undefined as T;
 
     case 'task_get_resumable':
@@ -2360,8 +2241,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return null as T;
 
     case 'task_list_by_status':
-    case 'list_autonomous_task_checkpoints':
-    case 'list_autonomous_task_checkpoints_by_task':
       return [] as T;
 
     // ── Batch: 51 missing commands (write, account, settings, etc.) ───

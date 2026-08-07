@@ -262,6 +262,22 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
 // CloudRuntime implementation
 // ---------------------------------------------------------------------------
 
+/**
+ * Read the temporary-chat preference without importing the settings store at
+ * module scope. A static import pulls the whole settings dependency graph into
+ * this runtime, which breaks consumers that mock only the runtime's own
+ * collaborators. Defaults to `false` — a chat must never become temporary (and
+ * therefore auto-deleted) because a lookup failed.
+ */
+async function readTemporaryChatPreference(): Promise<boolean> {
+  try {
+    const { useSettingsStore } = await import('../stores/settingsStore');
+    return useSettingsStore.getState().chatPreferences.temporaryChat === true;
+  } catch {
+    return false;
+  }
+}
+
 export class CloudRuntime implements ChatRuntime {
   private _disposed = false;
   private _boundary: CloudConversationBoundary | null = null;
@@ -960,6 +976,10 @@ export class CloudRuntime implements ChatRuntime {
         model,
         options?.projectId,
         controller.signal,
+        // Read at creation time: temporary is a property of THIS conversation,
+        // fixed when the row is written. Toggling the chip later must not
+        // retroactively change an existing conversation's retention.
+        await readTemporaryChatPreference(),
       );
       if (shouldStopBeforeDispatch()) return;
       this.assertBoundary(boundary);

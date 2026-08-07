@@ -11,6 +11,7 @@ import { SettingsModalProvider } from '@/features/settings/components/SettingsMo
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
+import { AppearancePreferences } from '@shared/components/AppearancePreferences';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { seoService } from '@/lib/seo/seo-optimizer';
@@ -38,6 +39,7 @@ export default function Providers({
         <QueryProvider>
           <I18nextProvider i18n={i18n}>
             <WaitlistModalProvider>
+              <AppearancePreferences />
               <SettingsModalProvider>{children}</SettingsModalProvider>
               <CommandPaletteProvider />
               <OfflineIndicator position="bottom" />

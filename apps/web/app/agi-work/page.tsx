@@ -87,8 +87,8 @@ export default function AgiWorkPage() {
               v: 'Sensitive actions ask before they run. Broader automation is an explicit, scoped choice — never a silent default.',
             },
             {
-              k: 'Desktop dispatch — coming',
-              v: 'Scheduled routines that run on your own machine and phone-to-desktop dispatch are still in development. They are not available yet; this page will say so the moment they ship.',
+              k: 'Desktop dispatch',
+              v: 'Scheduled routines run on your own machine, and you can hand a task from your phone to a paired desktop. Both require the Desktop app, and dispatch only runs when that desktop has explicitly enabled it.',
             },
           ]}
         />
@@ -96,7 +96,7 @@ export default function AgiWorkPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Put a goal into AGI Work."
-          body="AGI Work is live in the web app: switch the composer to AGI Work, hand it an outcome, approve the steps that matter, and collect the deliverable. Scheduled desktop routines and mobile-to-desktop dispatch are coming later, and stay clearly labeled as future until they ship."
+          body="AGI Work is live in the web app: switch the composer to AGI Work, hand it an outcome, approve the steps that matter, and collect the deliverable. Scheduled routines and mobile-to-desktop dispatch ship with the Desktop app."
           ctas={[
             { href: '/chat', label: 'Open AGI Work' },
             { href: '/tasks', label: 'See task history' },

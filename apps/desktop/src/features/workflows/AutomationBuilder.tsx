@@ -77,11 +77,18 @@ const CRON_PRESETS: { label: string; value: string }[] = [
   { label: 'Monthly 1st 9am', value: '0 9 1 * *' },
 ];
 
-const DEFAULT_CRON_CONFIG: CronConfig = { expression: '0 9 * * *' };
-const DEFAULT_WEBHOOK_CONFIG: WebhookConfig = { path: '/webhook', authEnabled: false };
+// Each default carries the `type` discriminant the Rust `TriggerConfig` enum
+// requires; serde cannot pick a variant without it.
+const DEFAULT_CRON_CONFIG: CronConfig = { type: 'cron', expression: '0 9 * * *' };
+const DEFAULT_WEBHOOK_CONFIG: WebhookConfig = {
+  type: 'webhook',
+  path: '/webhook',
+  authToken: null,
+};
 const DEFAULT_FILE_WATCHER_CONFIG: FileWatcherConfig = {
-  directory: '',
-  globPattern: '**/*',
+  type: 'fileWatcher',
+  watchPath: '',
+  glob: '**/*',
   debounceMs: 500,
 };
 
@@ -135,6 +142,7 @@ function defaultFormState(): CreateTriggerInput {
     enabled: true,
     config: { ...DEFAULT_CRON_CONFIG },
     action: {
+      type: 'agent',
       prompt: '',
       model: getDefaultModelFor(null, 'chat'),
       approvalRequired: false,
@@ -357,10 +365,10 @@ function ConfigSummary({ trigger }: { trigger: EventTriggerDefinition }) {
     summary = `Schedule: ${(cfg as CronConfig).expression}`;
   } else if (trigger.type === 'webhook') {
     const wh = cfg as WebhookConfig;
-    summary = `Path: ${wh.path}${wh.authEnabled ? ' · Auth enabled' : ''}`;
+    summary = `Path: ${wh.path}${wh.authToken ? ' · Auth token set' : ''}`;
   } else if (trigger.type === 'file_watcher') {
     const fw = cfg as FileWatcherConfig;
-    summary = `Watch: ${fw.directory || '(unset)'} — ${fw.globPattern}`;
+    summary = `Watch: ${fw.watchPath || '(unset)'} — ${fw.glob}`;
   }
 
   return (
@@ -562,11 +570,16 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-foreground">Require auth token</label>
                 <Switch
-                  checked={(cfg as WebhookConfig).authEnabled}
+                  checked={Boolean((cfg as WebhookConfig).authToken)}
                   onCheckedChange={(checked) =>
                     setForm((prev) => ({
                       ...prev,
-                      config: { ...(prev.config as WebhookConfig), authEnabled: checked },
+                      config: {
+                        ...(prev.config as WebhookConfig),
+                        // Rust stores a bearer token, not a boolean. Turning the
+                        // switch on mints one; turning it off clears it.
+                        authToken: checked ? crypto.randomUUID() : null,
+                      },
                     }))
                   }
                 />
@@ -581,13 +594,13 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={(cfg as FileWatcherConfig).directory}
+                    value={(cfg as FileWatcherConfig).watchPath}
                     onChange={(e) =>
                       setForm((prev) => ({
                         ...prev,
                         config: {
                           ...(prev.config as FileWatcherConfig),
-                          directory: e.target.value,
+                          watchPath: e.target.value,
                         },
                       }))
                     }
@@ -609,13 +622,13 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                 <label className="text-xs font-medium text-foreground">Glob pattern</label>
                 <input
                   type="text"
-                  value={(cfg as FileWatcherConfig).globPattern}
+                  value={(cfg as FileWatcherConfig).glob ?? ''}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
                       config: {
                         ...(prev.config as FileWatcherConfig),
-                        globPattern: e.target.value,
+                        glob: e.target.value,
                       },
                     }))
                   }
@@ -630,7 +643,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                   type="number"
                   min={100}
                   max={30000}
-                  value={(cfg as FileWatcherConfig).debounceMs}
+                  value={(cfg as FileWatcherConfig).debounceMs ?? 500}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
@@ -655,7 +668,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-foreground">Prompt</label>
               <textarea
-                value={form.action.prompt}
+                value={form.action.prompt ?? ''}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
@@ -672,7 +685,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-foreground">Model</label>
               <Select
-                value={form.action.model}
+                value={form.action.model ?? ''}
                 onValueChange={(v) =>
                   setForm((prev) => ({ ...prev, action: { ...prev.action, model: v } }))
                 }

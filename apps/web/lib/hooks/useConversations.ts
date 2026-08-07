@@ -71,7 +71,13 @@ function useConversationAuthHeaders() {
   return { getAuthHeaders, isLoaded, isSignedIn };
 }
 
-function toWebConversation(
+/**
+ * Wire row → sidebar store shape. Exported because the deleted-chats restore
+ * path needs the SAME mapping: a restored conversation has to be added to the
+ * store, and a second hand-written mapper is how `isTemporary` got dropped the
+ * first time (see the note below).
+ */
+export function toWebConversation(
   wire: Parameters<typeof normalizeManagedCloudConversation>[0],
 ): Conversation {
   const conversation = normalizeManagedCloudConversation(wire);

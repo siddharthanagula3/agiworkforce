@@ -25,11 +25,26 @@ export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
 
+/** Selectable link lifetimes, in days. Keep in sync with the schema below. */
+const DEFAULT_SHARE_EXPIRY_DAYS = 7;
+
 const CreateShareSchema = z.object({
   title: z.string().min(1).max(200).default('Shared Session'),
   model_id: z.string().optional(),
   provider: z.string().optional(),
   messages: z.array(z.record(z.string(), z.unknown())).default([]),
+  /**
+   * How long the link stays live. Previously hardcoded to 7 days with no way
+   * to ask for anything else — a user sharing a transcript for a single review
+   * had no way to make it short-lived, and one sharing reference material had
+   * no way to make it last.
+   *
+   * Bounded by an enum rather than a free number so a caller cannot mint a link
+   * that effectively never expires; the retention story stays predictable.
+   */
+  expires_in_days: z
+    .union([z.literal(1), z.literal(7), z.literal(30)])
+    .default(DEFAULT_SHARE_EXPIRY_DAYS),
 });
 
 // Sanitize messages - strip local absolute paths from display_args to avoid leaking local FS info
@@ -79,13 +94,13 @@ async function handleCreateShare(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const { title, model_id, provider, messages } = parsed.data;
+  const { title, model_id, provider, messages, expires_in_days: expiresInDays } = parsed.data;
 
   // Generate 24-char base64url token (144 bits entropy)
   const token = randomBytes(18).toString('base64url');
 
   const sanitizedMessages = sanitizeMessages(messages);
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
   const [data] = await db.query<SharedSessionRow>(
     `insert into shared_sessions
