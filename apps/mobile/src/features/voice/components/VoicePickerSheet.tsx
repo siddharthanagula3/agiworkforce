@@ -12,13 +12,14 @@
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import Animated, { FadeIn, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
+import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VOICE_PRESETS, type VoicePreset } from '../voicePresets';
 
@@ -65,6 +66,7 @@ export interface VoicePickerSheetProps {
 
 export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerSheetProps) {
   const insets = useSafeAreaInsets();
+  const sheetSlideIn = useSheetSlideIn({ visible });
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
@@ -119,16 +121,17 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
         style={{ flex: 1, backgroundColor: colors.scrim }}
       >
         <Animated.View
-          entering={SlideInDown.springify().damping(22)}
-          exiting={SlideOutDown.duration(180)}
-          style={{
-            flex: 1,
-            marginTop: insets.top + 8,
-            backgroundColor: colors.surfaceElevated,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingBottom: insets.bottom + 20,
-          }}
+          style={[
+            {
+              flex: 1,
+              marginTop: insets.top + 8,
+              backgroundColor: colors.surfaceElevated,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingBottom: insets.bottom + 20,
+            },
+            sheetSlideIn,
+          ]}
         >
           <View
             style={{

@@ -5,6 +5,7 @@ import { resolveMobileImageGenerationRequest } from '../src/features/chat/action
 const eligibleRequest = {
   executionMode: 'cloud' as const,
   text: '/image a secure enterprise architecture',
+  mediaMode: 'text' as const,
   selection: getDefaultCloudModelIdForTier('pro')!,
   subscriptionTier: 'pro',
   hasAttachments: false,
@@ -86,5 +87,58 @@ describe('resolveMobileImageGenerationRequest', () => {
         text: '/imageinfo explain this command',
       }),
     ).toEqual({ status: 'not_requested' });
+  });
+});
+
+/**
+ * Image mode is the composer's explicit output-kind switch. It shipped wired to
+ * the video resolver but NOT to this one, so the composer could show the Image
+ * chip and the image model's name while a prompt without an image noun fell
+ * through to chat completions — the reported "it is using text model instead of
+ * image model", where "Create an stylist anime MC" came back as a written
+ * character profile.
+ */
+describe('resolveMobileImageGenerationRequest — explicit Image mode', () => {
+  const imageMode = { ...eligibleRequest, mediaMode: 'image' as const };
+
+  it('admits a prompt that names no visual medium at all', () => {
+    const result = resolveMobileImageGenerationRequest({
+      ...imageMode,
+      text: 'Create an stylist anime MC',
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      prompt: 'Create an stylist anime MC',
+    });
+    if (result.status === 'ready') {
+      expect(getModelMetadataById(result.model)?.capabilities.imageGen).toBe(true);
+    }
+  });
+
+  it('leaves the same prompt to ordinary chat when the mode is text', () => {
+    expect(
+      resolveMobileImageGenerationRequest({
+        ...eligibleRequest,
+        text: 'Create an stylist anime MC',
+      }),
+    ).toEqual({ status: 'not_requested' });
+  });
+
+  it('still fails closed on the plan gate rather than silently answering as text', () => {
+    expect(
+      resolveMobileImageGenerationRequest({
+        ...imageMode,
+        text: 'Create an stylist anime MC',
+        subscriptionTier: 'free',
+      }),
+    ).toMatchObject({ status: 'blocked', code: 'plan_required' });
+  });
+
+  it('blocks an empty prompt instead of dispatching a blank generation', () => {
+    expect(resolveMobileImageGenerationRequest({ ...imageMode, text: '   ' })).toMatchObject({
+      status: 'blocked',
+      code: 'empty_prompt',
+    });
   });
 });

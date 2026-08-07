@@ -66,6 +66,13 @@ import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/v
 const LARGE_PASTE_THRESHOLD = 10_000;
 
 /**
+ * Measured content height, in points, past which the composer restacks. One
+ * line of the composer's 15pt text measures ~20pt, two measure ~38pt, so this
+ * sits in the gap between them with room for font-scaling wobble.
+ */
+const STACK_LAYOUT_MIN_HEIGHT = 34;
+
+/**
  * Fold a dictation transcript into the composer's existing text.
  *
  * Shared by both dictation exits (stop-into-composer and stop-and-send) so a
@@ -190,6 +197,10 @@ export function ChatInput({
   // single row would squeeze long text into a ~278pt column between the two
   // 40pt buttons while the pill grew tall — the "width goes very large but
   // only the middle" report. Both ChatGPT and Claude restack the same way.
+  //
+  // Latches on from the height measurement and clears only when the composer
+  // empties (see the effect below). See `onContentSizeChange` for why the
+  // release has to be driven by the text rather than by another measurement.
   const [isMultiline, setIsMultiline] = useState(false);
   // Full-screen editing of the current message (PAR-M05). No text of its own —
   // it renders this composer's `text`/`handleChangeText`.
@@ -593,6 +604,15 @@ export function ChatInput({
     [resetRecordingUi],
   );
 
+  // The only release for the stacked layout. Driven by the text instead of by
+  // a second height reading, which is what would reintroduce the oscillation,
+  // and placed here rather than in `handleChangeText` so it also covers send,
+  // slash-command clears, draft switches, and dictation cancel — every path
+  // that empties the composer, not just typing.
+  useEffect(() => {
+    if (text.length === 0) setIsMultiline(false);
+  }, [text]);
+
   const hasContent = text.trim().length > 0 || attachments.length > 0;
   // Recording and transcribing keep the compact row: both render short,
   // fixed-height content and morph the row's buttons in place.
@@ -964,12 +984,27 @@ export function ChatInput({
             value={text}
             onChangeText={handleChangeText}
             // Measure the rendered text rather than counting characters, so
-            // wrapped long words and pasted newlines are both caught. The 4pt
-            // band above one line's height debounces sub-pixel jitter that
-            // would otherwise flip the layout back and forth on every keystroke.
+            // wrapped long words and pasted newlines are both caught.
+            //
+            // ONE-WAY ON PURPOSE. This measurement is only ever allowed to
+            // *enter* the stacked layout; `isMultiline` is cleared from the
+            // empty-composer effect above, never from a height reading. That
+            // asymmetry is what stops the composer shaking.
+            //
+            // The height being measured depends on the input's width, and the
+            // width depends on the layout this measurement chooses:
+            //   compact  -> pill - 12 padding - 34 plus - 34 mic = pill - 80
+            //   stacked  -> pill - 16 - 10 - 28 expand glyph     = pill - 54
+            // Stacking hands the text 26pt more room. So any string that wraps
+            // to two lines at the narrow width but fits on one at the wide one
+            // used to oscillate forever: compact measures ~38 -> stack, stacked
+            // measures ~20 -> unstack, repeat, at layout framerate. A symmetric
+            // hysteresis band cannot fix that — it damps sub-pixel jitter, not
+            // a 26pt swing in the measuring stick itself.
             onContentSizeChange={(event) => {
-              const height = event.nativeEvent.contentSize.height;
-              setIsMultiline((current) => (current ? height > 30 : height > 34));
+              if (event.nativeEvent.contentSize.height > STACK_LAYOUT_MIN_HEIGHT) {
+                setIsMultiline(true);
+              }
             }}
             multiline
             numberOfLines={MAX_INPUT_LINES}
