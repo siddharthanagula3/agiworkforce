@@ -8,9 +8,16 @@
  * gateway validates server-side.
  */
 
+import * as Crypto from 'expo-crypto';
+
 import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
+// Deep subpath, NOT the '@agiworkforce/utils' barrel: the barrel re-exports
+// pathContainment.ts, which imports 'node:path'. Metro has no Node stdlib, so
+// importing the barrel from a mobile file fails the whole bundle
+// ("You attempted to import the Node standard library module 'node:path'").
+import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaImageGenerationRequest } from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
@@ -50,12 +57,37 @@ export interface GeneratedImage {
  * inline; this client does not invent a polling route.
  * @throws {Error} On network or server errors
  */
-export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
+export async function generateImage(
+  request: ImageGenRequest,
+  options: { operationId?: string } = {},
+): Promise<ImageGenResponse> {
   if (!FEATURES.imageGen) throw new Error('imagegen: image generation not available in v1');
   if (!request.prompt.trim()) {
     throw new Error('Image generation requires a non-empty prompt');
   }
-  return api.post<ImageGenResponse>('/api/media/image/generate', request);
+
+  /**
+   * `Idempotency-Key` is REQUIRED by `/api/media/image/generate` — the route
+   * calls `parseManagedUsageIdempotencyKey` before it does any work, so every
+   * mobile image generation failed outright with "Idempotency-Key header is
+   * required for Managed Cloud chat". Web (`useMediaGeneration.ts`) and Desktop
+   * (`CloudRuntime.ts`) both built the key with the shared helper; mobile sent
+   * no header at all.
+   *
+   * The key is derived ONCE per user action. `options.operationId` lets a caller
+   * reuse the same identity across transport retries so a retried request is
+   * settled once rather than billed twice — which is the whole point of the
+   * header, not a formality to satisfy.
+   */
+  const idempotencyKey = createManagedMediaIdempotencyKey({
+    surface: 'mobile',
+    operation: 'image',
+    operationId: options.operationId ?? Crypto.randomUUID(),
+  });
+
+  return api.post<ImageGenResponse>('/api/media/image/generate', request, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 }
 
 export function getGeneratedImageUri(image: GeneratedImage | undefined): string | null {

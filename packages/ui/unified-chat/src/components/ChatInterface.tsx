@@ -19,7 +19,7 @@ import type {
   DeriveMessageArtifacts,
   MessageArtifactProjection,
 } from '../lib/types';
-import type { ChipType, QuickChipAvailability } from './QuickChips';
+
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
 import {
@@ -28,7 +28,7 @@ import {
   type ChatWorkScope,
   type ComposerVoiceController,
 } from './ChatInput';
-import { QuickChips } from './QuickChips';
+
 import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from './UsageWarningBanner';
 import { Disclaimer } from './Disclaimer';
@@ -310,7 +310,6 @@ export interface ChatInterfaceProps {
   /** Managed-account entitlement for AGI Work; ordinary project chat remains available when false. */
   canUseAgiWork?: boolean;
   /** Host/account overrides layered over runtime quick-action capabilities. */
-  quickChipAvailability?: QuickChipAvailability;
   /**
    * Host-owned, enforcement-backed controls rendered in the shared composer.
    * Desktop uses this for native sandbox/workspace context that the package
@@ -342,12 +341,12 @@ export interface ChatInterfaceProps {
    */
   sidebarSlot?: ReactNode;
   /**
-   * When provided, replaces the default `EmptyState + QuickChips` block that
+   * When provided, replaces the default `EmptyState` block that
    * renders when the conversation has no messages.
    */
   emptyStateSlot?: ReactNode;
   /**
-   * When provided, replaces the default `ChatInput + QuickChips + Disclaimer`
+   * When provided, replaces the default `ChatInput + Disclaimer`
    * composer block at the bottom of the chat. Host apps using this slot are
    * responsible for invoking `runtime.sendMessage` themselves (typically via
    * the exported `useChat` hook).
@@ -407,7 +406,6 @@ export function ChatInterface({
   onClearFolder,
   projectPicker,
   canUseAgiWork = true,
-  quickChipAvailability,
   composerHostControls,
   usageWarning,
   onUpgradeUsage,
@@ -617,26 +615,7 @@ export function ChatInterface({
     handleSend(externalSendRequest.content.trim());
   }, [externalSendRequest, handleSend, isStreaming]);
 
-  const setDraftContent = useChatStore((s) => s.setDraftContent);
   const setActiveView = useUIStore((s) => s.setActiveView);
-
-  const handleChipClick = useCallback(
-    (chip: ChipType) => {
-      const prompts: Partial<Record<ChipType, string>> = {
-        code: 'Help me write code for ',
-        write: 'Help me write ',
-        research: 'Research this topic in depth: ',
-        image: 'Create an image of ',
-        video: 'Create a video of ',
-        computer: 'Use computer to ',
-        learn: 'Explain this to me: ',
-        life: 'Help me with ',
-        web: 'Search the web for ',
-      };
-      setDraftContent(prompts[chip] ?? '');
-    },
-    [setDraftContent],
-  );
 
   const handleModelSelectorClick = useCallback(() => {
     onModelSelectorClickProp?.();
@@ -967,21 +946,10 @@ export function ChatInterface({
                 voiceInputController={voiceInputController}
                 slashCommandHost={slashCommandHost}
               />
-              {/* Sample-prompt mode chips below the composer (claude.ai parity —
-                  ref: claude_reference/015). This is a composer-area element shown
-                  whenever the chat is empty; it's independent of `emptyStateSlot`,
-                  which owns the content area above (the branded greeting). */}
-              {!hasMessages && (
-                <QuickChips
-                  onChipClick={handleChipClick}
-                  availability={{
-                    research: quickChipAvailability?.research ?? runtime?.supportsResearch,
-                    image: quickChipAvailability?.image ?? runtime?.supportsImageGeneration,
-                    video: quickChipAvailability?.video ?? runtime?.supportsVideoGeneration,
-                    computer: quickChipAvailability?.computer ?? runtime?.supportsComputerUse,
-                  }}
-                />
-              )}
+              {/* The sample-prompt mode chips that used to sit here were removed
+                  on every surface (founder 2026-08-06) — web, desktop, and
+                  mobile. The empty state is the branded greeting in
+                  `emptyStateSlot` and nothing else. */}
               <Disclaimer variant={disclaimerVariant} />
             </>
           )}

@@ -91,6 +91,28 @@ export interface CombinedChatState {
     assistantMessageId: string,
     errorMessage: string,
   ) => void;
+  beginVideoGeneration: (
+    conversationId: string,
+    commandContent: string,
+    prompt: string,
+    model: string,
+  ) => string;
+  updateVideoGenerationProgress: (
+    conversationId: string,
+    assistantMessageId: string,
+    progress: number | undefined,
+    status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout',
+  ) => void;
+  completeVideoGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    result: { videoUrl: string; thumbnailUrl?: string; model?: string },
+  ) => void;
+  failVideoGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    errorMessage: string,
+  ) => void;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
   sendMessage: (
@@ -158,6 +180,10 @@ function buildCombinedState(
     beginImageGeneration: msg.beginImageGeneration,
     completeImageGeneration: msg.completeImageGeneration,
     failImageGeneration: msg.failImageGeneration,
+    beginVideoGeneration: msg.beginVideoGeneration,
+    updateVideoGenerationProgress: msg.updateVideoGenerationProgress,
+    completeVideoGeneration: msg.completeVideoGeneration,
+    failVideoGeneration: msg.failVideoGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     isStreaming: exec.isStreaming,

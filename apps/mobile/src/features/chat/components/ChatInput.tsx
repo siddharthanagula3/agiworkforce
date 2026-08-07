@@ -34,6 +34,9 @@ import { SendButton } from './SendButton';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
+import { MediaModeChip } from './MediaModeChip';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { Waveform } from '@/src/features/voice/components/Waveform';
 import * as VoiceService from '@/src/features/voice/services/voice';
@@ -218,6 +221,21 @@ export function ChatInput({
 
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
+  // In a media mode the composer shows the MEDIA model that will serve the
+  // request, not the chat model — the chat selection is left untouched so
+  // leaving the mode costs nothing. See actions/mediaMode.ts.
+  const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const mediaModelId = mediaModelIdForMode(mediaMode);
+  // Read the name from the CATALOG, not `getShortDisplayName`. That helper only
+  // knows models the mobile picker can select (local + cloud chat); a media slot
+  // model like `veo-3.1` is not selectable, so it returned UNKNOWN_MODEL_LABEL
+  // and the chip read "Video Not set".
+  const mediaModelName = mediaModelId
+    ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
+    : null;
+  const handleExitMediaMode = useCallback(() => {
+    exitMediaMode();
+  }, []);
   const isSignedInCloudChat = appMode === 'cloud' && isClerkSignedIn;
   const researchActive =
     isSignedInCloudChat &&
@@ -233,17 +251,18 @@ export function ChatInput({
     selectedModelMetadata?.capabilities.codeExecution === true &&
     codeExecutionAvailable &&
     grantedCapabilities.includes('canUseCloudExecution');
-  const imageGenerationActive =
-    isSignedInCloudChat &&
-    FEATURES.imageGen &&
-    chatFeatures.imageGen &&
-    grantedCapabilities.includes('canUseImages') &&
-    canUseBillingPlanCapability(subscriptionTier, 'image_generation');
   const activeToolStatuses = [
     // Web search has no user toggle -- it is on for every capable signed-in
     // cloud model, so a permanent "Search" chip is noise rather than status.
     // The chips below all require an explicit toggle in the "+" sheet, so
     // they still tell the user something they chose.
+    //
+    // Image is deliberately NOT in this list any more. It used to be, back when
+    // `features.imageGen` was a switch in the + sheet. That switch became the
+    // Image MODE (2026-08-06), so the flag now sits permanently at its `true`
+    // default with no way to turn it off — the chip rendered on every signed-in
+    // Cloud chat and told the user nothing they had chosen. Image mode is shown
+    // by MediaModeChip, which also names the model and offers a way out.
     ...(researchActive
       ? [
           {
@@ -261,16 +280,6 @@ export function ChatInput({
             label: 'Code',
             accessibilityLabel: 'Code execution active',
             Icon: Terminal,
-          },
-        ]
-      : []),
-    ...(imageGenerationActive
-      ? [
-          {
-            key: 'image',
-            label: 'Image',
-            accessibilityLabel: 'Image generation active',
-            Icon: Paintbrush,
           },
         ]
       : []),
@@ -631,6 +640,17 @@ export function ChatInput({
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    /**
+     * Dismiss the keyboard BEFORE the sheet opens.
+     *
+     * Tapping [+] with the keyboard up left it raised over the sheet: the
+     * bottom sheet animates to its 75% snap point behind the keyboard, so only
+     * the "Add to Chat" header cleared the top of the keys and every row —
+     * attachments, Model, Create — was unreachable. The composer's TextInput
+     * keeps focus otherwise, and nothing in the sheet takes focus to displace
+     * it, so the keyboard never yields on its own.
+     */
+    Keyboard.dismiss();
     onOpenAddToChat?.();
   }, [hapticsEnabled, onOpenAddToChat]);
 
@@ -674,9 +694,15 @@ export function ChatInput({
     ? `Reply to ${modelName}...`
     : !isOnline
       ? `Offline — message will send on reconnect${queueLabel}`
-      : isThreadActive
-        ? 'Reply to AGI'
-        : "What's on your mind?";
+      : // In a media mode every send is a generation request, so the prompt asks
+        // for a subject rather than a message.
+        mediaMode === 'image'
+        ? 'Describe the image to create'
+        : mediaMode === 'video'
+          ? 'Describe the video to create'
+          : isThreadActive
+            ? 'Reply to AGI'
+            : "What's on your mind?";
 
   return (
     <View
@@ -690,6 +716,14 @@ export function ChatInput({
           below morphs into the recording UI and there is no draft to describe. */}
       {sendPreviewPresentation && !isRecording && !isTranscribing ? (
         <SendPreview presentation={sendPreviewPresentation} variant="compact" />
+      ) : null}
+
+      {/* Media mode is a MODEL swap, so it needs a standing indicator and an
+          explicit exit — otherwise the next text question silently goes to an
+          image/video model. Hidden during capture for the same reason as the
+          disclosure above. */}
+      {mediaMode !== 'text' && !isRecording && !isTranscribing ? (
+        <MediaModeChip mode={mediaMode} modelName={mediaModelName} onExit={handleExitMediaMode} />
       ) : null}
 
       {/* Attachment preview strip */}
@@ -993,7 +1027,13 @@ export function ChatInput({
                     founder rejected on 2026-07-29, and rather than in the
                     compact pill, where it would eat the single-line input's
                     width — the exact complaint the restack fixed. */}
-                {onOpenModelPicker ? <ModelSelectorButton onPress={onOpenModelPicker} /> : null}
+                {/* Hidden in a media mode: the model is fixed by the registry
+                    slot for that output kind, so a picker here would imply a
+                    choice that does not apply to this turn. The MediaModeChip
+                    above names the model instead. */}
+                {onOpenModelPicker && mediaMode === 'text' ? (
+                  <ModelSelectorButton onPress={onOpenModelPicker} />
+                ) : null}
                 <View style={{ flex: 1 }} />
               </>
             ) : null}

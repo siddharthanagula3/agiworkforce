@@ -62,7 +62,23 @@ interface GoogleOperationResponse {
   };
   response?: {
     '@type': string;
-    // Veo 3.x response format
+    /**
+     * What the live API actually returns. Verified against
+     * veo-3.1-lite-generate-preview on 2026-08-06: a completed operation nests
+     * the samples one level deeper than the flat `generatedSamples` this route
+     * used to read, so the URL was never found and the client polled until its
+     * five-minute timeout on a video that had already been generated (and
+     * billed).
+     */
+    generateVideoResponse?: {
+      generatedSamples?: Array<{
+        video?: {
+          uri?: string;
+          bytesBase64Encoded?: string;
+        };
+      }>;
+    };
+    // Flat shape kept as a fallback for other Veo revisions.
     generatedSamples?: Array<{
       video?: {
         uri?: string;
@@ -186,7 +202,14 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
  * We store only the numeric/alphanumeric ID portion and reconstruct the path here.
  */
 async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusResponse> {
-  const apiKey = process.env['GOOGLE_API_KEY'];
+  // Same three-key chain the generate route uses. Reading only GOOGLE_API_KEY
+  // here meant a deployment set up with GEMINI_API_KEY could START a Veo job
+  // but never poll it — the video generated and billed, and the client saw a
+  // service-unavailable on every status call.
+  const apiKey =
+    process.env['GOOGLE_API_KEY'] ??
+    process.env['GOOGLE_AI_API_KEY'] ??
+    process.env['GEMINI_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Google Veo API not configured');
   }
@@ -255,7 +278,12 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
 
   // Extract video URL when completed - handle both response shapes Veo may return
   if (status === 'completed' && result.response) {
-    const samples = result.response.generatedSamples ?? result.response.videos ?? [];
+    // Nested shape first — that is what the live API returns today.
+    const samples =
+      result.response.generateVideoResponse?.generatedSamples ??
+      result.response.generatedSamples ??
+      result.response.videos ??
+      [];
     if (samples.length > 0) {
       const firstVideo = samples[0]?.video;
       if (firstVideo?.uri) {
@@ -305,10 +333,11 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   const { provider, originalId } = parseTaskId(taskId);
 
   // Verify task ownership: the requesting user must be the one who created this task.
-  // The current owner store is process-local. If ownership is missing because the
-  // request landed on a different instance, fail closed until this moves to durable
-  // storage instead of polling a provider-side task by guessable ID.
-  const taskOwner = getVideoTaskOwner(taskId);
+  // Ownership is durable (Redis, with a same-instance fallback), so a poll that
+  // lands on a different instance than the one that created the task still
+  // resolves. Missing ownership fails closed rather than allowing a
+  // provider-side task to be polled by guessable ID.
+  const taskOwner = await getVideoTaskOwner(taskId);
   if (!taskOwner || taskOwner !== userId) {
     logger.warn(
       { taskId, requestingUser: userId, taskOwner },

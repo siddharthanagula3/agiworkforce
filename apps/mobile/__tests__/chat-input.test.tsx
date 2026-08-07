@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { TextInput } from 'react-native';
+import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
@@ -492,7 +492,7 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Web Search active')).toBeNull();
     });
 
-    it('keeps enabled Research, Code, and Image options visible after the sheet closes', () => {
+    it('keeps enabled Research and Code options visible after the sheet closes', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
       mockChatFeatures = {
@@ -517,7 +517,9 @@ describe('ChatInput', () => {
 
       expect(getByLabelText('Deep Research active')).toBeTruthy();
       expect(getByLabelText('Code execution active')).toBeTruthy();
-      expect(getByLabelText('Image generation active')).toBeTruthy();
+      // Image is a MODE now, not a toggle, so it has no status chip here — see
+      // the regression note below.
+      expect(queryByLabelText('Image generation active')).toBeNull();
 
       mockChatFeatures = {
         ...mockChatFeatures,
@@ -532,12 +534,38 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Image generation active')).toBeNull();
     });
 
-    it('hides Image when the server capability handshake denies it', () => {
+    /**
+     * Regression guard. The "Image generation active" chip was driven by
+     * `features.imageGen`, which WAS a switch in the + sheet. That switch became
+     * the Image mode (2026-08-06), leaving the flag pinned at its `true` default
+     * with no way to turn it off — so the chip rendered on every signed-in Cloud
+     * chat and reported a choice the user had never made. It must stay gone even
+     * when every capability is granted and the flag is on.
+     */
+    /**
+     * The [+] tap must drop the keyboard first. Without it the sheet animated
+     * to its snap point BEHIND a raised keyboard: only the "Add to Chat" header
+     * cleared the keys, and every row inside was unreachable.
+     */
+    it('dismisses the keyboard when opening the + sheet', () => {
+      const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+      const onOpenAddToChat = jest.fn();
+
+      const { getAllByLabelText } = renderInput({ onOpenAddToChat });
+      fireEvent.press(getAllByLabelText('Add to chat')[0]!);
+
+      expect(dismiss).toHaveBeenCalled();
+      expect(onOpenAddToChat).toHaveBeenCalled();
+      dismiss.mockRestore();
+    });
+
+    it('never shows an Image status chip, even fully entitled with imageGen on', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
+      mockChatFeatures = { ...mockChatFeatures, imageGen: true };
       mockTierState = {
         tier: 'pro',
-        grantedCapabilities: [],
+        grantedCapabilities: ['canUseImages'],
         codeExecutionAvailable: false,
         genericWebSearchAvailable: false,
       };

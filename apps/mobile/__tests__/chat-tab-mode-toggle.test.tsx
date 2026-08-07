@@ -93,13 +93,6 @@ jest.mock('@/src/features/chat/components/AddToChatSheet', () => {
   };
 });
 
-jest.mock('@/src/features/chat/components/ConversationStarters', () => {
-  const { View } = require('react-native');
-  return {
-    ConversationStarters: () => <View testID="conversation-starters" />,
-  };
-});
-
 jest.mock('@/src/features/chat/components/ProjectSelectorBar', () => {
   const { View } = require('react-native');
   return {

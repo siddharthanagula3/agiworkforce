@@ -6,6 +6,7 @@ import {
   Bell,
   BookImage,
   BookOpen,
+  Bot,
   Boxes,
   CalendarClock,
   FolderOpen,
@@ -19,6 +20,7 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
@@ -32,6 +34,7 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { archiveConversation } from '@/src/features/archived-chats';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 
@@ -297,10 +300,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const workMode = useChatStore((s) => s.workMode);
+  const setWorkMode = useChatStore((s) => s.setWorkMode);
+  const tier = useTierStore((s) => s.tier);
+  // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
+  // a plan that includes AGI Work. The server is still authoritative.
+  const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
   }, [props.navigation]);
+
+  // Toggling leaves the drawer open: this is a mode change, not navigation, and
+  // closing would hide the state change the user just made.
+  const handleToggleAgiWork = useCallback(() => {
+    setWorkMode(workMode === 'agiwork' ? 'chat' : 'agiwork');
+  }, [setWorkMode, workMode]);
 
   const navigate = useCallback(
     (route: RoutePath, params?: Record<string, string>) => {
@@ -452,6 +467,20 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 }}
               />
             ))}
+            {/* AGI Work is a session-wide stance, not a per-message attachment,
+                so it lives here rather than in the composer's [+] sheet where it
+                used to be a toggle (founder 2026-08-06). It stays a row that
+                flips state instead of a route because there is no AGI Work
+                screen — the mode changes how the next turns are executed. */}
+            {showAgiWork ? (
+              <NavRow
+                label="AGI Work"
+                icon={Bot}
+                active={workMode === 'agiwork'}
+                tag={workMode === 'agiwork' ? 'On' : 'Cloud'}
+                onPress={handleToggleAgiWork}
+              />
+            ) : null}
           </View>
 
           {FEATURES.companion ? (
