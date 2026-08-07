@@ -34,10 +34,23 @@ const INVISIBLE_CHARS = new RegExp(
   'g',
 );
 
-/** C0/C1 control characters, keeping \n (0x0A) and \t (0x09). */
-// Matching escaped control-code ranges is the point of this sanitizer: they
-// are the payload being stripped, not an accident of the pattern.
-const CONTROL_CHARS = new RegExp('[\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]', 'g');
+/** Strip C0/C1 control characters, keeping \n (0x0A) and \t (0x09). */
+function stripControlCharacters(value: string): string {
+  let cleaned = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (
+      codePoint !== undefined &&
+      (codePoint <= 0x08 ||
+        (codePoint >= 0x0b && codePoint <= 0x1f) ||
+        (codePoint >= 0x7f && codePoint <= 0x9f))
+    ) {
+      continue;
+    }
+    cleaned += character;
+  }
+  return cleaned;
+}
 
 /**
  * Strip control characters that let text lie about its own structure, and
@@ -47,10 +60,7 @@ const CONTROL_CHARS = new RegExp('[\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F
  * of view.
  */
 export function sanitizeUntrustedText(value: string): string {
-  return value
-    .normalize('NFKC')
-    .replace(INVISIBLE_CHARS, '')
-    .replace(CONTROL_CHARS, '')
+  return stripControlCharacters(value.normalize('NFKC').replace(INVISIBLE_CHARS, ''))
     .replace(/<<<+\s*AGI_SUPPORT_DOC[A-Z_]*\s*>>>+/gi, '[removed]')
     .replace(/<{3,}/g, '(')
     .replace(/>{3,}/g, ')')

@@ -42,6 +42,30 @@ function firstString(...candidates: unknown[]): string | null {
   return null;
 }
 
+function hasUnsafeCitationCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) continue;
+    if (
+      codePoint <= 0x1f ||
+      (codePoint >= 0x7f && codePoint <= 0x9f) ||
+      codePoint === 0xad ||
+      codePoint === 0x180e ||
+      (codePoint >= 0x200b && codePoint <= 0x200f) ||
+      (codePoint >= 0x202a && codePoint <= 0x202e) ||
+      codePoint === 0x2028 ||
+      codePoint === 0x2029 ||
+      (codePoint >= 0x2060 && codePoint <= 0x2064) ||
+      (codePoint >= 0x2066 && codePoint <= 0x206f) ||
+      codePoint === 0xfeff ||
+      (codePoint >= 0xfff9 && codePoint <= 0xfffb)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A citation URL may be:
  *   - a same-origin path: `/docs/byok`, `/help#faq` (but never `//evil.example`
@@ -66,13 +90,7 @@ export function isSafeCitationUrl(url: string): boolean {
   //
   // Refuse outright rather than strip-and-hope. A dropped citation degrades to
   // an abstention, which is the safe direction to fail in.
-  if (
-    // Matching escaped control-code ranges is the entire point of this guard:
-    // they are the payload being rejected, not an accident of the pattern.
-    /[\u0000-\u001f\u007f-\u009f\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2028\u2029\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]/.test(
-      trimmed,
-    )
-  ) {
+  if (hasUnsafeCitationCharacter(trimmed)) {
     return false;
   }
   const cleaned = trimmed;
