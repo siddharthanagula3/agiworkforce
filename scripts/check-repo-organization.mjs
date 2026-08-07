@@ -49,6 +49,12 @@ const allowedRootFiles = new Set([
   'eslint.config.mjs',
   'node-version.txt',
   'ollama-manifest.json',
+  // knip resolves its config from the repo root and offers no way to relocate
+  // it, so this is root-level by tool constraint rather than by choice. Backs
+  // `check:knip` / `check:knip:production`; the rationale, the first-run
+  // numbers, and the path to making it a CI gate live in
+  // docs/engineering/dead-code-detection.md.
+  'knip.json',
   'package.json',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',

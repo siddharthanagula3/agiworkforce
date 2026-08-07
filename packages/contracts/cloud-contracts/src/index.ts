@@ -7,6 +7,7 @@
  * @packageDocumentation
  */
 
+export * from './embeddings';
 export * from './generated-files';
 export * from './library';
 export * from './managed-media';
