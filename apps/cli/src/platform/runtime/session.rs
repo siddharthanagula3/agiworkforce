@@ -144,7 +144,7 @@ pub fn validate_managed_session_id(session_id: &str) -> Result<&str> {
     if session_id.trim().is_empty() {
         bail!("Managed session is missing a session_id");
     }
-    if session_id.as_bytes().len() > MANAGED_SESSION_ID_MAX_ENCODED_UNITS
+    if session_id.len() > MANAGED_SESSION_ID_MAX_ENCODED_UNITS
         || session_id.encode_utf16().count() > MANAGED_SESSION_ID_MAX_ENCODED_UNITS
     {
         bail!(
@@ -266,7 +266,7 @@ enum ManagedSessionJsonlRecord {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output_style: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        fallback_model_ids: Option<Vec<String>>,
+        fallback_model_ids: Box<Option<Vec<String>>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         auto_routing: Option<Box<ManagedSessionAutoRouting>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -582,7 +582,7 @@ impl ManagedSession {
                         current_plan,
                         fast_mode,
                         output_style,
-                        fallback_model_ids,
+                        fallback_model_ids: *fallback_model_ids,
                         auto_routing: auto_routing.map(|routing| *routing),
                         routing_authority: routing_authority.map(|authority| *authority),
                     });
@@ -682,7 +682,7 @@ impl ManagedSession {
             current_plan: self.current_plan.clone(),
             fast_mode: self.fast_mode,
             output_style: self.output_style.clone(),
-            fallback_model_ids: self.fallback_model_ids.clone(),
+            fallback_model_ids: Box::new(self.fallback_model_ids.clone()),
             auto_routing: self.auto_routing.clone().map(Box::new),
             routing_authority: self.routing_authority.clone().map(Box::new),
         };

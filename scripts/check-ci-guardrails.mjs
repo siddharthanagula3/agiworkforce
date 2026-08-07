@@ -83,8 +83,10 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=high');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run lint --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:module-reachability');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run typecheck --affected');
-requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run test --affected');
+requireIncludes('.github/workflows/ci.yml', 'pnpm test:affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
+requireIncludes('package.json', '"test": "turbo run test --concurrency=2"');
+requireIncludes('package.json', '"test:affected": "turbo run test --affected --concurrency=2"');
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:protocol-types');
 requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');
@@ -106,7 +108,7 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/extension package');
 // Rust dependency policy moved from cargo-audit to cargo-deny (2026-07-16):
 // bans/sources/licenses gate merges; advisories report against the triaged
-// baseline in docs/security/rust-dependency-advisories-2026-07-16.md.
+// RUST-DEPENDENCY-ADVISORIES-01 entry in docs/agent-context/known-flaws.md.
 requireIncludes('.github/workflows/ci.yml', 'cargo deny check bans sources licenses');
 requireIncludes('.github/workflows/ci.yml', 'cargo deny check advisories');
 requireIncludes(

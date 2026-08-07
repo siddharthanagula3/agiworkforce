@@ -145,13 +145,13 @@ export async function registerBackgroundFetch(): Promise<void> {
   // single Restricted state — it does not distinguish a user denial from an
   // OS-level restriction (Low Power Mode, Screen Time, managed device).
   if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
-    // Info, not warn: BGTaskScheduler does not exist on the Simulator at all,
+    // Debug, not warn: BGTaskScheduler does not exist on the Simulator at all,
     // so Restricted is the only answer it can ever give and flags nothing about
     // the app. On real hardware it means Low Power Mode, Screen Time or an MDM
     // policy — still the user's setting rather than a defect. Distinguishing
     // the two needs expo-device, which is a native module and a rebuild for a
     // log level, so name both causes instead.
-    console.info(
+    console.debug(
       '[backgroundFetch] Background tasks unavailable (Simulator, Low Power Mode, or device policy) — approval polling is off',
     );
     return;

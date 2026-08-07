@@ -678,7 +678,7 @@ describe('POST /api/media/video/generate', () => {
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: '6', resolution: '720p' },
+        parameters: { durationSeconds: 6, resolution: '720p' },
       });
     });
 
@@ -703,7 +703,7 @@ describe('POST /api/media/video/generate', () => {
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: '8', resolution: '4k' },
+        parameters: { durationSeconds: 8, resolution: '4k' },
       });
     });
 

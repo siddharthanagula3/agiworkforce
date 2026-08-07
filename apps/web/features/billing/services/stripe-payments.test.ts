@@ -12,6 +12,7 @@ vi.mock('@stripe/stripe-js', () => ({
 }));
 
 import {
+  contactEnterpriseSales,
   previewUpgrade,
   startPlanCheckout,
   upgradePlanMidCycle,
@@ -49,6 +50,19 @@ describe('stripe payments', () => {
       plan: 'max_15x',
       billingInterval: 'monthly',
     });
+  });
+
+  it('returns an internal contact-sales URL for App Router navigation', () => {
+    expect(
+      contactEnterpriseSales({
+        userId: 'user_1',
+        userEmail: 'user+sales@example.com',
+        userName: 'Ada Lovelace',
+        companyName: 'Analytical Engines',
+      }),
+    ).toBe(
+      '/contact-sales?email=user%2Bsales%40example.com&plan=enterprise&name=Ada+Lovelace&company=Analytical+Engines',
+    );
   });
 
   it('never lets the browser choose the charged currency', async () => {

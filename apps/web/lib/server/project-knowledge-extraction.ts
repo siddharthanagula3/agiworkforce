@@ -57,8 +57,8 @@ async function extractPdfText(data: Buffer): Promise<string | null> {
       useWorkerFetch: false,
       verbosity: 0,
     });
-    const document = await loadingTask.promise;
     try {
+      const document = await loadingTask.promise;
       if (document.numPages > MAX_PDF_PAGES) {
         throw new ProjectKnowledgeExtractionError(
           'document_too_complex',
@@ -79,7 +79,7 @@ async function extractPdfText(data: Buffer): Promise<string | null> {
       }
       return normalizeAndBoundText(pages.join('\n\n'));
     } finally {
-      await document.destroy();
+      await loadingTask.destroy();
     }
   } catch (error) {
     if (error instanceof ProjectKnowledgeExtractionError) throw error;

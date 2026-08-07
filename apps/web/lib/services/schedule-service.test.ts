@@ -350,7 +350,26 @@ describe('schedule service persistence', () => {
       database(query),
       'user-1',
       'task-1',
-      { name: 'Renamed' },
+      {
+        // The mounted editor uses a full PUT representation. Presence of these
+        // unchanged timing fields must not reclassify a legacy cadence as a
+        // timing edit and make a simple rename impossible.
+        name: 'Renamed',
+        description: null,
+        prompt: 'Brief me',
+        model: 'auto-balanced',
+        recurrence: 'interval',
+        cronExpression: null,
+        scheduledAt: null,
+        intervalMs: 300_000,
+        timeOfDay: '09:00',
+        daysOfWeek: [],
+        dayOfMonth: null,
+        timezone: 'UTC',
+        isActive: true,
+        expiresAt: null,
+        maxExecutions: null,
+      },
       {
         now: new Date('2026-07-15T12:01:00.000Z'),
       },

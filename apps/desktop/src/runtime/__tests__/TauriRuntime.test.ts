@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersonalizationPreferences } from '../../stores/settingsStore';
 
 const invokeMock = vi.fn();
@@ -80,14 +80,27 @@ vi.mock('../../stores/settingsStore', () => ({
 }));
 
 describe('TauriRuntime', () => {
+  let resetArtifactStore: () => void;
+
+  beforeAll(async () => {
+    // This runtime module is intentionally large. Transform it once outside the
+    // per-test budget so a busy root Turbo graph cannot charge module loading to
+    // an otherwise synchronous runtime assertion.
+    const [{ useArtifactStore }] = await Promise.all([
+      import('../../stores/artifactStore'),
+      import('../TauriRuntime'),
+    ]);
+    resetArtifactStore = () => useArtifactStore.getState().resetOnLogout();
+  }, 20_000);
+
   it('does not advertise the shared per-conversation agent control without a native wire field', async () => {
     const { TauriRuntime } = await import('../TauriRuntime');
     expect(new TauriRuntime().supportsAgentControl).toBe(false);
   });
 
   beforeEach(() => {
-    vi.resetModules();
     vi.clearAllMocks();
+    resetArtifactStore();
     listenHandlers.clear();
     executionModeByConversationId.clear();
     projectIdByConversationId.clear();

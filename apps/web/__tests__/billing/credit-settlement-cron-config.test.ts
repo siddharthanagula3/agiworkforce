@@ -31,11 +31,11 @@ describe('credit settlement recovery schedule', () => {
       (cron) => cron.path === '/api/cron/run-schedules',
     );
     expect(entry).toBeDefined();
-    // Hourly since 2026-08-04. Total scheduled-run throughput is
-    // invocations/day * the per-invocation claim limit, shared across all users,
-    // and BILLING_PLAN_PRODUCT_LIMITS.maxScheduledTasks is sized against it.
-    // Changing this cadence means re-deriving those catalog limits and
+    // Daily while the production Vercel project remains on Hobby, which rejects
+    // sub-daily cron expressions before a build starts. Total throughput is
+    // invocations/day * the per-invocation claim limit, shared across all users.
+    // Changing this cadence means reassessing the catalog limits and
     // SWEEP_INTERVAL_MS in apps/web/lib/schedules/schedule-time.ts.
-    expect(entry?.schedule).toBe('0 * * * *');
+    expect(entry?.schedule).toBe('0 1 * * *');
   });
 });

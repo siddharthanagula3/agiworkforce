@@ -398,15 +398,18 @@ export async function upgradePlanMidCycle(data: {
 }
 
 /**
- * Create Enterprise plan inquiry (Contact sales)
+ * Build the Enterprise plan inquiry destination (Contact sales).
+ *
+ * Navigation belongs to the calling Client Component so internal routes use
+ * the Next.js router instead of forcing a full document reload from a service.
  */
-export async function contactEnterpriseSales(data: {
+export function contactEnterpriseSales(data: {
   userId: string;
   userEmail: string;
   userName?: string;
   companyName?: string;
   message?: string;
-}): Promise<void> {
+}): string {
   // In a real implementation, this would send an email or create a lead in CRM
   // For now, we'll just open the contact page or show a success message
 
@@ -419,5 +422,5 @@ export async function contactEnterpriseSales(data: {
     ...(data.companyName && { company: data.companyName }),
   });
 
-  window.location.href = `/contact-sales?${params.toString()}`;
+  return `/contact-sales?${params.toString()}`;
 }

@@ -12,6 +12,12 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
+const routerPush = vi.hoisted(() => vi.fn());
+const clerkUserState = vi.hoisted(() => ({ isLoaded: true, isSignedIn: true }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
 
 vi.mock('sonner', () => ({
   toast: {
@@ -21,7 +27,7 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: true }),
+  useUser: () => clerkUserState,
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
@@ -70,6 +76,8 @@ const originalLocation = Object.getOwnPropertyDescriptor(window, 'location');
 describe('useConnectors — OAuth grants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clerkUserState.isLoaded = true;
+    clerkUserState.isSignedIn = true;
     invalidateConnectorsCache();
   });
 
@@ -113,6 +121,22 @@ describe('useConnectors — OAuth grants', () => {
     expect(result.current.needsReauthorizationIds.has('linear')).toBe(false);
     expect(result.current.needsReauthorizationIds.has('notion')).toBe(true);
     expect(result.current.availableIds.has('linear')).toBe(true);
+  });
+
+  it('uses App Router navigation for a signed-out connector action', async () => {
+    clerkUserState.isSignedIn = false;
+    stubLocation('https://app.example.com/connectors?category=Developer');
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.connect('linear', 'oauth');
+    });
+
+    expect(routerPush).toHaveBeenCalledWith(
+      '/login?redirectTo=%2Fconnectors%3Fcategory%3DDeveloper',
+    );
   });
 
   // Regression guard: the hook only followed `installStartPath` (the GitHub App

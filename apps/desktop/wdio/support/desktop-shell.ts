@@ -22,6 +22,10 @@ export async function waitForDesktopShell(): Promise<number> {
       async () =>
         (await isDisplayed('button=Use Local Mode')) ||
         (await isDisplayed('button=New chat')) ||
+        // Collapsed state persists between native sessions. The icon rail is a
+        // fully interactive shell even though it intentionally omits the
+        // expanded rail's text labels and footer Settings button.
+        (await isDisplayed('button[aria-label="Expand sidebar"]')) ||
         (await isDisplayed('button[aria-label="Settings"]')),
       {
         timeout: SHELL_STARTUP_TIMEOUT_MS,

@@ -108,4 +108,25 @@ describe('DESKTOP-CLOUDROLLBACK-01: cloud-create failure must not lose a sent me
     );
     expect(active?.executionMode).toBe('cloud_managed');
   });
+
+  it('repairs a dangling active draft after concurrent Cloud hydration without losing messages', () => {
+    const draftId = 'draft-created-before-the-second-hydration-finished';
+    const draftMessage = { id: 'm-draft', role: 'user', content: 'Keep this draft' } as never;
+    useChatStore.setState({
+      conversations: [],
+      activeConversationId: draftId,
+      messagesByConversation: { [draftId]: [draftMessage] },
+      messages: [],
+    });
+
+    useChatStore.getState().ensureActiveConversation();
+
+    const state = useChatStore.getState();
+    expect(state.activeConversationId).toBe(draftId);
+    expect(state.conversations).toEqual([
+      expect.objectContaining({ id: draftId, executionMode: 'cloud_managed' }),
+    ]);
+    expect(state.messagesByConversation[draftId]).toEqual([draftMessage]);
+    expect(state.messages).toEqual([draftMessage]);
+  });
 });

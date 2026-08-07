@@ -94,13 +94,90 @@ async function shot(name: string): Promise<void> {
   await browser.saveScreenshot(path.join(SCREEN_DIR, `${name}.png`));
 }
 
+/**
+ * A Radix dialog can enter the DOM while a cold native WebView still holds its
+ * invisible first animation keyframe. Waiting for a mere `[role="dialog"]`
+ * match let that unfocused dialog leak into the next test while the screenshot
+ * still showed the underlying Projects panel.
+ */
+async function waitForInteractiveDialog(timeout = 5_000): Promise<void> {
+  await browser.waitUntil(
+    () =>
+      browser.execute(() => {
+        const dialog = Array.from(
+          document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
+        ).find((candidate) => (candidate as HTMLElement).getClientRects().length > 0);
+        if (!(dialog instanceof HTMLElement)) return false;
+
+        // Search owns a full-screen role=dialog wrapper and animates its inner
+        // panel; Radix dialogs put the role on the surface itself.
+        const surface =
+          (dialog.querySelector('[data-testid="search-modal-panel"]') as HTMLElement | null) ??
+          dialog;
+        const opacity = Number.parseFloat(window.getComputedStyle(surface).opacity || '1');
+        return (
+          surface.getClientRects().length > 0 &&
+          opacity >= 0.99 &&
+          !!document.activeElement &&
+          dialog.contains(document.activeElement)
+        );
+      }),
+    {
+      timeout,
+      interval: 100,
+      timeoutMsg: 'Dialog mounted but never became visible and focus-trapped',
+    },
+  );
+}
+
+async function waitForNoVisibleDialog(label: string, timeout = 5_000): Promise<void> {
+  await browser.waitUntil(
+    () =>
+      browser.execute(
+        () =>
+          !Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(
+            (dialog) => (dialog as HTMLElement).getClientRects().length > 0,
+          ),
+      ),
+    {
+      timeout,
+      interval: 100,
+      timeoutMsg: `${label} stayed open after Escape`,
+    },
+  );
+}
+
 // Canonical Local-mode order from Sidebar.tsx navItemsForMode(). `customize` is
 // last and opens the settings modal rather than a panel, so it is swept in the
 // settings section below.
-const LOCAL_NAV_STEPS: Array<{ navId: string; label: string; expectTestId: string }> = [
+const LOCAL_NAV_STEPS: Array<{
+  navId: string;
+  label: string;
+  expectTestId: string;
+  expectSelector?: string;
+}> = [
   { navId: 'artifacts', label: 'Artifacts', expectTestId: 'agi-work-artifacts' },
   { navId: 'code', label: 'Code', expectTestId: 'code-workspace' },
-  { navId: 'tasks', label: 'Tasks', expectTestId: 'desktop-agent-tasks' },
+  { navId: 'design', label: 'Design', expectTestId: 'design-workspace' },
+  { navId: 'research', label: 'Research', expectTestId: 'research-workspace' },
+  {
+    navId: 'automation',
+    label: 'Automation',
+    expectTestId: 'desktop-automation',
+    // The wrapper exists while AutomationBuilder's lazy chunk is still on the
+    // shell fallback. Its toolbar control only exists once the real panel has
+    // resolved, so the screenshot cannot capture the spinner-only state.
+    expectSelector: '[data-testid="desktop-automation"] button[title="Refresh triggers"]',
+  },
+  {
+    navId: 'tasks',
+    label: 'Tasks',
+    expectTestId: 'desktop-agent-tasks',
+    // The wrapper is mounted before its React.lazy chunk resolves. Requiring
+    // the real creator input keeps a bare Suspense spinner from passing the
+    // step and becoming the screenshot evidence for this destination.
+    expectSelector: '[data-testid="desktop-agent-tasks"] #agent-task-goal',
+  },
   { navId: 'scheduled', label: 'Schedules', expectTestId: 'agi-work-scheduled' },
 ];
 
@@ -114,15 +191,49 @@ const LOCAL_NAV_STEPS: Array<{ navId: string; label: string; expectTestId: strin
  * folder section instead), so the two lists are compared deliberately, not
  * asserted equal.
  */
-const LOCAL_RAIL_NAV_IDS = ['projects', 'artifacts', 'code', 'tasks', 'scheduled', 'customize'];
+const LOCAL_RAIL_NAV_IDS = [
+  'projects',
+  'artifacts',
+  'code',
+  'design',
+  'research',
+  'automation',
+  'tasks',
+  'scheduled',
+  'customize',
+];
 
 /** Local-mode expanded nav, in Sidebar.tsx navItemsForMode() order. */
-const EXPANDED_NAV_IDS = ['artifacts', 'code', 'tasks', 'scheduled', 'customize'];
+const EXPANDED_NAV_IDS = [
+  'artifacts',
+  'code',
+  'design',
+  'research',
+  'automation',
+  'tasks',
+  'scheduled',
+  'customize',
+];
 
-const RAIL_STEPS: Array<{ navId: string; expectTestId: string }> = [
+const RAIL_STEPS: Array<{
+  navId: string;
+  expectTestId: string;
+  expectSelector?: string;
+}> = [
   { navId: 'artifacts', expectTestId: 'agi-work-artifacts' },
   { navId: 'code', expectTestId: 'code-workspace' },
-  { navId: 'tasks', expectTestId: 'desktop-agent-tasks' },
+  { navId: 'design', expectTestId: 'design-workspace' },
+  { navId: 'research', expectTestId: 'research-workspace' },
+  {
+    navId: 'automation',
+    expectTestId: 'desktop-automation',
+    expectSelector: '[data-testid="desktop-automation"] button[title="Refresh triggers"]',
+  },
+  {
+    navId: 'tasks',
+    expectTestId: 'desktop-agent-tasks',
+    expectSelector: '[data-testid="desktop-agent-tasks"] #agent-task-goal',
+  },
   { navId: 'scheduled', expectTestId: 'agi-work-scheduled' },
   { navId: 'projects', expectTestId: 'agi-work-projects' },
 ];
@@ -161,6 +272,15 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
     }
     // A previous spec can leave settings open, possibly dirty.
     await closeAnySettingsDialog();
+
+    // Sidebar collapse is persisted. Make this sweep independent of a prior
+    // native run (including an interrupted run) before asserting the expanded
+    // inventory below.
+    const expandSidebar = await $('button[aria-label="Expand sidebar"]');
+    if ((await expandSidebar.isExisting()) && (await expandSidebar.isDisplayed())) {
+      await expandSidebar.click();
+      await $('button[aria-label="Collapse sidebar"]').waitForDisplayed({ timeout: 5_000 });
+    }
 
     rawKeyBaseline = await collectRawKeys();
     console.log('SWEEP baseline raw i18n keys:', JSON.stringify(rawKeyBaseline));
@@ -215,7 +335,11 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         await sweepStep(
           `nav:${step.navId}`,
           { navId: step.navId },
-          { testId: step.expectTestId, forbidTestId: 'agi-work-projects' },
+          {
+            testId: step.expectTestId,
+            selectorPresent: step.expectSelector,
+            forbidTestId: 'agi-work-projects',
+          },
           6, // looks, not ms — lazy panels (CodeWorkspace) need several
         ),
       );
@@ -253,7 +377,7 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         { testId: 'agi-work-projects' },
       ),
     );
-    await shot('05-panel-projects');
+    await shot('08-panel-projects');
     // Projects IS the target here, so the fallback guard does not apply.
     assertStep(result, false);
   });
@@ -272,23 +396,27 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         },
       ),
     );
-    await shot('06-panel-chat');
+    await shot('09-panel-chat');
     assertStep(result);
   });
 
   it('"New project" opens the create-project dialog', async function () {
     this.timeout(90_000);
     const result = record(
-      await sweepStep('rail:new-project', { ariaLabel: 'New project' }, { dialog: true }),
+      // The project form can mount just after the default four-look budget on
+      // a cold native WebView. Eight looks keep this a bounded interaction
+      // check without letting a late dialog leak into the next test.
+      await sweepStep('rail:new-project', { ariaLabel: 'New project' }, { dialog: true }, 8),
     );
-    await shot('07-dialog-new-project');
     expect(result.clicked).toBe(true);
     expect(result.deadControlToasts).toEqual([]);
     expect(result.errorBoundary).toBe(null);
     expect(result.passed).toBe(true);
 
+    await waitForInteractiveDialog();
+    await shot('10-dialog-new-project');
     await browser.keys('Escape');
-    await browser.pause(400);
+    await waitForNoVisibleDialog('Create-project dialog');
   });
 
   it('Search button opens the search modal and Escape closes it', async function () {
@@ -300,20 +428,81 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         { dialog: true },
       ),
     );
-    await shot('08-modal-search');
+    await waitForInteractiveDialog();
+    await shot('11-modal-search');
     expect(result.clicked).toBe(true);
     expect(result.deadControlToasts).toEqual([]);
     expect(result.passed).toBe(true);
 
     await browser.keys('Escape');
-    await browser.pause(500);
-    const closed = await browser.execute(
-      () =>
-        !Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(
-          (d) => (d as HTMLElement).getClientRects().length > 0,
-        ),
+    await waitForNoVisibleDialog('Search modal');
+  });
+
+  it('an existing project opens an interactive edit dialog and Escape closes it', async function () {
+    this.timeout(180_000);
+    const createDialog = record(
+      await sweepStep(
+        'project-edit:create-fixture',
+        { ariaLabel: 'New project' },
+        { dialog: true },
+        8,
+      ),
     );
-    expect(closed).toBe(true);
+    assertStep(createDialog, false);
+    await waitForInteractiveDialog();
+
+    const projectName = `Native edit sweep ${Date.now()}`;
+    const nameInput = await $('#project-name');
+    await nameInput.setValue(projectName);
+    const createButton = await $('button=Create project');
+    await createButton.waitForClickable({ timeout: 5_000 });
+    await createButton.click();
+
+    // The real create callback activates the persisted project and routes to
+    // its detail view. That gives this test the same Settings entry point a
+    // user reaches for an existing project, without seeding store state.
+    await browser.waitUntil(
+      () =>
+        browser.execute((expectedName: string) => {
+          const dialogOpen = Array.from(
+            document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
+          ).some((dialog) => (dialog as HTMLElement).getClientRects().length > 0);
+          const activeProjectHeading = Array.from(document.querySelectorAll('h1')).some(
+            (heading) => (heading.textContent ?? '').trim() === expectedName,
+          );
+          return !dialogOpen && activeProjectHeading;
+        }, projectName),
+      {
+        timeout: 20_000,
+        interval: 200,
+        timeoutMsg: 'Created project did not open its real detail view',
+      },
+    );
+
+    const editDialog = record(
+      await sweepStep(
+        'project-edit:settings',
+        { ariaLabel: 'Project settings' },
+        { dialog: true },
+        8,
+      ),
+    );
+    assertStep(editDialog, false);
+    await waitForInteractiveDialog();
+
+    const editTitleVisible = await browser.execute(() => {
+      const dialog = Array.from(
+        document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
+      ).find((candidate) => (candidate as HTMLElement).getClientRects().length > 0);
+      return Array.from(dialog?.querySelectorAll('h1, h2, h3, [role="heading"]') ?? []).some(
+        (heading) => (heading.textContent ?? '').trim() === 'Edit Project',
+      );
+    });
+    expect(editTitleVisible).toBe(true);
+    await shot('12-dialog-edit-project');
+
+    await browser.keys('Escape');
+    await waitForNoVisibleDialog('Edit-project dialog');
   });
 
   it('collapse rail exposes the same destinations and expand restores them', async function () {
@@ -329,44 +518,83 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       ),
     );
     expect(collapsed.clicked).toBe(true);
-    await shot('09-sidebar-collapsed');
+    await shot('12-sidebar-collapsed');
 
-    // Inventory FIRST: a destination the rail never renders cannot be caught by
-    // clicking the ones it does. This assertion is what the missing `scheduled`
-    // rail entry would have failed on.
-    const railNavIds = await listNavIds();
-    console.log('SWEEP rail nav ids present:', JSON.stringify(railNavIds));
-    expect(railNavIds).toEqual(LOCAL_RAIL_NAV_IDS);
+    let expanded: SweepStepResult | null = null;
+    try {
+      // Inventory FIRST: a destination the rail never renders cannot be caught
+      // by clicking the ones it does. This assertion is what the missing
+      // `scheduled` rail entry would have failed on.
+      const railNavIds = await listNavIds();
+      console.log('SWEEP rail nav ids present:', JSON.stringify(railNavIds));
+      expect(railNavIds).toEqual(LOCAL_RAIL_NAV_IDS);
 
-    for (const target of RAIL_STEPS) {
-      const isProjects = target.navId === 'projects';
-      const result = record(
+      for (const target of RAIL_STEPS) {
+        const isProjects = target.navId === 'projects';
+        const result = record(
+          await sweepStep(
+            `rail:${target.navId}`,
+            { navId: target.navId },
+            {
+              testId: target.expectTestId,
+              selectorPresent: target.expectSelector,
+              ...(isProjects ? {} : { forbidTestId: 'agi-work-projects' }),
+            },
+            6,
+          ),
+        );
+        await shot(`13-rail-${target.navId}`);
+        assertStep(result, !isProjects);
+      }
+
+      // Customize is a real nav row in both layouts, separate from the footer
+      // Settings gear. Its route must open the same live settings surface.
+      const customize = record(
+        await sweepStep('rail:customize', { navId: 'customize' }, { dialog: true }, 8),
+      );
+      assertStep(customize, false);
+      await waitForSettingsReady();
+      await shot('13-rail-customize-settings');
+      expect(await closeAnySettingsDialog()).toBe(true);
+    } finally {
+      // A failed rail inventory/route assertion must not leave the persisted
+      // sidebar collapsed and turn every later Settings assertion into noise.
+      expanded = record(
         await sweepStep(
-          `rail:${target.navId}`,
-          { navId: target.navId },
-          {
-            testId: target.expectTestId,
-            ...(isProjects ? {} : { forbidTestId: 'agi-work-projects' }),
-          },
-          6,
+          'rail:expand',
+          { ariaLabel: 'Expand sidebar' },
+          { selectorPresent: 'aside[data-v3-sidebar][data-collapsed="false"]' },
         ),
       );
-      await shot(`10-rail-${target.navId}`);
-      assertStep(result, !isProjects);
+      if (!expanded.passed) {
+        // Best-effort recovery only: do not mask the original rail assertion.
+        await browser.execute(() => {
+          const sidebar = document.querySelector('aside[data-v3-sidebar]');
+          if (sidebar?.getAttribute('data-collapsed') !== 'true') return;
+          (
+            sidebar.querySelector('button[aria-label="Expand sidebar"]') as HTMLElement | null
+          )?.click();
+        });
+      }
+      await shot('14-sidebar-expanded');
     }
 
-    const expanded = record(
-      await sweepStep(
-        'rail:expand',
-        { ariaLabel: 'Expand sidebar' },
-        { selectorPresent: '[data-nav-id="customize"]' },
-      ),
-    );
-    expect(expanded.clicked).toBe(true);
-    await browser.pause(400);
+    expect(expanded).not.toBeNull();
+    assertStep(expanded!, false);
     // Expanding must restore the expanded nav, not leave the rail behind.
     expect(await listNavIds()).toEqual(EXPANDED_NAV_IDS);
-    await shot('11-sidebar-expanded');
+  });
+
+  it('expanded Customize nav opens Settings and closes cleanly', async function () {
+    this.timeout(120_000);
+    const result = record(
+      await sweepStep('nav:customize', { navId: 'customize' }, { dialog: true }, 8),
+    );
+    assertStep(result, false);
+
+    await waitForSettingsReady();
+    await shot('14-expanded-customize-settings');
+    expect(await closeAnySettingsDialog()).toBe(true);
   });
 
   it('settings gear opens the modal', async function () {
@@ -379,7 +607,7 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
     expect(result.passed).toBe(true);
 
     await waitForSettingsReady();
-    await shot('12-settings-open');
+    await shot('15-settings-open');
   });
 
   for (const [index, label] of SETTINGS_TABS.entries()) {
@@ -477,7 +705,7 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       );
       console.log(`  preview: ${snap.preview}`);
 
-      await shot(`13-${String(index + 1).padStart(2, '0')}-settings-${slug(label)}`);
+      await shot(`16-${String(index + 1).padStart(2, '0')}-settings-${slug(label)}`);
 
       expect(clicked).toBe(true);
       expect(snap.hasErrorBoundary).toBe(false);

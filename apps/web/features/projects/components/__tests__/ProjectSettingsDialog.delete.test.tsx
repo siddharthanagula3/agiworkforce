@@ -80,6 +80,15 @@ describe('ProjectSettingsDialog — delete fires a real server request', () => {
     expect(screen.queryByRole('button', { name: /choose emoji/i })).toBeNull();
   });
 
+  it('exposes export as a document download link instead of client-side routing', () => {
+    renderDialog();
+
+    expect(screen.getByRole('link', { name: /export/i })).toHaveAttribute(
+      'href',
+      '/api/projects/proj_abc123/export',
+    );
+  });
+
   it('sends DELETE /api/projects/[id], then removes locally and toasts success', async () => {
     const fetchMock = vi
       .fn()

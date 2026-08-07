@@ -5,6 +5,12 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage, readTaskJournal } from '../TasksPage';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
+// Root CI executes many package suites concurrently. This two-effect render is
+// fast when focused, but its jsdom worker can be scheduler-starved beyond the
+// 5 s default. Keep the extra budget on this test rather than the whole suite.
+const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
+const DURABLE_PROGRESS_TEST =
+  'loads durable progress, generated outputs, and the honest context boundary';
 
 const run: CloudAgentRun = {
   id: RUN_ID,
@@ -72,34 +78,40 @@ function client(overrides: Partial<ManagedCloudAgentRunClient> = {}): ManagedClo
 }
 
 describe('Tasks task-detail panel', () => {
-  it('loads durable progress, generated outputs, and the honest context boundary', async () => {
-    const openConversation = vi.fn();
-    const taskClient = client();
+  it(
+    DURABLE_PROGRESS_TEST,
+    async () => {
+      const openConversation = vi.fn();
+      const taskClient = client();
 
-    render(
-      <TasksPage
-        transport={{
-          client: taskClient,
-          openConversation,
-          notifyError: vi.fn(),
-        }}
-      />,
-    );
+      render(
+        <TasksPage
+          transport={{
+            client: taskClient,
+            openConversation,
+            notifyError: vi.fn(),
+          }}
+        />,
+      );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'View details for AGI Work task' }),
+      );
 
-    expect(await screen.findByText('Prepared the benchmark')).toBeTruthy();
-    expect(screen.getByText('Outputs · 1')).toBeTruthy();
-    expect(screen.getByText('benchmark.csv')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Download and open' }).getAttribute('href')).toBe(
-      '/api/files/asset-1',
-    );
-    expect(screen.getByText('Earlier project context was compacted')).toBeTruthy();
-    expect(screen.getByText(/does not copy input filenames or folder paths/)).toBeTruthy();
+      expect(await screen.findByText('Prepared the benchmark')).toBeTruthy();
+      expect(screen.getByText('Outputs · 1')).toBeTruthy();
+      expect(screen.getByText('benchmark.csv')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Download and open' }).getAttribute('href')).toBe(
+        '/api/files/asset-1',
+      );
+      expect(screen.getByText('Earlier project context was compacted')).toBeTruthy();
+      expect(screen.getByText(/does not copy input filenames or folder paths/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open source chat' }));
-    expect(openConversation).toHaveBeenCalledWith('conversation-1');
-  });
+      fireEvent.click(screen.getByRole('button', { name: 'Open source chat' }));
+      expect(openConversation).toHaveBeenCalledWith('conversation-1');
+    },
+    ROOT_GRAPH_TEST_TIMEOUT_MS,
+  );
 
   it('reads paginated journals up to the run sequence without dropping events', async () => {
     const first = Array.from({ length: 500 }, (_, sequence) =>

@@ -7,12 +7,14 @@ on:
   push:
     branches: [main, develop]
     paths:
+      - '.github/workflows/codeql.yml'
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
   pull_request:
     branches: [main]
     paths:
+      - '.github/workflows/codeql.yml'
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
@@ -50,6 +52,15 @@ jobs:
         with:
           workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
+
+      - name: Install pinned cargo-audit
+        # audit-check installs cargo-audit without --locked when the binary is
+        # absent. That selected kstring 2.0.4 (Rust 1.96) on our Rust 1.94
+        # runner. Preinstall the current cargo-audit release from its published
+        # lockfile so the action finds the compatible, deterministic binary.
+        env:
+          RUSTFLAGS: ''
+        run: cargo install cargo-audit --version 0.22.2 --locked
 
       - name: Run cargo audit (CVE scanning)
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0

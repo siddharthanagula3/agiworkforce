@@ -25,6 +25,7 @@ import {
   type ManagedCloudRequestContext,
 } from '../../services/managedCloudRequestContext';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
+import { isTauri } from '../../lib/runtimeEnvironment';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,8 +98,13 @@ export function SearchModal() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [librarySearch, setLibrarySearch] = useState<LibrarySearchState | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  // WebKit can leave a Framer Motion surface pinned to its invisible first
+  // keyframe in the bundled Tauri host. Native dialogs must be interactive on
+  // their first paint; reduced-motion users receive the same static entry.
+  const disableEntryMotion = isTauri || prefersReducedMotion;
 
   // Store data
   const conversations = useChatStore((s) => s.conversations);
@@ -194,14 +200,28 @@ export function SearchModal() {
   useEffect(() => {
     if (!isOpen) return;
 
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery('');
     setFilter('all');
     setSelectedIndex(0);
+    // The bundled native WebView can defer its first animation frame long
+    // enough to leave a visible modal without keyboard focus. The element is
+    // committed when this effect runs, so focus it immediately in Tauri.
+    if (isTauri) {
+      inputRef.current?.focus();
+      return () => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus();
+      };
+    }
     // Autofocus input after animation frame
     const frameId = requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-    return () => cancelAnimationFrame(frameId);
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
   }, [isOpen]);
 
   // Reset selection when query or filter changes
@@ -382,6 +402,32 @@ export function SearchModal() {
             handleSelect(results[selectedIndex]!);
           }
           break;
+        case 'Tab': {
+          const dialog = dialogRef.current;
+          if (!dialog) break;
+          const focusable = Array.from(
+            dialog.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]',
+            ),
+          ).filter((element) => element.tabIndex >= 0);
+          if (focusable.length === 0) {
+            e.preventDefault();
+            dialog.focus();
+            break;
+          }
+
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          const activeElement = document.activeElement;
+          if (e.shiftKey && (activeElement === first || !dialog.contains(activeElement))) {
+            e.preventDefault();
+            last?.focus();
+          } else if (!e.shiftKey && (activeElement === last || !dialog.contains(activeElement))) {
+            e.preventDefault();
+            first?.focus();
+          }
+          break;
+        }
         case 'Escape':
           e.preventDefault();
           close();
@@ -517,29 +563,35 @@ export function SearchModal() {
   return (
     <AnimatePresence>
       <div
+        ref={dialogRef}
         className="fixed inset-0 z-50 flex items-start justify-center pt-28"
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-label="Spotlight search"
         onClick={close}
       >
         {/* Backdrop */}
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={{ opacity: disableEntryMotion ? 1 : 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={disableEntryMotion ? { duration: 0 } : undefined}
           className="absolute inset-0 bg-[var(--chat-surface-overlay)]/80 backdrop-blur-xs"
         />
 
         {/* Panel */}
         <motion.div
-          initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: -20 }}
+          data-testid="search-modal-panel"
+          initial={
+            disableEntryMotion
+              ? { opacity: 1, scale: 1, y: 0 }
+              : { opacity: 0, scale: 0.95, y: -20 }
+          }
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: -20 }}
+          exit={disableEntryMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: -20 }}
           transition={
-            prefersReducedMotion
-              ? { duration: 0.15 }
-              : { type: 'spring', stiffness: 350, damping: 30 }
+            disableEntryMotion ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30 }
           }
           onClick={(e) => e.stopPropagation()}
           className={cn(
@@ -549,7 +601,7 @@ export function SearchModal() {
             'shadow-[var(--chat-shadow-lg)]',
             'overflow-hidden',
           )}
-          style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
+          style={{ willChange: disableEntryMotion ? 'auto' : 'opacity, transform' }}
         >
           {/* Search header */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">

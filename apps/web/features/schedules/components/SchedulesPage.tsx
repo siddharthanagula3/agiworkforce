@@ -194,7 +194,9 @@ export function SchedulesPage({
   };
 
   const saveSchedule = async () => {
-    const validation = validateAndBuildScheduleRequest(draft, now());
+    const validation = validateAndBuildScheduleRequest(draft, now(), {
+      existingIntervalMs: editing?.intervalMs,
+    });
     if (!validation.ok) {
       setFormErrors(validation.errors);
       setSubmitError(null);

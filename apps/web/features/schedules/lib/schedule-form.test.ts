@@ -164,9 +164,38 @@ describe('schedule form contract', () => {
     });
   });
 
-  // The sweep that runs due tasks fires hourly, so anything finer is an
-  // availability the platform does not have. The client refuses it here so the
-  // user is not told "every 5 minutes" and then served one run an hour.
+  it('allows an unchanged legacy interval through an unrelated edit but rejects a new one', () => {
+    const legacyDraft = draft({
+      name: 'Renamed legacy task',
+      recurrence: 'interval',
+      intervalValue: '1',
+      intervalUnit: 'hours',
+    });
+
+    expect(
+      validateAndBuildScheduleRequest(legacyDraft, new Date('2026-07-15T12:00:00.000Z'), {
+        existingIntervalMs: 60 * 60_000,
+      }),
+    ).toMatchObject({
+      ok: true,
+      payload: { name: 'Renamed legacy task', intervalMs: 60 * 60_000 },
+    });
+
+    expect(
+      validateAndBuildScheduleRequest(
+        { ...legacyDraft, intervalValue: '2' },
+        new Date('2026-07-15T12:00:00.000Z'),
+        { existingIntervalMs: 60 * 60_000 },
+      ),
+    ).toMatchObject({
+      ok: false,
+      errors: { intervalValue: expect.stringContaining(describeSweepCadence().minimum) },
+    });
+  });
+
+  // The sweep that runs due tasks currently fires daily, so anything finer is
+  // an availability the platform does not have. The client refuses it here so
+  // the user is not promised a cadence the deployed trigger cannot serve.
   it('refuses a cadence finer than the deployed sweep, on both interval and cron', () => {
     expect(
       validateAndBuildScheduleRequest(

@@ -624,25 +624,33 @@ export async function updateSchedule(
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be edited');
     }
-    const timingKeys: ReadonlyArray<keyof ScheduleUpdateInput> = [
-      'recurrence',
-      'cronExpression',
-      'scheduledAt',
-      'intervalMs',
-      'timeOfDay',
-      'daysOfWeek',
-      'dayOfMonth',
-      'timezone',
-    ];
-    const timingChanged = timingKeys.some((key) => Object.hasOwn(patch, key));
+    const validationNow = options.now ?? new Date();
     const definition = validateScheduleInput(
       { ...inputFromTask(current), ...patch } as ScheduleInput,
-      options.now ?? new Date(),
-      // A row created before the cadence floor existed keeps running at whatever
-      // cadence it was stored with. Renaming it must not become impossible; the
-      // floor only applies when the caller is actually changing the timing.
-      { enforceCadence: timingChanged },
+      validationNow,
+      // Compare the normalized timing below. A PUT client may send a complete
+      // representation, so key presence alone cannot distinguish an actual
+      // cadence change from an unrelated edit to a legacy row.
+      { enforceCadence: false },
     );
+    const timingChanged =
+      definition.scheduleType !== current.scheduleType ||
+      definition.cronExpression !== current.cronExpression ||
+      definition.executeAt !== current.executeAt ||
+      definition.intervalMs !== current.intervalMs ||
+      definition.timezone !== current.timezone;
+    if (timingChanged) {
+      assertDeliverableCadence(
+        {
+          scheduleType: definition.scheduleType,
+          cronExpression: definition.cronExpression,
+          executeAt: definition.executeAt,
+          intervalMs: definition.intervalMs,
+          timezone: definition.timezone,
+        },
+        validationNow,
+      );
+    }
     const activationChanged =
       Object.hasOwn(patch, 'isActive') && patch.isActive !== current.isEnabled;
     if (!timingChanged && !activationChanged) {

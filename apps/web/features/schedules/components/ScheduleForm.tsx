@@ -63,15 +63,6 @@ const INTERVAL_UNITS: { value: IntervalUnit; label: string; ms: number }[] = [
   { value: 'days', label: 'Days', ms: 24 * 60 * 60_000 },
 ];
 
-/**
- * Only units the deployed sweep can actually deliver are offered, filtered by
- * `SWEEP_INTERVAL_MS` rather than a hardcoded list. The list used to name "Days"
- * alone, which both outlived the sweep going hourly and left the default draft
- * unit (`hours`) with no matching option — the control showed "Days" while the
- * draft still said hours.
- */
-const OFFERED_INTERVAL_UNITS = INTERVAL_UNITS.filter((unit) => unit.ms >= SWEEP_INTERVAL_MS);
-
 export function ScheduleForm({
   draft,
   errors,
@@ -82,6 +73,14 @@ export function ScheduleForm({
   onSubmit,
   onCancel,
 }: ScheduleFormProps) {
+  // New schedules expose only deliverable units. An existing legacy interval
+  // keeps its currently selected unit visible so a name/description edit never
+  // renders an invalid empty select; choosing a different sub-daily cadence is
+  // still blocked by validation.
+  const visibleIntervalUnits = INTERVAL_UNITS.filter(
+    (unit) => unit.ms >= SWEEP_INTERVAL_MS || unit.value === draft.intervalUnit,
+  );
+
   useEffect(() => {
     const firstError = FIELD_ORDER.find((field) => errors[field]);
     if (!firstError) return;
@@ -282,7 +281,7 @@ export function ScheduleForm({
                 }
                 aria-describedby="schedule-cadence-helper"
               >
-                {OFFERED_INTERVAL_UNITS.map((unit) => (
+                {visibleIntervalUnits.map((unit) => (
                   <option key={unit.value} value={unit.value}>
                     {unit.label}
                   </option>

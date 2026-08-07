@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
 
@@ -191,6 +192,7 @@ export function withConnectorReturnPath(startPath: string, returnPath: string): 
  */
 export function useConnectors(): ConnectorStatus {
   const { isLoaded, isSignedIn } = useUser();
+  const router = useRouter();
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});
   const [sources, setSources] = useState<Record<string, ConnectorSource>>({});
@@ -295,9 +297,7 @@ export function useConnectors(): ConnectorStatus {
           typeof window === 'undefined'
             ? '/connectors'
             : `${window.location.pathname}${window.location.search}`;
-        if (typeof window !== 'undefined') {
-          window.location.href = `/login?redirectTo=${encodeURIComponent(redirectTo)}`;
-        }
+        router.push(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
         return;
       }
 
@@ -358,7 +358,7 @@ export function useConnectors(): ConnectorStatus {
         });
       }
     },
-    [isSignedIn],
+    [isSignedIn, router],
   );
 
   const connect = useCallback(

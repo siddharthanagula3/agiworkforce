@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
+import { isProtectedCleanupPath, TRACKED_STALE } from './clean-repo.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -162,12 +163,19 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   errors.push(`Unclassified root file: ${entry.name}`);
 }
 
-// Note: audit/, tasks/, and reports/ are intentionally NOT required. They are
-// removed by scripts/clean-repo.mjs and treated as disposable evidence/triage
-// per the agi-alpha clean-repo policy; durable conclusions live in
-// docs/agent-context/known-flaws.md and docs/current. Do not re-add them here.
+// audit/ is the live evidence-ledger root and must remain both required and
+// protected from cleanup. tasks/ and reports/ remain optional disposable roots;
+// durable conclusions live in docs/agent-context/known-flaws.md and docs/current.
+if (!isProtectedCleanupPath('audit')) {
+  errors.push('scripts/clean-repo.mjs must protect the live audit/ evidence ledger.');
+}
+if (TRACKED_STALE.some((candidate) => candidate === 'audit' || candidate.startsWith('audit/'))) {
+  errors.push('scripts/clean-repo.mjs must not classify audit/ as stale cleanup output.');
+}
+
 const requiredDirs = [
   'apps',
+  'audit',
   'packages',
   'crates',
   'services',

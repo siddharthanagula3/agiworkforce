@@ -54,7 +54,7 @@ const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
 const MAX_TOTAL_IMAGE_INPUT_BYTES: usize = 20_000_000;
 const MAX_IMAGE_DATA_URL_HEADER_BYTES: usize = 256;
 const MAX_IMAGE_MIME_BYTES: usize = 127;
-const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = (MAX_IMAGE_INPUT_BYTES + 2) / 3 * 4;
+const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
 // headroom for the JSON-RPC envelope and thread summary while measuring the
@@ -146,9 +146,9 @@ async fn take_steered_input_or_close(
     // before this close point or observes that the running claim is gone.
     let mut running = running_turns.lock().await;
     let mut queues = steering.lock().await;
-    if !running
+    if running
         .get(thread_id)
-        .is_some_and(|running| running.turn_id == turn_id)
+        .is_none_or(|running| running.turn_id != turn_id)
     {
         return None;
     }

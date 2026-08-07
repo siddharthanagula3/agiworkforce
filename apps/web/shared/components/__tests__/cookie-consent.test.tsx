@@ -35,11 +35,11 @@ import {
 vi.mock('next/script', () => ({
   default: ({ src, id, children }: { src?: string; id?: string; children?: string }) =>
     src ? (
-      // Test stand-in for next/script. Deliberately NOT `async`: React 19
-      // hoists async scripts into <head>, which would move the tag out of the
-      // render container and make the assertions test React's hoisting rather
-      // than the consent gate.
-      <script data-testid="ga-script" src={src} />
+      // Test stand-in for next/script. Use `defer` rather than `async`: React
+      // 19 hoists async scripts into <head>, which would move the tag out of
+      // the render container and make the assertions test React's hoisting
+      // rather than the consent gate. `defer` also keeps this valid HTML.
+      <script data-testid="ga-script" src={src} defer />
     ) : (
       <script data-testid={id ?? 'ga-inline'}>{children}</script>
     ),

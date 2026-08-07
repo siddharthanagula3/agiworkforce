@@ -206,7 +206,10 @@ export const useBillingStore = create<AuthState>()((set) => ({
     }
     set({ ...INITIAL_STATE, isLoading: false, initialized: true });
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      // Sign-out must discard all in-memory state after Clerk clears its
+      // session. Keep the existing full document navigation semantics; an
+      // absolute same-origin URL distinguishes this from an App Router route.
+      window.location.assign(new URL('/login', window.location.origin));
     }
   },
 

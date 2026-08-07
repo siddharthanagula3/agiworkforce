@@ -86,15 +86,6 @@ impl Skill {
 // Discovery
 // ---------------------------------------------------------------------------
 
-/// Discover all available skills from project, global, and plugin sources.
-///
-/// Sources are loaded in precedence order. Model-facing catalogs deduplicate by
-/// case-insensitive name with the first entry winning, so a project skill can
-/// intentionally override a global or plugin skill without exposing a path:
-/// 1. Project: `.agiworkforce/skills/`
-/// 2. Global: `~/.agiworkforce/skills/`
-/// 3. Plugins: every path declared in any installed plugin's manifest under
-///    `skills:` (Sprint B6) — both files and dirs are accepted.
 /// Path to the persisted disabled-skill set (names the user turned off via
 /// /skills-toggle). Lives beside the global skills dir.
 fn disabled_skills_path() -> Option<std::path::PathBuf> {
@@ -140,6 +131,14 @@ pub fn discover_skills() -> Vec<Skill> {
 
 /// ALL discovered skills regardless of the disable set — used by the
 /// /skills-toggle overlay so it can list + re-enable disabled skills.
+///
+/// Sources are loaded in precedence order. Model-facing catalogs deduplicate by
+/// case-insensitive name with the first entry winning, so a project skill can
+/// intentionally override a global or plugin skill without exposing a path:
+/// 1. Project: `.agiworkforce/skills/`
+/// 2. Global: `~/.agiworkforce/skills/`
+/// 3. Plugins: every path declared in any installed plugin's manifest under
+///    `skills:` (Sprint B6) — both files and dirs are accepted.
 pub fn discover_skills_all() -> Vec<Skill> {
     let mut skills = Vec::new();
 
