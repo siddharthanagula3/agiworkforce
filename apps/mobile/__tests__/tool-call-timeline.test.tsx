@@ -74,18 +74,21 @@ describe('ToolCallTimeline', () => {
   });
 
   it('renders the group summary and collapses/expands on tap', () => {
+    // Every tool here is already `completed`, so the run auto-collapses on
+    // mount — see the auto-collapse describe block below.
     const tools = [makeTool({ output: 'result text' })];
     const { getByText, queryByText } = render(
       <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
     );
 
     expect(getByText('Used 1 tool')).toBeTruthy();
-    // Collapse hides the rows (the "Done" footer disappears).
-    fireEvent.press(getByText('Used 1 tool'));
     expect(queryByText('Done')).toBeNull();
-    // Expand brings them back.
+    // Expand brings the rows back.
     fireEvent.press(getByText('Used 1 tool'));
     expect(queryByText('Done')).toBeTruthy();
+    // And collapse hides them again.
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(queryByText('Done')).toBeNull();
   });
 
   it('expands a row inline to show the response body', () => {
@@ -95,6 +98,8 @@ describe('ToolCallTimeline', () => {
     );
 
     expect(queryByText('short output')).toBeNull();
+    // Completed runs mount collapsed, so open the group before reaching a row.
+    fireEvent.press(getByText('Used 1 tool'));
     // Tap the row (its accessible pressable carries the tool label text).
     fireEvent.press(getByText(/web search|searched/i));
     expect(getByText('short output')).toBeTruthy();
@@ -107,6 +112,7 @@ describe('ToolCallTimeline', () => {
       <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
     );
 
+    fireEvent.press(getByText('Used 1 tool'));
     fireEvent.press(getByText(/web search|searched/i));
     const opener = getByText('View full output');
     expect(opener).toBeTruthy();
@@ -126,6 +132,7 @@ describe('ToolCallTimeline', () => {
       <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
     );
 
+    fireEvent.press(getByText('Used 1 tool'));
     fireEvent.press(getByText(/web search|searched/i));
     expect(queryByText('View full output')).toBeNull();
   });
@@ -152,5 +159,50 @@ describe('ToolCallTimeline', () => {
 
     expect(getByText('Decision saved: allow')).toBeTruthy();
     expect(getByText('Allowed')).toBeTruthy();
+  });
+});
+
+/**
+ * Matches the reference (Claude iOS, new-latest-claude-mobile-ios-images
+ * IMG_0741): a finished run appears in the transcript as a single tappable
+ * summary line, not as its full scaffolding.
+ *
+ * Expanded WHILE running is the point — that is the progress indicator. What
+ * was wrong is that it stayed expanded forever, so a ten-step run permanently
+ * buried the answer it produced.
+ */
+describe('ToolCallTimeline auto-collapse', () => {
+  it('stays expanded while a tool is still running', () => {
+    const tools = [makeTool({ status: 'running' })];
+    const { getByLabelText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Using 1 tool" />,
+    );
+
+    // The toggle's accessibility label carries the group's state, which is a
+    // steadier assertion than a running row's copy.
+    expect(getByLabelText('Using 1 tool, expanded')).toBeTruthy();
+  });
+
+  it('collapses once every tool has finished', () => {
+    const tools = [makeTool({ output: 'result text' })];
+    const { queryByText } = render(<ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />);
+
+    expect(queryByText('Done')).toBeNull();
+  });
+
+  it('does not re-collapse a group the user deliberately opened', () => {
+    // Collapsing something the user just chose to open is worse than any amount
+    // of transcript noise, so a manual toggle wins permanently.
+    const tools = [makeTool({ output: 'result text' })];
+    const { getByText, queryByText, rerender } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(queryByText('Done')).toBeTruthy();
+
+    // A re-render with the same finished tools must not slam it shut again.
+    rerender(<ToolCallTimeline toolCalls={[...tools]} summary="Used 1 tool" />);
+    expect(queryByText('Done')).toBeTruthy();
   });
 });

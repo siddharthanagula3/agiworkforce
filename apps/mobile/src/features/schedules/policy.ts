@@ -19,7 +19,7 @@ const MOBILE_SUPPORTED_RECURRENCE_SET = new Set<string>(MOBILE_SUPPORTED_SCHEDUL
  * pins this constant to that cron instead; if the deployed sweep changes speed
  * the test fails until this follows it.
  */
-export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The sweep cadence in words, derived from the constant so the user-facing copy

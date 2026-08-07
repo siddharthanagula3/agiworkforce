@@ -11,7 +11,7 @@
  * Supersedes the old per-tool bordered-pill rendering (InlineToolCall, now
  * removed) for every tool call in the transcript.
  */
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import { View, Pressable, Modal, ScrollView } from 'react-native';
 import {
@@ -524,12 +524,44 @@ export function ToolCallTimeline({
     [toolCalls],
   );
 
+  /**
+   * Auto-collapse once the run finishes, matching the reference (Claude iOS
+   * shows a finished run as a single tappable summary line in the transcript,
+   * expanding it into its own view on demand).
+   *
+   * Expanded WHILE running is the point — that is the progress indicator. What
+   * was wrong is that it stayed expanded forever, so a ten-step run permanently
+   * buried the answer it produced under its own scaffolding.
+   *
+   * A manual toggle wins permanently. Collapsing something the user just chose
+   * to open is worse than any amount of transcript noise, so the auto-collapse
+   * fires at most once and never fights a deliberate choice.
+   */
+  const userToggledRef = useRef(false);
+  const autoCollapsedRef = useRef(false);
+  useEffect(() => {
+    // messageId is in the dep list so a recycled FlashList instance re-arms
+    // both refs for whichever message it now renders.
+    userToggledRef.current = false;
+    autoCollapsedRef.current = false;
+  }, [messageId]);
+  useEffect(() => {
+    if (!allDone || userToggledRef.current || autoCollapsedRef.current) return;
+    autoCollapsedRef.current = true;
+    setCollapsed(true);
+  }, [allDone, setCollapsed]);
+
+  const handleToggle = useCallback(() => {
+    userToggledRef.current = true;
+    setCollapsed((prev) => !prev);
+  }, [setCollapsed]);
+
   if (toolCalls.length === 0) return null;
 
   return (
     <View style={{ marginBottom: 4 }}>
       <Pressable
-        onPress={() => setCollapsed((prev) => !prev)}
+        onPress={handleToggle}
         accessibilityRole="button"
         accessibilityLabel={`${summary}${collapsed ? ', collapsed' : ', expanded'}`}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
