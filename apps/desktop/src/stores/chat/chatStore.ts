@@ -409,12 +409,25 @@ export const useChatMessageStore = create<ChatMessageState>()(
           ensureActiveConversation: () =>
             set(
               (state) => {
-                if (state.activeConversationId) {
-                  const existing = state.messagesByConversation[state.activeConversationId];
+                const activeConversation = state.activeConversationId
+                  ? state.conversations.find(
+                      (conversation) => conversation.id === state.activeConversationId,
+                    )
+                  : undefined;
+                if (activeConversation) {
+                  const existing = state.messagesByConversation[activeConversation.id];
                   if (existing && state.messages.length === 0) state.messages = existing.slice();
                   return;
                 }
-                const id = crypto.randomUUID();
+
+                // A concurrent Cloud list hydration can replace the summary array
+                // after an empty-boundary draft has been seeded while leaving its
+                // active id and messages intact. Repair that dangling summary with
+                // the same id so a Strict Mode hydration race cannot expose a
+                // composer whose Send action silently fails closed — and never
+                // discard text already attached to the draft.
+                const id = state.activeConversationId ?? crypto.randomUUID();
+                const existingMessages = state.messagesByConversation[id] ?? [];
                 const created: ConversationSummary = {
                   id,
                   title: 'New chat',
@@ -425,8 +438,8 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 };
                 state.conversations.unshift(created);
                 state.activeConversationId = id;
-                state.messagesByConversation[id] = [];
-                state.messages = [];
+                state.messagesByConversation[id] = existingMessages;
+                state.messages = existingMessages.slice();
               },
               undefined,
               'chat/ensureActiveConversation',

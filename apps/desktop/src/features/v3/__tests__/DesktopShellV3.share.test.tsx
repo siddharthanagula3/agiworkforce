@@ -89,6 +89,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     },
     EmptyState: () => React.createElement('div', { 'data-testid': 'empty-state' }),
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
+    useReducedMotion: () => false,
     useChatStore,
     selectBudget: () => ({ enabled: false }),
     selectBudgetPercentage: () => 0,

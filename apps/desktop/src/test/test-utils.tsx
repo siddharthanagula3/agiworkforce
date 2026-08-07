@@ -1,21 +1,11 @@
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
 import { vi, type MockInstance } from 'vitest';
-
-interface AllTheProvidersProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  children: any;
-}
-
-function AllTheProviders({ children }: AllTheProvidersProps) {
-  return <BrowserRouter>{children}</BrowserRouter>;
-}
 
 const customRender = (
   ui: ReactElement,
   options?: Omit<RenderOptions, 'wrapper'>,
-): ReturnType<typeof render> => render(ui, { wrapper: AllTheProviders, ...options });
+): ReturnType<typeof render> => render(ui, options);
 
 export { screen, waitFor, within, fireEvent, cleanup } from '@testing-library/react';
 export { customRender as render };

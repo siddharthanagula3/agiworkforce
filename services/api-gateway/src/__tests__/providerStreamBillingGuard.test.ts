@@ -17,9 +17,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const routeSource = readFileSync(new URL('../routes/providerStream.ts', import.meta.url), 'utf8');
-const meteredSource = readFileSync(new URL('../routes/llm.ts', import.meta.url), 'utf8');
+const routeSource = readFileSync(join(__dirname, '..', 'routes', 'providerStream.ts'), 'utf8');
+const meteredSource = readFileSync(join(__dirname, '..', 'routes', 'llm.ts'), 'utf8');
 
 describe('provider stream billing guard', () => {
   it('refuses to serve unless an operator explicitly opts in', () => {

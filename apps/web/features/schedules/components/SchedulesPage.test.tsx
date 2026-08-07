@@ -201,8 +201,8 @@ describe('SchedulesPage', () => {
     const unitSelect = within(dialog).getByLabelText<HTMLSelectElement>('Interval Unit');
     const offered = [...unitSelect.options].map((option) => option.value);
     // Derived from the sweep, not pinned to a literal list: the form used to
-    // offer "Days" alone while the sweep was hourly and the draft defaulted to
-    // hours, so the control showed a unit the draft did not hold.
+    // offer a list that disagrees with either the deployed cadence or the
+    // default draft, which leaves the select showing a value it does not hold.
     expect(offered).toEqual(
       ['minutes', 'hours', 'days'].filter(
         (unit) =>
@@ -219,6 +219,51 @@ describe('SchedulesPage', () => {
     expect(
       within(dialog).getByText(new RegExp(`swept ${describeSweepCadence().cadence}`)),
     ).toBeInTheDocument();
+  });
+
+  it('keeps an existing sub-daily interval editable without advertising it for new schedules', async () => {
+    const legacySchedule: ScheduleTask = {
+      ...schedule,
+      name: 'Legacy hourly brief',
+      scheduleType: 'interval',
+      cronExpression: null,
+      intervalMs: 60 * 60_000,
+      metadata: { productRecurrence: 'interval' },
+    };
+    const updateSchedule = vi.fn<ScheduleApi['updateSchedule']>(async (_id, payload) => ({
+      ...legacySchedule,
+      name: payload.name,
+    }));
+    const api = createApi({
+      listSchedules: vi.fn(async () => page([legacySchedule])),
+      updateSchedule,
+    });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    await screen.findByRole('heading', { name: 'Legacy hourly brief' });
+    await user.click(screen.getByRole('button', { name: 'Edit Legacy hourly brief' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Edit Schedule' });
+    const unitSelect = within(dialog).getByLabelText<HTMLSelectElement>('Interval Unit');
+    expect(unitSelect).toHaveValue('hours');
+    expect([...unitSelect.options].map((option) => option.value)).toEqual(['hours', 'days']);
+
+    const name = within(dialog).getByLabelText('Schedule Name');
+    await user.clear(name);
+    await user.type(name, 'Renamed legacy brief');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() =>
+      expect(updateSchedule).toHaveBeenCalledWith(
+        legacySchedule.id,
+        expect.objectContaining({
+          name: 'Renamed legacy brief',
+          recurrence: 'interval',
+          intervalMs: 60 * 60_000,
+        }),
+      ),
+    );
   });
 
   it('creates a supported schedule, updates the list, and announces success', async () => {

@@ -273,14 +273,14 @@ const SettingsPageContent: React.FC = () => {
       setShowDeleteAccount(false);
       setDeleteConfirmText('');
       setTimeout(() => {
-        window.location.href = '/login';
+        router.replace('/login');
       }, 2000);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete account data');
     } finally {
       setIsDeleting(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (section && section !== activeSection) {

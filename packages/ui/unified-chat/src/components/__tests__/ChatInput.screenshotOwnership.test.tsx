@@ -34,6 +34,14 @@ import { ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 
+// The root test graph runs dozens of package suites concurrently. This test is
+// synchronous and completes in well under a second when focused, but React's
+// jsdom render can be scheduler-starved past Vitest's 5 s default under that
+// load. Keep the extra budget scoped to the affected integration-style test.
+const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
+const DROPS_STALE_SCREENSHOT_TEST =
+  'drops a screenshot that completes after the same account starts a new auth incarnation';
+
 describe('ChatInput screenshot ownership', () => {
   beforeEach(() => {
     screenshotHarness.callbacks.length = 0;
@@ -49,55 +57,59 @@ describe('ChatInput screenshot ownership', () => {
 
   afterEach(() => cleanup());
 
-  it('drops a screenshot that completes after the same account starts a new auth incarnation', () => {
-    const onSend = vi.fn();
-    const common = {
-      onSend,
-      onStop: vi.fn(),
-      onModelSelectorClick: vi.fn(),
-      hasMessages: false,
-    };
-    const { rerender } = render(
-      <ChatInput
-        {...common}
-        conversationId="conv-a"
-        attachmentContextKey="managed:account-a:session-1"
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start screenshot' }));
-    const finishAccountAScreenshot = screenshotHarness.callbacks[0];
-    expect(finishAccountAScreenshot).toBeTypeOf('function');
-
-    rerender(
-      <ChatInput
-        {...common}
-        conversationId="conv-a"
-        attachmentContextKey="managed:account-a:session-2"
-      />,
-    );
-    const accountBFile = new File(['account B'], 'account-b.txt', { type: 'text/plain' });
-    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
-    fireEvent.change(fileInput!, { target: { files: [accountBFile] } });
-
-    act(() => {
-      finishAccountAScreenshot?.(
-        new File(['account A screenshot'], 'account-a-screenshot.png', { type: 'image/png' }),
+  it(
+    DROPS_STALE_SCREENSHOT_TEST,
+    () => {
+      const onSend = vi.fn();
+      const common = {
+        onSend,
+        onStop: vi.fn(),
+        onModelSelectorClick: vi.fn(),
+        hasMessages: false,
+      };
+      const { rerender } = render(
+        <ChatInput
+          {...common}
+          conversationId="conv-a"
+          attachmentContextKey="managed:account-a:session-1"
+        />,
       );
-    });
 
-    expect(screen.getByText('account-b.txt')).toBeTruthy();
-    expect(screen.queryByText('account-a-screenshot.png')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Start screenshot' }));
+      const finishAccountAScreenshot = screenshotHarness.callbacks[0];
+      expect(finishAccountAScreenshot).toBeTypeOf('function');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
-    expect(onSend).toHaveBeenCalledWith(
-      'Please analyze the attached file.',
-      'ask',
-      undefined,
-      [accountBFile],
-      false,
-    );
-  });
+      rerender(
+        <ChatInput
+          {...common}
+          conversationId="conv-a"
+          attachmentContextKey="managed:account-a:session-2"
+        />,
+      );
+      const accountBFile = new File(['account B'], 'account-b.txt', { type: 'text/plain' });
+      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+      fireEvent.change(fileInput!, { target: { files: [accountBFile] } });
+
+      act(() => {
+        finishAccountAScreenshot?.(
+          new File(['account A screenshot'], 'account-a-screenshot.png', { type: 'image/png' }),
+        );
+      });
+
+      expect(screen.getByText('account-b.txt')).toBeTruthy();
+      expect(screen.queryByText('account-a-screenshot.png')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
+      expect(onSend).toHaveBeenCalledWith(
+        'Please analyze the attached file.',
+        'ask',
+        undefined,
+        [accountBFile],
+        false,
+      );
+    },
+    ROOT_GRAPH_TEST_TIMEOUT_MS,
+  );
 
   it('merges a delayed screenshot with a file added meanwhile in the same destination', () => {
     const onSend = vi.fn();

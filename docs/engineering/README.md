@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-08-07
 Purpose: collect durable engineering workflow, review, and agent-native development guidance that applies across apps, packages, crates, services, and docs.
 
 ## Read First
@@ -28,4 +28,4 @@ Purpose: collect durable engineering workflow, review, and agent-native developm
 
 - Product requirements; use `PLAN.md`, `TODO.md`, and `docs/current/product-suite.md`.
 - Surface-specific runbooks; use `docs/surfaces/` or the owner README near the code.
-- Historical research; use `docs/research/` or `docs/agent-context/known-flaws.md`. (The former `audit/`, `reports/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28.)
+- Historical research; use `docs/research/` or `docs/agent-context/known-flaws.md`. The former `reports/` and `docs/archive/` directories were removed repo-wide on 2026-06-28; root `audit/` is now the live evidence-ledger and triage root, not historical research or proof of completion.

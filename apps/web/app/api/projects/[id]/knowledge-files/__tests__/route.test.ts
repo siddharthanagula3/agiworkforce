@@ -436,7 +436,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     const supersedeCall = mockNeonQuery.mock.calls.find((call) =>
       String(call?.[0] ?? '').includes('set superseded_at = now()'),
     );
-    expect(supersedeCall?.[1]).toEqual(['kb-old']);
+    expect(supersedeCall?.[1]).toEqual(['kb-old', 'proj-1']);
+    expect(String(supersedeCall?.[0] ?? '')).toContain('project_id = $2');
     expect(String(supersedeCall?.[0] ?? '')).not.toContain('deleted_at');
   });
 });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AGI repo cleanup — remove stale audits / reports / working notes / caches.
+// AGI repo cleanup — remove stale reports / working notes / caches.
 //
 // Conservative + explicit: it only touches a hard-coded STALE allowlist and
 // refuses to touch anything in KEEP. SAFE BY DEFAULT (lists the plan and
@@ -14,18 +14,21 @@
 
 import { existsSync, statSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Tracked, stale → git rm -r (kept in history, recoverable).
-const TRACKED_STALE = ['audit', 'reports', 'tasks', '_archive', 'docs/archive'];
+export const TRACKED_STALE = ['reports', 'tasks', '_archive', 'docs/archive'];
 
 // Gitignored caches / scratch → rm -rf.
 const CACHE_STALE = ['.tmp', '.tmp_capture', '.playwright-mcp', '.remember', '.firecrawl'];
 
 // Never touch these (canonical sources of truth + product code).
-const KEEP = [
+export const KEEP = [
   'AGENTS.md',
   'CLAUDE.md',
   'README.md',
+  'audit',
   'docs/current',
   'docs/engineering',
   'docs/agent-context',
@@ -37,6 +40,12 @@ const KEEP = [
   'services',
   'scripts',
 ];
+
+export function isProtectedCleanupPath(candidate) {
+  return KEEP.some(
+    (protectedPath) => candidate === protectedPath || candidate.startsWith(`${protectedPath}/`),
+  );
+}
 
 function countFiles(p) {
   let n = 0;
@@ -58,7 +67,7 @@ function countFiles(p) {
 function main() {
   const apply = process.argv.slice(2).includes('--apply');
   const guard = (p) => {
-    if (KEEP.some((k) => p === k || p.startsWith(`${k}/`))) {
+    if (isProtectedCleanupPath(p)) {
       throw new Error(`refusing to remove protected path: ${p}`);
     }
   };
@@ -92,4 +101,7 @@ function main() {
   }
 }
 
-main();
+const isMain =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+if (isMain) main();

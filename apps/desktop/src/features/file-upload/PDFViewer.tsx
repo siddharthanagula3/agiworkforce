@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { PDFDocumentLoadingTask } from 'pdfjs-dist';
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,12 +22,17 @@ interface PDFPageProxy {
   render: (options: {
     canvasContext: globalThis.CanvasRenderingContext2D;
     viewport: PDFPageViewport;
-  }) => { promise: Promise<void> };
+  }) => PDFRenderTask;
 }
 
 interface PDFPageViewport {
   width: number;
   height: number;
+}
+
+interface PDFRenderTask {
+  promise: Promise<void>;
+  cancel: () => void;
 }
 
 interface PDFViewerProps {
@@ -45,6 +51,8 @@ interface PDFViewerProps {
 export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderTaskRef = useRef<PDFRenderTask | null>(null);
+  const renderRequestRef = useRef(0);
 
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,6 +66,18 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
   // Load PDF document
   useEffect(() => {
     let cancelled = false;
+    let loadingTask: PDFDocumentLoadingTask | undefined;
+    let loadingTaskDestroyed = false;
+
+    const destroyLoadingTask = () => {
+      if (!loadingTask || loadingTaskDestroyed) return;
+      loadingTaskDestroyed = true;
+      void loadingTask.destroy().catch((destroyError: unknown) => {
+        if (!cancelled) {
+          console.error('Failed to release PDF worker:', destroyError);
+        }
+      });
+    };
 
     const loadPDF = async () => {
       try {
@@ -65,12 +85,16 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
         setError(null);
 
         // Dynamically import PDF.js to avoid SSR issues
-        const pdfjs = await import('pdfjs-dist');
+        const [pdfjs, pdfWorker] = await Promise.all([
+          import('pdfjs-dist'),
+          import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+        ]);
 
-        // Set worker source - use CDN for simplicity
-        pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+        // Bundle the matching worker so Local PDF previews do not depend on a
+        // third-party CDN or risk mixing incompatible PDF.js versions.
+        pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker.default;
 
-        let loadingTask;
+        let activeLoadingTask: PDFDocumentLoadingTask;
 
         if (filePath) {
           // For Tauri file paths, we need to read the file first
@@ -83,10 +107,10 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
             for (let i = 0; i < binaryData.length; i++) {
               bytes[i] = binaryData.charCodeAt(i);
             }
-            loadingTask = pdfjs.getDocument({ data: bytes });
+            activeLoadingTask = pdfjs.getDocument({ data: bytes });
           } catch {
             // Fallback to URL if file read fails
-            loadingTask = pdfjs.getDocument(src);
+            activeLoadingTask = pdfjs.getDocument({ url: src });
           }
         } else if (src.startsWith('data:')) {
           // Data URL - extract base64 content
@@ -97,24 +121,29 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
             for (let i = 0; i < binaryData.length; i++) {
               bytes[i] = binaryData.charCodeAt(i);
             }
-            loadingTask = pdfjs.getDocument({ data: bytes });
+            activeLoadingTask = pdfjs.getDocument({ data: bytes });
           } else {
-            loadingTask = pdfjs.getDocument(src);
+            activeLoadingTask = pdfjs.getDocument({ url: src });
           }
         } else {
           // Regular URL
-          loadingTask = pdfjs.getDocument(src);
+          activeLoadingTask = pdfjs.getDocument({ url: src });
         }
 
-        const pdf = (await loadingTask.promise) as unknown as PDFDocumentProxy;
+        loadingTask = activeLoadingTask;
+        const pdf = (await activeLoadingTask.promise) as unknown as PDFDocumentProxy;
 
-        if (cancelled) return;
+        if (cancelled) {
+          destroyLoadingTask();
+          return;
+        }
 
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
         setCurrentPage(1);
         onLoad?.(pdf.numPages);
       } catch (err) {
+        destroyLoadingTask();
         if (cancelled) return;
         console.error('Failed to load PDF:', err);
         const errorMessage = err instanceof Error ? err.message : 'Failed to load PDF';
@@ -131,16 +160,23 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
 
     return () => {
       cancelled = true;
+      destroyLoadingTask();
     };
   }, [src, filePath, onError, onLoad]);
 
   // Render current page
   const renderPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current || renderingPage) return;
+    if (!pdfDoc || !canvasRef.current) return;
+
+    const requestId = ++renderRequestRef.current;
+    renderTaskRef.current?.cancel();
+    renderTaskRef.current = null;
 
     try {
       setRenderingPage(true);
       const page = await pdfDoc.getPage(currentPage);
+      if (requestId !== renderRequestRef.current || !canvasRef.current) return;
+
       const viewport = page.getViewport({ scale, rotation });
 
       const canvas = canvasRef.current;
@@ -150,19 +186,34 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      await page.render({
+      const renderTask = page.render({
         canvasContext: context,
         viewport,
-      }).promise;
+      });
+      renderTaskRef.current = renderTask;
+      await renderTask.promise;
     } catch (err) {
-      console.error('Failed to render page:', err);
+      if (
+        requestId === renderRequestRef.current &&
+        (!(err instanceof Error) || err.name !== 'RenderingCancelledException')
+      ) {
+        console.error('Failed to render page:', err);
+      }
     } finally {
-      setRenderingPage(false);
+      if (requestId === renderRequestRef.current) {
+        renderTaskRef.current = null;
+        setRenderingPage(false);
+      }
     }
-  }, [pdfDoc, currentPage, scale, rotation, renderingPage]);
+  }, [pdfDoc, currentPage, scale, rotation]);
 
   useEffect(() => {
-    renderPage();
+    void renderPage();
+    return () => {
+      renderRequestRef.current += 1;
+      renderTaskRef.current?.cancel();
+      renderTaskRef.current = null;
+    };
   }, [renderPage]);
 
   // Navigation handlers

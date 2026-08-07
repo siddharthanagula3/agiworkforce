@@ -118,6 +118,7 @@ describe('extractProjectKnowledgeFile', () => {
     storageMocks.getObject.mockResolvedValue({ data, contentType: 'application/pdf' });
     const destroy = vi.fn().mockResolvedValue(undefined);
     pdfMocks.getDocument.mockReturnValue({
+      destroy,
       promise: Promise.resolve({
         numPages: 2,
         getPage: vi
@@ -128,7 +129,6 @@ describe('extractProjectKnowledgeFile', () => {
           .mockResolvedValueOnce({
             getTextContent: vi.fn().mockResolvedValue({ items: [{ str: 'Page two' }] }),
           }),
-        destroy,
       }),
     });
 

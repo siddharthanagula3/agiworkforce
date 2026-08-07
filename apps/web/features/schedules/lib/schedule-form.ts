@@ -32,7 +32,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   cronExpression: '',
   scheduledLocal: '',
   intervalValue: '1',
-  intervalUnit: 'hours',
+  intervalUnit: 'days',
   timeOfDay: '09:00',
   daysOfWeek: [1, 2, 3, 4, 5],
   dayOfMonth: 1,
@@ -230,9 +230,19 @@ export type ScheduleValidationResult =
   | { ok: true; payload: ScheduleMutation }
   | { ok: false; errors: ScheduleFormErrors };
 
+interface ScheduleValidationOptions {
+  /**
+   * A stored sub-daily interval created before the deployed cadence floor.
+   * It may survive an unrelated edit, but cannot be changed to another
+   * unsupported cadence.
+   */
+  existingIntervalMs?: number | null;
+}
+
 export function validateAndBuildScheduleRequest(
   draft: ScheduleDraft,
   now = new Date(),
+  options: ScheduleValidationOptions = {},
 ): ScheduleValidationResult {
   const errors: ScheduleFormErrors = {};
   const name = draft.name.trim();
@@ -296,11 +306,15 @@ export function validateAndBuildScheduleRequest(
   } else if (draft.recurrence === 'interval') {
     const intervalValue = Number(draft.intervalValue);
     intervalMs = intervalValue * UNIT_MS[draft.intervalUnit];
+    const unchangedLegacyInterval =
+      typeof options.existingIntervalMs === 'number' &&
+      options.existingIntervalMs < SWEEP_INTERVAL_MS &&
+      intervalMs === options.existingIntervalMs;
     if (
       !Number.isInteger(intervalValue) ||
       intervalValue <= 0 ||
       !Number.isSafeInteger(intervalMs) ||
-      intervalMs < SWEEP_INTERVAL_MS ||
+      (intervalMs < SWEEP_INTERVAL_MS && !unchangedLegacyInterval) ||
       intervalMs > MAX_INTERVAL_MS
     ) {
       // Lower bound is the deployed sweep, not a fixed "1 day" — the message is

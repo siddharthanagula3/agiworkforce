@@ -3,7 +3,7 @@
 // Updated: Jan 18th 2026 - Migrated to React Query for server state management
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@agiworkforce/ui';
 import {
   upgradeToBasicPlan,
@@ -59,6 +59,7 @@ const CHECKOUT_ENABLED =
 
 const BillingPage: React.FC = () => {
   const { user } = useAuthStore();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('yearly');
   const [isManagingBilling, setIsManagingBilling] = useState(false);
@@ -145,11 +146,13 @@ const BillingPage: React.FC = () => {
 
     try {
       if (plan === 'enterprise') {
-        await contactEnterpriseSales({
-          userId: user.id,
-          userEmail: user.email || '',
-          userName: (user.user_metadata?.['full_name'] as string) || user.email || '',
-        });
+        router.push(
+          contactEnterpriseSales({
+            userId: user.id,
+            userEmail: user.email || '',
+            userName: (user.user_metadata?.['full_name'] as string) || user.email || '',
+          }),
+        );
         return;
       }
 

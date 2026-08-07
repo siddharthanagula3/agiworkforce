@@ -290,9 +290,6 @@ function handlePaymentRequired(): void {
     category: 'billing',
     actionLabel: 'Upgrade Now',
     actionUrl: '/billing',
-    onAction: () => {
-      window.location.href = '/billing';
-    },
   });
 }
 

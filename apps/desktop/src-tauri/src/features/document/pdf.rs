@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use lopdf::{Dictionary, Document as LopdfDocument, Object};
+use lopdf::{decode_text_string, Dictionary, Document as LopdfDocument, Object, StringFormat};
 use pdf_extract;
 
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
@@ -244,10 +244,20 @@ fn timestamp_to_string(time: std::time::SystemTime) -> Option<String> {
 
 fn decode_pdf_string(object: &Object) -> Option<String> {
     match object {
-        Object::String(bytes, _) => Some(LopdfDocument::decode_text(None, bytes)),
+        Object::String(bytes, _) => decode_pdf_text_bytes(bytes),
         Object::Name(name) => String::from_utf8(name.clone()).ok(),
         _ => None,
     }
+}
+
+fn decode_pdf_text_bytes(bytes: &[u8]) -> Option<String> {
+    if let Some(utf16_bytes) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        if utf16_bytes.len() % 2 != 0 {
+            return None;
+        }
+    }
+
+    decode_text_string(&Object::String(bytes.to_vec(), StringFormat::Literal)).ok()
 }
 
 fn resolve_info_dict<'a>(
@@ -261,5 +271,31 @@ fn resolve_info_dict<'a>(
             .ok()
             .and_then(|obj| obj.as_dict().ok()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_pdf_text_bytes;
+
+    #[test]
+    fn decodes_pdfdocencoding_metadata() {
+        assert_eq!(
+            decode_pdf_text_bytes(b"AGI Workforce"),
+            Some("AGI Workforce".to_string())
+        );
+    }
+
+    #[test]
+    fn decodes_utf16be_metadata() {
+        assert_eq!(
+            decode_pdf_text_bytes(&[0xFE, 0xFF, 0x00, 0x41, 0x00, 0x47, 0x00, 0x49]),
+            Some("AGI".to_string())
+        );
+    }
+
+    #[test]
+    fn rejects_truncated_utf16be_metadata() {
+        assert_eq!(decode_pdf_text_bytes(&[0xFE, 0xFF, 0x00]), None);
     }
 }

@@ -305,7 +305,7 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
  * Pinned to `vercel.json` by `schedule-cadence.test.ts` — if the deployed cron
  * gets faster, that test fails until this constant follows it.
  */
-export const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+export const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** Occurrences to sample when measuring the tightest gap a cron can produce. */
 const CADENCE_SAMPLE_OCCURRENCES = 8;
@@ -315,8 +315,22 @@ const CADENCE_SAMPLE_OCCURRENCES = 8;
  * occurrences exist inside the sampled horizon (a schedule that rare is always
  * deliverable).
  */
+function localWallClockMs(parts: LocalDateParts): number {
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+}
+
 function tightestCronGapMs(expression: string, timezone: string, from: Date): number | null {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: validateTimeZone(timezone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
   let previous = nextCronOccurrence(expression, timezone, from);
+  let previousLocal = localParts(formatter, previous);
   let tightest: number | null = null;
   for (let index = 1; index < CADENCE_SAMPLE_OCCURRENCES; index += 1) {
     let next: Date;
@@ -327,9 +341,16 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
       // whole story.
       break;
     }
-    const gap = next.getTime() - previous.getTime();
+    // Measure recurring cron cadence in its configured wall clock. A normal
+    // once-daily schedule is 23 or 25 elapsed hours across DST, but it still
+    // has exactly one occurrence per local calendar day and is deliverable by
+    // the daily sweep. Twice-daily/hourly crons retain their shorter wall-clock
+    // gap and remain rejected.
+    const nextLocal = localParts(formatter, next);
+    const gap = localWallClockMs(nextLocal) - localWallClockMs(previousLocal);
     if (tightest === null || gap < tightest) tightest = gap;
     previous = next;
+    previousLocal = nextLocal;
   }
   return tightest;
 }
@@ -345,9 +366,10 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
  */
 /**
  * The sweep cadence in words, derived from `SWEEP_INTERVAL_MS` so the refusal
- * message cannot outlive the constant. These strings previously hardcoded "once
- * a day"; when the deployed cron moved to hourly they would have kept telling
- * users a limit the platform no longer had.
+ * message cannot outlive the constant. The deployed cron is currently daily
+ * because the production Vercel Hobby plan rejects sub-daily cron expressions.
+ * When that deployment constraint changes, the root cron and this constant must
+ * move together.
  */
 export function describeSweepCadence(): { cadence: string; minimum: string } {
   const hours = SWEEP_INTERVAL_MS / (60 * 60 * 1000);

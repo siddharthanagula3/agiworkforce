@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import type {
   MeResponse,
   SettingsSyncPullResponse,
@@ -24,6 +24,26 @@ const DEFAULT_USER: MockCloudAuthUser = {
   email: 'e2e@test.local',
   name: 'E2E User',
 };
+
+/**
+ * Return CORS headers that remain valid for credentialed cross-origin fetches.
+ * A wildcard origin is forbidden when `credentials: 'include'`; echoing the
+ * browser-supplied Origin keeps the fixture faithful to the shipping API.
+ */
+export function mockCloudCorsHeaders(route: Route): Record<string, string> {
+  const requestOrigin = route.request().headers()['origin'];
+  return {
+    'Access-Control-Allow-Origin': requestOrigin ?? '*',
+    ...(requestOrigin
+      ? {
+          'Access-Control-Allow-Credentials': 'true',
+          Vary: 'Origin',
+        }
+      : {}),
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CSRF-Token, X-Requested-With',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  };
+}
 
 function resolveMockUser(user?: Partial<MockCloudAuthUser>): MockCloudAuthUser {
   return {
@@ -136,21 +156,17 @@ export async function mockCloudAccountEndpoints(
   // network, logging "[Auth] Failed to refresh Clerk/Neon account data". Match
   // on the pathname so the query string cannot slip past, and answer with CORS
   // headers because that call uses the absolute cloud origin, not same-origin.
-  const meCorsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  };
   await page.route(
     (url) => url.pathname === '/api/me',
     (route) => {
+      const corsHeaders = mockCloudCorsHeaders(route);
       if (route.request().method() === 'OPTIONS') {
-        return route.fulfill({ status: 204, headers: meCorsHeaders });
+        return route.fulfill({ status: 204, headers: corsHeaders });
       }
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        headers: meCorsHeaders,
+        headers: corsHeaders,
         body: JSON.stringify(meResponse),
       });
     },
@@ -158,11 +174,7 @@ export async function mockCloudAccountEndpoints(
 
   await page.route('**/api/settings/sync**', (route) => {
     const method = route.request().method();
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    };
+    const corsHeaders = mockCloudCorsHeaders(route);
     if (method === 'OPTIONS') {
       return route.fulfill({ status: 204, headers: corsHeaders });
     }

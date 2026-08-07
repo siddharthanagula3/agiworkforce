@@ -8,14 +8,14 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // This is a known, tracked gap rather than a fault, and subscribeToRealtime is
 // called on every sign-in and foreground. Warning each time buried genuine
-// warnings, so report it once per session at info level.
+// warnings, so report it once per session at debug level.
 let hasReportedDisabledChannel = false;
 
 export async function subscribeToRealtime(): Promise<() => void> {
   if (!FEATURES.cloudChat) return () => {};
   if (!hasReportedDisabledChannel) {
     hasReportedDisabledChannel = true;
-    console.info('[Realtime] Cloud sync is disabled until the Web/API channel is available.');
+    console.debug('[Realtime] Cloud sync is disabled until the Web/API channel is available.');
   }
   return () => {};
 }

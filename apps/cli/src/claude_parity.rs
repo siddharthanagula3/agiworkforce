@@ -379,7 +379,7 @@ pub fn handle_privacy_mode(session: &mut AgentSession, arg: &str) -> String {
         .join("\n");
     }
 
-    vec![
+    [
         format!("Privacy mode unchanged: {}", mode.label()),
         format!("  {}", mode.description()),
     ]

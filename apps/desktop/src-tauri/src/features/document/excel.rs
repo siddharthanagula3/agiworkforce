@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use calamine::{open_workbook_auto, DataType, Reader};
+use calamine::{open_workbook_auto, Data, ExcelDateTime, Reader};
 use chrono::{Duration as ChronoDuration, NaiveDate, NaiveDateTime};
 
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
@@ -104,7 +104,7 @@ impl ExcelHandler {
             }
             aggregated.push_str(&format!("Sheet: {}\n", sheet_name));
 
-            if let Some(Ok(range)) = workbook.worksheet_range(&sheet_name) {
+            if let Ok(range) = workbook.worksheet_range(&sheet_name) {
                 for row in range.rows() {
                     // DOC-015 fix: Check size limit per row to prevent unbounded growth
                     if aggregated.len() >= MAX_EXTRACTION_SIZE {
@@ -210,23 +210,39 @@ fn timestamp_to_string(time: std::time::SystemTime) -> Option<String> {
         .map(|d| d.as_secs().to_string())
 }
 
-fn data_type_to_string(cell: &DataType) -> String {
+fn data_type_to_string(cell: &Data) -> String {
     match cell {
-        DataType::Empty => String::new(),
-        DataType::String(s) => s.trim().to_string(),
-        DataType::Float(f) => {
+        Data::Empty => String::new(),
+        Data::String(s) => s.trim().to_string(),
+        Data::Float(f) => {
             if (f.fract() - 0.0).abs() < f64::EPSILON {
                 format!("{}", *f as i64)
             } else {
                 f.to_string()
             }
         }
-        DataType::Int(i) => i.to_string(),
-        DataType::Bool(b) => b.to_string(),
-        DataType::DateTime(dt) => excel_serial_to_string(*dt),
-        DataType::DateTimeIso(value) | DataType::DurationIso(value) => value.trim().to_string(),
-        DataType::Duration(secs) => format!("{}s", secs),
-        DataType::Error(err) => format!("{:?}", err),
+        Data::Int(i) => i.to_string(),
+        Data::Bool(b) => b.to_string(),
+        Data::DateTime(dt) if dt.is_duration() => excel_duration_to_string(dt),
+        Data::DateTime(dt) => dt
+            .as_datetime()
+            .map(|value| value.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| excel_serial_to_string(dt.as_f64())),
+        Data::DateTimeIso(value) | Data::DurationIso(value) => value.trim().to_string(),
+        Data::Error(err) => format!("{:?}", err),
+    }
+}
+
+fn excel_duration_to_string(datetime: &ExcelDateTime) -> String {
+    let Some(duration) = datetime.as_duration() else {
+        return format!("{}d", datetime.as_f64());
+    };
+
+    let milliseconds = duration.num_milliseconds();
+    if milliseconds % 1_000 == 0 {
+        format!("{}s", milliseconds / 1_000)
+    } else {
+        format!("{}s", milliseconds as f64 / 1_000.0)
     }
 }
 
@@ -246,4 +262,39 @@ fn excel_serial_to_datetime(value: f64) -> Option<NaiveDateTime> {
     let base = epoch_date.and_hms_opt(0, 0, 0)?;
 
     base.checked_add_signed(ChronoDuration::seconds(seconds_total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use calamine::{ExcelDateTime, ExcelDateTimeType};
+
+    #[test]
+    fn formats_excel_datetime_after_calamine_upgrade() {
+        let datetime = Data::DateTime(ExcelDateTime::new(
+            25_569.0,
+            ExcelDateTimeType::DateTime,
+            false,
+        ));
+
+        assert_eq!(data_type_to_string(&datetime), "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn formats_excel_1904_epoch_datetime_after_calamine_upgrade() {
+        let datetime = Data::DateTime(ExcelDateTime::new(
+            24_107.0,
+            ExcelDateTimeType::DateTime,
+            true,
+        ));
+
+        assert_eq!(data_type_to_string(&datetime), "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn formats_excel_duration_in_seconds_after_calamine_upgrade() {
+        let duration = Data::DateTime(ExcelDateTime::new(0.5, ExcelDateTimeType::TimeDelta, false));
+
+        assert_eq!(data_type_to_string(&duration), "43200s");
+    }
 }

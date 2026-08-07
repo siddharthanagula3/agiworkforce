@@ -1,6 +1,7 @@
 import { expect, type Page, type Route } from '@playwright/test';
 import {
   injectMockCloudAuth,
+  mockCloudCorsHeaders,
   mockCloudAccountEndpoints,
   type MockCloudAuthOptions,
 } from './mock-cloud-auth';
@@ -54,7 +55,7 @@ export interface CloudMessageWire {
 }
 
 export interface MockCloudApiOptions extends MockCloudAuthOptions {
-  /** Models returned by `GET /api/models`; empty keeps Auto sourced from the canonical registry. */
+  /** Models returned by `GET /api/models`; empty deliberately makes the managed picker unavailable. */
   models?: Array<{ id: string; name: string; provider: string }>;
   /** Conversation list returned by `GET /api/chat/conversations`. */
   conversations?: CloudConversationWire[];
@@ -76,17 +77,11 @@ export interface MockCloudApiOptions extends MockCloudAuthOptions {
  * every mocked response with permissive CORS headers so the cross-origin ones
  * are readable instead of silently failing the preflight.
  */
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CSRF-Token, X-Requested-With',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-} as const;
-
 function fulfillJson(route: Route, body: unknown, status = 200): Promise<void> {
   return route.fulfill({
     status,
     contentType: 'application/json',
-    headers: { ...CORS_HEADERS },
+    headers: mockCloudCorsHeaders(route),
     body: JSON.stringify(body),
   });
 }
@@ -149,7 +144,9 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   await page.route('**/api/**', (route) => {
     const url = new URL(route.request().url());
     if (!url.pathname.startsWith('/api/')) return route.fallback();
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, {});
   });
 
@@ -161,12 +158,16 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   //    Every shape below comes from `managed-cloud-chat-client.ts`, which parses
   //    each response with a zod schema and throws a contract error otherwise.
   await page.route('**/api/models**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, { models });
   });
 
   await page.route('**/api/chat/conversations**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     const request = route.request();
     const method = request.method();
     const { pathname } = new URL(request.url());
@@ -219,22 +220,30 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   });
 
   await page.route('**/api/projects**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, { projects });
   });
 
   await page.route('**/api/llm/v1/chat/completions/runs**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, { runs: agentRuns, nextCursor: null });
   });
 
   await page.route('**/api/library**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, { items: libraryItems, has_more: false, next_offset: null });
   });
 
   await page.route('**/api/csrf**', (route) => {
-    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
     return fulfillJson(route, { token: 'e2e-csrf' });
   });
 }

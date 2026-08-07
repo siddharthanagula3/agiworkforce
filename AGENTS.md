@@ -1,6 +1,6 @@
 # AGENTS.md — AI Agent Entry Point
 
-**Version:** 1.0 · **Owner:** Platform lead · **Last updated:** 2026-07-11 · **Status:** Canonical
+**Version:** 1.0 · **Owner:** Platform lead · **Last updated:** 2026-08-07 · **Status:** Canonical
 
 This is THE entry point for every AI coding agent (Claude, Codex, Cursor, Gemini, etc.) working on AGI. Read this before touching any code, before reading deeper docs, and before making changes.
 
@@ -62,10 +62,10 @@ Managed cloud is in public alpha and open by default (founder decision, 2026-06-
 | CLI            | `apps/cli`                          | Developer engine and terminal surface.                                                     |
 | Desktop        | `apps/desktop`                      | Local-private compute host and rich app shell.                                             |
 | Web            | `apps/web`                          | Account, projects, synced app chats, artifacts, billing/waitlist.                          |
-| Mobile         | `apps/mobile` plus root `ios/`      | Local on-device chat + public-alpha Cloud (no BYOK), continuity, approvals, preview/share. |
+| Mobile         | `apps/mobile`                       | Local on-device chat + public-alpha Cloud (no BYOK), continuity, approvals, preview/share. |
 | Chrome         | `apps/extension`                    | Browser context, capture, native messaging.                                                |
 | VS Code        | `apps/extension-vscode`             | IDE-native developer surface.                                                              |
-| Sandbox        | `apps/sandbox`                      | Cross-origin artifact renderer.                                                            |
+| Sandbox        | `infrastructure/sandbox`            | Cross-origin artifact renderer.                                                            |
 | Shared TS      | `packages`                          | Contracts, providers, runtime, UI, tools.                                                  |
 | Shared Rust    | `crates`                            | Protocol, command registry, sandbox, runtime utilities.                                    |
 | Services       | `services`                          | API gateway, signaling, future managed compute.                                            |
