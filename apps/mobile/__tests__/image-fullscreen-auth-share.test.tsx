@@ -106,3 +106,57 @@ describe('ImageFullScreen generated-media boundary', () => {
     expect(mockShareGeneratedImage).toHaveBeenCalledWith(durablePath);
   });
 });
+
+/**
+ * `MessageBubble` opens this same viewer for USER ATTACHMENTS, passing
+ * `attachment.url` — an on-device URI. The generated-image resolver only speaks
+ * durable `/api/files/<uuid>` paths, so those fell to its `invalid` branch and
+ * the viewer rendered "Generated image unavailable" on black with a share
+ * button: tapping an image you attached in Local Mode looked broken.
+ */
+describe('ImageFullScreen on-device attachments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // What the resolver returns for anything that is not a durable path. If the
+    // viewer consulted it for these URIs, the black panel would come back.
+    mockUseGeneratedImageSource.mockReturnValue({ status: 'invalid', source: null });
+    mockShareGeneratedImage.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    ['a document-picker file', 'file:///var/mobile/Containers/Data/tmp/photo.png'],
+    ['a photo-library asset', 'ph://A1B2C3D4-0000-4000-8000-00000000ABCD/L0/001'],
+    ['an Android content URI', 'content://media/external/images/media/42'],
+    ['an inline data payload', 'data:image/png;base64,iVBORw0KGgo='],
+    ['a remote https image', 'https://cdn.example.com/cat.png'],
+  ])('renders %s directly instead of the unavailable panel', (_label, uri) => {
+    const { queryByText } = render(<ImageFullScreen imageUrl={uri} visible onClose={jest.fn()} />);
+
+    expect(mockExpoImage).toHaveBeenCalledWith(expect.objectContaining({ source: { uri } }));
+    expect(queryByText('Generated image unavailable')).toBeNull();
+  });
+
+  it('never asks Cloud to authorize an on-device attachment', () => {
+    // Local Mode is a trust boundary: the bytes are on the phone and a token
+    // request for them would be a Cloud round trip the user never asked for.
+    render(
+      <ImageFullScreen imageUrl="file:///var/mobile/tmp/private.png" visible onClose={jest.fn()} />,
+    );
+
+    expect(mockUseGeneratedImageSource).toHaveBeenCalledWith('', false);
+  });
+
+  it('still routes a durable generated path through the authenticated resolver', () => {
+    mockUseGeneratedImageSource.mockReturnValue({
+      status: 'ready',
+      source: {
+        uri: 'https://agiworkforce.com' + durablePath,
+        headers: { Authorization: 'Bearer t' },
+      },
+    });
+
+    render(<ImageFullScreen imageUrl={durablePath} visible onClose={jest.fn()} />);
+
+    expect(mockUseGeneratedImageSource).toHaveBeenCalledWith(durablePath, false);
+  });
+});
