@@ -322,14 +322,19 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Chat (default)')).toBeNull();
     });
 
-    it('shows a real AGI Work toggle for paid Cloud chats', () => {
+    // AGI Work moved out of this sheet to the drawer (founder 2026-08-06): it
+    // is a session-wide stance, not a per-message attachment. The sheet must no
+    // longer offer it at ANY tier — including the paid tiers that used to see a
+    // working toggle here, which is the regression this guards.
+    it('no longer offers AGI Work at a paid tier — the drawer owns it now', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'max' });
 
-      const { getByLabelText } = renderSheet();
-      fireEvent(getByLabelText('AGI Work off'), 'valueChange', true);
+      const { queryByText, queryByLabelText } = renderSheet();
 
-      expect(useChatStore.getState().workMode).toBe('agiwork');
+      expect(queryByText('AGI Work')).toBeNull();
+      expect(queryByLabelText('AGI Work off')).toBeNull();
+      expect(useChatStore.getState().workMode).toBe('chat');
     });
 
     it('does not advertise AGI Work to Free users', () => {
@@ -340,15 +345,6 @@ describe('AddToChatSheet', () => {
 
       expect(queryByText('AGI Work')).toBeNull();
       expect(useChatStore.getState().workMode).toBe('chat');
-    });
-
-    it('does not show AGI Work to Basic users because the server requires Pro', () => {
-      useChatAppModeStore.setState({ appMode: 'cloud' });
-      useTierStore.setState({ tier: 'basic' });
-
-      const { queryByText } = renderSheet();
-
-      expect(queryByText('AGI Work')).toBeNull();
     });
   });
 
@@ -361,9 +357,16 @@ describe('AddToChatSheet', () => {
       // Temporary chat lives in the chat header, not this sheet.
       expect(queryByText('Temporary chat')).toBeNull();
       // Search is ambient and capability-clamped at send time, so it is not a
-      // per-turn switch in the + sheet. Image generation is Cloud-only.
+      // per-turn switch in the + sheet. Image/Video are Cloud-only modes.
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image generation')).toBeNull();
+      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Video')).toBeNull();
+      // AGI Work moved to the drawer (founder 2026-08-06) — it is a session
+      // stance, not a per-message attachment.
+      expect(queryByText('AGI Work')).toBeNull();
+      // Code execution lives in Settings > Capabilities, matching Claude and
+      // ChatGPT. A second switch here was a duplicate control for one flag.
+      expect(queryByText('Run code')).toBeNull();
       // Still gated off in this build.
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
@@ -372,29 +375,66 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Medium')).toBeNull();
     });
 
-    it('shows the Image generation row in Cloud mode only', () => {
+    // Image is a MODE, not a toggle: picking it switches the selected model to
+    // the registry's image model (founder 2026-08-06). The row is labelled
+    // "Image" and lives in the Create section.
+    it('shows the Image row in Cloud mode only', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
       const { getByText } = renderSheet();
-      expect(getByText('Image generation')).toBeTruthy();
+      expect(getByText('Image')).toBeTruthy();
     });
 
-    it('hides Image generation below Pro so the toggle cannot promise a denied request', () => {
+    it('hides Image below Pro so the option cannot promise a denied request', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'basic' });
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image generation')).toBeNull();
+      expect(queryByText('Image')).toBeNull();
     });
 
-    it('hides Image generation when the server capability handshake denies it', () => {
+    it('hides Image when the server capability handshake denies it', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: [] });
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image generation')).toBeNull();
+      expect(queryByText('Image')).toBeNull();
+    });
+
+    // Video is Max 15x / Enterprise only (`video_generation` in the billing
+    // catalog), so a Pro account must not see it.
+    it('hides Video below Max 15x', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Video')).toBeNull();
+    });
+
+    it('never offers Run code in the + sheet, even fully entitled in Cloud', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'claude-sonnet-5' });
+      useTierStore.setState({
+        tier: 'max',
+        grantedCapabilities: ['canUseImages', 'canUseCloudExecution', 'canUseDeepResearch'],
+        codeExecutionAvailable: true,
+      } as never);
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Run code')).toBeNull();
+    });
+
+    it('shows the Video row on an entitled plan', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'max_15x', grantedCapabilities: ['canUseImages'] });
+
+      const { getByText } = renderSheet();
+
+      expect(getByText('Video')).toBeTruthy();
     });
 
     it('does not render a Web search toggle for an unsupported model', () => {
@@ -402,7 +442,7 @@ describe('AddToChatSheet', () => {
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image generation')).toBeNull();
+      expect(queryByText('Image')).toBeNull();
     });
 
     it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {

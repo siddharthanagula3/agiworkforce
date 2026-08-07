@@ -11,7 +11,6 @@ export * from './components/CommandPalette';
 export * from './components/Composer/Composer';
 export * from './components/ContextWarningChip';
 export * from './components/ConversationExportSheet';
-export * from './components/ConversationStarters';
 export * from './components/FileExportButton';
 export * from './components/GeneratedImage';
 export * from './components/ImageFullScreen';

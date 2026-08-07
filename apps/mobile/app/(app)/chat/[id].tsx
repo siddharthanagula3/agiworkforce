@@ -25,6 +25,7 @@ import {
   type TaskChipType,
 } from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
@@ -85,6 +86,9 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -114,7 +118,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ id: string; prompt?: string }>();
   // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  // Prompt pre-fill from ConversationStarters or deep link
+  // Prompt pre-fill from a deep link (?prompt=)
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const activeProject = useProjectStore((s) =>
@@ -180,6 +184,11 @@ export default function ChatScreen() {
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
+  const beginVideoGeneration = useChatStore((s) => s.beginVideoGeneration);
+  const updateVideoGenerationProgress = useChatStore((s) => s.updateVideoGenerationProgress);
+  const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
+  const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
+  const mediaMode = useChatViewStore((s) => s.mediaMode);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
 
@@ -370,6 +379,55 @@ export default function ChatScreen() {
       }
 
       const trimmedInput = text.trim();
+
+      // Checked before image: in Video mode every send is a video request, and
+      // the image classifier would otherwise claim visual-sounding prompts.
+      const videoRequest = resolveMobileVideoGenerationRequest({
+        executionMode: conversationExecutionMode,
+        text: trimmedInput,
+        mediaMode,
+        subscriptionTier,
+        isClerkSignedIn,
+        ownerId: clerkUserId,
+        grantedCapabilities,
+        isOnline,
+      });
+      if (videoRequest.status === 'blocked') {
+        Alert.alert(videoRequest.alert.title, videoRequest.alert.message);
+        return false;
+      }
+      if (videoRequest.status === 'ready') {
+        quotedMessageScopeRef.current = null;
+        setQuotedMessage(null);
+        const videoTurn = runVideoGenerationTurn({
+          conversationId: id,
+          displayText: finalText,
+          prompt: videoRequest.prompt,
+          model: videoRequest.model,
+          ownerId: videoRequest.ownerId,
+          begin: beginVideoGeneration,
+          progress: updateVideoGenerationProgress,
+          complete: completeVideoGeneration,
+          fail: failVideoGeneration,
+          remove: deleteMessage,
+          onPaywall: (error) => {
+            setPaywallError({
+              feature: error.feature,
+              requiredTier: error.requiredTier,
+              reason: error.reason,
+            });
+          },
+          onUnexpectedError: (error) => {
+            console.warn('[ChatScreen] Video generation failed:', error);
+          },
+        });
+        if (dispatchOptions?.awaitCompletion) {
+          return videoTurn.then(() => true);
+        }
+        void videoTurn;
+        return true;
+      }
+
       const imageRequest = resolveMobileImageGenerationRequest({
         executionMode: conversationExecutionMode,
         text: trimmedInput,
@@ -500,6 +558,11 @@ export default function ChatScreen() {
       beginImageGeneration,
       completeImageGeneration,
       failImageGeneration,
+      beginVideoGeneration,
+      updateVideoGenerationProgress,
+      completeVideoGeneration,
+      failVideoGeneration,
+      mediaMode,
       deleteMessage,
       setPaywallError,
       setSendError,
@@ -1271,6 +1334,15 @@ export default function ChatScreen() {
 
         {/* Quoted reply bar */}
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
+
+        {/* Context-budget warning. The component computes its own threshold and
+            renders null below it, so it is mounted unconditionally — it appears
+            only once the thread crosses ~70% of the model's context window. */}
+        <ContextWarningChip
+          modelId={selectedModel}
+          messages={conversationMessages}
+          onStartFreshChat={handleNewChat}
+        />
 
         {/* Model-tier warning — shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />

@@ -31,6 +31,18 @@ export interface ChatFeatures {
   research: boolean;
 }
 
+/**
+ * What kind of output the composer is currently aimed at.
+ *
+ * This replaced the old `features.imageGen` boolean as the USER-FACING control
+ * (founder 2026-08-06): picking Image or Video in the [+] sheet switches the
+ * selected model to the registry's media model for that slot rather than
+ * setting a flag on a text model. `features.imageGen` survives as the
+ * capability gate the send path still checks; it is no longer a toggle anyone
+ * flips by hand.
+ */
+export type MediaMode = 'text' | 'image' | 'video';
+
 export interface ConversationSearchResult {
   conversationId: string;
   messageId: string;
@@ -48,6 +60,14 @@ interface ViewState {
   chatStyle: ChatStyle;
   toolAccess: ToolAccess;
   features: ChatFeatures;
+  /** Output kind the composer is aimed at. See {@link MediaMode}. */
+  mediaMode: MediaMode;
+  /**
+   * The model the user picked for each media kind, when they picked one.
+   * Absent means "use the registry's slot default". Keyed by kind so switching
+   * image -> video -> image does not lose either choice.
+   */
+  selectedMediaModel: { image?: string; video?: string };
 
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
@@ -55,6 +75,14 @@ interface ViewState {
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
+  /**
+   * Set the composer's output kind. The media model it resolves to lives in
+   * `src/features/chat/actions/mediaMode.ts`; the user's chat-model selection
+   * in `useModelStore` is deliberately left alone.
+   */
+  setMediaMode: (mode: MediaMode) => void;
+  /** Pick the model for one media kind. */
+  setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
   /** Clear account-scoped server search state while preserving device preferences. */
   clearCloudSearchState: () => void;
 }
@@ -197,6 +225,8 @@ export const useChatViewStore = create<ViewState>()(
         codeExecution: false,
         research: false,
       },
+      mediaMode: 'text',
+      selectedMediaModel: {},
 
       searchConversations: (query: string) => {
         const trimmed = query.trim();
@@ -227,6 +257,9 @@ export const useChatViewStore = create<ViewState>()(
       setToolAccess: (access) => set({ toolAccess: access }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),
+      setMediaMode: (mode) => set({ mediaMode: mode }),
+      setMediaModel: (kind, modelId) =>
+        set((state) => ({ selectedMediaModel: { ...state.selectedMediaModel, [kind]: modelId } })),
       clearCloudSearchState: () => {
         if (searchDebounceTimer !== undefined) {
           clearTimeout(searchDebounceTimer);
@@ -240,12 +273,16 @@ export const useChatViewStore = create<ViewState>()(
       storage: createJSONStorage(() => mmkvStorage),
       // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
+      // `mediaMode` is deliberately NOT persisted: relaunching straight into
+      // video mode would silently spend a Max-tier generation on whatever the
+      // returning user typed first. Cold start always begins in 'text'.
       partialize: (state) => ({
         chatMode: state.chatMode,
         workMode: state.workMode,
         chatStyle: state.chatStyle,
         toolAccess: state.toolAccess,
         features: state.features,
+        selectedMediaModel: state.selectedMediaModel,
       }),
     },
   ),

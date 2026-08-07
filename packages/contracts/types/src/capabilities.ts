@@ -146,12 +146,16 @@ const MOBILE: CapabilityRow = {
   // Cloud tools — SPEC-SILENT on mobile's product "Includes" list. The matrix
   // declares PLATFORM capability (mobile's AddToChatSheet HAS these affordances);
   // the v1 FEATURE flags then gate runtime availability ON TOP (the intended
-  // layering). NOTE: in v1 today FEATURES.webSearch=false and connectors=false
-  // (apps/mobile/lib/v1FeatureFlags.ts) — so these are platform-capable but
-  // runtime-DISABLED pending AGI Cloud invite access. Confirm intent with founder.
-  canUseWebSearch: true, // platform-capable; runtime-gated by FEATURES.webSearch (v1: off)
-  canUseDeepResearch: true, // platform-capable; runtime-gated by FEATURES (v1)
-  canUseConnectors: true, // platform-capable; runtime-gated by FEATURES.connectors (v1: off)
+  // layering). As of 2026-08-06 `FEATURES.webSearch`, `research`, and
+  // `connectors` are all TRUE in apps/mobile/lib/v1FeatureFlags.ts — the older
+  // note here claiming they were off pending "AGI Cloud invite access" was stale
+  // (Managed Cloud went open public alpha 2026-06-27; there is no invite gate).
+  // Runtime availability now turns on the per-account capability handshake from
+  // `/api/me?surface=mobile` and the selected model's own capabilities, not on
+  // these flags.
+  canUseWebSearch: true,
+  canUseDeepResearch: true,
+  canUseConnectors: true,
   canUsePlugins: false, // SPEC-SILENT · current: not surfaced in mobile composer
   canUseSkills: false, // SPEC-SILENT · current: not surfaced in mobile composer
   // Desktop-only — explicitly MUST NOT appear on mobile

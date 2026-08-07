@@ -11,6 +11,7 @@
     "./format": "./src/format.ts",
     "./logger": "./src/logger.ts",
     "./managed-chat-idempotency": "./src/managedChatIdempotency.ts",
+    "./managed-media-idempotency": "./src/managedMediaIdempotency.ts",
     "./privacy-handoff": "./src/privacyHandoff.ts",
     "./reasoning": "./src/reasoning.ts",
     "./signaling": "./src/signaling.ts",

@@ -120,6 +120,32 @@ interface MessageState {
     assistantMessageId: string,
     errorMessage: string,
   ) => void;
+  beginVideoGeneration: (
+    conversationId: string,
+    commandContent: string,
+    prompt: string,
+    model: string,
+  ) => string;
+  updateVideoGenerationProgress: (
+    conversationId: string,
+    assistantMessageId: string,
+    progress: number | undefined,
+    status: NonNullable<ChatMessage['videoGenStatus']>,
+  ) => void;
+  completeVideoGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    result: {
+      videoUrl: string;
+      thumbnailUrl?: string;
+      model?: string;
+    },
+  ) => void;
+  failVideoGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    errorMessage: string,
+  ) => void;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
 }
@@ -759,6 +785,199 @@ export const useChatMessageStore = create<MessageState>()(
                       imageGenStatus: 'failed',
                       imageGenProgress: 100,
                       imageGenError: errorMessage,
+                    }
+                  : message,
+              ),
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: finalContent,
+                    updatedAt: now,
+                  }
+                : conversation,
+            ),
+          };
+        });
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, assistantMessageId);
+          void syncNow();
+        }
+      },
+
+      beginVideoGeneration: (conversationId, commandContent, prompt, model) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
+        const now = new Date().toISOString();
+        const assistantMessageId = newMessageId();
+        const userMessage: ChatMessage = {
+          id: newMessageId(),
+          conversationId,
+          role: 'user',
+          content: commandContent,
+          createdAt: now,
+          model,
+        };
+        const assistantMessage: ChatMessage = {
+          id: assistantMessageId,
+          conversationId,
+          role: 'assistant',
+          content: '',
+          createdAt: now,
+          model,
+          isGeneratingVideo: true,
+          videoGenStatus: 'queued',
+          videoGenPrompt: prompt,
+        };
+
+        ownerStore.setState((state) => {
+          const existingMessages = state.messages[conversationId] ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: [...existingMessages, userMessage, assistantMessage],
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: commandContent,
+                    messageCount: (conversation.messageCount ?? 0) + 2,
+                    updatedAt: now,
+                    model: conversation.model ?? model,
+                    provider: conversation.provider ?? providerForExecutionMode('cloud'),
+                    executionMode: conversation.executionMode ?? 'cloud',
+                  }
+                : conversation,
+            ),
+          };
+        });
+
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, userMessage.id);
+        }
+
+        return assistantMessageId;
+      },
+
+      /**
+       * Provider progress tick. Local-only on purpose: a video task emits many
+       * of these over its minutes-long run, and syncing each one would burn the
+       * sync budget to animate a progress bar. The terminal state syncs.
+       */
+      updateVideoGenerationProgress: (conversationId, assistantMessageId, progress, status) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
+          const messages = state.messages[conversationId];
+          if (!messages) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      videoGenStatus: status,
+                      ...(progress !== undefined ? { videoGenProgress: progress } : {}),
+                    }
+                  : message,
+              ),
+            },
+          };
+        });
+      },
+
+      completeVideoGeneration: (conversationId, assistantMessageId, result) => {
+        const now = new Date().toISOString();
+        const finalContent = 'Generated video';
+
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        ownerStore.setState((state) => {
+          const messages = state.messages[conversationId];
+          if (!messages) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      type: 'video',
+                      videoUrl: result.videoUrl,
+                      ...(result.thumbnailUrl ? { videoThumbnailUrl: result.thumbnailUrl } : {}),
+                      content: finalContent,
+                      isGeneratingVideo: false,
+                      videoGenStatus: 'completed',
+                      videoGenProgress: 100,
+                      model: result.model ?? message.model,
+                    }
+                  : message,
+              ),
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: finalContent,
+                    updatedAt: now,
+                    provider: conversation.provider ?? providerForExecutionMode('cloud'),
+                    executionMode: conversation.executionMode ?? 'cloud',
+                  }
+                : conversation,
+            ),
+          };
+        });
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, assistantMessageId);
+          void syncNow();
+        }
+      },
+
+      failVideoGeneration: (conversationId, assistantMessageId, errorMessage) => {
+        const now = new Date().toISOString();
+        const finalContent = `Video generation failed: ${errorMessage}`;
+
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        ownerStore.setState((state) => {
+          const messages = state.messages[conversationId];
+          if (!messages) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      content: finalContent,
+                      isGeneratingVideo: false,
+                      videoGenStatus: 'failed',
+                      videoGenProgress: 100,
+                      videoGenError: errorMessage,
                     }
                   : message,
               ),

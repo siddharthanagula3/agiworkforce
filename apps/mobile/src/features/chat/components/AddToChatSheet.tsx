@@ -16,13 +16,22 @@ import {
   Lock,
   Terminal,
   Bot,
+  Film,
+  Check,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import {
+  enterMediaMode,
+  exitMediaMode,
+  listMediaModels,
+  resolveMediaModelId,
+} from '@/src/features/chat/actions/mediaMode';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
@@ -83,28 +92,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const cloudMessages = useChatCloudMessageStore((s) => s.messages);
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
-  const workMode = useChatStore((s) => s.workMode);
-  const setWorkMode = useChatStore((s) => s.setWorkMode);
+  const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const setMediaModel = useChatViewStore((s) => s.setMediaModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
-  // Code execution: same "don't promise a no-op" reasoning as web search,
-  // plus two extra checks since running code is higher-risk than searching —
-  // the toggle only appears in Cloud mode, for a model whose catalog entry
-  // actually supports server-side code execution, AND when this deployment's
-  // E2B execution loop is reachable (`/api/me` feature_flags.code_execution,
-  // cached in useTierStore — defaults false until the first refresh, so a
-  // fresh install never shows the toggle before the real capability is known).
-  const selectedModelSupportsCodeExecution =
-    selectedModelMetadata?.capabilities?.codeExecution ?? false;
-  const codeExecutionDeploymentAvailable = useTierStore((s) => s.codeExecutionAvailable);
-  const showCodeExecutionToggle =
-    FEATURES.codeExecution &&
-    appMode === 'cloud' &&
-    selectedModelSupportsCodeExecution &&
-    codeExecutionDeploymentAvailable;
+  // Code execution has NO row here. It is a standing capability, not a
+  // per-message attachment, and it already has a switch in
+  // Settings > Capabilities bound to the same `features.codeExecution` flag —
+  // this sheet's copy was a duplicate control for one preference. Both
+  // reference apps agree: Claude puts "Code execution and file creation" in
+  // Settings > Capabilities, not the composer's + menu (founder 2026-08-06).
+  // The send path still re-verifies model capability and deployment
+  // availability per turn in chatExecutionStore, so nothing is loosened.
   // Deep Research: cloud-only, paid, and only for a model that declares BOTH the
   // `research` capability AND native `search` (the server's research loop needs
   // web search). Same "never a cosmetic toggle" reasoning as web search / code
@@ -115,15 +117,32 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  // Image generation runs only through the Managed Cloud media route, so the
-  // toggle is Cloud-only (previously it also rendered in Local mode, where it
-  // could do nothing).
-  const showImageGenToggle =
+  const showToolSection = showResearchToggle || FEATURES.computerUse;
+  // Media generation runs only through the Managed Cloud media routes, so both
+  // options are Cloud-only. Each is additionally hidden when the canonical
+  // registry slot has no capable model, so the sheet never offers an output kind
+  // that would fail at send time.
+  const imageModelId = resolveMediaModelId('image');
+  const videoModelId = resolveMediaModelId('video');
+  const showImageOption =
     FEATURES.imageGen &&
     appMode === 'cloud' &&
+    imageModelId !== null &&
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'image_generation');
-  const canUseAgiWork = canUseBillingPlanCapability(tier, 'agi_work');
+  // Video is Max 15x / Enterprise only — `video_generation` in the billing
+  // catalog. The server enforces it too; this just avoids showing a control that
+  // can only produce a paywall.
+  const showVideoOption =
+    appMode === 'cloud' &&
+    videoModelId !== null &&
+    grantedCapabilities.includes('canUseImages') &&
+    canUseBillingPlanCapability(tier, 'video_generation');
+  // Catalog name, NOT `getShortDisplayName`: that helper only knows models the
+  // picker can select, and media slot models are not selectable — it returned
+  // UNKNOWN_MODEL_LABEL, so both rows read "Switches to Not set".
+  const imageModelName = imageModelId ? (getModelMetadataById(imageModelId)?.name ?? null) : null;
+  const videoModelName = videoModelId ? (getModelMetadataById(videoModelId)?.name ?? null) : null;
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
   // Local and cloud projects live in physically separate stores; read the one
@@ -213,15 +232,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenProjectPicker();
   }, [haptic, onOpenProjectPicker]);
 
-  const handleCodeExecutionToggle = useCallback(
-    (enabled: boolean) => {
-      if (!FEATURES.codeExecution) return;
-      haptic();
-      setFeature('codeExecution', enabled);
-    },
-    [haptic, setFeature],
-  );
-
   const handleResearchToggle = useCallback(
     (enabled: boolean) => {
       if (!FEATURES.research) return;
@@ -231,22 +241,26 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [haptic, setFeature],
   );
 
-  const handleWorkModeToggle = useCallback(
-    (enabled: boolean) => {
-      haptic();
-      setWorkMode(enabled ? 'agiwork' : 'chat');
-    },
-    [haptic, setWorkMode],
-  );
+  // Selecting a media mode swaps the composer's model; selecting the one that
+  // is already active is a no-op rather than a toggle-off, so a double tap
+  // cannot silently drop the user back to text mid-thought. "Back to text chat"
+  // is the explicit way out, mirrored by the composer's MediaModeChip.
+  const handleSelectImageMode = useCallback(() => {
+    haptic();
+    if (mediaMode === 'image') return;
+    enterMediaMode('image');
+  }, [haptic, mediaMode]);
 
-  const handleImageGenerationToggle = useCallback(
-    (enabled: boolean) => {
-      if (!FEATURES.imageGen) return;
-      haptic();
-      setFeature('imageGen', enabled);
-    },
-    [haptic, setFeature],
-  );
+  const handleSelectVideoMode = useCallback(() => {
+    haptic();
+    if (mediaMode === 'video') return;
+    enterMediaMode('video');
+  }, [haptic, mediaMode]);
+
+  const handleBackToText = useCallback(() => {
+    haptic();
+    exitMediaMode();
+  }, [haptic]);
 
   const handleConnectors = useCallback(() => {
     haptic();
@@ -273,6 +287,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       index={-1}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
+      // Belt-and-braces for the keyboard-over-sheet bug fixed at the tap site in
+      // ChatInput: if anything ever raises the keyboard while this sheet is up,
+      // the sheet resizes around it instead of being covered by it, and a blur
+      // restores the previous position rather than leaving a gap.
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
       backdropComponent={renderBackdrop}
       backgroundStyle={{
         backgroundColor: themeColors.surfaceElevated,
@@ -427,45 +448,147 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         {/* Divider */}
         <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-        {/* Section 2: Session controls */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: '600',
-              color: themeColors.textMuted,
-              letterSpacing: 0,
-              textTransform: 'uppercase',
-              marginBottom: 4,
-            }}
-          >
-            Session
-          </Text>
+        {/* Model sits directly under the attachment cards and ABOVE Create:
+            it is the most-tapped row in this sheet, so it gets the shortest
+            thumb travel rather than sitting at the bottom with the rarely
+            touched config links (founder 2026-08-07). In a media mode the
+            Create section below owns the model choice, so this row would be a
+            second, conflicting control — it is hidden there. */}
+        {mediaMode === 'text' ? (
+          <>
+            <View style={{ paddingHorizontal: 20, paddingVertical: 4 }}>
+              <ConfigLink
+                icon={<Bot size={18} color={themeColors.textMuted} />}
+                label="Model"
+                value={getShortDisplayName(selectedModel, tier)}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+                onPress={handleOpenModelPicker}
+              />
+            </View>
+            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+          </>
+        ) : null}
 
-          {/* Temporary chat lives on the chat header (TemporaryChatToggle) -- it is
-              a pre-conversation decision, and a second copy here was a duplicate
-              control (founder 2026-07-29). */}
-          {appMode === 'cloud' && canUseAgiWork ? (
-            <CapabilityRow
-              icon={<Bot size={18} color={themeColors.teal} />}
-              label="AGI Work"
-              description="Search, run code, and use tools for longer tasks"
-              enabled={workMode === 'agiwork'}
-              onToggle={handleWorkModeToggle}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-            />
-          ) : null}
-        </View>
+        {/* Section 2: Create — output kind.
+            Image and video are MODES, not flags: picking one switches the
+            selected model to the registry's media model for that slot (founder
+            2026-08-06), replacing the old boolean toggles that sat on top of a
+            text model the send path never actually used. AGI Work moved out of
+            this sheet to the drawer in the same pass — it is a session-wide
+            stance, not a per-message attachment. */}
+        {showImageOption || showVideoOption ? (
+          <>
+            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: themeColors.textMuted,
+                  letterSpacing: 0,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                Create
+              </Text>
 
-        {/* Divider */}
-        <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+              {showImageOption ? (
+                <MediaModeRow
+                  icon={
+                    <Paintbrush
+                      size={18}
+                      color={mediaMode === 'image' ? themeColors.teal : themeColors.textMuted}
+                    />
+                  }
+                  label="Image"
+                  description={
+                    imageModelName
+                      ? `Switches to ${imageModelName}`
+                      : 'Generate images in this chat'
+                  }
+                  active={mediaMode === 'image'}
+                  onPress={handleSelectImageMode}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  activeColor={themeColors.teal}
+                />
+              ) : null}
+              {showVideoOption ? (
+                <MediaModeRow
+                  icon={
+                    <Film
+                      size={18}
+                      color={mediaMode === 'video' ? themeColors.teal : themeColors.textMuted}
+                    />
+                  }
+                  label="Video"
+                  description={
+                    videoModelName ? `Switches to ${videoModelName}` : 'Generate video in this chat'
+                  }
+                  active={mediaMode === 'video'}
+                  onPress={handleSelectVideoMode}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  activeColor={themeColors.teal}
+                />
+              ) : null}
+              {/* Model catalog for the ACTIVE kind. Picking Image or Video is
+                  only half the decision — the catalog carries several models
+                  per kind at very different prices (Veo 3.1 at $0.40/s vs Veo
+                  3.1 Lite at $0.05/s), so the choice belongs to the user. */}
+              {mediaMode !== 'text' ? (
+                <View style={{ paddingTop: 4, paddingBottom: 2 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: themeColors.textMuted,
+                      textTransform: 'uppercase',
+                      paddingHorizontal: 4,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {mediaMode === 'video' ? 'Video model' : 'Image model'}
+                  </Text>
+                  {listMediaModels(mediaMode).map((candidateId) => (
+                    <MediaModelRow
+                      key={candidateId}
+                      modelId={candidateId}
+                      selected={
+                        candidateId === (mediaMode === 'video' ? videoModelId : imageModelId)
+                      }
+                      onPress={() => {
+                        haptic();
+                        setMediaModel(mediaMode, candidateId);
+                      }}
+                      textColor={themeColors.textPrimary}
+                      mutedColor={themeColors.textMuted}
+                      activeColor={themeColors.teal}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {mediaMode !== 'text' ? (
+                <Pressable
+                  onPress={handleBackToText}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to text chat"
+                  style={{ paddingVertical: 10, paddingHorizontal: 4 }}
+                >
+                  <Text style={{ fontSize: 13, color: themeColors.teal }}>Back to text chat</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+          </>
+        ) : null}
 
         {/* Section 3: Tool availability */}
-        {showResearchToggle ||
-        showCodeExecutionToggle ||
-        showImageGenToggle ||
-        FEATURES.computerUse ? (
+        {showToolSection ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
             {showResearchToggle ? (
               <CapabilityRow
@@ -474,28 +597,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 description="Multi-step research with cited sources"
                 enabled={features.research}
                 onToggle={handleResearchToggle}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ) : null}
-            {showCodeExecutionToggle ? (
-              <CapabilityRow
-                icon={<Terminal size={18} color={themeColors.teal} />}
-                label="Run code"
-                description="Let the model execute code in a secure sandbox"
-                enabled={features.codeExecution}
-                onToggle={handleCodeExecutionToggle}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ) : null}
-            {showImageGenToggle ? (
-              <CapabilityRow
-                icon={<Paintbrush size={18} color={themeColors.teal} />}
-                label="Image generation"
-                description="Create generated images in chat"
-                enabled={features.imageGen}
-                onToggle={handleImageGenerationToggle}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
@@ -516,10 +617,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         ) : null}
 
         {/* Divider */}
-        {showResearchToggle ||
-        showCodeExecutionToggle ||
-        showImageGenToggle ||
-        FEATURES.computerUse ? (
+        {showToolSection ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
         ) : null}
 
@@ -535,14 +633,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             textColor={themeColors.textPrimary}
             mutedColor={themeColors.textMuted}
             onPress={handleOpenProjectPicker}
-          />
-          <ConfigLink
-            icon={<Bot size={18} color={themeColors.textMuted} />}
-            label="Model"
-            value={getShortDisplayName(selectedModel, tier)}
-            textColor={themeColors.textPrimary}
-            mutedColor={themeColors.textMuted}
-            onPress={handleOpenModelPicker}
           />
           <ConfigLink
             icon={<Palette size={18} color={themeColors.textMuted} />}
@@ -602,6 +692,120 @@ function AttachmentCard({
     >
       {icon}
       <Text style={{ fontSize: 12, fontWeight: '500', color: textColor }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * A selectable output-kind row (Image / Video).
+ *
+ * Deliberately NOT a Switch: these are mutually exclusive modes that change the
+ * selected model, and a switch would imply they stack on top of the current
+ * model — which is exactly the misconception the old toggles created.
+ */
+function MediaModeRow({
+  icon,
+  label,
+  description,
+  active,
+  onPress,
+  textColor,
+  mutedColor,
+  activeColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  active: boolean;
+  onPress: () => void;
+  textColor: string;
+  mutedColor: string;
+  activeColor: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}${active ? ', selected' : ''}`}
+      accessibilityHint={active ? undefined : `Switches this chat to ${label.toLowerCase()}`}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        paddingHorizontal: 4,
+        minHeight: 52,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+        {icon}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 15, color: active ? activeColor : textColor }}>{label}</Text>
+          <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+      </View>
+      {active ? <Check size={18} color={activeColor} /> : null}
+    </Pressable>
+  );
+}
+
+/** One choosable media model. Subtitle carries the price so the cost of the
+ *  choice is visible at the point of choosing, not buried in billing. */
+function MediaModelRow({
+  modelId,
+  selected,
+  onPress,
+  textColor,
+  mutedColor,
+  activeColor,
+}: {
+  modelId: string;
+  selected: boolean;
+  onPress: () => void;
+  textColor: string;
+  mutedColor: string;
+  activeColor: string;
+}) {
+  const meta = getModelMetadataById(modelId);
+  const perSecond = meta?.videoPerSecondCost;
+  const perImage = meta?.imagePerImageCost;
+  const price =
+    perSecond !== undefined
+      ? `$${perSecond}/sec`
+      : perImage !== undefined
+        ? `$${perImage}/image`
+        : (meta?.provider ?? '');
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${meta?.name ?? modelId}${price ? `, ${price}` : ''}${selected ? ', selected' : ''}`}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+        paddingLeft: 28,
+        minHeight: 44,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>
+          {meta?.name ?? modelId}
+        </Text>
+        {price ? (
+          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{price}</Text>
+        ) : null}
+      </View>
+      {selected ? <Check size={16} color={activeColor} /> : null}
     </Pressable>
   );
 }

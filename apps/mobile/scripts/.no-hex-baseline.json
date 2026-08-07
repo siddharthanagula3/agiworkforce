@@ -54,7 +54,7 @@
       "line": 146,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/agents/[id].tsx",
@@ -223,7 +223,7 @@
       "line": 395,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/chat/[id].tsx",
@@ -506,7 +506,7 @@
       "line": 217,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/translate.tsx",
@@ -525,7 +525,7 @@
       "line": 395,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/voice.tsx",
@@ -1554,36 +1554,6 @@
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
-      "line": 18,
-      "literal": "#3b82f6",
-      "rule": "hex"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
-      "line": 23,
-      "literal": "#10b981",
-      "rule": "hex"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
-      "line": 29,
-      "literal": "#a855f7",
-      "rule": "hex"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
-      "line": 35,
-      "literal": "#f59e0b",
-      "rule": "hex"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
-      "line": 41,
-      "literal": "#ef4444",
-      "rule": "hex"
-    },
-    {
       "file": "apps/mobile/src/features/chat/components/FileExportButton.tsx",
       "line": 211,
       "literal": "rgba(",
@@ -2014,7 +1984,7 @@
       "line": 123,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
@@ -2327,14 +2297,14 @@
       "line": 152,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
       "line": 180,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",

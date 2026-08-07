@@ -3,9 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
+  type ManagedMediaImageOperation,
   type ManagedMediaImageProvider,
 } from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
+import { getMediaAssetById } from '@/lib/server/media-assets';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -210,10 +212,34 @@ function estimateImageCostCents(
 }
 
 /**
+ * Google credential names, in priority order.
+ *
+ * This route previously read `GOOGLE_API_KEY` alone, while the rest of the
+ * stack resolves Google through the chain in
+ * `lib/services/provider-adapter-service.ts` (`PROVIDER_API_KEY_ENV_KEYS.google`).
+ * A deployment that sets only `GEMINI_API_KEY` — which is the common case, and
+ * this one — therefore had working Gemini CHAT but a silently unavailable
+ * Gemini IMAGE path: `getDefaultProvider` skipped Google and fell through to
+ * OpenAI/Stability, so `gemini-3.1-flash-image` (the catalog's
+ * `image_generation` slot model) never actually served a request.
+ *
+ * Keep this list in sync with `PROVIDER_API_KEY_ENV_KEYS.google`.
+ */
+const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
+
+function getGoogleApiKey(): string | undefined {
+  for (const key of GOOGLE_API_KEY_ENV_KEYS) {
+    const value = getOptionalEnv(key);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
  * Determine the default provider based on available API keys
  */
 function getDefaultProvider(): ImageProvider {
-  if (getOptionalEnv('GOOGLE_API_KEY')) {
+  if (getGoogleApiKey()) {
     return 'google';
   }
   if (getOptionalEnv('OPENAI_API_KEY')) {
@@ -232,8 +258,15 @@ function getApiKey(provider: ImageProvider): string {
   switch (provider) {
     case 'openai':
       return requireEnv('OPENAI_API_KEY');
-    case 'google':
-      return requireEnv('GOOGLE_API_KEY');
+    case 'google': {
+      const key = getGoogleApiKey();
+      if (!key) {
+        throw new Error(
+          `Missing Google credential. Set one of: ${GOOGLE_API_KEY_ENV_KEYS.join(', ')}.`,
+        );
+      }
+      return key;
+    }
     case 'stability':
       return requireEnv('STABILITY_API_KEY');
   }
@@ -247,7 +280,7 @@ function isProviderAvailable(provider: ImageProvider): boolean {
     case 'openai':
       return !!getOptionalEnv('OPENAI_API_KEY');
     case 'google':
-      return !!getOptionalEnv('GOOGLE_API_KEY');
+      return !!getGoogleApiKey();
     case 'stability':
       return !!getOptionalEnv('STABILITY_API_KEY');
   }
@@ -257,12 +290,56 @@ function isProviderAvailable(provider: ImageProvider): boolean {
  * Generate images using the catalog-selected OpenAI image slot.
  * Endpoint: POST https://api.openai.com/v1/images/generations
  */
+
+/**
+ * Resolve a `source_image` / `mask_image` reference to raw bytes.
+ *
+ * OWNER-SCOPED on purpose: an `asset_id` is re-read under the caller's identity
+ * and rejected on mismatch, so a caller cannot pass someone else's asset id and
+ * have the server fetch that image on their behalf. Inline `b64_json` bytes are
+ * the caller's own upload and need no lookup.
+ *
+ * There is deliberately no URL branch — accepting one would turn this endpoint
+ * into a server-side fetcher for attacker-supplied hosts.
+ */
+async function resolveImageRefBytes(
+  ref: { asset_id: string } | { b64_json: string },
+  userId: string,
+): Promise<Uint8Array> {
+  if ('b64_json' in ref) {
+    const base64 = ref.b64_json.includes(',') ? ref.b64_json.split(',').pop()! : ref.b64_json;
+    return Uint8Array.from(Buffer.from(base64, 'base64'));
+  }
+
+  const asset = await getMediaAssetById(ref.asset_id);
+  if (!asset || asset.deletedAt) {
+    throw new Error('Source image not found');
+  }
+  if (asset.userId !== userId) {
+    // Same message as not-found: never confirm the existence of another
+    // account's asset.
+    throw new Error('Source image not found');
+  }
+
+  const response = await fetch(asset.storageUrl, { signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) {
+    throw new Error('Source image could not be read');
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 async function generateWithOpenAIImage(
   prompt: string,
   size: string,
   quality: string,
   n: number,
   requestedModelId?: string,
+  edit?: {
+    operation: ManagedMediaImageOperation;
+    sourceBytes: Uint8Array;
+    maskBytes?: Uint8Array;
+    transparentBackground: boolean;
+  },
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('openai');
   const catalogModel = resolveOpenAIImageModel(requestedModelId);
@@ -273,6 +350,57 @@ async function generateWithOpenAIImage(
   const validSizes = ['1024x1024', '1536x1024', '1024x1536', 'auto'];
   const imageSize = validSizes.includes(size) ? size : '1024x1024';
   const imageQuality = quality === 'hd' ? 'high' : 'medium';
+
+  // An edit sends the ORIGINAL PIXELS to the provider's edits endpoint. The
+  // previous behavior — a fresh text-to-image call built from a modified
+  // prompt — could not preserve anything about the source image, which is why
+  // "edit" never actually edited.
+  if (edit) {
+    const form = new FormData();
+    form.append('model', model);
+    form.append('prompt', prompt);
+    form.append('size', imageSize);
+    form.append('n', String(Math.min(n, 4)));
+    if (edit.transparentBackground) form.append('background', 'transparent');
+    form.append(
+      'image',
+      new Blob([edit.sourceBytes as BlobPart], { type: 'image/png' }),
+      'source.png',
+    );
+    if (edit.maskBytes) {
+      form.append(
+        'mask',
+        new Blob([edit.maskBytes as BlobPart], { type: 'image/png' }),
+        'mask.png',
+      );
+    }
+
+    const editResponse = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(55_000),
+    });
+
+    if (!editResponse.ok) {
+      const errorData = (await editResponse.json().catch(() => ({}))) as Record<string, unknown>;
+      const errorObj = errorData['error'] as Record<string, unknown> | undefined;
+      throw new Error(
+        (errorObj?.['message'] as string) ||
+          `OpenAI image edit API error: ${editResponse.status} ${editResponse.statusText}`,
+      );
+    }
+
+    const editData = (await editResponse.json()) as {
+      data?: Array<{ b64_json?: string; url?: string }>;
+    };
+    return {
+      images: (editData.data ?? [])
+        .map((item) => ({ b64_json: item.b64_json, url: item.url }))
+        .filter((item) => item.b64_json || item.url),
+      model: `${model}-${edit.operation}`,
+    };
+  }
 
   const response = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
@@ -286,6 +414,7 @@ async function generateWithOpenAIImage(
       size: imageSize,
       quality: imageQuality,
       n: Math.min(n, 4),
+      ...(edit === undefined ? {} : {}),
     }),
     signal: AbortSignal.timeout(55_000),
   });
@@ -739,6 +868,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     quality,
     n,
     negative_prompt,
+    operation,
+    source_image,
+    mask_image,
+    transparent_background,
   } = validationResult.data;
 
   // Determine provider
@@ -863,9 +996,46 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
     await markManagedUsageProviderStarted(reservation);
 
+    // Resolve edit inputs before dispatch so a bad reference fails BEFORE the
+    // provider is called and before any provider-side cost is incurred.
+    let editContext:
+      | {
+          operation: ManagedMediaImageOperation;
+          sourceBytes: Uint8Array;
+          maskBytes?: Uint8Array;
+          transparentBackground: boolean;
+        }
+      | undefined;
+    if (operation !== 'generate' && source_image) {
+      const sourceBytes = await resolveImageRefBytes(source_image, userId);
+      const maskBytes = mask_image ? await resolveImageRefBytes(mask_image, userId) : undefined;
+      editContext = {
+        operation,
+        sourceBytes,
+        ...(maskBytes ? { maskBytes } : {}),
+        transparentBackground: transparent_background,
+      };
+    }
+
+    if (editContext && provider !== 'openai') {
+      // Only the OpenAI adapter has a real edits endpoint wired. Refuse rather
+      // than silently falling back to text-to-image, which is exactly the
+      // behavior that made "edit" a lie in the first place.
+      throw new Error(
+        `Image ${operation} is not supported by the ${provider} provider yet. Use the OpenAI image model for edits.`,
+      );
+    }
+
     switch (provider) {
       case 'openai':
-        result = await generateWithOpenAIImage(prompt, size, quality, n, catalogModel.id);
+        result = await generateWithOpenAIImage(
+          prompt,
+          size,
+          quality,
+          n,
+          catalogModel.id,
+          editContext,
+        );
         break;
       case 'google':
         result = await generateWithImagen(prompt, size, style, n, negative_prompt, catalogModel.id);
