@@ -165,6 +165,17 @@ jobs:
         continue-on-error: true
 
       - name: Type check
+        # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134) —
+        # "Ineffective mark-compacts near heap limit" — under Node's default
+        # old-space cap on a standard runner. It is not intermittent: every run
+        # that actually schedules web's typecheck has died here, and the runs
+        # that looked green simply had web outside `--affected`, so the biggest
+        # package never got checked. That made any commit touching apps/web
+        # unable to pass CI, and therefore unable to deploy.
+        #
+        # The runner has 16 GB, so 8 GB of old space is well within budget.
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm exec turbo run typecheck --affected
 
       - name: Test
