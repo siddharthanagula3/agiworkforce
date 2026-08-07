@@ -163,14 +163,8 @@
     "managed_cloud": {
       "label": "Managed Cloud",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 1,
-        "outputPerMillion": 1
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
       "modelPrefixes": ["stable"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "gemini-3.5-flash-lite",
@@ -198,14 +192,8 @@
     "openai": {
       "label": "OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 1,
-        "outputPerMillion": 1
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
       "modelPrefixes": ["gpt-", "o1", "o3", "o4", "tts-", "whisper", "gpt-image"],
       "aliases": [],
       "defaultModel": "gpt-5.6-sol",
@@ -218,21 +206,13 @@
         "long_context": "gpt-5.6-sol",
         "computer_use": "gpt-5.6-sol"
       },
-      "canonicalization": {
-        "gpt-5.6": "gpt-5.6-sol"
-      }
+      "canonicalization": { "gpt-5.6": "gpt-5.6-sol" }
     },
     "anthropic": {
       "label": "Anthropic",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1.05,
-        "completion": 1.05
-      },
-      "defaultPricing": {
-        "inputPerMillion": 3,
-        "outputPerMillion": 15
-      },
+      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
+      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
       "modelPrefixes": ["claude"],
       "aliases": [],
       "defaultModel": "claude-sonnet-5",
@@ -250,14 +230,8 @@
     "google": {
       "label": "Google",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 0.95,
-        "completion": 0.95
-      },
-      "defaultPricing": {
-        "inputPerMillion": 1,
-        "outputPerMillion": 5
-      },
+      "tokenMultiplier": { "prompt": 0.95, "completion": 0.95 },
+      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 5 },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
       "defaultModel": "gemini-3.6-flash",
@@ -274,14 +248,8 @@
     "xai": {
       "label": "xAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 0.5
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
       "defaultModel": "grok-4.5",
@@ -298,14 +266,8 @@
     "deepseek": {
       "label": "DeepSeek",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1.05,
-        "completion": 1.05
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.28
-      },
+      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
+      "defaultPricing": { "inputPerMillion": 0.14, "outputPerMillion": 0.28 },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
       "defaultModel": "deepseek-v4-flash",
@@ -322,14 +284,8 @@
     "qwen": {
       "label": "Qwen",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.5,
-        "outputPerMillion": 2
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 2 },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "qwen-3.7-plus",
@@ -346,14 +302,8 @@
     "moonshot": {
       "label": "Moonshot AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 3,
-        "outputPerMillion": 15
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
       "taskRouting": {},
@@ -363,14 +313,8 @@
     "perplexity": {
       "label": "Perplexity",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 1,
-        "outputPerMillion": 1
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
       "modelPrefixes": ["sonar"],
       "aliases": ["perplexity", "pplx", "sonar"],
       "defaultModel": "sonar-deep-research",
@@ -387,14 +331,8 @@
     "zhipu": {
       "label": "ZhipuAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 1.4,
-        "outputPerMillion": 4.4
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 1.4, "outputPerMillion": 4.4 },
       "modelPrefixes": ["glm"],
       "aliases": ["zhipu", "zhipuai", "bigmodel", "glm", "z.ai", "zai"],
       "defaultModel": "glm-5.2",
@@ -411,14 +349,8 @@
     "bedrock": {
       "label": "AWS Bedrock",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 3,
-        "outputPerMillion": 15
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
       "modelPrefixes": ["anthropic.", "amazon.", "meta.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
       "taskRouting": {},
@@ -427,14 +359,8 @@
     "nvidia_nim": {
       "label": "NVIDIA NIM",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.5,
-        "outputPerMillion": 1.5
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
       "modelPrefixes": ["nvidia/", "meta/", "mistralai/"],
       "aliases": ["nvidia_nim", "nvidia-nim", "nim"],
       "defaultModel": "",
@@ -444,14 +370,8 @@
     "open_router": {
       "label": "OpenRouter",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
       "defaultModel": "",
@@ -461,14 +381,8 @@
     "ollama": {
       "label": "Ollama (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": {
-        "prompt": 1.1,
-        "completion": 1.1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -478,14 +392,8 @@
     "lmstudio": {
       "label": "LM Studio (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": {
-        "prompt": 1.1,
-        "completion": 1.1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -495,14 +403,8 @@
     "llamacpp": {
       "label": "llama.cpp (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": {
-        "prompt": 1.1,
-        "completion": 1.1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -512,14 +414,8 @@
     "vllm": {
       "label": "vLLM (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": {
-        "prompt": 1.1,
-        "completion": 1.1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -529,14 +425,8 @@
     "runway": {
       "label": "Runway",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": ["runway", "gen4_"],
       "aliases": ["runway-ml", "runwayml"],
       "defaultModel": "runway-gen-4",
@@ -546,14 +436,8 @@
     "minimax": {
       "label": "MiniMax",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.3,
-        "outputPerMillion": 1.2
-      },
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0.3, "outputPerMillion": 1.2 },
       "modelPrefixes": ["minimax"],
       "aliases": ["minimax"],
       "taskRouting": {},
@@ -599,12 +483,7 @@
       "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16",
-      "longContext": {
-        "inputCost": 10,
-        "cached_input": 1,
-        "cached_write": 12.5,
-        "outputCost": 45
-      },
+      "longContext": { "inputCost": 10, "cached_input": 1, "cached_write": 12.5, "outputCost": 45 },
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -626,11 +505,7 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
+        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -649,9 +524,7 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": {
-        "detailValues": ["auto", "original"]
-      },
+      "imageInput": { "detailValues": ["auto", "original"] },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -660,9 +533,7 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 5,
-      "tierPolicy": {
-        "minTier": "max"
-      }
+      "tierPolicy": { "minTier": "max" }
     },
     "gpt-5.6-terra": {
       "id": "gpt-5.6-terra",
@@ -722,11 +593,7 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
+        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -745,9 +612,7 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": {
-        "detailValues": ["auto", "original"]
-      },
+      "imageInput": { "detailValues": ["auto", "original"] },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -756,9 +621,7 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 4,
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "gpt-5.6-luna": {
       "id": "gpt-5.6-luna",
@@ -818,11 +681,7 @@
           "endpoint": "responses",
           "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
         },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
+        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
         "persistentReasoning": {
           "param": "reasoning.context",
           "values": ["auto", "all_turns", "current_turn"],
@@ -841,9 +700,7 @@
           "endpoint": "responses"
         }
       },
-      "imageInput": {
-        "detailValues": ["auto", "original"]
-      },
+      "imageInput": { "detailValues": ["auto", "original"] },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "cachePolicy": {
         "writeMultiplier": 1.25,
@@ -852,9 +709,7 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 3,
-      "tierPolicy": {
-        "minTier": "free"
-      }
+      "tierPolicy": { "minTier": "free" }
     },
     "gpt-5.4-mini": {
       "id": "gpt-5.4-mini",
@@ -908,9 +763,7 @@
         }
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "tierPolicy": {
-        "minTier": "free"
-      }
+      "tierPolicy": { "minTier": "free" }
     },
     "claude-fable-5": {
       "id": "claude-fable-5",
@@ -964,9 +817,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "max"
-      }
+      "tierPolicy": { "minTier": "max" }
     },
     "claude-opus-5": {
       "id": "claude-opus-5",
@@ -1024,13 +875,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "max"
-      },
+      "tierPolicy": { "minTier": "max" },
       "promptCacheMinimumTokens": 512,
-      "providerCompatibility": {
-        "nativeWebFetch": false
-      }
+      "providerCompatibility": { "nativeWebFetch": false }
     },
     "claude-sonnet-5": {
       "id": "claude-sonnet-5",
@@ -1084,9 +931,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -1150,13 +995,7 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 74.2,
-        "humaneval": 93.5,
-        "mmlu": 89.5,
-        "gpqa": 91.9,
-        "aime": 95
-      },
+      "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1178,9 +1017,7 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "gemini-3.5-flash-lite": {
       "id": "gemini-3.5-flash-lite",
@@ -1231,46 +1068,7 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": {
-        "minTier": "free"
-      }
-    },
-    "gemini-3.5-live-translate-preview": {
-      "id": "gemini-3.5-live-translate-preview",
-      "apiModelId": "gemini-3.5-live-translate-preview",
-      "name": "Gemini 3.5 Live Translate",
-      "provider": "google",
-      "modelType": "tts",
-      "contextWindow": 32000,
-      "inputCost": 3.5,
-      "outputCost": 21.0,
-      "capabilities": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Real-Time Speech Translation", "Live Multilingual Conversation"],
-      "released": "June 2026",
-      "deprecation_date": null,
-      "availability": "preview",
-      "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "tierPolicy": { "minTier": "free" }
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
@@ -1280,7 +1078,7 @@
       "modelType": "image",
       "contextWindow": 1000000,
       "inputCost": 0.5,
-      "outputCost": 60.0,
+      "outputCost": 60,
       "capabilities": {
         "streaming": false,
         "tools": false,
@@ -1302,15 +1100,12 @@
       "bestFor": ["Image Generation", "Native Gemini Image Gen"],
       "released": "March 2026",
       "deprecation_date": null,
+      "imagePerImageCost": 0.067,
       "imageApi": "gemini",
+      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0 — 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "imagePerImageCost": 0.067,
-      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0 — 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table."
+      "reasoning": { "capable": false, "control": "none" }
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1338,13 +1133,7 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 75,
-        "humaneval": 95,
-        "mmlu": 87,
-        "gpqa": 75,
-        "aime": 85
-      },
+      "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
       "speed": "very-fast",
       "quality": "excellent",
       "qualityTier": "fast",
@@ -1366,9 +1155,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1396,13 +1183,7 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 81,
-        "humaneval": 96,
-        "mmlu": 92,
-        "gpqa": 87,
-        "aime": 95
-      },
+      "benchmarks": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "best",
@@ -1431,9 +1212,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "qwen-3.5-flash": {
       "id": "qwen-3.5-flash",
@@ -1481,9 +1260,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "basic"
-      },
+      "tierPolicy": { "minTier": "basic" },
       "longContext": {
         "inputCost": 0.172,
         "cached_input": 0.0344,
@@ -1515,9 +1292,7 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": {
-        "mmlu": 75
-      },
+      "benchmarks": { "mmlu": 75 },
       "speed": "fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -1526,13 +1301,8 @@
       "deprecation_date": null,
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "tierPolicy": {
-        "minTier": "free"
-      }
+      "reasoning": { "capable": false, "control": "none" },
+      "tierPolicy": { "minTier": "free" }
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1558,10 +1328,7 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": {
-        "mmlu": 85,
-        "gpqa": 62
-      },
+      "benchmarks": { "mmlu": 85, "gpqa": 62 },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1608,9 +1375,7 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": {
-        "mmlu": 88
-      },
+      "benchmarks": { "mmlu": 88 },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1619,10 +1384,7 @@
       "deprecation_date": null,
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "sonar-deep-research": {
       "id": "sonar-deep-research",
@@ -1648,9 +1410,7 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": {
-        "mmlu": 88
-      },
+      "benchmarks": { "mmlu": 88 },
       "speed": "slow",
       "quality": "excellent",
       "qualityTier": "best",
@@ -1672,9 +1432,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "runway-gen-4": {
       "id": "runway-gen-4",
@@ -1707,14 +1465,9 @@
       "released": "2025",
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
-      "videoPerSecondCostByResolution": {
-        "720p": 0.05
-      },
+      "videoPerSecondCostByResolution": { "720p": 0.05 },
       "pricingNote": "Runway Gen-4 remains an alternate third-party video provider entry. Default AGI video routing uses the verified current Google Veo route unless product policy explicitly chooses Runway.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "stable-image-core": {
       "id": "stable-image-core",
@@ -1749,10 +1502,7 @@
       "imagePerImageCost": 0.03,
       "imageApi": "stability",
       "pricingNote": "Stable Image Core uses Stability AI's v2beta generate/core endpoint and costs 3 credits per successful generation; 1 credit is $0.01.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-image-2": {
       "id": "gpt-image-2",
@@ -1787,10 +1537,7 @@
       "deprecation_date": null,
       "imageApi": "openai",
       "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-4o-mini-tts": {
       "id": "gpt-4o-mini-tts",
@@ -1824,10 +1571,7 @@
       "deprecated": true,
       "deprecation_date": null,
       "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Default snapshot gpt-4o-mini-tts-2025-12-15 (the 2025-03-20 snapshot shut down 2026-07-23). DEPRECATED on developers.openai.com's model catalog listing, but retained because it is the only model OpenAI serves on /v1/audio/speech — gpt-audio-1.5 explicitly does not support that endpoint, no successor is named in the deprecations table, no shutdown date is published, and the text-to-speech guide still calls it \"our newest and most reliable text-to-speech model\". The migration path OpenAI is signalling is audio-native chat (gpt-audio-1.5) and realtime (gpt-realtime-2.1), neither of which is a drop-in for a REST speech call. Verified 2026-07-28.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
@@ -1856,11 +1600,7 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "sweBenchPro": 55.1,
-        "terminalBench2": 76.2,
-        "osWorldVerified": 78.4
-      },
+      "benchmarks": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1889,9 +1629,7 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": {
-        "minTier": "basic"
-      }
+      "tierPolicy": { "minTier": "basic" }
     },
     "glm-5.2": {
       "id": "glm-5.2",
@@ -1918,13 +1656,7 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 79,
-        "humaneval": 92,
-        "mmlu": 90,
-        "gpqa": 84,
-        "aime": 92
-      },
+      "benchmarks": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
@@ -1950,9 +1682,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "qwen-3.7-plus": {
       "id": "qwen-3.7-plus",
@@ -2006,9 +1736,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
+      "tierPolicy": { "minTier": "pro" },
       "longContext": {
         "inputCost": 1.2,
         "cached_input": 0.24,
@@ -2065,9 +1793,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
     },
     "grok-4.5": {
       "id": "grok-4.5",
@@ -2093,13 +1819,7 @@
         "codeExecution": true,
         "caching": false
       },
-      "benchmarks": {
-        "swebench": 68,
-        "humaneval": 96.5,
-        "mmlu": 91.5,
-        "gpqa": 80,
-        "aime": 82
-      },
+      "benchmarks": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "best",
@@ -2121,9 +1841,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": {
-        "minTier": "max"
-      }
+      "tierPolicy": { "minTier": "max" }
     },
     "veo-3.1": {
       "id": "veo-3.1",
@@ -2156,95 +1874,9 @@
       "released": "January 2026",
       "deprecation_date": null,
       "videoPerSecondCost": 0.4,
-      "videoPerSecondCostByResolution": {
-        "720p": 0.4,
-        "1080p": 0.4,
-        "4k": 0.6
-      },
+      "videoPerSecondCostByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 },
       "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
-    },
-    "veo-3.1-lite": {
-      "id": "veo-3.1-lite",
-      "apiModelId": "veo-3.1-lite-generate-preview",
-      "name": "Veo 3.1 Lite",
-      "provider": "google",
-      "modelType": "video",
-      "contextWindow": 4000,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": true,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
-      "released": "January 2026",
-      "deprecation_date": null,
-      "videoPerSecondCost": 0.05,
-      "videoPerSecondCostByResolution": {
-        "720p": 0.05,
-        "1080p": 0.08
-      },
-      "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
-    },
-    "gemini-omni-flash-preview": {
-      "id": "gemini-omni-flash-preview",
-      "apiModelId": "gemini-omni-flash-preview",
-      "name": "Gemini Omni Flash",
-      "provider": "google",
-      "modelType": "video",
-      "contextWindow": 4000,
-      "inputCost": 1.5,
-      "outputCost": 17.5,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": true,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": true,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Video Generation", "Conversational Video Editing"],
-      "released": "June 2026",
-      "deprecation_date": null,
-      "availability": "preview",
-      "videoPerSecondCost": 0.1,
-      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-4o-transcribe": {
       "id": "gpt-4o-transcribe",
@@ -2277,10 +1909,7 @@
       "released": "December 2025",
       "deprecation_date": null,
       "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Was $0.006 — whisper-1's per-minute rate left behind when whisper-1 was replaced, which inputCost (dollars per 1M tokens) understated by ~417x. Verified 2026-07-28 against developers.openai.com/api/docs/models.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-4o-mini-transcribe": {
       "id": "gpt-4o-mini-transcribe",
@@ -2313,10 +1942,7 @@
       "released": "December 2025",
       "deprecation_date": null,
       "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Default snapshot gpt-4o-mini-transcribe-2025-12-15. Was $0.006 — whisper-1's per-minute rate. Verified 2026-07-28 against developers.openai.com/api/docs/models.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
+      "reasoning": { "capable": false, "control": "none" }
     },
     "minimax-m3": {
       "id": "minimax-m3",
@@ -2349,9 +1975,111 @@
       "released": "June 2026",
       "deprecation_date": null,
       "openWeight": true,
-      "tierPolicy": {
-        "minTier": "pro"
-      }
+      "tierPolicy": { "minTier": "pro" }
+    },
+    "veo-3.1-lite": {
+      "id": "veo-3.1-lite",
+      "apiModelId": "veo-3.1-lite-generate-preview",
+      "name": "Veo 3.1 Lite",
+      "provider": "google",
+      "modelType": "video",
+      "contextWindow": 4000,
+      "inputCost": 0,
+      "outputCost": 0,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
+      "released": "January 2026",
+      "deprecation_date": null,
+      "videoPerSecondCost": 0.05,
+      "videoPerSecondCostByResolution": { "720p": 0.05, "1080p": 0.08 },
+      "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
+      "reasoning": { "capable": false, "control": "none" }
+    },
+    "gemini-omni-flash-preview": {
+      "id": "gemini-omni-flash-preview",
+      "apiModelId": "gemini-omni-flash-preview",
+      "name": "Gemini Omni Flash",
+      "provider": "google",
+      "modelType": "video",
+      "contextWindow": 4000,
+      "inputCost": 1.5,
+      "outputCost": 17.5,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Video Generation", "Conversational Video Editing"],
+      "released": "June 2026",
+      "deprecation_date": null,
+      "videoPerSecondCost": 0.1,
+      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06.",
+      "availability": "preview",
+      "reasoning": { "capable": false, "control": "none" }
+    },
+    "gemini-3.5-live-translate-preview": {
+      "id": "gemini-3.5-live-translate-preview",
+      "apiModelId": "gemini-3.5-live-translate-preview",
+      "name": "Gemini 3.5 Live Translate",
+      "provider": "google",
+      "modelType": "tts",
+      "contextWindow": 32000,
+      "inputCost": 3.5,
+      "outputCost": 21,
+      "capabilities": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Real-Time Speech Translation", "Live Multilingual Conversation"],
+      "released": "June 2026",
+      "deprecation_date": null,
+      "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
+      "availability": "preview",
+      "reasoning": { "capable": false, "control": "none" }
     }
   },
   "tierAllowedModels": {

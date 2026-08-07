@@ -1220,8 +1220,8 @@
         "control": "none"
       },
       "costOverride": {
-        "inputCost": 0.039,
-        "outputCost": 0
+        "inputCost": 0.5,
+        "outputCost": 60
       },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
@@ -1240,7 +1240,9 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "March 2026"
+      "releasedOverride": "March 2026",
+      "imagePerImageCost": 0.067,
+      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0 — 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table."
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1962,6 +1964,128 @@
         "codeExecution": false,
         "caching": true
       }
+    },
+    "veo-3.1-lite": {
+      "id": "veo-3.1-lite",
+      "apiModelId": "veo-3.1-lite-generate-preview",
+      "name": "Veo 3.1 Lite",
+      "provider": "google",
+      "modelType": "video",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
+      "deprecation_date": null,
+      "videoPerSecondCost": 0.05,
+      "videoPerSecondCostByResolution": {
+        "720p": 0.05,
+        "1080p": 0.08
+      },
+      "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 4000,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "January 2026"
+    },
+    "gemini-omni-flash-preview": {
+      "id": "gemini-omni-flash-preview",
+      "apiModelId": "gemini-omni-flash-preview",
+      "name": "Gemini Omni Flash",
+      "provider": "google",
+      "modelType": "video",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Video Generation", "Conversational Video Editing"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "videoPerSecondCost": 0.1,
+      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1.5,
+        "outputCost": 17.5
+      },
+      "contextOverride": 4000,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "June 2026"
+    },
+    "gemini-3.5-live-translate-preview": {
+      "id": "gemini-3.5-live-translate-preview",
+      "apiModelId": "gemini-3.5-live-translate-preview",
+      "name": "Gemini 3.5 Live Translate",
+      "provider": "google",
+      "modelType": "tts",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Real-Time Speech Translation", "Live Multilingual Conversation"],
+      "deprecation_date": null,
+      "availability": "preview",
+      "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 3.5,
+        "outputCost": 21
+      },
+      "contextOverride": 32000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "June 2026"
     }
   },
   "tierAllowedModels": {
