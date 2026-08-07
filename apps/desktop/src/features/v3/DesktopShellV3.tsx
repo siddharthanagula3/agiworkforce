@@ -47,6 +47,14 @@ const CanvasWorkspace = lazy(() =>
     default: module.CanvasWorkspace,
   })),
 );
+// Event-triggered automations (cron / webhook / file watcher). Local-only: the
+// trigger runtime is `src-tauri/src/core/agent/triggers.rs` and watches this
+// device's filesystem and clock.
+const AutomationBuilder = lazy(() =>
+  import('@/features/workflows/AutomationBuilder').then((module) => ({
+    default: module.AutomationBuilder,
+  })),
+);
 // Deep research. Local-only: `useResearchStore.startResearch` invokes the
 // native `research_start` command (stores/researchStore.ts), which runs the
 // on-device swarm orchestrator in src-tauri/src/core/research. Nothing here
@@ -56,6 +64,9 @@ const DeepResearchPage = lazy(() =>
     default: module.DeepResearchPage,
   })),
 );
+// Not lazy: it must already be mounted to observe the store transition that
+// opens it, and it renders `null` until then.
+import { ExecutionSidecar } from '@/features/execution-sidecar/ExecutionSidecar';
 const DesktopTerminalWorkspace = lazy(() =>
   import('@/features/terminal/TerminalWorkspace').then((module) => ({
     default: module.TerminalWorkspace,
@@ -77,10 +88,7 @@ import {
 } from '../context-handoff/SelectedContextReview';
 import { CloudFolderAttachSheet } from '../context-handoff/CloudFolderAttachSheet';
 import { revokeCloudHandoffGrant } from '../context-handoff/cloudHandoffGrant';
-import {
-  canUseDesktopCloudAgiWork,
-  canUseDesktopCloudImageGeneration,
-} from '../../services/desktopCloudEntitlements';
+import { canUseDesktopCloudAgiWork } from '../../services/desktopCloudEntitlements';
 import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
 import { useCloudVoiceController } from '../voice/useCloudVoiceController';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
@@ -137,6 +145,7 @@ type V3Panel =
   | 'code'
   | 'design'
   | 'research'
+  | 'automation'
   | 'library'
   | 'tasks'
   | 'agent-tasks'
@@ -239,9 +248,6 @@ export function DesktopShellV3({
   const isManagedCloud = privacyMode === 'managed';
   const cloudVoice = useCloudVoiceController(isManagedCloud);
   const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
-  const quickChipAvailability = isManagedCloud
-    ? { image: canUseDesktopCloudImageGeneration(accountPlan) }
-    : undefined;
   const composerSendShortcut = useSettingsStore(
     (state) => state.chatPreferences.sendShortcut ?? 'enter',
   );
@@ -368,6 +374,7 @@ export function DesktopShellV3({
         'code',
         'design',
         'research',
+        'automation',
         'scheduled',
         'record-skill',
         'agent-tasks',
@@ -649,6 +656,14 @@ export function DesktopShellV3({
         setActivePanel('research');
         return;
       }
+      if (view === 'automation') {
+        if (privacyMode !== 'local') {
+          toast.info('Automations run on this device and are available in Local mode.');
+          return;
+        }
+        setActivePanel('automation');
+        return;
+      }
       if (view === 'work-scheduled') {
         if (privacyMode === 'managed') {
           setActivePanel('cloud-schedules');
@@ -721,7 +736,6 @@ export function DesktopShellV3({
                 onClearFolder={folderSeamEnabled ? clearFolder : undefined}
                 projectPicker={composerProjectPicker}
                 canUseAgiWork={canUseAgiWork}
-                quickChipAvailability={quickChipAvailability}
                 composerHostControls={
                   <ComposerContextControls
                     mode={privacyMode}
@@ -805,6 +819,12 @@ export function DesktopShellV3({
               <div data-testid="desktop-research" className="h-full">
                 <Suspense fallback={panelFallback}>
                   <DeepResearchPage />
+                </Suspense>
+              </div>
+            ) : activePanel === 'automation' && privacyMode === 'local' ? (
+              <div data-testid="desktop-automation" className="h-full overflow-y-auto">
+                <Suspense fallback={panelFallback}>
+                  <AutomationBuilder />
                 </Suspense>
               </div>
             ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
@@ -912,6 +932,15 @@ export function DesktopShellV3({
             </>
           )}
         </div>
+
+        {/*
+          Live execution sidecar: timeline, screen view, terminal, and — most
+          importantly — approval prompts. It self-gates on `isOpen` and takes no
+          props, so mounting it here is the whole wiring. Before this, a running
+          agent produced no visual feedback at all and a `tool_execution`
+          approval had nowhere to render.
+        */}
+        <ExecutionSidecar />
       </div>
     </CapabilityProvider>
   );

@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Telescope,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -32,6 +33,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
 import type { AutoApproveMode } from '@/types/chat';
+import type { ToolAccess } from '@/stores/chat/chatViewStore';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
 type ToggleCapability = 'webSearch' | 'imageGen' | 'codeExecution' | 'research';
@@ -69,14 +71,22 @@ const APPROVAL_MODE_LABELS: Record<AutoApproveMode, string> = {
   full: 'All actions',
 };
 
+/** Pill labels for `chatViewStore.toolAccess`; the screen owns the full copy. */
+const TOOL_ACCESS_LABELS: Record<ToolAccess, string> = {
+  auto: 'Auto',
+  'on-demand': 'On demand',
+  always: 'Always',
+};
+
 function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
   autoApproveMode: AutoApproveMode;
+  toolAccess: ToolAccess;
   /** Derived from the newest stored memory; null when nothing is stored yet. */
   memoryFreshness: string | null;
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, autoApproveMode, memoryFreshness } = input;
+  const { cloudUnlocked, appMode, autoApproveMode, toolAccess, memoryFreshness } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
@@ -186,6 +196,15 @@ function makeSections(input: {
           ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),
         },
         {
+          key: 'tool-access',
+          icon: Wrench,
+          tone: 'cloud',
+          label: 'Tool access',
+          description: 'Choose how eagerly Cloud chats load tool definitions.',
+          value: TOOL_ACCESS_LABELS[toolAccess],
+          href: '/(app)/settings/tool-access',
+        },
+        {
           key: 'continuity',
           icon: RefreshCw,
           tone: 'cloud',
@@ -227,6 +246,7 @@ export default function CapabilitiesScreen() {
   // may do, so a constant rendered inside a status pill is a false statement.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
+  const toolAccess = useChatStore((s) => s.toolAccess);
   // Freshness for the Memory row comes from the real store this screen links
   // to, read through the same mode-aware facade the Memory screen uses.
   const memoryEntries = useMemoryStore((s) => s.entries);
@@ -235,7 +255,13 @@ export default function CapabilitiesScreen() {
     void fetchMemories();
   }, [fetchMemories, appMode]);
   const memoryFreshness = useMemo(() => describeMemoryFreshness(memoryEntries), [memoryEntries]);
-  const sections = makeSections({ cloudUnlocked, appMode, autoApproveMode, memoryFreshness });
+  const sections = makeSections({
+    cloudUnlocked,
+    appMode,
+    autoApproveMode,
+    toolAccess,
+    memoryFreshness,
+  });
 
   const navigate = useCallback(
     (href: string) => {

@@ -16,7 +16,7 @@ export type { CanonicalChatMessage };
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
-export type MessageType = 'text' | 'image';
+export type MessageType = 'text' | 'image' | 'video';
 
 export interface MessageAttachment {
   /** Remote URL after upload */
@@ -155,6 +155,24 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   imageGenError?: string;
   /** Image generation prompt */
   imageGenPrompt?: string;
+  /** URL of a generated video */
+  videoUrl?: string;
+  /** Poster frame for videoUrl, when the provider returned one */
+  videoThumbnailUrl?: string;
+  /** Whether a video is currently being generated for this message */
+  isGeneratingVideo?: boolean;
+  /**
+   * Video generation status. Video is a long-running provider task polled
+   * through `/api/media/video/status`, so unlike image it also carries the
+   * server's own `queued` state.
+   */
+  videoGenStatus?: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+  /** Real server-reported video generation progress (0–100), when available. */
+  videoGenProgress?: number;
+  /** Error message if video generation failed */
+  videoGenError?: string;
+  /** Video generation prompt */
+  videoGenPrompt?: string;
   /** Citations from RAG or web search */
   citations?: Array<{ url: string; title?: string; snippet?: string }>;
   /** True when the message is waiting in the offline queue to be sent */

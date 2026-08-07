@@ -924,13 +924,6 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     const view = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
     expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['canUseAgiWork']).toBe(false);
-    expect(
-      (
-        unifiedChatMock.chatInterfaceProps.at(-1)?.['quickChipAvailability'] as
-          | { image?: boolean }
-          | undefined
-      )?.image,
-    ).toBe(false);
 
     act(() => {
       useUnifiedAuthStore.setState({
@@ -941,13 +934,6 @@ describe('DesktopShellV3 duplication ownership', () => {
     view.rerender(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
     expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['canUseAgiWork']).toBe(true);
-    expect(
-      (
-        unifiedChatMock.chatInterfaceProps.at(-1)?.['quickChipAvailability'] as
-          | { image?: boolean }
-          | undefined
-      )?.image,
-    ).toBe(true);
   });
 
   it('scopes the active conversation through the existing project seam when the picker selects', async () => {

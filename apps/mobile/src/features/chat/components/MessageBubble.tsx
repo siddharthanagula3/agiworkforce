@@ -42,6 +42,8 @@ import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageGenProgress } from './ImageGenProgress';
+import { GeneratedVideo } from './GeneratedVideo';
+import { VideoGenProgress } from './VideoGenProgress';
 import { ImageFullScreen } from './ImageFullScreen';
 import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
@@ -727,7 +729,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {contentElements}
                 {message.isStreaming && <StreamingIndicator />}
               </View>
-            ) : message.isStreaming && !message.isGeneratingImage ? (
+            ) : message.isStreaming && !message.isGeneratingImage && !message.isGeneratingVideo ? (
               <StreamingIndicator />
             ) : null}
 
@@ -750,6 +752,26 @@ export const MessageBubble = memo(function MessageBubble({
                 width={imageWidth}
                 allowEphemeral={message.imageGenPersisted === false}
                 onPress={() => handleImagePress(message.imageUrl!)}
+              />
+            )}
+
+            {/* Video generation progress */}
+            {isAssistant && message.isGeneratingVideo && (
+              <VideoGenProgress
+                prompt={message.videoGenPrompt ?? message.content ?? 'Generating video…'}
+                progress={message.videoGenProgress}
+                status={message.videoGenStatus ?? 'processing'}
+                errorMessage={message.videoGenError}
+              />
+            )}
+
+            {/* Generated video */}
+            {isAssistant && (message.type === 'video' || message.videoUrl) && message.videoUrl && (
+              <GeneratedVideo
+                videoUrl={message.videoUrl}
+                thumbnailUrl={message.videoThumbnailUrl}
+                width={imageWidth}
+                prompt={message.videoGenPrompt}
               />
             )}
 

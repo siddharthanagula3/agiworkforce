@@ -115,7 +115,7 @@ describe('AdvancedEmptyState', () => {
 describe('ChatInterface host ownership slots', () => {
   beforeEach(resetStores);
 
-  it('replaces the default content-area empty state with the host slot, but keeps the independent composer quick chips', () => {
+  it('replaces the default content-area empty state with the host slot', () => {
     const html = renderToStaticMarkup(
       <ChatInterface
         runtime={null}
@@ -129,17 +129,15 @@ describe('ChatInterface host ownership slots', () => {
     // package's default <EmptyState> greeting ("What can I help with?").
     expect(html).toContain('Desktop empty');
     expect(html).not.toContain('What can I help with?');
-
-    // The composer-area sample-prompt chips are a SEPARATE slot, shown whenever
-    // the chat is empty (claude.ai parity — ref: claude_reference/015). They are
-    // intentionally independent of emptyStateSlot (which owns only the greeting
-    // above), so they remain rendered. See the ChatInterface composer block.
-    expect(html).toContain('>Code<');
-    expect(html).toContain('>Research<');
-    expect(html).toContain('>Computer<');
   });
 
-  it('renders only the quick actions declared by the active runtime', () => {
+  /**
+   * The composer-area sample-prompt chips (Code / Research / Image / Video /
+   * Computer) were removed on every surface — web, desktop, and mobile —
+   * per the founder on 2026-08-06. The empty state is the greeting alone.
+   * This guards the removal so they cannot quietly come back on one surface.
+   */
+  it('renders no quick-action chips on an empty chat, whatever the runtime declares', () => {
     const runtime = {
       supportsResearch: true,
       supportsImageGeneration: true,
@@ -151,8 +149,9 @@ describe('ChatInterface host ownership slots', () => {
       <ChatInterface runtime={runtime} sidebarSlot={null} enableSearchOverlay={false} />,
     );
 
-    expect(html).toContain('>Research<');
-    expect(html).toContain('>Image<');
+    expect(html).not.toContain('>Code<');
+    expect(html).not.toContain('>Research<');
+    expect(html).not.toContain('>Image<');
     expect(html).not.toContain('>Video<');
     expect(html).not.toContain('>Computer<');
   });

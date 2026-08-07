@@ -108,13 +108,34 @@ function managedUsageErrorResponse(
 }
 
 /**
+ * Google credential names, in priority order.
+ *
+ * This route read `GOOGLE_API_KEY` alone while the rest of the stack resolves
+ * Google through `PROVIDER_API_KEY_ENV_KEYS.google` in
+ * `lib/services/provider-adapter-service.ts`. On a deployment that sets only
+ * `GEMINI_API_KEY` the Google branch below could never be taken, so the
+ * canonical `video_generation` slot model (`veo-3.1`, a GOOGLE model) silently
+ * fell through to Runway — a request for Veo was answered by Gen-4 with no
+ * error and no log. Keep in sync with that map.
+ */
+const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
+
+function getGoogleApiKey(): string | undefined {
+  for (const key of GOOGLE_API_KEY_ENV_KEYS) {
+    const value = process.env[key];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
  * Determine which provider to use
  */
 function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
   if (requestedProvider === 'runway' && process.env['RUNWAY_API_KEY']) {
     return 'runway';
   }
-  if (requestedProvider === 'google' && process.env['GOOGLE_API_KEY']) {
+  if (requestedProvider === 'google' && getGoogleApiKey()) {
     return 'google';
   }
 
@@ -122,9 +143,9 @@ function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
   // back to the other configured adapter. Provider preference is product
   // policy and must not be duplicated in this route.
   const slotProvider = getModelMetadataById(getRoutingSlotModel('video_generation'))?.provider;
-  if (slotProvider === 'google' && process.env['GOOGLE_API_KEY']) return 'google';
+  if (slotProvider === 'google' && getGoogleApiKey()) return 'google';
   if (slotProvider === 'runway' && process.env['RUNWAY_API_KEY']) return 'runway';
-  if (process.env['GOOGLE_API_KEY']) return 'google';
+  if (getGoogleApiKey()) return 'google';
   if (process.env['RUNWAY_API_KEY']) return 'runway';
 
   throw createError.serviceUnavailable(
@@ -292,9 +313,11 @@ async function generateWithGoogleVeo(
   resolution: VideoResolution,
   model: ModelMetadata,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
-  const apiKey = process.env['GOOGLE_API_KEY'];
+  const apiKey = getGoogleApiKey();
   if (!apiKey) {
-    throw createError.serviceUnavailable('Google Veo API not configured');
+    throw createError.serviceUnavailable(
+      `Google Veo API not configured. Set one of: ${GOOGLE_API_KEY_ENV_KEYS.join(', ')}.`,
+    );
   }
 
   const providerModelId = model.apiModelId ?? model.id;
@@ -314,7 +337,14 @@ async function generateWithGoogleVeo(
       ],
       parameters: {
         aspectRatio: '16:9',
-        durationSeconds: String(durationSecs),
+        // NUMBER, not a string. This was `String(durationSecs)`, and the live
+        // API rejects that outright:
+        //   400 INVALID_ARGUMENT — "The value type for `durationSeconds` needs
+        //   to be a number. Please adjust your request accordingly."
+        // Verified against veo-3.1-lite-generate-preview on 2026-08-06: the
+        // string form 400s, the numeric form returns 200 with an operation
+        // name. Every Google video generation failed before this.
+        durationSeconds: durationSecs,
         resolution,
         numberOfVideos: 1,
         enhancePrompt: true,
@@ -617,10 +647,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     },
   });
 
-  // Store task_id → user_id mapping in-process memory with TTL for ownership verification.
-  // This allows the status endpoint to verify the requesting user owns the task.
-  // In a distributed/serverless deployment, replace with Redis or Neon persistence.
-  storeVideoTask(taskId, userId);
+  // Store task_id → user_id with TTL so the status endpoint can verify the
+  // requesting user owns the task. Durable (Redis) so polling works regardless
+  // of which serverless instance the follow-up request lands on.
+  await storeVideoTask(taskId, userId);
 
   logger.info(
     { userId: userId, provider, taskId, estimatedCostCents },

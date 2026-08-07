@@ -61,6 +61,9 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
@@ -105,6 +108,11 @@ export default function ChatTabScreen() {
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
+  const beginVideoGeneration = useChatStore((s) => s.beginVideoGeneration);
+  const updateVideoGenerationProgress = useChatStore((s) => s.updateVideoGenerationProgress);
+  const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
+  const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
+  const mediaMode = useChatViewStore((s) => s.mediaMode);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
@@ -248,6 +256,59 @@ export default function ChatTabScreen() {
         // Same value the SendPreview disclosure above the composer describes.
         if (!modelForSend) return false;
         const trimmed = text.trim();
+
+        // Video is checked BEFORE image: in Video mode every send is a video
+        // request, and the image classifier would otherwise claim prompts that
+        // merely sound visual.
+        const videoRequest = resolveMobileVideoGenerationRequest({
+          executionMode: activeMode,
+          text: trimmed,
+          mediaMode,
+          subscriptionTier,
+          isClerkSignedIn,
+          ownerId: clerkUserId,
+          grantedCapabilities,
+          isOnline,
+        });
+        if (videoRequest.status === 'blocked') {
+          Alert.alert(videoRequest.alert.title, videoRequest.alert.message);
+          return false;
+        }
+        if (videoRequest.status === 'ready') {
+          const title =
+            videoRequest.prompt.length > 40
+              ? videoRequest.prompt.slice(0, 40).trim() + '...'
+              : videoRequest.prompt;
+          const conversationId = await createConversation(title);
+          router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+
+          const videoTurn = runVideoGenerationTurn({
+            conversationId,
+            displayText: trimmed,
+            prompt: videoRequest.prompt,
+            model: videoRequest.model,
+            ownerId: videoRequest.ownerId,
+            begin: beginVideoGeneration,
+            progress: updateVideoGenerationProgress,
+            complete: completeVideoGeneration,
+            fail: failVideoGeneration,
+            remove: deleteMessage,
+            onPaywall: (error) => {
+              setPaywallError({
+                feature: error.feature,
+                requiredTier: error.requiredTier,
+                reason: error.reason,
+              });
+            },
+            onUnexpectedError: (error) => {
+              console.warn('[ChatTabScreen] Video generation failed:', error);
+            },
+          });
+          if (dispatchOptions?.awaitCompletion) await videoTurn;
+          else void videoTurn;
+          return true;
+        }
+
         const imageRequest = resolveMobileImageGenerationRequest({
           executionMode: activeMode,
           text: trimmed,
@@ -353,6 +414,11 @@ export default function ChatTabScreen() {
       beginImageGeneration,
       completeImageGeneration,
       failImageGeneration,
+      beginVideoGeneration,
+      updateVideoGenerationProgress,
+      completeVideoGeneration,
+      failVideoGeneration,
+      mediaMode,
       deleteMessage,
       setPaywallError,
       setSendError,

@@ -51,9 +51,15 @@ module.exports = {
   devices: {
     'ios.sim': {
       type: 'ios.simulator',
-      device: {
-        type: process.env.DETOX_IOS_DEVICE || 'iPhone 17 Pro',
-      },
+      // `DETOX_IOS_UDID` pins a SPECIFIC simulator; `DETOX_IOS_DEVICE` selects by
+      // device-type name. The UDID form matters when the run has to attach to a
+      // simulator that already holds state — a signed-in Cloud session, an
+      // installed local model — because selecting by type picks whichever
+      // matching simulator Detox finds first, which may be a different, empty
+      // one when several "iPhone 17 Pro" devices exist.
+      device: process.env.DETOX_IOS_UDID
+        ? { id: process.env.DETOX_IOS_UDID }
+        : { type: process.env.DETOX_IOS_DEVICE || 'iPhone 17 Pro' },
     },
     'android.emu': {
       type: 'android.emulator',

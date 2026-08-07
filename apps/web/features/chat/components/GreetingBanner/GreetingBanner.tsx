@@ -1,61 +1,28 @@
 'use client';
 
 /**
- * GreetingBanner · time-aware greeting with suggestion chips for the chat
- * empty state (rendered by ChatMessageList when messages.length === 0).
+ * GreetingBanner · time-aware greeting for the chat empty state (rendered by
+ * ChatMessageList when messages.length === 0).
  *
  * Design:
- *   1. Sparkle icon · amber accent, small
+ *   1. AGI brand mark
  *   2. Greeting headline · serif display font, time-aware (morning / afternoon / evening)
- *   3. Subtext line · muted secondary copy
- *   4. Suggestion chips · pre-fill the composer text on click
+ *
+ * The six quick-start suggestion chips were removed here and on mobile and
+ * desktop (founder 2026-08-06): the empty state is the mark and the greeting,
+ * nothing else.
  *
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */
 
-import { Code2, Film, Image as ImageIcon, Monitor, PenLine, Search } from 'lucide-react';
-import {
-  QUICK_START_INTENTS,
-  quickStartIntentLabel,
-  quickStartIntentPrompt,
-  type QuickStartIntent,
-} from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useGreeting } from './useGreeting';
 
-interface SuggestionChip {
-  label: string;
-  prompt: string;
-  icon: React.ReactNode;
-}
-
-/**
- * Icons are per-surface (they are React nodes); the labels and composer stems
- * come from the shared vocabulary so web, desktop and mobile stop introducing
- * the product with three different sets of starting points.
- *
- * Web PREFILLS rather than toggling a mode: its chat store is separate from
- * unified-chat's, so rendering desktop's mode-toggling QuickChips here would
- * flip a store this surface never reads — a chip that looks live and does
- * nothing. Shared words, surface-appropriate action.
- */
-const INTENT_ICONS: Record<QuickStartIntent, React.ReactNode> = {
-  code: <Code2 size={13} />,
-  write: <PenLine size={13} />,
-  research: <Search size={13} />,
-  image: <ImageIcon size={13} />,
-  video: <Film size={13} />,
-  computer: <Monitor size={13} />,
-};
-
-const CHIPS: SuggestionChip[] = QUICK_START_INTENTS.map((intent) => ({
-  label: quickStartIntentLabel(intent),
-  prompt: quickStartIntentPrompt(intent),
-  icon: INTENT_ICONS[intent],
-}));
-
 interface GreetingBannerProps {
-  /** Called when the user clicks a suggestion chip. */
+  /**
+   * Retained so callers need no change and a future empty-state action has a
+   * hook; nothing in this component sends today.
+   */
   onSendMessage?: (prompt: string) => void;
   /**
    * Whether a turn is actually in flight. The mark spins ONLY then.
@@ -68,7 +35,7 @@ interface GreetingBannerProps {
   busy?: boolean;
 }
 
-export function GreetingBanner({ onSendMessage, busy = false }: GreetingBannerProps) {
+export function GreetingBanner({ busy = false }: GreetingBannerProps) {
   const { headline } = useGreeting();
 
   return (
@@ -100,37 +67,8 @@ export function GreetingBanner({ onSendMessage, busy = false }: GreetingBannerPr
         {headline}
       </h1>
 
-      {/* Suggestion chips */}
-      {onSendMessage && (
-        <div className="flex flex-wrap justify-center gap-2 pt-1">
-          {CHIPS.map((chip) => (
-            <button
-              key={chip.label}
-              type="button"
-              onClick={() => onSendMessage(chip.prompt)}
-              className="inline-flex items-center gap-1.5 h-[34px] px-3 rounded-full text-[13px] border transition-colors"
-              style={{
-                borderColor: 'var(--chat-border)',
-                background: 'var(--chat-surface-base)',
-                color: 'var(--chat-text-secondary)',
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = 'var(--chat-surface-hover)';
-                el.style.color = 'var(--chat-text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = 'var(--chat-surface-base)';
-                el.style.color = 'var(--chat-text-secondary)';
-              }}
-            >
-              {chip.icon}
-              {chip.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Suggestion chips were removed on every surface (founder 2026-08-06).
+          The empty state is the brand mark and the greeting — nothing else. */}
     </div>
   );
 }
