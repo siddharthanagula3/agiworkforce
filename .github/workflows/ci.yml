@@ -266,6 +266,27 @@ jobs:
         # last known-good bindings used by downstream packages.
         run: pnpm check:protocol-types
 
+      - name: Reclaim runner disk before the native build
+        if: steps.scope.outputs.native == 'true'
+        # The sidecar build died with
+        #   rustc-LLVM ERROR: IO failure on output stream: No space left on device
+        # Building the desktop lib drags in the whole native tree — openssl,
+        # aws-lc, libgit2, libsodium, sqlite — and `--profile debug` compiles it
+        # all with -C debuginfo=2, which is what fills the volume. The error is
+        # about the runner's disk, not about the code.
+        #
+        # None of the toolchains removed here are used by this job: no .NET, no
+        # Android (the mobile E2E job runs on its own macOS runner), no GHC, no
+        # CodeQL. Each job gets a fresh runner, so this cannot affect the others.
+        # `df -h` is printed on both sides so the next disk failure is legible
+        # instead of arriving as a bare LLVM IO error.
+        run: |
+          echo "--- before ---"; df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          echo "--- after ---"; df -h /
+
       - name: Build native messaging host sidecar
         if: steps.scope.outputs.native == 'true'
         run: pnpm exec turbo run build:native-host --filter=@agiworkforce/desktop -- --profile debug
