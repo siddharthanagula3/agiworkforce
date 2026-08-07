@@ -151,4 +151,12 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleDuplicateProject));
-export const OPTIONS = handleCorsPreflightRequest;
+// Not `export const OPTIONS = handleCorsPreflightRequest`. That helper's second
+// parameter is a `requireOrigin` boolean, but Next 16 types a route handler's
+// second parameter as the route context (`{ params: Promise<{ id: string }> }`),
+// so exporting it directly fails the typed-route constraint — and it can return
+// null, where a handler must always return a Response. `tsc --noEmit` does not
+// run that check; only `next build` does.
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
