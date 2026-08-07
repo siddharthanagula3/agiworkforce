@@ -312,6 +312,7 @@ export default function ChatTabScreen() {
         const imageRequest = resolveMobileImageGenerationRequest({
           executionMode: activeMode,
           text: trimmed,
+          mediaMode,
           selection: modelForSend,
           subscriptionTier,
           hasAttachments: Boolean(attachments?.length),

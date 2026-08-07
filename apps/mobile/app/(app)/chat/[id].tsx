@@ -431,6 +431,7 @@ export default function ChatScreen() {
       const imageRequest = resolveMobileImageGenerationRequest({
         executionMode: conversationExecutionMode,
         text: trimmedInput,
+        mediaMode,
         selection: selectedModel,
         subscriptionTier,
         hasAttachments: Boolean(attachments?.length),

@@ -45,9 +45,22 @@ import type {
 /** Slash-prefixed image generation commands (`/image`, `/imagine`, …). */
 const RE_IMAGE_SLASH = /^\/(image|imagine|draw|generate)\b/i;
 
-/** Natural-language image generation phrases ("make an image of …"). */
+/**
+ * Natural-language image generation phrases ("make an image of …").
+ *
+ * A generation verb alone is deliberately NOT enough — the phrase has to name a
+ * visual medium. "Create a plan", "generate the quarterly report" and "make a
+ * function" all lead with the same verbs, and routing those to an image model
+ * would be both wrong and billable. The noun list is the whole guard, so it is
+ * extended by adding media nouns rather than by loosening the verb side.
+ *
+ * The nouns beyond the original seven (artwork through wallpaper) cover the
+ * vocabulary people actually use for image requests; without them a prompt like
+ * "draw a portrait of a fox" fell through to a text model and came back as
+ * prose describing the picture it did not draw.
+ */
 const RE_IMAGE_PHRASE =
-  /\b(generate|create|make|draw)\s+(an?\s+)?(image|picture|photo|illustration|logo|mockup|wireframe)/i;
+  /\b(generate|create|make|draw)\s+(me\s+)?(an?\s+|some\s+)?(\w+\s+){0,2}(image|picture|photo|photograph|illustration|logo|mockup|wireframe|artwork|drawing|painting|sketch|portrait|poster|banner|avatar|thumbnail|wallpaper)\b/i;
 
 /** Computer-use automation verbs that signal browser / desktop control. */
 const RE_COMPUTER_USE = /\b(click|navigate|fill|submit|automate)\b/i;
