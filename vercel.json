@@ -52,7 +52,7 @@
     },
     {
       "path": "/api/cron/run-schedules",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/cron/reclaim-sandboxes",
@@ -68,7 +68,7 @@
     },
     {
       "path": "/api/cron/expire-support-handoffs",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
