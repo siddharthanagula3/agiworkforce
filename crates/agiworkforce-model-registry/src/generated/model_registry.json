@@ -578,6 +578,57 @@
         "deprecated": false
       },
       "evidenceRefs": []
+    },
+    "veo-3.1-lite": {
+      "identity": {
+        "key": "veo-3.1-lite",
+        "displayName": "Veo 3.1 Lite",
+        "provider": "google",
+        "providerModelId": "veo-3.1-lite-generate-preview",
+        "kind": "video"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-omni-flash-preview": {
+      "identity": {
+        "key": "gemini-omni-flash-preview",
+        "displayName": "Gemini Omni Flash",
+        "provider": "google",
+        "providerModelId": "gemini-omni-flash-preview",
+        "kind": "video"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "preview",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-3.5-live-translate-preview": {
+      "identity": {
+        "key": "gemini-3.5-live-translate-preview",
+        "displayName": "Gemini 3.5 Live Translate",
+        "provider": "google",
+        "providerModelId": "gemini-3.5-live-translate-preview",
+        "kind": "tts"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "preview",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
     }
   },
   "providerModelKeys": {
@@ -598,7 +649,10 @@
       "gemini-3.5-flash-lite",
       "gemini-3.1-flash-image",
       "gemini-3.6-flash",
-      "veo-3.1"
+      "veo-3.1",
+      "veo-3.1-lite",
+      "gemini-omni-flash-preview",
+      "gemini-3.5-live-translate-preview"
     ],
     "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
     "qwen": ["qwen-3.5-flash", "qwen-3.7-plus"],
@@ -889,6 +943,33 @@
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
+    },
+    "google/veo-3.1-lite": {
+      "modelKey": "veo-3.1-lite",
+      "provider": "google",
+      "providerModelId": "veo-3.1-lite-generate-preview",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-omni-flash-preview": {
+      "modelKey": "gemini-omni-flash-preview",
+      "provider": "google",
+      "providerModelId": "gemini-omni-flash-preview",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "preview",
+      "selectable": false
+    },
+    "google/gemini-3.5-live-translate-preview": {
+      "modelKey": "gemini-3.5-live-translate-preview",
+      "provider": "google",
+      "providerModelId": "gemini-3.5-live-translate-preview",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "preview",
+      "selectable": false
     }
   },
   "harnesses": {
@@ -1780,6 +1861,48 @@
       "structuredOutput": true,
       "functionCalling": true,
       "reasoning": true
+    },
+    "veo-3.1-lite": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "gemini-omni-flash-preview": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "gemini-3.5-live-translate-preview": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": true,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
     }
   },
   "pricing": {
@@ -1863,9 +1986,10 @@
     },
     "gemini-3.1-flash-image": {
       "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.039,
-      "outputPerMillion": 0
+      "unit": "per_image",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 60,
+      "imagePerImage": 0.067
     },
     "deepseek-v4-flash": {
       "currency": "USD",
@@ -2001,6 +2125,27 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 0.3,
       "outputPerMillion": 1.2
+    },
+    "veo-3.1-lite": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "videoPerSecond": 0.05,
+      "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
+    },
+    "gemini-omni-flash-preview": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 17.5,
+      "videoPerSecond": 0.1
+    },
+    "gemini-3.5-live-translate-preview": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 3.5,
+      "outputPerMillion": 21
     }
   },
   "limits": {
@@ -2069,7 +2214,10 @@
     "veo-3.1": { "contextTokens": 4000 },
     "gpt-4o-transcribe": { "contextTokens": 16000 },
     "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
-    "minimax-m3": { "contextTokens": 1000000 }
+    "minimax-m3": { "contextTokens": 1000000 },
+    "veo-3.1-lite": { "contextTokens": 4000 },
+    "gemini-omni-flash-preview": { "contextTokens": 4000 },
+    "gemini-3.5-live-translate-preview": { "contextTokens": 32000 }
   },
   "benchmarks": {
     "gpt-5.6-sol": {},
@@ -2108,7 +2256,10 @@
     "veo-3.1": {},
     "gpt-4o-transcribe": {},
     "gpt-4o-mini-transcribe": {},
-    "minimax-m3": {}
+    "minimax-m3": {},
+    "veo-3.1-lite": {},
+    "gemini-omni-flash-preview": {},
+    "gemini-3.5-live-translate-preview": {}
   },
   "evidence": [
     {
