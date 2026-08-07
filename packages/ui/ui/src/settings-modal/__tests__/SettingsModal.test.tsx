@@ -137,11 +137,18 @@ describe('SettingsModal nav (web IA)', () => {
     expect(within(nav).queryByText('Customize')).toBeNull();
     expect(SETTINGS_NAV_GROUPS_WEB).toHaveLength(1);
     expect(SETTINGS_NAV_GROUPS_WEB[0]?.label).toBeUndefined();
-    // Skills/Connectors/Plugins come AFTER the core settings items.
+    // Skills/Connectors/Plugins come AFTER the core settings items, as one
+    // contiguous run. This used to assert `keys.slice(-3)`, which pinned the
+    // trio to the literal END of the list and so failed the moment Help was
+    // added below them — position, not the invariant it meant to protect.
     const keys = SETTINGS_NAV_GROUPS_WEB[0]!.items.map((i) => i.key);
     expect(keys).toContain('reflect');
     expect(keys).toContain('time-focus');
-    expect(keys.slice(-3)).toEqual(['skills', 'connectors', 'plugins']);
+    const customizeRun = keys.indexOf('skills');
+    expect(customizeRun).toBeGreaterThan(keys.indexOf('time-focus'));
+    expect(keys.slice(customizeRun, customizeRun + 3)).toEqual(['skills', 'connectors', 'plugins']);
+    // Help is the last entry — it is a link-out, not a settings surface.
+    expect(keys[keys.length - 1]).toBe('help');
   });
 
   it('closes on Escape', () => {
@@ -155,6 +162,46 @@ describe('SettingsModal nav (web IA)', () => {
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     fireEvent.click(within(nav).getByRole('button', { name: 'Skills' }));
     expect(onSectionChange).toHaveBeenCalledWith('skills');
+  });
+});
+
+/**
+ * Nav attention badges. `/api/connectors` has always reported which OAuth
+ * grants expired, but nothing outside the Connectors page read it — a
+ * connector could stop working and the only way to find out was to open that
+ * page and scroll to the right row.
+ */
+describe('SettingsModal nav badges', () => {
+  it('renders no badge when nothing needs attention', () => {
+    renderModal();
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    // Exact-name match: a badge would make the accessible name "Connectors 2".
+    expect(within(nav).getByRole('button', { name: 'Connectors' })).toBeTruthy();
+  });
+
+  it('marks the section and says what is wrong, not just a number', () => {
+    renderModal({
+      navBadges: { connectors: { count: 2, description: '2 connectors need to be reconnected' } },
+    });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    expect(within(nav).getByText('2')).toBeTruthy();
+    // "2" alone tells a screen-reader user nothing about what needs attention.
+    expect(within(nav).getByLabelText('2 connectors need to be reconnected')).toBeTruthy();
+  });
+
+  it('caps the count so a long list cannot distort the nav row', () => {
+    renderModal({
+      navBadges: { connectors: { count: 42, description: '42 connectors need to be reconnected' } },
+    });
+    expect(screen.getByText('9+')).toBeTruthy();
+  });
+
+  it('renders nothing for a zero count', () => {
+    renderModal({ navBadges: { connectors: { count: 0, description: 'nothing' } } });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'Connectors' })).toBeTruthy();
+    expect(within(nav).queryByText('0')).toBeNull();
   });
 });
 

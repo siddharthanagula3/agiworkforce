@@ -150,11 +150,15 @@ export async function loadProjectContext(
       summary: string | null;
       extracted_text: string | null;
     }>(
+      // The superseded_at filter matters most HERE: this is the query that
+      // feeds the model. Without it, re-uploading a corrected file left the
+      // stale version in the prompt alongside the correction, so the model saw
+      // two contradictory copies of the same document.
       `select file_name,
               summary,
               to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text
          from project_knowledge_files
-        where project_id = $1 and deleted_at is null
+        where project_id = $1 and deleted_at is null and superseded_at is null
         order by added_at desc
         limit ${MAX_KNOWLEDGE_FILES}`,
       [params.projectId],

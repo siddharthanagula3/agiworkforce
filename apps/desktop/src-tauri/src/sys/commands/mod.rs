@@ -1,7 +1,6 @@
 pub mod agent;
 pub mod agent_context;
 pub mod agi;
-pub mod agi_checkpoint;
 pub mod analytics;
 pub mod api;
 pub mod artifacts;
@@ -53,7 +52,6 @@ pub mod interactive;
 pub mod knowledge;
 pub mod llm;
 pub mod lsp;
-pub mod marketplace;
 pub mod master_password;
 pub mod mcp;
 pub mod mcp_extensions;
@@ -122,7 +120,6 @@ pub use agent_context::{
     try_get_command_name, try_get_conversation_id, try_get_request_id, CommandContext, COMMAND_CTX,
 };
 pub use agi::*;
-pub use agi_checkpoint::*;
 pub use analytics::*;
 pub use api::*;
 pub use artifacts::*;
@@ -172,7 +169,6 @@ pub use intent::*;
 pub use knowledge::*;
 pub use llm::*;
 pub use lsp::*;
-pub use marketplace::*;
 pub use master_password::*;
 pub use mcp::*;
 pub use mcp_extensions::*;

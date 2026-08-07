@@ -147,6 +147,54 @@ function formatUsageReset(value: string | null): string {
   }).format(date)}`;
 }
 
+/**
+ * Help destinations for the desktop cloud shell. Same pages the web Help
+ * section links to; opened in the user's browser because they are hosted, not
+ * device-local.
+ */
+const CLOUD_HELP_LINKS: readonly { href: string; label: string; description: string }[] = [
+  { href: '/docs', label: 'Documentation', description: 'Guides for every surface.' },
+  { href: '/help', label: 'Help center', description: 'Answers to common questions.' },
+  { href: '/support', label: 'Contact support', description: 'Reach a person about your account.' },
+  { href: '/changelog', label: 'Release notes', description: 'What shipped, and when.' },
+  { href: '/status', label: 'System status', description: 'Current managed-service availability.' },
+  { href: '/legal', label: 'Legal', description: 'Terms, privacy, and related documents.' },
+];
+
+/** Resolve a hosted settings path against the web app origin and open it. */
+async function openExternalHelpLink(href: string): Promise<void> {
+  const url = new URL(href, WEB_APP_URL);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+  await openExternalUrl(url.toString());
+}
+
+function CloudHelpLinks() {
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-semibold">Help</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Documentation, support, and service status.
+        </p>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {CLOUD_HELP_LINKS.map(({ href, label, description }) => (
+          <li key={href}>
+            <button
+              type="button"
+              onClick={() => void openExternalHelpLink(href)}
+              className="w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
+            >
+              <span className="block text-sm font-medium">{label}</span>
+              <span className="block text-xs text-muted-foreground">{description}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
     ...group,
@@ -1035,6 +1083,11 @@ export function DesktopCloudSettingsModal({
           <LazyCloudSafety />
         </Suspense>
       ),
+      // Help mirrors web's Help section: the desktop cloud shell is the same
+      // Managed Cloud plane, so the same documentation, support, status, and
+      // legal destinations apply. Rendered as external links because these are
+      // hosted pages, not device surfaces.
+      help: <CloudHelpLinks />,
       // Archived chats and shared links are conversation-data surfaces web
       // reaches from its Privacy section rather than from the settings nav.
       // Desktop could already publish a share (DesktopShellV3 calls

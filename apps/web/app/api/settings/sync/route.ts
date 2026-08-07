@@ -43,8 +43,8 @@ export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
   'personalization',
   'profile',
   // PER-9: `general` is the namespace Settings → General ACTUALLY writes
-  // (display/preferred name, work description, custom instructions, chat font,
-  // voice). It was missing here, so `filterCloudSafeSettings` silently dropped
+  // (display/preferred name, work description, custom instructions, chat font).
+  // It was missing here, so `filterCloudSafeSettings` silently dropped
   // it in BOTH directions while the UI said "Synced to your account". Nothing
   // in it is a secret or device-specific: it is the profile identity every
   // surface reads via `lib/server/user-identity.ts`. The fail-closed design was

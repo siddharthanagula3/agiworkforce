@@ -76,6 +76,10 @@ describe('ResearchReportView', () => {
     expect(screen.getByText('Node 24 is the active LTS line.')).toBeInTheDocument();
     expect(screen.getByText('v24.18.0 is LTS')).toBeInTheDocument();
     expect(screen.getByTestId('research-report-content')).toHaveTextContent('Node 24 is LTS [1]');
+    // Regression: the body was rendered with `whitespace-pre-wrap`, so a saved
+    // report showed literal markdown syntax instead of formatting.
+    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByTestId('research-report-content')).not.toHaveTextContent('## Overview');
     expect(screen.getByText('nodejs.org releases')).toBeInTheDocument();
     expect(screen.getByText('2 sources · 45s')).toBeInTheDocument();
   });

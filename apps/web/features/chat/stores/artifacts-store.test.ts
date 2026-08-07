@@ -81,6 +81,56 @@ describe('chat artifacts sidecar store', () => {
     ]);
   });
 
+  // Regression: version browsing shipped read-only on web — a user could page
+  // back to an earlier revision and had no way to act on it, while desktop
+  // already had rollback.
+  describe('restoreArtifactVersion', () => {
+    const base = {
+      id: 'artifact-restore',
+      type: 'html' as const,
+      title: 'Preview',
+      language: 'html',
+      messageId: 'msg-restore',
+      conversationId: 'conv-restore',
+    };
+
+    function seedThreeVersions() {
+      const store = useArtifactsStore.getState();
+      store.upsertArtifact({ ...base, content: '<main>one</main>' });
+      store.upsertArtifact({ ...base, content: '<main>two</main>' });
+      store.upsertArtifact({ ...base, content: '<main>three</main>' });
+    }
+
+    it('appends the restored content as the new latest version', () => {
+      seedThreeVersions();
+
+      expect(useArtifactsStore.getState().restoreArtifactVersion(base.id, 0)).toBe(true);
+
+      const state = useArtifactsStore.getState();
+      expect(state.artifacts.find((a) => a.id === base.id)?.content).toBe('<main>one</main>');
+      // History is preserved, not rewound: the intervening versions survive and
+      // the restore is recorded as a new one.
+      expect(state.getArtifactVersions(base.id).map((v) => v.content)).toEqual([
+        '<main>one</main>',
+        '<main>two</main>',
+        '<main>three</main>',
+        '<main>one</main>',
+      ]);
+    });
+
+    it('is a no-op for an unknown index or content that is already current', () => {
+      seedThreeVersions();
+      const before = useArtifactsStore.getState().getArtifactVersions(base.id).length;
+
+      expect(useArtifactsStore.getState().restoreArtifactVersion(base.id, 99)).toBe(false);
+      // Index 2 is the current content.
+      expect(useArtifactsStore.getState().restoreArtifactVersion(base.id, 2)).toBe(false);
+      expect(useArtifactsStore.getState().restoreArtifactVersion('missing-id', 0)).toBe(false);
+
+      expect(useArtifactsStore.getState().getArtifactVersions(base.id).length).toBe(before);
+    });
+  });
+
   it('scopes artifacts to their conversationId via addArtifactForMessage', () => {
     const store = useArtifactsStore.getState();
 

@@ -271,6 +271,60 @@ impl ToolExecutor {
         }
     }
 
+    /// Edit an existing spreadsheet in place, preserving its current data.
+    ///
+    /// Only Excel gets an edit tool. `WordEditor` cannot parse an existing
+    /// .docx and would silently replace the document with just the edits — see
+    /// docs/adr/wire-or-cut.md.
+    pub(crate) async fn execute_document_edit_excel_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if self.app_handle.is_none() {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            });
+        }
+
+        use crate::sys::commands::document::document_edit_excel;
+
+        let file_path = args
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing file_path parameter"))?
+            .to_string();
+
+        // Default to editing in place, which is what "edit this spreadsheet"
+        // means to a user. An explicit output_path writes a copy instead.
+        let output_path = args
+            .get("output_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&file_path)
+            .to_string();
+
+        let edits_value = args
+            .get("edits")
+            .ok_or_else(|| anyhow!("Missing edits parameter"))?;
+        let edits = serde_json::from_value(edits_value.clone())
+            .map_err(|e| anyhow!("Invalid edits payload: {}", e))?;
+
+        match document_edit_excel(file_path, output_path.clone(), edits).await {
+            Ok(path) => {
+                created_document_tool_result(path, "xlsx", GeneratedDocumentKind::Xlsx, tool_id)
+            }
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": format!("Failed to edit Excel document: {}", e), "success": false }),
+                error: Some(format!("Failed to edit Excel document: {}", e)),
+                metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+            }),
+        }
+    }
+
     pub(crate) async fn execute_document_create_pdf_tool(
         &self,
         args: &HashMap<String, Value>,

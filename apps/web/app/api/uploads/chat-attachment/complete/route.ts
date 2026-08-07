@@ -7,7 +7,14 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getObject, isObjectStorageConfigured, publicUrlForKey } from '@/lib/server/object-storage';
+import {
+  deleteObject,
+  getObject,
+  isObjectStorageConfigured,
+  publicUrlForKey,
+} from '@/lib/server/object-storage';
+import { scanUploadBytes } from '@/lib/security/upload-scan';
+import { logger } from '@/lib/logger';
 import { getMediaAssetByStoragePathname, insertMediaAsset } from '@/lib/server/media-assets';
 import {
   isChatImageMimeType,
@@ -85,6 +92,38 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   const storedContentType = object.contentType?.split(';', 1)[0]?.trim().toLowerCase();
   if (storedContentType && storedContentType !== mimeType.trim().toLowerCase()) {
     throw createError.validation('Uploaded file type does not match the selected file.');
+  }
+
+  // Inspect the actual BYTES. Every check before this point trusts the client's
+  // claims about the file; this is the first one that opens it. Catches
+  // type-confusion polyglots, disguised executables, script-bearing SVGs, and
+  // auto-executing PDFs.
+  //
+  // On a finding the object is DELETED, not merely unregistered: R2 is a public
+  // bucket, so the bytes are already reachable at their storage URL and leaving
+  // them there would keep them served forever. Deleting shrinks the exposure to
+  // the seconds between the client's PUT and this handler. Closing it entirely
+  // is the private-bucket decision recorded in known-flaws.md.
+  const scan = await scanUploadBytes(object.data, mimeType);
+  if (!scan.ok) {
+    logger.warn(
+      { userId, storageKey, fileName, findings: scan.findings },
+      '[uploads] rejected an attachment that failed content inspection',
+    );
+    try {
+      await deleteObject(storageKey);
+    } catch (deleteError) {
+      // Loud: the file stays publicly reachable until it is removed by hand.
+      logger.error(
+        { err: deleteError, userId, storageKey },
+        '[uploads] CRITICAL: could not delete a rejected upload from public storage',
+      );
+    }
+    // Deliberately generic for the uploader: the specific detector that fired
+    // is an oracle for tuning an evasion against, and it is already logged.
+    throw createError.validation(
+      'This file could not be attached because its contents failed a safety check.',
+    );
   }
 
   const id = await insertMediaAsset({

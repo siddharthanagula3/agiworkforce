@@ -49,6 +49,20 @@ async function handleGetConversations(request: NextRequest) {
   if (!['include', 'only', 'exclude'].includes(archivedFilter)) {
     throw createError.validation('Invalid archived filter');
   }
+  /**
+   * Deleted conversations are SOFT-deleted (`deleted_at`) and nothing purges
+   * them — there is no conversation equivalent of `purge-deleted-media`. They
+   * were simply unreachable: every read filtered `deleted_at is null`, so a
+   * mis-click was permanent from the user's point of view while the rows sat
+   * in the table indefinitely.
+   *
+   * `only` surfaces exactly those rows so they can be restored. It is opt-in,
+   * so no existing caller changes behaviour.
+   */
+  const deletedFilter = url.searchParams.get('deleted') ?? 'exclude';
+  if (!['exclude', 'only'].includes(deletedFilter)) {
+    throw createError.validation('Invalid deleted filter');
+  }
 
   // Offset-based pagination so the sidebar can page past the most-recent 50
   // conversations instead of having anything older become unreachable.
@@ -60,7 +74,8 @@ async function handleGetConversations(request: NextRequest) {
 
   try {
     const db = getNeonChatDb();
-    const where = ['user_id = $1', 'deleted_at is null'];
+    const where = ['user_id = $1'];
+    where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
     const params: unknown[] = [userId];
     if (projectId) {
       params.push(projectId);
@@ -85,7 +100,7 @@ async function handleGetConversations(request: NextRequest) {
     const [rows, historyStatsRows] = await Promise.all([
       db.query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at
           from web_conversations
           where ${where.join(' and ')}
           order by pinned desc, updated_at desc

@@ -2,6 +2,8 @@
 
 import { MemoryEditor } from '@agiworkforce/unified-chat';
 
+import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
+
 export function MemorySection() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -22,6 +24,10 @@ export function MemorySection() {
           and synced to your account across devices when you&apos;re signed in.
         </p>
       </div>
+
+      {/* Exclusions sit ABOVE the memory list: the rule that governs what gets
+          saved is more useful before you read what was. */}
+      <MemoryExclusions />
 
       <section
         style={{

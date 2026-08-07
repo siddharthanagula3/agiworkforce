@@ -319,6 +319,7 @@ export {
 export {
   SettingsModal,
   type SettingsModalProps,
+  type SettingsNavBadge,
   ConnectorLogo,
   type ConnectorLogoProps,
   type SettingsDataAdapter,

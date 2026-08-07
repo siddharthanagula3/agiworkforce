@@ -20,6 +20,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Download, ExternalLink, Telescope, TriangleAlert } from 'lucide-react';
 import type { Citation, ResearchReport } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
+import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
@@ -243,11 +244,16 @@ export function ResearchReportView({ report, onClose, exportService }: ResearchR
           </section>
         )}
 
+        {/*
+          The stored body is markdown, so it goes through the same renderer the
+          chat transcript uses. Rendering it as preformatted text showed saved
+          reports as literal `##`, `**`, and `[text](url)` syntax.
+        */}
         <article
-          className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+          className="text-sm leading-relaxed text-foreground"
           data-testid="research-report-content"
         >
-          {report.content}
+          <MarkdownContent content={report.content} />
         </article>
 
         {report.citations.length > 0 && (

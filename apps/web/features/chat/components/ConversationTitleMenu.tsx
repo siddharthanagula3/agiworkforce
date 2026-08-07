@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import { ChevronDown, Pencil, Trash2, FolderInput } from 'lucide-react';
+import { ChevronDown, GitFork, Pencil, Printer, Trash2, FolderInput } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,15 @@ export interface ConversationTitleMenuProps {
   onMoveToProject?: (projectId: string) => void;
   /** Delete the conversation (caller confirms). */
   onDelete: () => void;
+  /** Print the transcript. Omit to hide the item. */
+  onPrint?: () => void;
+  /**
+   * Fork the whole conversation into a new one branched from its last message.
+   * Omit to hide the item. The per-message "Branch conversation" action in
+   * MessageBubble already covers branching from an arbitrary point; this is the
+   * conversation-level entry point that had no UI.
+   */
+  onFork?: () => void;
 }
 
 export function ConversationTitleMenu({
@@ -47,6 +56,8 @@ export function ConversationTitleMenu({
   onRename,
   onMoveToProject,
   onDelete,
+  onFork,
+  onPrint,
 }: ConversationTitleMenuProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -120,6 +131,18 @@ export function ConversationTitleMenu({
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+            )}
+            {onPrint && (
+              <DropdownMenuItem onSelect={() => onPrint()}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </DropdownMenuItem>
+            )}
+            {onFork && (
+              <DropdownMenuItem onSelect={() => onFork()}>
+                <GitFork className="mr-2 h-4 w-4" />
+                Duplicate as branch
+              </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -169,28 +169,18 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({
                 )}
               />
 
-              <FormField
-                control={systemForm.control}
-                name="retention_period"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Data Retention (days)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 30)}
-                        className="border-border bg-background text-foreground"
-                        min={1}
-                        max={365}
-                      />
-                    </FormControl>
-                    <FormDescription>Between 1 and 365 days</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+              {/*
+                The "Data Retention (days)" input was REMOVED, not fixed.
+                It validated 1-365 and persisted, but `retention_period` had
+                zero consumers in `app/api` — nothing ever purged anything. A
+                user who set 30 days believed their conversations were being
+                deleted and they were not, which is a worse failure than having
+                no control at all.
+                Building the purge job instead would have meant silently
+                deleting user data on a retention policy nobody approved. Do not
+                re-add this input until a purge path exists and a retention
+                policy is signed off.
+              */}
               <FormField
                 control={systemForm.control}
                 name="max_concurrent_jobs"

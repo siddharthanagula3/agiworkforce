@@ -12,7 +12,9 @@ Shared browser automation primitives backed by Playwright Core.
 
 ## Consumers
 
-Chrome extension, Desktop, Web/managed experiments, and future computer-use adapters.
+Chrome extension only (`apps/extension`). No other workspace package depends on
+this one: Desktop browser automation is a separate Rust/CDP stack under
+`apps/desktop/src-tauri/src/automation/browser`, and Web does not use it at all.
 
 ## Public API / Exports
 

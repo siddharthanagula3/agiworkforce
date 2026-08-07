@@ -1,4 +1,4 @@
-export { SettingsModal, type SettingsModalProps } from './SettingsModal';
+export { SettingsModal, type SettingsModalProps, type SettingsNavBadge } from './SettingsModal';
 export { ConnectorLogo, type ConnectorLogoProps } from './ConnectorLogo';
 export type {
   SettingsDataAdapter,

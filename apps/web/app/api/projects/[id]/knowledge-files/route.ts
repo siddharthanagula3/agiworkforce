@@ -14,6 +14,11 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  getKnowledgeStorageLimitBytes,
+  getKnowledgeStorageLimitErrorMessage,
+} from '@/lib/services/free-plan-entitlements';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapKnowledgeFileRow } from '@/lib/projects';
@@ -71,7 +76,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   try {
     data = await db.query<Record<string, unknown>>(
       `select * from project_knowledge_files
-       where project_id = $1 and deleted_at is null
+       where project_id = $1 and deleted_at is null and superseded_at is null
        order by added_at desc`,
       [projectId],
     );
@@ -153,7 +158,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     const [countRow] = await db.query<{ count: number }>(
       `select count(*)::int as count
          from project_knowledge_files
-        where project_id = $1 and deleted_at is null`,
+        where project_id = $1 and deleted_at is null and superseded_at is null`,
       [projectId],
     );
     activeCount = countRow?.count ?? 0;
@@ -173,6 +178,94 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.conflict(
       `This project already has the maximum of ${MAX_KNOWLEDGE_FILES} knowledge files. Remove a file before adding another.`,
     );
+  }
+
+  // Duplicate detection.
+  //
+  // `checksum_sha256` was computed by the client, stored on the row, and passed
+  // to the extractor — but never COMPARED against anything, so re-uploading the
+  // same file created a second unrelated row. That silently consumed one of the
+  // project's file slots, doubled the text stuffed into the model's context,
+  // and made the file list confusing.
+  //
+  // Checked BEFORE extraction so a duplicate does not pay for the extraction
+  // work, and scoped to non-deleted rows so re-adding a file the user
+  // deliberately removed still works.
+  let duplicate: { id: string; file_name: string } | undefined;
+  try {
+    [duplicate] = await db.query<{ id: string; file_name: string }>(
+      `select id, file_name
+         from project_knowledge_files
+        where project_id = $1 and checksum_sha256 = $2 and deleted_at is null
+          and superseded_at is null
+        limit 1`,
+      [projectId, body.checksumSha256.trim()],
+    );
+  } catch (error) {
+    // A pre-migration table already produced a 503 from the count query above,
+    // so treat it as "cannot check" and fall through rather than failing the
+    // upload on a schema state the caller cannot fix.
+    if (!isSchemaNotReady(error)) throw error;
+  }
+  // Thrown OUTSIDE the try: a conflict must never be swallowed by the
+  // schema-not-ready branch above.
+  if (duplicate) {
+    throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
+  }
+
+  // Aggregate storage quota.
+  //
+  // A per-file byte cap and a 20-files-per-project count cap already existed,
+  // but nothing bounded TOTAL bytes — so spreading large files across projects
+  // held unbounded storage. Summed across all of the user's projects, because
+  // a per-project quota has the same hole.
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const storageLimitBytes = getKnowledgeStorageLimitBytes(subscription?.plan_tier);
+  if (storageLimitBytes !== null) {
+    let usedBytes = 0;
+    try {
+      const [usage] = await db.query<{ total: string | number | null }>(
+        `select coalesce(sum(k.byte_count), 0) as total
+           from project_knowledge_files k
+           join user_projects p on p.id = k.project_id
+          where p.user_id = $1 and k.deleted_at is null and k.superseded_at is null`,
+        [userId],
+      );
+      usedBytes = Number(usage?.total ?? 0);
+    } catch (error) {
+      // Pre-migration schema already 503s above; do not fail an upload on a
+      // state the caller cannot fix.
+      if (!isSchemaNotReady(error)) throw error;
+    }
+    if (usedBytes + body.byteCount > storageLimitBytes) {
+      throw createError.validation(
+        getKnowledgeStorageLimitErrorMessage(subscription?.plan_tier, storageLimitBytes),
+      );
+    }
+  }
+
+  // Version history.
+  //
+  // Same file name + DIFFERENT checksum is an EDIT, not a new file. Without
+  // this the old row stayed active, so the model saw both the stale and the
+  // corrected text, the 20-file budget was consumed twice, and nothing said
+  // which row was current. (Same name + same checksum is the duplicate case
+  // rejected above; the two rules are complementary.)
+  let supersedes: { id: string; version: number } | undefined;
+  try {
+    [supersedes] = await db.query<{ id: string; version: number }>(
+      `select id, version
+         from project_knowledge_files
+        where project_id = $1
+          and file_name = $2
+          and deleted_at is null
+          and superseded_at is null
+        order by version desc
+        limit 1`,
+      [projectId, body.fileName.trim()],
+    );
+  } catch (error) {
+    if (!isSchemaNotReady(error)) throw error;
   }
 
   let extractedText: string | null;
@@ -198,8 +291,8 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   try {
     const [inserted] = await db.query<Record<string, unknown>>(
       `insert into project_knowledge_files
-         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end)
+         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at, version, supersedes_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end, $11, $12)
        returning *`,
       [
         projectId,
@@ -212,10 +305,26 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         userId,
         body.storageUri.trim(),
         extractedText,
+        (supersedes?.version ?? 0) + 1,
+        supersedes?.id ?? null,
       ],
     );
     if (!inserted) throw new Error('No row returned');
     data = inserted;
+
+    // Retire the previous version only AFTER the replacement exists, so a
+    // failed insert can never leave the project with no active copy of the
+    // file. `superseded_at` is deliberately not `deleted_at`: the old row is
+    // retained as history, and conflating "replaced" with "user deleted it"
+    // would make restoring a version impossible.
+    if (supersedes) {
+      await db.query(
+        `update project_knowledge_files
+            set superseded_at = now()
+          where id = $1 and superseded_at is null`,
+        [supersedes.id],
+      );
+    }
   } catch (error) {
     if (isSchemaNotReady(error)) {
       return NextResponse.json(

@@ -78,7 +78,6 @@ export * as governance from './governance';
 
 // ---- Wave 6: Analytics, Marketplace, Skills, Notifications, Polish ----
 export * as analytics from './analytics';
-export * as marketplace from './marketplace';
 export * as notifications from './notifications';
 export * as canvas from './canvas';
 export * as skills from './skills';

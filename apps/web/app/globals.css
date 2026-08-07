@@ -1015,6 +1015,43 @@
     font-size: 13px;
   }
 
+  /* ── Transcript appearance preferences ──────────────────────────────────
+     Driven by data attributes stamped on <html> by
+     `shared/components/AppearancePreferences.tsx`. Kept in CSS rather than
+     threaded through the renderer so it reaches every prose body and fenced
+     block — including those inside artifacts and the shared markdown
+     component — without touching them.
+
+     'default' sets NO attribute, so the rules above stand unmodified. */
+
+  html[data-chat-text-size='small'] .prose {
+    font-size: 13.5px;
+  }
+  html[data-chat-text-size='large'] .prose {
+    font-size: 17px;
+  }
+
+  html[data-chat-text-size='small'] .code-block-body,
+  html[data-chat-text-size='small'] .code-block-body pre,
+  html[data-chat-text-size='small'] .code-block-body code {
+    font-size: 12px;
+  }
+  html[data-chat-text-size='large'] .code-block-body,
+  html[data-chat-text-size='large'] .code-block-body pre,
+  html[data-chat-text-size='large'] .code-block-body code {
+    font-size: 14.5px;
+  }
+
+  /* Wrapping trades the horizontal scrollbar for taller blocks. `break-word`
+     rather than `break-all` so identifiers stay readable, and `overflow-x`
+     is reset because a wrapped block has nothing to scroll. */
+  html[data-code-block-wrap='on'] .code-block-body pre {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow-x: visible;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .message-bubble {
       animation: none;
@@ -8198,5 +8235,61 @@
 
   .chat-composer-mode-in-menu {
     display: block !important;
+  }
+}
+
+/* ─── Print ─────────────────────────────────────────────────────────────────
+ *
+ * Printing a conversation produced the app chrome — sidebar, composer, floating
+ * controls — and a virtualized transcript that only contained the handful of
+ * rows currently in the DOM. There was no print action and no print stylesheet.
+ *
+ * `data-print-scope="transcript"` is set on <html> for the duration of the
+ * print by `printConversation()`, which also expands the virtual list first so
+ * the whole conversation is present to paint.
+ */
+@media print {
+  html[data-print-scope='transcript'] [data-print-hide],
+  html[data-print-scope='transcript'] aside,
+  html[data-print-scope='transcript'] nav,
+  html[data-print-scope='transcript'] [role='toolbar'],
+  html[data-print-scope='transcript'] [data-testid='chat-composer'] {
+    display: none !important;
+  }
+
+  html[data-print-scope='transcript'],
+  html[data-print-scope='transcript'] body {
+    /* Ink on paper, not the app's dark surface: printing a dark theme wastes
+       toner and renders light-on-white text unreadable. */
+    background: #fff !important;
+    color: #000 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  html[data-print-scope='transcript'] [data-testid='chat-message-list'] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Keep a message from being split across a page break mid-sentence. */
+  html[data-print-scope='transcript'] [data-message-id] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  html[data-print-scope='transcript'] pre,
+  html[data-print-scope='transcript'] blockquote {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    white-space: pre-wrap;
+  }
+
+  /* A printed page has no hover state, so a bare link is anonymous. */
+  html[data-print-scope='transcript'] a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.85em;
+    word-break: break-all;
   }
 }

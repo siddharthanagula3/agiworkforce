@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-07-18
+Last updated: 2026-08-06
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -87,7 +87,12 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 
 ## Competitive Baseline
 
-As of May 28, 2026, AGI's parity target is source-backed by official product docs plus the local Claude reference folder at `/Users/siddhartha/Desktop/claude_reference`.
+POINT-IN-TIME SNAPSHOT, captured 2026-05-28 and not refreshed since. Competitor
+surfaces move monthly, so treat every claim below as a historical record of what
+was true that day, not as current fact. Re-verify against official product docs
+before using any of it to justify scope. The parity target was source-backed by
+those docs plus the local Claude reference folder at
+`/Users/siddhartha/Desktop/claude_reference`.
 
 OpenAI/ChatGPT baseline:
 
@@ -395,7 +400,13 @@ Treat these as evidence or working notes, not source of truth:
 - generated parity reports
 - stale PRDs and launch plans
 
-(The former `tasks/**`, `reports/**`, `docs/archive/**`, and standalone `audit/` directories were removed repo-wide on 2026-06-28 — do not cite them as existing.)
+(The former `tasks/**`, `reports/**`, and `docs/archive/**` directories were
+removed repo-wide on 2026-06-28 — do not cite them as existing. `audit/` was
+removed then too but has since been reintroduced and is live again: it is the
+current triage queue, and `audit/capability-gaps.csv` is cited as the source of
+truth by `docs/current/parity-implementation-matrix.md`. Cite it, but treat its
+contents as a queue of claims to verify in code, never as evidence that work is
+done.)
 
 Do not delete evidence casually. Classify first, then archive, compress, externalize, or remove only when the current docs and checks no longer depend on it.
 

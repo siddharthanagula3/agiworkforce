@@ -23,13 +23,20 @@ import {
   type InteractiveCardRegistry,
 } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 
 /**
- * Kind-specific renderers. Empty in slice 1: nothing produces cards yet, and an
- * entry here with no producer would be untested code pretending to be shipped.
- * `clarify.v1` registers in slice 2, `itinerary.v1` in slice 5.
+ * Kind-specific renderers.
+ *
+ * `clarify.v1` registered in slice 2 (2026-08-06). `itinerary.v1` still has no
+ * renderer and no producer, so it keeps falling back — an entry here with no
+ * producer would be untested code pretending to be shipped.
  */
-const WEB_CARD_REGISTRY: InteractiveCardRegistry<React.ReactNode> = {};
+const WEB_CARD_REGISTRY: InteractiveCardRegistry<React.ReactNode> = {
+  'clarify.v1': ({ card, body, ctx }) => (
+    <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
+  ),
+};
 
 interface InteractiveCardBlockProps {
   cards: readonly InteractiveCard[];

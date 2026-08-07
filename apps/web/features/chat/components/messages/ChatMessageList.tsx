@@ -15,6 +15,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { MessageSearch } from './MessageSearch';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   List,
@@ -992,6 +993,79 @@ const ChatMessageListComponent = ({
   // Scroll management
   // ---------------------------------------------------------------------------
 
+  // ─── In-conversation search (Cmd/Ctrl+F) ──────────────────────────────────
+  //
+  // `MessageSearch` was complete but never exported or mounted, and nothing
+  // bound Cmd+F — so the browser's own find-in-page ran against a VIRTUALIZED
+  // transcript and could only ever match the handful of rows currently in the
+  // DOM. This owns the shortcut so search covers the whole conversation.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  const searchMatches = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return [] as number[];
+    // Indices into `groups`, which is what the virtual list renders.
+    return groups.reduce<number[]>((acc, group, index) => {
+      const hit = group.messages.some((message) =>
+        typeof message.content === 'string'
+          ? message.content.toLowerCase().includes(needle)
+          : false,
+      );
+      if (hit) acc.push(index);
+      return acc;
+    }, []);
+  }, [groups, searchQuery]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setCurrentMatchIndex(0);
+  }, []);
+
+  useEffect(() => {
+    setCurrentMatchIndex(0);
+  }, [searchQuery]);
+
+  const goToMatch = useCallback(
+    (matchIndex: number) => {
+      const rowIndex = searchMatches[matchIndex];
+      if (rowIndex === undefined) return;
+      listApiRef.current?.scrollToRow({ align: 'center', behavior: 'smooth', index: rowIndex });
+    },
+    [searchMatches],
+  );
+
+  const handleSearchNext = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const next = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(next);
+    goToMatch(next);
+  }, [currentMatchIndex, goToMatch, searchMatches.length]);
+
+  const handleSearchPrev = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const prev = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(prev);
+    goToMatch(prev);
+  }, [currentMatchIndex, goToMatch, searchMatches.length]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if (event.key === 'Escape' && searchOpen) {
+        closeSearch();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [closeSearch, searchOpen]);
+
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
       const listApi = listApiRef.current;
@@ -1350,6 +1424,17 @@ const ChatMessageListComponent = ({
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {streamAnnouncement}
       </p>
+      {searchOpen && (
+        <MessageSearch
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          totalMatches={searchMatches.length}
+          currentMatchIndex={currentMatchIndex}
+          onNext={handleSearchNext}
+          onPrev={handleSearchPrev}
+          onClose={closeSearch}
+        />
+      )}
       <List
         listRef={listApiRef}
         rowComponent={VirtualizedTranscriptRow}

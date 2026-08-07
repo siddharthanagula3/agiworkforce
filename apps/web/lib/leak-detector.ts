@@ -4,24 +4,23 @@
  */
 
 /**
- * EXPORTED (2026-08-05) so redactors can share ONE pattern list with the
- * detector. `lib/support/handoff/transcript.ts` needs to strip secrets out of a
+ * EXPORTED so redactors can share ONE pattern list with the detector.
+ * `lib/support/handoff/transcript.ts` needs to strip secrets out of a
  * user-pasted support transcript rather than throw on them — rejecting a user's
  * escalation because they pasted their own key is a worse outcome than
- * redacting it. A second, divergent copy of this list is how a key eventually
- * reaches an inbox, so it is shared rather than duplicated.
+ * redacting it.
+ *
+ * The patterns themselves now live in `lib/security/secret-patterns.ts`, the
+ * single registry shared with `lib/security/secrets-audit.ts`. This is the
+ * conservative `assertable` subset, because matching here ABORTS a live
+ * request; the registry's broader detectors are scan-and-warn only.
  *
  * Consumers must not mutate the array. Patterns are unanchored and non-global,
  * so a redactor has to rebuild them with the `g` flag (see `redactSecrets`).
  */
-export const SECRET_PATTERNS: readonly RegExp[] = [
-  /sk-[A-Za-z0-9_-]{32,}/, // Anthropic/OpenAI API keys
-  /sk_live_[A-Za-z0-9]{24,}/, // Stripe live keys
-  /sk_test_[A-Za-z0-9]{24,}/, // Stripe test keys
-  /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, // JWTs
-  /NEON_DATABASE_URL[=:][^\s]{8,}/, // Neon connection string
-  /Bearer\s+[A-Za-z0-9_-]{20,}/, // Bearer tokens
-];
+export { ASSERTABLE_SECRET_PATTERNS as SECRET_PATTERNS } from './security/secret-patterns';
+
+import { ASSERTABLE_SECRET_PATTERNS } from './security/secret-patterns';
 
 export class LeakDetectedError extends Error {
   constructor(label: string, pattern: string) {
@@ -31,7 +30,7 @@ export class LeakDetectedError extends Error {
 }
 
 function scanString(value: string, label: string): void {
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of ASSERTABLE_SECRET_PATTERNS) {
     if (pattern.test(value)) {
       // Log sanitized warning (don't log the actual value)
       console.warn(`[leak-detector] Pattern ${pattern.source} matched in: ${label}`);

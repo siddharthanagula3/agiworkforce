@@ -428,8 +428,7 @@
       "action": "keep",
       "evidence": [
         "packages/ai/model-registry/scripts/compile.mjs",
-        "packages/ai/model-registry/generated/registry.ts",
-        "apps/desktop/src/api/googleBatch.test.ts"
+        "packages/ai/model-registry/generated/registry.ts"
       ]
     },
     {

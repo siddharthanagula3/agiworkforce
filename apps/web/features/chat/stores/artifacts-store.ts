@@ -461,6 +461,22 @@ type ArtifactsStoreReturn = {
    * single-version artifacts. Ordered oldest → newest.
    */
   getArtifactVersions: (id: string) => SharedArtifact[];
+  /**
+   * Restore an earlier version by re-upserting its content.
+   *
+   * Version browsing shipped read-only on web: a user could page back through
+   * history and then had no way to act on what they found. Desktop already had
+   * rollback (`ArtifactVersionHistory`).
+   *
+   * Restoring APPENDS rather than rewinds, because versions here are
+   * content-keyed — re-upserting older content records it as the new latest and
+   * leaves the intervening versions intact. Destroying history to undo one
+   * change would be the more surprising behavior.
+   *
+   * Returns false when the index does not exist or already matches current
+   * content, so the caller can skip a pointless write.
+   */
+  restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
   applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
   clearCloudArtifacts: () => void;
   setCloudSyncStatus: (
@@ -624,6 +640,21 @@ const actions = {
 
   getArtifactVersions(id: string): SharedArtifact[] {
     return _sharedArtifactStore.getState().getArtifactVersions(id);
+  },
+
+  restoreArtifactVersion(id: string, versionIndex: number): boolean {
+    const versions = _sharedArtifactStore.getState().getArtifactVersions(id);
+    const target = versions[versionIndex];
+    if (!target) return false;
+
+    const current = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
+    if (!current || current.content === target.content) return false;
+
+    // Go through the shared engine directly: its artifact type is wider than
+    // the web `ArtifactInput` (e.g. 'component'), and narrowing here would
+    // silently drop kinds this store legitimately holds.
+    _sharedArtifactStore.getState().upsertArtifact({ ...current, content: target.content });
+    return true;
   },
 
   clearArtifactsForMessage(messageId: string): void {

@@ -34,26 +34,50 @@ export type TriggerType = 'cron' | 'webhook' | 'file_watcher';
 
 export type TriggerExecutionStatus = 'success' | 'failed' | 'running';
 
+// ── Wire contract ────────────────────────────────────────────────────────────
+//
+// These MUST match `core/agent/triggers.rs`, which declares
+// `#[serde(tag = "type", rename_all = "camelCase")]` on `TriggerConfig`. Until
+// 2026-08-06 they did not, and every create/update failed serde deserialization
+// on the Rust side before doing anything:
+//
+//   - no `type` discriminant was sent at all (serde needs it to pick a variant)
+//   - `authEnabled: boolean`  vs  `authToken: string | null`
+//   - `directory` / `globPattern`  vs  `watchPath` / `glob`
+//   - `TriggerAction` never sent its required `type` field
+//
+// The bug was invisible because `AutomationBuilder` — the only caller — was
+// never mounted. Keep these shapes pinned to the Rust enum, not to whatever is
+// convenient for the form.
+
 export interface CronConfig {
+  type: 'cron';
   expression: string;
+  timezone?: string | null;
 }
 
 export interface WebhookConfig {
+  type: 'webhook';
   path: string;
-  authEnabled: boolean;
+  /** Bearer token the caller must present; null means an unauthenticated hook. */
+  authToken?: string | null;
 }
 
 export interface FileWatcherConfig {
-  directory: string;
-  globPattern: string;
-  debounceMs: number;
+  type: 'fileWatcher';
+  watchPath: string;
+  glob?: string | null;
+  debounceMs?: number | null;
 }
 
 export type TriggerConfig = CronConfig | WebhookConfig | FileWatcherConfig;
 
+export type TriggerActionType = 'agent' | 'workflow' | 'notification';
+
 export interface TriggerAction {
-  prompt: string;
-  model: string;
+  type: TriggerActionType;
+  prompt?: string | null;
+  model?: string | null;
   approvalRequired: boolean;
 }
 

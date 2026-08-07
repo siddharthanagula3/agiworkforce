@@ -9,6 +9,16 @@ interface BudgetTrackerDisplayProps {
   className?: string;
   /** When true, also fetches and shows the credit balance from /api/llm/v1/credits/balance */
   showCreditBalance?: boolean;
+  /**
+   * `card` (default) is the padded, bordered, multi-row block.
+   * `compact` is a single inline pill for the composer's one-line toolbar.
+   *
+   * The composer footer renders in a one-line flex row, and this component was
+   * card-only — so it was guarded behind `!inline` and never rendered in
+   * production at all. A card dropped into that row breaks the layout, which is
+   * why the guard existed; the fix is a variant, not removing the guard.
+   */
+  variant?: 'card' | 'compact';
 }
 
 async function fetchCreditBalance(): Promise<ManagedUsageBalance | null> {
@@ -27,6 +37,7 @@ async function fetchCreditBalance(): Promise<ManagedUsageBalance | null> {
 export function BudgetTrackerDisplay({
   className,
   showCreditBalance = false,
+  variant = 'card',
 }: BudgetTrackerDisplayProps) {
   const sessionCost_cents = useBillingUsageStore((s) => s.sessionCost_cents);
   const dailyBudget_cents = useBillingUsageStore((s) => s.dailyBudget_cents);
@@ -59,6 +70,24 @@ export function BudgetTrackerDisplay({
 
   if (sessionUsedPercent === null && !showCreditBalance) {
     return null;
+  }
+
+  if (variant === 'compact') {
+    // Nothing meaningful to show inline until a session has cost something.
+    if (sessionUsedPercent === null) return null;
+    return (
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[10px] text-muted-foreground',
+          className,
+        )}
+        aria-label={`Session budget: ${sessionUsedPercent}% used`}
+        title={`Current session: ${sessionUsedPercent}% of your daily budget`}
+      >
+        <span className="tabular-nums font-medium text-foreground">{sessionUsedPercent}%</span>
+        <span>used</span>
+      </span>
+    );
   }
 
   return (

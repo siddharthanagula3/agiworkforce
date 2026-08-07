@@ -313,6 +313,11 @@ describe('cloudApi', () => {
           size: '1024x1024',
           n: 1,
           quality: 'standard',
+          // Additive image-edit fields with safe defaults. The desktop client
+          // builds this payload through the shared contract schema, so a plain
+          // text-to-image request now carries them explicitly.
+          operation: 'generate',
+          transparent_background: false,
         }),
       }),
     );

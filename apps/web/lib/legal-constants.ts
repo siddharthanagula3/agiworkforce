@@ -92,6 +92,8 @@ export const POLICY_LAST_UPDATED = {
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',
   mobile: '2026-08-05',
+  copyright: '2026-08-06',
+  modelLicenses: '2026-08-06',
 } as const;
 
 /**

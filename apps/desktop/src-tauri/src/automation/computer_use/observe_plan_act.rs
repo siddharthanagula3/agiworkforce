@@ -11,6 +11,10 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// Upper bound on how long the OPA loop will sit paused waiting for a user
+/// confirmation that currently has no channel to arrive on.
+const CONFIRMATION_WAIT_TIMEOUT: Duration = Duration::from_secs(300);
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
@@ -409,8 +413,25 @@ impl ComputerUseAgent {
                 if decision.requires_confirmation && task.require_confirmation {
                     session.pause(decision.warnings.join(", "), action.clone());
 
-                    // Wait for resume (in real implementation, this would be async)
-                    while session.is_paused() && !session.is_cancelled() {
+                    // BOUNDED wait. There is still no resume channel: `session`
+                    // is owned by this loop and `is_paused` is a plain bool, so
+                    // nothing outside can clear it — a caller that sets
+                    // `require_confirmation: true` would otherwise spin here
+                    // forever, holding the automation session open.
+                    //
+                    // Nothing sets that flag today (it defaults to false and has
+                    // no assignment in Rust or TS), so this branch is currently
+                    // unreachable; the fail-closed block above handles every real
+                    // confirmation case. The timeout exists so the hang cannot
+                    // appear the moment someone does set it.
+                    //
+                    // Real human-in-the-loop confirmation needs a shared signal
+                    // threaded into this loop — see docs/adr/wire-or-cut.md.
+                    let waited_from = Instant::now();
+                    while session.is_paused()
+                        && !session.is_cancelled()
+                        && waited_from.elapsed() < CONFIRMATION_WAIT_TIMEOUT
+                    {
                         sleep(Duration::from_millis(100)).await;
                     }
 
@@ -419,6 +440,20 @@ impl ComputerUseAgent {
                             &mut session,
                             state,
                             CompletionReason::UserCancelled,
+                        );
+                    }
+
+                    if session.is_paused() {
+                        tracing::warn!(
+                            "Confirmation wait timed out after {:?} with no resume channel; blocking the action.",
+                            CONFIRMATION_WAIT_TIMEOUT
+                        );
+                        return self.complete_task(
+                            &mut session,
+                            state,
+                            CompletionReason::SafetyBlocked {
+                                reason: "Timed out waiting for user confirmation".to_string(),
+                            },
                         );
                     }
                 }

@@ -24,6 +24,7 @@ import {
   MonitorSmartphone,
   Laptop,
   type LucideIcon,
+  LifeBuoy,
 } from 'lucide-react';
 
 /**
@@ -66,10 +67,12 @@ export type SettingsNavKey =
   | 'reflect'
   | 'time-focus'
   | 'skills'
+  | 'help'
   // Conversation-data sections. Web registers these as settings sections and
   // routes to them, but deliberately keeps them out of SETTINGS_NAV_GROUPS_WEB
   // and links to them from its Privacy section instead.
   | 'archived'
+  | 'deleted-chats'
   | 'shared-links';
 
 export interface SettingsNavEntry {
@@ -291,6 +294,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'skills', label: 'Skills', icon: BookOpen },
       { key: 'connectors', label: 'Connectors', icon: Plug },
       { key: 'plugins', label: 'Plugins', icon: Puzzle },
+      { key: 'help', label: 'Help', icon: LifeBuoy },
     ],
   },
 ];

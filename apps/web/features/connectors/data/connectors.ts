@@ -38,21 +38,76 @@ export interface Connector {
   exclusive?: boolean;
 }
 
-export type ConnectorAvailability = 'ready' | 'request_access' | 'planned' | 'exclusive';
+export type ConnectorAvailability =
+  | 'ready'
+  | 'request_access'
+  | 'planned'
+  | 'exclusive'
+  | 'unavailable';
 
-export function getConnectorAvailability(connector: Connector): ConnectorAvailability {
+/**
+ * Resolve what a connector card should claim, preferring the SERVER's answer.
+ *
+ * `availableIds` is the `available` array `GET /api/connectors` returns — the
+ * ids that can genuinely be connected in this deployment, derived from the
+ * operator's MCP map, the configured OAuth providers, and the GitHub App.
+ *
+ * This used to be decided purely from the static `phase`/`authType` fields,
+ * which have no relationship to that runtime configuration. Because
+ * `lib/connectors/oauth-registry.ts` ships zero providers by default, every
+ * phase-1 OAuth connector rendered as "Coming soon" while
+ * `POST /api/connectors` returned 501, and every phase-1 non-OAuth connector
+ * rendered "Ready" whether or not an operator had mapped it. The catalog's
+ * present-tense capability copy ("Search, read, send, and draft email…") sat on
+ * top of that.
+ *
+ * Pass `availableIds` wherever it is in scope. Omitting it falls back to the
+ * old static heuristic, which is a guess — only correct for `exclusive` and
+ * later-phase entries that are not connectable anywhere.
+ */
+export function getConnectorAvailability(
+  connector: Connector,
+  availableIds?: ReadonlySet<string>,
+): ConnectorAvailability {
   if (connector.exclusive) return 'exclusive';
+
+  if (availableIds) {
+    if (availableIds.has(connector.id)) return 'ready';
+    return connector.phase > 1 ? 'planned' : 'unavailable';
+  }
+
   if (connector.phase > 1) return 'planned';
   if (connector.authType === 'oauth') return 'request_access';
   return 'ready';
 }
 
-export function isConnectorReady(connector: Connector): boolean {
-  return getConnectorAvailability(connector) === 'ready';
+export function isConnectorReady(
+  connector: Connector,
+  availableIds?: ReadonlySet<string>,
+): boolean {
+  return getConnectorAvailability(connector, availableIds) === 'ready';
 }
 
-export function getConnectorAvailabilityLabel(connector: Connector): string {
-  const availability = getConnectorAvailability(connector);
+/**
+ * Label for a caller that has already resolved availability to a boolean (for
+ * example a detail panel handed `available` as a prop) rather than holding the
+ * whole `availableIds` set.
+ */
+export function getConnectorAvailabilityLabelFor(
+  connector: Connector,
+  isAvailable: boolean,
+): string {
+  return getConnectorAvailabilityLabel(
+    connector,
+    isAvailable ? new Set([connector.id]) : new Set<string>(),
+  );
+}
+
+export function getConnectorAvailabilityLabel(
+  connector: Connector,
+  availableIds?: ReadonlySet<string>,
+): string {
+  const availability = getConnectorAvailability(connector, availableIds);
   switch (availability) {
     case 'ready':
       return 'Ready';
@@ -62,6 +117,10 @@ export function getConnectorAvailabilityLabel(connector: Connector): string {
       return `Phase ${connector.phase}`;
     case 'exclusive':
       return 'Exclusive';
+    case 'unavailable':
+      // Deliberately not "Coming soon": nothing is in flight. This deployment
+      // has no credentials for the provider, and connecting would 501.
+      return 'Not available here';
   }
 }
 

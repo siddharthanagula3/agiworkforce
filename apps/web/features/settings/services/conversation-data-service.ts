@@ -85,6 +85,62 @@ export async function listArchivedConversations(
   };
 }
 
+/**
+ * Soft-deleted conversations, newest first.
+ *
+ * `DELETE` only sets `deleted_at` and nothing purges those rows, so before this
+ * a deleted conversation was permanently unreachable while its messages stayed
+ * in the database indefinitely.
+ */
+export async function listDeletedConversations(
+  offset = 0,
+  signal?: AbortSignal,
+): Promise<ArchivedConversationPage> {
+  const response = await fetch(
+    `/api/chat/conversations?deleted=only&limit=50&offset=${Math.max(0, offset)}`,
+    { credentials: 'include', signal },
+  );
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to load deleted chats');
+  }
+
+  const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+  return {
+    conversations: data.conversations.map((wire) => {
+      const conversation = normalizeManagedCloudConversation(wire);
+      return {
+        id: conversation.id,
+        title: conversation.title,
+        updatedAt: conversation.updatedAt,
+      };
+    }),
+    hasMore: data.hasMore,
+    nextOffset: data.nextOffset,
+  };
+}
+
+/**
+ * Clear `deleted_at`, putting the conversation back exactly as it was.
+ *
+ * Returns the restored conversation because the caller needs it: unlike an
+ * archived chat — which is already in the sidebar store — a deleted one was
+ * filtered out of every read, so it has to be ADDED back, not just updated.
+ */
+export async function restoreDeletedConversation(id: string) {
+  const response = await fetch(`${managedCloudConversationPath(id)}/restore`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to restore deleted chat');
+  }
+  // The raw wire row is returned so the caller can use the SAME
+  // `toWebConversation` mapper the sidebar uses; a second hand-written mapping
+  // is how fields get silently dropped.
+  return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
+}
+
 export async function restoreArchivedConversation(id: string): Promise<void> {
   const response = await fetch(managedCloudConversationPath(id), {
     method: 'PUT',

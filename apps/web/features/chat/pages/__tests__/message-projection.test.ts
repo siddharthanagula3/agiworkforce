@@ -24,6 +24,43 @@ describe('WebChatPage message projection', () => {
 
     expect(toChatMessage(message, 'conversation-id').attachments).toEqual(message.attachments);
   });
+
+  // Regression: `messages.input_tokens` / `output_tokens` were persisted by the
+  // server and returned by the load path, but nothing lifted them into
+  // metadata — so `tokensUsed` had no producer and every per-message cost
+  // surface rendered empty, including the otherwise-complete TokenUsageDisplay.
+  it('lifts persisted per-turn usage into metadata', () => {
+    const message: Message = {
+      id: 'assistant-message',
+      role: 'assistant',
+      content: 'Here you go.',
+      createdAt: '2026-08-06T00:00:00.000Z',
+      model: 'test-model',
+      inputTokens: 1200,
+      outputTokens: 340,
+    };
+
+    const projected = toChatMessage(message, 'conversation-id');
+    expect(projected.metadata?.['inputTokens']).toBe(1200);
+    expect(projected.metadata?.['outputTokens']).toBe(340);
+    expect(projected.metadata?.['tokensUsed']).toBe(1540);
+    expect(projected.metadata?.['model']).toBe('test-model');
+  });
+
+  it('leaves usage absent rather than reporting zero when the row has none', () => {
+    // A turn with no recorded usage must show nothing. Zeros would read as a
+    // free turn, which is a different and false claim.
+    const message: Message = {
+      id: 'assistant-no-usage',
+      role: 'assistant',
+      content: 'No usage recorded.',
+      createdAt: '2026-08-06T00:00:00.000Z',
+    };
+
+    const projected = toChatMessage(message, 'conversation-id');
+    expect(projected.metadata?.['tokensUsed']).toBeUndefined();
+    expect(projected.metadata?.['inputTokens']).toBeUndefined();
+  });
 });
 
 describe('WebChatPage account identity', () => {

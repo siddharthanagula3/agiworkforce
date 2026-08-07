@@ -245,6 +245,7 @@ interface SettingsState {
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
+  setTemporaryChat: (enabled: boolean) => void;
   setSendShortcut: (shortcut: 'enter' | 'mod-enter') => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
@@ -1093,6 +1094,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setCompactMode',
+          );
+        },
+
+        setTemporaryChat: (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, temporaryChat: enabled },
+            }),
+            undefined,
+            'settings/setTemporaryChat',
           );
         },
 

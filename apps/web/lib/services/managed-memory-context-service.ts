@@ -72,6 +72,68 @@ export async function loadManagedMemoryPolicy(
   };
 }
 
+/** Upper bound on stored exclusion terms — a settings list, not a rules engine. */
+export const MAX_MEMORY_EXCLUSIONS = 50;
+/** Terms shorter than this match almost everything and would disable memory wholesale. */
+export const MIN_MEMORY_EXCLUSION_LENGTH = 3;
+
+/**
+ * Normalize an exclusion list from stored settings.
+ *
+ * Deliberately plain case-insensitive SUBSTRINGS, not regexes: a user-supplied
+ * regex is both a footgun (a stray `.*` silently excludes everything) and a
+ * ReDoS surface on a server-side path that runs per chat turn.
+ *
+ * Anything unusable is dropped rather than rejected — this runs on the write
+ * path, and a malformed settings blob must not stop the filter applying to the
+ * terms that ARE valid.
+ */
+export function normalizeMemoryExclusions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const term = entry.trim().toLowerCase();
+    if (term.length < MIN_MEMORY_EXCLUSION_LENGTH) continue;
+    seen.add(term);
+    if (seen.size >= MAX_MEMORY_EXCLUSIONS) break;
+  }
+  return [...seen];
+}
+
+/**
+ * Terms this account has asked never to be remembered.
+ *
+ * Read from the same `user_settings` row as the memory policy. Absent or
+ * malformed settings yield an empty list: an exclusion that fails open is a
+ * privacy claim the product does not honor, so this is paired with a write-path
+ * filter that runs on every candidate, NOT with client-side filtering.
+ */
+export async function loadMemoryExclusions(
+  db: ManagedMemoryContextDb,
+  params: { userId: string },
+): Promise<string[]> {
+  const [row] = await db.query<{ memory: unknown }>(
+    `select coalesce(settings -> 'memory', '{}'::jsonb) as memory
+       from user_settings
+      where user_id = $1
+      limit 1`,
+    [params.userId],
+  );
+  const memory =
+    row?.memory && typeof row.memory === 'object' && !Array.isArray(row.memory)
+      ? (row.memory as Record<string, unknown>)
+      : {};
+  return normalizeMemoryExclusions(memory['excludedTerms']);
+}
+
+/** True when `content` contains any excluded term (case-insensitive). */
+export function isMemoryExcluded(content: string, exclusions: readonly string[]): boolean {
+  if (exclusions.length === 0) return false;
+  const haystack = content.toLowerCase();
+  return exclusions.some((term) => haystack.includes(term));
+}
+
 /** Load bounded, active account memories through an owner-scoped DB handle. */
 export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
@@ -149,6 +211,8 @@ function deterministicAutoMemoryId(userId: string, normalizedKey: string): strin
 export interface ManagedAutoMemoryResult {
   extracted: number;
   inserted: number;
+  /** Candidates dropped by the account's sensitive-data exclusions. */
+  excluded: number;
 }
 
 /**
@@ -162,7 +226,14 @@ export async function persistManagedAutoMemoryFacts(
   params: { userId: string; candidates: readonly string[] },
 ): Promise<ManagedAutoMemoryResult> {
   const extracted = params.candidates.length;
-  if (extracted === 0) return { extracted: 0, inserted: 0 };
+  if (extracted === 0) return { extracted: 0, inserted: 0, excluded: 0 };
+
+  // Sensitive-data exclusions are enforced HERE, on the write path, before any
+  // candidate reaches the table. Filtering in the UI would leave the fact
+  // stored and merely hidden, which is the false-privacy-claim shape: the user
+  // is told it was excluded while it sits in the database and keeps being fed
+  // to the model. `excluded` is reported so the caller can log the drop.
+  const exclusions = await loadMemoryExclusions(db, { userId: params.userId });
 
   const seen = new Set<string>();
   const batch: Array<{
@@ -171,11 +242,16 @@ export async function persistManagedAutoMemoryFacts(
     category: string;
     normalizedKey: string;
   }> = [];
+  let excluded = 0;
   for (const candidate of params.candidates) {
     const normalizedKey = normalizeMemoryKey(candidate);
     if (!normalizedKey || seen.has(normalizedKey)) continue;
     seen.add(normalizedKey);
     const content = candidate.trim();
+    if (isMemoryExcluded(content, exclusions)) {
+      excluded += 1;
+      continue;
+    }
     batch.push({
       id: deterministicAutoMemoryId(params.userId, normalizedKey),
       content,
@@ -184,7 +260,7 @@ export async function persistManagedAutoMemoryFacts(
     });
     if (batch.length >= MAX_AUTO_MEMORIES_PER_TURN) break;
   }
-  if (batch.length === 0) return { extracted, inserted: 0 };
+  if (batch.length === 0) return { extracted, inserted: 0, excluded };
 
   const inserted = await db.query<{ id: string }>(
     `with incoming as materialized (
@@ -210,5 +286,5 @@ export async function persistManagedAutoMemoryFacts(
     [params.userId, JSON.stringify(batch)],
   );
 
-  return { extracted, inserted: inserted.length };
+  return { extracted, inserted: inserted.length, excluded };
 }

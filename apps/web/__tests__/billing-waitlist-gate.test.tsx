@@ -12,11 +12,13 @@
  * FAILS without the fix (the components fire live purchase requests).
  * PASSES with the fix (purchase paths remain in context and show an error).
  *
- * Lane files: BillingDashboard.tsx, CreditAlertModal.tsx
+ * Lane files: BillingDashboard.tsx
  *
  * Credit top-ups (Topup.tsx, api/credit-topup, token-pack-purchase's
  * buyTokenPack) were removed entirely — the locked product rule is "no
- * top-ups, ever". CreditAlertModal now routes an exhausted Max user to
+ * top-ups, ever". The exhausted-Max contact-sales route is covered by
+ * UpgradePlanDialog.test.tsx and marketing-copy-regression.test.ts; the
+ * unreachable CreditAlertModal that also asserted it was cut 2026-08-06. It read:
  * Enterprise contact-sales instead of a purchase flow.
  */
 
@@ -125,27 +127,11 @@ vi.mock('@/components/ui', () => ({
 // ---------------------------------------------------------------------------
 // Lazy-import after mocks
 // ---------------------------------------------------------------------------
-const { CreditAlertModal } = await import('@shared/components/modals/CreditAlertModal');
 const BillingDashboard = (await import('@/features/billing/pages/BillingDashboard')).default;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function renderCreditAlertModal(overrides: Partial<Parameters<typeof CreditAlertModal>[0]> = {}) {
-  return render(
-    React.createElement(CreditAlertModal, {
-      isOpen: true,
-      onClose: vi.fn(),
-      alertType: 'exhausted',
-      currentPlan: 'max',
-      remainingCents: 0,
-      allocatedCents: 10000,
-      percentageUsed: 100,
-      ...overrides,
-    }),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -160,28 +146,6 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED=false (kill-swi
     Object.defineProperty(window, 'location', {
       writable: true,
       value: { ...originalLocation, href: 'http://localhost/billing' },
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // CreditAlertModal — exhausted Max plan routes to contact-sales, not a
-  // top-up purchase (no-top-ups locked product rule).
-  // -------------------------------------------------------------------------
-
-  describe('CreditAlertModal — exhausted Max plan', () => {
-    it('calls contactEnterpriseSales instead of any purchase flow', async () => {
-      renderCreditAlertModal({ alertType: 'exhausted', currentPlan: 'max' });
-
-      const contactBtn = screen.getByRole('button', { name: /contact sales/i });
-      expect(contactBtn).toBeTruthy();
-
-      fireEvent.click(contactBtn);
-
-      await waitFor(() => {
-        expect(mockContactEnterpriseSales).toHaveBeenCalledWith(
-          expect.objectContaining({ userId: 'user-123' }),
-        );
-      });
     });
   });
 

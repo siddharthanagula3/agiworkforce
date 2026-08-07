@@ -21,6 +21,12 @@ export type ChatConversationRow = {
   is_temporary: boolean;
   created_at: string;
   updated_at: string;
+  /**
+   * Set when the conversation is soft-deleted. Present so the recently-deleted
+   * list can show WHEN something was deleted; null on every normal read, which
+   * filters `deleted_at is null`.
+   */
+  deleted_at?: string | null;
 };
 
 export type ChatMessageRow = {

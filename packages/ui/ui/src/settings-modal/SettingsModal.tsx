@@ -1778,12 +1778,14 @@ function NavButton({
   Icon,
   isActive,
   onClick,
+  badge,
 }: {
   itemKey: string;
   label: string;
   Icon: LucideIcon;
   isActive: boolean;
   onClick: (key: string) => void;
+  badge?: SettingsNavBadge;
 }) {
   return (
     <button
@@ -1801,8 +1803,35 @@ function NavButton({
     >
       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
       <span className="truncate">{label}</span>
+      {badge && badge.count > 0 && (
+        <span
+          className={cn(
+            'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5',
+            'bg-destructive text-[11px] font-semibold leading-none text-destructive-foreground',
+          )}
+          // The count alone ("2") tells a screen-reader user nothing about what
+          // needs attention, so the caller supplies the sentence.
+          aria-label={badge.description}
+          title={badge.description}
+        >
+          {badge.count > 9 ? '9+' : badge.count}
+        </span>
+      )}
     </button>
   );
+}
+
+/**
+ * An attention marker on one nav row, e.g. connectors whose OAuth grant has
+ * expired. Surface-owned: this package renders the badge but never decides
+ * what warrants one, so no web-specific policy leaks into the shell Desktop
+ * also renders.
+ */
+export interface SettingsNavBadge {
+  /** Rendered as-is up to 9, then "9+". Zero renders nothing. */
+  count: number;
+  /** Full sentence for assistive tech and the tooltip — the count alone is meaningless. */
+  description: string;
 }
 
 export interface SettingsModalProps {
@@ -1833,6 +1862,11 @@ export interface SettingsModalProps {
    * Omit and the detail view simply shows no disclosure block.
    */
   connectorDisclosure?: React.ReactNode;
+  /**
+   * Per-section attention badges, keyed by nav key. A section with no entry —
+   * or a zero count — renders exactly as before.
+   */
+  navBadges?: Partial<Record<string, SettingsNavBadge>>;
   /** Modal title (default: "Settings") */
   title?: string;
 }
@@ -1847,6 +1881,7 @@ export function SettingsModal({
   navGroups,
   adapter,
   connectorDisclosure,
+  navBadges,
   title = 'Settings',
 }: SettingsModalProps) {
   const [navSearch, setNavSearch] = useState('');
@@ -1966,6 +2001,7 @@ export function SettingsModal({
                       Icon={item.icon}
                       isActive={activeSection === item.key}
                       onClick={onSectionChange}
+                      badge={navBadges?.[item.key]}
                     />
                   ))}
                 </div>
@@ -1984,6 +2020,7 @@ export function SettingsModal({
                   Icon={entry.icon}
                   isActive={activeSection === entry.key}
                   onClick={onSectionChange}
+                  badge={navBadges?.[entry.key]}
                 />
               ))}
             </div>

@@ -151,12 +151,32 @@ export function ResearchActivity({
   const interrupted = research.phase === 'interrupted';
   const complete = research.phase === 'complete';
 
+  // Search count against the cap the run is actually bounded by. A bare count
+  // that stops climbing looks like the run gave up; "12 of 12" says the budget
+  // is spent. The cap is only shown WHILE the run can still spend it — on a
+  // finished run the total is the interesting number, not the ceiling.
   const counts: string[] = [];
   if (typeof research.searches === 'number' && research.searches > 0) {
-    counts.push(`${research.searches} search${research.searches === 1 ? '' : 'es'}`);
+    const searchLabel = `search${research.searches === 1 ? '' : 'es'}`;
+    counts.push(
+      isActive && typeof research.maxSearches === 'number' && research.maxSearches > 0
+        ? `${research.searches} of ${research.maxSearches} ${searchLabel}`
+        : `${research.searches} ${searchLabel}`,
+    );
   }
   if (typeof research.sources === 'number' && research.sources > 0) {
     counts.push(`${research.sources} source${research.sources === 1 ? '' : 's'}`);
+  }
+  // Round progress. `maxIterations` has always been decoded from the status
+  // event and stored; nothing ever displayed it.
+  if (
+    isActive &&
+    typeof research.iteration === 'number' &&
+    research.iteration > 0 &&
+    typeof research.maxIterations === 'number' &&
+    research.maxIterations > 0
+  ) {
+    counts.unshift(`round ${research.iteration} of ${research.maxIterations}`);
   }
 
   const steps = research.steps ?? [];
