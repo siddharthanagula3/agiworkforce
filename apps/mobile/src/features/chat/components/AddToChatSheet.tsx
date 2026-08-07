@@ -138,11 +138,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     videoModelId !== null &&
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'video_generation');
-  // Catalog name, NOT `getShortDisplayName`: that helper only knows models the
-  // picker can select, and media slot models are not selectable — it returned
-  // UNKNOWN_MODEL_LABEL, so both rows read "Switches to Not set".
-  const imageModelName = imageModelId ? (getModelMetadataById(imageModelId)?.name ?? null) : null;
-  const videoModelName = videoModelId ? (getModelMetadataById(videoModelId)?.name ?? null) : null;
+  // No model name on the Image/Video rows any more: the model list rendered
+  // under the active kind names it, and a second copy up here went stale the
+  // moment the user picked a different one. Defaults stay Google — the
+  // registry's image_generation and video_generation slots resolve to
+  // gemini-3.1-flash-image and veo-3.1.
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
   // Local and cloud projects live in physically separate stores; read the one
@@ -502,11 +502,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     />
                   }
                   label="Image"
-                  description={
-                    imageModelName
-                      ? `Switches to ${imageModelName}`
-                      : 'Generate images in this chat'
-                  }
+                  description="Generate images in this chat"
                   active={mediaMode === 'image'}
                   onPress={handleSelectImageMode}
                   textColor={themeColors.textPrimary}
@@ -523,9 +519,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     />
                   }
                   label="Video"
-                  description={
-                    videoModelName ? `Switches to ${videoModelName}` : 'Generate video in this chat'
-                  }
+                  description={'Generate video in this chat'}
                   active={mediaMode === 'video'}
                   onPress={handleSelectVideoMode}
                   textColor={themeColors.textPrimary}
