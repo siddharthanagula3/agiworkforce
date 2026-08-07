@@ -12,6 +12,7 @@ const cloudPackageName = '@agiworkforce/cloud-contracts';
 const servicesPackageName = '@agiworkforce/services';
 
 const cloudModules = [
+  'embeddings',
   'generated-files',
   'library',
   'managed-media',

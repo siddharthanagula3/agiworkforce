@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "apps/web": {
+      "entry": [
+        "app/**/{page,layout,template,loading,error,not-found,route,default,global-error}.{ts,tsx}",
+        "app/**/{sitemap,robots,manifest,icon,opengraph-image}.{ts,tsx}",
+        "proxy.ts",
+        "instrumentation.ts",
+        "instrumentation-client.ts",
+        "next.config.ts",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": ["**/*.{ts,tsx}"]
+    },
+    "apps/desktop": {
+      "entry": ["src/main.tsx", "electron/*.{ts,mjs}", "scripts/*.mjs", "**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "electron/**/*.ts"]
+    },
+    "packages/*": {
+      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/ui/*": {
+      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  },
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/archive/**"
+  ],
+  "ignoreDependencies": ["@types/*"],
+  "ignoreExportsUsedInFile": true
+}
