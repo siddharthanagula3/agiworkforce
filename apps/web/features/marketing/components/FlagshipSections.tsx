@@ -120,6 +120,7 @@ export function FlagshipHero({
             </h1>
           )}
           {lede && <p className="agi-fl-lede">{lede}</p>}
+          {modeRibbon.length > 0 && (
           <ul
             className={
               modeRibbon.some((mode) => typeof mode !== 'string')
@@ -139,6 +140,7 @@ export function FlagshipHero({
               ),
             )}
           </ul>
+          )}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
               <CtaButton

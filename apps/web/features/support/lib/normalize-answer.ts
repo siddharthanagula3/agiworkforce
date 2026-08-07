@@ -67,9 +67,8 @@ export function isSafeCitationUrl(url: string): boolean {
   // Refuse outright rather than strip-and-hope. A dropped citation degrades to
   // an abstention, which is the safe direction to fail in.
   if (
-    // Matching control characters is the entire point of this guard: they are
-    // the payload being rejected, not an accident of authoring the pattern.
-    // eslint-disable-next-line no-control-regex
+    // Matching escaped control-code ranges is the entire point of this guard:
+    // they are the payload being rejected, not an accident of the pattern.
     /[\u0000-\u001f\u007f-\u009f\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2028\u2029\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]/.test(
       trimmed,
     )

@@ -35,9 +35,8 @@ const INVISIBLE_CHARS = new RegExp(
 );
 
 /** C0/C1 control characters, keeping \n (0x0A) and \t (0x09). */
-// Matching control characters is the point of this sanitizer: they are the
-// payload being stripped, not an accident of authoring the pattern.
-// eslint-disable-next-line no-control-regex
+// Matching escaped control-code ranges is the point of this sanitizer: they
+// are the payload being stripped, not an accident of the pattern.
 const CONTROL_CHARS = new RegExp('[\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]', 'g');
 
 /**

@@ -4537,6 +4537,134 @@
   color: var(--agi-ink);
 }
 
+/* Explained variant — label + note pairs instead of short strings */
+[data-design='agi'] .agi-fl-mode-ribbon.agi-fl-mode-ribbon--explained {
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+}
+
+[data-design='agi'] .agi-fl-mode-ribbon--explained li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+[data-design='agi'] .agi-fl-mode-label {
+  display: block;
+  font-weight: 600;
+  color: var(--agi-ink);
+  letter-spacing: 0.06em;
+}
+
+[data-design='agi'] .agi-fl-mode-note {
+  display: block;
+  font-weight: 400;
+  color: var(--agi-ink-2);
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+/* ─── Availability strip ─── */
+[data-design='agi'] .agi-fl-avail {
+  padding: clamp(48px, 6vw, 80px) var(--agi-page-gutter);
+  max-width: var(--agi-page-max, 1200px);
+  margin: 0 auto;
+}
+
+[data-design='agi'] .agi-fl-avail-title {
+  font-family: var(--agi-font-sans, sans-serif);
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  font-weight: 400;
+  color: var(--agi-ink-2);
+  margin: 12px 0 28px;
+  line-height: 1.4;
+}
+
+[data-design='agi'] .agi-fl-avail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--agi-rule);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--agi-rule);
+}
+
+[data-design='agi'] .agi-fl-avail-item {
+  background: var(--agi-console-tint, var(--agi-bg));
+}
+
+[data-design='agi'] .agi-fl-avail-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+[data-design='agi'] .agi-fl-avail-link:hover {
+  background: color-mix(in srgb, var(--agi-ink) 4%, transparent);
+}
+
+[data-design='agi'] .agi-fl-avail-name {
+  display: block;
+  font-family: var(--agi-font-sans, sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-fl-avail-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--agi-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: var(--agi-ink-2);
+  opacity: 0.7;
+}
+
+[data-design='agi'] .agi-fl-avail-status--live {
+  color: var(--agi-ink-2);
+  opacity: 1;
+}
+
+[data-design='agi'] .agi-fl-avail-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--agi-ink-2);
+  opacity: 0.35;
+  flex-shrink: 0;
+}
+
+[data-design='agi'] .agi-fl-avail-dot--live {
+  background: #22c55e;
+  opacity: 1;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.45);
+}
+
+[data-design='agi'] .agi-fl-avail-note {
+  margin-top: 20px;
+  font-family: var(--agi-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--agi-ink-2);
+  opacity: 0.65;
+  max-width: 72ch;
+}
+
 /* hero console — composite product scene */
 [data-design='agi'] .agi-fl-hero-console {
   position: relative;
