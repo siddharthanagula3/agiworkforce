@@ -136,3 +136,85 @@ describe('resolveMobileVideoGenerationRequest', () => {
     expect(decision.alert.message).toBeTruthy();
   });
 });
+
+/**
+ * Auto intent routing, matching how Auto already reaches an image model from
+ * the wording of a prompt. Video was previously reachable only from `/video`
+ * or the composer's Video mode, so "Create a video of a cat" in an Auto chat
+ * was answered as prose by a text model.
+ *
+ * The bar is deliberately higher than the image classifier's. A false positive
+ * here spends a Max-15x per-second video generation and takes a minute to come
+ * back, so a generation verb AND a medium noun AND a generation-shaped
+ * continuation are all required.
+ */
+describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
+  const TEXT_MODE = { ...ENTITLED, mediaMode: 'text' as const };
+
+  it.each([
+    'Create a video of an stylist anime character',
+    'make an animation showing a rocket launch',
+    'generate a video',
+    'create a short clip about dogs',
+    'render an animation of a spinning globe',
+    'make me a video featuring a sunset',
+  ])('routes a plainly worded video request: %s', (text) => {
+    const decision = resolveMobileVideoGenerationRequest({ ...TEXT_MODE, text });
+
+    expect(decision.status).toBe('ready');
+    if (decision.status !== 'ready') return;
+    expect(decision.prompt).toBe(text);
+  });
+
+  // Each of these would be a billed video generation if the pattern were the
+  // naive `\b(video)\b`. They must all stay in chat.
+  it.each([
+    'create a video game character',
+    'make a movie recommendation',
+    'summarise this video',
+    'explain how video codecs work',
+    'create a video editing plan',
+    'write a script for a movie trailer',
+    'make a list of video ideas',
+  ])('leaves a non-generation mention to chat: %s', (text) => {
+    expect(resolveMobileVideoGenerationRequest({ ...TEXT_MODE, text })).toEqual({
+      status: 'not_requested',
+    });
+  });
+
+  it('never hijacks an explicit Image-mode send', () => {
+    // This resolver runs BEFORE the image one, so an unguarded pattern would
+    // bill an explicit image request as video.
+    expect(
+      resolveMobileVideoGenerationRequest({
+        ...ENTITLED,
+        mediaMode: 'image',
+        text: 'Create a video of an stylist anime character',
+      }),
+    ).toEqual({ status: 'not_requested' });
+  });
+
+  it('still fails closed on the plan gate for an inferred request', () => {
+    const decision = resolveMobileVideoGenerationRequest({
+      ...TEXT_MODE,
+      subscriptionTier: 'free',
+      text: 'Create a video of a cat',
+    });
+
+    expect(decision.status).toBe('blocked');
+    if (decision.status !== 'blocked') return;
+    expect(decision.code).toBe('plan_required');
+  });
+
+  it('does not infer video from a Local Mode chat', () => {
+    const decision = resolveMobileVideoGenerationRequest({
+      ...TEXT_MODE,
+      executionMode: 'local',
+      text: 'Create a video of a cat',
+    });
+
+    expect(decision.status).toBe('blocked');
+    if (decision.status !== 'blocked') return;
+    expect(decision.code).toBe('requires_cloud');
+  });
+});
