@@ -17,7 +17,18 @@ const UNIX_TYPE_MASK = 0o170000;
 const ZIP_OPTIONS = Object.freeze({
   checkOverlappingEntry: true,
   checkSignature: true,
-  useCompressionStream: false,
+  // Inflate through the platform's DecompressionStream, not zip.js's bundled JS
+  // implementation. On @zip.js/zip.js 2.8.26 the JS path fails checkSignature
+  // for entries large enough to span multiple chunks: packaging this extension
+  // produced `ERROR: Invalid signature` on extension/out/extension.js (~1 MB,
+  // deflated) while the other 16 entries passed. The archive was intact —
+  // `unzip -t` reported no errors and an independently recomputed CRC32 matched
+  // both the central directory and the value zip.js itself reported. So the
+  // bytes were fine and the JS inflate path's own verification was wrong.
+  //
+  // This keeps checkSignature ON. It changes which inflater runs, not whether
+  // the CRC is verified.
+  useCompressionStream: true,
   useWebWorkers: false,
 });
 

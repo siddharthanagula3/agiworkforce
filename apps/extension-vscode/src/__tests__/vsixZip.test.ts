@@ -74,4 +74,16 @@ describe('portable VSIX ZIP inspection', () => {
 
     await expect(inspectVsixArchive(archivePath)).rejects.toThrow(/Invalid signature/u);
   });
+
+  // NOT COVERED HERE: the useCompressionStream bug fixed in scripts/vsix-zip.js.
+  // Both fixtures above are tiny and STORED (level 0), so neither reaches the
+  // inflater. Synthetic archives written by zip.js's own ZipWriter do not
+  // reproduce it either — deflated payloads up to 1 MB compressed, with and
+  // without data descriptors, all verify fine on the buggy path. Whatever vsce
+  // emits differs in some way not yet identified, so no unit fixture here has
+  // been shown to fail without the fix.
+  //
+  // The real guard is `pnpm test:integration:package` (the VS Code + CLI
+  // clean-profile E2E job), which verifies the actual packaged VSIX. That is
+  // where the bug surfaced and where a regression would surface again.
 });
