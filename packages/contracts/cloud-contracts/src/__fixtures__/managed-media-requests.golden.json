@@ -7,7 +7,9 @@
     "size": "1536x1536",
     "style": "photorealistic",
     "n": 1,
-    "quality": "hd"
+    "quality": "hd",
+    "operation": "generate",
+    "transparent_background": false
   },
   "video": {
     "prompt": "A catalog-backed video request",
