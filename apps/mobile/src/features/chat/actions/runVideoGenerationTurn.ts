@@ -4,7 +4,7 @@ import {
   type GeneratedVideo,
   type VideoGenRequest,
   type VideoGenStatusResponse,
-} from '@/src/features/video/services/videogen';
+} from '@/src/features/video';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
