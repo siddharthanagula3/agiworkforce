@@ -54,6 +54,8 @@ export interface CloudMessageWire {
 }
 
 export interface MockCloudApiOptions extends MockCloudAuthOptions {
+  /** Models returned by `GET /api/models`; empty keeps Auto sourced from the canonical registry. */
+  models?: Array<{ id: string; name: string; provider: string }>;
   /** Conversation list returned by `GET /api/chat/conversations`. */
   conversations?: CloudConversationWire[];
   /** Messages returned by `GET /api/chat/conversations/:id`, keyed by id. */
@@ -135,6 +137,7 @@ export function cloudMessageFixture(
  * before `page.goto`.
  */
 export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}): Promise<void> {
+  const models = options.models ?? [];
   const conversations = options.conversations ?? [];
   const messagesByConversation = options.messagesByConversation ?? {};
   const projects = options.projects ?? [];
@@ -157,6 +160,11 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   // 3. The endpoints the catch-all's empty `{}` would violate the contract for.
   //    Every shape below comes from `managed-cloud-chat-client.ts`, which parses
   //    each response with a zod schema and throws a contract error otherwise.
+  await page.route('**/api/models**', (route) => {
+    if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
+    return fulfillJson(route, { models });
+  });
+
   await page.route('**/api/chat/conversations**', (route) => {
     if (isPreflight(route)) return route.fulfill({ status: 204, headers: { ...CORS_HEADERS } });
     const request = route.request();
