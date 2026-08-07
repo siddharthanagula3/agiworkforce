@@ -12,10 +12,14 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { ToolCallTimeline } from '../ToolCallTimeline';
 import type { ToolCall } from '@/types/chat';
 
+// Deliberately still `running`. A finished run auto-collapses on its own (see
+// tool-call-timeline.test.tsx), which would mask the thing these tests exist to
+// pin: that a MANUAL toggle does not bleed across a recycle. Keeping the run in
+// flight isolates the recycling invariant from the auto-collapse behaviour.
 const manyTools: ToolCall[] = Array.from({ length: 5 }, (_, i) => ({
   id: `tool-${i}`,
   name: 'read_file',
-  status: 'completed',
+  status: 'running',
 }));
 
 function toggleLabel(summary: string, collapsed: boolean) {
