@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { X, Share2 } from 'lucide-react-native';
@@ -21,6 +21,35 @@ interface ImageFullScreenProps {
 }
 
 /**
+ * URIs the image view can render as-is, with no Cloud round trip.
+ *
+ * `useGeneratedImageSource` speaks exactly one dialect: the durable
+ * `/api/files/<uuid>` path a Cloud generation returns, which it turns into an
+ * absolute URL and fetches with a bearer token. Anything else lands on its
+ * `invalid` branch.
+ *
+ * This viewer is also opened for USER ATTACHMENTS (`MessageBubble` passes
+ * `attachment.url` straight in), and those are on-device URIs — `file://` from
+ * the document picker, `ph://` from the photo library, `content://` on Android,
+ * or an inline `data:` payload. None is a durable path, so tapping an attached
+ * image in Local Mode rendered "Generated image unavailable" on black: the
+ * viewer asking the Cloud about a file that never left the phone.
+ *
+ * These need no authorization and must never be routed through one — Local Mode
+ * is an on-device trust boundary, and fetching an attachment's bytes through
+ * Cloud would breach it.
+ */
+const DIRECTLY_DISPLAYABLE_URI = /^(file|ph|content|assets-library|data|https?):/i;
+
+/** True when `imageUrl` can be handed to `expo-image` unchanged. */
+function isDirectlyDisplayableUri(imageUrl: string | null): imageUrl is string {
+  if (!imageUrl) return false;
+  // A durable generated path is relative (`/api/files/…`), so it can never
+  // match a scheme-prefixed URI — the two sets do not overlap.
+  return DIRECTLY_DISPLAYABLE_URI.test(imageUrl.trim());
+}
+
+/**
  * Full-screen image viewer with pinch-to-zoom and double-tap toggle.
  * Overlay pattern matching ArtifactFullScreen.
  */
@@ -34,7 +63,19 @@ export function ImageFullScreen({
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { width: screenWidth } = useWindowDimensions();
-  const { source, status: sourceStatus } = useGeneratedImageSource(imageUrl ?? '', allowEphemeral);
+  const directUri = useMemo(
+    () => (isDirectlyDisplayableUri(imageUrl) ? imageUrl.trim() : null),
+    [imageUrl],
+  );
+  // Hooks cannot be called conditionally, so the generated-image resolver still
+  // runs — it is fed an empty URL for a direct URI so it settles on `invalid`
+  // without issuing a token request, and its result is then overridden below.
+  const { source: generatedSource, status: generatedStatus } = useGeneratedImageSource(
+    directUri ? '' : (imageUrl ?? ''),
+    allowEphemeral,
+  );
+  const source = directUri ? { uri: directUri } : generatedSource;
+  const sourceStatus = directUri ? ('ready' as const) : generatedStatus;
 
   // Zoom state via reanimated shared values
   const scale = useSharedValue(1);
