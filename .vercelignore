@@ -105,9 +105,9 @@ lerna-debug.log
 
 # Native and platform build outputs (2026-08-08)
 #
-# `vercel --prod` uploads the working directory. Without these the CLI tries to
-# push ~1.2GB and dies on "File size limit exceeded (100 MB)" — which is why a
-# CLI deploy was not a usable incident-response path during the argon2 outage.
+# A CLI production deploy uploads the working directory. Without these the CLI
+# tries to push ~1.2GB and dies on "File size limit exceeded (100 MB)" — which
+# is why it was not a usable incident-response path during the argon2 outage.
 # None of it is an input to the web build.
 target
 apps/desktop/release
