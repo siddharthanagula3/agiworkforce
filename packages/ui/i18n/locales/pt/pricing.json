@@ -74,5 +74,7 @@
   "max15xCta": "Obter Max 15x",
   "heroLede": "Veja os preços dos planos individuais, de equipe e enterprise.",
   "pageTitle": "Preços",
-  "freeLocalByok": "Modelos locais e suas próprias chaves de API, sempre grátis"
+  "freeLocalByok": "Modelos locais e suas próprias chaves de API, sempre grátis",
+  "seatTotal_one": "{{count}} assento · {{total}}/mês",
+  "seatTotal_other": "{{count}} assentos · {{total}}/mês"
 }

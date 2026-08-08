@@ -175,7 +175,6 @@
   "perSeatPricingSub": "por licencia, al mes",
   "perSeatPrice": "{{price}}/licencia/mes",
   "seatCountLabel": "Licencias",
-  "seatTotal": "{{seats}} licencias · {{total}}/mes",
   "changeSeatsCta": "Actualizar licencias",
   "audienceLabel": "Tipo de facturación",
   "audienceIndividual": "Individual",
@@ -187,5 +186,7 @@
   "max15xFeature3": "Generación de vídeo",
   "max15xCta": "Obtener Max 15x",
   "heroLede": "Consulta los precios de los planes individuales, de equipo y enterprise.",
-  "freeLocalByok": "Modelos locales y tus propias claves API, siempre gratis"
+  "freeLocalByok": "Modelos locales y tus propias claves API, siempre gratis",
+  "seatTotal_one": "{{count}} licencia · {{total}}/mes",
+  "seatTotal_other": "{{count}} licencias · {{total}}/mes"
 }

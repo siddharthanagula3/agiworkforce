@@ -74,5 +74,7 @@
   "max15xCta": "Max 15x लें",
   "heroLede": "व्यक्तिगत, टीम और एंटरप्राइज़ प्लान की कीमतें देखें।",
   "pageTitle": "मूल्य निर्धारण",
-  "freeLocalByok": "लोकल मॉडल और आपकी अपनी API कुंजियाँ, हमेशा मुफ़्त"
+  "freeLocalByok": "लोकल मॉडल और आपकी अपनी API कुंजियाँ, हमेशा मुफ़्त",
+  "seatTotal_one": "{{count}} सीट · {{total}}/माह",
+  "seatTotal_other": "{{count}} सीटें · {{total}}/माह"
 }

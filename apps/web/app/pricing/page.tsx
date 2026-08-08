@@ -535,7 +535,7 @@ export default function PricingPage() {
         <section
           className="agi-page-hero"
           aria-labelledby="pricing-hero-title"
-          style={{ borderBottom: 'none', paddingBottom: 24 }}
+          style={{ borderBottom: 'none', paddingTop: 48, paddingBottom: 24 }}
         >
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
@@ -543,42 +543,84 @@ export default function PricingPage() {
           <p className="agi-fl-section-lede">{t('heroLede')}</p>
         </section>
 
-        {/* ─────────────────────── Audience selector ────────────────────── */}
-        {/* `.agi-tier-toggle` ships a 36px bottom margin, and the cadence toggle
-            below carries a 32px top margin. They sit either side of the panel
-            boundary so they never collapse — left alone they stack to 68px of
-            dead space between the tabs and the first control. The 32px below is
-            the spacing; this is zeroed. */}
+        {/* ──────────────── Audience + billing-cadence controls ─────────────
+            Both toggles are the same kind of thing — "which prices am I
+            looking at" — so they share a row. The cadence one only appears
+            for individual plans; Team carries its own cadence next to its
+            seat count, because seats and cadence are bought together. */}
         <div
-          className="agi-tier-toggle"
-          role="group"
-          aria-label={t('audienceLabel')}
-          style={{ marginBottom: 0 }}
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 32,
+          }}
         >
-          <button
-            type="button"
-            aria-pressed={audience === 'individual'}
-            onClick={() => setAudience('individual')}
-            className={
-              audience === 'individual'
-                ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                : 'agi-tier-toggle-btn'
-            }
+          <div
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('audienceLabel')}
+            style={{ marginBottom: 0 }}
           >
-            {t('audienceIndividual')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={audience === 'business'}
-            onClick={() => setAudience('business')}
-            className={
-              audience === 'business'
-                ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                : 'agi-tier-toggle-btn'
-            }
-          >
-            {t('audienceBusiness')}
-          </button>
+            <button
+              type="button"
+              aria-pressed={audience === 'individual'}
+              onClick={() => setAudience('individual')}
+              className={
+                audience === 'individual'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceIndividual')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={audience === 'business'}
+              onClick={() => setAudience('business')}
+              className={
+                audience === 'business'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceBusiness')}
+            </button>
+          </div>
+
+          {audience === 'individual' ? (
+            <div
+              className="agi-tier-toggle"
+              role="group"
+              aria-label={t('billingCadenceLabel')}
+              style={{ marginBottom: 0 }}
+            >
+              <button
+                type="button"
+                aria-pressed={!annual}
+                onClick={() => setAnnual(false)}
+                className={
+                  annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                }
+              >
+                {t('monthly')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={annual}
+                onClick={() => setAnnual(true)}
+                className={
+                  annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
+                }
+              >
+                {t('annual')}{' '}
+                <span className="agi-tier-toggle-save">
+                  {t('annualSave', { pct: proSavingsPct })}
+                </span>
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* ─────────────────── Team & Enterprise (centerpiece) ──────────── */}
@@ -659,7 +701,12 @@ export default function PricingPage() {
                   {t('teamFeature4')}
                 </li>
               </ul>
-              <div className="agi-tier-seats">
+              {/* `.agi-tier-seats` is `display: block` with no gap, so the label
+                  and the number input sat flush and read as one word, "Seats1". */}
+              <div
+                className="agi-tier-seats"
+                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              >
                 <label className="agi-tier-seats-label" htmlFor="team-seat-count">
                   {t('seatCountLabel')}
                 </label>
@@ -689,7 +736,7 @@ export default function PricingPage() {
                 <p className="agi-tier-seats-total">
                   {teamInterval === 'yearly'
                     ? t('seatTotalAnnual', { total: teamYearlyTotalPrice, seats: teamSeats })
-                    : t('seatTotal', { total: teamTotalPrice, seats: teamSeats })}
+                    : t('seatTotal', { total: teamTotalPrice, count: teamSeats })}
                 </p>
               </div>
               <div className="agi-tier-cta-group">
@@ -745,36 +792,6 @@ export default function PricingPage() {
           {/* The audience tab above already says which plans these are; a second
               headline and two lines of prose only delayed the prices. The name
               moves to aria-label so the section keeps an accessible name. */}
-          <div
-            className="agi-tier-toggle"
-            role="group"
-            aria-label={t('billingCadenceLabel')}
-            style={{ marginTop: 32 }}
-          >
-            <button
-              type="button"
-              aria-pressed={!annual}
-              onClick={() => setAnnual(false)}
-              className={
-                annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-              }
-            >
-              {t('monthly')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={annual}
-              onClick={() => setAnnual(true)}
-              className={
-                annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
-              }
-            >
-              {t('annual')}{' '}
-              <span className="agi-tier-toggle-save">
-                {t('annualSave', { pct: proSavingsPct })}
-              </span>
-            </button>
-          </div>
 
           {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
             <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>

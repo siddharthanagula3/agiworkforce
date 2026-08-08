@@ -175,7 +175,6 @@
   "perSeatPricingSub": "per seat, per month",
   "perSeatPrice": "{{price}}/seat/mo",
   "seatCountLabel": "Seats",
-  "seatTotal": "{{seats}} seats · {{total}}/mo",
   "changeSeatsCta": "Update seats",
   "audienceLabel": "Billing audience",
   "audienceIndividual": "Individual",
@@ -187,5 +186,7 @@
   "max15xFeature3": "Video generation",
   "max15xCta": "Get Max 15x",
   "heroLede": "See pricing for individual, team, and enterprise plans.",
-  "freeLocalByok": "Local models and your own API keys, always free"
+  "freeLocalByok": "Local models and your own API keys, always free",
+  "seatTotal_one": "{{count}} seat · {{total}}/mo",
+  "seatTotal_other": "{{count}} seats · {{total}}/mo"
 }

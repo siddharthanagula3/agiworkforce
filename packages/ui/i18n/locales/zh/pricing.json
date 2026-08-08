@@ -74,5 +74,7 @@
   "max15xCta": "获取 Max 15x",
   "heroLede": "查看个人、团队和企业方案的价格。",
   "pageTitle": "价格",
-  "freeLocalByok": "本地模型和自带 API 密钥，始终免费"
+  "freeLocalByok": "本地模型和自带 API 密钥，始终免费",
+  "seatTotal_one": "{{count}} 个席位 · {{total}}/月",
+  "seatTotal_other": "{{count}} 个席位 · {{total}}/月"
 }
