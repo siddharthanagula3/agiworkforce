@@ -4,7 +4,13 @@ import type { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { auth } from '@clerk/nextjs/server';
-import { ApiKeyService } from '@/lib/services/api-key-service';
+// NOT a static import. `ApiKeyService` pulls in `argon2`, a native module, at
+// module scope — and 98 route files import this one. On 2026-08-07 that binary
+// failed to resolve in the serverless bundle and every one of those routes
+// returned an empty 500 for ~21 hours, including routes that never hash
+// anything. Importing it lazily, only on the API-key path, means a hashing
+// dependency can fail without taking the authenticated surface with it.
+// See the incident note in apps/web/next.config.ts.
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   isDeveloperTokenRevoked,
@@ -171,6 +177,7 @@ async function verifyApiKey(
   token: string,
 ): Promise<(AuthResult & { scopes: readonly string[] }) | null> {
   try {
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
     const apiKey = await ApiKeyService.verifyKey(token);
     if (!apiKey) return null;
     return { userId: apiKey.user_id, scopes: apiKey.scopes };

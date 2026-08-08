@@ -38,6 +38,33 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  /**
+   * INCIDENT 2026-08-07 → 2026-08-08: every authenticated API route returned an
+   * empty HTTP 500 for ~21 hours.
+   *
+   *   Failed to load external module argon2-…: No native build was found for
+   *   platform=linux arch=arm64 abi=137 node=24.18.0
+   *
+   * `argon2` ships real prebuilt binaries (`prebuildify --napi`, including
+   * `prebuilds/linux-arm64/`), and N-API is ABI-stable, so the reported `abi=137`
+   * was a symptom rather than the cause. The cause is that `node-gyp-build`
+   * locates those `.node` files by BUILDING A PATH AT RUNTIME. Next's static file
+   * tracing cannot see a path that does not exist as a literal import, so the
+   * binaries were never copied into the serverless bundle.
+   *
+   * `serverExternalPackages` stops the bundler inlining the package;
+   * `outputFileTracingIncludes` copies the prebuilds it cannot infer. Both are
+   * required — either alone still ships a package that cannot resolve its binary.
+   *
+   * Blast radius was 98 route files, because `lib/api-auth.ts` imports
+   * `ApiKeyService`, which imports `argon2` at module scope. That import is being
+   * made lazy in the same change so a hashing dependency can never again take
+   * down routes that do no hashing.
+   */
+  serverExternalPackages: ['argon2'],
+  outputFileTracingIncludes: {
+    '/api/**/*': ['../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**'],
+  },
   // Instrumentation is automatically enabled in Next.js 16+
   // See: apps/web/instrumentation.ts
   experimental: {
