@@ -182,24 +182,39 @@ function extractTitleComment(content: string): string | undefined {
  * `indexOf` does the same job in one forward pass and returns undefined when
  * the closer is missing, which is the behaviour the callers already expected.
  */
-function betweenTags(content: string, openPattern: RegExp, closeTag: string): string | undefined {
-  const open = openPattern.exec(content);
-  if (!open) return undefined;
-  const start = open.index + open[0].length;
-  const end = content.toLowerCase().indexOf(closeTag, start);
+function betweenTags(content: string, openTag: string, closeTag: string): string | undefined {
+  const lower = content.toLowerCase();
+
+  // The open tag is located by scanning too, not by a regex.
+  //
+  // The first version of this used `/<h1[^>]*>/i.exec(content)`, and CodeQL
+  // was right to keep flagging it. A negated class before a required literal
+  // does not backtrack WITHIN one match attempt — but `exec` also advances the
+  // start position, and every `<h1` in a document with no `>` re-scans to the
+  // end. That is still O(n*m); the rewrite had only moved the constant.
+  //
+  // Here each character is visited at most twice: once by indexOf looking for
+  // the tag name, once by the bounded scan for `>`.
+  const nameAt = lower.indexOf(openTag);
+  if (nameAt === -1) return undefined;
+
+  let cursor = nameAt + openTag.length;
+  while (cursor < content.length && content[cursor] !== '>') cursor += 1;
+  if (cursor >= content.length) return undefined; // open tag never closed
+
+  const start = cursor + 1;
+  const end = lower.indexOf(closeTag, start);
   return end === -1 ? undefined : content.slice(start, end);
 }
 
 export function extractArtifactTitle(content: string): string | undefined {
-  // `<title>` and `<h1 ...>` are linear on their own — a negated class before a
-  // required literal does not backtrack. Only the span between them was.
-  const titleText = betweenTags(content, /<title\s*>/i, '</title>');
+  const titleText = betweenTags(content, '<title', '</title>');
   if (titleText?.trim()) return titleText.trim();
 
   const commentText = extractTitleComment(content);
   if (commentText) return commentText;
 
-  const headingText = betweenTags(content, /<h1[^>]*>/i, '</h1>');
+  const headingText = betweenTags(content, '<h1', '</h1>');
   if (headingText) {
     let text: string = headingText;
     let prev: string;
