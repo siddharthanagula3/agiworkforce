@@ -13,10 +13,12 @@ import {
   type ManagedUsageRequestReservation,
 } from './managed-usage-request-service';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import { LLMCostCalculator } from './llm-cost-calculator';
 import {
   runCloudCodeAgentTurn,
   type CloudCodeAgentEvent,
   type CloudCodeAgentResult,
+  type CloudCodeTurnUsage,
 } from './cloud-code-agent-loop';
 import {
   CloudCodeConflictError,
@@ -45,8 +47,62 @@ import {
  *    `awaiting_approval` with its pending row, so the gate survives a reload.
  */
 
-/** Conservative per-turn estimate, refined by real usage at settle time. */
+/**
+ * Conservative per-turn RESERVATION. This is what we hold against the user's
+ * balance before the turn runs; it is not what the turn is billed.
+ */
 const ESTIMATED_TURN_COST_CENTS = 25;
+
+/**
+ * Floor for a turn that did real provider work. A turn that reached the
+ * provider is never free, so a zero here means the provider did not report
+ * usage — not that nothing was consumed.
+ */
+const MINIMUM_BILLED_TURN_CENTS = 1;
+
+/**
+ * What a completed turn actually costs.
+ *
+ * WHY THIS EXISTS. Settlement used to pass `ESTIMATED_TURN_COST_CENTS`
+ * straight through, so EVERY Cloud Code turn billed a flat 25c no matter what
+ * it consumed — while the constant's own comment claimed it was "refined by
+ * real usage at settle time". It was not, and it could not be: the provider's
+ * `usage` chunk was being dropped by the `default: break` in
+ * `drainAssistantTurn`, so no real usage ever reached this file.
+ *
+ * The exposure ran both ways and was unbounded on one side. A one-tool-call
+ * turn overcharged at 25c; a long multi-step turn on a flagship model against
+ * a large repository context also billed 25c, and nothing capped how far that
+ * could diverge. Cloud Code turns are agentic — many provider calls per turn
+ * is the normal case, not the tail.
+ *
+ * Real usage now flows through `CloudCodeAgentResult.usage`, summed across
+ * every provider call, and is priced with the same `LLMCostCalculator` the
+ * rest of the managed surface uses, so the two paths cannot drift.
+ *
+ * When the provider reported nothing, we fall back to the reservation rather
+ * than to zero. Unknown usage must not be free — that is the direction of the
+ * error that costs money.
+ */
+function settledTurnCostCents(provider: string, model: string, usage: CloudCodeTurnUsage): number {
+  const reportedTokens =
+    usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+  if (reportedTokens <= 0) return ESTIMATED_TURN_COST_CENTS;
+
+  // calculateCost already returns whole cents, ceil'd with a one-cent floor,
+  // and its rounding is deliberately identical to the gateway's
+  // `dollarsToLedgerCents`. Re-rounding here would be the drift this is meant
+  // to avoid, so the only thing left to enforce is that a turn which reached
+  // the provider is never settled at zero.
+  const costCents = LLMCostCalculator.calculateCost(provider, model, {
+    promptTokens: usage.inputTokens,
+    completionTokens: usage.outputTokens,
+    totalTokens: usage.inputTokens + usage.outputTokens,
+    cacheReadInputTokens: usage.cacheReadTokens,
+    cacheCreationInputTokens: usage.cacheWriteTokens,
+  });
+  return Math.max(MINIMUM_BILLED_TURN_CENTS, costCents);
+}
 
 export interface StartCloudCodeAgentTurnInput {
   db: DatabaseAdapter;
@@ -236,7 +292,8 @@ export async function startCloudCodeAgentTurn(
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: result.stopReason === 'error' ? 'failed' : 'completed',
-    actualCostCents: result.stopReason === 'error' ? 0 : ESTIMATED_TURN_COST_CENTS,
+    actualCostCents:
+      result.stopReason === 'error' ? 0 : settledTurnCostCents(provider, model, result.usage),
     usage: { steps: result.stepsUsed, stopReason: result.stopReason },
   });
 
