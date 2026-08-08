@@ -63,7 +63,7 @@
   "limitReached": "Limit Reached",
   "limitMessage": "You have reached your {{limit}} limit.",
   "heroEyebrow": "Pricing",
-  "pageTitle": "Private by default. Built for teams.",
+  "pageTitle": "Pricing",
   "heroLedePart1": "{{localLabel}} keeps open-model work on your device. {{byokLabel}} sends only the requests you choose to your selected API provider, under that provider's billing and data terms. Both remain free, with no seat or card required.",
   "heroLedePart2": "AGI managed cloud is open in public alpha for individual use. Team is self-serve and billed per seat; Enterprise is sales-assisted when your organization wants custom governance and negotiated terms.",
   "installCta": "Get notified",
@@ -185,5 +185,7 @@
   "max15xFeature1": "15x Pro usage",
   "max15xFeature2": "Everything in Max 5x",
   "max15xFeature3": "Video generation",
-  "max15xCta": "Get Max 15x"
+  "max15xCta": "Get Max 15x",
+  "heroLede": "See pricing for individual, team, and enterprise plans.",
+  "freeLocalByok": "Local models and your own API keys, always free"
 }

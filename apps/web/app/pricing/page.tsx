@@ -520,34 +520,28 @@ export default function PricingPage() {
       <main className="agi-shell">
         <Header />
 
-        {/* ───────────────────────────── Hero ───────────────────────────── */}
+        {/* ───────────────────────────── Hero ─────────────────────────────
+            A pricing page is a place to compare prices. Both comparables give it
+            a title and one orienting line — chatgpt.com/pricing is "Pricing" over
+            "See pricing for our individual, business, and enterprise plans" —
+            and let the cards carry the argument. The positioning prose, the
+            three CTAs and the mode ribbon that used to live here said nothing a
+            visitor came to this page for; the trust-mode story is told on `/`,
+            `/local` and `/byok`, where it is the actual subject. */}
         <section className="agi-page-hero" aria-labelledby="pricing-hero-title">
-          <p className="agi-fl-eyebrow">{t('heroEyebrow')}</p>
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
           </h1>
-          <p className="agi-fl-section-lede">{t('heroLedePart1', { localLabel, byokLabel })}</p>
-          <p className="agi-fl-section-lede">{t('heroLedePart2')}</p>
-          <div className="agi-fl-cta-row">
-            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              {t('installCta')}
-            </Link>
-            <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
-              {t('talkToSalesCta')}
-            </Link>
-            <Link href="/" className="agi-fl-cta agi-fl-cta--ghost">
-              {t('tryAgiCta')}
-            </Link>
-          </div>
-          <ul className="agi-fl-mode-ribbon" aria-label={t('modeRibbonLabel')}>
-            <li>{t('ribbonLocal')}</li>
-            <li>{t('ribbonByok')}</li>
-            <li>{t('ribbonTeam')}</li>
-          </ul>
+          <p className="agi-fl-section-lede">{t('heroLede')}</p>
         </section>
 
         {/* ─────────────────────── Audience selector ────────────────────── */}
-        <div className="agi-tier-toggle" role="group" aria-label={t('audienceLabel')}>
+        <div
+          className="agi-tier-toggle"
+          role="group"
+          aria-label={t('audienceLabel')}
+          style={{ marginBottom: 40 }}
+        >
           <button
             type="button"
             aria-pressed={audience === 'individual'}
@@ -574,93 +568,13 @@ export default function PricingPage() {
           </button>
         </div>
 
-        {/* ──────────────────── The wedge: Local + BYOK ─────────────────── */}
-        <section
-          className="agi-fl-section"
-          aria-labelledby="pricing-wedge-title"
-          hidden={audience !== 'individual'}
-        >
-          <p className="agi-fl-eyebrow">{t('wedgeEyebrow')}</p>
-          <h2 id="pricing-wedge-title" className="agi-fl-h2">
-            {t('wedgeHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('wedgeLede')}</p>
-
-          <div className="agi-tier-grid agi-tier-grid--compact" style={{ marginTop: 32 }}>
-            <Reveal as="article" className="agi-tier agi-tier--compact">
-              <h3 className="agi-tier-name">{localLabel}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('free')}</span>
-                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-              </p>
-              <p className="agi-tier-body">{t('localTierBody')}</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('localFeature1', { localLabel })}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature4')}
-                </li>
-              </ul>
-              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                {t('installCta')}
-              </Link>
-            </Reveal>
-
-            <Reveal as="article" delay={60} className="agi-tier agi-tier--compact">
-              <h3 className="agi-tier-name">{byokLabel}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('free')}</span>
-                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-              </p>
-              <p className="agi-tier-body">{t('byokTierBody')}</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature4')}
-                </li>
-              </ul>
-              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                {t('installCta')}
-              </Link>
-            </Reveal>
-          </div>
-        </section>
-
         {/* ─────────────────── Team & Enterprise (centerpiece) ──────────── */}
         <section
           className="agi-fl-section"
-          aria-labelledby="pricing-team-title"
+          aria-label={t('audienceBusiness')}
           hidden={audience !== 'business'}
+          style={{ paddingTop: 0 }}
         >
-          <p className="agi-fl-eyebrow">{t('teamEyebrow')}</p>
-          <h2 id="pricing-team-title" className="agi-fl-h2">
-            {t('teamHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('teamLede')}</p>
-
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
@@ -811,15 +725,13 @@ export default function PricingPage() {
         {/* ──────────────────── Individual cloud on-ramp ────────────────── */}
         <section
           className="agi-fl-section"
-          aria-labelledby="pricing-individual-title"
+          aria-label={t('audienceIndividual')}
           hidden={audience !== 'individual'}
+          style={{ paddingTop: 0 }}
         >
-          <p className="agi-fl-eyebrow">{t('individualEyebrow')}</p>
-          <h2 id="pricing-individual-title" className="agi-fl-h2">
-            {t('individualHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('individualLede')}</p>
-
+          {/* The audience tab above already says which plans these are; a second
+              headline and two lines of prose only delayed the prices. The name
+              moves to aria-label so the section keeps an accessible name. */}
           <div
             className="agi-tier-toggle"
             role="group"
@@ -887,6 +799,15 @@ export default function PricingPage() {
                 <li>
                   <CheckIcon />
                   {t('freeFeature3')}
+                </li>
+                {/* Local and BYOK are $0 trust modes, not plans anyone buys.
+                    They were two more zero-price cards a visitor had to read
+                    past before reaching a price; as a line here they stay
+                    visible without spending a column. /local and /byok carry
+                    the full story. */}
+                <li>
+                  <CheckIcon />
+                  {t('freeLocalByok')}
                 </li>
               </ul>
               <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
