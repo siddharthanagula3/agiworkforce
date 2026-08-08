@@ -27,6 +27,11 @@ const allowedRootFiles = new Set([
   'BUILD.md',
   'CHANGELOG.md',
   'CLAUDE.md',
+  // The session execution queue and its founder-action companion. Both are
+  // emptied when a queue completes, so they are expected to exist and expected
+  // to be blank — see the working loop in CLAUDE.md.
+  'ExecutionPlan.md',
+  'FoundersAssistance.md',
   'CONTRIBUTING.md',
   'Cargo.lock',
   'Cargo.toml',

@@ -59,6 +59,44 @@ taxonomy at `docs/agent-context/llm-failure-taxonomy.json`. Do not leave
 unvalidated LLM/tool/API/IPC inputs, fake tests, swallowed assertions,
 production stubs, or vulnerable dependency ranges.
 
+## Session Working Loop
+
+Every session runs from `ExecutionPlan.md` and finishes it end to end.
+
+**The queue.** `ExecutionPlan.md` holds the session's items. Each carries `Status`,
+`Owner`, `Writes`, `Verify` and `Evidence`. **`Writes:` is the scheduling primitive — two
+items may run in parallel only if their write-sets are disjoint.** That is the whole
+collision rule.
+
+**What is never delegated.** `Owner: main` on anything where parallel writes clobber
+rather than merge: `packages/contracts/types/src/**`; ratchet files that regenerate
+wholesale (`scripts/config/reference-integrity-allowlist.json`, `audit/inventory.json`);
+the 12 locale bundles under `packages/ui/i18n/locales` (`check:i18n-parity` demands exact
+key parity); database migrations; `ExecutionPlan.md`, `CHANGELOG.md` and
+`docs/agent-context/known-flaws.md`; and every commit. Agents that must write in parallel
+run with worktree isolation.
+
+**Per item.** Verify against source → implement → targeted test → full suite plus
+`pnpm check:llm-operability` → append to `CHANGELOG.md` → mark `done` with evidence.
+A finding that does not reproduce is completed by recording the evidence that disproves it;
+audit queues contain false positives and dismissals must be as explicit as fixes.
+
+**On completion.** When every item is `done`, empty both `ExecutionPlan.md` and
+`CHANGELOG.md`. Git history is the durable record; the queue and its log are disposable by
+design.
+
+**Decisions.** Ask with `AskUserQuestion`. If no answer arrives, research how ChatGPT,
+Claude and Gemini handle the same decision, choose from that evidence, and record the
+question, the comparison, the choice, and how to reverse it. Never self-decide anything
+outward-facing or irreversible without explicit approval: publishing, deleting user data,
+creating live Stripe objects, or anything that spends real money.
+
+**Founder-blocked work.** Vercel, Stripe and Neon CLI use is pre-authorised, including
+applying migrations. When something genuinely cannot proceed without the founder — a
+credential, a console, an approval — write the steps into `FoundersAssistance.md` in plain
+step-by-step form and move to a different item rather than stalling. Keep that file empty
+when nothing is waiting.
+
 ## Claude Code Context Order
 
 1. `AGENTS.md`
