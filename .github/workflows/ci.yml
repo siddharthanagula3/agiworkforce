@@ -579,6 +579,15 @@ jobs:
       - name: Install Detox simulator utilities
         run: |
           brew tap wix/brew
+          # Homebrew now refuses formulae from third-party taps unless the tap
+          # is explicitly trusted:
+          #   "Refusing to load formula wix/brew/applesimutils from untrusted
+          #    tap wix/brew. Run `brew trust wix/brew` to trust it."
+          # applesimutils is Detox's own simulator helper and wix/brew is the
+          # Detox authors' tap, which is why it was already tapped above. The
+          # trust step just makes the existing decision explicit to the newer
+          # Homebrew. Without it this job dies before a single test runs.
+          brew trust wix/brew
           brew install applesimutils
           pnpm --filter @agiworkforce/mobile exec detox build-framework-cache
 
