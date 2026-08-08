@@ -109,16 +109,6 @@ export function isActiveSubscriptionStatus(status: string): boolean {
 }
 
 // =============================================================================
-// Default CORS Origins
-// =============================================================================
-
-export const DEFAULT_ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:4000',
-] as const;
-
-// =============================================================================
 // Database Error Codes
 // =============================================================================
 
