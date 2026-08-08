@@ -21,6 +21,7 @@
  */
 
 import { z } from 'zod';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 
 /**
  * Which UI surface owns a generated output. Derived DETERMINISTICALLY on the
@@ -107,7 +108,7 @@ export function parseGeneratedFilesDelta(payload: unknown): GeneratedFileWire[] 
  */
 export function resolveGeneratedFileUri(uri: string, apiBaseUrl: string): string {
   if (/^https?:\/\//i.test(uri)) return uri;
-  const base = apiBaseUrl.replace(/\/+$/, '');
+  const base = stripTrailingSlashes(apiBaseUrl);
   if (!base) return uri;
   return uri.startsWith('/') ? `${base}${uri}` : `${base}/${uri}`;
 }

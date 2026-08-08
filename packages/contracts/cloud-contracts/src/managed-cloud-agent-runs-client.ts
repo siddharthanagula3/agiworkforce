@@ -20,6 +20,7 @@ import {
   type ManagedCloudAgentRunReference as RunReference,
 } from './managed-cloud-agent-run-reference';
 import { ToolApprovalResumeRequestSchema } from './tool-approval-resume';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
 
@@ -186,7 +187,7 @@ export class ManagedCloudAgentRunAbortError extends Error {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+  return stripTrailingSlashes(baseUrl);
 }
 
 function assertNotAborted(signal?: AbortSignal): void {

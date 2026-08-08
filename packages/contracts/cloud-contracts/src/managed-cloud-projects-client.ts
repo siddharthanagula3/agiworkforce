@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
   ProjectsSyncPullResponseSchema,
   ProjectsSyncPushRequestSchema,
@@ -103,7 +104,7 @@ export class ManagedCloudProjectsContractError extends Error {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+  return stripTrailingSlashes(baseUrl);
 }
 
 function parseInput<T>(schema: z.ZodType<T>, input: unknown, name: string): T {

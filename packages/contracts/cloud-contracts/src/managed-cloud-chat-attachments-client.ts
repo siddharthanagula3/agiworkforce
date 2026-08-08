@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
@@ -42,7 +43,7 @@ function assertNotAborted(signal?: AbortSignal): void {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+  return stripTrailingSlashes(baseUrl);
 }
 
 async function responseError(response: Response, fallback: string): Promise<Error> {
