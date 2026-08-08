@@ -153,12 +153,67 @@ fn provider_label(spec: &ProviderSpec) -> &str {
     }
 }
 
+/// True when `url` names the local machine, where cleartext HTTP cannot leave
+/// the host.
+fn is_loopback_endpoint(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        // Unparseable: treat as remote. Fail closed.
+        return false;
+    };
+    match parsed.host_str() {
+        Some("localhost") | Some("127.0.0.1") | Some("::1") | Some("[::1]") => true,
+        Some(host) => host
+            .parse::<std::net::IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false),
+        None => false,
+    }
+}
+
+/// Refuse to attach a credential to a cleartext non-loopback endpoint.
+///
+/// `base_url` is user-configurable — BYOK users point it at proxies, gateways
+/// and local runtimes — and [`apply_headers`] attaches the API key to whatever
+/// it is given. Nothing checked the scheme, so a `base_url` of
+/// `http://gateway.internal/v1` sent the key over the wire in cleartext. That
+/// is what `rust/cleartext-transmission` flagged on all three request sites,
+/// and it was a real gap rather than a false positive.
+///
+/// The sibling MCP crate has enforced exactly this rule for its own transports
+/// (`agiworkforce-mcp::security::enforce_https_for_remote`); the LLM crate,
+/// which carries provider API keys, had no equivalent. Loopback stays exempt
+/// so Ollama and other local runtimes on `http://localhost:11434` keep working
+/// — the same carve-out, for the same reason.
+fn require_secure_credential_transport(url: &str, spec: &ProviderSpec) -> Result<(), LlmError> {
+    // `extra_headers` is documented as non-secret (spec.rs), so `Auth` is the
+    // only thing that can carry key material here.
+    let carries_secret = !matches!(spec.auth, Auth::None);
+    if !carries_secret || !url.starts_with("http://") {
+        return Ok(());
+    }
+    if is_loopback_endpoint(url) {
+        return Ok(());
+    }
+    Err(LlmError::Auth {
+        provider: spec.id.clone(),
+        message: format!(
+            "refusing to send credentials over cleartext HTTP to a non-loopback endpoint.              Use https:// for '{url}', or a loopback address for a local runtime."
+        ),
+    })
+}
+
 /// Apply auth + caller extra headers. Secrets only ever come from
 /// [`Auth`] — never log the returned builder's headers.
+///
+/// Takes the url so the transport check above cannot be skipped: this is the
+/// one place a credential is attached, so it is the one place that has to
+/// refuse.
 fn apply_headers(
     mut builder: reqwest::RequestBuilder,
+    url: &str,
     spec: &ProviderSpec,
-) -> reqwest::RequestBuilder {
+) -> Result<reqwest::RequestBuilder, LlmError> {
+    require_secure_credential_transport(url, spec)?;
     builder = match &spec.auth {
         Auth::None => builder,
         Auth::Bearer(token) => builder.header("Authorization", format!("Bearer {token}")),
@@ -167,7 +222,7 @@ fn apply_headers(
     for (name, value) in &spec.extra_headers {
         builder = builder.header(name.as_str(), value.as_str());
     }
-    builder
+    Ok(builder)
 }
 
 /// Classify a non-success response, consuming its body.
@@ -367,7 +422,7 @@ async fn stream_anthropic(
 
     let url = &spec.base_url;
     let mut builder = client.post(url);
-    builder = apply_headers(builder, spec);
+    builder = apply_headers(builder, url, spec)?;
     builder = builder
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json");
@@ -708,7 +763,7 @@ async fn stream_openai_compat(
 
     let url = &spec.base_url;
     let mut builder = client.post(url);
-    builder = apply_headers(builder, spec);
+    builder = apply_headers(builder, url, spec)?;
     builder = builder.header("content-type", "application/json");
     let resp = builder
         .json(&body)
@@ -971,7 +1026,7 @@ async fn stream_openai_responses(
 
     let url = &spec.base_url;
     let mut builder = client.post(url);
-    builder = apply_headers(builder, spec);
+    builder = apply_headers(builder, url, spec)?;
     builder = builder.header("content-type", "application/json");
     let response = builder
         .json(&body)
@@ -1417,7 +1472,7 @@ async fn stream_gemini(
 
     let mut builder = client.post(&url);
     builder = builder.header("content-type", "application/json");
-    builder = apply_headers(builder, spec);
+    builder = apply_headers(builder, &url, spec)?;
     let resp = builder
         .json(&body)
         .send()
@@ -1625,7 +1680,7 @@ async fn stream_ollama(
 
     let mut builder = client.post(&url);
     builder = builder.header("content-type", "application/json");
-    builder = apply_headers(builder, spec);
+    builder = apply_headers(builder, &url, spec)?;
     let resp = builder.json(&body).send().await.map_err(|e| {
         let msg = e.to_string();
         if msg.contains("Connection refused") || msg.contains("connection refused") {
@@ -2093,5 +2148,91 @@ mod anthropic_request_tests {
         req.gemini_thinking_budget = Some(0);
         let body = build_gemini_request_body(&req);
         assert!(body.pointer("/generationConfig/thinkingConfig").is_none());
+    }
+}
+
+#[cfg(test)]
+mod credential_transport_tests {
+    use super::*;
+
+    fn spec(base_url: &str, auth: Auth) -> ProviderSpec {
+        ProviderSpec {
+            id: "test-provider".to_string(),
+            dialect: Dialect::OpenAiCompat(OpenAiOpts::for_url(base_url)),
+            base_url: base_url.to_string(),
+            auth,
+            extra_headers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn refuses_a_bearer_token_over_cleartext_http_to_a_remote_host() {
+        // THE GAP. `base_url` is user-configurable — BYOK users point it at
+        // proxies and gateways — and apply_headers attached the API key to
+        // whatever it was given. An http:// endpoint sent the key in the
+        // clear. rust/cleartext-transmission flagged this, correctly.
+        let s = spec("http://gateway.internal/v1/chat", Auth::Bearer("sk-secret".into()));
+        let err = require_secure_credential_transport(&s.base_url, &s).unwrap_err();
+        assert!(
+            format!("{err}").contains("cleartext HTTP"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn refuses_a_custom_auth_header_over_cleartext_http_too() {
+        let s = spec(
+            "http://gateway.internal/v1/chat",
+            Auth::Header {
+                name: "x-api-key".into(),
+                value: "secret".into(),
+            },
+        );
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
+    }
+
+    #[test]
+    fn allows_https_to_any_host() {
+        let s = spec(
+            "https://api.openai.com/v1/chat/completions",
+            Auth::Bearer("sk-secret".into()),
+        );
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_ok());
+    }
+
+    #[test]
+    fn allows_cleartext_http_to_loopback_so_local_runtimes_keep_working() {
+        // Ollama and friends. The carve-out exists for the same reason the MCP
+        // crate has one: on loopback the bytes never leave the machine.
+        for url in [
+            "http://localhost:11434/api/chat",
+            "http://127.0.0.1:1234/v1/chat/completions",
+            "http://[::1]:8080/v1/chat/completions",
+        ] {
+            let s = spec(url, Auth::Bearer("sk-local".into()));
+            assert!(
+                require_secure_credential_transport(url, &s).is_ok(),
+                "{url} should be permitted"
+            );
+        }
+    }
+
+    #[test]
+    fn allows_cleartext_http_when_there_is_no_credential_to_leak() {
+        let s = spec("http://ollama.lan:11434/api/chat", Auth::None);
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_ok());
+    }
+
+    #[test]
+    fn treats_an_unparseable_url_as_remote_and_fails_closed() {
+        let s = spec("http://", Auth::Bearer("sk-secret".into()));
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
+    }
+
+    #[test]
+    fn a_lookalike_host_is_not_loopback() {
+        // "localhost.evil.com" must not be mistaken for the local machine.
+        let s = spec("http://localhost.evil.com/v1", Auth::Bearer("sk-secret".into()));
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
     }
 }
