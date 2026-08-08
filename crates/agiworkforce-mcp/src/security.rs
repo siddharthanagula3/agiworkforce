@@ -86,20 +86,77 @@ pub fn enforce_https_for_remote(url: &str) -> Result<()> {
         Err(e) => bail!("Invalid MCP server URL: {e}"),
     };
     let host = parsed.host_str().unwrap_or("");
-    let is_localhost = host == "localhost"
+    if !host_is_loopback(host) {
+        bail!(
+            "Refusing to connect to non-localhost HTTP URL '{host}'. Remote MCP servers must use HTTPS."
+        );
+    }
+    Ok(())
+}
+
+/// True when `host` names the local machine.
+fn host_is_loopback(host: &str) -> bool {
+    host == "localhost"
         || host == "127.0.0.1"
         || host == "::1"
         || host == "[::1]"
         || host
             .parse::<std::net::Ipv4Addr>()
             .map(|v4| v4.is_loopback())
-            .unwrap_or(false);
-    if !is_localhost {
+            .unwrap_or(false)
+}
+
+/// Decide whether a transport may skip TLS certificate verification.
+///
+/// WHY THIS LIVES HERE. `danger_accept_invalid_certs(true)` is called in
+/// `transport/http.rs` and `transport/sse.rs` whenever [`crate::McpTimeouts`]
+/// carries `verify_tls: false`. The only guard against that was in the DESKTOP
+/// caller (`apps/desktop/src-tauri/src/core/mcp/transport.rs`, SEV-DESK-07) —
+/// far away from the code that performs the dangerous action, and invisible to
+/// any other caller. The CLI happens to pass `McpTimeouts::default()`
+/// (`verify_tls: true`), so nothing is exploitable today, but the safety
+/// property held only by luck and by a guard in a different crate. One new
+/// caller, or one new config knob, and TLS silently downgrades.
+///
+/// The policy is the desktop's, moved to where it is actually enforceable:
+///
+/// - Release builds refuse `verify_tls: false` for ANY host. A malicious or
+///   mistaken config file must not be able to downgrade TLS on a shipped
+///   binary, regardless of what it points at.
+/// - Debug builds allow it for loopback only, so a developer can run a local
+///   MCP server behind a self-signed certificate without disabling the check
+///   for the whole internet.
+///
+/// The desktop's own check stays where it is; it is now defence in depth
+/// rather than the sole barrier.
+pub fn enforce_tls_verification_policy(url: &str, verify_tls: bool) -> Result<()> {
+    if verify_tls {
+        return Ok(());
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = url;
         bail!(
-            "Refusing to connect to non-localhost HTTP URL '{host}'. Remote MCP servers must use HTTPS."
+            "TLS certificate verification cannot be disabled in release builds. \
+             Use a properly-signed certificate, or a loopback server in a debug build."
         );
     }
-    Ok(())
+
+    #[cfg(debug_assertions)]
+    {
+        let host = reqwest::Url::parse(url)
+            .ok()
+            .and_then(|parsed| parsed.host_str().map(str::to_owned))
+            .unwrap_or_default();
+        if !host_is_loopback(&host) {
+            bail!(
+                "Refusing to disable TLS certificate verification for non-loopback host '{host}'. \
+                 It is permitted only for localhost, and only in debug builds."
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -181,5 +238,58 @@ mod tests {
     fn https_enforcement_blocks_cleartext_remote() {
         let err = enforce_https_for_remote("http://mcp.example.com/").unwrap_err();
         assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    #[test]
+    fn tls_policy_is_a_no_op_when_verification_stays_on() {
+        // The overwhelmingly common case must cost nothing and never fail,
+        // including for hosts the policy would otherwise reject.
+        assert!(enforce_tls_verification_policy("https://mcp.example.com/", true).is_ok());
+        assert!(enforce_tls_verification_policy("http://127.0.0.1:8080/", true).is_ok());
+        assert!(enforce_tls_verification_policy("not a url", true).is_ok());
+    }
+
+    #[test]
+    fn tls_policy_refuses_a_remote_downgrade() {
+        // Release: refused for every host. Debug: refused for non-loopback.
+        // Either way this URL must never reach danger_accept_invalid_certs.
+        let err = enforce_tls_verification_policy("https://mcp.example.com/", false).unwrap_err();
+        let rendered = format!("{err:#}");
+        assert!(
+            rendered.contains("cannot be disabled in release builds")
+                || rendered.contains("non-loopback host"),
+            "unexpected refusal message: {rendered}"
+        );
+    }
+
+    #[test]
+    fn tls_policy_refuses_an_unparseable_url_rather_than_defaulting_open() {
+        // A URL we cannot resolve a host from must fail closed. Under the
+        // debug branch the host resolves to "", which is not loopback.
+        assert!(enforce_tls_verification_policy("://malformed", false).is_err());
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn tls_policy_allows_loopback_in_debug_builds_only() {
+        // The developer affordance: a local MCP server behind a self-signed
+        // certificate. Deliberately not compiled into release builds, where
+        // the refusal above is unconditional.
+        for url in [
+            "https://localhost:8443/",
+            "https://127.0.0.1:8443/",
+            "https://[::1]:8443/",
+        ] {
+            assert!(
+                enforce_tls_verification_policy(url, false).is_ok(),
+                "{url} should be permitted in a debug build"
+            );
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn tls_policy_refuses_loopback_too_in_release_builds() {
+        assert!(enforce_tls_verification_policy("https://localhost:8443/", false).is_err());
     }
 }

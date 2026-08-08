@@ -41,6 +41,9 @@ pub(crate) fn connect(
     // No global `.timeout()` on the client — POSTs are wrapped per-call, and the
     // optional GET stream is long-lived.
     let mut builder = reqwest::Client::builder();
+    // Release builds refuse this outright; debug builds allow loopback only.
+    crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)
+        .context("[mcp http]")?;
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
     }
