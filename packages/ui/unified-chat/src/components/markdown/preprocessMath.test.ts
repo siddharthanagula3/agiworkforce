@@ -84,3 +84,74 @@ describe('preprocessMath', () => {
     expect(preprocessMath(input)).toBe(input);
   });
 });
+
+describe('preprocessMath — scanner parity with the expression it replaced', () => {
+  /**
+   * The exact regex implementation that shipped before, kept here as the
+   * oracle. Parity is checked against what ran in production, not against a
+   * description of what it was supposed to do.
+   */
+  const LEGACY_RE = /(```[\s\S]*?```|`[^`\n]*`)|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g;
+  function legacy(content: string): string {
+    return content.replace(
+      LEGACY_RE,
+      (
+        match,
+        code: string | undefined,
+        display: string | undefined,
+        inline: string | undefined,
+      ) => {
+        if (code != null) return code;
+        if (display != null) return '\n\n$$\n' + display + '\n$$\n\n';
+        if (inline != null) return '$' + inline + '$';
+        return match;
+      },
+    );
+  }
+
+  it.each([
+    ['empty display math is not math', '\\[\\]'],
+    ['minimum-one-char lazy match', '\\[\\]x\\]'],
+    ['unterminated fence falls through to a code span', '```'],
+    ['fence with an immediate closer', '``````'],
+    ['code span protects a bracket', '`\\[not math\\]`'],
+    ['fence protects a bracket', '```\n\\[not math\\]\n```'],
+    ['display then inline', '\\[a\\] and \\(b\\)'],
+    ['backtick then newline is not a span', '`\nx`'],
+    ['unterminated display math', '\\[unclosed'],
+    ['unterminated inline math', '\\(unclosed'],
+    ['bare backslash', 'a \\ b'],
+    ['nothing to do', 'plain text'],
+  ])('matches the legacy output: %s', (_label, input) => {
+    expect(preprocessMath(input)).toBe(legacy(input));
+  });
+
+  it('matches the legacy output across generated delimiter soup', () => {
+    // The same differential fuzz that validated the rewrite, shrunk to a size
+    // that belongs in a unit suite and seeded so a failure reproduces exactly.
+    const atoms = ['`', '```', '\\[', '\\]', '\\(', '\\)', 'a', ' ', '\n', 'x^2', '$', '\\'];
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+    for (let n = 0; n < 20_000; n += 1) {
+      const len = 1 + Math.floor(rnd() * 9);
+      let input = '';
+      for (let k = 0; k < len; k += 1) input += atoms[Math.floor(rnd() * atoms.length)];
+      expect(preprocessMath(input), `input: ${JSON.stringify(input)}`).toBe(legacy(input));
+    }
+  });
+
+  it('stays linear on the unterminated fence a streaming message produces', () => {
+    // This is the ordinary case, not an attack: every render before the
+    // closing fence arrives looks exactly like this.
+    const streaming = '```' + 'a'.repeat(200_000);
+    expect(preprocessMath(streaming)).toBe(streaming);
+  });
+
+  it('stays linear on unterminated math delimiters', () => {
+    const display = '\\[' + 'a'.repeat(200_000);
+    const inline = '\\(' + 'a'.repeat(200_000);
+    expect(preprocessMath(display)).toBe(display);
+    expect(preprocessMath(inline)).toBe(inline);
+  });
+});
