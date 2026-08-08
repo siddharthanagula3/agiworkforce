@@ -31,7 +31,7 @@ pub(crate) async fn connect(
     if timeouts.validate_urls {
         crate::security::validate_server_url(url).with_context(|| format!("[{name}] SSE"))?;
     }
-    let client = build_sse_client(&timeouts)?;
+    let client = build_sse_client(url, &timeouts)?;
 
     let resp = open_sse_stream(name, &client, url, headers).await?;
 
@@ -88,7 +88,7 @@ pub(crate) async fn connect_legacy(
         crate::security::validate_server_url(base_url)
             .with_context(|| format!("[{name}] SSE-legacy"))?;
     }
-    let client = build_sse_client(&timeouts)?;
+    let client = build_sse_client(base_url, &timeouts)?;
 
     let base = base_url.trim_end_matches('/');
     let post_url = format!("{base}/message");
@@ -201,8 +201,12 @@ fn spawn_legacy_sse_supervisor(
 /// `.timeout()` here — the SSE GET stays open indefinitely and any per-request
 /// cap kills it. Per-call timeouts are applied via `tokio::time::timeout` in
 /// send_request.
-fn build_sse_client(timeouts: &McpTimeouts) -> Result<reqwest::Client> {
+fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder();
+    // Takes the url so the policy is enforced HERE, beside the dangerous call,
+    // rather than at each caller where a new one could forget it. Release
+    // builds refuse this outright; debug builds allow loopback only.
+    crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)?;
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
     }

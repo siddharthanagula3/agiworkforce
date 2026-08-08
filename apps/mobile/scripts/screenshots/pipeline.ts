@@ -18,7 +18,7 @@
  *   apps/mobile/store-listing/screenshots/captures/{class}/final/NN-name.png
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -199,9 +199,24 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
   const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
-  execSync(
-    `pnpm exec detox test --configuration ${detoxConfig} --reuse --artifacts-location "${artifactsDir}/" ` +
+  // execFileSync with an argv array, not execSync with an interpolated string:
+  // no shell is spawned, so no argument can be reinterpreted as shell syntax.
+  // Every value here is already a literal from the const tables above, so this
+  // fixes no live injection — it removes the possibility, and stops the next
+  // edit that makes one of these dynamic from quietly opening one.
+  execFileSync(
+    'pnpm',
+    [
+      'exec',
+      'detox',
+      'test',
+      '--configuration',
+      detoxConfig,
+      '--reuse',
+      '--artifacts-location',
+      `${artifactsDir}/`,
       `apps/mobile/scripts/screenshots/specs/${spec}`,
+    ],
     { stdio: 'inherit', env },
   );
   const producedPng = findScreenshotPng(artifactsDir);
