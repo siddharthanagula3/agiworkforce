@@ -146,19 +146,62 @@ export function detectArtifactType(language: string, content: string): SharedArt
 const MAX_TITLE_CHARS = 60;
 
 /**
+ * `@title:` marker in a leading comment, terminated by a newline or `-->`.
+ *
+ * Replaces `/(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i`, whose `(.+?)`
+ * before an alternation of terminators is the same quadratic shape as the tag
+ * spans above when NEITHER terminator appears.
+ */
+function extractTitleComment(content: string): string | undefined {
+  const marker = /(?:\/\/|<!--|#)\s*@title:?\s*/i.exec(content);
+  if (!marker) return undefined;
+  const start = marker.index + marker[0].length;
+  const newline = content.indexOf('\n', start);
+  const commentEnd = content.indexOf('-->', start);
+  const candidates = [newline, commentEnd].filter((i) => i !== -1);
+  const end = candidates.length > 0 ? Math.min(...candidates) : content.length;
+  const value = content.slice(start, end).trim();
+  return value || undefined;
+}
+
+/**
  * Derive a human-readable title: an explicit `<title>`/`@title`, an `<h1>`, or
  * the first meaningful line (comment/heading stripped); else undefined.
  */
+/**
+ * Text between an opening tag and its closing tag, found by scanning rather
+ * than by a lazy quantifier.
+ *
+ * `/<title>(.*?)<\/title>/` and friends are quadratic when the CLOSING tag is
+ * absent: the engine advances `.*?` one character at a time and retries the
+ * whole tail at each position (js/polynomial-redos). Artifact content is
+ * model-generated and can be large, and an unterminated tag is exactly what a
+ * truncated stream produces — so the pathological input is the ordinary
+ * failure case here, not a crafted attack.
+ *
+ * `indexOf` does the same job in one forward pass and returns undefined when
+ * the closer is missing, which is the behaviour the callers already expected.
+ */
+function betweenTags(content: string, openPattern: RegExp, closeTag: string): string | undefined {
+  const open = openPattern.exec(content);
+  if (!open) return undefined;
+  const start = open.index + open[0].length;
+  const end = content.toLowerCase().indexOf(closeTag, start);
+  return end === -1 ? undefined : content.slice(start, end);
+}
+
 export function extractArtifactTitle(content: string): string | undefined {
-  const titleMatch = content.match(/<title>(.*?)<\/title>/i);
-  if (titleMatch?.[1]) return titleMatch[1].trim();
+  // `<title>` and `<h1 ...>` are linear on their own — a negated class before a
+  // required literal does not backtrack. Only the span between them was.
+  const titleText = betweenTags(content, /<title\s*>/i, '</title>');
+  if (titleText?.trim()) return titleText.trim();
 
-  const commentMatch = content.match(/(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i);
-  if (commentMatch?.[1]) return commentMatch[1].trim();
+  const commentText = extractTitleComment(content);
+  if (commentText) return commentText;
 
-  const headingMatch = content.match(/<h1[^>]*>(.*?)<\/h1>/i);
-  if (headingMatch?.[1]) {
-    let text: string = headingMatch[1];
+  const headingText = betweenTags(content, /<h1[^>]*>/i, '</h1>');
+  if (headingText) {
+    let text: string = headingText;
     let prev: string;
     do {
       prev = text;

@@ -55,11 +55,25 @@ function capitalizeMemoryClause(value: string): string {
   return value.length > 0 ? value[0]!.toUpperCase() + value.slice(1) : value;
 }
 
+const TRAILING_PUNCTUATION = new Set(['.', '!', '?', ',', ';', ':']);
+
+function isTrailingNoise(ch: string): boolean {
+  return TRAILING_PUNCTUATION.has(ch) || /\s/u.test(ch);
+}
+
 function cleanMemoryClause(value: string): string {
-  return value
-    .trim()
-    .replace(/[.!?,;:\s]+$/u, '')
-    .trim();
+  // Was `.replace(/[.!?,;:\s]+$/u, '')`. An anchored `+` over a repeated
+  // character class backtracks quadratically: on a clause ending in a long run
+  // of punctuation or whitespace the engine retries from every position before
+  // it can fail. Memory clauses come from model output, so a degenerate run is
+  // cheap for the model to emit and costly for us to reject
+  // (js/polynomial-redos). One backward scan does the same job in O(n).
+  const trimmed = value.trim();
+  let end = trimmed.length;
+  while (end > 0 && isTrailingNoise(trimmed[end - 1]!)) {
+    end -= 1;
+  }
+  return trimmed.slice(0, end).trim();
 }
 
 function splitMemorySentences(value: string): string[] {
