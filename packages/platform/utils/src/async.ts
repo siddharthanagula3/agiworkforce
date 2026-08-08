@@ -80,9 +80,17 @@ export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> 
  * The debounced function will only execute after the specified delay
  * has passed without any new calls.
  *
+ * The returned function carries `cancel()`, which drops any pending call. A
+ * debounced callback that closes over component state MUST be cancelled on
+ * unmount: otherwise the trailing timer fires against a torn-down tree. In
+ * production that is a React "update on an unmounted component"; under jsdom
+ * it is an uncaught `ReferenceError: window is not defined` thrown from
+ * `resolveUpdatePriority` well after the owning test finished, which fails the
+ * whole run and blames an unrelated file.
+ *
  * @param func - Function to debounce
  * @param wait - Delay in milliseconds
- * @returns Debounced function
+ * @returns Debounced function with a `cancel()` method
  *
  * @example
  * ```typescript
@@ -95,13 +103,19 @@ export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> 
  * debouncedSearch('abc'); // Only this one executes after 300ms
  * ```
  */
+export interface DebouncedFunction<TArgs extends unknown[]> {
+  (...args: TArgs): void;
+  /** Drop any pending call. Idempotent, and safe to call after it has fired. */
+  cancel(): void;
+}
+
 export function debounce<TArgs extends unknown[], TReturn>(
   func: (...args: TArgs) => TReturn,
   wait: number,
-): (...args: TArgs) => void {
+): DebouncedFunction<TArgs> {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 
-  return function executedFunction(...args: TArgs) {
+  const executedFunction = function (...args: TArgs) {
     const later = () => {
       timeout = null;
       func(...args);
@@ -111,7 +125,16 @@ export function debounce<TArgs extends unknown[], TReturn>(
       clearTimeout(timeout);
     }
     timeout = setTimeout(later, wait);
+  } as DebouncedFunction<TArgs>;
+
+  executedFunction.cancel = () => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
   };
+
+  return executedFunction;
 }
 
 /**
