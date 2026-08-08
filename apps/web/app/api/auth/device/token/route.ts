@@ -15,6 +15,7 @@ import {
   createDeviceRefreshCredential,
   DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
 } from '@/lib/server/device-refresh-token';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 
 // RFC 8628 device-code POLL. Mirrors services/api-gateway deviceAuth.ts `/token`.
 // The CLI polls this until the user approves at /auth/device. Status codes are
@@ -136,11 +137,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   }
 
   // Correlation id only — never log the raw device_code (it is the poll secret).
-  const deviceRef = crypto
-    .createHash('sha256')
-    .update(record.device_id + (process.env['LOG_SALT'] ?? ''))
-    .digest('hex')
-    .slice(0, 12);
+  const deviceRef = pseudonymizeIdentifier(record.device_id, 'device-id', 12);
   logger.info({ deviceRef, userId: record.user_id }, 'Device token issued');
   return NextResponse.json(
     {
