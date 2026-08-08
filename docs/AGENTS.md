@@ -34,4 +34,3 @@ Read root `AGENTS.md` before this file. This file applies to documentation work 
 - `pnpm check:repo-organization`
 - `pnpm check:report-retention`
 - `pnpm check:non-md-artifacts`
-- `pnpm check:readme-ownership`

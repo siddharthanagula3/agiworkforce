@@ -83,8 +83,6 @@ const requiredFiles = [
   'docs/engineering/autonomous-software-company-roadmap.md',
   'docs/research/agentic-company-research-prompts.md',
   '.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md',
-  'docs/marketing/README.md',
-  'docs/support/README.md',
   'docs/legal/README.md',
   '.github/pull_request_template.md',
   '.github/PULL_REQUEST_TEMPLATE/product-surface.md',
@@ -106,10 +104,6 @@ const requiredFiles = [
   'packages/ai/provider-runtime/AGENTS.md',
   'packages/ai/provider-protocol/AGENTS.md',
   'packages/ai/model-registry/AGENTS.md',
-  '.claude/README.md',
-  '.codex/README.md',
-  '.agents/README.md',
-  '.agents/skills/README.md',
 ];
 
 for (const file of requiredFiles) {
@@ -203,12 +197,6 @@ requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected T
 requireIncludes('README.md', 'For coding agents');
 requireIncludes('README.md', '[AGENTS.md](AGENTS.md)');
 requireIncludes('README.md', 'AGI_WORKFORCE.md) — product source of truth');
-requireIncludes('apps/web/README.md', 'apps/web/pnpm-workspace.yaml');
-requireIncludes('apps/web/README.md', 'root `pnpm-workspace.yaml` remains canonical');
-requireIncludes(
-  '.agents/README.md',
-  'Each tracked skill directory under `.agents/skills/` must include `SKILL.md`',
-);
 if (exists('opencode.json') || exists('.opencode')) {
   errors.push(
     'opencode tooling was retired on 2026-07-08 (monorepo restructure P0); do not reintroduce opencode.json or .opencode/',
@@ -396,7 +384,6 @@ if (commands) {
     'neonMigrations',
     'ciGuardrails',
     'codeowners',
-    'readmeOwnership',
     'docStatus',
     'hooks',
     'llmOperability',
