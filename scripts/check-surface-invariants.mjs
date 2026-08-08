@@ -404,7 +404,13 @@ export function findWriteOnlyCollections(relativePath, source) {
     if (seen.has(name)) continue;
     seen.add(name);
 
-    const escaped = name.replace(/\$/g, '\\$');
+    // Full regex escape, not just `$`. Escaping one metacharacter happens to
+    // suffice while COLLECTION_DECLARATION only captures JS identifiers (where
+    // `$` is the sole regex-special character that can appear) — but that is a
+    // property of the CAPTURE, not of this line, so widening the pattern later
+    // would silently produce a malformed RegExp or a wrong match count.
+    // (js/incomplete-sanitization)
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const occurrences = (source.match(new RegExp(`\\b${escaped}\\b`, 'g')) ?? []).length;
     const declarations = (
       source.match(
