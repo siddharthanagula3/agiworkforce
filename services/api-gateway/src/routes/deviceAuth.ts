@@ -16,6 +16,14 @@ const db = getSystemClient('device-authorization');
 
 const router: Router = Router();
 
+// Router-level floor: every route below already declares its own, stricter
+// limiter, so no current limit changes. It exists so a route ADDED here later
+// cannot ship unlimited by omission — an absence no diff review would catch.
+// A DISTINCT limiter instance, never the same one a route uses: express-rate-
+// limit keeps one store per instance, so reusing an instance would count each
+// request twice against a single counter.
+router.use(createRateLimiter('default'));
+
 const JWT_SECRET = requireEnv('JWT_SECRET');
 const DEVICE_AUTH_TABLE = 'device_authorization_codes';
 

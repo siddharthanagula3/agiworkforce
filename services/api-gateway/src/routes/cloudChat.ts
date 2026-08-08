@@ -32,6 +32,15 @@ const router: Router = Router();
 router.use(authenticateToken);
 router.use(requireManagedChatPlan);
 
+// Router-level floor. Every route below already declares its own, stricter
+// limiter, so this changes no current limit — `default` is 100/min and the
+// tightest here is 10/min. It exists so a route ADDED to this file later is
+// never unlimited by omission, which is what `js/missing-rate-limiting`
+// flagged and what the other nine gateway routers already do. Mounted after
+// authenticateToken so keyGenerator resolves `user:<id>` rather than falling
+// back to the caller's IP.
+router.use(createRateLimiter('default'));
+
 // =============================================================================
 // VALIDATION SCHEMAS
 // =============================================================================
