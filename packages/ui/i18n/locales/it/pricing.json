@@ -74,5 +74,7 @@
   "max15xCta": "Ottieni Max 15x",
   "heroLede": "Scopri i prezzi dei piani individuali, team ed enterprise.",
   "pageTitle": "Prezzi",
-  "freeLocalByok": "Modelli locali e le tue chiavi API, sempre gratis"
+  "freeLocalByok": "Modelli locali e le tue chiavi API, sempre gratis",
+  "seatTotal_one": "{{count}} postazione · {{total}}/mese",
+  "seatTotal_other": "{{count}} postazioni · {{total}}/mese"
 }

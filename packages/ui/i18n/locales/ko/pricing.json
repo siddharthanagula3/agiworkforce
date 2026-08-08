@@ -74,5 +74,7 @@
   "max15xCta": "Max 15x 시작하기",
   "heroLede": "개인, 팀, 엔터프라이즈 요금제의 가격을 확인하세요.",
   "pageTitle": "요금제",
-  "freeLocalByok": "로컬 모델과 직접 보유한 API 키는 항상 무료"
+  "freeLocalByok": "로컬 모델과 직접 보유한 API 키는 항상 무료",
+  "seatTotal_one": "{{count}}석 · {{total}}/월",
+  "seatTotal_other": "{{count}}석 · {{total}}/월"
 }

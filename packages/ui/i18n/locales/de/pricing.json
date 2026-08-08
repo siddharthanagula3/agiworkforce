@@ -74,5 +74,7 @@
   "max15xCta": "Max 15x holen",
   "heroLede": "Preise für Einzel-, Team- und Enterprise-Tarife.",
   "pageTitle": "Preise",
-  "freeLocalByok": "Lokale Modelle und eigene API-Schlüssel, immer kostenlos"
+  "freeLocalByok": "Lokale Modelle und eigene API-Schlüssel, immer kostenlos",
+  "seatTotal_one": "{{count}} Platz · {{total}}/Mon.",
+  "seatTotal_other": "{{count}} Plätze · {{total}}/Mon."
 }
