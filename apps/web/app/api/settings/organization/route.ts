@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { resolvePurchasedSeatsForOwner } from '@/lib/server/purchased-seats';
 import type { OrganizationRow, OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import {
@@ -157,6 +158,15 @@ async function handleCreate(request: NextRequest) {
   const db = getNeonDb();
   const access = await requireTeamAdminAccess(db, userId);
 
+  // Seats are bought before the organization exists, so the webhook's
+  // owner-matched seat write found no row and reported `no_organization`.
+  // Recover the paid-for count here, or every Team customer lands on migration
+  // 0085's `licensed_seats default 1` and is told to buy seats they already
+  // own. Resolved OUTSIDE the transaction: it makes a Stripe call, and holding
+  // an advisory lock across a network round trip serializes org creation behind
+  // Stripe's latency. Null on any failure — see resolvePurchasedSeatsForOwner.
+  const purchasedSeats = await resolvePurchasedSeatsForOwner(db, userId);
+
   try {
     const organization = await db.transaction(async (tx) => {
       // Serialize provisioning by user so concurrent create requests cannot
@@ -179,12 +189,29 @@ async function handleCreate(request: NextRequest) {
         throw createError.conflict('You already belong to an organization');
       }
 
-      const [created] = await tx.query<OrganizationRow>(
-        `insert into public.organizations (name, slug, created_by)
-         values ($1, $2, $3)
-         returning id, name, slug, created_by, created_at, updated_at`,
-        [parsed.data.name, parsed.data.slug, userId],
-      );
+      const [created] = purchasedSeats
+        ? await tx.query<OrganizationRow>(
+            `insert into public.organizations
+               (name, slug, created_by, licensed_seats, billing_plan_tier,
+                stripe_subscription_id, stripe_customer_id, seat_billing_updated_at)
+             values ($1, $2, $3, $4, $5, $6, $7, now())
+             returning id, name, slug, created_by, created_at, updated_at`,
+            [
+              parsed.data.name,
+              parsed.data.slug,
+              userId,
+              purchasedSeats.seats,
+              purchasedSeats.planTier,
+              purchasedSeats.stripeSubscriptionId,
+              purchasedSeats.stripeCustomerId,
+            ],
+          )
+        : await tx.query<OrganizationRow>(
+            `insert into public.organizations (name, slug, created_by)
+             values ($1, $2, $3)
+             returning id, name, slug, created_by, created_at, updated_at`,
+            [parsed.data.name, parsed.data.slug, userId],
+          );
 
       if (!created) {
         throw createError.conflict('The organization could not be created');
