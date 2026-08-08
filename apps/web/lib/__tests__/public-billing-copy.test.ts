@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { MAX_PURCHASABLE_SEATS, MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 
 const webRoot = resolve(import.meta.dirname, '../..');
 
@@ -51,9 +52,14 @@ describe('public billing truth', () => {
     // Team is per-seat, so the published contract must expose the seat count
     // clients have to send. A documented plan with an undocumented required
     // field is worse than no documentation.
+    // Asserted against the shared constants, NOT literals. This test previously
+    // pinned `minimum: 1`, so when the seat floor moved to 2 (2026-08-08) it
+    // stayed green while the published contract drifted from the validator —
+    // an integrator following the docs would have got an undocumented 400.
     expect(document.components.schemas.CheckoutRequest.properties.seats).toMatchObject({
       type: 'integer',
-      minimum: 1,
+      minimum: MIN_PURCHASABLE_SEATS,
+      maximum: MAX_PURCHASABLE_SEATS,
     });
     expect(document.components.schemas.CheckoutRequest.properties.billingInterval.enum).toEqual([
       'monthly',
