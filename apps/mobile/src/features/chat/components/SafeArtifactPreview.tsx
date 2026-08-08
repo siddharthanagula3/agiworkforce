@@ -26,7 +26,7 @@ import {
 
 export type { PreviewableKind } from './sandboxedArtifactHtml';
 
-const MERMAID_CDN_PREFIX = 'https://cdn.jsdelivr.net';
+import { MERMAID_CDN_ORIGIN, isAllowedPreviewNavigation } from './previewNavigationPolicy';
 
 export interface SafeArtifactPreviewProps {
   content: string;
@@ -48,7 +48,9 @@ export function SafeArtifactPreview({ content, kind, style }: SafeArtifactPrevie
     <WebView
       source={{ html }}
       style={style}
-      originWhitelist={isMermaid ? [MERMAID_CDN_PREFIX] : []}
+      // react-native-webview matches these as patterns; the explicit `/*`
+      // keeps it anchored to the origin for the same reason as above.
+      originWhitelist={isMermaid ? [`${MERMAID_CDN_ORIGIN}/*`] : []}
       // mermaid needs JS to render; html/svg never execute scripts.
       javaScriptEnabled={isMermaid}
       domStorageEnabled={false}
@@ -59,12 +61,7 @@ export function SafeArtifactPreview({ content, kind, style }: SafeArtifactPrevie
       setSupportMultipleWindows={false}
       // Allow only the initial in-memory document (+ the pinned mermaid CDN for
       // mermaid); reject every other navigation.
-      onShouldStartLoadWithRequest={(req) =>
-        req.url === 'about:blank' ||
-        req.url === 'about:srcdoc' ||
-        req.url.startsWith('data:') ||
-        (isMermaid && req.url.startsWith(MERMAID_CDN_PREFIX))
-      }
+      onShouldStartLoadWithRequest={(req) => isAllowedPreviewNavigation(req.url, isMermaid)}
       overScrollMode="never"
       accessibilityRole="image"
       accessibilityLabel={`${kind.toUpperCase()} artifact preview`}
