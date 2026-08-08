@@ -6,6 +6,39 @@ Last updated: 2026-08-08
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-08-08 The managed-compute kill-switch does not stop web free-trial traffic
+
+- **OPS-KILLSWITCH-FREE-TRIAL-EXEMPT — OPEN, needs a founder decision.**
+  `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is designated in CLAUDE.md as the
+  incident-response kill-switch (`0`/`false`/`off` re-gates managed compute).
+  The two surfaces that honour it do not agree on what it stops.
+  `services/api-gateway/src/middleware/managedComputeGate.ts:106` blocks every
+  managed-compute request when the switch is engaged.
+  `apps/web/lib/managed-compute-gate.ts:51-60` blocks all of them EXCEPT
+  free-trial requests, which are explicitly allowed through.
+- **Why it matters.** An operator who flips the switch during an incident —
+  cost runaway, abuse wave, provider outage — will reasonably believe managed
+  compute is off. It is off for desktop, CLI and VS Code (gateway), and still
+  serving on web for exactly the traffic class that is cheapest to create in
+  bulk and the most common abuse vector. A kill-switch that leaves a class
+  flowing is the failure mode kill-switches exist to avoid, and the gap is
+  invisible because the flag is a single boolean with one name.
+- **Why the carve-out exists.** Its comment ("so new users can chat without
+  needing the private-beta env var") was written when the flag was a LAUNCH
+  GATE for the private beta, where exempting trials was correct. The founder
+  decision of 2026-06-27 removed the launch gate and repurposed the same flag
+  as a kill-switch. The carve-out was not revisited when the meaning changed.
+- **The decision required.** Should engaging the kill-switch also stop new-user
+  onboarding? For incident response the industry norm is yes — a partial kill
+  is a known anti-pattern. But it makes the switch strictly more disruptive,
+  and that is a product call, not a refactor, which is why this is recorded
+  rather than changed.
+- **Naming note, separate from the behaviour.** `isManagedComputePrivateBetaEnabled()`
+  returns `true` when managed compute is OPEN, i.e. when the kill-switch is NOT
+  engaged. Both call sites correctly read `if (!isManagedComputePrivateBetaEnabled())`,
+  so behaviour is right, but the name asserts the opposite of what it means and
+  is a live trap for the next reader.
+
 ## 2026-08-08 Async video generation is charged even when it fails
 
 - **BILLING-VIDEO-NO-FAILURE-REFUND — OPEN, needs a design decision.** A user
