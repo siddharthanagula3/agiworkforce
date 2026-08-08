@@ -1,6 +1,5 @@
 import 'server-only';
 
-import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -13,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 
 const DeviceCodeApproveSchema = z.object({
   user_code: z
@@ -85,11 +85,8 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
 
   // Non-reversible reference to the device. `device_id` is the polling secret
   // for the CLI/desktop flow and must never be persisted into an audit row.
-  const deviceRef = crypto
-    .createHash('sha256')
-    .update(record.device_id + (process.env['LOG_SALT'] ?? ''))
-    .digest('hex')
-    .slice(0, 12);
+  // Same domain as the token route so the two rows still correlate.
+  const deviceRef = pseudonymizeIdentifier(record.device_id, 'device-id', 12);
 
   if (action === 'deny') {
     const denied = await db.query<{ status: string }>(

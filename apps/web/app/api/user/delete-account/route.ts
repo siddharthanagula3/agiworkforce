@@ -10,7 +10,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import { recordAuditEvent } from '@/lib/security-audit';
-import crypto from 'node:crypto';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 
 /**
  * DELETE /api/user/delete-account
@@ -90,11 +90,7 @@ export async function DELETE(request: NextRequest) {
    * Consequence, stated honestly: this row does NOT appear in the user's own
    * "Security activity" panel (that view filters on user_id).
    */
-  const subjectRef = crypto
-    .createHash('sha256')
-    .update(userId + (process.env['LOG_SALT'] ?? ''))
-    .digest('hex')
-    .slice(0, 16);
+  const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 
   try {
     // Schedule deletion: set deletion_requested_at. A background job
