@@ -13,7 +13,7 @@
       "path": "audit/inventory.json",
       "status": "machine-contract",
       "owner": "Platform and product integration",
-      "reason": "The identity-pinned 654-item product integration ledger is validated by CI and governed by docs/decisions/2026-07-29-live-integration-inventory.md."
+      "reason": "The identity-pinned 654-item product integration ledger is validated by CI via pnpm check:audit-inventory."
     },
     {
       "path": ".agents/skills/**",
