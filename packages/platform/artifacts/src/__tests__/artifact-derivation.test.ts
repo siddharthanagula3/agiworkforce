@@ -265,3 +265,61 @@ describe('extractTrailingUnclosedBlock', () => {
     expect(block!.content).toHaveLength(500_000);
   });
 });
+
+describe('extractArtifactTitle — linear rewrite parity', () => {
+  // The lazy-quantifier expressions this replaced, kept verbatim so parity is
+  // checked against what actually shipped rather than against a description
+  // of it.
+  const LEGACY_TITLE = /<title>(.*?)<\/title>/i;
+  const LEGACY_COMMENT = /(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i;
+  const LEGACY_H1 = /<h1[^>]*>(.*?)<\/h1>/i;
+
+  const cases = [
+    '<title>Hello</title>',
+    '<TITLE>Upper</TITLE>',
+    '<title>  spaced  </title>',
+    '<h1>Heading</h1>',
+    '<h1 class="x">Attrs</h1>',
+    '<h1><span>Nested</span> markup</h1>',
+    '// @title: Comment Title\nrest',
+    '<!-- @title: Html Comment -->',
+    '# @title Hash Title\nrest',
+    '<title>First</title><h1>Second</h1>',
+    'no title at all\njust text',
+  ];
+
+  it.each(cases)('agrees with the expressions it replaced: %j', (content) => {
+    const legacy =
+      LEGACY_TITLE.exec(content)?.[1]?.trim() ||
+      LEGACY_COMMENT.exec(content)?.[1]?.trim() ||
+      (() => {
+        const h = LEGACY_H1.exec(content)?.[1];
+        if (!h) return undefined;
+        let text = h;
+        let prev: string;
+        do {
+          prev = text;
+          text = text.replace(/<[^>]*>/g, '');
+        } while (text !== prev);
+        return text.trim() || undefined;
+      })() ||
+      undefined;
+
+    if (legacy) expect(extractArtifactTitle(content)).toBe(legacy);
+  });
+
+  it.each([
+    ['unterminated <title>', `<title>${'a'.repeat(200_000)}`],
+    ['unterminated <h1>', `<h1>${'a'.repeat(200_000)}`],
+    ['unterminated @title comment', `<!-- @title: ${'a'.repeat(200_000)}`],
+  ])('answers immediately on %s, which the old expressions made quadratic', (_label, content) => {
+    // A truncated stream produces exactly this shape, so the pathological
+    // input is the ordinary failure case rather than a crafted attack. The
+    // assertion is on completion, not wall-clock, which would be flaky on CI.
+    expect(() => extractArtifactTitle(content)).not.toThrow();
+  });
+
+  it('still falls back to the first meaningful line', () => {
+    expect(extractArtifactTitle('\n\n# Fallback Heading\nmore')).toBe('Fallback Heading');
+  });
+});

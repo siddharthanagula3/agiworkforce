@@ -41,9 +41,23 @@ function stripBom(text: string): string {
 const NUMERIC_CELL_RE =
   /^\(?[-+]?[$€£₹]?\s?\d{1,3}(?:[, ]\d{3})*(?:\.\d+)?%?\)?$|^\(?[-+]?[$€£₹]?\s?\d*\.?\d+(?:[eE][-+]?\d+)?%?\)?$/;
 
+/**
+ * Longest string that could plausibly be a formatted number cell. A sign, a
+ * currency symbol, 18 grouped digits, a decimal tail and a percent sign fit
+ * comfortably inside this.
+ */
+const MAX_NUMERIC_CELL_CHARS = 48;
+
 export function isNumericCell(value: string): boolean {
   const v = value.trim();
   if (!v) return false;
+  // NUMERIC_CELL_RE nests quantifiers (`\d{1,3}(?:[, ]\d{3})*`), which
+  // backtracks polynomially on a long digit run that ultimately fails to match
+  // (js/polynomial-redos). Cell values come from model-generated tables, so a
+  // 100k-digit "cell" costs the model nothing. Bounding the input first makes
+  // the worst case constant, and it is not a behavioural compromise: nothing
+  // longer than this was ever going to be a number.
+  if (v.length > MAX_NUMERIC_CELL_CHARS) return false;
   return NUMERIC_CELL_RE.test(v);
 }
 
