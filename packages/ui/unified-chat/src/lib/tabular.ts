@@ -233,7 +233,12 @@ export function toCsv(data: TabularData): string {
 
 /** Serialize TabularData to a GitHub-flavored markdown table. */
 export function toMarkdownTable(data: TabularData): string {
-  const esc = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  // Backslashes FIRST, then pipes. Escaping order matters: with pipes first,
+  // an input of `a\|b` becomes `a\\|b`, where markdown renders `\\` as a
+  // literal backslash and the pipe is left as an unescaped COLUMN SEPARATOR —
+  // the cell splits and the table structure breaks. Windows paths and regex
+  // literals hit this readily. (js/incomplete-sanitization)
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
   const header = `| ${data.columns.map(esc).join(' | ')} |`;
   const sep = `| ${data.columns.map(() => '---').join(' | ')} |`;
   const body = data.rows.map((r) => `| ${r.map(esc).join(' | ')} |`).join('\n');

@@ -135,6 +135,20 @@ describe('parseTabular', () => {
     expect(toMarkdownTable(data)).toBe('| a | b |\n| --- | --- |\n| x\\|y | 2 |');
   });
 
+  it('escapes a backslash before the pipe it precedes, so the cell cannot split', () => {
+    // Escaping order regression. With pipes escaped first, `a\|b` became
+    // `a\\|b` — markdown renders `\\` as a literal backslash and then treats
+    // the pipe as an unescaped COLUMN SEPARATOR, splitting the row into three
+    // cells against a two-column header. Windows paths and regex literals in
+    // model-generated tables hit this readily.
+    const data = parseTabular('a,b\n"x\\|y",2')!;
+    const table = toMarkdownTable(data);
+    expect(table).toBe('| a | b |\n| --- | --- |\n| x\\\\\\|y | 2 |');
+    // Every row must still have exactly the header's column count.
+    const rows = table.split('\n').map((line) => line.split(/(?<!\\)\|/).length);
+    expect(new Set(rows).size).toBe(1);
+  });
+
   it('parseDelimited drops a blank trailing row from a final newline', () => {
     expect(parseDelimited('a,b\n1,2\n', ',')).toEqual([
       ['a', 'b'],
