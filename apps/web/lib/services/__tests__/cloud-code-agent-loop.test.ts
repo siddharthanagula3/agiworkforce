@@ -314,3 +314,99 @@ describe('runCloudCodeAgentTurn', () => {
     expect(String(err?.content)).toContain('requires a "path"');
   });
 });
+
+describe('cloud code turn usage accounting', () => {
+  it('captures the usage chunk the drain used to discard', async () => {
+    // The `default: break` in drainAssistantTurn silently swallowed every
+    // chunk type it did not name, including `usage`. That is why the turn
+    // could not be billed at what it actually cost — no real usage ever left
+    // this function.
+    const drained = await drainAssistantTurn(
+      (async function* () {
+        yield { type: 'text-delta', delta: 'hello' } as StreamChunk;
+        yield {
+          type: 'usage',
+          inputTokens: 1_000,
+          outputTokens: 250,
+          cacheReadTokens: 40,
+          cacheWriteTokens: 10,
+        } as StreamChunk;
+      })(),
+    );
+
+    expect(drained.usage).toEqual({
+      inputTokens: 1_000,
+      outputTokens: 250,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 10,
+    });
+  });
+
+  it('reports zeros rather than undefined when the provider says nothing', async () => {
+    const drained = await drainAssistantTurn(
+      (async function* () {
+        yield { type: 'text-delta', delta: 'hi' } as StreamChunk;
+      })(),
+    );
+    expect(drained.usage).toBeUndefined();
+  });
+
+  it('SUMS usage across every provider call in a multi-step turn', async () => {
+    // The bug this guards: a Cloud Code turn is agentic, so many provider
+    // calls per turn is the normal case. Taking usage from the last call —
+    // or from none — is how an expensive turn ends up billed like a cheap one.
+    const runner: CloudCodeToolRunner = {
+      readFile: vi.fn(async () => ({ output: 'contents', isError: false })),
+      listFiles: vi.fn(async () => ({ output: 'a\nb', isError: false })),
+      runCommand: vi.fn(async () => ({ output: 'ok', isError: false })),
+      runSharedExecutionTool: vi.fn(async () => ({ output: 'ok', isError: false })),
+    } as unknown as CloudCodeToolRunner;
+
+    const adapter = adapterFor([
+      [
+        { type: 'tool-use-start', toolUseId: 't1', name: 'list_files' } as StreamChunk,
+        { type: 'tool-use-delta', toolUseId: 't1', deltaJson: '{}' } as StreamChunk,
+        { type: 'tool-use-end', toolUseId: 't1' } as StreamChunk,
+        { type: 'usage', inputTokens: 100, outputTokens: 20 } as StreamChunk,
+      ],
+      [
+        { type: 'text-delta', delta: 'done' } as StreamChunk,
+        { type: 'usage', inputTokens: 300, outputTokens: 80, cacheReadTokens: 5 } as StreamChunk,
+      ],
+    ]);
+
+    const result = await runCloudCodeAgentTurn({
+      adapter,
+      model: 'claude-sonnet-4-5-20250929',
+      goal: 'inspect the repo',
+      runner,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage.inputTokens).toBe(400);
+    expect(result.usage.outputTokens).toBe(100);
+    expect(result.usage.cacheReadTokens).toBe(5);
+    expect(result.usage.cacheWriteTokens).toBe(0);
+  });
+
+  it('still reports accumulated usage when the turn ends early', async () => {
+    // A turn that errors after real provider work must not settle as if
+    // nothing happened.
+    const runner = {
+      readFile: vi.fn(),
+      listFiles: vi.fn(),
+      runCommand: vi.fn(),
+      runSharedExecutionTool: vi.fn(),
+    } as unknown as CloudCodeToolRunner;
+
+    const result = await runCloudCodeAgentTurn({
+      adapter: adapterFor([[{ type: 'usage', inputTokens: 700, outputTokens: 0 } as StreamChunk]]),
+      model: 'claude-sonnet-4-5-20250929',
+      goal: 'stop immediately',
+      runner,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage.inputTokens).toBe(700);
+  });
+});

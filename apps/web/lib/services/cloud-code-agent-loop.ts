@@ -114,6 +114,12 @@ export interface CloudCodeAgentEvent {
 export interface CloudCodeAgentResult {
   stopReason: CloudCodeAgentStopReason;
   stepsUsed: number;
+  /**
+   * Summed provider usage across every step of the turn. Zeros when no
+   * provider call reported usage, which the caller must treat as "unknown"
+   * rather than "free".
+   */
+  usage: CloudCodeTurnUsage;
   finalMessage: string;
   /** Set when stopReason === 'awaiting_approval'. */
   pendingApproval?: CloudCodeApprovalRequest;
@@ -186,6 +192,20 @@ export function truncateToolOutput(
 interface DrainedTurn {
   text: string;
   toolCalls: ToolUseBlock[];
+  /**
+   * Provider-reported token usage for this assistant turn, when the stream
+   * emitted a `usage` chunk. Previously the `default: break` below swallowed
+   * it, which is why the turn could not be billed at what it actually cost.
+   */
+  usage?: CloudCodeTurnUsage;
+}
+
+/** Token usage accumulated across every provider call in a turn. */
+export interface CloudCodeTurnUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
 
 /**
@@ -195,6 +215,7 @@ interface DrainedTurn {
  */
 export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Promise<DrainedTurn> {
   let text = '';
+  let usage: CloudCodeTurnUsage | undefined;
   const names = new Map<string, string>();
   const buffers = new Map<string, string>();
   const completed: string[] = [];
@@ -213,6 +234,17 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
         break;
       case 'tool-use-end':
         completed.push(chunk.toolUseId);
+        break;
+      case 'usage':
+        // A provider may emit several usage chunks; the last one is the
+        // authoritative total for the turn, matching how the metered chat
+        // path treats them.
+        usage = {
+          inputTokens: chunk.inputTokens ?? 0,
+          outputTokens: chunk.outputTokens ?? 0,
+          cacheReadTokens: chunk.cacheReadTokens ?? 0,
+          cacheWriteTokens: chunk.cacheWriteTokens ?? 0,
+        };
         break;
       default:
         break;
@@ -241,7 +273,7 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
     }
     toolCalls.push({ type: 'tool_use', id, name, input });
   }
-  return { text, toolCalls };
+  return { text, toolCalls, usage };
 }
 
 function toolResultBlock(toolUseId: string, outcome: CloudCodeToolOutcome): ContentBlock {
@@ -295,12 +327,22 @@ export async function runCloudCodeAgentTurn(
     });
   }
 
+  // Accumulates across EVERY provider call in the turn. A multi-step turn makes
+  // many calls, so per-call usage must be summed rather than taken from the
+  // last one.
+  const usage: CloudCodeTurnUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
+
   while (stepsUsed < maxSteps) {
     if (input.signal.aborted) {
-      return { stopReason: 'cancelled', stepsUsed, finalMessage, messages };
+      return { stopReason: 'cancelled', stepsUsed, finalMessage, messages, usage };
     }
     if (now() - startedAt > maxDurationMs) {
-      return { stopReason: 'timeout', stepsUsed, finalMessage, messages };
+      return { stopReason: 'timeout', stepsUsed, finalMessage, messages, usage };
     }
 
     await input.onStepCommitted?.(stepsUsed);
@@ -318,15 +360,23 @@ export async function runCloudCodeAgentTurn(
       drained = await drainAssistantTurn(input.adapter.stream(request, input.signal));
     } catch (error) {
       if (input.signal.aborted) {
-        return { stopReason: 'cancelled', stepsUsed, finalMessage, messages };
+        return { stopReason: 'cancelled', stepsUsed, finalMessage, messages, usage };
       }
       return {
         stopReason: 'error',
         stepsUsed,
         finalMessage,
         messages,
+        usage,
         errorMessage: error instanceof Error ? error.message : String(error),
       };
+    }
+
+    if (drained.usage) {
+      usage.inputTokens += drained.usage.inputTokens;
+      usage.outputTokens += drained.usage.outputTokens;
+      usage.cacheReadTokens += drained.usage.cacheReadTokens;
+      usage.cacheWriteTokens += drained.usage.cacheWriteTokens;
     }
 
     if (drained.text) {
@@ -336,7 +386,7 @@ export async function runCloudCodeAgentTurn(
 
     // No tool calls ⇒ the model is answering, which is how a turn ends.
     if (drained.toolCalls.length === 0) {
-      return { stopReason: 'done', stepsUsed, finalMessage, messages };
+      return { stopReason: 'done', stepsUsed, finalMessage, messages, usage };
     }
 
     const assistantContent: ContentBlock[] = [];
@@ -374,6 +424,7 @@ export async function runCloudCodeAgentTurn(
             stepsUsed,
             finalMessage,
             messages,
+            usage,
             pendingApproval: {
               stepIndex: stepsUsed,
               toolUseId: call.id,
@@ -411,5 +462,5 @@ export async function runCloudCodeAgentTurn(
     messages.push({ role: 'user', content: results });
   }
 
-  return { stopReason: 'max_steps', stepsUsed, finalMessage, messages };
+  return { stopReason: 'max_steps', stepsUsed, finalMessage, messages, usage };
 }
