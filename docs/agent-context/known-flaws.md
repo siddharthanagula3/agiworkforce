@@ -6,6 +6,35 @@ Last updated: 2026-08-08
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-08-08 Enterprise spend has no instrument, though the config is deliberate
+
+- **BILLING-ENTERPRISE-NO-SPEND-INSTRUMENT — OPEN, observability gap not a
+  config error.** Wave 5 reports this as "the one account type with no
+  technical spend ceiling is also the one whose price the system does not
+  know". The description is accurate; the implied defect is not. Checked the
+  source: `managed-usage-policy.ts:100` documents `unlimited: true` as
+  "DELIBERATELY uncapped, declared rather than inferred from a zero. Its spend
+  governor is the contract, not this table", and
+  `MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS = 100_000_000` is documented
+  as "HEADROOM, NOT A PRICE OR A SPEND CEILING ... it exists only so the cents
+  ledger has an account to debit against". `monthlyPriceUsd: 0` is correct for
+  a contract-priced tier — there is no self-serve price to state.
+- **What IS real.** The contract is named as the governor, and nothing measures
+  against it. There is no per-account spend report, no threshold, no alert. So
+  the true statement is not "enterprise is misconfigured" but "enterprise spend
+  is unobserved" — an operator cannot answer "is this account above its
+  contract?" from anything the system produces.
+- **Why the distinction matters for the fix.** Treating it as a config error
+  invites capping a tier whose whole point is a negotiated ceiling, which would
+  break paying customers. The correct work is an instrument: record contracted
+  value per enterprise account and report actual ledger spend against it. That
+  needs a place to put the contract value, which does not exist yet — a schema
+  decision, not a constant change.
+- **Precedent for checking before acting.** An earlier audit in this series
+  reported the Team pricing panel as rendering empty; it was a reveal
+  transition captured mid-frame. Audit artifacts in this repo have a real
+  false-positive rate, and the headline framing is where it shows up.
+
 ## 2026-08-08 The managed-compute kill-switch does not stop web free-trial traffic
 
 - **OPS-KILLSWITCH-FREE-TRIAL-EXEMPT — OPEN, needs a founder decision.**
