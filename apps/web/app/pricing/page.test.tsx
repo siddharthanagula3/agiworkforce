@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
+import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string } },
@@ -189,7 +190,7 @@ describe('PricingPage', () => {
 
     await waitFor(() =>
       expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({
-        seats: 1,
+        seats: MIN_PURCHASABLE_SEATS,
         billingPeriod: 'yearly',
       }),
     );
@@ -235,11 +236,15 @@ describe('PricingPage', () => {
 
     await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    // The floor is 2 since 2026-08-08; a one-person Team belongs on Pro.
     fireEvent.change(seatInput, { target: { value: '0' } });
-    expect(seatInput).toHaveValue(1);
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
 
     fireEvent.change(seatInput, { target: { value: '-5' } });
-    expect(seatInput).toHaveValue(1);
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
+
+    fireEvent.change(seatInput, { target: { value: '1' } });
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
   });
 
   it('shows the enforceable project, MCP, media, and developer-surface plan differences', async () => {
