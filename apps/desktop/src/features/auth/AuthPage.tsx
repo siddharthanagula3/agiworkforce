@@ -37,7 +37,16 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
                 AGI Desktop
               </span>
             </div>
-            <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+            {/*
+              text-foreground/70, not text-muted-foreground: at 11px on the
+              bg-muted/40 pill the muted token renders #64748b on #f8f8f8,
+              which is 4.48:1 — below the 4.5:1 WCAG 2.1 AA minimum, and with
+              no large-text exemption at this size and weight. The desktop
+              accessibility audit fails on it as a serious violation. 70%
+              foreground composites to #555a68 for 6.49:1 while staying
+              visually muted.
+            */}
+            <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-foreground/70">
               Secure Cloud sign-in
             </span>
           </header>
