@@ -104,14 +104,16 @@ describe('PricingPage', () => {
   it('offers Team as a real per-seat checkout instead of a sales hand-off', async () => {
     render(<PricingPage />);
 
-    // The contact-sales dead end is gone for Team; Enterprise keeps it.
+    // The contact-sales dead end is gone for Team; Enterprise keeps it. Both
+    // cards live on the Team & Enterprise tab, so activate it before looking.
+    await showTeamAndEnterprise();
+
     const salesLinks = await screen.findAllByRole('link', { name: /Cta$/ });
     expect(
       salesLinks.some((link) => link.getAttribute('href') === '/contact-sales?plan=team'),
     ).toBe(false);
     expect(salesLinks.some((link) => link.getAttribute('href') === '/contact-sales')).toBe(true);
 
-    await showTeamAndEnterprise();
     expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toBeInTheDocument();
   });
