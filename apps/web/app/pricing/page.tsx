@@ -528,7 +528,15 @@ export default function PricingPage() {
             three CTAs and the mode ribbon that used to live here said nothing a
             visitor came to this page for; the trust-mode story is told on `/`,
             `/local` and `/byok`, where it is the actual subject. */}
-        <section className="agi-page-hero" aria-labelledby="pricing-hero-title">
+        {/* `.agi-page-hero` carries a bottom rule to divide a hero from the
+            section beneath it. Here the audience tabs are the hero's own
+            controls, so that rule drew a line between the title and the thing
+            it introduces. Dropped, with the padding pulled in to match. */}
+        <section
+          className="agi-page-hero"
+          aria-labelledby="pricing-hero-title"
+          style={{ borderBottom: 'none', paddingBottom: 24 }}
+        >
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
           </h1>
@@ -536,11 +544,16 @@ export default function PricingPage() {
         </section>
 
         {/* ─────────────────────── Audience selector ────────────────────── */}
+        {/* `.agi-tier-toggle` ships a 36px bottom margin, and the cadence toggle
+            below carries a 32px top margin. They sit either side of the panel
+            boundary so they never collapse — left alone they stack to 68px of
+            dead space between the tabs and the first control. The 32px below is
+            the spacing; this is zeroed. */}
         <div
           className="agi-tier-toggle"
           role="group"
           aria-label={t('audienceLabel')}
-          style={{ marginBottom: 40 }}
+          style={{ marginBottom: 0 }}
         >
           <button
             type="button"
