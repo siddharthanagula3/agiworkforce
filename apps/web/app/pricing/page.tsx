@@ -403,7 +403,7 @@ export default function PricingPage() {
     }
   }
 
-  const freeHref = user ? '/chat' : '/login?redirectTo=%2Fchat';
+  const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
   const compareRows: CompareRow[] = [
     {

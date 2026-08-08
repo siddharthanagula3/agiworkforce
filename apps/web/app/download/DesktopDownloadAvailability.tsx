@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
+const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
 type Availability =
   | { state: 'loading' }
