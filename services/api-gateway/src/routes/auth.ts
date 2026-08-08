@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { createRateLimiter } from '../middleware/rateLimit';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
@@ -9,6 +10,14 @@ import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
+
+// Router-level floor: every route below already declares its own, stricter
+// limiter, so no current limit changes. It exists so a route ADDED here later
+// cannot ship unlimited by omission — an absence no diff review would catch.
+// A DISTINCT limiter instance, never the same one a route uses: express-rate-
+// limit keeps one store per instance, so reusing an instance would count each
+// request twice against a single counter.
+router.use(createRateLimiter('default'));
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
