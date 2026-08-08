@@ -71,5 +71,8 @@
   "max15xFeature1": "Pro 的 15 倍用量",
   "max15xFeature2": "Max 5x 的全部功能",
   "max15xFeature3": "视频生成",
-  "max15xCta": "获取 Max 15x"
+  "max15xCta": "获取 Max 15x",
+  "heroLede": "查看个人、团队和企业方案的价格。",
+  "pageTitle": "价格",
+  "freeLocalByok": "本地模型和自带 API 密钥，始终免费"
 }
