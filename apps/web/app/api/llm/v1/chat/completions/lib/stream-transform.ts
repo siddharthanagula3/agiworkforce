@@ -37,6 +37,39 @@ interface StreamBillingUsage {
   cacheCreation1hInputTokens?: number;
 }
 
+/**
+ * Which outcome the managed ledger is settled under.
+ *
+ * A client abort is not a provider failure, and must not be billed like one.
+ * The tokens were generated, the provider has already charged us for them, and
+ * the cancel path deliberately keeps the partial answer
+ * (`persistAssistantTurnSnapshot(true)`), so the user keeps what they received.
+ *
+ * Settling that as `failed` zeroes the charge — `finalizeManagedUsageRequest`
+ * forces `actualCostCents` to 0 on failure regardless of what is passed — which
+ * turned "ask for something long, press Stop at 95%" into unlimited free
+ * inference on the managed path. It was unbounded rather than merely cheap: a
+ * zero settle records no cost, so neither the monthly allowance nor the rolling
+ * 5h/weekly caps could observe it, and it repeated indefinitely on any tier.
+ *
+ * Only an attempt that produced NO tokens is still refunded in full — the
+ * genuine-failure case the zeroing rule exists for. A provider error before any
+ * output, or an unsupported provider, refunds via `refundFailedReservation` in
+ * route.ts and never reaches here carrying tokens.
+ *
+ * Exported for direct testing: the abort path runs inside a ReadableStream
+ * `cancel()` behind an SSE heartbeat wrapper and a Response body, which a unit
+ * test cannot reliably drive, so the decision itself is guarded here instead.
+ */
+export function resolveBilledOutcome(input: {
+  outcome?: 'completed' | 'failed';
+  cancelled?: boolean;
+  totalTokens: number;
+}): 'completed' | 'failed' {
+  if (input.cancelled === true && input.totalTokens > 0) return 'completed';
+  return input.outcome ?? 'completed';
+}
+
 async function settleStreamBilling(input: {
   processed: ProcessedRequest;
   userId: string;
@@ -72,8 +105,14 @@ async function settleStreamBilling(input: {
     return;
   }
 
+  const billedOutcome = resolveBilledOutcome({
+    ...(input.outcome === undefined ? {} : { outcome: input.outcome }),
+    ...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
+    totalTokens,
+  });
+
   const actualCostCents =
-    input.outcome === 'failed'
+    billedOutcome === 'failed'
       ? 0
       : totalTokens > 0
         ? LLMCostCalculator.calculateCost(provider, model, {
@@ -89,7 +128,7 @@ async function settleStreamBilling(input: {
   if (processed.managedUsage) {
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
-      outcome: input.outcome ?? 'completed',
+      outcome: billedOutcome,
       actualCostCents,
       usage: {
         inputTokens: usage.inputTokens,
@@ -101,13 +140,16 @@ async function settleStreamBilling(input: {
         // CPST Stage-0 telemetry, MANAGED CLOUD ONLY (design doc §4.3 phase 1).
         // Spread into the SAME call because finalize replaces the usage jsonb
         // wholesale; a follow-up write would erase the token counters above.
+        // `billingOutcome` reports what was actually charged; `cancelled` still
+        // carries the abandonment signal, so a billed-but-abandoned turn stays
+        // distinguishable from a normal completion in CPST.
         ...buildCpstUsageFields(processed, {
-          billingOutcome: input.outcome ?? 'completed',
+          billingOutcome: billedOutcome,
           ...(input.cancelled === true ? { cancelled: true } : {}),
         }),
       },
     });
-    if (input.outcome !== 'failed') {
+    if (billedOutcome !== 'failed') {
       await markManagedUsageClientDelivered(processed.managedUsage).catch((error) => {
         logger.warn(
           { error, userId, requestId: processed.requestId },
