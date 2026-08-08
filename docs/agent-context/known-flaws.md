@@ -2,9 +2,44 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
+
+## 2026-08-08 Async video generation is charged even when it fails
+
+- **BILLING-VIDEO-NO-FAILURE-REFUND — OPEN, needs a design decision.** A user
+  is charged for a video that never generates. `apps/web/app/api/media/video/
+generate/route.ts:635` settles the managed-usage reservation as `completed`
+  at **task-creation** time, using `getVideoCostCents(model, resolution,
+billableDurationSecs)` computed from the REQUESTED parameters. Video
+  generation is asynchronous: the route returns a `taskId` and the client polls
+  `media/video/status`. That status route contains no
+  `finalizeManagedUsageRequest` call at all — verified by grepping every
+  `operation: 'video'` settlement site in the repo, which yields exactly two,
+  both inside the generate route (one refunding a task that failed to be
+  CREATED, one settling on successful creation). So when the provider later
+  reports `status: 'failed'` at `status/route.ts:172/247/263`, nothing reverses
+  the charge.
+- **Why the obvious fix is wrong.** Calling `finalizeManagedUsageRequest` again
+  from the status route does not refund: the reservation is already terminal
+  and the RPC is idempotent, so the second call returns `already_finalized`.
+  There is also no credit/adjustment mechanism in `apps/web/lib` to post a
+  compensating entry — searched for `grantCredit`/`applyCredit`/
+  `recordAdjustment`/ledger-adjustment exports, none exist.
+- **What a correct fix requires.** Defer settlement to the task's TERMINAL
+  status rather than its creation: hold the reservation open across the async
+  task, extend the lease while it runs, settle `failed` (cost 0) or `completed`
+  (cost from the realised duration/resolution) when it resolves, and add a
+  sweeper so a task the user never polls cannot leak a held reservation
+  forever. That is a billing-architecture decision with real money on both
+  sides, which is why it is recorded here rather than patched in passing — a
+  wrong billing fix is worse than a documented billing bug.
+- **Contrast with the image path, which is correct.** `media/image/generate/
+route.ts:1277` recomputes cost from `result.images.length` — the number
+  actually returned — and settles synchronously because image generation
+  completes within the request. The asymmetry is the tell: the same team got
+  this right where the work was synchronous.
 
 ## 2026-08-05 iOS App Store submission blockers (partly resolved, founder-blocked remainder)
 
