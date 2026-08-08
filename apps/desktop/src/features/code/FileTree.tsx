@@ -88,6 +88,10 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     debouncedSearch(searchInput);
   }, [searchInput, debouncedSearch]);
 
+  // The trailing timer outlives the component otherwise, and fires
+  // setDebouncedSearchQuery against an unmounted tree.
+  useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
+
   const fetchDirectoryEntries = useCallback(async (path: string) => {
     const entries = await invoke<
       {

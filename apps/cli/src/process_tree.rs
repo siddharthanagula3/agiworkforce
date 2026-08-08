@@ -134,9 +134,15 @@ pub(crate) async fn terminate_owners_and_wait(
         .copied()
         .collect::<std::collections::HashSet<_>>();
     let deadline = Instant::now() + timeout;
+    // Every group we have signalled. The registry draining only proves we
+    // stopped TRACKING a tree — see `await_process_groups_reaped`.
+    let mut signalled = std::collections::HashSet::<u32>::new();
 
     loop {
-        let (process_ids, mut count_receiver) = {
+        // The registry guard is `std::sync::MutexGuard`, which is not `Send`.
+        // It must be dropped before any `.await`, or this whole future stops
+        // being `Send` and cannot be spawned.
+        let drained_or_next = {
             let registry = active_process_trees()
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -152,12 +158,20 @@ pub(crate) async fn terminate_owners_and_wait(
                     .values()
                     .any(|entry| entry.owner.is_some_and(|owner| owner_set.contains(&owner)))
             {
-                return Ok(());
+                None
+            } else {
+                Some((process_ids, registry.active_count.subscribe()))
             }
-            (process_ids, registry.active_count.subscribe())
+        };
+
+        let Some((process_ids, mut count_receiver)) = drained_or_next else {
+            // Registry is clear. That is necessary but NOT sufficient, so
+            // confirm against the OS before acknowledging.
+            return await_process_groups_reaped(&signalled, deadline).await;
         };
 
         for process_id in process_ids {
+            signalled.insert(process_id);
             if tokio::time::timeout_at(deadline, signal_process_tree(Some(process_id)))
                 .await
                 .is_err()
@@ -171,6 +185,61 @@ pub(crate) async fn terminate_owners_and_wait(
             return Err(process_tree_shutdown_timeout());
         }
     }
+}
+
+/// Wait until every signalled process group is actually gone from the OS.
+///
+/// `terminate_owners_and_wait` used to return as soon as the in-process
+/// registry drained. A registry entry disappears when its supervisor task drops
+/// the tracked child — which is the DIRECT child exiting, not the group being
+/// reaped. `killpg(SIGKILL)` is delivered asynchronously, so between those two
+/// moments the grandchildren are doomed but still present.
+///
+/// On an idle machine that window is invisible. Under load it is not: CI ran
+/// this alongside 1,833 other tests and caught shutdown acknowledging while
+/// `[pid, pid, pid]` were still alive, which is precisely the contract
+/// `shutdown()` advertises and did not keep. It failed 100 consecutive runs and
+/// blocked every downstream E2E job for 18 days.
+///
+/// A zombie still answers signal 0 until its parent reaps it, so this waits for
+/// genuine `ESRCH` rather than treating "doomed" as "gone".
+#[cfg(unix)]
+async fn await_process_groups_reaped(
+    groups: &std::collections::HashSet<u32>,
+    deadline: Instant,
+) -> io::Result<()> {
+    use nix::errno::Errno;
+    use nix::sys::signal::killpg;
+    use nix::unistd::Pid;
+
+    if groups.is_empty() {
+        return Ok(());
+    }
+    loop {
+        let still_alive = groups
+            .iter()
+            .copied()
+            .filter_map(|id| i32::try_from(id).ok())
+            .any(|id| !matches!(killpg(Pid::from_raw(id), None), Err(Errno::ESRCH)));
+        if !still_alive {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(process_tree_shutdown_timeout());
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+/// Windows tears the tree down synchronously via `taskkill /T /F`, which has
+/// already returned by the time the registry drains, so there is no equivalent
+/// window to wait out.
+#[cfg(not(unix))]
+async fn await_process_groups_reaped(
+    _groups: &std::collections::HashSet<u32>,
+    _deadline: Instant,
+) -> io::Result<()> {
+    Ok(())
 }
 
 fn process_tree_shutdown_timeout() -> io::Error {
