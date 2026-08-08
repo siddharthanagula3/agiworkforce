@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { stripTrailingSlashes } from '../url';
+import { getToolDisplayLabel } from '../tool-display';
 
 describe('stripTrailingSlashes', () => {
   it('matches what the nine hand-rolled regexes did', () => {
@@ -38,5 +39,36 @@ describe('stripTrailingSlashes', () => {
     // flaky test on shared CI runners.
     const pathological = `${'/'.repeat(100_000)}x${'/'.repeat(100_000)}`;
     expect(stripTrailingSlashes(pathological)).toBe(`${'/'.repeat(100_000)}x`);
+  });
+});
+
+describe('getToolDisplayLabel — mcp name parsing parity', () => {
+  const LEGACY = /^mcp__([a-z0-9_-]+)__(.+)$/i;
+
+  it.each([
+    'mcp__github__create_issue',
+    'mcp__my-server__do_thing',
+    'MCP__Upper__Tool_Name',
+    'mcp__server__a',
+    'mcp__server',
+    'mcp__',
+    'not_an_mcp_tool',
+    'read_file',
+  ])('agrees with the expression it replaced: %s', (name) => {
+    const legacySource = LEGACY.exec(name)?.[2] ?? name;
+    const expected = legacySource
+      .replace(/^(mcp__|tool_|action_)/i, '')
+      .replace(/[_-]+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const actual = getToolDisplayLabel(name).displayName;
+    expect(actual).toBe(expected || 'Working');
+  });
+
+  it('answers immediately on the input that made the old expression quadratic', () => {
+    // `_` sits inside the server-name class, so the engine could not tell
+    // which `__` was the separator and retried every split point.
+    const pathological = `mcp__${'a_'.repeat(50_000)}`;
+    expect(() => getToolDisplayLabel(pathological)).not.toThrow();
   });
 });
