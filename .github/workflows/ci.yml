@@ -628,6 +628,22 @@ jobs:
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       CLERK_SECRET_KEY: test-clerk-secret-key
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_mock
+      # `instrumentation.ts` runs validate-env at boot and throws on a missing
+      # critical variable, so without these the server never starts and every
+      # E2E and accessibility assertion fails against a dead port — which is
+      # exactly what this lane had been doing.
+      #
+      # Placeholders rather than AGI_ALLOW_INVALID_ENV=1: the checks are
+      # presence-only (apps/web/lib/validate-env.ts), no Stripe call is made in
+      # this lane, and naming each variable keeps the validator meaningful. A
+      # newly required variable still fails this job loudly instead of being
+      # silently suppressed by a blanket override.
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      STRIPE_PRICE_PRO_MONTHLY: price_ci_placeholder_pro_monthly
+      STRIPE_PRICE_PRO_YEARLY: price_ci_placeholder_pro_yearly
     steps:
       - uses: actions/checkout@v6
 
