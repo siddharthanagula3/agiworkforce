@@ -176,6 +176,12 @@ export default function PricingPage() {
   const user = useAuthStore((s) => s.user);
   const { data: billing, isLoading: billingLoading } = useBillingData();
 
+  // Nine billing tiers exist, but showing all nine at once is where people stall.
+  // ChatGPT and Claude both segment by audience first and then show three or four
+  // cards; `audience` is that first cut, and `maxVariant` keeps Max 5x and Max 15x
+  // in one card so the individual grid really does hold the four it is classed for.
+  const [audience, setAudience] = useState<'individual' | 'business'>('individual');
+  const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
   const [annual, setAnnual] = useState(false);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -529,7 +535,7 @@ export default function PricingPage() {
             <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
               {t('talkToSalesCta')}
             </Link>
-            <Link href="/chat" className="agi-fl-cta agi-fl-cta--ghost">
+            <Link href="/" className="agi-fl-cta agi-fl-cta--ghost">
               {t('tryAgiCta')}
             </Link>
           </div>
@@ -540,8 +546,40 @@ export default function PricingPage() {
           </ul>
         </section>
 
+        {/* ─────────────────────── Audience selector ────────────────────── */}
+        <div className="agi-tier-toggle" role="group" aria-label={t('audienceLabel')}>
+          <button
+            type="button"
+            aria-pressed={audience === 'individual'}
+            onClick={() => setAudience('individual')}
+            className={
+              audience === 'individual'
+                ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                : 'agi-tier-toggle-btn'
+            }
+          >
+            {t('audienceIndividual')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={audience === 'business'}
+            onClick={() => setAudience('business')}
+            className={
+              audience === 'business'
+                ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                : 'agi-tier-toggle-btn'
+            }
+          >
+            {t('audienceBusiness')}
+          </button>
+        </div>
+
         {/* ──────────────────── The wedge: Local + BYOK ─────────────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-wedge-title">
+        <section
+          className="agi-fl-section"
+          aria-labelledby="pricing-wedge-title"
+          hidden={audience !== 'individual'}
+        >
           <p className="agi-fl-eyebrow">{t('wedgeEyebrow')}</p>
           <h2 id="pricing-wedge-title" className="agi-fl-h2">
             {t('wedgeHeading')}
@@ -612,7 +650,11 @@ export default function PricingPage() {
         </section>
 
         {/* ─────────────────── Team & Enterprise (centerpiece) ──────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-team-title">
+        <section
+          className="agi-fl-section"
+          aria-labelledby="pricing-team-title"
+          hidden={audience !== 'business'}
+        >
           <p className="agi-fl-eyebrow">{t('teamEyebrow')}</p>
           <h2 id="pricing-team-title" className="agi-fl-h2">
             {t('teamHeading')}
@@ -767,7 +809,11 @@ export default function PricingPage() {
         </section>
 
         {/* ──────────────────── Individual cloud on-ramp ────────────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-individual-title">
+        <section
+          className="agi-fl-section"
+          aria-labelledby="pricing-individual-title"
+          hidden={audience !== 'individual'}
+        >
           <p className="agi-fl-eyebrow">{t('individualEyebrow')}</p>
           <h2 id="pricing-individual-title" className="agi-fl-h2">
             {t('individualHeading')}
@@ -903,52 +949,64 @@ export default function PricingPage() {
               {renderPlanAction('pro', t('proCta'))}
             </Reveal>
 
+            {/* Max 5x and Max 15x share one card. They are the same plan at two
+                capacities, and splitting them pushed the individual grid to five
+                cards inside a four-card layout. The selector keeps both buyable
+                without spending a column on each. */}
             <Reveal as="article" delay={120} className="agi-tier">
-              <h3 className="agi-tier-name">{max.label}</h3>
+              <h3 className="agi-tier-name">{maxVariant === 'max' ? max.label : max15x.label}</h3>
+              <div className="agi-tier-toggle" role="group" aria-label={t('maxVariantLabel')}>
+                <button
+                  type="button"
+                  aria-pressed={maxVariant === 'max'}
+                  onClick={() => setMaxVariant('max')}
+                  className={
+                    maxVariant === 'max'
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {max.label}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={maxVariant === 'max_15x'}
+                  onClick={() => setMaxVariant('max_15x')}
+                  className={
+                    maxVariant === 'max_15x'
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {max15x.label}
+                </button>
+              </div>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{maxPrice}</span>
+                <span className="agi-tier-price-num">
+                  {maxVariant === 'max' ? maxPrice : max15xPrice}
+                </span>
                 <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
               </p>
-              <p className="agi-tier-body">{t('maxTierBody')}</p>
+              <p className="agi-tier-body">
+                {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
+              </p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  {t('maxFeature1')}
+                  {maxVariant === 'max' ? t('maxFeature1') : t('max15xFeature1')}
                 </li>
                 <li>
                   <CheckIcon />
-                  {t('maxFeature2')}
+                  {maxVariant === 'max' ? t('maxFeature2') : t('max15xFeature2')}
                 </li>
                 <li>
                   <CheckIcon />
-                  {t('maxFeature3')}
+                  {maxVariant === 'max' ? t('maxFeature3') : t('max15xFeature3')}
                 </li>
               </ul>
-              {renderPlanAction('max', t('maxCta'))}
-            </Reveal>
-
-            <Reveal as="article" delay={160} className="agi-tier">
-              <h3 className="agi-tier-name">{max15x.label}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{max15xPrice}</span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-              </p>
-              <p className="agi-tier-body">Highest-capacity managed AI for sustained work.</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  15x Pro usage
-                </li>
-                <li>
-                  <CheckIcon />
-                  Everything in {max.label}
-                </li>
-                <li>
-                  <CheckIcon />
-                  Video generation
-                </li>
-              </ul>
-              {renderPlanAction('max_15x', `Get ${max15x.label}`)}
+              {maxVariant === 'max'
+                ? renderPlanAction('max', t('maxCta'))
+                : renderPlanAction('max_15x', t('max15xCta'))}
             </Reveal>
           </div>
         </section>
