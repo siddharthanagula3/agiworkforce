@@ -99,16 +99,22 @@ function textPrefix(bytes: Uint8Array, limit = 64_000): string {
 function scanSvg(bytes: Uint8Array): UploadScanFinding[] {
   const text = textPrefix(bytes).toLowerCase();
   const findings: UploadScanFinding[] = [];
-  if (/<script[\s>]/.test(text)) {
+  // `/` belongs in every one of these classes alongside whitespace. The HTML
+  // tokenizer treats a solidus after a tag name, or between attributes, as a
+  // separator — `<script/src=x>` and `<svg/onload=alert(1)>` both parse and
+  // both EXECUTE. Matching only `[\s>]` let both through a scanner whose whole
+  // job is to catch them (js/bad-tag-filter). Verified against the tokenizer
+  // behaviour, and each form is now a regression case in upload-scan.test.ts.
+  if (/<script[\s/>]/.test(text)) {
     findings.push({ code: 'active_content_svg', detail: 'SVG contains a <script> element' });
   }
-  if (/\son\w+\s*=/.test(text)) {
+  if (/[\s/]on\w+\s*=/.test(text)) {
     findings.push({ code: 'active_content_svg', detail: 'SVG contains an inline event handler' });
   }
   if (/javascript:/.test(text)) {
     findings.push({ code: 'active_content_svg', detail: 'SVG contains a javascript: URL' });
   }
-  if (/<foreignobject[\s>]/.test(text)) {
+  if (/<foreignobject[\s/>]/.test(text)) {
     findings.push({ code: 'active_content_svg', detail: 'SVG contains <foreignObject>' });
   }
   return findings;
