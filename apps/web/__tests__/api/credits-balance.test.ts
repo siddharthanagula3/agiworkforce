@@ -212,11 +212,13 @@ describe('Credits Balance API', () => {
         expect(data.credits.has_usage_remaining).toBe(true);
         expect(data.credits.reset_at).toBeDefined();
         expect(data.credits.seconds_until_reset).toBeGreaterThanOrEqual(0);
+        expect(data.credits.usage_visible).toBe(true);
         expect(Object.keys(data.credits).sort()).toEqual([
           'has_usage_remaining',
           'reset_at',
           'seconds_until_reset',
           'usage_percentage',
+          'usage_visible',
         ]);
         expect(JSON.stringify(data)).not.toMatch(
           /_cents|monthly_allocated|monthly_remaining|formatted|\$/i,
@@ -288,12 +290,41 @@ describe('Credits Balance API', () => {
         );
         const data = await response.json();
 
+        // Free still meters and still reports whether it may continue and when
+        // the window resets — but its allowance is internal (2026-08-08), so no
+        // percentage is published even though the service computed 75.
         expect(data.credits).toMatchObject({
-          usage_percentage: 75,
+          usage_percentage: null,
+          usage_visible: false,
           reset_at: '2026-07-19T12:00:00.000Z',
           has_usage_remaining: true,
         });
         expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(mockUser.id);
+      });
+
+      it('never leaks a Free allowance number anywhere in the payload', async () => {
+        // Suppression is at the API boundary, not the UI: the response is
+        // readable in devtools, so a hidden meter would not withhold anything.
+        vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
+          ...mockSubscription,
+          plan_tier: 'free',
+        });
+        vi.mocked(CreditService.getBalance).mockResolvedValue(null);
+        mockGetFreeTrialPublicUsage.mockResolvedValue({
+          usagePercentage: 93,
+          resetAt: '2026-07-19T12:00:00.000Z',
+          hasUsageRemaining: true,
+        });
+
+        const response = await GET(
+          new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+            headers: { Authorization: 'Bearer valid-token' },
+          }),
+        );
+        const body = JSON.stringify(await response.json());
+
+        expect(body).not.toContain('93');
+        expect(body).not.toMatch(/_cents|allocated|remaining_units/i);
       });
     });
 
