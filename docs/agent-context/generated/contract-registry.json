@@ -27,6 +27,7 @@
     "event-triggers",
     "interactive-cards",
     "managed-usage-balance",
+    "managed-usage-caps",
     "memory",
     "model",
     "model-catalog",
