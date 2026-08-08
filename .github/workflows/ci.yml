@@ -788,7 +788,15 @@ jobs:
         # than gating shipping-binary lint here.
         run: |
           cargo clippy --workspace --lib \
-            --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/webrtc-support,agiworkforce-desktop/sentry,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
+            # NB3: `sentry` is NOT in this list because agiworkforce-desktop has no
+            # such feature. Cargo rejects an unknown feature before it lints
+            # anything ("none of the selected packages contains this feature"),
+            # so while it was listed this lane failed on every commit and linted
+            # zero lines. It went unnoticed because the lane only runs after
+            # `check` passes, which had not happened since 2026-07-21.
+            # Every name below is verified against [features] in
+            # apps/desktop/src-tauri/Cargo.toml.
+            --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/webrtc-support,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
             -- -D warnings
 
   # macOS smoke check: compile + clippy on the primary target platform.

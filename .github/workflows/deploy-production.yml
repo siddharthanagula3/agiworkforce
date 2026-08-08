@@ -112,6 +112,44 @@ jobs:
           --retry 5 --retry-all-errors --retry-delay 5
           --max-time 20 "$DEPLOYMENT_URL/api/health" > /dev/null
 
+      - name: Verify the authenticated serving path
+        # /api/health is the ONE route that does not import lib/api-auth, so it
+        # returns 200 through a total outage of every authenticated route. That
+        # is not hypothetical: during the 2026-08-07 argon2 incident /api/health
+        # served 200 while /api/me served 500 for 22 hours, and this gate would
+        # have promoted the broken build and called it verified.
+        #
+        # Probing an AUTHENTICATED route without credentials is the cheap
+        # discriminator. A healthy deployment rejects the request — 401 or 403 —
+        # because it successfully loaded the auth module in order to reject it.
+        # A 5xx means the serving path itself failed to load, which is exactly
+        # the shape a missing native binary produces.
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 20 "$DEPLOYMENT_URL/api/me" || echo 000)"
+            case "$code" in
+              401|403)
+                echo "Authenticated route rejected an anonymous request with $code - serving path is up."
+                exit 0
+                ;;
+              5*|000)
+                echo "Attempt $attempt: /api/me returned $code (want 401/403); retrying."
+                sleep 5
+                ;;
+              *)
+                echo "::error::/api/me returned $code. Expected 401/403 from an anonymous request."
+                exit 1
+                ;;
+            esac
+          done
+          echo "::error::/api/me never returned 401/403; the authenticated serving path is broken even though /api/health is green."
+          exit 1
+
       - name: Record deployment summary
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}

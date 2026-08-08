@@ -142,7 +142,7 @@
     "sync:models:check": "pnpm --filter @agiworkforce/model-registry check",
     "sync:models:refresh": "pnpm --filter @agiworkforce/model-registry refresh",
     "check:lock-drift": "node scripts/check-lock-build-drift.mjs",
-    "check:llm-operability": "pnpm check:agent-context && pnpm check:audit-inventory && pnpm check:capability-gaps && pnpm check:ui-gaps && pnpm check:executable-docs && pnpm check:agent-context-indexes && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:cloud-contract-ownership && pnpm check:artifact-sync-ownership && pnpm check:service-domain-ownership && pnpm check:module-reachability && pnpm check:surface-reachability && pnpm check:surface-invariants && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:env-contract && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:native-module-tracing && pnpm sync:models:check && pnpm check:report-retention && pnpm check:non-md-artifacts && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites && pnpm check:model-catalog && pnpm check:availability-invariant && pnpm check:db-isolation && pnpm check:css-tokens && pnpm check:llm-failures",
+    "check:llm-operability": "pnpm check:agent-context && pnpm check:audit-inventory && pnpm check:capability-gaps && pnpm check:ui-gaps && pnpm check:executable-docs && pnpm check:agent-context-indexes && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:cloud-contract-ownership && pnpm check:artifact-sync-ownership && pnpm check:service-domain-ownership && pnpm check:module-reachability && pnpm check:surface-reachability && pnpm check:surface-invariants && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:env-contract && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:native-module-tracing && pnpm sync:models:check && pnpm check:report-retention && pnpm check:non-md-artifacts && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:workflow-cargo-features && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites && pnpm check:model-catalog && pnpm check:availability-invariant && pnpm check:db-isolation && pnpm check:css-tokens && pnpm check:llm-failures",
     "audit:file-ledger": "node scripts/generate-surface-file-ledger.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -174,7 +174,8 @@
     "check:css-tokens": "node scripts/check-css-tokens.mjs",
     "check:knip": "knip",
     "check:knip:production": "knip --production",
-    "check:native-module-tracing": "node --test scripts/check-native-module-tracing.test.mjs && node scripts/check-native-module-tracing.mjs"
+    "check:native-module-tracing": "node --test scripts/check-native-module-tracing.test.mjs && node scripts/check-native-module-tracing.mjs",
+    "check:workflow-cargo-features": "node scripts/check-workflow-cargo-features.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
