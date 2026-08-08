@@ -23,6 +23,7 @@
 
 import type { StreamChunk } from '@agiworkforce/types';
 import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, StreamIdleTimeoutError } from '../watchdog';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export interface StreamIdleWatchdogOptions {
   /** Per-chunk idle timeout. Default: `DEFAULT_STREAM_IDLE_TIMEOUT_MS` (90s). */
@@ -168,7 +169,7 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
   } = options;
 
   const doFetch = fetchImpl ?? fetch;
-  const url = `${baseUrl.replace(/\/+$/, '')}/api/v1/providers/${encodeURIComponent(providerId)}/stream`;
+  const url = `${stripTrailingSlashes(baseUrl)}/api/v1/providers/${encodeURIComponent(providerId)}/stream`;
 
   // Tracks which phase a transport failure occurred in so a caught error can be classified
   // as STREAM_FETCH_ERROR vs STREAM_READ_ERROR the same way the original mobile client did.

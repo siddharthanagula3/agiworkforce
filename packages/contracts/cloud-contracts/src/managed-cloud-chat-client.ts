@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_BASE_PATH,
   ManagedCloudConversationListQuerySchema,
@@ -121,7 +122,7 @@ export class ManagedCloudChatContractError extends Error {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+  return stripTrailingSlashes(baseUrl);
 }
 
 function withBaseUrl(baseUrl: string, path: string): string {

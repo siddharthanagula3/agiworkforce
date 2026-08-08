@@ -1,4 +1,4 @@
-import { validateAttachmentFile } from '@agiworkforce/types';
+import { validateAttachmentFile, stripTrailingSlashes } from '@agiworkforce/types';
 import type { ZodType } from 'zod';
 import {
   MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
@@ -48,7 +48,7 @@ export class ManagedCloudProjectKnowledgeContractError extends Error {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+  return stripTrailingSlashes(baseUrl);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

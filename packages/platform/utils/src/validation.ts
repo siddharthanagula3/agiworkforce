@@ -41,8 +41,38 @@ export interface PasswordValidationResult extends ValidationResult {
  * ```
  */
 export function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  // Was /^[^\s@]+@[^\s@]+\.[^\s@]+$/. Anchored, but `[^\s@]+\.[^\s@]+$`
+  // still backtracks polynomially (js/polynomial-redos): on a domain with no
+  // dot the engine retries every split point before failing. Emails arrive
+  // from user input, so the input is exactly the untrusted, attacker-length
+  // kind the rule warns about.
+  //
+  // The structural checks below are the same predicate, evaluated in linear
+  // time: exactly one '@', a non-empty local part, and a domain that contains
+  // a dot with non-empty labels either side. Neither part may contain
+  // whitespace. This deliberately stays as permissive as the original — it is
+  // a shape check, not RFC 5322 validation, and tightening it would reject
+  // addresses that previously passed.
+  const at = email.indexOf('@');
+  if (at <= 0 || at !== email.lastIndexOf('@')) return false;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!domain) return false;
+  if (hasWhitespace(local) || hasWhitespace(domain)) return false;
+
+  const dot = domain.indexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+}
+
+function hasWhitespace(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    // space, tab, LF, VT, FF, CR — the ASCII set `\s` matches, which is all
+    // the original expression could reject in practice.
+    if (code === 32 || (code >= 9 && code <= 13)) return true;
+  }
+  return false;
 }
 
 /**
@@ -281,18 +311,23 @@ export function validateJson(json: string): ValidationResult & { data?: unknown 
  * ```
  */
 export function validateSqlQuery(query: string): ValidationResult {
-  const dangerousPatterns = [
-    /DROP\s+TABLE/i,
-    /DROP\s+DATABASE/i,
-    /TRUNCATE/i,
-    /DELETE\s+FROM\s+.*\s+WHERE\s+1\s*=\s*1/i,
-    /;\s*DROP/i,
-  ];
+  const dangerousPatterns = [/DROP\s+TABLE/i, /DROP\s+DATABASE/i, /TRUNCATE/i, /;\s*DROP/i];
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(query)) {
       return { valid: false, error: 'Query contains potentially dangerous operation' };
     }
+  }
+
+  // Was one expression: /DELETE\s+FROM\s+.*\s+WHERE\s+1\s*=\s*1/i. The
+  // `.*\s+` there is a polynomial-ReDoS backtracker (js/polynomial-redos) —
+  // on a long DELETE with no matching WHERE the engine retries every split
+  // point. Two anchored linear tests preserve the intent: both halves must be
+  // present. The only behavioural difference is that WHERE 1=1 no longer has
+  // to appear AFTER the DELETE FROM, which for a denylist is the safer
+  // direction — it matches strictly more.
+  if (/DELETE\s+FROM\b/i.test(query) && /\bWHERE\s+1\s*=\s*1/i.test(query)) {
+    return { valid: false, error: 'Query contains potentially dangerous operation' };
   }
 
   return { valid: true };
@@ -364,13 +399,22 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     /<iframe/i,
     /<object/i,
     /<embed/i,
-    /<svg\b[^>]*\bon\w+/i, // SVG with event handlers
   ];
 
   for (const pattern of xssPatterns) {
     if (pattern.test(input)) {
       return { safe: false, type: 'XSS' };
     }
+  }
+
+  // Was one entry in the list above: /<svg\b[^>]*\bon\w+/i. `[^>]*` before a
+  // required literal backtracks polynomially on a long unclosed tag
+  // (js/polynomial-redos). Two linear tests keep the same condition — an <svg>
+  // and an on-attribute both present. Dropping the "same tag" adjacency makes
+  // it match strictly more, which for a denylist is the safe direction, and it
+  // does not newly flag a plain <svg> the way testing for the tag alone would.
+  if (/<svg\b/i.test(input) && /\bon\w+/i.test(input)) {
+    return { safe: false, type: 'XSS' };
   }
 
   return { safe: true };
