@@ -176,5 +176,14 @@
   "perSeatPrice": "{{price}}/licencia/mes",
   "seatCountLabel": "Licencias",
   "seatTotal": "{{seats}} licencias · {{total}}/mes",
-  "changeSeatsCta": "Actualizar licencias"
+  "changeSeatsCta": "Actualizar licencias",
+  "audienceLabel": "Tipo de facturación",
+  "audienceIndividual": "Individual",
+  "audienceBusiness": "Equipos y Enterprise",
+  "maxVariantLabel": "Capacidad Max",
+  "max15xTierBody": "IA gestionada de máxima capacidad para trabajo sostenido.",
+  "max15xFeature1": "Uso 15x de Pro",
+  "max15xFeature2": "Todo lo de Max 5x",
+  "max15xFeature3": "Generación de vídeo",
+  "max15xCta": "Obtener Max 15x"
 }

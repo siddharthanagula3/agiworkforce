@@ -62,5 +62,14 @@
   "upgradeMessage": "此功能需要更高的订阅计划。",
   "limitReached": "已达到限制",
   "limitMessage": "您已达到 {{limit}} 的限制。",
-  "heroLedePart2": "AGI 托管云已面向个人使用开放公测（Public Alpha）。Team 为自助购买、按席位计费；当您的组织需要定制化治理与协商条款时，Enterprise 由销售协助提供。"
+  "heroLedePart2": "AGI 托管云已面向个人使用开放公测（Public Alpha）。Team 为自助购买、按席位计费；当您的组织需要定制化治理与协商条款时，Enterprise 由销售协助提供。",
+  "audienceLabel": "计费对象",
+  "audienceIndividual": "个人",
+  "audienceBusiness": "团队与企业",
+  "maxVariantLabel": "Max 容量",
+  "max15xTierBody": "面向持续工作的最高容量托管 AI。",
+  "max15xFeature1": "Pro 的 15 倍用量",
+  "max15xFeature2": "Max 5x 的全部功能",
+  "max15xFeature3": "视频生成",
+  "max15xCta": "获取 Max 15x"
 }

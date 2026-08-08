@@ -62,5 +62,14 @@
   "upgradeMessage": "Cette fonctionnalité nécessite un plan d'abonnement supérieur.",
   "limitReached": "Limite atteinte",
   "limitMessage": "Vous avez atteint votre limite de {{limit}}.",
-  "heroLedePart2": "Le cloud géré AGI est ouvert en alpha publique pour un usage individuel. Team est en libre-service et facturé par siège ; Enterprise passe par l’équipe commerciale lorsque votre organisation souhaite une gouvernance sur mesure et des conditions négociées."
+  "heroLedePart2": "Le cloud géré AGI est ouvert en alpha publique pour un usage individuel. Team est en libre-service et facturé par siège ; Enterprise passe par l’équipe commerciale lorsque votre organisation souhaite une gouvernance sur mesure et des conditions négociées.",
+  "audienceLabel": "Type de facturation",
+  "audienceIndividual": "Particulier",
+  "audienceBusiness": "Équipe et Enterprise",
+  "maxVariantLabel": "Capacité Max",
+  "max15xTierBody": "IA gérée à capacité maximale pour un travail soutenu.",
+  "max15xFeature1": "Usage 15x de Pro",
+  "max15xFeature2": "Tout ce que contient Max 5x",
+  "max15xFeature3": "Génération vidéo",
+  "max15xCta": "Choisir Max 15x"
 }
