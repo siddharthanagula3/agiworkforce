@@ -110,14 +110,22 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
     expect(res).toBeNull();
   });
 
-  test('SECURITY: free-trial economy prompt is allowed even when the kill-switch is engaged', () => {
+  test('SECURITY: the kill-switch refuses free-trial prompts too, with no carve-out', () => {
+    // INVERTED 2026-08-08 by founder decision. Previously asserted that a
+    // free-trial prompt was ALLOWED through an engaged kill-switch, which was
+    // correct while this flag gated the private-beta launch. Since 2026-06-27
+    // it is the incident-response kill-switch, and the gateway
+    // (services/api-gateway/src/middleware/managedComputeGate.ts) already
+    // blocked everything — so the two surfaces disagreed about what "engaged"
+    // meant, with web still serving the traffic class cheapest to create in
+    // bulk. A partial kill is the failure mode a kill-switch exists to prevent.
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
       model: 'claude-sonnet-5',
       isFreeTrial: true,
     });
-    // Explicit per-request opt-in lets brand-new users try the product.
-    expect(res).toBeNull();
+    expect(res).not.toBeNull();
+    expect(res?.status).toBe(403);
   });
 });
