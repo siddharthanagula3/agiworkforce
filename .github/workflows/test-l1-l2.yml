@@ -20,6 +20,13 @@ concurrency:
   group: tests-l1-l2-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege. Without an explicit block GITHUB_TOKEN inherits the
+# repository default, which on a public repo can be write-all — so a
+# compromised dependency in a test run could push commits or publish
+# packages. These jobs only read the checkout.
+permissions:
+  contents: read
+
 jobs:
   test-l1-l2:
     runs-on: ubuntu-24.04
