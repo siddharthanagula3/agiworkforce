@@ -144,6 +144,30 @@ const TOOL_DISPLAY_LABEL: Record<string, ToolDisplayLabel> = {
  * Order: direct map match → MCP-prefixed name humanized (`mcp__x__do_thing` →
  * "Do thing") → generic snake/kebab-case humanization → "Working" fallback.
  */
+/**
+ * The tool part of an `mcp__<server>__<tool>` name, or undefined.
+ *
+ * Was `/^mcp__([a-z0-9_-]+)__(.+)$/i`. Because `_` is inside the server-name
+ * class, the engine cannot tell which `__` is the separator and retries every
+ * split point — polynomial on a long name that ultimately fails to match
+ * (js/polynomial-redos). Tool names arrive from MCP servers, which are
+ * user-configured third parties.
+ *
+ * Scanning for the first `__` after the prefix is both linear and what the
+ * expression meant: `[a-z0-9_-]+` is greedy, so the original bound to the LAST
+ * `__`, and this binds to the first. That difference only shows up on a server
+ * name that itself contains `__`, which the MCP naming convention does not
+ * produce; the parity test pins the shapes that do occur.
+ */
+function mcpToolSuffix(name: string): string | undefined {
+  const PREFIX = 'mcp__';
+  if (!name.toLowerCase().startsWith(PREFIX)) return undefined;
+  const separator = name.indexOf('__', PREFIX.length);
+  if (separator === -1) return undefined;
+  const suffix = name.slice(separator + 2);
+  return suffix.length > 0 ? suffix : undefined;
+}
+
 export function getToolDisplayLabel(rawName: string | null | undefined): ToolDisplayLabel {
   const name = (rawName ?? '').trim();
   if (!name) {
@@ -153,8 +177,7 @@ export function getToolDisplayLabel(rawName: string | null | undefined): ToolDis
   const direct = TOOL_DISPLAY_LABEL[name] ?? TOOL_DISPLAY_LABEL[name.toLowerCase()];
   if (direct) return direct;
 
-  const mcp = name.match(/^mcp__([a-z0-9_-]+)__(.+)$/i);
-  const source = mcp?.[2] ?? name;
+  const source = mcpToolSuffix(name) ?? name;
   const readable = source
     .replace(/^(mcp__|tool_|action_)/i, '')
     .replace(/[_-]+/g, ' ')
