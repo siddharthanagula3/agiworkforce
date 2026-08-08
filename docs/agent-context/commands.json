@@ -56,7 +56,6 @@
     "neonMigrations": "pnpm check:neon-migrations",
     "ciGuardrails": "pnpm check:ci-guardrails",
     "codeowners": "pnpm check:codeowners",
-    "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",
     "hooks": "pnpm check:hooks",
     "hookFireSites": "pnpm check:hook-fire-sites",

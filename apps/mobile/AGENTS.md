@@ -4,7 +4,7 @@ Status: Current
 Owner: Mobile lead
 Last updated: 2026-06-05
 
-Read root `AGENTS.md`, then this file, then `apps/mobile/README.md`.
+Read root `AGENTS.md`, then this file.
 
 ## Scope
 

@@ -4,11 +4,11 @@ Status: Current
 Owner: Extension lead
 Last updated: 2026-05-21
 
-Read root `AGENTS.md`, then this file, then `docs/CONTRIBUTING-NOTES.md`.
+Read root `AGENTS.md`, then this file.
 
 `README.md` in this package is the VS Code Marketplace "Details" page — it
 ships byte-identical inside the VSIX. Keep engineering detail out of it and in
-`docs/CONTRIBUTING-NOTES.md`, which `.vscodeignore` excludes from the package.
+this file.
 
 ## Scope
 

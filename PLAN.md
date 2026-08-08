@@ -4,7 +4,6 @@ Status: Active
 Owner: Founder + platform lead
 Last updated: 2026-08-01
 Detailed plan: `docs/plans/monorepo-restructure-2026-07-08.md`
-Organization sequence: `docs/plans/pre-release-repo-organization-2026-05-20.md`
 
 > **Phase note (2026-07-26).** The mechanical restructure below is complete —
 > every wave is landed and the repository is structurally coherent (baseline:
@@ -283,7 +282,7 @@ and still open: (a) `pnpm check:llm-operability` is 32 of 34 guardrails passing
 — `check:mobile-hygiene` and `check:readme-ownership` both fail on the same
 three missing files, `apps/mobile/src/features/{archived-chats,reflect,team}/README.md`,
 each of which must carry the `Status:`, `Owner` and `Purpose` markers that
-`scripts/check-readme-ownership.mjs` enforces; this is a regression this branch
+Per-directory ownership READMEs were retired on 2026-08-08; this is a regression this branch
 introduced and it blocks the pre-push gate. (b) `cargo test --workspace --lib`
 is 6,770 passed / 4 failed / 34 ignored across 14 binaries, all four failures
 inside `agiworkforce-desktop` and all four reproducing deterministically in
@@ -302,7 +301,7 @@ Founder decisions standing as of this checkpoint: the branch is **not pushed**
 and **no PR is open**, deliberately — origin's copy is an ancestor 280 commits
 behind, so a push would fast-forward whenever it is authorized. The full
 successor briefing, including tree disposition and the not-run list, is
-`docs/agent-context/remediation-handoff-2026-08-01.md`; read it before resuming.
+the 2026-08-01 remediation handoff (retired 2026-08-08; see git history); read it before resuming.
 Finally, `TODO.md` was deleted in `906fe5cda`, so this Exact Resume Point
 section is now the executable queue — add new work here, not to a new root
 control doc.

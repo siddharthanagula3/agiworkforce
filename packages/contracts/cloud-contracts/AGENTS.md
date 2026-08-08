@@ -4,7 +4,7 @@ Status: Current
 Owner: Platform lead
 Last updated: 2026-07-16
 
-Read root `AGENTS.md`, then this file, then `packages/contracts/cloud-contracts/README.md`.
+Read root `AGENTS.md`, then this file, then this file.
 
 ## Scope
 

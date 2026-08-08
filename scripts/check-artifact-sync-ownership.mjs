@@ -317,12 +317,10 @@ const syncFiles = [
 
 for (const relativePath of [
   `${artifactsPath}/package.json`,
-  `${artifactsPath}/README.md`,
   `${artifactsPath}/tsconfig.json`,
   `${artifactsPath}/vitest.config.ts`,
   `${artifactsPath}/src/index.ts`,
   `${syncPath}/package.json`,
-  `${syncPath}/README.md`,
   `${syncPath}/tsconfig.json`,
   `${syncPath}/vitest.config.ts`,
   `${syncPath}/src/index.ts`,

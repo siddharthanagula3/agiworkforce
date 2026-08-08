@@ -4,7 +4,7 @@ Status: Current
 Owner: Provider/platform owner
 Last updated: 2026-05-21
 
-Read root `AGENTS.md`, then this file, then `packages/ai/providers/README.md` and the leaf provider README when present.
+Read root `AGENTS.md`, then this file.
 
 ## Scope
 

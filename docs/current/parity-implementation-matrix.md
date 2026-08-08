@@ -45,7 +45,7 @@ Surface abbreviations:
 
 ## 2026-07-16 Mounted Frontend Reconciliation
 
-The detailed current frontend contract is `docs/current/frontend-experience-contract.md`; the sanitized live Claude evidence is `docs/research/claude-live-frontend-system-2026-07-16.md`.
+The detailed current frontend contract is `docs/current/frontend-experience-contract.md`.
 
 The table below records production mounts and end-to-end reality found by the 2026-07-16 source audit. It supersedes older optimistic row text elsewhere in this file when they conflict. A source file, mock route, feature flag, or component is not capability evidence without a production mount and runtime path.
 

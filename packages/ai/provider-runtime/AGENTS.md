@@ -4,7 +4,7 @@ Status: Current
 Owner: Provider/platform owner
 Last updated: 2026-07-16
 
-Read root `AGENTS.md`, then this file, then `packages/ai/provider-runtime/README.md`.
+Read root `AGENTS.md`, then this file, then this file.
 
 ## Scope
 
