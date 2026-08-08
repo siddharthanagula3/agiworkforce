@@ -8,7 +8,7 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
+const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
 export const metadata = buildMetadata({
   title: 'AGI Deep Research | Cited Answers Across Web, Files & Tools',

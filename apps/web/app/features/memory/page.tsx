@@ -173,7 +173,7 @@ export default function MemoryFeaturePage() {
           title="Make it personal. Keep it yours."
           body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work. Memory stays in your hands either way."
           ctas={[
-            { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
+            { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/download', label: 'Get notified' },
           ]}
         />

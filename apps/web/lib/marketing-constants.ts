@@ -61,12 +61,13 @@ export const COMING_SOON_LABEL = 'Coming soon';
  *
  * This map previously read `COMING_SOON_LABEL` for ALL SIX surfaces, which the
  * home page contradicted one screen away: its primary CTA is "Try AGI Web" →
- * `/login?redirectTo=%2Fchat`, and both routes exist and work. A visitor who
+ * `/login?redirectTo=%2F`, and both routes exist and work. A visitor who
  * clicked through into a working product learned the site was wrong about its
  * own status.
  *
  * Evidence for each value, re-verify before changing:
- *   web      — this application. `app/login` and `app/chat` both resolve.
+ *   web      — this application. `app/login` resolves, and `app/page.tsx` serves
+ *              the product itself to a signed-in visitor (2026-08-08 root move).
  *   desktop  — git tag `v-desktop-1.2.0`. `.github/workflows/release-desktop.yml`
  *              publishes Linux x86_64 + notarized universal macOS artifacts;
  *              `app/api/download/route.ts` resolves live GitHub release
