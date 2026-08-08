@@ -49,16 +49,27 @@ export function buildManagedComputeGateResponse(
   };
 
   if (!isManagedComputePrivateBetaEnabled()) {
-    // Free-trial prompts are always allowed through so new users can chat
-    // without needing the private-beta env var. All other managed-compute
-    // requests are gated until the flag is set.
-    if (descriptor.isFreeTrial) {
-      logger.info(
-        { feature: base.feature, model: base.model },
-        '[managed-compute-gate] free-trial request allowed through without private-beta flag',
-      );
-      return null;
-    }
+    // NO CARVE-OUTS. Free-trial requests used to be allowed through here, and
+    // that was correct while this flag was the private-beta LAUNCH GATE: the
+    // point was to let new users chat without the env var being set.
+    //
+    // The 2026-06-27 decision removed the launch gate and repurposed the same
+    // flag as the incident-response kill-switch. The exemption was not
+    // revisited, so the two surfaces disagreed about what "engaged" meant —
+    // services/api-gateway/src/middleware/managedComputeGate.ts blocked
+    // everything while this one kept serving free-trial traffic. An operator
+    // flipping the switch during a cost runaway or abuse wave got desktop, CLI
+    // and VS Code stopped and web still serving, for exactly the traffic class
+    // that is cheapest to create in bulk.
+    //
+    // A kill-switch that leaves a class flowing is the failure mode
+    // kill-switches exist to avoid. Founder decision 2026-08-08: engaging it
+    // stops new-user onboarding too. That is strictly more disruptive, and it
+    // is the intended trade.
+    logger.warn(
+      { feature: base.feature, model: base.model, isFreeTrial: descriptor.isFreeTrial === true },
+      '[managed-compute-gate] kill-switch engaged; refusing managed compute',
+    );
 
     return NextResponse.json(
       {

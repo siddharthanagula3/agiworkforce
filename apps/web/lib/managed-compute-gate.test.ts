@@ -54,9 +54,35 @@ describe('web managed compute gate', () => {
     expect(body.managed_compute.allowed).toBe(false);
   });
 
-  it('allows a free-trial request through even when the kill-switch is engaged', () => {
-    // Free-tier chat must work even if an operator re-engages the kill-switch.
+  it('refuses a free-trial request too when the kill-switch is engaged', () => {
+    // INVERTED 2026-08-08 by founder decision, and the inversion is the point.
+    //
+    // This test previously asserted the opposite, and was right to while this
+    // flag was the private-beta LAUNCH GATE — exempting trials let new users
+    // chat without the env var set. The 2026-06-27 decision repurposed the same
+    // flag as the incident-response kill-switch and the exemption was never
+    // revisited, so web kept serving free-trial traffic while the gateway
+    // blocked everything. An operator flipping the switch during an abuse wave
+    // got the cheapest-to-create traffic class still flowing.
+    //
+    // A kill-switch with a carve-out is the failure mode kill-switches exist to
+    // avoid. Engaging it now stops onboarding too.
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
+    const response = buildManagedComputeGateResponse(request(), {
+      provider: 'openai',
+      model: 'gpt-5.6-terra',
+      isFreeTrial: true,
+    });
+
+    expect(response).not.toBeNull();
+    expect(response?.status).toBe(403);
+  });
+
+  it('still allows free-trial requests when the kill-switch is NOT engaged', () => {
+    // The switch is off by default (public alpha), so the ordinary path must be
+    // untouched by the change above — this is what proves the inversion did not
+    // simply break free-tier chat.
+    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
       model: 'gpt-5.6-terra',
