@@ -264,13 +264,39 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 // Configure CORS with allowed origins
 const allowedOrigins = (() => {
   const configured = process.env['ALLOWED_ORIGINS'];
-  if (!configured) {
-    return [...DEFAULT_ALLOWED_ORIGINS];
+  if (configured) {
+    return configured
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
   }
-  return configured
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+
+  // No ALLOWED_ORIGINS. Falling back to the localhost defaults is only correct
+  // OUTSIDE production, and the gate was missing.
+  //
+  // This server sends `credentials: true`, so the fallback previously let a
+  // page on http://localhost:3000/3001/4000 make CREDENTIALED cross-origin
+  // requests to a deployed signaling server — and it is a developer product,
+  // so a local server on :3000 is the normal state of a user's machine. It
+  // simultaneously allowed NO production origin, so real traffic was blocked
+  // while localhost was not.
+  //
+  // The variable is easy to miss: railway.toml only names it in a comment,
+  // docker-compose.yml defaults it to an EMPTY string (falsy, so it lands
+  // here), and no deploy workflow sets it.
+  //
+  // apps/web/lib/cors.ts already gates its identical localhost list behind
+  // NODE_ENV === 'development'. This is the same rule, applied to the surface
+  // that was missing it.
+  if (process.env['NODE_ENV'] === 'production') {
+    logger.error(
+      'ALLOWED_ORIGINS is not set. Refusing to fall back to localhost origins in production; ' +
+        'cross-origin requests will be rejected until it is configured.',
+    );
+    return [];
+  }
+
+  return [...DEFAULT_ALLOWED_ORIGINS];
 })();
 
 app.use(
