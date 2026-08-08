@@ -116,6 +116,35 @@ export async function dispatchStripeEvent(
         [canceledAt, stripeSubId],
       );
 
+      // Release the organization's binding to this now-dead subscription.
+      //
+      // `persistPurchasedSeatsOnOrganization` only writes seats when the
+      // organization is unbound or already bound to the INCOMING subscription
+      // (seats.ts WHERE clause). Nothing used to clear the binding on
+      // cancellation, so an organization kept the cancelled subscription's id
+      // forever — and a customer who later re-subscribed to Team paid for N
+      // seats, hit the mismatch branch, and had NONE of them attach. The
+      // failure was silent to them and surfaced only as a CRITICAL log line.
+      //
+      // The guard itself is right: one organization must not be hijacked by a
+      // different subscription. It simply could not tell "bound to a different
+      // ACTIVE subscription" from "bound to a DEAD one". Clearing the binding
+      // here supplies that distinction at the only moment we know the answer.
+      //
+      // `licensed_seats` is deliberately left alone. Cancellation policy is no
+      // mid-period cutoff, this event fires at period end, and lowering the
+      // ceiling below `seats_consumed` would trip the
+      // organizations_seats_within_license CHECK and abort the webhook
+      // transaction. Membership is what should shrink, and that is a separate
+      // decision, not a side effect of a Stripe event.
+      await db.execute(
+        `update public.organizations
+            set stripe_subscription_id = null,
+                seat_billing_updated_at = now()
+          where stripe_subscription_id = $1`,
+        [stripeSubId],
+      );
+
       await recordAuditEvent({
         userId: ownerRow?.user_id ?? null,
         eventType: 'plan_changed',
