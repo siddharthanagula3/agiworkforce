@@ -2,6 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   getModelMetadataById,
+  getPlanFlagshipWeeklyUsageCapCents,
+  getPlanSessionUsageCapCents,
+  getPlanWeeklyUsageCapCents,
+  getSlotForModel,
   normalizeModelId,
   resolveEffectiveModelPricing,
   type StreamChunkUsage,
@@ -306,13 +310,39 @@ export async function reserveManagedUsage(input: {
   idempotencyKey: string;
   provider: string;
   request: ManagedUsageRequestBody;
+  /**
+   * REQUIRED. The rolling ceilings are per-tier, so a reservation without a
+   * tier cannot be capped — see the note on the RPC call below.
+   */
+  planTier: string;
   leaseToken?: string;
 }): Promise<ManagedUsageReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const requestHash = fingerprintManagedUsageRequest(input.request);
   const estimatedCostCents = estimateManagedUsageCostCents(input.request);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const row = await callBillingRpc(input.client, 'reserve_managed_usage_request', {
+
+  /**
+   * `_with_limits`, NOT the bare `reserve_managed_usage_request`.
+   *
+   * This called the legacy 8-argument function with no ceilings at all, while
+   * apps/web called this one with all three. The capped function is a wrapper
+   * that delegates to the legacy one after checking, so the gateway was
+   * literally "the same reservation, minus every cap" — and the gateway is the
+   * endpoint desktop, CLI and the VS Code extension use. A single user could
+   * burn an entire monthly allocation inside one five-hour window, all of it on
+   * flagship models, and nothing on this path would decline it.
+   *
+   * `is_flagship` matters beyond this request: it is stamped onto the
+   * settlement metadata only inside `_with_limits`, and the flagship weekly
+   * window filters on that tag. Reserving through the legacy function left
+   * gateway spend invisible to the flagship ceiling even for later apps/web
+   * checks.
+   */
+  const slot = getSlotForModel(input.request.model);
+  const isFlagship = slot === 'flagship_coding_pro_plus' || slot === 'flagship_general_pro_plus';
+
+  const row = await callBillingRpc(input.client, 'reserve_managed_usage_request_with_limits', {
     p_user_id: input.userId,
     p_idempotency_key: idempotencyKey,
     p_request_hash: requestHash,
@@ -321,6 +351,10 @@ export async function reserveManagedUsage(input: {
     p_estimated_cost_cents: estimatedCostCents,
     p_lease_token: leaseToken,
     p_lease_seconds: 15 * 60,
+    p_session_cap_cents: getPlanSessionUsageCapCents(input.planTier),
+    p_weekly_cap_cents: getPlanWeeklyUsageCapCents(input.planTier),
+    p_flagship_weekly_cap_cents: getPlanFlagshipWeeklyUsageCapCents(input.planTier),
+    p_is_flagship: isFlagship,
   });
 
   const decision = row['reservation_decision'];

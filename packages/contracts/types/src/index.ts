@@ -207,3 +207,4 @@ export * from './sessions';
 // Server-authoritative effective-capability handshake (model ∩ tier ∩
 // surface ∩ settings) — W5 discipline wave 1, six-app report finding A.
 export * from './capability-handshake';
+export * from './managed-usage-caps';

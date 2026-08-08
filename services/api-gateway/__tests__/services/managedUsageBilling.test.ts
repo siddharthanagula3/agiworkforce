@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  getPlanFlagshipWeeklyUsageCapCents,
+  getPlanSessionUsageCapCents,
+  getPlanWeeklyUsageCapCents,
+} from '@agiworkforce/types';
+
+import {
   calculateManagedUsageCostCents,
   estimateManagedUsageCostCents,
   fingerprintManagedUsageRequest,
@@ -377,6 +383,7 @@ describe('managed usage durable lifecycle client', () => {
       idempotencyKey: 'turn_12345678',
       provider: 'anthropic',
       request: requestBody,
+      planTier: 'pro',
       leaseToken: 'lease-1',
     });
 
@@ -386,16 +393,28 @@ describe('managed usage durable lifecycle client', () => {
       estimatedCostCents: 2,
       requestStatus: 'reserved',
     });
+    // `_with_limits`, and the ceilings must actually be present. This asserted
+    // the legacy 8-argument `reserve_managed_usage_request`, which performs no
+    // rolling-window accounting at all — so it passed for as long as the
+    // gateway enforced no five-hour, weekly or flagship cap on desktop, CLI and
+    // VS Code traffic. Pinning the capped function and a real ceiling is the
+    // only version of this assertion that can catch that regression.
     expect(rpc).toHaveBeenCalledWith(
-      'reserve_managed_usage_request',
+      'reserve_managed_usage_request_with_limits',
       expect.objectContaining({
         p_user_id: 'user-1',
         p_idempotency_key: 'turn_12345678',
         p_provider: 'anthropic',
         p_model: 'claude-opus-5',
         p_lease_token: 'lease-1',
+        p_session_cap_cents: getPlanSessionUsageCapCents('pro'),
+        p_weekly_cap_cents: getPlanWeeklyUsageCapCents('pro'),
+        p_flagship_weekly_cap_cents: getPlanFlagshipWeeklyUsageCapCents('pro'),
       }),
     );
+    const reserveArgs = rpc.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(reserveArgs['p_session_cap_cents']).toBeGreaterThan(0);
+    expect(reserveArgs['p_weekly_cap_cents']).toBeGreaterThan(0);
   });
 
   it.each([

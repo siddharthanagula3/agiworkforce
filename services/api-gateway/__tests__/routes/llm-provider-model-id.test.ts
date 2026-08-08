@@ -13,6 +13,7 @@ type AdapterMode =
   | 'throw-before-token'
   | 'throw-after-token'
   | 'slow-before-token'
+  | 'deltas-then-client-abort'
   | 'slow-until-client-abort'
   | 'backpressure'
   | 'backpressure-timeout'
@@ -229,6 +230,23 @@ vi.mock('../../src/lib/providerAdapters', () => ({
         }
         if (state.adapterMode === 'slow-before-token') {
           await new Promise((resolve) => setTimeout(resolve, 50));
+          if (signal?.aborted) throw signal.reason;
+          return;
+        }
+        if (state.adapterMode === 'deltas-then-client-abort') {
+          yield { type: 'text-delta', delta: 'a long answer' };
+          yield {
+            type: 'usage',
+            inputTokens: 1_000,
+            outputTokens: 4_000,
+          } as unknown as StreamChunk;
+          await new Promise<void>((resolve) => {
+            if (signal?.aborted) {
+              resolve();
+              return;
+            }
+            signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
           if (signal?.aborted) throw signal.reason;
           return;
         }
@@ -524,6 +542,37 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
       error: 'The upstream provider timed out. Please retry.',
     });
     expect(state.billingEvents.filter((event) => event === 'finalize-failed')).toHaveLength(1);
+  });
+
+  it('bills a client disconnect that already received tokens instead of releasing it free', async () => {
+    // The existing disconnect test below passes because its adapter emits NO
+    // chunks — the legitimately-free zero-token case. Nothing covered "deltas
+    // delivered, then abort", which settled as `failed` and therefore at zero
+    // cost while the provider had already charged us. That made "read the
+    // answer, then close the socket" unlimited free inference, and unbounded:
+    // a zero settle records no deduction, so the rolling windows never saw it.
+    state.adapterMode = 'deltas-then-client-abort';
+
+    const outbound = request(createApp())
+      .post('/api/llm/v1/chat/completions')
+      .send({
+        model: 'claude-opus-5',
+        messages: [{ role: 'user', content: 'hello' }],
+        stream: true,
+      });
+    const settled = outbound.then(
+      () => 'response' as const,
+      () => 'aborted' as const,
+    );
+
+    await vi.waitFor(() => expect(state.capturedSignal).toBeInstanceOf(AbortSignal));
+    outbound.abort();
+    await settled;
+
+    await vi.waitFor(() =>
+      expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1),
+    );
+    expect(state.billingEvents.filter((event) => event === 'finalize-failed')).toHaveLength(0);
   });
 
   it('cancels and releases the upstream iterator when the client disconnects', async () => {

@@ -408,6 +408,10 @@ router.post(
         idempotencyKey,
         provider,
         request: body as ManagedUsageRequestBody,
+        // The rolling five-hour, weekly and flagship ceilings are per-tier.
+        // Without this the reservation cannot be capped at all — which is
+        // exactly what this path did before 2026-08-08.
+        planTier: tier,
       });
       await markManagedUsageProviderStarted({
         client: usageDb,
@@ -469,7 +473,23 @@ router.post(
     const releaseFailedReservation = async (reason: string): Promise<void> => {
       if (billingFinalized || providerSuccessObserved) return;
       try {
-        await finalizeBilling('failed');
+        /**
+         * A client that walks away after we already streamed it tokens is not a
+         * failure, and must not be billed as one.
+         *
+         * `finalizeManagedUsage` forces `actual_cost_cents` to 0 on `failed`,
+         * and migration 0056 refunds the whole reservation — so "read the
+         * answer, then close the socket" cost nothing while the provider had
+         * already charged us for every token. It was unbounded rather than
+         * merely cheap: a zero settle records no deduction, so it never counted
+         * toward the rolling five-hour, weekly or flagship windows either.
+         *
+         * Only an attempt that produced NOTHING is still released in full —
+         * that is the genuine-failure case the zeroing rule exists for.
+         */
+        const deliveredTokens =
+          (actualUsage.inputTokens ?? 0) + (actualUsage.outputTokens ?? 0) > 0;
+        await finalizeBilling(deliveredTokens ? 'completed' : 'failed');
       } catch (error) {
         logger.error(
           {
