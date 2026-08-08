@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 
 // RFC 8628 device-code START. Mirrors services/api-gateway deviceAuth.ts `/code`
 // but in apps/web's Neon (raw SQL) conventions, so the CLI can complete login
@@ -107,11 +108,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
     surface,
   });
   // Correlation id only — never log the raw device_code (it is the poll secret).
-  const deviceRef = crypto
-    .createHash('sha256')
-    .update(deviceCode + (process.env['LOG_SALT'] ?? ''))
-    .digest('hex')
-    .slice(0, 12);
+  const deviceRef = pseudonymizeIdentifier(deviceCode, 'device-code', 12);
   logger.info({ deviceRef, surface }, 'Device code issued');
 
   return NextResponse.json(
