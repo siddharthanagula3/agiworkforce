@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '@agiworkforce/types';
 /**
  * artifact-sandbox — how an artifact preview gets a document to run in.
  *
@@ -225,7 +226,7 @@ export function configureArtifactSandboxOrigin(origin: string | null | undefined
  * exact string `postMessage` targetOrigin and `event.origin` use.
  */
 function normalizeSandboxOrigin(raw: string): string | null {
-  const trimmed = raw.trim().replace(/\/+$/, '');
+  const trimmed = stripTrailingSlashes(raw.trim());
   if (!trimmed) return null;
   let url: URL;
   try {

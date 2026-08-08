@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_SCHEDULES_PATH = '/api/schedules';
 
@@ -192,7 +193,7 @@ export class ManagedCloudSchedulesContractError extends Error {
 }
 
 function scheduleBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
+  return stripTrailingSlashes(value);
 }
 
 function parseScheduleContract<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
