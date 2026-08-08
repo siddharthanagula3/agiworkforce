@@ -73,6 +73,27 @@ Owner: main
 Blocks: everything that needs a verified deploy path
 Verify: `get_runtime_errors` shows the argon2 group stop growing; `/api/me` non-500
 
+### E-03b Unblock the deploy pipeline (Vercel git comments vs Next 16.3.0)
+
+Status: blocked — founder action, see FoundersAssistance.md §1
+Owner: main
+Evidence: **Every** deploy fails after a successful build with "Cannot patch preview
+comments when immutable static file upload is enabled." Not preview-only — it kills
+production deploys too, which is the real reason nothing has shipped. No stable Next
+release fixes it; only `16.3.1-canary.8`. API PATCH of `gitComments` was silently
+rejected, so the dashboard toggle is required.
+
+### E-03c Vercel CLI could not deploy at all (fixed)
+
+Status: done
+Owner: main
+Writes: .vercelignore
+Evidence: a CLI production deploy uploads the working directory and .vercelignore omitted every
+native output, so the CLI pushed ~1.2GB and died on "File size limit exceeded (100 MB)" —
+a CLI deploy was not an available incident-response path during the outage. Excluded
+`target` (70GB), `apps/desktop/release`, `.vscode-test`, `ios/Pods`, `tmp`, `.turbo/cache`.
+Build now completes; only E-03b remains.
+
 ### E-04 Post-deploy smoke check
 
 Status: todo
@@ -186,6 +207,28 @@ Batched so write-sets stay disjoint. Each finding is verified against source bef
 | E-27  | Wave 4 | i18n — 2,055 missing keys; three surfaces with no i18n mechanism                                                            |
 
 ---
+
+## P3b — Code scanning: 108 open CodeQL alerts on `main`
+
+Counted from the GitHub API, not the dashboard summary. Grouped by rule so write-sets stay
+disjoint and each batch shares one mental model.
+
+| Item | Rule                                                           | Count | Note                                                                                                                                         |
+| ---- | -------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| E-40 | `rust/cleartext-logging`                                       | 39    | Largest group. Secrets or tokens reaching logs.                                                                                              |
+| E-41 | `rust/hard-coded-cryptographic-value`                          | 21    | Concentrated in `managed_cloud_provider.rs`; some are test fixtures (`byok_vault_tests.rs`) and will be dismissals with evidence, not fixes. |
+| E-42 | `js/polynomial-redos`                                          | 21    | Regex denial-of-service on user-supplied input.                                                                                              |
+| E-43 | `js/insufficient-password-hash`                                | 4     | Directly adjacent to the argon2 work in E-01.                                                                                                |
+| E-44 | `rust/cleartext-transmission`                                  | 3     |                                                                                                                                              |
+| E-45 | `js/incomplete-sanitization` + multi-character + url-substring | 7     | Sanitizer families; fix together.                                                                                                            |
+| E-46 | `rust/disabled-certificate-check`                              | 2     | Verify intent before touching — may be a deliberate local-dev path.                                                                          |
+| E-47 | `js/missing-rate-limiting`                                     | 2     | Ties into E-10 tier-aware limits.                                                                                                            |
+| E-48 | `js/bad-code-sanitization`                                     | 2     |                                                                                                                                              |
+| E-49 | `actions/missing-workflow-permissions`                         | 2     | Workflow hardening; cheap.                                                                                                                   |
+
+CodeQL itself currently reports errors on the repo — that is investigated as part of E-40
+before trusting any individual alert, since a partially-failing scan can both miss real
+findings and surface stale ones.
 
 ## P4 — Prevention, so these classes cannot recur
 

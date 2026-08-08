@@ -11,15 +11,56 @@ When this list is empty, nothing is waiting on you.
 
 ---
 
-## 1. Nothing blocking right now
+## 1. BLOCKING — one toggle in the Vercel dashboard
 
-Both open items are automated and in flight:
+**This is the only thing standing between you and production being restored.** Two minutes
+of clicking.
 
-- **PR #400** — CI fix (one Rust test has blocked 100 consecutive runs)
-- **PR #401** — production fix (authenticated API returning 500 since 2026-08-07)
+Production has been returning HTTP 500 on every authenticated route since 2026-08-07
+21:41 UTC. The fix is written, verified and merged-ready (PR #401) — I built it and
+confirmed 197 route traces now carry the native binary that was missing.
 
-I have CLI permission for Vercel, Stripe and Neon, so merge and deploy proceed without you
-once CI is green.
+**Every deploy fails at the final upload step**, production included:
+
+```
+Build Completed in /vercel/output [4m]
+Deploying outputs...
+Cannot patch preview comments when immutable static file upload is enabled.
+Upgrade to next@v16.3.0-canary.32 or newer to resolve this.
+status ● Error
+```
+
+The build succeeds every time. Vercel then tries to patch its Git PR comment and dies,
+because Next 16.3.0 enabled immutable static uploads. There is no stable Next release that
+fixes it — only `16.3.1-canary.8`, and I will not put a canary into production during an
+incident.
+
+The fix is to turn off Vercel's Git comments. I tried via the API and the PATCH was
+silently rejected, so it needs the dashboard.
+
+**Steps:**
+
+1. Open https://vercel.com/siddharthanagula4/agiworkforce/settings/git
+2. Find **Git Comments** (may be listed as "Comments" or under Git Integration)
+3. Turn **off** both "Pull Request Comments" and "Commit Comments"
+4. Save
+5. Tell me it is done — I will redeploy immediately and confirm the 500s stop
+
+Re-enable it whenever Next ships a stable release past 16.3.0; it is a convenience
+feature, not a dependency.
+
+**If you would rather not disable it:** the alternative is pinning Next to
+`16.3.1-canary.8`. Say so and I will do that instead, but a canary in production carries
+its own risk and I would not choose it.
+
+---
+
+## 2. In flight, no action needed
+
+- **PR #400** — CI fix. One Rust test has blocked 100 consecutive runs and every E2E job
+  for 18 days. Verified locally: full suite 1,837 passed / 0 failed.
+- **PR #401** — the production fix above.
+- **PR #402** — the ExecutionPlan working convention.
 
 ---
 
