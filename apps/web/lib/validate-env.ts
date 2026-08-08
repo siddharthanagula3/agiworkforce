@@ -76,6 +76,16 @@ export function validateRequiredEnvVars(): ValidationResult {
     'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
     // Pseudonymizes device/user identifiers in auth logs.
     'LOG_SALT',
+    // Per-second rate for E2B sandbox compute. Its ABSENCE is a revenue
+    // control that silently no-ops: apps/web/lib/e2b/compute-metering.ts
+    // refuses to invent a rate (correctly — the number depends on the
+    // deployment's E2B contract), so with this unset every sandbox-second is
+    // free and moves none of the 5-hour, weekly or billing-period meters. The
+    // module logs when it first meters a sandbox, but that is only reached
+    // once a sandbox runs, so an operator who never reads those logs never
+    // learns. Surfacing it at boot puts it where the other operational
+    // warnings are.
+    'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
   ];
 
   // Stripe price IDs (required for checkout to work)
