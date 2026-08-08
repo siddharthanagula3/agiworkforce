@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import { MAX_PURCHASABLE_SEATS, MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import {
   CheckoutRequestSchema,
   UpgradeApplyRequestSchema,
@@ -111,6 +111,9 @@ describe('resolveCheckoutQuantity', () => {
   });
 
   it('never returns 0 or a negative quantity', () => {
-    expect(resolveCheckoutQuantity({ plan: 'team' })).toBe(1);
+    // A per-seat plan reaching here without seats is already a schema violation;
+    // the fallback is the seat floor, which is 2 since 2026-08-08.
+    expect(resolveCheckoutQuantity({ plan: 'team' })).toBe(MIN_PURCHASABLE_SEATS);
+    expect(resolveCheckoutQuantity({ plan: 'team' })).toBeGreaterThan(0);
   });
 });
