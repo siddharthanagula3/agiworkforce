@@ -92,6 +92,20 @@ describe('inspectUploadBytes — SVG active content', () => {
     const result = inspectUploadBytes(utf8('<SVG><SCRIPT>x</SCRIPT></SVG>'), 'image/svg+xml');
     expect(result.ok).toBe(false);
   });
+
+  it.each([
+    ['script with a solidus separator', '<svg><script/src="https://evil.test/x.js"></svg>'],
+    ['handler after a solidus', '<svg/onload=alert(1)>'],
+    ['foreignObject with a solidus', '<svg><foreignobject/x></svg>'],
+  ])('rejects %s, which the [\\s>] classes used to miss', (_label, markup) => {
+    // The HTML tokenizer treats a solidus after a tag name, or between
+    // attributes, as a separator — every one of these parses AND executes in a
+    // browser. The scanner matched only [\s>], so all three were reported
+    // clean by the check whose entire job is to catch them.
+    const result = inspectUploadBytes(utf8(markup), 'image/svg+xml');
+    expect(result.ok).toBe(false);
+    expect(result.findings.some((f) => f.code === 'active_content_svg')).toBe(true);
+  });
 });
 
 describe('inspectUploadBytes — PDF active content', () => {
