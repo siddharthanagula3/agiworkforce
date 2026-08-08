@@ -6,6 +6,39 @@ Last updated: 2026-08-08
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-08-08 Parallel AGI execution writes outcomes to a stray database
+
+- **AGI-EXECUTOR-PARALLEL-ORPHAN-DB — OPEN, needs a small design decision.**
+  `core/agi/executor.rs:742` constructs
+  `OutcomeTracker::new("outcome_tracker_parallel.db".to_string())` — a bare
+  RELATIVE path, in production code, not a test.
+- **Two consequences, both real.** (1) The file is created wherever the process
+  working directory happens to be. For a packaged desktop app that is whatever
+  the launcher set, which may be read-only (an app bundle) or the user's home.
+  (2) Every other construction site resolves the real database:
+  `core.rs:267` takes `db_path` as a parameter and
+  `sys/commands/process_reasoning.rs:38` uses `database_path(&db)`. So outcomes
+  recorded during PARALLEL execution land in a different database from every
+  other path, and `get_outcome_tracking` — which reads the real one — cannot
+  see them. The data is silently orphaned rather than lost loudly.
+- **Why it happened.** `execute_plans_parallel(&self, ...)` clones the fields
+  it needs out of `self` before `tokio::spawn` — tool_registry, automation,
+  router, tool_cache, app_handle — but NOT `self.outcome_tracker`. Inside the
+  spawned task there is no tracker in scope, so one is fabricated. The
+  correctly-built tracker was three lines away in the same function.
+- **Why it is not a one-line fix.** `AGIExecutor::with_process_reasoning`
+  takes `Arc<OutcomeTracker>`, while `self.outcome_tracker` is
+  `Option<Arc<OutcomeTracker>>` (executor.rs:59, and constructors at :96 and
+  :161 set it to None). Cloning it through requires deciding what a parallel
+  sub-task should do when the PARENT has no tracker: skip outcome tracking to
+  match the parent, or take a constructor that accepts None. That is a
+  behavioural choice about whether parallel sub-tasks are tracked at all, and
+  it sits in a live execution path.
+- **Found by sweeping the class, not the instance.** The indexer test flake
+  (#406) was a bare relative `test.db`; sweeping every bare relative database
+  path in the Rust surfaces turned this up in production code. The other hits
+  in that sweep were labels passed to parsers rather than opened files.
+
 ## 2026-08-08 Enterprise spend has no instrument, though the config is deliberate
 
 - **BILLING-ENTERPRISE-NO-SPEND-INSTRUMENT — OPEN, observability gap not a
