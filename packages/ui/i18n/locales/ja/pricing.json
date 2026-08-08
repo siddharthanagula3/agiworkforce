@@ -74,5 +74,7 @@
   "max15xCta": "Max 15x を購入",
   "heroLede": "個人・チーム・エンタープライズ各プランの料金をご覧ください。",
   "pageTitle": "料金",
-  "freeLocalByok": "ローカルモデルと自分の API キーは常に無料"
+  "freeLocalByok": "ローカルモデルと自分の API キーは常に無料",
+  "seatTotal_one": "{{count}} シート · {{total}}/月",
+  "seatTotal_other": "{{count}} シート · {{total}}/月"
 }

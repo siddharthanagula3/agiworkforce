@@ -74,5 +74,7 @@
   "max15xCta": "Choisir Max 15x",
   "heroLede": "Découvrez les tarifs des offres individuelles, équipe et entreprise.",
   "pageTitle": "Tarifs",
-  "freeLocalByok": "Modèles locaux et vos propres clés API, toujours gratuits"
+  "freeLocalByok": "Modèles locaux et vos propres clés API, toujours gratuits",
+  "seatTotal_one": "{{count}} siège · {{total}}/mois",
+  "seatTotal_other": "{{count}} sièges · {{total}}/mois"
 }
