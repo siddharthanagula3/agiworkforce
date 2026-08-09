@@ -15,21 +15,57 @@
 
 import rateLimit, { type Options, type Store, ipKeyGenerator } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
+import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from '../lib/logger';
 
 let _sharedStore: Store | undefined;
 let _storeInitialized = false;
 
+export type RateLimitRedisResolution =
+  | { url: string; reason: 'ok' }
+  | { url: null; reason: 'unset' | 'not-a-redis-url' | 'rest-url-only' };
+
+/**
+ * Resolve the URL the ioredis-backed store may use.
+ *
+ * `ioredis` speaks the Redis wire protocol, so only a `redis://`/`rediss://`
+ * URL can produce a working client. `UPSTASH_REDIS_REST_URL` is an HTTPS REST
+ * endpoint for a different client (`@upstash/redis`) and carries no password,
+ * so the previous `??` fallback handed `new Redis()` a URL it can never
+ * connect with: the store construction looked successful, every command then
+ * failed, and the gateway silently ran per-instance memory limits on a deploy
+ * whose env vars said Redis was configured. Refuse the REST URL instead, and
+ * say which variable to set.
+ */
+export function resolveRateLimitRedisUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): RateLimitRedisResolution {
+  const configured = env['RATE_LIMIT_REDIS_URL']?.trim();
+  if (configured) {
+    if (/^rediss?:\/\//i.test(configured)) return { url: configured, reason: 'ok' };
+    return { url: null, reason: 'not-a-redis-url' };
+  }
+  if (env['UPSTASH_REDIS_REST_URL']?.trim()) return { url: null, reason: 'rest-url-only' };
+  return { url: null, reason: 'unset' };
+}
+
+const REDIS_SETUP_HINT =
+  'Set RATE_LIMIT_REDIS_URL to a rediss:// endpoint (Upstash exposes one alongside its REST URL).';
+
 function getOrCreateStore(): Store | undefined {
   if (_storeInitialized) return _sharedStore;
   _storeInitialized = true;
 
-  const redisUrl = process.env['RATE_LIMIT_REDIS_URL'] ?? process.env['UPSTASH_REDIS_REST_URL'];
-  if (!redisUrl) {
-    if (process.env.NODE_ENV === 'production') {
+  const resolved = resolveRateLimitRedisUrl();
+  if (resolved.reason !== 'ok') {
+    // A misconfigured variable is worth saying out loud everywhere; a simply
+    // absent one only matters in production.
+    if (resolved.reason !== 'unset' || process.env.NODE_ENV === 'production') {
       logger.warn(
-        'RATE_LIMIT_REDIS_URL not configured — using in-memory rate limiting (P1-23). ' +
-          'This is NOT suitable for multi-instance production deployments.',
+        { reason: resolved.reason },
+        'Rate limiter has no usable Redis URL — using in-memory rate limiting (P1-23). ' +
+          'This is NOT suitable for multi-instance production deployments. ' +
+          REDIS_SETUP_HINT,
       );
     }
     return undefined;
@@ -41,7 +77,15 @@ function getOrCreateStore(): Store | undefined {
     const { RedisStore } = require('rate-limit-redis');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Redis } = require('ioredis');
-    const client = new Redis(redisUrl);
+    const client = new Redis(resolved.url);
+    // ioredis rethrows connection errors as uncaught exceptions when nothing
+    // listens, which would take the gateway down for a degraded limiter.
+    client.on('error', (error: unknown) => {
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Rate limit Redis connection error — limits degrade to per-instance counts.',
+      );
+    });
     _sharedStore = new RedisStore({
       sendCommand: (...args: string[]) => client.call(...args),
     });
@@ -145,7 +189,8 @@ export const rateLimitConfigs = {
   // SECURITY: Support case creation is write/spam-sensitive.
   'enterprise-support-case': { windowMs: 60_000, max: 5 },
 
-  // LLM proxy: tier-aware limit (enforced at 30/min baseline; pro users get higher via plan gate)
+  // LLM proxy: base ceiling. Scaled by plan via TIER_SCALED_KEYS wherever the
+  // route resolves `req.planTier` before the limiter runs.
   // SECURITY: 30/min prevents runaway API cost from compromised tokens
   'llm-completions': { windowMs: 60_000, max: 30 },
 
@@ -187,7 +232,10 @@ export function warnIfMultiInstanceWithoutRedis(): void {
   const flyMachineCount = Number(process.env['FLY_MACHINE_COUNT'] ?? '0');
   const numInstancesHint = Number(process.env['NUM_INSTANCES'] ?? '0');
   const explicitMulti = process.env['RATE_LIMIT_MULTI_INSTANCE'] === '1';
-  const redisConfigured = Boolean(process.env['RATE_LIMIT_REDIS_URL']);
+  // Ask the same resolver the store uses: a REST-only or malformed URL makes
+  // the variable present but the store per-instance, which is exactly the
+  // situation this alarm exists to surface.
+  const redisConfigured = resolveRateLimitRedisUrl().reason === 'ok';
 
   const looksMultiInstance =
     explicitMulti ||
@@ -215,6 +263,74 @@ export function warnIfMultiInstanceWithoutRedis(): void {
 }
 
 export type RateLimitKey = keyof typeof rateLimitConfigs;
+
+/**
+ * Per-user ceilings that must scale with the plan the caller bought.
+ *
+ * Every `max` above is flat, so a Max 15x subscriber sold 12 concurrent
+ * managed turns was handed the same 30 completions/min as a Free user — the
+ * paid concurrency is unreachable through the limiter sitting in front of it.
+ * Only per-user, post-authentication keys belong here: pre-auth and
+ * IP-bucketed limits have no trustworthy tier to read, and security limits
+ * (credits, device, auth) must not widen just because someone spends more.
+ *
+ * Scaling only takes effect where the tier is already resolved before the
+ * limiter runs — `requireManagedChatPlan` sets `req.planTier` on the cloud-chat
+ * router. Keys whose routes resolve the tier later fall back to the base
+ * ceiling rather than guessing.
+ */
+const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
+  'llm-completions',
+  'cloud-chat-list',
+  'cloud-chat-create',
+  'cloud-chat-get',
+  'cloud-chat-patch',
+  'cloud-chat-send',
+]);
+
+/**
+ * Highest concurrency any tier advertises. Tiers that declare themselves
+ * uncapped ('unlimited'/'custom') still need a request ceiling, so they borrow
+ * this one instead of going unbounded.
+ *
+ * The `1` is not decoration. Without it, a catalog in which no tier states a
+ * NUMERIC concurrency reduces this to 0, and Enterprise — whose 'custom' value
+ * lands on exactly this branch — would resolve to a ceiling of zero requests
+ * and be locked out of the product entirely. That is the same
+ * contract-collapses-to-zero failure the limit conversion is written to avoid;
+ * an uncapped tier must never be MORE restricted than a capped one.
+ */
+const MAX_TIER_CONCURRENCY = Math.max(
+  1,
+  ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) =>
+    typeof limits.maxConcurrentTurns === 'number' ? limits.maxConcurrentTurns : 0,
+  ),
+);
+
+/** The catalog's advertised concurrency for `planTier`, as a usable multiplier. */
+function tierConcurrency(planTier: string | null | undefined): number {
+  if (!planTier) return 1;
+  const advertised = getPlanMaxConcurrentTurns(planTier);
+  if (advertised === null) return MAX_TIER_CONCURRENCY;
+  // 0 means the catalog did not recognise the tier; stay on the base ceiling.
+  return advertised > 0 ? advertised : 1;
+}
+
+/**
+ * Ceiling for `key` under `planTier`. The billing catalog is the single source
+ * of truth for how much more a paid tier may do, so the multiplier IS the
+ * tier's advertised concurrency; the floor guarantees a tier can always drive
+ * the turns it was sold even if a base ceiling is later lowered below it.
+ */
+export function resolveTierRateLimitMax(
+  key: RateLimitKey,
+  planTier: string | null | undefined,
+): number {
+  const base = rateLimitConfigs[key].max;
+  if (!TIER_SCALED_KEYS.has(key)) return base;
+  const concurrency = tierConcurrency(planTier);
+  return Math.max(base * concurrency, concurrency);
+}
 
 /**
  * Extract identifier for rate limiting.
@@ -249,9 +365,13 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
 
   const store = getOrCreateStore();
 
+  const tierScaled = TIER_SCALED_KEYS.has(key);
+
   const options: Partial<Options> = {
     windowMs: config.windowMs,
-    max: config.max,
+    // Resolved per request so a route that establishes `req.planTier` upstream
+    // (planGate) gets the tier ceiling without re-declaring its limiter.
+    max: tierScaled ? (req: Request) => resolveTierRateLimitMax(key, req.planTier) : config.max,
     ...(store ? { store } : {}),
     // Return rate limit info in standard headers (RFC 6585)
     standardHeaders: true,

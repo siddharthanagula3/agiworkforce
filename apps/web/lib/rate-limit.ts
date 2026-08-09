@@ -1,7 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from './logger';
 import { logRateLimitExceeded } from './security-audit';
 
@@ -647,7 +647,72 @@ function inMemoryRateLimit(
   return { success: true, remaining: limit - entry.count, reset: entry.resetTime };
 }
 
-type RateLimitKey = keyof typeof rateLimitConfigs;
+export type RateLimitKey = keyof typeof rateLimitConfigs;
+
+/**
+ * Per-user ceilings that must scale with the plan the caller bought.
+ *
+ * Every `limit` above is flat, so a Max 15x subscriber sold 12 concurrent
+ * managed turns shared the Free user's 20 chat messages/min and 30 LLM
+ * requests/min — the limiter capped the product below what the plan page
+ * advertises. Only per-user, post-authentication keys belong here:
+ * `llm-completion-ip` and the auth/security limits are IP-bucketed and
+ * evaluated before any tier is known, and they must not widen with spend.
+ *
+ * Callers pass the tier they already resolved; nothing is inferred here,
+ * because a rate limiter must not spend a database round-trip to decide
+ * whether to allow a request.
+ */
+const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
+  'llm-completion',
+  'chat-message',
+  'chat-conversation',
+  'prompt-completion',
+  'image-generation',
+  'video-generation',
+  'audio-transcription',
+]);
+
+/**
+ * Highest concurrency any tier advertises. Tiers that declare themselves
+ * uncapped ('unlimited'/'custom') still need a request ceiling, so they borrow
+ * this one instead of going unbounded.
+ *
+ * The `1` is not decoration. Without it, a catalog in which no tier states a
+ * NUMERIC concurrency reduces this to 0, and Enterprise — whose 'custom' value
+ * lands on exactly this branch — would resolve to a ceiling of zero requests
+ * and be locked out of the product entirely. That is the same
+ * contract-collapses-to-zero failure the limit conversion is written to avoid;
+ * an uncapped tier must never be MORE restricted than a capped one.
+ */
+const MAX_TIER_CONCURRENCY = Math.max(
+  1,
+  ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) =>
+    typeof limits.maxConcurrentTurns === 'number' ? limits.maxConcurrentTurns : 0,
+  ),
+);
+
+/** The catalog's advertised concurrency for `planTier`, as a usable multiplier. */
+function tierConcurrency(planTier: string | null | undefined): number {
+  if (!planTier) return 1;
+  const advertised = getPlanMaxConcurrentTurns(planTier);
+  if (advertised === null) return MAX_TIER_CONCURRENCY;
+  // 0 means the catalog did not recognise the tier; stay on the base ceiling.
+  return advertised > 0 ? advertised : 1;
+}
+
+/**
+ * Ceiling for `key` under `planTier`. The billing catalog is the single source
+ * of truth for how much more a paid tier may do, so the multiplier IS the
+ * tier's advertised concurrency; the floor guarantees a tier can always drive
+ * the turns it was sold even if a base limit is later lowered below it.
+ */
+export function resolveTierRateLimit(key: RateLimitKey, planTier?: string | null): number {
+  const base = rateLimitConfigs[key].limit;
+  if (!TIER_SCALED_KEYS.has(key)) return base;
+  const concurrency = tierConcurrency(planTier);
+  return Math.max(base * concurrency, concurrency);
+}
 
 /**
  * Module-level cache for rate limiter instances.
@@ -658,15 +723,21 @@ type RateLimitKey = keyof typeof rateLimitConfigs;
  * because they set up Redis connection handlers. Caching them reduces
  * overhead from ~5-10ms per request to near-zero for subsequent requests.
  */
-const rateLimiterCache = new Map<RateLimitKey, Ratelimit>();
+const rateLimiterCache = new Map<string, Ratelimit>();
 
 /**
  * Get or create a rate limiter instance (only called when Redis is available)
  * Uses module-level caching to reuse instances across requests.
+ *
+ * Cached by key AND ceiling: one endpoint now has one instance per tier
+ * ceiling. The Redis `prefix` deliberately stays keyed on the endpoint alone,
+ * so a user keeps ONE bucket per endpoint regardless of tier — changing tiers
+ * must change the ceiling, never hand out a fresh counter.
  */
-function getRateLimiter(key: RateLimitKey): Ratelimit {
+function getRateLimiter(key: RateLimitKey, limit: number): Ratelimit {
   // Return cached instance if available
-  const cached = rateLimiterCache.get(key);
+  const cacheKey = `${key}:${limit}`;
+  const cached = rateLimiterCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -690,15 +761,15 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
   // independent bucket its distinct limit/window already implies.
   const rateLimiter = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(config.limit, config.window),
+    limiter: Ratelimit.slidingWindow(limit, config.window),
     analytics: true,
     prefix: `agi-rl:${key}`,
   });
 
-  rateLimiterCache.set(key, rateLimiter);
+  rateLimiterCache.set(cacheKey, rateLimiter);
 
   logger.info(
-    { key, cacheSize: rateLimiterCache.size },
+    { key, limit, cacheSize: rateLimiterCache.size },
     'Created and cached new rate limiter instance',
   );
 
@@ -878,8 +949,10 @@ export async function checkRateLimit(
   request: NextRequest,
   key: RateLimitKey,
   identifier?: string,
+  planTier?: string | null,
 ): Promise<RateLimitInfo> {
   const config = rateLimitConfigs[key];
+  const effectiveLimit = resolveTierRateLimit(key, planTier);
   const id = await resolveRateLimitIdentifier(request, identifier);
 
   // Use in-memory rate limiting if Redis is not configured
@@ -904,7 +977,7 @@ export async function checkRateLimit(
         );
         return {
           success: false,
-          limit: config.limit,
+          limit: effectiveLimit,
           remaining: 0,
           reset: Date.now() + 60000,
           headers: {
@@ -925,10 +998,10 @@ export async function checkRateLimit(
     // (me/connectors/projects/conversations) exhausted the shared counter —
     // dropping the assistant-message persist POST and losing the reply on
     // reload. Mirror the Redis-path `prefix` so both stores bucket identically.
-    const result = inMemoryRateLimit(`${key}:${id}`, config.limit, windowMs);
+    const result = inMemoryRateLimit(`${key}:${id}`, effectiveLimit, windowMs);
 
     const headers: Record<string, string> = {
-      'X-RateLimit-Limit': config.limit.toString(),
+      'X-RateLimit-Limit': effectiveLimit.toString(),
       'X-RateLimit-Remaining': result.remaining.toString(),
       'X-RateLimit-Reset': new Date(result.reset).toISOString(),
     };
@@ -939,7 +1012,7 @@ export async function checkRateLimit(
 
     return {
       success: result.success,
-      limit: config.limit,
+      limit: effectiveLimit,
       remaining: result.remaining,
       reset: result.reset,
       headers,
@@ -947,7 +1020,7 @@ export async function checkRateLimit(
     };
   }
 
-  const rateLimiter = getRateLimiter(key);
+  const rateLimiter = getRateLimiter(key, effectiveLimit);
 
   try {
     // Cap the Upstash REST round-trip: this call gates EVERY request, so a slow
@@ -998,7 +1071,7 @@ export async function checkRateLimit(
       );
       return {
         success: false,
-        limit: config.limit,
+        limit: effectiveLimit,
         remaining: 0,
         reset: Date.now() + 60000,
         headers: {
@@ -1012,8 +1085,8 @@ export async function checkRateLimit(
     logger.warn({ key, identifier }, 'Rate limit check failed, allowing request (fail-open)');
     return {
       success: true,
-      limit: config.limit,
-      remaining: config.limit,
+      limit: effectiveLimit,
+      remaining: effectiveLimit,
       reset: Date.now() + 60000,
       headers: {},
       identifier: id,
@@ -1028,8 +1101,9 @@ export async function withRateLimit(
   request: NextRequest,
   key: RateLimitKey,
   identifier?: string,
+  planTier?: string | null,
 ): Promise<NextResponse | null> {
-  const info = await checkRateLimit(request, key, identifier);
+  const info = await checkRateLimit(request, key, identifier, planTier);
 
   if (!info.success) {
     logger.warn(
@@ -1212,12 +1286,13 @@ export function withRateLimitHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>,
   key: RateLimitKey,
   getIdentifier?: (request: NextRequest) => string | undefined,
+  getPlanTier?: (request: NextRequest) => string | null | undefined,
 ) {
   return async (...args: T): Promise<NextResponse> => {
     const request = args[0] as NextRequest;
     const identifier = getIdentifier?.(request);
 
-    const rateLimitResponse = await withRateLimit(request, key, identifier);
+    const rateLimitResponse = await withRateLimit(request, key, identifier, getPlanTier?.(request));
     if (rateLimitResponse) {
       return rateLimitResponse;
     }

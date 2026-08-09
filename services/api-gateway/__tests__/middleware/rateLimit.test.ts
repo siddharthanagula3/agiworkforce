@@ -7,7 +7,13 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { ipKeyGenerator } from 'express-rate-limit';
-import { createRateLimiter, rateLimitConfigs } from '../../src/middleware/rateLimit';
+import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+import {
+  createRateLimiter,
+  rateLimitConfigs,
+  resolveRateLimitRedisUrl,
+  resolveTierRateLimitMax,
+} from '../../src/middleware/rateLimit';
 
 describe('Rate Limiter Middleware', () => {
   describe('rateLimitConfigs', () => {
@@ -116,6 +122,96 @@ describe('Rate Limiter Middleware', () => {
 
       const rateLimited = responses.filter((r) => r.status === 429);
       expect(rateLimited.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('resolveTierRateLimitMax', () => {
+    it('gives a paid tier more headroom than free on metered endpoints', () => {
+      for (const key of ['llm-completions', 'cloud-chat-send'] as const) {
+        expect(resolveTierRateLimitMax(key, 'max_15x')).toBeGreaterThan(
+          resolveTierRateLimitMax(key, 'free'),
+        );
+        expect(resolveTierRateLimitMax(key, 'pro')).toBeGreaterThan(
+          resolveTierRateLimitMax(key, 'basic'),
+        );
+      }
+    });
+
+    it('scales every metered ceiling with the concurrency the plan advertises', () => {
+      for (const tier of ['free', 'basic', 'pro', 'max', 'max_15x', 'team'] as const) {
+        const advertised = getPlanMaxConcurrentTurns(tier);
+        expect(advertised).not.toBeNull();
+
+        for (const key of ['llm-completions', 'cloud-chat-send'] as const) {
+          const ceiling = resolveTierRateLimitMax(key, tier);
+          // The ceiling must clear the concurrency the plan page sells...
+          expect(ceiling).toBeGreaterThanOrEqual(advertised!);
+          // ...and every one of those turns must get the base budget, not a
+          // share of one flat budget sized for a single-turn Free user.
+          expect(ceiling).toBeGreaterThanOrEqual(rateLimitConfigs[key].max * advertised!);
+        }
+      }
+    });
+
+    it('leaves the base ceiling in place for an absent or unknown tier', () => {
+      expect(resolveTierRateLimitMax('llm-completions', undefined)).toBe(
+        rateLimitConfigs['llm-completions'].max,
+      );
+      expect(resolveTierRateLimitMax('llm-completions', 'hobby')).toBe(
+        rateLimitConfigs['llm-completions'].max,
+      );
+    });
+
+    it('does not widen financial or device limits for paid tiers', () => {
+      for (const key of ['credits-deduct', 'device-register', 'heartbeat'] as const) {
+        expect(resolveTierRateLimitMax(key, 'max_15x')).toBe(rateLimitConfigs[key].max);
+      }
+    });
+
+    it('applies the tier ceiling to the live limiter when the plan gate resolved a tier', async () => {
+      const app = express();
+      app.use((req, _res, next) => {
+        req.planTier = 'max_15x';
+        next();
+      });
+      app.use(createRateLimiter('cloud-chat-send'));
+      app.get('/test', (_req, res) => res.json({ ok: true }));
+
+      const response = await request(app).get('/test');
+      expect(response.status).toBe(200);
+      expect(Number(response.headers['ratelimit-limit'])).toBe(
+        resolveTierRateLimitMax('cloud-chat-send', 'max_15x'),
+      );
+      expect(Number(response.headers['ratelimit-limit'])).toBeGreaterThan(
+        rateLimitConfigs['cloud-chat-send'].max,
+      );
+    });
+  });
+
+  describe('resolveRateLimitRedisUrl', () => {
+    it('accepts a redis wire-protocol URL', () => {
+      expect(resolveRateLimitRedisUrl({ RATE_LIMIT_REDIS_URL: 'rediss://host:6379' })).toEqual({
+        url: 'rediss://host:6379',
+        reason: 'ok',
+      });
+    });
+
+    it('refuses the Upstash REST URL instead of handing it to ioredis', () => {
+      // The REST endpoint speaks HTTP and carries no password, so a client
+      // built from it never connects — the store silently stayed in memory on
+      // a deploy whose env vars claimed Redis was configured.
+      expect(resolveRateLimitRedisUrl({ UPSTASH_REDIS_REST_URL: 'https://db.upstash.io' })).toEqual(
+        { url: null, reason: 'rest-url-only' },
+      );
+
+      expect(resolveRateLimitRedisUrl({ RATE_LIMIT_REDIS_URL: 'https://db.upstash.io' })).toEqual({
+        url: null,
+        reason: 'not-a-redis-url',
+      });
+    });
+
+    it('reports an unset variable distinctly from a misconfigured one', () => {
+      expect(resolveRateLimitRedisUrl({})).toEqual({ url: null, reason: 'unset' });
     });
   });
 });
