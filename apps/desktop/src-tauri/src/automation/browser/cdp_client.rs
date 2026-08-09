@@ -501,7 +501,18 @@ impl CdpClient {
         }
     }
 
+    /// Drive this tab to `url`.
+    ///
+    /// The always-blocked host policy is enforced here rather than only in the
+    /// `browser_navigate` Tauri command, because every agent-driven caller
+    /// (`BrowserExecutor`, the LLM `browser_tools` handlers, the realtime
+    /// WebSocket bridge, the continuous job runner) reaches the page through
+    /// this method and reuses an already-open tab, which skipped the
+    /// create-tab-time check.
     pub async fn navigate(&self, url: &str) -> Result<()> {
+        crate::automation::computer_use::ensure_navigation_url_allowed(url)
+            .map_err(Error::Other)?;
+
         let params = json!({
             "url": url,
         });
@@ -557,5 +568,49 @@ mod tests {
         let client = CdpClient::new("ws://localhost:9222".to_string());
 
         assert!(client.connection.lock().await.is_none());
+    }
+
+    /// The always-blocked host policy must be refused by `navigate` itself, not
+    /// only by the `browser_navigate` command. Every agent-driven caller
+    /// (`BrowserExecutor`, `browser_tools`, the realtime bridge, the continuous
+    /// job runner) reuses an already-open tab and reaches this method directly.
+    ///
+    /// The client is deliberately not connected: without the guard the call
+    /// falls through to `send_command` and fails with "Not connected to CDP",
+    /// which is what this assertion distinguishes.
+    #[tokio::test]
+    async fn navigate_refuses_always_blocked_hosts_before_touching_the_wire() {
+        let client = CdpClient::new("ws://localhost:9222".to_string());
+
+        for url in [
+            "https://chase.com/login",
+            "https://accounts.coinbase.com/signin",
+            "http://robinhood.com",
+        ] {
+            let err = client
+                .navigate(url)
+                .await
+                .expect_err("expected blocked host to be refused");
+            assert!(
+                err.to_string().contains("is blocked"),
+                "expected a policy refusal for {url}, got: {err}"
+            );
+        }
+    }
+
+    /// The guard must only deny: an ordinary host still reaches the transport,
+    /// so an unconnected client reports the connection error, not a block.
+    #[tokio::test]
+    async fn navigate_allows_ordinary_hosts_through_to_the_transport() {
+        let client = CdpClient::new("ws://localhost:9222".to_string());
+
+        let err = client
+            .navigate("https://example.com/docs")
+            .await
+            .expect_err("unconnected client cannot navigate");
+        assert!(
+            !err.to_string().contains("is blocked"),
+            "ordinary host must not be treated as blocked, got: {err}"
+        );
     }
 }

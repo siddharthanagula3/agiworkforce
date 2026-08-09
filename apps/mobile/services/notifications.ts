@@ -47,6 +47,12 @@ export type NotificationEventType =
   | 'status_update'
   | 'heartbeat_info'
   | 'schedule_triggered'
+  // Emitted by the ONLY server-side push producer this app has:
+  // `apps/web/lib/services/schedule-notification-service.ts` sends
+  // `{ type: 'schedule_run', taskId }` after a scheduled run is finalized.
+  // Without this member every real push fell through to `default:` and opened
+  // app home instead of the schedules list.
+  | 'schedule_run'
   | 'companion_connected'
   | 'chat_message';
 
@@ -472,6 +478,11 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'schedule_triggered':
+    case 'schedule_run':
+      // `/(app)/schedules` is live (FEATURES.schedules === true), so this is a
+      // real destination rather than a <FeatureUnavailable/> dead end. The
+      // push carries `taskId`, but there is no schedule-detail route to open
+      // it with — the list is the deepest screen that exists.
       safeNavigate({ pathname: '/(app)/schedules' as const });
       break;
 

@@ -5,6 +5,7 @@
  *  - Permissions: task-notification toggle, approved sites allowlist
  *  - Account: log out
  *  - Shortcuts: keyboard shortcut reference
+ *  - Help: links to the Help center, docs and support routes on the web app
  *
  * Styles injected via Constructable Stylesheets (CSP-compliant, same pattern as side_panel.ts).
  */
@@ -106,6 +107,18 @@ function injectStyles(): void {
       margin-top: 2px;
       line-height: 1.4;
     }
+
+    .opt-link {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--agi-ext-accent);
+      text-decoration: none;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .opt-link:hover { text-decoration: underline; }
+    .opt-link:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     .opt-toggle {
       appearance: none;
@@ -1031,6 +1044,62 @@ function buildPage(): void {
   }
   shortcutsSection.appendChild(table);
   page.appendChild(shortcutsSection);
+
+  // ── Section: Help ─────────────────────────────────────────────────────────
+  //
+  // The extension had no help affordance at all — neither the side panel nor
+  // this page offered a route to documentation or support, so a stuck user's
+  // only exit was to guess the marketing site. Every destination below is a
+  // route that exists in `apps/web/app` today; do not add one that does not.
+
+  const helpSection = el('div', { class: 'opt-section' });
+  const helpHeader = el('div', { class: 'opt-section-header' });
+  helpHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Help'));
+  helpSection.appendChild(helpHeader);
+
+  const HELP_LINKS: Array<{ label: string; hint: string; path: string; cta: string }> = [
+    {
+      label: 'Help center',
+      hint: 'Answers to the questions people ask most.',
+      path: '/help',
+      cta: 'Open',
+    },
+    {
+      label: 'Documentation',
+      hint: 'Guides for every surface, including this extension.',
+      path: '/docs',
+      cta: 'Open',
+    },
+    {
+      label: 'Contact support',
+      hint: 'Reach a person about your account.',
+      path: '/support',
+      cta: 'Open',
+    },
+  ];
+
+  for (const link of HELP_LINKS) {
+    const row = el('div', { class: 'opt-row' });
+    const left = el('div');
+    left.appendChild(el('div', { class: 'opt-row-label' }, link.label));
+    left.appendChild(el('div', { class: 'opt-row-hint' }, link.hint));
+    row.appendChild(left);
+    row.appendChild(
+      el(
+        'a',
+        {
+          class: 'opt-link',
+          href: `https://agiworkforce.com${link.path}?from=chrome-extension`,
+          target: '_blank',
+          rel: 'noreferrer noopener',
+        },
+        link.cta,
+      ),
+    );
+    helpSection.appendChild(row);
+  }
+
+  page.appendChild(helpSection);
 
   // Version footer
   const ver = chrome.runtime.getManifest().version;

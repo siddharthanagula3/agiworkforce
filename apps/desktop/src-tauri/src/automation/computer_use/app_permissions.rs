@@ -107,6 +107,37 @@ pub fn is_always_blocked_host(host: &str) -> bool {
         .any(|blocked| lowered == *blocked || lowered.ends_with(&format!(".{}", blocked)))
 }
 
+/// Reject a navigation URL that targets an always-blocked host.
+///
+/// The policy used to be enforced only in the `browser_navigate` Tauri command
+/// and when a brand-new CDP tab was created, so every agent-driven path that
+/// reached an *already open* tab — the AGI `BrowserExecutor`, the LLM
+/// `browser_tools` navigate handlers, the realtime WebSocket bridge and the
+/// continuous job runner — drove the same browser to the same brokerage or
+/// banking host with no check at all. This helper is the single guard the
+/// three real navigation implementations (`CdpClient::navigate`,
+/// `PlaywrightBridge::navigate`, `ExtensionBridge::navigate`) call, so the
+/// policy holds no matter which caller gets there.
+///
+/// A URL that does not parse, or parses without a host, is allowed through to
+/// the caller's existing error handling: this guard only ever denies, it is not
+/// the scheme or syntax validator.
+pub fn ensure_navigation_url_allowed(url: &str) -> std::result::Result<(), String> {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return Ok(());
+    };
+    let Some(host) = parsed.host_str() else {
+        return Ok(());
+    };
+    if is_always_blocked_host(host) {
+        tracing::warn!("blocked agent navigation to always-blocked host: {}", host);
+        return Err(format!(
+            "Navigation to {host} is blocked. Financial, brokerage, and wallet sites are off-limits to automated browsing."
+        ));
+    }
+    Ok(())
+}
+
 /// Permission status for an application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

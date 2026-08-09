@@ -20,9 +20,15 @@ export const CHAT_ATTACHMENT_MIME_TYPES = [
   'text/html',
   'text/css',
   'application/json',
-  // Jupyter notebooks. Served as JSON by most tools, but given their own type
-  // so the extractor can pull CELLS rather than dumping raw notebook JSON —
-  // which is mostly base64 image outputs and metadata.
+  // Jupyter notebooks. Kept as a distinct type rather than folded into
+  // application/json so a notebook stays identifiable end-to-end.
+  //
+  // It does NOT buy cell extraction on the chat path: hydration base64s the
+  // stored bytes and labels them with `normalizeChatDocumentMimeType`, which
+  // returns text/plain for everything except PDF, so the model receives the
+  // whole serialized notebook — base64 image outputs and kernel metadata
+  // included. Cell extraction (`extractNotebookText`) exists only in the web
+  // project-knowledge extractor, which this roster does not feed.
   'application/x-ipynb+json',
   'application/xml',
 ] as const;

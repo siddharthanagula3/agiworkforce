@@ -322,8 +322,13 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('streaming success path', () => {
+    // The composer's mode chips, "Choose Style" sheet and task chips must reach
+    // the CLOUD turn, not only Local generation. This test previously ran
+    // without `seedCloudConversation()`, so `MODEL` resolved to a Local-mode
+    // conversation and it passed while the Cloud path shipped the controls dead.
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
       useChatStore.setState({ chatMode: 'create', chatStyle: 'detailed' });
 
       mockStreamChat.mockImplementation(
@@ -339,7 +344,7 @@ describe('chatStore — streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'make a launch checklist', MODEL);
+        await getState().sendMessage(CONV_ID, 'make a launch checklist', CLOUD_MODEL);
       });
 
       expect(capturedBody?.messages).toEqual(

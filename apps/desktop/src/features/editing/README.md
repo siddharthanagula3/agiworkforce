@@ -2,7 +2,11 @@
 
 Status: Current
 Owner: Desktop surface lead
-Purpose: Own enhanced diff, visual editor, live preview, conflict resolver, and file-change review UI.
+Purpose: Own enhanced diff, conflict resolver, and file-change review UI.
+
+The visual-editor shell and live-preview pane that this folder once held were
+removed; the remaining components have no importer outside this folder, so
+nothing here renders in the shipped desktop app yet.
 
 ## Boundaries
 

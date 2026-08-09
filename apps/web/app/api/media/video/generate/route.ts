@@ -233,7 +233,6 @@ function getVideoCostCents(
 async function generateWithRunway(
   prompt: string,
   durationSecs: number,
-  resolution: string,
   model: ModelMetadata,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
   const apiKey = process.env['RUNWAY_API_KEY'];
@@ -241,9 +240,6 @@ async function generateWithRunway(
     throw createError.serviceUnavailable('Runway API not configured');
   }
 
-  // Map resolution to Runway ratio - Gen4 supports 16:9 and 9:16
-  // 4K is not yet available; fall back to 1080p
-  const ratio = resolution === '9:16' ? '9:16' : '16:9';
   const clampedDuration = Math.max(2, Math.min(durationSecs, 10));
 
   const response = await fetch('https://api.dev.runwayml.com/v1/text_to_video', {
@@ -257,7 +253,16 @@ async function generateWithRunway(
       model: model.apiModelId ?? model.id,
       promptText: prompt,
       duration: clampedDuration,
-      ratio,
+      // Landscape, unconditionally. The wire contract
+      // (ManagedMediaVideoGenerationRequestSchema) carries a RESOLUTION —
+      // '720p' | '1080p' | '4k' — and no aspect-ratio field at all, so no
+      // caller can request portrait. This read `resolution === '9:16' ? '9:16'
+      // : '16:9'`, comparing a resolution against an aspect ratio: the portrait
+      // arm was unreachable, and the comment above it claimed a 4K-to-1080p
+      // fallback that the request body never expressed. Give Runway a portrait
+      // option only together with a real aspect-ratio field on the contract and
+      // a control that produces it.
+      ratio: '16:9',
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -583,7 +588,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   try {
     await markManagedUsageProviderStarted(reservation);
     if (provider === 'runway') {
-      const result = await generateWithRunway(prompt, billableDurationSecs, resolution, model);
+      // No `resolution` argument: the Runway body carries none. `runway-gen-4`
+      // is priced for 720p alone in models.json, so getVideoCostCents (called
+      // above, before any provider work) already rejected every other value.
+      const result = await generateWithRunway(prompt, billableDurationSecs, model);
       taskId = result.taskId;
       estimatedDuration = result.estimatedDuration;
     } else {

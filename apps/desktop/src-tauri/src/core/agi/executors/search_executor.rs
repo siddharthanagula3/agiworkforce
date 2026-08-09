@@ -57,8 +57,11 @@ impl SearchType {
         }
     }
 
-    /// Get domain filters for this search type.
-    ///
+    /// Domain ALLOWLIST for this search type, sent to Perplexity as
+    /// `search_domain_filter` by `search_with_perplexity`. An empty list means
+    /// the whole web. Only the Perplexity path can honor this — the DuckDuckGo
+    /// Instant Answer fallback has no domain-filter parameter, so a fallback
+    /// search is unrestricted.
     #[must_use]
     pub fn domain_filters(self) -> Vec<String> {
         match self {
@@ -345,9 +348,12 @@ impl SearchExecutor {
             &enhanced_query[..enhanced_query.len().min(50)]
         );
 
-        // Execute the search
+        // Execute the search. The typed verticals (code, academic, news) carry a
+        // domain allowlist; passing it is what makes `search_type` restrict the
+        // sources rather than only nudge the prompt. General search passes an
+        // empty list and is unrestricted.
         let response = client
-            .search_with_model(&enhanced_query, model)
+            .search_with_model_in_domains(&enhanced_query, model, search_type.domain_filters())
             .await
             .map_err(|e| anyhow!("Perplexity search failed: {}", e))?;
 
@@ -885,6 +891,34 @@ mod tests {
         let academic_filters = SearchType::Academic.domain_filters();
         assert!(academic_filters.contains(&"arxiv.org".to_string()));
         assert!(academic_filters.contains(&"scholar.google.com".to_string()));
+    }
+
+    /// The allowlist above is worthless unless it reaches the wire. Before this
+    /// was wired, `search_with_perplexity` called `search_with_model`, which
+    /// hardcoded `search_domain_filter: vec![]`, so `search_type: "academic"`
+    /// was reported back to the model while the search was a plain general one.
+    #[test]
+    fn typed_search_puts_its_domain_allowlist_on_the_perplexity_request() {
+        for search_type in [SearchType::Code, SearchType::Academic, SearchType::News] {
+            let request = PerplexityClient::search_request(
+                search_type.to_perplexity_model(),
+                "example query",
+                search_type.domain_filters(),
+            );
+            assert_eq!(
+                request.search_domain_filter,
+                search_type.domain_filters(),
+                "{search_type:?} lost its domain allowlist on the way to the wire"
+            );
+        }
+
+        // General stays unrestricted.
+        let general = PerplexityClient::search_request(
+            SearchType::General.to_perplexity_model(),
+            "example query",
+            SearchType::General.domain_filters(),
+        );
+        assert!(general.search_domain_filter.is_empty());
     }
 
     #[test]

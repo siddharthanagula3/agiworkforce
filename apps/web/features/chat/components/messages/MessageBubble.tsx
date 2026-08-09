@@ -1794,12 +1794,15 @@ const MessageBubbleComponent = function MessageBubble({
                         <DropdownMenuSeparator />
                         <div className="px-2 py-1.5">
                           {/*
-                            Full usage breakdown. Until the server started
-                            publishing a terminal usage frame, `tokensUsed` and
-                            `cost` had no producer at all, so this menu showed
-                            nothing and TokenUsageDisplay sat unused. `cost` is
-                            in CENTS on the wire (matching billing); the display
-                            component formats dollars.
+                            Token breakdown for the turn. `tokensUsed` comes
+                            from the PERSISTED message row via `toChatMessage`
+                            (no terminal usage stream frame exists — one was
+                            built and reverted, see docs/adr/wire-or-cut.md
+                            "Per-message token/cost"), so it appears after the
+                            turn is saved. `cost` has no producer at all today:
+                            managed cost stays server-side, so the dollar line
+                            below stays hidden until that policy changes. It is
+                            typed in CENTS, hence the /100.
                           */}
                           <TokenUsageDisplay
                             variant="detailed"

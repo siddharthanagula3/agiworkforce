@@ -7,23 +7,26 @@
  * `file://` URL.
  *
  * Usage (in ArtifactPanel):
- *   import { makeDesktopPublishArtifact } from './publishAdapter';
- *   const publishArtifact = makeDesktopPublishArtifact();
- *   <UnifiedArtifactPanel publishArtifact={publishArtifact} ... />
+ *   const publish = makeDesktopPublishCallback(artifact);
+ *   const { shareUrl } = await publish();
  *
  * Current boundary:
- *   This adapter only handles the local path. Cloud publish is gated until the
- *   managed artifact publishing path is proven.
+ *   This adapter only handles the local path, so it always calls the service
+ *   with `privacyMode: 'local'` and narrows the result to
+ *   {@link LocalPublishResult}. Publishing to a hosted URL needs a
+ *   `CloudPublisher`, and the web adapter is the only one that exists today
+ *   (apps/web/features/chat/components/artifacts/publishArtifactClient.ts);
+ *   desktop injects none, so no caller here can receive a cloud result.
  */
 
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
 import { publishArtifact as corePublishArtifact } from '@agiworkforce/artifacts';
-import type { PublishResult } from '@agiworkforce/artifacts';
+import type { LocalPublishResult } from '@agiworkforce/artifacts';
 import type { PublishableArtifact } from '@agiworkforce/artifacts';
 
 // Re-export for convenience so ArtifactPanel does not import from two places.
-export type { PublishResult };
+export type { LocalPublishResult };
 
 /**
  * Map artifact type to a file extension for local export.
@@ -84,17 +87,26 @@ async function tauriLocalFileWriter(artifact: PublishableArtifact): Promise<stri
  * @param artifact - The artifact to publish. Captured at call time so the
  *   returned function is a stable zero-argument callback that the panel can
  *   call directly.
- * @param privacyMode - Current session privacy mode. Defaults to 'local' (v1).
  */
 export function makeDesktopPublishCallback(
   artifact: PublishableArtifact,
-  privacyMode: 'local' | 'byok' | 'managed' = 'local',
-): () => Promise<PublishResult> {
-  return async () =>
-    corePublishArtifact({
+): () => Promise<LocalPublishResult> {
+  return async () => {
+    const result = await corePublishArtifact({
       artifact,
-      privacyMode,
+      privacyMode: 'local',
       surface: 'desktop',
       localFileWriter: tauriLocalFileWriter,
     });
+    // The service's local path returns a LocalPublishResult or throws; the
+    // cloud/unavailable arms belong to byok/managed, which this adapter never
+    // asks for. Assert the cross-package contract here so the panel is not
+    // forced to carry a branch it can never take.
+    if (result.kind !== 'local') {
+      throw new Error(
+        `publishArtifact returned "${result.kind}" for a local publish; expected "local".`,
+      );
+    }
+    return result;
+  };
 }

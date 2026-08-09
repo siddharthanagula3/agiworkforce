@@ -27,20 +27,13 @@ use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolS
 /// A URL that does not parse, or parses without a host, is allowed through to
 /// the existing navigation error handling — this guard only ever denies, it is
 /// not the scheme validator.
+///
+/// The policy itself now lives in `computer_use::ensure_navigation_url_allowed`
+/// so the CDP, Playwright and extension navigation implementations enforce the
+/// same list; this stays as the command-layer entry point that fails before a
+/// tab is even resolved.
 fn ensure_navigation_host_allowed(url: &str) -> Result<(), String> {
-    let Ok(parsed) = url::Url::parse(url) else {
-        return Ok(());
-    };
-    let Some(host) = parsed.host_str() else {
-        return Ok(());
-    };
-    if crate::automation::computer_use::is_always_blocked_host(host) {
-        tracing::warn!("blocked agent navigation to always-blocked host: {}", host);
-        return Err(format!(
-            "Navigation to {host} is blocked. Financial, brokerage, and wallet sites are off-limits to automated browsing."
-        ));
-    }
-    Ok(())
+    crate::automation::computer_use::ensure_navigation_url_allowed(url)
 }
 
 fn build_browser_script_confirmation_request(

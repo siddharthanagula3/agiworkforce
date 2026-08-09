@@ -7,10 +7,17 @@
  * message bubble.  Four states:
  *
  *  A. Generating  – animated placeholder card while the image is in-flight.
- *  B. Result      – inline image with overlay Edit/Share controls + action bar.
- *  C. Edit panel  – full-height right-side panel (mirrors ArtifactsPanel layout)
- *                   with aspect-ratio re-generate + "Describe edits" composer.
+ *  B. Result      – inline image with overlay New version/Share controls + action bar.
+ *  C. New-version panel – full-height right-side panel (mirrors ArtifactsPanel
+ *                   layout) with aspect-ratio re-generate + a change composer.
  *  D. Share modal – centered modal with copy-link, X, LinkedIn, Reddit, Download.
+ *
+ * This panel does NOT edit pixels. Every control in it calls `onRegenerate`,
+ * which runs a fresh text-to-image generation from a rewritten prompt — the
+ * source image is never sent to the provider. The copy below says exactly that.
+ * `POST /api/media/image/generate` does implement real provider-side edits
+ * (`operation` + `source_image` + `mask_image`), but no web client sends those
+ * fields yet, so naming this "Edit" would describe behaviour that is not wired.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,7 +31,6 @@ import {
   Pencil,
   MoreHorizontal,
   Send,
-  MousePointer2,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ImageAspectRatio } from './Composer/ChatComposerNew';
@@ -316,7 +322,7 @@ function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
 }
 
 // ---------------------------------------------------------------------------
-// State C: Edit panel
+// State C: revision panel — re-generates, never edits the source pixels
 // ---------------------------------------------------------------------------
 
 interface EditPanelProps {
@@ -433,7 +439,7 @@ function EditPanel({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Edit image"
+        aria-label="Generate a new version of this image"
         className={cn(
           'flex flex-col border-l border-border/30',
           'bg-card/95 backdrop-blur-xl',
@@ -537,18 +543,18 @@ function EditPanel({
           )}
         </div>
 
-        {/* Toolbar: Select (deferred) + Describe edits */}
+        {/* Toolbar: honest disclosure + describe-a-change composer.
+            A disabled "Select region to edit — Coming soon" strip used to sit
+            here. Region/mask editing is not scheduled and nothing in this
+            client sends `mask_image`, so the strip advertised a capability no
+            code backs; it is gone rather than left as a permanent promise. */}
         <div className="border-t border-border/30 p-3 space-y-2">
-          {/* Select / lasso — deferred, shown as disabled with label */}
-          <div className="flex items-center gap-2 rounded-lg border border-border/20 bg-muted/20 px-3 py-2 text-xs text-muted-foreground/50">
-            <MousePointer2 className="h-3.5 w-3.5 shrink-0" />
-            <span>Select region to edit</span>
-            <span className="ml-auto rounded bg-muted/40 px-1.5 py-0.5 text-[10px]">
-              Coming soon
-            </span>
-          </div>
+          <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+            Describing a change generates a new image from the updated description. The image above
+            is not modified.
+          </p>
 
-          {/* Describe edits composer */}
+          {/* Describe-a-change composer */}
           <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-[var(--chat-bg-elevated)] px-3 py-2">
             <input
               ref={editInputRef}
@@ -561,7 +567,7 @@ function EditPanel({
                   void handleDescribeEdit();
                 }
               }}
-              placeholder="Describe edits..."
+              placeholder="Describe a change to generate a new version..."
               disabled={generating}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none disabled:opacity-50"
             />
@@ -575,7 +581,7 @@ function EditPanel({
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'text-muted-foreground/40 cursor-not-allowed',
               )}
-              aria-label="Apply edit"
+              aria-label="Generate a new version with this change"
             >
               <Send className="h-3.5 w-3.5" />
             </button>
@@ -656,14 +662,15 @@ function ResultCard({ imageUrl, prompt, onEdit, onShare }: ResultCardProps) {
 
             {/* Overlay button row */}
             <div className="relative flex items-center justify-between px-3 pb-3">
-              {/* Bottom-left: Edit pill */}
+              {/* Bottom-left: new-version pill */}
               <button
                 type="button"
                 onClick={onEdit}
                 className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                title="Generate a new version from a changed description"
               >
                 <Pencil className="h-3 w-3" />
-                Edit
+                New version
               </button>
 
               {/* Bottom-right: Share circular button */}
@@ -826,7 +833,7 @@ export function ImageGenerationCard({
         onShare={() => setShowShare(true)}
       />
 
-      {/* State C: Edit panel (portals into the layout) */}
+      {/* State C: revision panel (portals into the layout) */}
       {showEdit && (
         <EditPanel
           imageUrl={liveUrl ?? imageUrl}

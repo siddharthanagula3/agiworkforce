@@ -354,6 +354,14 @@ impl ExtensionBridge {
 
     /// Navigate the active browser tab to a URL via the extension bridge.
     pub async fn navigate(&self, url: &str) -> Result<()> {
+        // The always-blocked host list is checked before the confirmation
+        // prompt: a brokerage or banking host must not be reachable even if
+        // the user clicks approve. `BrowserExecutor` falls back to this bridge
+        // whenever CDP is unavailable, so skipping it here reopened the exact
+        // path the CDP guard closes.
+        crate::automation::computer_use::ensure_navigation_url_allowed(url)
+            .map_err(Error::Generic)?;
+
         // SEV-DESK-02: navigation triggered by an LLM can land the user on
         // a phishing page or trigger a drive-by download. Surface the full
         // URL to the prompt so the user can see exactly where the agent
