@@ -89,8 +89,32 @@ class AuthService {
     return { user: null, error: 'Use Clerk sign-up flow' };
   }
 
+  /**
+   * End the Clerk session.
+   *
+   * This used to return `{ error: null }` without doing anything. Call sites
+   * that also invoke `useClerk().signOut()` themselves were unaffected, but the
+   * ones that only call `useAuthStore.logout()` — the chat header's "Log out"
+   * button and the inactivity auto-logout — merely cleared local state: the
+   * Clerk session cookie survived, so the next `resyncSession()` resolved
+   * `/api/me` again and signed the user straight back in.
+   *
+   * Clerk's browser instance is the only sign-out surface reachable from a
+   * plain module, and signing out twice is a no-op, so the call sites that
+   * already sign out stay correct.
+   */
   async logout(): Promise<{ error: string | null }> {
-    return { error: null };
+    if (typeof window === 'undefined') return { error: null };
+    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
+      | { signOut?: () => Promise<void> }
+      | undefined;
+    if (typeof clerk?.signOut !== 'function') return { error: null };
+    try {
+      await clerk.signOut();
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   async resetPassword(_email: string): Promise<{ error: string | null }> {

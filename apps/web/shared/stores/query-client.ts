@@ -318,16 +318,57 @@ export interface PaginationParams {
   order?: 'asc' | 'desc';
 }
 
+/**
+ * Resolve the API gateway base URL.
+ *
+ * A relative `/api` fallback would silently retarget gateway calls at the web
+ * app's own route handlers, so resolution mirrors `@shared/lib/api`: the local
+ * gateway in development, and a hard failure when a deployed build ships
+ * without the variable.
+ */
+function resolveApiBaseUrl(): string {
+  const configured = process.env['NEXT_PUBLIC_API_URL'];
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'development') return 'http://localhost:3001/api';
+  throw new Error('NEXT_PUBLIC_API_URL not configured');
+}
+
+/**
+ * Read the bearer token the way `APIClient` writes it.
+ *
+ * `auth_token` holds AES-GCM ciphertext (`APIClient.setToken` in
+ * `@shared/lib/api`), so the stored value is not a credential — sending it
+ * verbatim authenticates nothing. The crypto module is imported lazily to keep
+ * its DOMPurify dependency out of every page that mounts `QueryProvider`.
+ */
+async function readAuthToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  const stored = localStorage.getItem('auth_token');
+  if (!stored) return null;
+
+  const { securityManager } = await import('@shared/lib/security');
+
+  try {
+    return (await securityManager.decryptAsync(stored)) || null;
+  } catch {
+    // Same migration path the writer accepts: a token persisted before
+    // encryption landed is already plaintext, and JWTs start with "ey".
+    if (stored.startsWith('ey')) return stored;
+    logger.warn('[apiFetch] Ignoring undecryptable auth_token');
+    return null;
+  }
+}
+
 // Base fetch function with error handling
 export const apiFetch = async <T = unknown>(
   url: string,
   options: RequestInit = {},
 ): Promise<APIResponse<T>> => {
-  const baseUrl = process.env['NEXT_PUBLIC_API_URL'] || '/api';
+  const baseUrl = resolveApiBaseUrl();
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
-  // Get auth token from localStorage (client-side only)
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const token = await readAuthToken();
 
   const config: RequestInit = {
     headers: {

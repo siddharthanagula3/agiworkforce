@@ -27,6 +27,7 @@ import type {
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
+  getModelMetadataById,
   getToolDisplayLabel,
   type AgentEventEnvelope,
   type AgentEventToolCategory,
@@ -422,6 +423,30 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
       } satisfies TauriAttachmentPayload;
     }),
   );
+}
+
+/**
+ * Capability payload the Rust tool filter (`chat/tool_config.rs`) uses to decide
+ * which tools this turn may offer. It was never sent, so the filter had nothing
+ * to filter on and every model was offered every tool.
+ *
+ * The catalog is the only capability source the renderer has, so an off-catalog
+ * model (any local Ollama build) still resolves to `undefined` — the native side
+ * owns what an unknown model may be offered, and closes the managed-cloud gate.
+ */
+function resolveModelCapabilities(modelId: string | undefined) {
+  const capabilities = modelId ? getModelMetadataById(modelId)?.capabilities : undefined;
+  if (!capabilities) return undefined;
+
+  return {
+    tools: capabilities.tools,
+    vision: capabilities.vision,
+    computerUse: capabilities.computerUse,
+    search: capabilities.search,
+    codeExecution: capabilities.codeExecution,
+    imageGen: capabilities.imageGen,
+    agentic: capabilities.agentic,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1049,6 +1074,7 @@ export class TauriRuntime implements ChatRuntime {
           userId,
           provider,
           modelOverride: model,
+          modelCapabilities: resolveModelCapabilities(model),
           conversationId: backendConversationId,
           attachments: attachments ?? [],
           stream: true,

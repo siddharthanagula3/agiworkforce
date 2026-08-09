@@ -30,6 +30,8 @@ interface RefreshTokenRow {
   expires_at: string;
   used_at: string | null;
   revoked_at: string | null;
+  owner_missing: boolean;
+  owner_deletion_scheduled_for: string | null;
 }
 
 type RotationResult =
@@ -39,7 +41,7 @@ type RotationResult =
       accessExpiresIn: number;
       refreshToken: string;
     }
-  | { kind: 'invalid' | 'expired' | 'replayed' };
+  | { kind: 'invalid' | 'expired' | 'replayed' | 'erased' };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
@@ -59,14 +61,35 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const nowIso = new Date().toISOString();
   const result = await db.transaction<RotationResult>(async (tx) => {
     const rows = await tx.query<RefreshTokenRow>(
-      `SELECT id, family_id, user_id, user_email, expires_at, used_at, revoked_at
-         FROM device_refresh_tokens
-        WHERE token_hash = $1
-        FOR UPDATE`,
+      // The profile join is the account-erasure check: a device credential
+      // lives for 30 days and rotates itself, so without it a deleted account
+      // kept minting access tokens for as long as the desktop app kept asking.
+      // FOR UPDATE OF t: the nullable side of an outer join cannot be locked.
+      `SELECT t.id, t.family_id, t.user_id, t.user_email, t.expires_at, t.used_at, t.revoked_at,
+              p.id IS NULL AS owner_missing,
+              p.deletion_scheduled_for AS owner_deletion_scheduled_for
+         FROM device_refresh_tokens t
+         LEFT JOIN profiles p ON p.id = t.user_id
+        WHERE t.token_hash = $1
+        FOR UPDATE OF t`,
       [tokenHash],
     );
     const current = rows[0];
     if (!current) return { kind: 'invalid' };
+
+    // Erased or scheduled for erasure: kill the whole family, not just this
+    // token, so no sibling credential survives the purge. Deletion has no
+    // self-serve cancel (see DELETE /api/user/delete-account); support
+    // reversal restores access through a fresh sign-in.
+    if (current.owner_missing || current.owner_deletion_scheduled_for) {
+      await tx.execute(
+        `UPDATE device_refresh_tokens
+            SET revoked_at = COALESCE(revoked_at, $2)
+          WHERE family_id = $1`,
+        [current.family_id, nowIso],
+      );
+      return { kind: 'erased' };
+    }
 
     if (current.used_at) {
       await tx.execute(
