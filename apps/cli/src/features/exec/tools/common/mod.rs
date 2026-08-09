@@ -22,6 +22,12 @@ pub(super) fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf,
     crate::path_security::validate_workspace_path(path_str)
 }
 
+/// Path validation for tools that WRITE. Adds the agent-instruction denylist on
+/// top of containment — see path_security::AGENT_INSTRUCTION_DIRS.
+pub(super) fn validate_file_write_path(path_str: &str) -> std::result::Result<PathBuf, String> {
+    crate::path_security::validate_workspace_write_path(path_str)
+}
+
 pub(super) fn print_tool_status(tool_name: &str, display: &str) {
     eprintln!(
         "  {} {}",
