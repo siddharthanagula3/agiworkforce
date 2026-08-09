@@ -28,6 +28,9 @@ const allowedRootFiles = new Set([
   'CHANGELOG.md',
   'CLAUDE.md',
   'CONTRIBUTING.md',
+  // Active remediation queue built from the five audit artifacts; the working
+  // loop reads it every session. Root-level by the same rationale as PLAN.md.
+  'ExecutionPlan.md',
   'Cargo.lock',
   'Cargo.toml',
   'LICENSE',
