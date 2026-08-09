@@ -6,6 +6,74 @@ const MAX_QUERY_ROWS: usize = 1000;
 /// Maximum SQL query length to prevent abuse
 const MAX_QUERY_LENGTH: usize = 10_000;
 
+/// Tokenize an UPPERCASED SQL string for table-allowlist checking.
+///
+/// WHY NOT `split_whitespace()`. The allowlist used to split on whitespace and
+/// look for a token exactly equal to `FROM` or `JOIN`. SQL does not require
+/// whitespace there, so every one of these produced a token that never matched
+/// — and a non-match SKIPPED the table check entirely rather than failing it:
+///
+///     SELECT*FROM auth_sessions        -> token `*FROM`
+///     SELECT * FROM"settings"          -> token `FROM"SETTINGS"`
+///     SELECT * FROM/*c*/users          -> token `FROM/*C*/USERS`
+///
+/// The tool is reachable by indirect prompt injection, and the tables it then
+/// exposes are `auth_sessions` (access and refresh tokens in plaintext),
+/// `users` (password hashes) and `settings` (encrypted key blobs). A guard that
+/// silently does nothing on unusual-but-valid input is worse than no guard,
+/// because the code above it reads as protected.
+///
+/// This strips comments, then treats every character that cannot appear in an
+/// identifier as a separator. `SELECT*FROM X` becomes `SELECT FROM X`, so the
+/// keyword is found and the table after it is checked.
+///
+/// A qualified name like `main.auth_sessions` becomes two tokens, so the token
+/// after `FROM` is `MAIN`, which is not in any allowlist and is rejected. That
+/// is deliberate: fail closed on a shape the allowlist was never written to
+/// understand.
+fn sql_identifier_tokens(query_upper: &str) -> Vec<String> {
+    // Strip /* block */ comments.
+    let mut without_block = String::with_capacity(query_upper.len());
+    let bytes: Vec<char> = query_upper.chars().collect();
+    let mut i = 0;
+    let mut depth = 0usize;
+    while i < bytes.len() {
+        if i + 1 < bytes.len() && bytes[i] == '/' && bytes[i + 1] == '*' {
+            depth += 1;
+            i += 2;
+            continue;
+        }
+        if depth > 0 && i + 1 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '/' {
+            depth -= 1;
+            i += 2;
+            without_block.push(' ');
+            continue;
+        }
+        if depth == 0 {
+            without_block.push(bytes[i]);
+        }
+        i += 1;
+    }
+
+    // Strip `--` line comments.
+    let without_line: String = without_block
+        .lines()
+        .map(|line| match line.find("--") {
+            Some(at) => &line[..at],
+            None => line,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    without_line
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .map(str::to_string)
+        .collect()
+}
+
 impl ToolExecutor {
     pub(crate) async fn execute_db_query_tool(
         &self,
@@ -163,7 +231,7 @@ impl ToolExecutor {
         ];
         // Extract FROM and JOIN table references and validate each against the allowlist.
         {
-            let tokens: Vec<&str> = query_upper.split_whitespace().collect();
+            let tokens: Vec<String> = sql_identifier_tokens(&query_upper);
             let mut i = 0;
             while i < tokens.len() {
                 if tokens[i] == "FROM" || tokens[i] == "JOIN" {
@@ -418,21 +486,21 @@ impl ToolExecutor {
             "automation_history",
         ];
         {
-            let tokens: Vec<&str> = query_upper.split_whitespace().collect();
+            let tokens: Vec<String> = sql_identifier_tokens(&query_upper);
             // For INSERT: "INSERT INTO table_name"
             // For UPDATE: "UPDATE table_name"
             // For DELETE: "DELETE FROM table_name"
             let table_name_opt = if query_upper.starts_with("INSERT") {
                 tokens
                     .iter()
-                    .position(|t| *t == "INTO")
+                    .position(|t| t == "INTO")
                     .and_then(|p| tokens.get(p + 1))
             } else if query_upper.starts_with("UPDATE") {
                 tokens.get(1)
             } else if query_upper.starts_with("DELETE") {
                 tokens
                     .iter()
-                    .position(|t| *t == "FROM")
+                    .position(|t| t == "FROM")
                     .and_then(|p| tokens.get(p + 1))
             } else {
                 None
@@ -734,5 +802,89 @@ impl ToolExecutor {
                 metadata: HashMap::new(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod sql_tokenizer_tests {
+    use super::sql_identifier_tokens;
+
+    fn table_after_keyword(query: &str, keyword: &str) -> Option<String> {
+        let tokens = sql_identifier_tokens(&query.to_uppercase());
+        tokens
+            .iter()
+            .position(|t| t == keyword)
+            .and_then(|p| tokens.get(p + 1))
+            .cloned()
+    }
+
+    /// The bypasses. Each of these used to produce a token that never equalled
+    /// "FROM", so the allowlist loop skipped the table check entirely rather
+    /// than failing it — and the tool is reachable by indirect prompt
+    /// injection against `auth_sessions` (plaintext tokens), `users` (password
+    /// hashes) and `settings` (encrypted key blobs).
+    #[test]
+    fn finds_the_table_when_no_space_precedes_from() {
+        assert_eq!(
+            table_after_keyword("SELECT*FROM auth_sessions", "FROM"),
+            Some("AUTH_SESSIONS".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_the_table_when_it_is_quoted() {
+        assert_eq!(
+            table_after_keyword("SELECT * FROM\"settings\"", "FROM"),
+            Some("SETTINGS".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_the_table_through_a_block_comment() {
+        assert_eq!(
+            table_after_keyword("SELECT * FROM/*evade*/users", "FROM"),
+            Some("USERS".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_the_table_through_a_line_comment() {
+        assert_eq!(
+            table_after_keyword("SELECT * FROM users -- trailing", "FROM"),
+            Some("USERS".to_string())
+        );
+    }
+
+    #[test]
+    fn still_finds_the_table_in_ordinary_sql() {
+        // The rewrite must not break the normal path it protects.
+        assert_eq!(
+            table_after_keyword("SELECT id FROM conversations WHERE id = 1", "FROM"),
+            Some("CONVERSATIONS".to_string())
+        );
+        assert_eq!(
+            table_after_keyword("SELECT * FROM messages JOIN conversations ON 1=1", "JOIN"),
+            Some("CONVERSATIONS".to_string())
+        );
+    }
+
+    #[test]
+    fn a_qualified_name_resolves_to_the_schema_so_it_fails_closed() {
+        // `main.auth_sessions` yields MAIN, which is in no allowlist. The
+        // allowlist was never written to understand qualified names, so
+        // rejecting is correct — this pins that it rejects rather than
+        // silently accepting the table half.
+        assert_eq!(
+            table_after_keyword("SELECT * FROM main.auth_sessions", "FROM"),
+            Some("MAIN".to_string())
+        );
+    }
+
+    #[test]
+    fn newlines_and_tabs_are_still_separators() {
+        assert_eq!(
+            table_after_keyword("SELECT *\n\tFROM\n\tconversations", "FROM"),
+            Some("CONVERSATIONS".to_string())
+        );
     }
 }
