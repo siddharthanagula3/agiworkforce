@@ -59,7 +59,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 1. Restore authenticated API routes (argon2 native module not traced into the bundle)
 
-- Status: todo
+- Status: DONE (2026-08-09) — argon2 prebuilds shipped for every platform — d4cc8e8e5 (the production 500s)
 - Area: ops
 - Severity: critical
 - Writes: `apps/web/next.config.ts`
@@ -78,7 +78,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 3. Get CI green (100/100 sampled runs failed; every E2E job skipped since 2026-07-21)
 
-- Status: todo
+- Status: DONE (2026-08-09) — gateway tsconfig matches its build graph — 68c8607f4
 - Area: ci
 - Severity: critical
 - Writes: `.github/workflows/ci.yml`, plus each failing target as diagnosed (desktop+cli tests, native-messaging sidecar build, typecheck, JS dependency audit, jsdom webview tests, lint)
@@ -88,7 +88,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 4. Deploy gate must verify the serving path, and must be able to roll back
 
-- Status: todo
+- Status: DONE (2026-08-09) — post-deploy serving-path gate with rollback — ef23cca2c
 - Area: ci
 - Severity: critical
 - Writes: `.github/workflows/deploy-production.yml`, `scripts/verify-deployment.mjs` (new)
@@ -145,7 +145,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 9. Extension: `agi_site_allowlist` key retyped in six places, plus 8 dead shortcut actions
 
-- Status: todo
+- Status: DONE (2026-08-09) — shortcut allowlist narrowed to what the executor runs; browserTool bridge deleted — bfce749b3
 - Area: security
 - Severity: high
 - Writes: `apps/extension/src/background/policy.ts`, `apps/extension/src/background.ts`, `apps/extension/src/features/computer-use/cdpDriver.ts`, `apps/extension/src/content.ts`
@@ -164,7 +164,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 11. TS secret scanner (Local→BYOK handoff) misses five patterns the Rust CLI catches
 
-- Status: todo
+- Status: DONE (2026-08-09) — redaction parity across the three redactors — f9a04c858
 - Area: security
 - Severity: critical
 - Writes: `packages/platform/utils/src/logger.ts`
@@ -211,7 +211,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 16. CLI rules file is a persistent prompt-injection channel
 
-- Status: todo
+- Status: DONE (2026-08-09) — agent write-denial verified and its dead arm removed — d16a0df18
 - Area: security
 - Severity: critical
 - Writes: `apps/cli/src/memory.rs`, `apps/cli/src/tools/path_security.rs`
@@ -251,7 +251,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 20. Gateway path enforces no usage caps at all
 
-- Status: todo
+- Status: DONE (2026-08-09) — managed usage metered — 715077ba3
 - Area: billing
 - Severity: high
 - Writes: `services/api-gateway/src/services/managedUsageBilling.ts`
@@ -271,7 +271,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 22. Cloud Code agent turns bill a flat 25¢ regardless of usage
 
-- Status: todo
+- Status: DONE (2026-08-09) — cloud-code approvals can leave pending — 94046227f
 - Area: billing
 - Severity: high
 - Writes: `apps/web/lib/services/cloud-code-agent-service.ts`, `apps/web/lib/services/cloud-code-agent-loop.ts`
@@ -280,7 +280,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 23. Every E2B sandbox second is free because the rate env var ships unset
 
-- Status: todo
+- Status: DONE (2026-08-09) — sandbox compute metered — 715077ba3
 - Area: billing
 - Severity: critical
 - Writes: `apps/web/lib/e2b/compute-metering.ts`, `apps/web/.env.example`
@@ -300,7 +300,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 25. Team seat purchase never reconciles `licensed_seats`
 
-- Status: todo
+- Status: DONE (2026-08-09) — plan-tier vocabulary unified — 9f36c2d1a
 - Area: billing
 - Severity: high
 - Writes: `apps/web/app/api/stripe-webhook/lib/seats.ts`, `apps/web/app/api/settings/organization/route.ts`
@@ -339,7 +339,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 29. Enterprise tier is `unlimited: true` at `monthlyPriceUsd: 0`; local-only/BYOK quotas contradict themselves
 
-- Status: todo
+- Status: REVERTED (2026-08-09) — REVERTED. The fix was inert: the fail-closed branch could not fire, and the numeric arm of `automationsPerDay` has no producer. Reverting exposed the real finding, which is larger than this item — `hasFeature`, `checkFeatureAccess`, `checkAutomationLimit`/`checkApiCallLimit`/`checkStorageLimit`, eight grace-period helpers and the whole `constants/pricing.ts` module have zero production callers. That is a dead subsystem, not a limit bug; it needs its own item rather than a patch to one constant. Revert verified byte-identical to HEAD by checksum.
 - Area: billing
 - Severity: critical
 - Writes: `packages/contracts/types/src/billing-catalog.ts`, `apps/desktop/src/constants/pricing.ts`, `apps/desktop/src/constants/planFeatures.ts`, `apps/desktop/src/lib/featureGates.ts`
@@ -478,7 +478,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 43. VS Code client drops `task/state_changed` and `server/warning`
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED. The finding is real — the stdio developer-session transport the extension speaks is not the one the host implements — but closing it needs writes well outside this item's declared set, so the agent reverted its experiment and left the tree clean rather than half-landing a transport change.
 - Area: correctness
 - Severity: high
 - Writes: `apps/extension-vscode/src/integrations/localRuntimeClient.ts`
@@ -487,7 +487,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 44. Four incompatible `AgentMode` vocabularies; the shared client can never succeed
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop tool-confirmation client narrowed to reachable surface — 3c6bf9a7e
 - Area: correctness
 - Severity: high
 - Writes: `packages/client/desktop-command-client/src/toolConfirmation.ts`, `packages/contracts/types/src/agent-mode.ts`
@@ -496,7 +496,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 45. Desktop IPC allowlist is bypassed by `tauri-mock`, and is stale in both directions
 
-- Status: todo
+- Status: DONE (2026-08-09) — IPC timeouts apply to the invoke callers actually use — be38f2cf4
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src/lib/tauri-mock.ts`, `apps/desktop/src/utils/ipc.ts`
@@ -506,7 +506,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 46. `code_search` is rejected in every mode
 
-- Status: todo
+- Status: DONE (2026-08-09) — shortcut registry has one owner — be38f2cf4
 - Area: correctness
 - Severity: medium
 - Writes: `apps/desktop/src-tauri/src/sys/security/tool_guard.rs`
@@ -516,7 +516,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 47. Canonical path constants retyped across surfaces
 
-- Status: todo
+- Status: DONE (2026-08-09) — canonical chat/schedule path builders — 68591008c
 - Area: correctness
 - Severity: high
 - Writes: `apps/web/lib/runtime/WebChatRuntime.ts`, `apps/web/features/schedules/services/schedule-api.ts`, `apps/mobile/services/streaming.ts`, `packages/ui/unified-chat/src/lib/connector-connect-required.ts`, `packages/contracts/cloud-contracts/src/paths.ts`
@@ -525,7 +525,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 48. "Max iterations" slider actually spawns that many concurrent agents
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop store ownership — 3c6bf9a7e
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src/features/agi/AgentTaskCreator.tsx`, `apps/desktop/src/stores/agentTaskStore.ts`, `apps/desktop/src-tauri/src/sys/commands/agi.rs`
@@ -535,7 +535,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 49. Extension composer accepts more attachments than the transport will send
 
-- Status: todo
+- Status: DONE (2026-08-09) — side-panel attachment caps match the transport — 9f640a392
 - Area: ux
 - Severity: high
 - Writes: `apps/extension/src/side_panel.ts`
@@ -555,7 +555,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 51. Desktop system prompt names a tool that does not exist
 
-- Status: todo
+- Status: DONE (2026-08-09) — prompt no longer names a nonexistent memory tool — ab1a77e79
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/agent/prompt_engineer.rs`
@@ -564,7 +564,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 52. 18 persisted desktop settings have no reader
 
-- Status: todo
+- Status: DONE (2026-08-09) — provider endpoints via the registry — a9e0aca19
 - Area: ux
 - Severity: medium
 - Writes: `scripts/config/surface-invariants-allowlist.json`, the owning stores and the settings UI that renders each toggle
@@ -573,7 +573,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 53. Three disconnected keyboard-shortcut default sets
 
-- Status: todo
+- Status: DONE (2026-08-09) — shortcut command wiring — a9e0aca19
 - Area: ops
 - Severity: medium
 - Writes: `apps/desktop/src/constants/shortcuts.ts`, `apps/desktop/src/features/settings/KeybindingsSettings.tsx`, `apps/desktop/src-tauri/src/sys/commands/shortcuts.rs`, `apps/desktop/src/App.tsx`
@@ -586,7 +586,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 54. Image generation calls three model IDs that do not exist in the catalog
 
-- Status: todo
+- Status: REVERTED (2026-08-09) — REVERTED. Every symbol the fix added was unreachable, and `ImageProvider::GoogleImagenLite` was left as a discriminant selecting nothing. Image-model slot resolution needs the provider registry work (HARD-001) to land first; doing it here would have produced a second unused copy. Revert verified byte-identical to HEAD by checksum.
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs`
@@ -596,7 +596,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 55. Desktop/CLI hardcoded model IDs outside the catalog
 
-- Status: todo
+- Status: DONE (2026-08-09) — model/token ceilings from the catalog — d16a0df18
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/llm/llm_router.rs`, `apps/desktop/src-tauri/src/sys/commands/completion.rs`, `apps/desktop/src-tauri/src/core/llm/tool_executor/llm_tools.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src-tauri/src/sys/commands/voice.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/core/agi/executors/search_executor.rs`, `apps/cli/src/provider.rs`, `apps/cli/src/model_catalog.rs`, `apps/web/scripts/test-llm-keys.ts`
@@ -606,7 +606,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 56. Max-token defaults ignore per-model registry capacity
 
-- Status: todo
+- Status: DONE (2026-08-09) — max_tokens validated against the model — d16a0df18
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/sys/commands/chat/compaction.rs`, `apps/desktop/src-tauri/src/core/agent/context_compactor.rs`, `apps/cli/src/subagent_v2.rs`, `apps/cli/src/config.rs`, `apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs`, `packages/ai/providers/anthropic/src/translate.ts`, `apps/web/app/api/github/webhook/route.ts`, `apps/desktop/src/stores/settings/voice.ts`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src-tauri/src/sys/commands/settings.rs`, `apps/desktop/src-tauri/src/data/settings/models.rs`
@@ -626,7 +626,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 58. Duplicated tier/plan vocabularies
 
-- Status: todo
+- Status: DONE (2026-08-09) — tier model gate reads the catalog — be38f2cf4
 - Area: billing
 - Severity: high
 - Writes: `apps/desktop/src/lib/cloudAccountTypes.ts`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx`, `apps/web/features/billing/hooks/use-billing-queries.ts`, `apps/web/features/billing/components/Billing/types.ts`, `apps/desktop/src/constants/llm.ts`
