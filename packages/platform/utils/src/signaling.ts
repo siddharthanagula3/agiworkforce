@@ -42,6 +42,13 @@ function safeToNumber(value: unknown, fallback: number): number {
 }
 
 /**
+ * Safely convert a value to a string, with a fallback
+ */
+function safeToString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+/**
  * Validate if a value is a valid SignalingRole
  */
 function isValidSignalingRole(value: unknown): value is SignalingRole {
@@ -245,6 +252,35 @@ export class SignalingClient {
         this.options.onEvent({
           type: 'heartbeat_ack',
           timestamp: safeToNumber(message['timestamp'], Date.now()),
+        });
+        break;
+      }
+      case 'sync_request': {
+        this.options.onEvent({
+          type: 'sync_request',
+          reason: safeToString(message['reason'], 'unspecified'),
+          timestamp: safeToNumber(message['timestamp'], Date.now()),
+        });
+        break;
+      }
+      case 'approval_queued': {
+        this.options.onEvent({
+          type: 'approval_queued',
+          code: safeToString(message['code'], ''),
+        });
+        break;
+      }
+      case 'connection_timeout': {
+        this.options.onEvent({
+          type: 'connection_timeout',
+          reason: safeToString(message['reason'], 'idle'),
+        });
+        break;
+      }
+      case 'server_shutdown': {
+        this.options.onEvent({
+          type: 'server_shutdown',
+          reason: safeToString(message['reason'], 'server_shutdown'),
         });
         break;
       }

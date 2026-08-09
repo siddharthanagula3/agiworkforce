@@ -111,6 +111,37 @@ export type SignalingEvent =
   | { type: 'session_expired' }
   /** The session was explicitly terminated by the server */
   | { type: 'terminated' }
+  /**
+   * The server asks this peer to publish its current state to the session.
+   *
+   * Emitted to the desktop when a mobile peer re-registers, so the phone is
+   * resynced instead of rendering whatever it held before the drop.
+   */
+  | {
+      type: 'sync_request';
+      /** Why the server wants a resync */
+      reason: string;
+      /** Server timestamp, in Unix epoch milliseconds */
+      timestamp: number;
+    }
+  /** An approval could not be relayed and is held until the mobile peer returns */
+  | {
+      type: 'approval_queued';
+      /** Pairing code the approval was queued against */
+      code: string;
+    }
+  /** The server is dropping this socket for inactivity */
+  | {
+      type: 'connection_timeout';
+      /** Server-supplied timeout cause (currently always `idle`) */
+      reason: string;
+    }
+  /** The server is shutting down and is closing every socket */
+  | {
+      type: 'server_shutdown';
+      /** Server-supplied shutdown cause */
+      reason: string;
+    }
   /** An error occurred during signaling */
   | {
       type: 'error';
@@ -119,6 +150,38 @@ export type SignalingEvent =
     }
   /** WebSocket connection closed */
   | { type: 'close' };
+
+/**
+ * Every discriminant in {@link SignalingEvent}, as a runtime value.
+ *
+ * Clients switch on `event.type`; without a value-level list there is nothing
+ * a test can assert against, which is how four server-sent types
+ * (`sync_request`, `approval_queued`, `connection_timeout`, `server_shutdown`)
+ * shipped in `services/signaling-server` while every client dropped them.
+ *
+ * The `Record` keying makes the list exhaustive by construction: a new
+ * variant that is not listed here fails to compile.
+ */
+const SIGNALING_EVENT_TYPE_KEYS: Record<SignalingEvent['type'], true> = {
+  open: true,
+  registered: true,
+  peer_ready: true,
+  signal: true,
+  peer_left: true,
+  heartbeat_ack: true,
+  session_expired: true,
+  terminated: true,
+  sync_request: true,
+  approval_queued: true,
+  connection_timeout: true,
+  server_shutdown: true,
+  error: true,
+  close: true,
+};
+
+export const SIGNALING_EVENT_TYPES = Object.keys(
+  SIGNALING_EVENT_TYPE_KEYS,
+) as readonly SignalingEvent['type'][];
 
 /**
  * Type of WebRTC signaling message being exchanged between peers.
