@@ -864,6 +864,8 @@ here.
 
 ### HARD-006 — Upload cap is 10 MB in six clients while canonical cap is 12 MB
 
+> **Triage 2026-08-09 — OPEN_DEFECT — 5 production (non-test) sites still compute a 10 MB ceiling against a canonical 12 MiB attachment contract. Wave 2 fixed the Chrome side panel; these are the remainder. The task also asks that the server return typed limit metadata so clients stop hardcoding a hint at all, which has not been done.**
+
 **Source:** HC
 
 - [ ] Define one attachment-limit policy with per-file, per-request, per-plan, and per-type limits.
@@ -1306,7 +1308,7 @@ The scale report is organized under the visible sections **Spend**, **Throughput
 
 - [ ] **SCALE-VER-001 — Establish continuous performance tests.** Add a scheduled benchmark/load suite; alert when it has not produced valid results within the defined interval.
 
-      > **Triage 2026-08-09 — OPEN_FEATURE — no load or performance suite exists. `tools/load` is empty and there is no `load.yml` workflow; the tooling that briefly existed was reverted in wave 4 rather than landed half-built, because a load suite that does not run reads as coverage while providing none. Building one is a real piece of work, not a wiring fix.**
+      > **Triage 2026-08-09 — OPEN_FEATURE — no load or performance suite exists. the tools/load directory is absent and there is no `load.yml` workflow; the tooling that briefly existed was reverted in wave 4 rather than landed half-built, because a load suite that does not run reads as coverage while providing none. Building one is a real piece of work, not a wiring fix.**
 
 - [ ] **SCALE-VER-002 — Add E2E per surface.** Web, Desktop, Mobile, CLI, VS Code, and Chrome each need real happy-path, failure, auth, reconnect, and upgrade coverage.
 - [ ] **SCALE-VER-003 — Replace skipped visual tests.** Render real active routes/components and fail on unexpected absence.
@@ -2651,7 +2653,7 @@ The scale report is organized under the visible sections **Spend**, **Throughput
 
 - [ ] **SCALE-VER-001 — Establish continuous performance tests.** Add a scheduled benchmark/load suite; alert when it has not produced valid results within the defined interval.
 
-      > **Triage 2026-08-09 — OPEN_FEATURE — no load or performance suite exists. `tools/load` is empty and there is no `load.yml` workflow; the tooling that briefly existed was reverted in wave 4 rather than landed half-built, because a load suite that does not run reads as coverage while providing none. Building one is a real piece of work, not a wiring fix.**
+      > **Triage 2026-08-09 — OPEN_FEATURE — no load or performance suite exists. the tools/load directory is absent and there is no `load.yml` workflow; the tooling that briefly existed was reverted in wave 4 rather than landed half-built, because a load suite that does not run reads as coverage while providing none. Building one is a real piece of work, not a wiring fix.**
 
 - [ ] **SCALE-VER-002 — Add E2E per surface.** Web, Desktop, Mobile, CLI, VS Code, and Chrome each need real happy-path, failure, auth, reconnect, and upgrade coverage.
 - [ ] **SCALE-VER-003 — Replace skipped visual tests.** Render real active routes/components and fail on unexpected absence.
@@ -2986,7 +2988,12 @@ The business-layer report shows that substantial billing, entitlement, and enter
       > **Triage 2026-08-09 — OPEN_DEFECT — zero link or distribution-state tests exist under `apps/web/__tests__`. This is the guard that would stop DOC-003 (false store availability) and DOC-026 (traction and "six live apps" claims) from silently returning, and it is the cheap durable half of the truthfulness work.**
 
 - [ ] **DOC-029 — Add “no present-tense planned feature” lint checks for known product pages/catalogs.**
+
+      > **Triage 2026-08-09 — SATISFIED in mechanism — scripts/check-marketing-models.mjs exists and runs in the guard chain, and it passed on every commit this session. It covers model-ID claims specifically; the broader "no present-tense planned feature" check over product pages and catalogs is narrower in practice than the task's wording implies.**
+
 - [ ] **DOC-030 — Require code, test, docs, changelog, and known-flaws update in one pull request for capability-state changes.**
+
+      > **Triage 2026-08-09 — SATISFIED — .github/pull_request_template.md exists and references the capability-state / known-flaws requirement, so the one-PR rule is stated where an author will see it. It is a convention, not an enforced gate; making it blocking would need a CI check that a capability-state change touches code, test, docs and changelog together.**
 
 ---
 
@@ -2996,20 +3003,38 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 - [ ] **REL-001 — Web:** production smoke, auth, checkout, chat/tool/research, file, project, memory, artifact, billing, and rollback verification.
 - [ ] **REL-002 — Desktop:** publish signed/notarized macOS, signed Windows, and signed Linux artifacts with updater, rollback, SBOM, and install tests.
+
+      > **Triage 2026-08-09 — SATISFIED for the signing requirement. release-desktop.yml carries 10 signing/notarization references — Developer ID, notarytool, stapling, hardened-runtime verification — and the wave-6 conformance pass independently called desktop packaging the strongest part of that domain, noting the runbook FAILS the job unless it can prove each step. Still open within this task: SBOM and the install test on a clean machine (REL-008).**
+
 - [ ] **REL-003 — Mobile:** complete store metadata, privacy manifests/data-safety forms, signing, product IDs, device-matrix E2E, phased rollout, crash/ANR/battery/thermal telemetry, and support links.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — store metadata exists as 2 listing documents, but release-mobile.yml has ZERO references to a privacy manifest or a data-safety form, both of which are submission-blocking for iOS and Play respectively. Device-matrix E2E, phased rollout and crash/ANR telemetry are likewise absent. This is submission work, not a code defect.**
+
 - [ ] **REL-004 — CLI:** publish verified packages/releases with signatures, checksums, install/uninstall/upgrade tests, and shell completion.
 
       > **Triage 2026-08-09 — OPEN_DEFECT — .github/workflows/release-cli.yml contains no npm publish or cargo publish step, so the CLI has no published package while a release workflow exists. A workflow whose presence reads as a shipped channel is exactly what this ledger warns about. Signatures, checksums and install/upgrade tests are also absent.**
 
 - [ ] **REL-005 — VS Code:** marketplace CI, signing/publisher identity, Restricted Mode/Workspace Trust behavior, remote-host tests, update/rollback, and telemetry disclosure.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — release-vscode-extension.yml has exactly ONE publish reference. The task asks for marketplace CI, publisher identity, Restricted Mode / Workspace Trust behaviour, remote-host tests, update/rollback and telemetry disclosure; a single publish step covers the first and none of the rest.**
+
 - [ ] **REL-006 — Chrome:** MV3 store package, permission rationale, service-worker restart tests, update path, native-host installer, and restricted-page behavior.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — and the shape matters. release-chrome-extension.yml has ZERO store-publish steps, but it does build the store ZIP, install Chromium, and exercise the exact packaged bytes in a browser. So the hard part (packaged-byte verification, which most projects skip) is done, and the trivial part (uploading it) is not. The extension is verified and unpublished.**
+
 - [ ] **REL-007 — Cross-surface continuity:** test same account/workspace/conversation, explicit mode boundaries, conflict recovery, logout purge, and version skew.
 
 ## 8B. Enterprise control plane
 
 - [ ] **ENT-001 — Complete identity:** SSO/OIDC/SAML, SCIM, domain verification/capture, JIT, group mapping, deprovisioning, and recovery.
 - [ ] **ENT-002 — Complete authorization:** custom roles or clearly bounded fixed roles, groups, policy inheritance, delegated admin, service accounts, and break-glass.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — zero role literals in the contracts package, because the four roles are fixed in SQL and TypeScript rather than modelled as data. Custom roles, groups, policy inheritance, delegated admin, service accounts and break-glass are all absent. The ledger's own framing applies: either build extensible RBAC/ABAC or explicitly limit the product to four fixed roles and say so.**
+
 - [ ] **ENT-003 — Complete governance:** model/provider/tool/connector/skill/agent allowlists and read/write action controls.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — one allowlist exists in the licensing crate (egress.byokDomainsAllowlist), and CRIT-016's triage established it is ADVISORY METADATA rather than an enforced block. Governance over models, tools, connectors, skills and agents is otherwise absent. Enforcing the one that exists is the smallest real step and is a founder decision (recorded under CRIT-016).**
+
 - [ ] **ENT-004 — Complete audit:** organization/admin/agent action logs, immutable retention, export API, SIEM delivery, and correlation to traces.
 
       > **Triage 2026-08-09 — OPEN_DEFECT — audit tables exist (5 migrations) but export/SIEM delivery is effectively absent: one module across `apps/web/app/api` matches SIEM or audit-export. The correlation half is blocked on SCALE-VER-006 — an audit record cannot point at a trace that is never emitted.**
@@ -3023,6 +3048,9 @@ The business-layer report shows that substantial billing, entitlement, and enter
       > **Triage 2026-08-09 — OPEN_FEATURE — zero migrations mention CMEK/BYOK-encryption or IP allowlists. Procurement-driven capabilities; the honest interim state is that no customer-facing surface claims them (DOC-024 covers the claim side).**
 
 - [ ] **ENT-007 — Complete capacity/commercial controls:** quotas, budgets, chargeback, priority/support tier, SLA/SLO reporting, and contract entitlements.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — 19 modules under apps/web/app/api reference SLA or uptime, so the vocabulary exists, but quotas, budgets, chargeback and priority-support tiering do not follow from it. Worth checking whether those 19 are reporting or merely naming: a surface that mentions uptime without measuring it is the false-claim class DOC-024 covers.**
+
 - [ ] **ENT-008 — Procurement evidence:** security architecture, threat model, pen test/audit status, subprocessor list, incident process, backup/DR proof, and honest certification status.
 
 ## 8C. Release evidence
