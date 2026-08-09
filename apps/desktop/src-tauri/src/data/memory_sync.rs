@@ -21,6 +21,17 @@
 //! INTEGER PKs are never sent over the wire; only `cloud_id` (UUIDv7).
 //! `user_id` is never sent in a push body — the server derives it from session.
 //!
+//! ACCOUNT SCOPING: one desktop install serves many accounts and the local DB
+//! survives sign-out, so every push, ack, conflict and pull statement is scoped
+//! to `user_memory.sync_user_id` the same way `cloud_sync.rs` scopes on
+//! `conversations.user_id`. Rows created before that stamp existed are adopted
+//! once, and only while no second account is known to this device
+//! (`only_account_on_device`). Residual gap: a memory created in cloud mode by
+//! an account that then signs out WITHOUT ever completing a sync is still
+//! unowned, so the next account on the device adopts it. Closing that needs the
+//! owner stamped at creation in `sys/commands/memory.rs`, which is outside this
+//! engine.
+//!
 //! Known local-schema gaps:
 //!   - `topic` is NOT in the wire protocol. Pull-insert synthesizes it from
 //!     `cloud_id` to satisfy the `NOT NULL` + `UNIQUE(category,topic)` constraint.
@@ -241,6 +252,68 @@ fn write_memory_cursor(conn: &Connection, user_id: &str, cursor: &str) {
 }
 
 // ---------------------------------------------------------------------------
+// Account scoping — which account owns a local cloud row.
+// ---------------------------------------------------------------------------
+
+/// Add the owner stamp to `user_memory` when the local DB predates it. The
+/// engine runs it on every cycle rather than relying on a schema migration
+/// because a database can be reopened by an older build between two syncs, and
+/// an unscoped statement here would push one account's memories under another
+/// account's bearer token.
+fn ensure_memory_owner_column(conn: &Connection) -> SqlResult<()> {
+    let exists: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info('user_memory') WHERE name = 'sync_user_id'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !exists {
+        conn.execute("ALTER TABLE user_memory ADD COLUMN sync_user_id TEXT", [])?;
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_memory_sync_user_id ON user_memory(sync_user_id)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// True when nothing on this device is known to belong to a different account.
+/// Both probes fail closed, because an unowned row on a device that has served
+/// two accounts could belong to either one.
+fn only_account_on_device(conn: &Connection, user_id: &str) -> bool {
+    let other_synced: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cloud_sync_state WHERE user_id <> ?1",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+    let other_owned: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM user_memory \
+              WHERE sync_user_id IS NOT NULL AND sync_user_id <> ?1",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+    other_synced == 0 && other_owned == 0
+}
+
+/// Adopt cloud rows written before the owner stamp existed. Without this an
+/// upgrading install would strand its pending memories unpushable forever; with
+/// the single-account guard it can never adopt a row belonging to someone else.
+fn claim_unowned_memories(conn: &Connection, user_id: &str) -> usize {
+    if !only_account_on_device(conn, user_id) {
+        return 0;
+    }
+    conn.execute(
+        "UPDATE user_memory SET sync_user_id = ?1 \
+         WHERE sync_user_id IS NULL AND app_mode = 'cloud'",
+        params![user_id],
+    )
+    .unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
 // Identity minting.
 // ---------------------------------------------------------------------------
 
@@ -302,15 +375,17 @@ pub fn soft_delete_memory_by_topic_for_push(
 // DB-only push helpers.
 // ---------------------------------------------------------------------------
 
-/// Gather cloud memories that need pushing (needs_push=1, app_mode='cloud').
+/// Gather cloud memories that need pushing (needs_push=1, app_mode='cloud')
+/// and owned by the signed-in account.
 /// Tombstoned rows (deleted_at_utc IS NOT NULL) are included so deletes propagate.
-fn gather_push_memories(conn: &Connection) -> SqlResult<Vec<PushMemory>> {
+fn gather_push_memories(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushMemory>> {
     let mut stmt = conn.prepare(
         "SELECT cloud_id, content, category, source, server_version, deleted_at_utc \
          FROM user_memory \
-         WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL",
+         WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL \
+           AND sync_user_id = ?1",
     )?;
-    let rows = stmt.query_map([], |row| {
+    let rows = stmt.query_map(params![user_id], |row| {
         let cloud_id: String = row.get(0)?;
         let content: String = row.get(1)?;
         let category: Option<String> = row.get(2)?;
@@ -332,10 +407,11 @@ fn gather_push_memories(conn: &Connection) -> SqlResult<Vec<PushMemory>> {
     rows.collect()
 }
 
-fn memory_sync_content_matches(conn: &Connection, sent: &PushMemory) -> bool {
+fn memory_sync_content_matches(conn: &Connection, user_id: &str, sent: &PushMemory) -> bool {
     conn.query_row(
-        "SELECT content, category, source, deleted_at_utc FROM user_memory WHERE cloud_id = ?1",
-        params![sent.id],
+        "SELECT content, category, source, deleted_at_utc FROM user_memory \
+          WHERE cloud_id = ?1 AND sync_user_id = ?2",
+        params![sent.id, user_id],
         |row| {
             let deleted_at: Option<String> = row.get(3)?;
             Ok(row.get::<_, String>(0)? == sent.content
@@ -348,16 +424,22 @@ fn memory_sync_content_matches(conn: &Connection, sent: &PushMemory) -> bool {
 }
 
 /// Store every acknowledged revision, but clear only the exact snapshot sent.
-fn ack_clear_memories(conn: &Connection, acked: &[AckedMemory], sent: &[PushMemory]) {
+fn ack_clear_memories(
+    conn: &Connection,
+    user_id: &str,
+    acked: &[AckedMemory],
+    sent: &[PushMemory],
+) {
     for row in acked {
         let unchanged = sent
             .iter()
             .find(|item| item.id == row.id)
-            .is_some_and(|item| memory_sync_content_matches(conn, item));
+            .is_some_and(|item| memory_sync_content_matches(conn, user_id, item));
         let _ = conn.execute(
             "UPDATE user_memory SET server_version = ?1, \
-             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END WHERE cloud_id = ?3",
-            params![row.server_version, unchanged, row.id],
+             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
+             WHERE cloud_id = ?3 AND sync_user_id = ?4",
+            params![row.server_version, unchanged, row.id, user_id],
         );
     }
 }
@@ -374,8 +456,8 @@ fn resolve_memory_conflicts(
             None => {
                 let _ = conn.execute(
                     "UPDATE user_memory SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
-                     needs_push = 0 WHERE cloud_id = ?2",
-                    params![now_z(), conflict.id],
+                     needs_push = 0 WHERE cloud_id = ?2 AND sync_user_id = ?3",
+                    params![now_z(), conflict.id, user_id],
                 );
             }
             Some(current) if current.is_deleted => {
@@ -383,17 +465,19 @@ fn resolve_memory_conflicts(
             }
             Some(current) => {
                 let preserve_local = sent_item.is_some_and(|item| {
-                    item.base_version == "0" || !memory_sync_content_matches(conn, item)
+                    item.base_version == "0" || !memory_sync_content_matches(conn, user_id, item)
                 });
                 if preserve_local {
                     let _ = conn.execute(
-                        "UPDATE user_memory SET server_version = ?1 WHERE cloud_id = ?2",
-                        params![current.server_version, conflict.id],
+                        "UPDATE user_memory SET server_version = ?1 \
+                          WHERE cloud_id = ?2 AND sync_user_id = ?3",
+                        params![current.server_version, conflict.id, user_id],
                     );
                 } else {
                     let _ = conn.execute(
-                        "UPDATE user_memory SET needs_push = 0 WHERE cloud_id = ?1",
-                        params![conflict.id],
+                        "UPDATE user_memory SET needs_push = 0 \
+                          WHERE cloud_id = ?1 AND sync_user_id = ?2",
+                        params![conflict.id, user_id],
                     );
                     apply_memory_deltas(conn, user_id, std::slice::from_ref(current));
                 }
@@ -408,14 +492,18 @@ fn resolve_memory_conflicts(
 
 /// Apply pulled memory deltas into the local SQLite DB.
 /// Per-row failures are logged and skipped so one bad row doesn't abort the page.
+///
+/// The dedup match is scoped to the signed-in account, so a delta can never
+/// rewrite a row left behind by a previous account on the same device.
 fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
         // Dedup: find existing local row.
         let existing: Option<(i64, i64)> = conn
             .query_row(
-                "SELECT id, needs_push FROM user_memory WHERE cloud_id = ?1",
-                params![d.id],
+                "SELECT id, needs_push FROM user_memory \
+                  WHERE cloud_id = ?1 AND sync_user_id = ?2",
+                params![d.id, user_id],
                 |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
             )
             .ok();
@@ -464,16 +552,12 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
             let topic = format!("cloud:{}", &d.id);
             let created_at = to_z_datetime(&d.created_at);
             let updated_at = to_z_datetime(&d.updated_at);
-            // Ignore user_id in gather/push (no user_id on user_memory) but for INSERT
-            // we need to satisfy any user_id column that may exist. The table as created
-            // in v46 has no user_id; we pass it only to write_cursor.
-            let _ = user_id; // user_id used only for cursor; user_memory has no user_id col
             let r = conn.execute(
                 "INSERT INTO user_memory \
                  (cloud_id, category, topic, content, importance, source, \
                   created_at, updated_at, created_at_utc, server_version, \
-                  needs_push, app_mode) \
-                 VALUES (?1, ?2, ?3, ?4, 5, ?5, ?6, ?7, ?8, ?9, 0, 'cloud')",
+                  needs_push, app_mode, sync_user_id) \
+                 VALUES (?1, ?2, ?3, ?4, 5, ?5, ?6, ?7, ?8, ?9, 0, 'cloud', ?10)",
                 params![
                     d.id,
                     category,
@@ -483,7 +567,8 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
                     created_at,
                     updated_at,
                     d.created_at,
-                    d.server_version
+                    d.server_version,
+                    user_id
                 ],
             );
             match r {
@@ -569,7 +654,10 @@ async fn sync_memories_now_inner(
 
     let push_memories = {
         let conn = db.connection().map_err(|e| e.to_string())?;
-        gather_push_memories(&conn)
+        ensure_memory_owner_column(&conn)
+            .map_err(|e| format!("memory_sync: ensure owner column: {e}"))?;
+        claim_unowned_memories(&conn, user_id);
+        gather_push_memories(&conn, user_id)
             .map_err(|e| format!("memory_sync: gather push memories: {e}"))?
     };
 
@@ -608,7 +696,7 @@ async fn sync_memories_now_inner(
 
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            ack_clear_memories(&conn, &push_resp.applied, &body.memories);
+            ack_clear_memories(&conn, user_id, &push_resp.applied, &body.memories);
             resolve_memory_conflicts(&conn, user_id, &push_resp.conflicts, &body.memories);
         }
     }
@@ -676,10 +764,20 @@ mod tests {
     use crate::data::db::migrations::run_migrations;
     use rusqlite::Connection;
 
+    /// The signed-in account for every test that is not about account scoping.
+    const TEST_USER: &str = "u1";
+
     fn fresh_db() -> Connection {
         let conn = Connection::open_in_memory().expect("in-memory db");
         run_migrations(&conn).expect("migrations");
+        ensure_memory_owner_column(&conn).expect("owner column");
         conn
+    }
+
+    /// Stamp everything cloud-mode as `TEST_USER`, standing in for the adoption
+    /// the sync driver performs before it gathers.
+    fn own_local_rows(conn: &Connection) {
+        claim_unowned_memories(conn, TEST_USER);
     }
 
     // ── Test 1: Migration v68 columns/indexes exist ──────────────────────────
@@ -784,7 +882,8 @@ mod tests {
         assert_eq!(needs_push, 0, "local memory MUST NOT get needs_push=1");
 
         // Push gather also excludes it.
-        let push_mems = gather_push_memories(&conn).unwrap();
+        own_local_rows(&conn);
+        let push_mems = gather_push_memories(&conn, TEST_USER).unwrap();
         assert_eq!(
             push_mems.len(),
             0,
@@ -816,7 +915,8 @@ mod tests {
         )
         .unwrap();
 
-        let push_mems = gather_push_memories(&conn).unwrap();
+        own_local_rows(&conn);
+        let push_mems = gather_push_memories(&conn, TEST_USER).unwrap();
         assert_eq!(
             push_mems.len(),
             1,
@@ -865,7 +965,8 @@ mod tests {
             server_version: "100".to_string(),
         };
 
-        apply_memory_deltas(&conn, "u1", &[delta]);
+        own_local_rows(&conn);
+        apply_memory_deltas(&conn, TEST_USER, &[delta]);
 
         // Must have exactly one row (no duplicate).
         let count: i64 = conn
@@ -923,7 +1024,8 @@ mod tests {
             server_version: "200".to_string(),
         };
 
-        apply_memory_deltas(&conn, "u1", &[delta]);
+        own_local_rows(&conn);
+        apply_memory_deltas(&conn, TEST_USER, &[delta]);
 
         // Row still exists (soft delete).
         let (still_exists, deleted_at_utc): (i64, Option<String>) = conn
@@ -1074,8 +1176,9 @@ mod tests {
             id: cid.clone(),
             server_version: "99".to_string(),
         }];
-        let sent = gather_push_memories(&conn).unwrap();
-        ack_clear_memories(&conn, &acked, &sent);
+        own_local_rows(&conn);
+        let sent = gather_push_memories(&conn, TEST_USER).unwrap();
+        ack_clear_memories(&conn, TEST_USER, &acked, &sent);
 
         let (needs_push, sv): (i64, Option<String>) = conn
             .query_row(
@@ -1103,7 +1206,8 @@ mod tests {
         .unwrap();
         let mem_id = conn.last_insert_rowid();
         mark_memory_for_push(&conn, mem_id).unwrap();
-        let sent = gather_push_memories(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_memories(&conn, TEST_USER).unwrap();
         let cloud_id = sent[0].id.clone();
 
         conn.execute(
@@ -1113,6 +1217,7 @@ mod tests {
         .unwrap();
         ack_clear_memories(
             &conn,
+            TEST_USER,
             &[AckedMemory {
                 id: cloud_id,
                 server_version: "12".to_string(),
@@ -1148,7 +1253,8 @@ mod tests {
             params![mem_id],
         )
         .unwrap();
-        let sent = gather_push_memories(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_memories(&conn, TEST_USER).unwrap();
         let cloud_id = sent[0].id.clone();
         conn.execute(
             "UPDATE user_memory SET content = 'later edit', needs_push = 1 WHERE id = ?1",
@@ -1205,6 +1311,122 @@ mod tests {
         assert_eq!(fixture.memory_push.memories[0].base_version, "7");
         assert_eq!(fixture.memory_push_response.protocol_version, 2);
         assert_eq!(fixture.memory_push_response.conflicts.len(), 1);
+    }
+
+    // ── Account scoping: one device, two accounts ────────────────────────────
+
+    fn insert_owned_cloud_memory(
+        conn: &Connection,
+        topic: &str,
+        content: &str,
+        cloud_id: &str,
+        owner: Option<&str>,
+    ) {
+        conn.execute(
+            "INSERT INTO user_memory (category, topic, content, importance, app_mode, cloud_id, \
+             server_version, needs_push, sync_user_id, created_at, updated_at) \
+             VALUES ('Fact', ?1, ?2, 5, 'cloud', ?3, '5', 1, ?4, CURRENT_TIMESTAMP, \
+             CURRENT_TIMESTAMP)",
+            params![topic, content, cloud_id, owner],
+        )
+        .unwrap();
+    }
+
+    fn live_delta(cloud_id: &str, content: &str, server_version: &str) -> MemoryDelta {
+        MemoryDelta {
+            id: cloud_id.to_string(),
+            content: content.to_string(),
+            category: Some("Fact".to_string()),
+            source: None,
+            pinned: false,
+            is_deleted: false,
+            created_at: "2026-07-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-07-02T00:00:00.000Z".to_string(),
+            server_version: server_version.to_string(),
+        }
+    }
+
+    #[test]
+    fn sync_scoping_push_skips_memories_owned_by_another_account() {
+        let conn = fresh_db();
+        insert_owned_cloud_memory(&conn, "a_topic", "A's memory", "cloud-a", Some("user-a"));
+        insert_owned_cloud_memory(&conn, "b_topic", "B's memory", "cloud-b", Some("user-b"));
+
+        let sent = gather_push_memories(&conn, "user-b").unwrap();
+
+        assert_eq!(
+            sent.len(),
+            1,
+            "a push under user-b must carry only user-b's rows"
+        );
+        assert_eq!(
+            sent[0].id, "cloud-b",
+            "user-a's memory must never reach user-b's bearer token"
+        );
+    }
+
+    #[test]
+    fn sync_scoping_pull_leaves_another_accounts_memory_untouched() {
+        let conn = fresh_db();
+        insert_owned_cloud_memory(&conn, "a_topic", "A's memory", "cloud-a", Some("user-a"));
+        conn.execute(
+            "UPDATE user_memory SET needs_push = 0 WHERE topic = 'a_topic'",
+            [],
+        )
+        .unwrap();
+
+        apply_memory_deltas(
+            &conn,
+            "user-b",
+            &[live_delta("cloud-a", "recalled under user-b", "9")],
+        );
+
+        let (content, version): (String, String) = conn
+            .query_row(
+                "SELECT content, server_version FROM user_memory WHERE topic = 'a_topic'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            content, "A's memory",
+            "a delta pulled under user-b must not rewrite user-a's row"
+        );
+        assert_eq!(version, "5", "nor rebase its revision");
+    }
+
+    #[test]
+    fn sync_scoping_pull_stamps_the_pulling_account_as_owner() {
+        let conn = fresh_db();
+
+        apply_memory_deltas(&conn, "user-b", &[live_delta("cloud-new", "B's memory", "3")]);
+
+        let owner: Option<String> = conn
+            .query_row(
+                "SELECT sync_user_id FROM user_memory WHERE cloud_id = 'cloud-new'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(owner.as_deref(), Some("user-b"));
+    }
+
+    #[test]
+    fn sync_scoping_refuses_to_adopt_unowned_rows_once_a_second_account_is_known() {
+        let conn = fresh_db();
+        // user-a has synced on this device; the row predates the owner stamp.
+        write_memory_cursor(&conn, "user-a", "5");
+        insert_owned_cloud_memory(&conn, "legacy", "legacy content", "cloud-legacy", None);
+
+        claim_unowned_memories(&conn, "user-b");
+        assert!(
+            gather_push_memories(&conn, "user-b").unwrap().is_empty(),
+            "an unowned row must not be adopted by a second account"
+        );
+
+        // The sole account on the device still adopts its own legacy rows.
+        claim_unowned_memories(&conn, "user-a");
+        assert_eq!(gather_push_memories(&conn, "user-a").unwrap().len(), 1);
     }
 
     // ── Test 10: Token-empty gate (no network egress) ─────────────────────────

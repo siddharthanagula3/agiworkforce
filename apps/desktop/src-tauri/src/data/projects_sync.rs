@@ -35,6 +35,17 @@
 //! Conflict resolution is compare-and-swap against `baseVersion`, a server-owned
 //! monotonic revision. Client timestamps never cross the wire or choose a winner.
 //!
+//! ACCOUNT SCOPING: one desktop install serves many accounts and the local DB
+//! survives sign-out, so every push, ack, conflict and pull statement is scoped
+//! to `projects.sync_user_id` the same way `cloud_sync.rs` scopes on
+//! `conversations.user_id`. Rows created before that stamp existed are adopted
+//! once, and only while no second account is known to this device
+//! (`only_account_on_device`). Residual gap: a project created in cloud mode by
+//! an account that then signs out WITHOUT ever completing a sync is still
+//! unowned, so the next account on the device adopts it. Closing that needs the
+//! owner stamped at creation in `sys/commands/projects.rs`, which is outside
+//! this engine.
+//!
 //! PUSH: `#[serde(skip_serializing_if = "Option::is_none")]` on ALL optional
 //! fields. The server Zod schema uses `.optional()` (not `.nullable()`) for
 //! description, instructions, color, isArchived, metadata, deletedAt —
@@ -254,6 +265,67 @@ fn write_project_cursor(conn: &Connection, user_id: &str, cursor: &str) {
 }
 
 // ---------------------------------------------------------------------------
+// Account scoping — which account owns a local cloud row.
+// ---------------------------------------------------------------------------
+
+/// Add the owner stamp to `projects` when the local DB predates it. The engine
+/// runs it on every cycle rather than relying on a schema migration because a
+/// database can be reopened by an older build between two syncs, and an
+/// unscoped statement here would push one account's projects under another
+/// account's bearer token.
+fn ensure_project_owner_column(conn: &Connection) -> SqlResult<()> {
+    let exists: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info('projects') WHERE name = 'sync_user_id'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !exists {
+        conn.execute("ALTER TABLE projects ADD COLUMN sync_user_id TEXT", [])?;
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_sync_user_id ON projects(sync_user_id)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// True when nothing on this device is known to belong to a different account.
+/// Both probes fail closed, because an unowned row on a device that has served
+/// two accounts could belong to either one.
+fn only_account_on_device(conn: &Connection, user_id: &str) -> bool {
+    let other_synced: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cloud_sync_state WHERE user_id <> ?1",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+    let other_owned: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM projects WHERE sync_user_id IS NOT NULL AND sync_user_id <> ?1",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+    other_synced == 0 && other_owned == 0
+}
+
+/// Adopt cloud rows written before the owner stamp existed. Without this an
+/// upgrading install would strand its pending projects unpushable forever; with
+/// the single-account guard it can never adopt a row belonging to someone else.
+fn claim_unowned_projects(conn: &Connection, user_id: &str) -> usize {
+    if !only_account_on_device(conn, user_id) {
+        return 0;
+    }
+    conn.execute(
+        "UPDATE projects SET sync_user_id = ?1 \
+         WHERE sync_user_id IS NULL AND app_mode = 'cloud'",
+        params![user_id],
+    )
+    .unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
 // Identity minting.
 // ---------------------------------------------------------------------------
 
@@ -299,16 +371,18 @@ pub fn soft_delete_project_for_push(conn: &Connection, project_id: &str) -> SqlR
 // DB-only push helpers.
 // ---------------------------------------------------------------------------
 
-/// Gather cloud projects that need pushing (needs_push=1, app_mode='cloud').
+/// Gather cloud projects that need pushing (needs_push=1, app_mode='cloud')
+/// and owned by the signed-in account.
 /// Tombstoned rows (deleted_at_utc IS NOT NULL) are included so deletes propagate.
-fn gather_push_projects(conn: &Connection) -> SqlResult<Vec<PushProject>> {
+fn gather_push_projects(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushProject>> {
     let mut stmt = conn.prepare(
         "SELECT cloud_id, name, description, custom_instructions, color, is_archived, \
                 metadata, deleted_at_utc, COALESCE(server_version, '0') \
          FROM projects \
-         WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL",
+         WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL \
+           AND sync_user_id = ?1",
     )?;
-    let rows = stmt.query_map([], |row| {
+    let rows = stmt.query_map(params![user_id], |row| {
         let cloud_id: String = row.get(0)?;
         let name: String = row.get(1)?;
         let description: Option<String> = row.get(2)?;
@@ -355,8 +429,13 @@ fn project_sync_content_matches(left: &PushProject, right: &PushProject) -> bool
 }
 
 /// Ack-clear: mark acked projects as needs_push=0 and store server_version.
-fn ack_clear_projects(conn: &Connection, acked: &[AckedProject], sent: &[PushProject]) {
-    let current = gather_push_projects(conn).unwrap_or_default();
+fn ack_clear_projects(
+    conn: &Connection,
+    user_id: &str,
+    acked: &[AckedProject],
+    sent: &[PushProject],
+) {
+    let current = gather_push_projects(conn, user_id).unwrap_or_default();
     for row in acked {
         let unchanged = sent
             .iter()
@@ -369,8 +448,8 @@ fn ack_clear_projects(conn: &Connection, acked: &[AckedProject], sent: &[PushPro
             "UPDATE projects \
                 SET server_version = ?1, \
                     needs_push = CASE WHEN ?3 THEN 0 ELSE needs_push END \
-              WHERE cloud_id = ?2 AND app_mode = 'cloud'",
-            params![row.server_version, row.id, unchanged],
+              WHERE cloud_id = ?2 AND app_mode = 'cloud' AND sync_user_id = ?4",
+            params![row.server_version, row.id, unchanged, user_id],
         );
     }
 }
@@ -380,16 +459,18 @@ fn ack_clear_projects(conn: &Connection, acked: &[AckedProject], sent: &[PushPro
 /// content, advance only its base revision, and leave it dirty for the next cycle.
 fn apply_project_conflicts(
     conn: &Connection,
+    user_id: &str,
     conflicts: &[ProjectConflict],
     sent: &[PushProject],
 ) -> usize {
     let mut resolved = 0;
-    let current_local = gather_push_projects(conn).unwrap_or_default();
+    let current_local = gather_push_projects(conn, user_id).unwrap_or_default();
     for conflict in conflicts {
         let Some(current) = &conflict.current else {
             let _ = conn.execute(
-                "DELETE FROM projects WHERE cloud_id = ?1 AND app_mode = 'cloud'",
-                params![conflict.id],
+                "DELETE FROM projects \
+                  WHERE cloud_id = ?1 AND app_mode = 'cloud' AND sync_user_id = ?2",
+                params![conflict.id, user_id],
             );
             resolved += 1;
             continue;
@@ -413,11 +494,11 @@ fn apply_project_conflicts(
         if unchanged {
             let _ = conn.execute(
                 "UPDATE projects SET needs_push = 0 \
-                  WHERE cloud_id = ?1 AND app_mode = 'cloud'",
-                params![conflict.id],
+                  WHERE cloud_id = ?1 AND app_mode = 'cloud' AND sync_user_id = ?2",
+                params![conflict.id, user_id],
             );
         }
-        resolved += apply_project_deltas(conn, std::slice::from_ref(current));
+        resolved += apply_project_deltas(conn, user_id, std::slice::from_ref(current));
     }
     resolved
 }
@@ -430,18 +511,20 @@ fn apply_project_conflicts(
 /// Per-row failures are logged and skipped so one bad row doesn't abort the page.
 ///
 /// Dedup: match on `cloud_id` (not on `id`) so the origin device finds its own
-/// row by cloud_id when pulling its own echo back.
+/// row by cloud_id when pulling its own echo back. The match is also scoped to
+/// the signed-in account, so a delta can never rewrite a row left behind by a
+/// previous account on the same device.
 ///
 /// For new rows from another device: `id = d.id` (the UUIDv7 cloud id) since
 /// projects use TEXT PKs — no surrogate needed unlike memory's category+topic.
-fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
+fn apply_project_deltas(conn: &Connection, user_id: &str, deltas: &[ProjectDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
         // Dedup: find existing local row by cloud_id.
         let existing: Option<(String, i64)> = conn
             .query_row(
-                "SELECT id, needs_push FROM projects WHERE cloud_id = ?1",
-                params![d.id],
+                "SELECT id, needs_push FROM projects WHERE cloud_id = ?1 AND sync_user_id = ?2",
+                params![d.id, user_id],
                 |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
             )
             .ok();
@@ -512,8 +595,10 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
                 "INSERT INTO projects \
                  (id, name, description, custom_instructions, files, conversation_ids, \
                   color, is_archived, metadata, created_at, updated_at, \
-                  created_at_utc, server_version, needs_push, app_mode, cloud_id) \
-                 VALUES (?1, ?2, ?3, ?4, '[]', '[]', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, 'cloud', ?1)",
+                  created_at_utc, server_version, needs_push, app_mode, cloud_id, \
+                  sync_user_id) \
+                 VALUES (?1, ?2, ?3, ?4, '[]', '[]', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, 'cloud', ?1, \
+                  ?12)",
                 params![
                     d.id, // id = cloud_id (TEXT PK)
                     d.name,
@@ -529,6 +614,7 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
                     updated_at,
                     d.created_at, // created_at_utc (raw from server)
                     d.server_version,
+                    user_id,
                 ],
             );
             match r {
@@ -607,7 +693,10 @@ async fn sync_projects_now_inner(
 
     let push_projects = {
         let conn = db.connection().map_err(|e| e.to_string())?;
-        gather_push_projects(&conn)
+        ensure_project_owner_column(&conn)
+            .map_err(|e| format!("projects_sync: ensure owner column: {e}"))?;
+        claim_unowned_projects(&conn, user_id);
+        gather_push_projects(&conn, user_id)
             .map_err(|e| format!("projects_sync: gather push projects: {e}"))?
     };
 
@@ -639,8 +728,8 @@ async fn sync_projects_now_inner(
 
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            ack_clear_projects(&conn, &push_resp.applied, &body.projects);
-            apply_project_conflicts(&conn, &push_resp.conflicts, &body.projects);
+            ack_clear_projects(&conn, user_id, &push_resp.applied, &body.projects);
+            apply_project_conflicts(&conn, user_id, &push_resp.conflicts, &body.projects);
         }
     }
 
@@ -680,7 +769,7 @@ async fn sync_projects_now_inner(
 
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            let applied = apply_project_deltas(&conn, &pull_resp.projects);
+            let applied = apply_project_deltas(&conn, user_id, &pull_resp.projects);
             total_pulled += applied;
             write_project_cursor(&conn, user_id, &new_cursor);
         }
@@ -707,10 +796,20 @@ mod tests {
     use crate::data::db::migrations::run_migrations;
     use rusqlite::Connection;
 
+    /// The signed-in account for every test that is not about account scoping.
+    const TEST_USER: &str = "user-a";
+
     fn fresh_db() -> Connection {
         let conn = Connection::open_in_memory().expect("in-memory db");
         run_migrations(&conn).expect("migrations");
+        ensure_project_owner_column(&conn).expect("owner column");
         conn
+    }
+
+    /// Stamp everything cloud-mode as `TEST_USER`, standing in for the adoption
+    /// the sync driver performs before it gathers.
+    fn own_local_rows(conn: &Connection) {
+        claim_unowned_projects(conn, TEST_USER);
     }
 
     fn live_delta(id: &str, name: &str, server_version: &str) -> ProjectDelta {
@@ -834,7 +933,8 @@ mod tests {
         assert_eq!(needs_push, 0, "local project MUST NOT get needs_push=1");
 
         // Push gather also excludes it.
-        let push_projs = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let push_projs = gather_push_projects(&conn, TEST_USER).unwrap();
         assert_eq!(
             push_projs.len(),
             0,
@@ -869,7 +969,8 @@ mod tests {
         )
         .unwrap();
 
-        let push_projs = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let push_projs = gather_push_projects(&conn, TEST_USER).unwrap();
         assert_eq!(
             push_projs.len(),
             1,
@@ -923,7 +1024,8 @@ mod tests {
             server_version: "100".to_string(),
         };
 
-        apply_project_deltas(&conn, &[delta]);
+        own_local_rows(&conn);
+        apply_project_deltas(&conn, TEST_USER, &[delta]);
 
         // Must have exactly one row (no duplicate).
         let count: i64 = conn
@@ -984,7 +1086,8 @@ mod tests {
             server_version: "200".to_string(),
         };
 
-        apply_project_deltas(&conn, &[delta]);
+        own_local_rows(&conn);
+        apply_project_deltas(&conn, TEST_USER, &[delta]);
 
         // Row still exists (soft delete).
         let (still_exists, deleted_at_utc, needs_push): (i64, Option<String>, i64) = conn
@@ -1045,7 +1148,7 @@ mod tests {
             server_version: "77".to_string(),
         };
 
-        apply_project_deltas(&conn, &[delta]);
+        apply_project_deltas(&conn, TEST_USER, &[delta]);
 
         // Row must now exist (1 row).
         let (row_count, description, instructions): (i64, String, String) = conn
@@ -1295,8 +1398,10 @@ mod tests {
         )
         .unwrap();
 
+        own_local_rows(&conn);
         apply_project_deltas(
             &conn,
+            TEST_USER,
             &[live_delta("cloud-race", "stale server snapshot", "6")],
         );
 
@@ -1323,13 +1428,14 @@ mod tests {
             [],
         )
         .unwrap();
-        let sent = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_projects(&conn, TEST_USER).unwrap();
         let conflicts = vec![ProjectConflict {
             id: "cloud-stale".to_string(),
             current: Some(live_delta("cloud-stale", "server winner", "6")),
         }];
 
-        apply_project_conflicts(&conn, &conflicts, &sent);
+        apply_project_conflicts(&conn, TEST_USER, &conflicts, &sent);
 
         let (name, version, dirty): (String, String, i64) = conn
             .query_row(
@@ -1354,7 +1460,8 @@ mod tests {
             [],
         )
         .unwrap();
-        let sent = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_projects(&conn, TEST_USER).unwrap();
         conn.execute(
             "UPDATE projects SET name='newer in-flight edit', updated_at='2099-01-01 00:00:00', \
              needs_push=1 WHERE id='p-raced'",
@@ -1366,7 +1473,7 @@ mod tests {
             current: Some(live_delta("cloud-raced", "server winner", "6")),
         }];
 
-        apply_project_conflicts(&conn, &conflicts, &sent);
+        apply_project_conflicts(&conn, TEST_USER, &conflicts, &sent);
 
         let (name, version, dirty): (String, String, i64) = conn
             .query_row(
@@ -1392,7 +1499,8 @@ mod tests {
             [],
         )
         .unwrap();
-        let sent = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_projects(&conn, TEST_USER).unwrap();
         conn.execute(
             "UPDATE projects SET name='newer edit with same clock', needs_push=1 \
              WHERE id='p-same-clock'",
@@ -1404,7 +1512,7 @@ mod tests {
             current: Some(live_delta("cloud-same-clock", "server winner", "6")),
         }];
 
-        apply_project_conflicts(&conn, &conflicts, &sent);
+        apply_project_conflicts(&conn, TEST_USER, &conflicts, &sent);
 
         let (name, version, dirty): (String, String, i64) = conn
             .query_row(
@@ -1429,14 +1537,15 @@ mod tests {
             [],
         )
         .unwrap();
-        let sent = gather_push_projects(&conn).unwrap();
+        own_local_rows(&conn);
+        let sent = gather_push_projects(&conn, TEST_USER).unwrap();
         assert_eq!(sent[0].base_version, "0");
         let conflicts = vec![ProjectConflict {
             id: "cloud-legacy".to_string(),
             current: Some(live_delta("cloud-legacy", "server baseline", "6")),
         }];
 
-        apply_project_conflicts(&conn, &conflicts, &sent);
+        apply_project_conflicts(&conn, TEST_USER, &conflicts, &sent);
 
         let (name, version, dirty): (String, String, i64) = conn
             .query_row(
@@ -1448,6 +1557,106 @@ mod tests {
         assert_eq!(name, "legacy offline edit");
         assert_eq!(version, "6");
         assert_eq!(dirty, 1);
+    }
+
+    // ── Account scoping: one device, two accounts ────────────────────────────
+
+    fn insert_owned_cloud_project(
+        conn: &Connection,
+        id: &str,
+        name: &str,
+        cloud_id: &str,
+        owner: Option<&str>,
+    ) {
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             sync_user_id, created_at, updated_at) \
+             VALUES (?1, ?2, '', '', '[]', '[]', 0, 'cloud', ?3, '5', 1, ?4, \
+             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![id, name, cloud_id, owner],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn sync_scoping_push_skips_projects_owned_by_another_account() {
+        let conn = fresh_db();
+        insert_owned_cloud_project(&conn, "p-a", "A's project", "cloud-a", Some("user-a"));
+        insert_owned_cloud_project(&conn, "p-b", "B's project", "cloud-b", Some("user-b"));
+
+        let sent = gather_push_projects(&conn, "user-b").unwrap();
+
+        assert_eq!(
+            sent.len(),
+            1,
+            "a push under user-b must carry only user-b's rows"
+        );
+        assert_eq!(
+            sent[0].id, "cloud-b",
+            "user-a's project must never reach user-b's bearer token"
+        );
+    }
+
+    #[test]
+    fn sync_scoping_pull_leaves_another_accounts_project_untouched() {
+        let conn = fresh_db();
+        insert_owned_cloud_project(&conn, "p-a", "A's project", "cloud-a", Some("user-a"));
+        conn.execute("UPDATE projects SET needs_push = 0 WHERE id = 'p-a'", [])
+            .unwrap();
+
+        apply_project_deltas(
+            &conn,
+            "user-b",
+            &[live_delta("cloud-a", "recalled under user-b", "9")],
+        );
+
+        let (name, version): (String, String) = conn
+            .query_row(
+                "SELECT name, server_version FROM projects WHERE id = 'p-a'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            name, "A's project",
+            "a delta pulled under user-b must not rewrite user-a's row"
+        );
+        assert_eq!(version, "5", "nor rebase its revision");
+    }
+
+    #[test]
+    fn sync_scoping_pull_stamps_the_pulling_account_as_owner() {
+        let conn = fresh_db();
+
+        apply_project_deltas(&conn, "user-b", &[live_delta("cloud-new", "B's project", "3")]);
+
+        let owner: Option<String> = conn
+            .query_row(
+                "SELECT sync_user_id FROM projects WHERE cloud_id = 'cloud-new'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(owner.as_deref(), Some("user-b"));
+    }
+
+    #[test]
+    fn sync_scoping_refuses_to_adopt_unowned_rows_once_a_second_account_is_known() {
+        let conn = fresh_db();
+        // user-a has synced on this device; the row predates the owner stamp.
+        write_project_cursor(&conn, "user-a", "5");
+        insert_owned_cloud_project(&conn, "p-legacy", "legacy", "cloud-legacy", None);
+
+        claim_unowned_projects(&conn, "user-b");
+        assert!(
+            gather_push_projects(&conn, "user-b").unwrap().is_empty(),
+            "an unowned row must not be adopted by a second account"
+        );
+
+        // The sole account on the device still adopts its own legacy rows.
+        claim_unowned_projects(&conn, "user-a");
+        assert_eq!(gather_push_projects(&conn, "user-a").unwrap().len(), 1);
     }
 
     // ── Test 9: Ack-clear ────────────────────────────────────────────────────
@@ -1477,8 +1686,9 @@ mod tests {
             id: cid.clone(),
             server_version: "99".to_string(),
         }];
-        let sent = gather_push_projects(&conn).unwrap();
-        ack_clear_projects(&conn, &acked, &sent);
+        own_local_rows(&conn);
+        let sent = gather_push_projects(&conn, TEST_USER).unwrap();
+        ack_clear_projects(&conn, TEST_USER, &acked, &sent);
 
         let (needs_push, sv): (i64, Option<String>) = conn
             .query_row(
