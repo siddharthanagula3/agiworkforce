@@ -462,6 +462,10 @@ export function projectDesktopCloudSafeSettings(
       occupation: state.personalization.occupation,
       warmth: state.personalization.warmth * 20,
     },
+    // `locale` is the INTERFACE language only — it lands on i18n below. Mobile's
+    // spoken voice language is a separate preference under `speechLocale`
+    // (apps/mobile/services/cloudSettingsMapping.ts); never widen this key to
+    // mean both, or the two surfaces retune each other on every sync cycle.
     language: { locale: state.windowPreferences.language },
     capabilities: {
       memory: state.chatPreferences.memoryEnabled === true,

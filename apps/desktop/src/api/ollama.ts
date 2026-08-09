@@ -12,6 +12,7 @@
  * - ollama_delete_model - Remove an installed model
  */
 
+import { OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 
 // ============================================================================
@@ -56,8 +57,10 @@ export interface OllamaModel {
 // Configuration
 // ============================================================================
 
-const OLLAMA_TIMEOUT_MS = 10000;
-const OLLAMA_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+// Deliberately not the `OLLAMA_PULL_TIMEOUT_MS` in constants/timeouts.ts: that
+// one is a minute, and a pull streams a whole model over the user's connection,
+// so anything short of a day would abort large downloads on slow links.
+const OLLAMA_MODEL_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 // ============================================================================
 // Helper Functions
@@ -200,7 +203,7 @@ export async function ollamaPullModel(modelName: string, baseUrl?: string): Prom
     await invokeWithTimeout<void>(
       'ollama_pull_model',
       { modelName, baseUrl },
-      OLLAMA_PULL_TIMEOUT_MS,
+      OLLAMA_MODEL_PULL_TIMEOUT_MS,
     );
   } catch (error) {
     throw new Error(`Failed to pull model '${modelName}': ${error}`);

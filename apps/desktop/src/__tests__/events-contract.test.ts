@@ -41,7 +41,12 @@ function listenedEvents(): Map<string, string[]> {
     if (file.includes('__tests__')) continue;
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(LISTEN_PATTERN)) {
+      // A capture group is `string | undefined` under noUncheckedIndexedAccess,
+      // and the skip is not just to satisfy the compiler: an unmatched group
+      // would otherwise be keyed as the literal "undefined" and read as an event
+      // name that no Rust side could ever emit.
       const name = match[2];
+      if (!name) continue;
       const sites = events.get(name) ?? [];
       sites.push(file.slice(DESKTOP_ROOT.length + 1));
       events.set(name, sites);
@@ -54,7 +59,9 @@ function emittedEvents(): Set<string> {
   const events = new Set<string>();
   for (const file of collectFiles(RUST_ROOT, ['.rs'])) {
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(EMIT_PATTERN)) events.add(match[1]);
+    for (const match of source.matchAll(EMIT_PATTERN)) {
+      if (match[1]) events.add(match[1]);
+    }
   }
   return events;
 }
