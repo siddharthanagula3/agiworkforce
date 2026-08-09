@@ -313,6 +313,32 @@ describe('LLMCostCalculator — cache-write billing', () => {
     expect(withWrites).toBe(withoutWrites);
   });
 
+  it('bills a cache READ at the full input rate when the catalog prices none', () => {
+    // grok-4.5 publishes no cached_input. Billing a tenth of the input rate
+    // would invent a discount the catalog does not publish and would
+    // undercharge the same request the desktop calculator
+    // (apps/desktop/src-tauri/src/core/llm/cost_calculator.rs) bills in full.
+    // This is the reachable case: grok-4.5 is in
+    // tierAllowedModels.flagship_additions and its xAI adapter reuses the
+    // OpenAI stream translator, which reports cached prompt tokens.
+    const pricing = LLMCostCalculator.getPricing('xai', 'grok-4.5', PRICED_ON);
+    expect(typeof pricing.cachedInputCostPer1MTokens).not.toBe('number');
+
+    // 1M prompt served entirely from cache: 1M * $2 = 200 cents, not 20.
+    const cents = LLMCostCalculator.calculateCost(
+      'xai',
+      'grok-4.5',
+      {
+        promptTokens: 1_000_000,
+        completionTokens: 0,
+        totalTokens: 1_000_000,
+        cacheReadInputTokens: 1_000_000,
+      },
+      PRICED_ON,
+    );
+    expect(cents).toBe(200);
+  });
+
   it('keeps Anthropic disjoint accounting distinct from OpenAI subset accounting', () => {
     expect(
       LLMCostCalculator.getPricing('anthropic', 'claude-opus-5', PRICED_ON)

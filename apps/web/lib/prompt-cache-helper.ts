@@ -1,7 +1,11 @@
 import 'server-only';
 
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, resolveEffectiveModelPricing } from '@agiworkforce/types';
 import { logger } from './logger';
+import {
+  CACHE_WRITE_FALLBACK_MULTIPLIERS,
+  resolveCacheRates,
+} from '@/lib/services/llm-cost-calculator';
 
 /**
  * Minimal request shape this module needs: a message list with a findable
@@ -32,6 +36,29 @@ function getCachingModel(model: string) {
   const meta = getModelMetadataById(model);
   if (!meta || (meta.capabilities?.caching !== true && meta.cached_input == null)) return null;
   return meta;
+}
+
+/**
+ * The model's published per-million cache-READ price on `pricedAt`, or
+ * `undefined` when the catalog prices no cache read for it (or does not know
+ * the model at all). Dated `pricingSchedule` windows resolve the same way the
+ * billing path resolves them, so analytics quote the rate the request was
+ * billed at.
+ *
+ * Known limitation: the older `post_promo_prices` two-phase form is NOT layered
+ * on here, while the caller's `inputCostPerMtok` comes from
+ * `LLMCostCalculator.getPricing`, which does layer it. No shipped model sets
+ * `post_promo_prices.cached_input`, so the two rates cannot disagree today; the
+ * moment one does, this must resolve promos the same way `getPricing` does.
+ */
+function getDeclaredCacheReadPerMtok(
+  model: string | undefined,
+  pricedAt: Date,
+): number | undefined {
+  const meta = model ? getModelMetadataById(model) : null;
+  if (!meta) return undefined;
+  const cachedInput = resolveEffectiveModelPricing(meta, pricedAt).cached_input;
+  return typeof cachedInput === 'number' ? cachedInput : undefined;
 }
 
 /**
@@ -86,18 +113,33 @@ export function calculateCacheSavings(
     cacheCreationInputTokens?: number;
     cachedInputTokens?: number;
     promptTokens?: number;
+    /**
+     * Model the response came from, used to read its published cache-READ
+     * price. Optional because a caller may have none; without it the read
+     * falls back to the input rate and the reported saving is zero rather than
+     * an invented discount.
+     */
+    model?: string;
   },
   inputCostPerMtok: number,
   /**
    * Per-million cache-WRITE price for this model, resolved from the catalog by
    * the caller (`LLMCostCalculator.getCacheWriteCostPerMtok`, which is date- and
    * provider-aware). Omitted only by callers with no model context, where the
-   * Anthropic-published 1.25x surcharge is the historical default. Passing the
+   * Anthropic-published surcharge is the historical default. Passing the
    * resolved rate is what keeps models that declare NO write price — every
    * pre-GPT-5.6 OpenAI model — reported at their free-write cost instead of an
    * invented 25% surcharge.
    */
-  cacheWriteCostPerMtok: number = inputCostPerMtok * 1.25,
+  cacheWriteCostPerMtok: number = inputCostPerMtok * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m,
+  /**
+   * Instant the rates are read at. The live caller
+   * (`app/api/llm/v1/chat/completions/lib/response-builder.ts`) passes the same
+   * `pricedAt` it used for the input and cache-write rates, so all three rates
+   * come from one pricing window even across a UTC day boundary. Defaults to
+   * now for callers that resolve rates themselves.
+   */
+  pricedAt: Date = new Date(),
 ): {
   tokensSavedByCache: number;
   savedCostCents: number;
@@ -106,11 +148,21 @@ export function calculateCacheSavings(
   const cachedTokens = response.cachedInputTokens || 0;
   const cacheWriteTokens = response.cacheCreationInputTokens || 0;
 
-  // Cached tokens cost 10% of normal price (cache-read discount = 90% off).
+  // The saving is the gap between the input rate and the model's OWN cache-read
+  // rate. A flat 0.1x here was wrong in both directions: it under-reported
+  // DeepSeek (which reads at 0.02x input) and claimed a 90% saving for every
+  // model the catalog leaves unpriced -- minimax-m3, grok-4.5, and any caller
+  // that passes no `model` at all -- none of which is a saving anyone received.
+  // Those now report zero saved, because `resolveCacheRates` prices an unpriced
+  // read at the full input rate.
+  const declaredCacheRead = getDeclaredCacheReadPerMtok(response.model, pricedAt);
+  const { read: cacheReadCostPerMtok } = resolveCacheRates({
+    inputCostPer1MTokens: inputCostPerMtok,
+    cachedInputCostPer1MTokens: declaredCacheRead,
+  });
+
   // inputCostPerMtok is in dollars per 1M tokens, so convert: tokens * $/Mtok / 1M * 100 cents/$
-  const normalCostCents = (cachedTokens * inputCostPerMtok) / 10_000;
-  const cachedCostCents = (cachedTokens * inputCostPerMtok * 0.1) / 10_000;
-  const savedCostCents = normalCostCents - cachedCostCents;
+  const savedCostCents = (cachedTokens * (inputCostPerMtok - cacheReadCostPerMtok)) / 10_000;
 
   // The full write cost, not just the surcharge, is reported here.
   // Note: Anthropic 1h TTL write is 2.0x — indistinguishable from 5m at this call

@@ -54,7 +54,12 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       cached_write: 6.25,
       cached_write_1h: 10.0,
     },
-    'gpt-5.6-sol': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
+    'gpt-5.6-sol': {
+      provider: 'openai',
+      inputCost: 5.0,
+      outputCost: 30.0,
+      cached_input: 0.5,
+    },
     // GPT-5.6 declares a cache-WRITE price (1.25x the uncached input rate).
     'gpt-5.6-terra': {
       provider: 'openai',
@@ -75,6 +80,19 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       inputCost: 0.14,
       outputCost: 0.28,
       cached_input: 0.0028,
+    },
+    // Mirrors the shipped catalog: prices no cache read, so its reads take the
+    // shared fallback. grok-4.5 is the live case — it is in
+    // tierAllowedModels.flagship_additions and its OpenAI-shaped stream fills
+    // cache-read counts — and it does NOT declare caching, which is the proof
+    // that the fallback keys on the missing price and not on the capability.
+    // minimax-m3 is the same shape with caching declared, but no tier list
+    // includes it.
+    'grok-4.5': {
+      provider: 'xai',
+      inputCost: 2.0,
+      outputCost: 10.0,
+      capabilities: { caching: false },
     },
   };
   return {
@@ -217,32 +235,34 @@ describe('cost calculation', () => {
   });
 
   it('bills only the uncached remainder at input rate for inclusive providers (openai)', () => {
-    // gpt-5.6-sol: input=$5/M, no catalog cached_input → cache_read falls back to 10%
-    // of input = $0.5/M. 1M prompt with 400k cache hits: 600k billed at $5/M +
-    // 400k at $0.5/M = $3.0 + $0.2 = $3.2 (NOT $5 + $0.2 = $5.2).
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    // gpt-5.6-terra: input=$2/M, cached_input=$0.2/M. 1M prompt with 400k cache
+    // hits: 600k billed at $2/M + 400k at $0.2/M = $1.2 + $0.08 = $1.28
+    // (NOT $2 + $0.08 = $2.08).
+    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 400_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.6-sol')!.costUsd;
-    expect(cost).toBeCloseTo(3.2, 4);
+    const cost = report.get('gpt-5.6-terra')!.costUsd;
+    expect(cost).toBeCloseTo(1.28, 4);
   });
 
-  it('falls back to 10% of input rate for cache_read when cached_input is absent', () => {
-    // gpt-5.6-sol: inputCost=$5, no cached_input in this fixture.
-    // 1M cache_read = 10% of $5 = $0.5.
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
-      inputTokens: 0,
+  it('bills cache_read at the full input rate when the catalog prices none', () => {
+    // grok-4.5 prices no cache read, so its reads bill at the full $2/M — the
+    // rate the desktop calculator and the gateway charge for the same request.
+    // A 90%-off fallback here would bill $0.20/M for a discount the catalog
+    // does not publish.
+    recordModelUsage(SESSION_A, 'grok-4.5', {
+      inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.6-sol')!.costUsd;
-    expect(cost).toBeCloseTo(0.5, 4);
+    const cost = report.get('grok-4.5')!.costUsd;
+    expect(cost).toBeCloseTo(2.0, 6);
   });
 
   it('charges cache_creation at 125% of input rate', () => {
@@ -345,8 +365,8 @@ describe('worked cost examples — all token classes, per provider', () => {
     expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.65, 6);
   });
 
-  it('openai (inclusive prompt): cached subset subtracted from input, read at 0.1x fallback', () => {
-    // gpt-5.6-sol: input=$5/M, output=$30/M, no catalog cached_input → read = 0.1*5 = $0.5/M.
+  it('openai (inclusive prompt): cached subset subtracted from the input bucket', () => {
+    // gpt-5.6-sol: input=$5/M, output=$30/M, catalog cached_input=$0.5/M.
     // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
     // subtracted from the billable-input bucket (billed once, at the read rate).
     //   billable input (1M - 400k) 600k * 5   /1e6 = $3.00
