@@ -64,12 +64,22 @@ describe('checkout subscription Price authority', () => {
     const stripe = {
       checkout: { sessions: { retrieve: mocks.retrieveSession } },
       customers: { retrieve: vi.fn() },
-      subscriptions: { retrieve: vi.fn() },
+      subscriptions: {
+        retrieve: vi.fn().mockResolvedValue({
+          id: 'sub_live_1',
+          status: 'active',
+          customer: 'cus_1',
+          items: { data: [{ id: 'si_1', quantity: 1, price: { id: 'price_pro_monthly' } }] },
+          cancel_at_period_end: false,
+          canceled_at: null,
+          discounts: [],
+        }),
+      },
     } as never;
     const session = {
       id: 'cs_1',
       customer: null,
-      subscription: null,
+      subscription: 'sub_live_1',
       client_reference_id: 'user_1',
       metadata: { user_id: 'user_1', plan_tier: 'max_15x' },
     } as never;

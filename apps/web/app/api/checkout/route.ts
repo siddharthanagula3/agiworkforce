@@ -17,7 +17,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { isSelfServePaidPlanTier, tierAtLeast } from '@agiworkforce/types';
+import { normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
@@ -41,6 +41,39 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
+
+// Subscription statuses Stripe is still billing for, and which therefore mean
+// "this account already bought something". `incomplete` is deliberately absent:
+// that is a checkout whose payment never succeeded, and treating it as live
+// would trap a buyer whose card was declined into never being able to retry.
+const BILLING_ACTIVE_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
+
+/**
+ * Ask Stripe whether this customer is already being billed for a subscription.
+ *
+ * The `subscriptions` table only knows what the webhook has written, and Stripe
+ * retries an undelivered event for hours. Between a completed payment and its
+ * webhook the buyer reads as unsubscribed, so a second click starts a second
+ * paid subscription — and because the webhook upserts on `user_id`, the older
+ * subscription id is overwritten and keeps billing with nothing in the product
+ * pointing at it. Stripe itself is the authoritative answer.
+ */
+async function findLiveStripeSubscription(
+  stripe: Stripe,
+  customerId: string,
+): Promise<Stripe.Subscription | null> {
+  const statuses: Stripe.SubscriptionListParams['status'][] = ['active', 'trialing', 'past_due'];
+  const pages = await Promise.all(
+    statuses.map((status) => stripe.subscriptions.list({ customer: customerId, status, limit: 1 })),
+  );
+  for (const page of pages) {
+    const subscription = page.data[0];
+    if (subscription) {
+      return subscription;
+    }
+  }
+  return null;
+}
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
@@ -158,16 +191,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const existingSubscription = subRows[0] ?? null;
 
-  const activeStatuses = new Set(['active', 'trialing', 'past_due']);
   const hasActiveSubscription =
     !!existingSubscription &&
     existingSubscription.plan_tier !== 'free' &&
-    activeStatuses.has(existingSubscription.status) &&
+    BILLING_ACTIVE_STATUSES.has(existingSubscription.status) &&
     isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
   const replacesUnlinkedEntitlement =
     !!existingSubscription &&
     existingSubscription.plan_tier !== 'free' &&
-    activeStatuses.has(existingSubscription.status) &&
+    BILLING_ACTIVE_STATUSES.has(existingSubscription.status) &&
     !isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
 
   // An unlinked paid row is normally a manually provisioned entitlement that
@@ -186,10 +218,23 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // The stored tier is compared after normalization rather than only when it is
+  // one of the SELF-SERVE tiers. A negotiated Enterprise entitlement is
+  // provisioned by hand and therefore has no Stripe subscription id, so it lands
+  // in `replacesUnlinkedEntitlement` as well — and `isSelfServePaidPlanTier`
+  // excludes 'enterprise', so the guard used to skip exactly the rows worth the
+  // most. The webhook upsert writes `plan_tier = excluded.plan_tier` on
+  // conflict (user_id) (app/api/stripe-webhook/lib/db.ts), so a contract
+  // customer who clicked "Get Basic" silently replaced their Enterprise
+  // entitlement — losing `enterprise_controls`, SSO/SCIM admin and negotiated
+  // limits — with Basic. `/api/upgrade` already refuses this for every tier via
+  // `isUpgrade` (lib/server/stripe-plan-change.ts); checkout now agrees.
+  //
+  // Unknown/legacy tiers normalize to 'free', which preserves today's behaviour
+  // of letting them buy any plan instead of trapping them behind a 409.
   if (
     replacesUnlinkedEntitlement &&
-    isSelfServePaidPlanTier(existingSubscription.plan_tier) &&
-    !tierAtLeast(plan, existingSubscription.plan_tier)
+    !tierAtLeast(plan, normalizeUIPlanTier(existingSubscription.plan_tier, 'free'))
   ) {
     throw createError.conflict(
       'Use billing management to downgrade. Checkout cannot replace an existing entitlement with a lower plan.',
@@ -217,14 +262,21 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const profile = profileRows[0] ?? null;
 
+  // A customer minted by this request cannot already own a subscription, so the
+  // provider-authoritative duplicate check below only has to run for a customer
+  // that existed before this checkout.
+  let hadStoredStripeCustomer = false;
+
   if (isStripeCustomerId(profile?.stripe_customer_id)) {
     stripeCustomerId = profile.stripe_customer_id;
+    hadStoredStripeCustomer = true;
     logger.info(
       { userId: user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from profile',
     );
   } else if (isStripeCustomerId(existingSubscription?.stripe_customer_id)) {
     stripeCustomerId = existingSubscription.stripe_customer_id;
+    hadStoredStripeCustomer = true;
     logger.info(
       { userId: user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from subscription',
@@ -269,6 +321,42 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         'Failed to create Stripe customer, proceeding without customer ID',
       );
       // Continue without customer ID - Stripe will create one during checkout
+    }
+  }
+
+  // Duplicate-purchase guard against the payment provider, not against our own
+  // possibly-stale copy of it. The `subscriptions` read above is only as fresh
+  // as the last delivered webhook, so a second click during a delayed delivery
+  // would otherwise start a second paid subscription for the same account.
+  if (hadStoredStripeCustomer && stripeCustomerId) {
+    let liveSubscription: Stripe.Subscription | null = null;
+    try {
+      liveSubscription = await findLiveStripeSubscription(stripe, stripeCustomerId);
+    } catch (error) {
+      logger.error(
+        { error, userId: user.id, customerId: stripeCustomerId },
+        'Failed to verify existing Stripe subscriptions before checkout',
+      );
+      throw createError.serviceUnavailable(
+        'Billing details could not be verified. No checkout was created; please retry.',
+      );
+    }
+
+    if (liveSubscription) {
+      logger.error(
+        {
+          userId: user.id,
+          customerId: stripeCustomerId,
+          stripeSubscriptionId: liveSubscription.id,
+          stripeStatus: liveSubscription.status,
+          storedStatus: existingSubscription?.status ?? null,
+          storedPlanTier: existingSubscription?.plan_tier ?? null,
+        },
+        'Refusing checkout: Stripe is already billing a subscription for this customer',
+      );
+      throw createError.conflict(
+        'This account already has an active subscription with our payment provider. Open Billing to manage it, or contact support if your plan is not showing yet.',
+      );
     }
   }
 

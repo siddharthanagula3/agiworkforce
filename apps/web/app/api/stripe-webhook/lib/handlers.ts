@@ -11,6 +11,7 @@ import {
   updateSubscriptionFromStripeSubscription,
   CreditService,
 } from './db';
+import { toStoredSubscriptionStatus } from './subscription-status';
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const current = invoice.parent?.subscription_details?.subscription;
@@ -168,7 +169,7 @@ export async function dispatchStripeEvent(
 
       if (stripeSubId) {
         const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubId);
-        const actualStatus = stripeSubscription.status;
+        const actualStatus = toStoredSubscriptionStatus(stripeSubscription.status);
 
         logger.info(
           { stripeSubId, actualStatus },
@@ -190,14 +191,6 @@ export async function dispatchStripeEvent(
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
       const stripeCustomerId = charge.customer as string | null;
-      // Revoke only the DELTA of the most recent refund, NOT charge.amount_refunded
-      // (which is the running CUMULATIVE total). `charge.refunded` fires once per
-      // refund carrying the cumulative amount, so revoking the cumulative each time
-      // over-revokes on partial/multiple refunds (e.g. refund $10 then $5 would
-      // revoke $10 + $15 = $25 instead of $15). Fall back to the cumulative only
-      // when no individual refund is present (single-refund case where they match).
-      const latestRefund = charge.refunds?.data?.[0];
-      const refundedAmount = latestRefund?.amount ?? charge.amount_refunded;
 
       // Returning the money has to return the entitlement it bought. Revoking
       // only credits left a fully refunded customer on their paid plan: refunds
@@ -221,25 +214,64 @@ export async function dispatchStripeEvent(
       const revokesPlan = fullyRefunded && !isCreditTopUpCharge;
 
       logger.info(
-        { chargeId: charge.id, customerId: stripeCustomerId, refundedAmount, revokesPlan },
+        {
+          chargeId: charge.id,
+          customerId: stripeCustomerId,
+          amountRefundedCumulative: charge.amount_refunded,
+          revokesPlan,
+        },
         'Processing charge refund',
       );
 
-      if (stripeCustomerId && (refundedAmount > 0 || revokesPlan)) {
+      if (stripeCustomerId && (charge.amount_refunded > 0 || revokesPlan)) {
         const profiles = await db.query<{
           id: string;
         }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId]);
 
         const profile = profiles[0];
         if (profile?.id) {
+          // `charge.amount_refunded` is the running CUMULATIVE total refunded on
+          // this charge, and `charge.refunded` fires once per refund carrying it,
+          // so revoking that number on every event double-revokes multiple partial
+          // refunds ($10 then $5 would revoke $10 + $15 = $25 for $15 returned).
+          // The per-refund amount is not in this payload to subtract instead:
+          // since API version 2022-11-15 Stripe stopped including the `refunds`
+          // list on a Charge by default (it is expand-only, and webhook payloads
+          // cannot be expanded), and this deployment pins 2026-04-22.dahlia — see
+          // Stripe's 2024-10-28 changelog, "you couldn't find refund details in
+          // the charge.refunded event".
+          //
+          // So the delta comes from our own ledger: revoke the cumulative total
+          // minus what was already revoked for this charge. Cumulative targets are
+          // monotonic, so a replayed or out-of-order delivery computes a delta of
+          // zero instead of clawing back the same money twice. handle_refund
+          // clamps each call to the balance actually left, so a later refund on
+          // the same charge can still collect a shortfall an earlier one could not
+          // — never more, in total, than the money Stripe returned.
+          const refundLedgerDescription = `Refund for charge ${charge.id}`;
+          const [revoked] = await db.query<{ revoked_cents: string | number | null }>(
+            `select coalesce(sum(-amount_cents), 0) as revoked_cents
+               from credit_transactions
+              where user_id = $1 and transaction_type = 'refund' and description = $2`,
+            [profile.id, refundLedgerDescription],
+          );
+          const alreadyRevoked = Number(revoked?.revoked_cents ?? 0) || 0;
+          const refundedAmount = Math.max(0, charge.amount_refunded - alreadyRevoked);
+
           if (refundedAmount > 0) {
             await db.execute('select handle_refund($1, $2, $3)', [
               profile.id,
               refundedAmount,
-              `Refund for charge ${charge.id}`,
+              refundLedgerDescription,
             ]);
             logger.info(
-              { userId: profile.id, refundedAmount, chargeId: charge.id },
+              {
+                userId: profile.id,
+                refundedAmount,
+                alreadyRevoked,
+                amountRefundedCumulative: charge.amount_refunded,
+                chargeId: charge.id,
+              },
               'Credits revoked for refund successfully',
             );
           }

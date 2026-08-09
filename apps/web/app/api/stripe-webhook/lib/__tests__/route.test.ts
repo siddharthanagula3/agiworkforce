@@ -18,13 +18,25 @@ import { createHmac } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+
 vi.mock('server-only', () => ({}));
 
 vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_route_spec');
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_test_route_spec');
 
+/** Structured payloads passed to `logger.warn` during the current delivery. */
+const warnings = vi.hoisted(() => [] as Record<string, unknown>[]);
+
 vi.mock('@/lib/logger', () => ({
-  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+  logger: {
+    info: () => {},
+    warn: (payload: unknown) => {
+      if (payload && typeof payload === 'object') warnings.push(payload as Record<string, unknown>);
+    },
+    error: () => {},
+    debug: () => {},
+  },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: async () => null }));
@@ -172,10 +184,12 @@ function checkoutCompleted(overrides: {
   eventId?: string;
   priceId?: string;
   metadata?: Record<string, string>;
+  apiVersion?: string;
 }): string {
   return JSON.stringify({
     id: overrides.eventId ?? 'evt_checkout_1',
     type: 'checkout.session.completed',
+    ...(overrides.apiVersion ? { api_version: overrides.apiVersion } : {}),
     data: {
       object: {
         id: 'cs_test',
@@ -212,6 +226,7 @@ describe('a completed checkout provisions the entitlement it paid for', () => {
   beforeEach(() => {
     calls.length = 0;
     processedEventIds.clear();
+    warnings.length = 0;
     observedTolerance = undefined;
     allocateCreditsForPeriod.mockReset();
     allocateCreditsForPeriod.mockResolvedValue(undefined);
@@ -323,5 +338,34 @@ describe('a completed checkout provisions the entitlement it paid for', () => {
     expect(observedTolerance, 'the route stopped narrowing the replay window').toBe(60);
     expect(subscriptionUpsert()).toBeUndefined();
     expect(allocateCreditsForPeriod).not.toHaveBeenCalled();
+  });
+
+  // BIZ-014: the endpoint's API version lives in the Stripe dashboard, not in
+  // this repository, so it can drift away from `STRIPE_API_VERSION` with no
+  // deploy and no error — the payload just starts arriving in a shape the
+  // pinned types no longer describe. The event still has to be processed
+  // (refusing it would strand a paying customer behind infinite retries), so
+  // the only thing standing between silent drift and an operator is this log.
+  it('names the version drift when the endpoint delivers a foreign API version', async () => {
+    const response = await deliver(
+      checkoutCompleted({ eventId: 'evt_checkout_old_api', apiVersion: '2024-06-20' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(subscriptionUpsert(), 'a drifted event must still be provisioned').toBeDefined();
+
+    const drift = warnings.find((entry) => 'eventApiVersion' in entry);
+    expect(drift, 'the API version mismatch went unreported').toBeDefined();
+    expect(drift!['eventApiVersion']).toBe('2024-06-20');
+    expect(drift!['pinnedApiVersion']).toBe(STRIPE_API_VERSION);
+    expect(drift!['eventId']).toBe('evt_checkout_old_api');
+  });
+
+  it('stays quiet when the endpoint delivers the pinned API version', async () => {
+    await deliver(
+      checkoutCompleted({ eventId: 'evt_checkout_same_api', apiVersion: STRIPE_API_VERSION }),
+    );
+
+    expect(warnings.filter((entry) => 'eventApiVersion' in entry)).toEqual([]);
   });
 });

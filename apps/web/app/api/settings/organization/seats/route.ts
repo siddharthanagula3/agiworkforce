@@ -28,10 +28,11 @@ const QuerySchema = z.object({
  * from the application role).
  *
  * `seatSource: 'unprovisioned'` is the honest signal that no Stripe
- * subscription is linked yet: the ceiling holds, but it cannot grow until the
- * checkout/webhook path writes `organizations.licensed_seats`. That path is
- * owned by the billing workstream and is a declared dependency, not a claim
- * made here.
+ * subscription is linked to this organization yet: the ceiling holds, but it
+ * cannot grow until a purchase binds one. That purchase path now exists —
+ * `/api/checkout` sends the seat quantity to Stripe and the webhook writes
+ * `organizations.licensed_seats` via `persistPurchasedSeatsOnOrganization`
+ * (app/api/stripe-webhook/lib/seats.ts) — so growth happens there, never here.
  */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-seats');
@@ -81,7 +82,7 @@ async function handleGet(request: NextRequest) {
       pendingInvitations: Number.parseInt(pending?.pending_count ?? '0', 10),
       seatsWritable: false,
       seatsWritableReason:
-        'Licensed seats are written by billing provisioning. No checkout path writes organizations.licensed_seats yet, so this number cannot be increased from the product.',
+        'Licensed seats are written by billing provisioning, not from this endpoint. Buy or change seats in checkout or billing management; the Stripe webhook writes the new count.',
     },
     access,
     currentUserRole: membership.role,

@@ -23,6 +23,7 @@ import {
   resolveCheckoutSessionSeats,
   resolveSubscriptionSeats,
 } from './seats';
+import { toStoredSubscriptionStatus } from './subscription-status';
 
 export async function ensureProfileExists(
   db: DatabaseAdapter,
@@ -388,7 +389,15 @@ export async function upsertSubscriptionFromSession(
 
   let currentPeriodStart: Date | null = null;
   let currentPeriodEnd: Date | null = null;
-  let status: string = 'active';
+  // Entitlement status is whatever Stripe says the subscription is, and nothing
+  // else. It starts unset — a completed Checkout Session is evidence that the
+  // browser finished the flow, not that money was taken: with a delayed
+  // notification payment method the session completes while the subscription is
+  // still `incomplete`. Assuming `active` here (the previous default) granted
+  // the paid tier whenever Stripe could not be reached, because
+  // `effectivePlanTier` in packages/contracts/types/src/subscription-entitlement.ts
+  // entitles exactly `active`/`trialing`.
+  let status: string | null = null;
   let cancelAtPeriodEnd: boolean = false;
   let canceledAt: Date | null = null;
   let stripeCouponId: string | null = null;
@@ -397,36 +406,51 @@ export async function upsertSubscriptionFromSession(
   // line item, and never from metadata.
   let billedSeats: number | null = resolveCheckoutSessionSeats(session);
 
-  if (stripeSubId) {
-    try {
-      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
-      status = subscription.status;
+  // Every session that reaches this function is a `mode: 'subscription'`
+  // checkout (app/api/checkout/route.ts is the only creator; top-ups branch
+  // away in handlers.ts). One without a subscription id cannot be confirmed as
+  // paid, so it provisions nothing.
+  if (!stripeSubId) {
+    logger.error(
+      { sessionId: session.id, userId: resolvedUserId },
+      'Checkout session carries no Stripe subscription; refusing entitlement provisioning',
+    );
+    throw new Error('Cannot provision entitlement from a session without a Stripe subscription');
+  }
 
-      const period = getSubscriptionPeriod(subscription);
-      if (period) {
-        currentPeriodStart = new Date(period.start * 1000);
-        currentPeriodEnd = new Date(period.end * 1000);
-      }
+  try {
+    const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+    status = toStoredSubscriptionStatus(subscription.status);
 
-      cancelAtPeriodEnd = subscription.cancel_at_period_end;
-      canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
-      billedSeats = resolveSubscriptionSeats(subscription);
+    const period = getSubscriptionPeriod(subscription);
+    if (period) {
+      currentPeriodStart = new Date(period.start * 1000);
+      currentPeriodEnd = new Date(period.end * 1000);
+    }
 
-      const firstItem = subscription.items?.data?.[0];
-      if (!stripePriceId && firstItem) {
-        stripePriceId = firstItem.price.id;
-        logger.info(
-          { priceId: stripePriceId, subscriptionId: stripeSubId },
-          'Retrieved price_id from subscription',
-        );
-      }
-      stripeCouponId = getSubscriptionCouponId(subscription);
-    } catch (error) {
-      logger.error(
-        { error, subscriptionId: stripeSubId },
-        'Failed to retrieve subscription details',
+    cancelAtPeriodEnd = subscription.cancel_at_period_end;
+    canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
+    billedSeats = resolveSubscriptionSeats(subscription);
+
+    const firstItem = subscription.items?.data?.[0];
+    if (!stripePriceId && firstItem) {
+      stripePriceId = firstItem.price.id;
+      logger.info(
+        { priceId: stripePriceId, subscriptionId: stripeSubId },
+        'Retrieved price_id from subscription',
       );
     }
+    stripeCouponId = getSubscriptionCouponId(subscription);
+  } catch (error) {
+    logger.error(
+      { error, subscriptionId: stripeSubId },
+      'Failed to retrieve subscription details; refusing to provision an unconfirmed entitlement',
+    );
+    // Fail closed and let the route return 500: `mark_stripe_event_failed`
+    // leaves the event retryable (apps/web/db/neon/0020_functions.sql), so
+    // Stripe's redelivery provisions the purchase once Stripe answers again.
+    // Swallowing this granted the paid tier on an assumed `active` status.
+    throw new Error('Cannot provision entitlement: Stripe subscription status is unconfirmed');
   }
 
   if (!stripePriceId && stripeSubId) {
@@ -847,7 +871,7 @@ export async function updateSubscriptionFromStripeSubscription(
   const purchasedSeats = buildPurchasedSeatRecord(planTier, subscription);
 
   const updateData = {
-    status: subscription.status,
+    status: toStoredSubscriptionStatus(subscription.status),
     stripe_price_id: stripePriceId,
     current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
     current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
