@@ -15,7 +15,7 @@ use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalReq
 
 use super::common::{
     generate_simple_diff, preview_string, print_tool_status, truncate_line,
-    truncate_output_with_save, validate_file_path, MAX_FILE_LINES,
+    truncate_output_with_save, validate_file_path, validate_file_write_path, MAX_FILE_LINES,
 };
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
@@ -194,7 +194,7 @@ fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, String> 
             if !seen.insert(target.clone()) {
                 continue;
             }
-            let path = validate_file_path(&target)
+            let path = validate_file_write_path(&target)
                 .map_err(|reason| format!("Patch target rejected: {}", reason))?;
             paths.push(path);
         }
@@ -420,7 +420,7 @@ pub(super) async fn execute_write_file(
         }
     };
 
-    let validated_path = match validate_file_path(path) {
+    let validated_path = match validate_file_write_path(path) {
         Ok(p) => p,
         Err(reason) => {
             return Ok(ToolResult {
@@ -650,7 +650,7 @@ pub(super) async fn execute_edit_file(
         }
     };
 
-    let validated_path = match validate_file_path(path) {
+    let validated_path = match validate_file_write_path(path) {
         Ok(p) => p,
         Err(reason) => {
             return Ok(ToolResult {
@@ -957,7 +957,7 @@ pub(super) async fn execute_multiedit(
         &format!("MultiEdit({}, {} edits)", path, edits.len()),
     );
 
-    let validated_path = match validate_file_path(&path) {
+    let validated_path = match validate_file_write_path(&path) {
         Ok(p) => p,
         Err(reason) => {
             return Ok(ToolResult {

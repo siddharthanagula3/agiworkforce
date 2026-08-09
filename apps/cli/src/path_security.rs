@@ -71,6 +71,62 @@ pub fn clear_additional_workspace_roots_for_tests() {
     }
 }
 
+/// Directories whose contents the CLI loads as TRUSTED, always-on instructions
+/// for every future session in a project.
+///
+/// `memory.rs` glob-loads `.agiworkforce/rules/*.md` into the system prompt of
+/// every session, and `custom_commands.rs` loads `.agiworkforce/commands/**/*.md`
+/// as slash commands. Neither is fenced as untrusted, because both are meant to
+/// be authored by the human who owns the repository.
+///
+/// Nothing stopped the AGENT writing them. `validate_workspace_path` enforces
+/// containment only — is this path under an allowed root — and
+/// `.agiworkforce/rules/anything.md` is inside the project, so it passed. One
+/// approved `write_file`, with content sourced from a poisoned web page or an
+/// MCP tool result, therefore rewrote the agent's own instructions for that
+/// repository permanently, for that session and every session after it.
+///
+/// That is a privilege escalation from "influence one turn" to "influence
+/// every future turn", and it is invisible: the directory is dotfile-hidden and
+/// auto-loaded, so it does not read like configuration a human is reviewing.
+///
+/// Reads are unaffected — the CLI must load these to work. Only agent WRITES
+/// are refused. A human edits them with their own editor, which is the point.
+const AGENT_INSTRUCTION_DIRS: &[&str] = &[".agiworkforce/rules", ".agiworkforce/commands"];
+
+/// True when `path` lands inside a directory the agent must not author.
+fn is_agent_instruction_path(path: &Path) -> bool {
+    // Compare with forward slashes so the check behaves the same on Windows.
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    AGENT_INSTRUCTION_DIRS.iter().any(|dir| {
+        normalized.contains(&format!("/{dir}/")) || normalized.starts_with(&format!("{dir}/"))
+    })
+}
+
+/// Containment check plus the agent-instruction denylist.
+///
+/// Use this for every tool that WRITES. `validate_workspace_path` stays as-is
+/// for reads.
+pub fn validate_workspace_write_path(path_str: &str) -> std::result::Result<PathBuf, String> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    validate_workspace_write_path_with_cwd(path_str, &cwd)
+}
+
+pub fn validate_workspace_write_path_with_cwd(
+    path_str: &str,
+    cwd: &Path,
+) -> std::result::Result<PathBuf, String> {
+    let validated = validate_workspace_path_with_cwd(path_str, cwd)?;
+    if is_agent_instruction_path(&validated) {
+        return Err(format!(
+            "Refusing to write {path_str}: this directory is loaded as trusted, always-on \
+             instructions for every future session, so an agent write here would rewrite the \
+             agent's own instructions. Edit it yourself if that is intended."
+        ));
+    }
+    Ok(validated)
+}
+
 pub fn validate_workspace_path(path_str: &str) -> std::result::Result<PathBuf, String> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     validate_workspace_path_with_cwd(path_str, &cwd)
@@ -260,5 +316,93 @@ mod tests {
 
         assert_eq!(result, file.canonicalize().expect("canonical extra file"));
         clear_additional_workspace_roots_for_tests();
+    }
+}
+
+#[cfg(test)]
+mod agent_instruction_denylist_tests {
+    use super::*;
+    use std::fs;
+
+    /// The attack this closes: one approved `write_file`, with content from a
+    /// poisoned web page or MCP tool result, lands in a directory the CLI loads
+    /// as trusted always-on instructions — rewriting the agent's own
+    /// instructions for that repository and every session after it.
+    #[test]
+    fn refuses_agent_writes_to_the_rules_directory() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let rules = tmp.path().join(".agiworkforce").join("rules");
+        fs::create_dir_all(&rules).expect("create rules dir");
+        let target = rules.join("injected.md");
+
+        let err = validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path(),
+        )
+        .expect_err("writing into .agiworkforce/rules must be refused");
+        assert!(err.contains("trusted"), "unexpected message: {err}");
+    }
+
+    #[test]
+    fn refuses_agent_writes_to_the_commands_directory() {
+        // custom_commands.rs loads .agiworkforce/commands/**/*.md as slash
+        // commands, which is the same always-on trust with a different name.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let commands = tmp.path().join(".agiworkforce").join("commands");
+        fs::create_dir_all(&commands).expect("create commands dir");
+        let target = commands.join("evil.md");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn still_allows_ordinary_project_writes() {
+        // The denylist must not become a general obstacle — this is what proves
+        // the guard is narrow rather than broadly breaking the write tool.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).expect("create src");
+        let target = src.join("main.rs");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn still_allows_other_agiworkforce_subdirectories() {
+        // Only the two INSTRUCTION directories are denied. Session state and
+        // memories live under .agiworkforce too and are written legitimately.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let sessions = tmp.path().join(".agiworkforce").join("sessions");
+        fs::create_dir_all(&sessions).expect("create sessions");
+        let target = sessions.join("state.json");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn reads_are_unaffected() {
+        // The CLI must still LOAD rules to work; only writes are refused.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let rules = tmp.path().join(".agiworkforce").join("rules");
+        fs::create_dir_all(&rules).expect("create rules dir");
+        let target = rules.join("always.md");
+        fs::write(&target, "# rules").expect("write fixture");
+
+        assert!(
+            validate_workspace_path_with_cwd(target.to_str().expect("utf8 path"), tmp.path())
+                .is_ok()
+        );
     }
 }
