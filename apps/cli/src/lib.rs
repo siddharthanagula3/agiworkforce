@@ -1556,6 +1556,23 @@ fn is_git_plugin_source(source: &str) -> bool {
     source.ends_with(".git")
 }
 
+/// Host the quota check talks to when `AGI_API_URL` is unset.
+const DEFAULT_QUOTA_API_BASE: &str = "https://api.agiworkforce.com";
+
+/// Resolve the base URL that `fetch_remaining_pct` sends the account bearer
+/// token to.
+///
+/// `AGI_API_URL` is an operator override, so anyone able to plant it in the
+/// environment could otherwise redirect the `Authorization` header to a host of
+/// their choosing. Route it through the same allowlist that guards
+/// `AGIWORKFORCE_API_BASE`: HTTPS, and an `agiworkforce.com` origin. Anything
+/// else yields `None` so the caller skips the fetch instead of leaking the
+/// token.
+fn resolve_quota_api_base(raw: Option<&str>) -> Option<String> {
+    let raw = raw.map(str::trim).filter(|s| !s.is_empty());
+    tier_cache::resolve_agi_api_base(raw.unwrap_or(DEFAULT_QUOTA_API_BASE))
+}
+
 /// Fetch the user's remaining credit percentage from the AGI cloud API.
 /// Returns `None` on any network/parse failure so callers can fall back gracefully.
 /// The response exposes only percentage/reset metadata and availability.
@@ -3026,10 +3043,20 @@ pub async fn run_main() -> Result<()> {
                 });
 
             let remaining: u8 = if let Some(bearer) = token {
-                let api_base = std::env::var("AGI_API_URL")
-                    .unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
-                fetch_remaining_pct(&bearer, &api_base)
-                    .await
+                let raw_base = std::env::var("AGI_API_URL").ok();
+                let fetched = match resolve_quota_api_base(raw_base.as_deref()) {
+                    Some(api_base) => fetch_remaining_pct(&bearer, &api_base).await,
+                    None => {
+                        eprintln!(
+                            "{}",
+                            colored::Colorize::yellow(
+                                "Warning: AGI_API_URL is not an https agiworkforce.com origin — skipping the quota check instead of sending your token there."
+                            )
+                        );
+                        None
+                    }
+                };
+                fetched
                     .or_else(|| {
                         std::env::var("AGI_QUOTA_REMAINING_PCT")
                             .ok()
@@ -4205,6 +4232,55 @@ mod tests {
             Some(Command::Completion { shell }) => assert_eq!(shell, ShellType::Fish),
             other => panic!("expected completion command, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn api_base_resolution_defaults_to_the_agiworkforce_quota_host() {
+        assert_eq!(
+            resolve_quota_api_base(None).as_deref(),
+            Some("https://api.agiworkforce.com")
+        );
+        // A blank override is a misconfiguration, not a redirect — fall back.
+        assert_eq!(
+            resolve_quota_api_base(Some("   ")).as_deref(),
+            Some("https://api.agiworkforce.com")
+        );
+    }
+
+    #[test]
+    fn api_base_resolution_accepts_agiworkforce_origins() {
+        assert_eq!(
+            resolve_quota_api_base(Some("https://api.agiworkforce.com")).as_deref(),
+            Some("https://api.agiworkforce.com")
+        );
+        assert_eq!(
+            resolve_quota_api_base(Some("https://agiworkforce.com/")).as_deref(),
+            Some("https://agiworkforce.com")
+        );
+    }
+
+    #[test]
+    fn api_base_resolution_rejects_attacker_supplied_hosts() {
+        // The quota request carries the account bearer token, so an override
+        // that names any other host must abort the fetch, not redirect it.
+        assert_eq!(resolve_quota_api_base(Some("https://evil.example")), None);
+        assert_eq!(
+            resolve_quota_api_base(Some("https://api.agiworkforce.com.evil.example")),
+            None
+        );
+        assert_eq!(
+            resolve_quota_api_base(Some("https://evil.example/api.agiworkforce.com")),
+            None
+        );
+    }
+
+    #[test]
+    fn api_base_resolution_rejects_plaintext_and_non_http_schemes() {
+        assert_eq!(
+            resolve_quota_api_base(Some("http://api.agiworkforce.com")),
+            None
+        );
+        assert_eq!(resolve_quota_api_base(Some("file:///etc/passwd")), None);
     }
 
     #[test]
