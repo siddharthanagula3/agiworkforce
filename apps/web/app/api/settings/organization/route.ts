@@ -2,6 +2,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import Stripe from 'stripe';
+import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -16,6 +18,19 @@ import {
   requireTeamAdminAccess,
   type TeamAdminAccess,
 } from '@/app/api/settings/team/team-admin-access';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import {
+  resolvePurchasedSeatsForOwner,
+  type OwnerPurchasedSeats,
+} from '@/app/api/stripe-webhook/lib/seats';
+
+let stripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), { apiVersion: STRIPE_API_VERSION });
+  }
+  return stripeClient;
+}
 
 const CreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -157,6 +172,52 @@ async function handleCreate(request: NextRequest) {
   const db = getNeonDb();
   const access = await requireTeamAdminAccess(db, userId);
 
+  // Answer a caller who already has an organization before spending a Stripe
+  // round-trip on them: without this they pay for the read-back below on every
+  // repeat attempt, and during a Stripe outage they would get a 503 where the
+  // honest answer is 409. The authoritative check is still the serialized one
+  // inside the transaction — this only short-circuits the obvious case.
+  const [priorMembership] = await db.query<OrganizationMemberRow>(
+    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+      where user_id = $1
+      order by joined_at asc
+      limit 1`,
+    [userId],
+  );
+  if (priorMembership) {
+    throw createError.conflict('You already belong to an organization');
+  }
+
+  // A per-seat purchase can only precede this call — creating an organization
+  // requires a Team plan — so the webhook had no organization to write the paid
+  // seat count onto and reported `no_organization`. Read it back from Stripe now
+  // and let the INSERT carry it; `licensed_seats` is not writable from the
+  // product afterwards, so an organization created at the default of 1 would
+  // strand a multi-seat purchase until the buyer changed seats in Stripe's
+  // portal. The gate above proves an entitled team/enterprise `plan_tier`, NOT a
+  // per-seat subscription, so a null return here is ordinary (enterprise is
+  // contract-sold, and comped rows carry no Stripe quantity at all).
+  let purchasedSeats: OwnerPurchasedSeats | null;
+  try {
+    purchasedSeats = await resolvePurchasedSeatsForOwner(db, getStripe, userId);
+  } catch (error) {
+    // A missing STRIPE_SECRET_KEY and an unreachable Stripe both have to fail
+    // closed here, but they are different incidents: one is this deployment's
+    // configuration, the other is Stripe. Say which in the log.
+    const reason =
+      error instanceof Error && error.message.includes('STRIPE_SECRET_KEY')
+        ? 'stripe_not_configured'
+        : 'stripe_unreachable';
+    logger.error(
+      { error, userId, reason },
+      'Failed to read purchased seats before creating organization',
+    );
+    throw createError.serviceUnavailable(
+      'Your purchased seats could not be verified. No organization was created; please try again.',
+    );
+  }
+
   try {
     const organization = await db.transaction(async (tx) => {
       // Serialize provisioning by user so concurrent create requests cannot
@@ -179,11 +240,34 @@ async function handleCreate(request: NextRequest) {
         throw createError.conflict('You already belong to an organization');
       }
 
+      // Seats land on the INSERT rather than a follow-up UPDATE: a failure
+      // between the two would leave the organization at the default seat, and
+      // its owner told there is nothing to invite into for a purchase already
+      // made. `billing_plan_tier` rides along because it is what makes the
+      // number legible — it records which plan the seats were bought under.
+      //
+      // The Stripe anchors (`stripe_subscription_id`, `stripe_customer_id`) are
+      // deliberately NOT written here. `idx_organizations_stripe_subscription`
+      // (0085) is unique over a non-null subscription id, so stamping it at
+      // creation turns any org that already holds this buyer's subscription —
+      // e.g. one they transferred away and were then removed from — into a
+      // 23505 that the catch below reports as a slug conflict the user cannot
+      // escape by renaming. The webhook binds the anchor on the next per-seat
+      // event (`coalesce($3, stripe_subscription_id)` in seats.ts), which is
+      // where that binding has always been made.
       const [created] = await tx.query<OrganizationRow>(
-        `insert into public.organizations (name, slug, created_by)
-         values ($1, $2, $3)
+        `insert into public.organizations
+           (name, slug, created_by, licensed_seats, billing_plan_tier, seat_billing_updated_at)
+         values ($1, $2, $3, $4, $5,
+                 case when $5::text is null then null else now() end)
          returning id, name, slug, created_by, created_at, updated_at`,
-        [parsed.data.name, parsed.data.slug, userId],
+        [
+          parsed.data.name,
+          parsed.data.slug,
+          userId,
+          purchasedSeats?.seats ?? 1,
+          purchasedSeats?.planTier ?? null,
+        ],
       );
 
       if (!created) {

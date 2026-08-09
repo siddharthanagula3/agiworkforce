@@ -1,15 +1,30 @@
+import type { BillingPlanTier } from '@agiworkforce/types';
+
 // pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02.
-// Locked tiers are free, basic, pro, max, team, enterprise.
-export const VALID_PLANS = [
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-  'team',
-  'enterprise',
-] as const;
-export type PlanTier = (typeof VALID_PLANS)[number];
+// The tier vocabulary is the shared billing catalog's, not a second one:
+// `normalizePlan` answers 'free' for anything it has not heard of, so a tier
+// checkout already sells would show its own subscriber the Free plan.
+// 'local-only' and 'byok' are excluded on purpose — they are separate trust
+// boundaries with no managed subscription row to render here.
+export type PlanTier = Exclude<BillingPlanTier, 'local-only' | 'byok'>;
+
+// Keyed by PlanTier so the compiler, not a reviewer, checks the list against
+// the catalog: a billable tier added there fails to build until it is listed
+// here, instead of reaching this screen as an unknown that normalizes to Free.
+// The keys, not the catalog object, are read at runtime — this module is
+// imported by components whose tests mock @agiworkforce/types wholesale, so it
+// must stay a type-only consumer of the contract.
+const BILLABLE_PLAN_TIERS: Record<PlanTier, true> = {
+  free: true,
+  basic: true,
+  pro: true,
+  max: true,
+  max_15x: true,
+  team: true,
+  enterprise: true,
+};
+
+export const VALID_PLANS = Object.keys(BILLABLE_PLAN_TIERS) as readonly PlanTier[];
 
 export const VALID_STATUSES = [
   'active',
