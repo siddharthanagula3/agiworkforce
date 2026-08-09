@@ -4,6 +4,7 @@ import {
   getModelMetadataById,
   normalizeModelId,
   resolveEffectiveModelPricing,
+  SLOT_REGISTRY,
   type StreamChunkUsage,
 } from '@agiworkforce/types';
 import { isPromoExpired } from '@agiworkforce/routing';
@@ -12,6 +13,91 @@ const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
 const MAX_ESTIMATED_INPUT_TOKENS = 1_000_000;
 const BILLING_RPC_ATTEMPTS = 3;
+
+/**
+ * Rolling spend ceilings in paid-ledger cents, mirrored from the canonical
+ * table in `apps/web/lib/server/managed-usage-policy.ts`. That module is
+ * `server-only` and lives inside the Next app, so this service cannot import
+ * it — the two tables must be changed together. Canonical stores internal
+ * usage units at two units per cent; the units are quoted per line so the two
+ * tables can be diffed by eye, and
+ * `__tests__/services/managedUsageBilling.test.ts` fails the build if the
+ * billing catalog admits a tier to managed compute that is missing here.
+ *
+ * Only tiers that can actually reach a reservation appear. `local-only` and
+ * `byok` are absent because `enforcePlanTier` (routes/llm.ts) refuses both via
+ * `canUseBillingPlanCapability` before any reservation is attempted, and an
+ * absent tier denies below in any case.
+ *
+ * A zero is a DENIAL, not a bypass: migration 0070 guards each ceiling on
+ * `is not null`, so only `uncapped` — which resolves to `null` below — reserves
+ * without a ceiling.
+ */
+type ManagedUsageCapPolicy =
+  /** Negotiated contract that declares no configured ceiling. */
+  | { readonly uncapped: true }
+  /** Hard ceilings for the trailing five hours and trailing seven days. */
+  | { readonly fiveHourCents: number; readonly weeklyCents: number };
+
+const MANAGED_USAGE_CAPS: Readonly<Record<string, ManagedUsageCapPolicy>> = Object.freeze({
+  // Free's real allowance lives in the micro-USD trial ledger, which this
+  // gateway path has no notion of; against the paid cents ledger it is 0, the
+  // same value canonical `getPlanSessionUsageBudgetCents` returns for it.
+  free: { fiveHourCents: 0, weeklyCents: 0 },
+  basic: { fiveHourCents: 10, weeklyCents: 50 }, // 20 / 100 internal units
+  pro: { fiveHourCents: 50, weeklyCents: 250 }, // 100 / 500
+  max: { fiveHourCents: 250, weeklyCents: 1_250 }, // 500 / 2_500
+  max_15x: { fiveHourCents: 750, weeklyCents: 3_750 }, // 1_500 / 7_500
+  team: { fiveHourCents: 50, weeklyCents: 250 }, // 100 / 500
+  enterprise: { uncapped: true },
+});
+
+const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
+
+/**
+ * Models that back a flagship routing slot.
+ *
+ * Derived from the slot registry rather than `getSlotForModel`, which answers
+ * with the FIRST slot a model appears in — `claude-opus-5` resolves to
+ * `flagship_coding`, never to `flagship_coding_pro_plus`, so matching on the
+ * pro-plus slot names alone tags nothing and the flagship window never binds.
+ */
+const FLAGSHIP_MODEL_IDS: ReadonlySet<string> = new Set(
+  Object.values(SLOT_REGISTRY)
+    .filter((definition) => definition.slot.startsWith('flagship_'))
+    .map((definition) => definition.modelId),
+);
+
+/** A resolved ceiling in paid-ledger cents; `null` is explicitly uncapped. */
+type ManagedUsageCapCents = number | null;
+
+function capPolicy(planTier: string): ManagedUsageCapPolicy | null {
+  const normalized = planTier.trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(MANAGED_USAGE_CAPS, normalized)
+    ? (MANAGED_USAGE_CAPS[normalized] ?? null)
+    : null;
+}
+
+function planWindowCapCents(planTier: string, window: 'fiveHour' | 'weekly'): ManagedUsageCapCents {
+  const policy = capPolicy(planTier);
+  // Backstop, not the gate: `enforcePlanTier` already rejects every tier that
+  // is not a key above, so this only catches a future caller of the exported
+  // reservation that reserves without going through plan admission. It denies
+  // rather than reserving uncapped.
+  if (!policy) return 0;
+  if ('uncapped' in policy) return null;
+  return window === 'fiveHour' ? policy.fiveHourCents : policy.weeklyCents;
+}
+
+function planFlagshipWeeklyCapCents(planTier: string): ManagedUsageCapCents {
+  const weekly = planWindowCapCents(planTier, 'weekly');
+  return weekly === null ? null : Math.round(weekly * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO);
+}
+
+function isFlagshipModel(model: string): boolean {
+  const canonical = normalizeModelId(model);
+  return canonical !== null && FLAGSHIP_MODEL_IDS.has(canonical);
+}
 
 export interface ManagedUsageRpcClient {
   rpc(
@@ -291,6 +377,24 @@ function reservationDecisionError(decision: string): ManagedUsageBillingError {
         402,
         'INSUFFICIENT_CREDITS',
       );
+    case 'session_limit':
+      return new ManagedUsageBillingError(
+        'Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
+        429,
+        'ROLLING_FIVE_HOUR_LIMIT_REACHED',
+      );
+    case 'weekly_limit':
+      return new ManagedUsageBillingError(
+        'Your rolling weekly usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
+        429,
+        'ROLLING_WEEKLY_LIMIT_REACHED',
+      );
+    case 'flagship_weekly_limit':
+      return new ManagedUsageBillingError(
+        'Your rolling flagship weekly usage limit is reached. Choose a standard model, wait for earlier usage to leave the window, or upgrade for a higher limit.',
+        429,
+        'FLAGSHIP_WEEKLY_LIMIT_REACHED',
+      );
     default:
       return new ManagedUsageBillingError(
         'Managed usage billing is temporarily unavailable',
@@ -306,13 +410,42 @@ export async function reserveManagedUsage(input: {
   idempotencyKey: string;
   provider: string;
   request: ManagedUsageRequestBody;
+  /** Required: every rolling ceiling below is per-tier, so a reservation
+   * without a tier cannot be capped. */
+  planTier: string;
   leaseToken?: string;
 }): Promise<ManagedUsageReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const requestHash = fingerprintManagedUsageRequest(input.request);
   const estimatedCostCents = estimateManagedUsageCostCents(input.request);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const row = await callBillingRpc(input.client, 'reserve_managed_usage_request', {
+
+  /**
+   * `_with_limits`, not the bare `reserve_managed_usage_request`.
+   *
+   * The legacy eight-argument function takes no ceilings and does no rolling
+   * accounting, so this path — the one desktop, the CLI and the VS Code
+   * extension all use — admitted every request the credit balance could cover,
+   * with no five-hour, weekly or flagship window at all. The capped function
+   * delegates to the legacy one after checking, so this is the same durable
+   * reservation with the ceilings restored.
+   *
+   * `p_is_flagship` also matters beyond this request: the tag is stamped onto
+   * the settlement metadata only inside `_with_limits`, and the flagship
+   * weekly window sums on that tag. Reserving through the legacy function left
+   * gateway spend invisible to the flagship ceiling everywhere else too.
+   *
+   * KNOWN GAP, not closed here: the tag is computed from the REQUESTED model.
+   * `routes/llm.ts` can rotate to a client-supplied fallback model after a
+   * provider failure without re-reserving, so a request that fails over from a
+   * standard model to a flagship one is billed at the served model's cost but
+   * stays tagged `is_flagship=false`, invisible to the flagship window. The
+   * five-hour and weekly ceilings are tag-independent and still bind. Closing
+   * it needs the failover path to extend the reservation
+   * (`extend_managed_usage_request_provider_step`, which rejects a changed
+   * flagship tag as a conflict), which is not this call site.
+   */
+  const row = await callBillingRpc(input.client, 'reserve_managed_usage_request_with_limits', {
     p_user_id: input.userId,
     p_idempotency_key: idempotencyKey,
     p_request_hash: requestHash,
@@ -321,6 +454,10 @@ export async function reserveManagedUsage(input: {
     p_estimated_cost_cents: estimatedCostCents,
     p_lease_token: leaseToken,
     p_lease_seconds: 15 * 60,
+    p_session_cap_cents: planWindowCapCents(input.planTier, 'fiveHour'),
+    p_weekly_cap_cents: planWindowCapCents(input.planTier, 'weekly'),
+    p_flagship_weekly_cap_cents: planFlagshipWeeklyCapCents(input.planTier),
+    p_is_flagship: isFlagshipModel(input.request.model),
   });
 
   const decision = row['reservation_decision'];
