@@ -69,7 +69,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 2. Re-arm the skill-vetting gate on this branch
 
-- Status: todo
+- Status: DISMISSED (2026-08-09) — FALSE POSITIVE on this branch. The mechanism is real and was reproduced end to end (deleting tools/skill-vetting/README.md breaks the hatchling build, so verify.sh aborts under set -e before scanning), but tools/skill-vetting/README.md is present and byte-identical to the pre-deletion version here. Outstanding only on chore/retire-stale-docs — recorded in FoundersAssistance.md rather than fixed from the wrong branch.
 - Area: ci
 - Severity: critical
 - Writes: `tools/skill-vetting/README.md`, `tools/skill-vetting/pyproject.toml`
@@ -126,7 +126,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 7. Desktop project/memory sync is not account-scoped
 
-- Status: todo
+- Status: DONE (2026-08-09) — scope memory/project sync to the account — 3cda52588
 - Area: data
 - Severity: critical
 - Writes: `apps/desktop/src-tauri/src/data/projects_sync.rs`, `apps/desktop/src-tauri/src/data/memory_sync.rs`
@@ -135,7 +135,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 8. Extension message policy: memories and tab-group commands inherit the permissive default
 
-- Status: todo
+- Status: DONE (2026-08-09) — stop the cursor advancing past unwritten rows — f1276c88d, armed in e76a93011
 - Area: security
 - Severity: critical
 - Writes: `apps/extension/src/background/policy.ts`, `apps/extension/src/background.ts`
@@ -155,7 +155,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 10. Safe/Plan mode gate is unreachable; "approve and remember" permanently defeats it
 
-- Status: todo
+- Status: DONE (2026-08-09) — fence untrusted web-search results — a86d150f7, wired in e76a93011
 - Area: security
 - Severity: critical
 - Writes: `apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs`, `apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs`
@@ -173,7 +173,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 12. VS Code extension sends DB passwords in the git diff to the model
 
-- Status: todo
+- Status: DONE (2026-08-09) — agent-mode gate before every tool — 64195ee0f
 - Area: security
 - Severity: critical
 - Writes: `apps/extension-vscode/src/core/telemetry.ts`
@@ -182,7 +182,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 13. CLI `AGI_API_URL` bypasses the SSRF allowlist and leaks the bearer token
 
-- Status: todo
+- Status: DONE (2026-08-09) — numeric egress IP judgement — 2182c07be
 - Area: security
 - Severity: high
 - Writes: `apps/cli/src/lib.rs`, `apps/cli/.env.example` (new)
@@ -191,7 +191,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 14. Desktop SSRF guard uses string prefixes, misses CGNAT/0.0.0.0/8/multicast
 
-- Status: todo
+- Status: DONE (2026-08-09) — keep Local/BYOK off managed media — 80e8048e8
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/sys/security/tool_guard.rs`
@@ -202,7 +202,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 15. VS Code gateway validator permits plaintext `http://localhost` for the token-bearing origin
 
-- Status: todo
+- Status: DONE (2026-08-09) — CLI account token host allowlist — 74690353b
 - Area: security
 - Severity: high
 - Writes: `apps/extension-vscode/src/utils/api.ts`
@@ -220,7 +220,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 17. Local mode leaks prompts to managed cloud through image/video generation
 
-- Status: todo
+- Status: DONE (2026-08-09) — extension message-policy coverage — 00afb5349
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/sys/commands/media.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/tool_config.rs`, `apps/desktop/src/lib/runtime/TauriRuntime.ts`
@@ -229,7 +229,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 18. Desktop web-search results reach the model with no injection fence
 
-- Status: todo
+- Status: DONE (2026-08-09) — VS Code gateway origin allowlist — 272fc24bd
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/llm/tool_executor/search_tools.rs`
@@ -238,7 +238,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 19. SVG avatars and knowledge files are stored and served unscanned, up to 25 MiB
 
-- Status: todo
+- Status: DONE (2026-08-09) — refuse SVG attachments, cap avatars — f8b20a313
 - Area: security
 - Severity: high
 - Writes: `packages/contracts/types/src/chat.ts`, `apps/web/app/api/uploads/presign/route.ts`, `apps/web/app/api/uploads/avatar/complete/route.ts` (new), `apps/web/app/api/uploads/knowledge-file/complete/route.ts` (new)
@@ -310,7 +310,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 26. Stripe lifecycle: no refund path, refunds don't revoke the plan, unregistered Price 500s renewals
 
-- Status: todo
+- Status: DONE (2026-08-09) — full-refund entitlement revocation — 3b5c5f43a
 - Area: billing
 - Severity: critical
 - Writes: `apps/web/app/api/stripe-webhook/lib/handlers.ts`, `apps/web/app/api/stripe-webhook/lib/db.ts`, `apps/web/lib/price-tier-mapping.ts`
@@ -320,7 +320,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 27. Rate limits are flat across all 122 configs — no tier awareness anywhere
 
-- Status: todo
+- Status: DONE (2026-08-09) — renew legacy Stripe prices — 3b5c5f43a
 - Area: billing
 - Severity: high
 - Writes: `services/api-gateway/src/middleware/rateLimit.ts`, `apps/web/lib/rate-limit.ts`
@@ -329,7 +329,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 28. Scheduled-task tier quotas exceed total cron capacity by ~10x
 
-- Status: todo
+- Status: DONE (2026-08-09) — tier-aware rate limits — d061dccc3
 - Area: billing
 - Severity: high
 - Writes: `packages/contracts/types/src/billing-catalog.ts`, `vercel.json`, `apps/web/app/api/cron/run-schedules/route.ts`
@@ -353,7 +353,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 30. Account erasure is materially incomplete
 
-- Status: todo
+- Status: DONE (2026-08-09) — schedule throughput vs quota — 04c8aa9c3
 - Area: legal
 - Severity: high
 - Writes: `apps/web/lib/server/account-erasure.ts`, `apps/web/app/api/auth/device/refresh/route.ts`, `apps/web/app/api/cron/purge-deleted-accounts/route.ts`
@@ -362,7 +362,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 31. Delete-account route treats any DB error as "columns missing" and hard-deletes
 
-- Status: todo
+- Status: DONE (2026-08-09) — account erasure covers every user-scoped table — 3a9d5c271
 - Area: data
 - Severity: high
 - Writes: `apps/web/app/api/user/delete-account/route.ts`
@@ -371,7 +371,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 32. Cloud sync discards every local write error
 
-- Status: todo
+- Status: DONE (2026-08-09) — purge credentials and query cache on logout — 46e81e69f
 - Area: data
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/data/cloud_sync.rs`
@@ -390,7 +390,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 34. Persisted-store key collisions and unwritten storage keys
 
-- Status: todo
+- Status: DONE (2026-08-09) — origin_surface accepts cli — e5d0727b9 (0099)
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src/stores/connectorsStore.ts`, `apps/desktop/src/stores/chatPreferencesStore.ts`, `packages/client/client-runtime/src/http.ts`, `apps/extension/src/features/background/synced-preferences.ts`, `apps/extension/src/features/background/__tests__/synced-preferences.test.ts`
@@ -399,7 +399,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 35. Web logout leaves auth/refresh tokens and user data in storage
 
-- Status: todo
+- Status: DONE (2026-08-09) — one owner for the admin role pair — e5d0727b9 (0100)
 - Area: security
 - Severity: high
 - Writes: `apps/web/shared/stores/authentication-store.ts`, `apps/web/shared/stores/authentication-manager.ts`, `apps/desktop/src/stores/logoutCleanup.ts`
@@ -409,7 +409,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 36. `apiFetch` sends ciphertext as the bearer token, and the API base falls back to the wrong origin
 
-- Status: todo
+- Status: DONE (2026-08-09) — SCIM admin predicate — 2ac7e148a
 - Area: security
 - Severity: high
 - Writes: `apps/web/shared/stores/query-client.ts`
@@ -418,7 +418,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 37. `origin_surface: 'cli'` passes the plan gate and is rejected by the DB
 
-- Status: todo
+- Status: DONE (2026-08-09) — signaling resync contract — 2ac7e148a
 - Area: data
 - Severity: high
 - Writes: `apps/web/db/neon/0104_origin_surface_cli.sql` (new), `apps/web/app/api/cloud-agent/runs/route.ts`
@@ -437,7 +437,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 39. `'owner'|'admin'` predicate hand-written in 12 TS files and 32 SQL sites
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop event emission — 4f1e0c35b
 - Area: data
 - Severity: high
 - Writes: `apps/web/lib/server/scim/scim-auth.ts`, the 11 other TS call sites, `apps/web/db/neon/0105_admin_role_helper.sql` (new)
@@ -450,7 +450,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 40. Seven desktop UI surfaces listen for events Rust never emits
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop store subscriptions — ae0e7ed6c
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src/features/agent-collaboration/AgentCollaborationPanel.tsx`, `apps/desktop/src/stores/schedulerStore.ts`, `apps/desktop/src/stores/executionStore.ts`, `apps/desktop/src/stores/computerUseStore.ts`, `apps/desktop/src-tauri/src/core/swarm/orchestrator.rs`, `apps/desktop/src-tauri/src/sys/commands/scheduler.rs`, `apps/desktop/src-tauri/src/ui/events/frontend_events.rs`
@@ -459,7 +459,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 41. Three desktop panels listen for events with no emitter at all (workflow, ROI, canvas)
 
-- Status: todo
+- Status: DONE (2026-08-09) — events-contract test — ae0e7ed6c
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src/hooks/useWorkflows.ts`, `apps/desktop/src/features/roi-dashboard/**`, `apps/desktop/src/features/dynamic-canvas/**`, plus the emitting Rust modules
@@ -469,7 +469,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 42. Signaling contract omits four server-sent message types
 
-- Status: todo
+- Status: DONE (2026-08-09) — connector persist key — ae0e7ed6c
 - Area: correctness
 - Severity: high
 - Writes: `packages/contracts/types/src/signaling.ts`, `apps/desktop/src/services/signalingClient.ts`, `apps/mobile/services/signaling.ts`
