@@ -275,6 +275,48 @@ export function validateEndpointUrl(raw: string): string | undefined {
 }
 
 /**
+ * Origins the extension may send gateway requests to. EXACT origin match,
+ * https only: every gateway call carries the AGI Cloud account token as a
+ * Bearer, so the localhost/http escape `validateEndpointUrl` grants the LLM
+ * endpoint (where a local `agi` app-server is a legitimate dev target) would
+ * put a live account token on the wire in plaintext.
+ *
+ * Mirrors `GATEWAY_URL_ALLOWLIST_EXACT` in
+ * `apps/extension/src/background/policy.ts` — the two lists are asserted equal
+ * in `src/__tests__/api.test.ts`, so add new origins to both.
+ */
+const GATEWAY_ALLOWED_ORIGINS = new Set([
+  'https://api.agiworkforce.com',
+  'https://gateway.agiworkforce.com',
+  'https://staging-api.agiworkforce.com',
+  // Web app origin: hosts the Next.js /api/llm/v1/chat/completions route that
+  // supports free-tier users. The Express gateway at api.agiworkforce.com
+  // blocks free-tier users; this origin does not.
+  'https://agiworkforce.com',
+]);
+
+/**
+ * Validate a URL for use as the token-bearing gateway origin.
+ * Returns the normalised `https://host` origin, or undefined when the value is
+ * unparseable, not https, or off the allowlist.
+ */
+export function validateGatewayUrl(raw: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return undefined;
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return undefined;
+  }
+
+  const origin = `https://${parsed.host}`;
+  return GATEWAY_ALLOWED_ORIGINS.has(origin) ? origin : undefined;
+}
+
+/**
  * Read a setting that must never be overridden by workspace settings.
  * Returns the global value (user settings) → fallback to default.
  * Workspace-scoped values are intentionally ignored.
@@ -316,8 +358,7 @@ export function getCloudWebOrigin(): string {
 /** Trusted gateway origin used for provider streaming and token revocation. */
 export function getCloudGatewayOrigin(): string {
   const raw = getGlobalConfig<string>('agiWorkforce', 'gatewayUrl', DEFAULT_GATEWAY_ORIGIN);
-  const validated = validateEndpointUrl(raw) ?? DEFAULT_GATEWAY_ORIGIN;
-  return new URL(validated).origin;
+  return validateGatewayUrl(raw) ?? DEFAULT_GATEWAY_ORIGIN;
 }
 
 function getModel(): string {
