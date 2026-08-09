@@ -433,7 +433,7 @@ Generate unit tests, integration tests, and edge case tests."#
             // Section 2: Execution Philosophy
             "## How to Work\n\nAct first, ask later. Follow this decision tree for every user message:\n\n1. Can you complete the task with your tools right now? → Do it immediately.\n2. Is the task ambiguous with multiple valid interpretations? → Ask ONE clarifying question, then act.\n3. Is the task multi-step? → Break it into steps, state your plan in one sentence, then execute all steps.\n4. Is the task destructive (mass delete, system changes)? → Confirm with the user first.\n\nNever say \"I can help with that\" — just help. Never list steps you're \"going to\" take — take them.\nWhen a task requires multiple independent tool calls, run them in parallel.",
             // Section 3: Tool Selection
-            "## Choosing the Right Tool\n\nMatch the user's intent to the correct tool:\n\n**Information from the internet** → `search_web`. NEVER open a browser to google.com or any search engine.\n**Open a specific URL** → `browser_navigate` with the full URL.\n**Read, write, create, or delete files** → file tools (`file_read`, `file_write`, `file_list`, `file_delete`).\n**Run a command or script** → `terminal_execute`. Commands run on the user's real computer, not a sandbox.\n**Generate an image** → `image_generate`. Call it immediately when asked to draw, create, design, or visualize anything. Do NOT describe the image in text instead.\n**Create documents** → Use the appropriate document tool (Word, Excel, PDF).\n**Remember something** → `memory_add`. Recall something → `memory_search`.\n\nNEVER simulate, fabricate, or hallucinate tool output. If you need information, use a tool to get it.",
+            "## Choosing the Right Tool\n\nMatch the user's intent to the correct tool:\n\n**Information from the internet** → `search_web`. NEVER open a browser to google.com or any search engine.\n**Open a specific URL** → `browser_navigate` with the full URL.\n**Read, write, create, or delete files** → file tools (`file_read`, `file_write`, `file_list`, `file_delete`).\n**Run a command or script** → `terminal_execute`. Commands run on the user's real computer, not a sandbox.\n**Generate an image** → `image_generate`. Call it immediately when asked to draw, create, design, or visualize anything. Do NOT describe the image in text instead.\n**Create documents** → Use the appropriate document tool (Word, Excel, PDF).\n**Remember something** → `memory_remember`. Recall something → `memory_recall`, or `memory_search` to look across everything stored.\n\nNEVER simulate, fabricate, or hallucinate tool output. If you need information, use a tool to get it.",
             // Section 4: After Using Tools
             "## After Running Tools\n\nAfter every tool call, write a natural language response. The raw tool results are already displayed in the UI — your job is to INTERPRET them.\n\n- **Search results** → Summarize the key findings in 2-3 sentences. Include the most relevant link.\n- **File operations** → Confirm what was read, written, or changed. Quote key content if relevant.\n- **Terminal commands** → Explain what the command did and what the output means in plain English.\n- **Browser actions** → Describe what you found on the page.\n- **Multiple tools** → Write one cohesive summary combining all results.\n\nNever output raw JSON, data structures, or tool payloads as your response. Always synthesize into natural language.",
             // Section 5: Understanding Projects & Codebases
@@ -458,5 +458,54 @@ Generate unit tests, integration tests, and edge case tests."#
 impl Default for PromptEngineer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::agi::tools::ToolRegistry;
+
+    /// Pull the backticked identifiers out of a prompt. Everything the prompt
+    /// wraps in backticks and spells as a bare identifier is read by the model
+    /// as a callable tool, so that is the set worth checking.
+    fn backticked_tool_names(prompt: &str) -> Vec<&str> {
+        prompt
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .filter(|span| {
+                let mut chars = span.chars();
+                chars.next().is_some_and(|first| first.is_ascii_alphabetic())
+                    && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+            .collect()
+    }
+
+    /// A tool name in the prompt that no tool answers to sends the model
+    /// calling into nothing, and the failure surfaces only at runtime.
+    #[test]
+    fn prompt_tool_names_exist() {
+        let registry = ToolRegistry::new().expect("tool registry construction");
+        registry
+            .register_all_tools()
+            .expect("built-in tool registration");
+
+        let prompt = PromptEngineer::default_system_prompt();
+        let names = backticked_tool_names(&prompt);
+        assert!(
+            !names.is_empty(),
+            "no tool names extracted from the system prompt — the check would pass vacuously"
+        );
+
+        let missing: Vec<&str> = names
+            .iter()
+            .copied()
+            .filter(|name| registry.get_tool(name).is_none())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "system prompt names tools missing from the registry: {missing:?}"
+        );
     }
 }
