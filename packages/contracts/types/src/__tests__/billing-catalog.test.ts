@@ -72,7 +72,10 @@ describe('billing catalog', () => {
   });
 
   it('bounds a purchasable seat count so an unvalidated integer never reaches Stripe', () => {
-    expect(normalizePurchasableSeats(1)).toBe(1);
+    // The floor is 2 (2026-08-08): a one-person Team is Pro with an org bill
+    // attached, so a single seat is refused rather than clamped upward.
+    expect(normalizePurchasableSeats(1)).toBeNull();
+    expect(normalizePurchasableSeats(MIN_PURCHASABLE_SEATS)).toBe(MIN_PURCHASABLE_SEATS);
     expect(normalizePurchasableSeats(25)).toBe(25);
     expect(normalizePurchasableSeats(MIN_PURCHASABLE_SEATS - 1)).toBeNull();
     expect(normalizePurchasableSeats(MAX_PURCHASABLE_SEATS + 1)).toBeNull();

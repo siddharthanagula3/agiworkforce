@@ -202,7 +202,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
                 <Link href="/login" className="agi-top-link">
                   {t('navSignIn')}
                 </Link>
-                <Link href="/login?redirectTo=%2Fchat" className="agi-top-cta">
+                <Link href="/login?redirectTo=%2F" className="agi-top-cta">
                   {t('navChat', 'Open AGI')}
                 </Link>
               </>
@@ -294,7 +294,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
               ) : (
                 <>
                   <Link
-                    href="/login?redirectTo=%2Fchat"
+                    href="/login?redirectTo=%2F"
                     className="agi-top-cta agi-top-cta--block"
                     onClick={() => setIsMenuOpen(false)}
                   >

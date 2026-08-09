@@ -145,8 +145,6 @@ High-signal search examples live in `docs/agent-context/bug-finding-guide.md`.
 
 ## Current Organization Work
 
-The active cleanup plan is `docs/plans/pre-release-repo-organization-2026-05-20.md`.
-
 Order is locked:
 
 1. Inventory/classification.

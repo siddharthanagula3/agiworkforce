@@ -35,18 +35,11 @@ export default function DownloadError({
       )}
 
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <button
-          type="button"
-          onClick={reset}
-          className="agi-fl-cta agi-fl-cta--primary"
-        >
+        <button type="button" onClick={reset} className="agi-fl-cta agi-fl-cta--primary">
           <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
           Try again
         </button>
-        <Link
-          href="/login?redirectTo=%2Fchat"
-          className="agi-fl-cta agi-fl-cta--secondary"
-        >
+        <Link href="/login?redirectTo=%2F" className="agi-fl-cta agi-fl-cta--secondary">
           Use AGI Web
         </Link>
         <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">

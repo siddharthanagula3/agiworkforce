@@ -176,6 +176,12 @@ export default function PricingPage() {
   const user = useAuthStore((s) => s.user);
   const { data: billing, isLoading: billingLoading } = useBillingData();
 
+  // Nine billing tiers exist, but showing all nine at once is where people stall.
+  // ChatGPT and Claude both segment by audience first and then show three or four
+  // cards; `audience` is that first cut, and `maxVariant` keeps Max 5x and Max 15x
+  // in one card so the individual grid really does hold the four it is classed for.
+  const [audience, setAudience] = useState<'individual' | 'business'>('individual');
+  const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
   const [annual, setAnnual] = useState(false);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -403,7 +409,7 @@ export default function PricingPage() {
     }
   }
 
-  const freeHref = user ? '/chat' : '/login?redirectTo=%2Fchat';
+  const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
   const compareRows: CompareRow[] = [
     {
@@ -514,111 +520,116 @@ export default function PricingPage() {
       <main className="agi-shell">
         <Header />
 
-        {/* ───────────────────────────── Hero ───────────────────────────── */}
-        <section className="agi-page-hero" aria-labelledby="pricing-hero-title">
-          <p className="agi-fl-eyebrow">{t('heroEyebrow')}</p>
+        {/* ───────────────────────────── Hero ─────────────────────────────
+            A pricing page is a place to compare prices. Both comparables give it
+            a title and one orienting line — chatgpt.com/pricing is "Pricing" over
+            "See pricing for our individual, business, and enterprise plans" —
+            and let the cards carry the argument. The positioning prose, the
+            three CTAs and the mode ribbon that used to live here said nothing a
+            visitor came to this page for; the trust-mode story is told on `/`,
+            `/local` and `/byok`, where it is the actual subject. */}
+        {/* `.agi-page-hero` carries a bottom rule to divide a hero from the
+            section beneath it. Here the audience tabs are the hero's own
+            controls, so that rule drew a line between the title and the thing
+            it introduces. Dropped, with the padding pulled in to match. */}
+        <section
+          className="agi-page-hero"
+          aria-labelledby="pricing-hero-title"
+          style={{ borderBottom: 'none', paddingTop: 48, paddingBottom: 24 }}
+        >
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
           </h1>
-          <p className="agi-fl-section-lede">{t('heroLedePart1', { localLabel, byokLabel })}</p>
-          <p className="agi-fl-section-lede">{t('heroLedePart2')}</p>
-          <div className="agi-fl-cta-row">
-            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              {t('installCta')}
-            </Link>
-            <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
-              {t('talkToSalesCta')}
-            </Link>
-            <Link href="/chat" className="agi-fl-cta agi-fl-cta--ghost">
-              {t('tryAgiCta')}
-            </Link>
-          </div>
-          <ul className="agi-fl-mode-ribbon" aria-label={t('modeRibbonLabel')}>
-            <li>{t('ribbonLocal')}</li>
-            <li>{t('ribbonByok')}</li>
-            <li>{t('ribbonTeam')}</li>
-          </ul>
+          <p className="agi-fl-section-lede">{t('heroLede')}</p>
         </section>
 
-        {/* ──────────────────── The wedge: Local + BYOK ─────────────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-wedge-title">
-          <p className="agi-fl-eyebrow">{t('wedgeEyebrow')}</p>
-          <h2 id="pricing-wedge-title" className="agi-fl-h2">
-            {t('wedgeHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('wedgeLede')}</p>
-
-          <div className="agi-tier-grid agi-tier-grid--compact" style={{ marginTop: 32 }}>
-            <Reveal as="article" className="agi-tier agi-tier--compact">
-              <h3 className="agi-tier-name">{localLabel}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('free')}</span>
-                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-              </p>
-              <p className="agi-tier-body">{t('localTierBody')}</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('localFeature1', { localLabel })}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('localFeature4')}
-                </li>
-              </ul>
-              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                {t('installCta')}
-              </Link>
-            </Reveal>
-
-            <Reveal as="article" delay={60} className="agi-tier agi-tier--compact">
-              <h3 className="agi-tier-name">{byokLabel}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('free')}</span>
-                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-              </p>
-              <p className="agi-tier-body">{t('byokTierBody')}</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('byokFeature4')}
-                </li>
-              </ul>
-              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                {t('installCta')}
-              </Link>
-            </Reveal>
+        {/* ──────────────── Audience + billing-cadence controls ─────────────
+            Both toggles are the same kind of thing — "which prices am I
+            looking at" — so they share a row. The cadence one only appears
+            for individual plans; Team carries its own cadence next to its
+            seat count, because seats and cadence are bought together. */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 32,
+          }}
+        >
+          <div
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('audienceLabel')}
+            style={{ marginBottom: 0 }}
+          >
+            <button
+              type="button"
+              aria-pressed={audience === 'individual'}
+              onClick={() => setAudience('individual')}
+              className={
+                audience === 'individual'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceIndividual')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={audience === 'business'}
+              onClick={() => setAudience('business')}
+              className={
+                audience === 'business'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceBusiness')}
+            </button>
           </div>
-        </section>
+
+          {audience === 'individual' ? (
+            <div
+              className="agi-tier-toggle"
+              role="group"
+              aria-label={t('billingCadenceLabel')}
+              style={{ marginBottom: 0 }}
+            >
+              <button
+                type="button"
+                aria-pressed={!annual}
+                onClick={() => setAnnual(false)}
+                className={
+                  annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                }
+              >
+                {t('monthly')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={annual}
+                onClick={() => setAnnual(true)}
+                className={
+                  annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
+                }
+              >
+                {t('annual')}{' '}
+                <span className="agi-tier-toggle-save">
+                  {t('annualSave', { pct: proSavingsPct })}
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </div>
 
         {/* ─────────────────── Team & Enterprise (centerpiece) ──────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-team-title">
-          <p className="agi-fl-eyebrow">{t('teamEyebrow')}</p>
-          <h2 id="pricing-team-title" className="agi-fl-h2">
-            {t('teamHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('teamLede')}</p>
-
+        <section
+          className="agi-fl-section"
+          aria-label={t('audienceBusiness')}
+          hidden={audience !== 'business'}
+          style={{ paddingTop: 0 }}
+        >
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
@@ -690,7 +701,12 @@ export default function PricingPage() {
                   {t('teamFeature4')}
                 </li>
               </ul>
-              <div className="agi-tier-seats">
+              {/* `.agi-tier-seats` is `display: block` with no gap, so the label
+                  and the number input sat flush and read as one word, "Seats1". */}
+              <div
+                className="agi-tier-seats"
+                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              >
                 <label className="agi-tier-seats-label" htmlFor="team-seat-count">
                   {t('seatCountLabel')}
                 </label>
@@ -720,7 +736,7 @@ export default function PricingPage() {
                 <p className="agi-tier-seats-total">
                   {teamInterval === 'yearly'
                     ? t('seatTotalAnnual', { total: teamYearlyTotalPrice, seats: teamSeats })
-                    : t('seatTotal', { total: teamTotalPrice, seats: teamSeats })}
+                    : t('seatTotal', { total: teamTotalPrice, count: teamSeats })}
                 </p>
               </div>
               <div className="agi-tier-cta-group">
@@ -767,43 +783,15 @@ export default function PricingPage() {
         </section>
 
         {/* ──────────────────── Individual cloud on-ramp ────────────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-individual-title">
-          <p className="agi-fl-eyebrow">{t('individualEyebrow')}</p>
-          <h2 id="pricing-individual-title" className="agi-fl-h2">
-            {t('individualHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('individualLede')}</p>
-
-          <div
-            className="agi-tier-toggle"
-            role="group"
-            aria-label={t('billingCadenceLabel')}
-            style={{ marginTop: 32 }}
-          >
-            <button
-              type="button"
-              aria-pressed={!annual}
-              onClick={() => setAnnual(false)}
-              className={
-                annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-              }
-            >
-              {t('monthly')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={annual}
-              onClick={() => setAnnual(true)}
-              className={
-                annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
-              }
-            >
-              {t('annual')}{' '}
-              <span className="agi-tier-toggle-save">
-                {t('annualSave', { pct: proSavingsPct })}
-              </span>
-            </button>
-          </div>
+        <section
+          className="agi-fl-section"
+          aria-label={t('audienceIndividual')}
+          hidden={audience !== 'individual'}
+          style={{ paddingTop: 0 }}
+        >
+          {/* The audience tab above already says which plans these are; a second
+              headline and two lines of prose only delayed the prices. The name
+              moves to aria-label so the section keeps an accessible name. */}
 
           {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
             <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
@@ -841,6 +829,15 @@ export default function PricingPage() {
                 <li>
                   <CheckIcon />
                   {t('freeFeature3')}
+                </li>
+                {/* Local and BYOK are $0 trust modes, not plans anyone buys.
+                    They were two more zero-price cards a visitor had to read
+                    past before reaching a price; as a line here they stay
+                    visible without spending a column. /local and /byok carry
+                    the full story. */}
+                <li>
+                  <CheckIcon />
+                  {t('freeLocalByok')}
                 </li>
               </ul>
               <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
@@ -903,52 +900,64 @@ export default function PricingPage() {
               {renderPlanAction('pro', t('proCta'))}
             </Reveal>
 
+            {/* Max 5x and Max 15x share one card. They are the same plan at two
+                capacities, and splitting them pushed the individual grid to five
+                cards inside a four-card layout. The selector keeps both buyable
+                without spending a column on each. */}
             <Reveal as="article" delay={120} className="agi-tier">
-              <h3 className="agi-tier-name">{max.label}</h3>
+              <h3 className="agi-tier-name">{maxVariant === 'max' ? max.label : max15x.label}</h3>
+              <div className="agi-tier-toggle" role="group" aria-label={t('maxVariantLabel')}>
+                <button
+                  type="button"
+                  aria-pressed={maxVariant === 'max'}
+                  onClick={() => setMaxVariant('max')}
+                  className={
+                    maxVariant === 'max'
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {max.label}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={maxVariant === 'max_15x'}
+                  onClick={() => setMaxVariant('max_15x')}
+                  className={
+                    maxVariant === 'max_15x'
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {max15x.label}
+                </button>
+              </div>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{maxPrice}</span>
+                <span className="agi-tier-price-num">
+                  {maxVariant === 'max' ? maxPrice : max15xPrice}
+                </span>
                 <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
               </p>
-              <p className="agi-tier-body">{t('maxTierBody')}</p>
+              <p className="agi-tier-body">
+                {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
+              </p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  {t('maxFeature1')}
+                  {maxVariant === 'max' ? t('maxFeature1') : t('max15xFeature1')}
                 </li>
                 <li>
                   <CheckIcon />
-                  {t('maxFeature2')}
+                  {maxVariant === 'max' ? t('maxFeature2') : t('max15xFeature2')}
                 </li>
                 <li>
                   <CheckIcon />
-                  {t('maxFeature3')}
+                  {maxVariant === 'max' ? t('maxFeature3') : t('max15xFeature3')}
                 </li>
               </ul>
-              {renderPlanAction('max', t('maxCta'))}
-            </Reveal>
-
-            <Reveal as="article" delay={160} className="agi-tier">
-              <h3 className="agi-tier-name">{max15x.label}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{max15xPrice}</span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-              </p>
-              <p className="agi-tier-body">Highest-capacity managed AI for sustained work.</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  15x Pro usage
-                </li>
-                <li>
-                  <CheckIcon />
-                  Everything in {max.label}
-                </li>
-                <li>
-                  <CheckIcon />
-                  Video generation
-                </li>
-              </ul>
-              {renderPlanAction('max_15x', `Get ${max15x.label}`)}
+              {maxVariant === 'max'
+                ? renderPlanAction('max', t('maxCta'))
+                : renderPlanAction('max_15x', t('max15xCta'))}
             </Reveal>
           </div>
         </section>

@@ -50,7 +50,7 @@
           },
           "seats": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 2,
             "maximum": 999999,
             "description": "Licensed seat count. Required for per-seat plans (team) and rejected for per-account plans. Charged as the Stripe line-item quantity."
           }
