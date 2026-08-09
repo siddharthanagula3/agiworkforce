@@ -96,6 +96,94 @@ interface SwarmResult {
 
 type PanelTab = 'messages' | 'tasks' | 'results';
 
+// ─── Swarm event payloads ───
+//
+// Field names are snake_case because `SwarmOrchestrator::emit_event` builds
+// them with `serde_json::json!` rather than serializing a renamed struct
+// (apps/desktop/src-tauri/src/core/swarm/orchestrator.rs).
+
+interface SwarmStartedPayload {
+  goal_id: string;
+  description: string;
+}
+
+interface SubtaskStartedPayload {
+  goal_id: string;
+  subtask_id: string;
+  agent_id: string;
+  description: string;
+}
+
+interface SubtaskCompletedPayload {
+  goal_id: string;
+  subtask_id: string;
+  agent_id: string;
+  output: unknown;
+  execution_time_ms: number;
+}
+
+interface SubtaskFailedPayload {
+  goal_id: string;
+  subtask_id: string;
+  agent_id: string;
+  error: string | null;
+}
+
+interface SwarmCompletedPayload {
+  goal_id: string;
+  success: boolean;
+  succeeded: number;
+  failed: number;
+  wall_time_ms: number;
+  speedup_ratio: number;
+}
+
+const MAX_FEED_MESSAGES = 100;
+
+function appendMessage(previous: AgentMessage[], message: AgentMessage): AgentMessage[] {
+  return [...previous, message].slice(-MAX_FEED_MESSAGES);
+}
+
+/** Adds the agent the orchestrator just dispatched to, or re-arms an existing row. */
+function upsertAgent(previous: SwarmAgent[], agentId: string, task: string): SwarmAgent[] {
+  const running: Partial<SwarmAgent> = { status: 'running', currentTask: task, progress: 0 };
+  if (previous.some((a) => a.id === agentId)) {
+    return previous.map((a) => (a.id === agentId ? { ...a, ...running } : a));
+  }
+  return [
+    ...previous,
+    {
+      id: agentId,
+      name: agentId,
+      role: 'subtask worker',
+      status: 'running',
+      currentTask: task,
+      progress: 0,
+    },
+  ];
+}
+
+function settleAgent(
+  previous: SwarmAgent[],
+  agentId: string,
+  status: 'completed' | 'error',
+): SwarmAgent[] {
+  return previous.map((a) =>
+    a.id === agentId ? { ...a, status, progress: 1, currentTask: undefined } : a,
+  );
+}
+
+/** Subtask output is an untyped `serde_json::Value`; render it without `[object Object]`. */
+function describeSubtaskOutput(output: unknown): string {
+  if (output === null || output === undefined) return '(no output)';
+  if (typeof output === 'string') return output;
+  try {
+    return JSON.stringify(output);
+  } catch {
+    return String(output);
+  }
+}
+
 // ─── Component ───
 
 interface AgentCollaborationPanelProps {
@@ -142,49 +230,100 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     const unlisteners: Array<() => void> = [];
 
     const setup = async () => {
+      const track = (unlisten: () => void) => {
+        if (mounted) unlisteners.push(unlisten);
+        else unlisten();
+      };
+
       try {
-        const unlistenProgress = await listen<{
-          agents: SwarmAgent[];
-          progress: number;
-          phase: string;
-        }>('swarm:progress', (event) => {
-          if (!mounted) return;
-          setAgents(event.payload.agents ?? []);
-        });
-        if (mounted) unlisteners.push(unlistenProgress);
-        else unlistenProgress();
+        track(
+          await listen<SwarmStartedPayload>('swarm:started', () => {
+            if (!mounted) return;
+            setAgents([]);
+            setMessages([]);
+          }),
+        );
 
-        const unlistenMessage = await listen<AgentMessage>('swarm:agent_message', (event) => {
-          if (!mounted) return;
-          setMessages((prev) => [...prev.slice(-99), event.payload]);
+        track(
+          await listen<SubtaskStartedPayload>('swarm:subtask_started', (event) => {
+            if (!mounted) return;
+            const { agent_id, description } = event.payload;
+            setAgents((prev) => upsertAgent(prev, agent_id, description));
+            setMessages((prev) =>
+              appendMessage(prev, {
+                id: `${event.payload.subtask_id}-assigned`,
+                fromAgent: 'orchestrator',
+                toAgent: agent_id,
+                content: description,
+                timestamp: Date.now(),
+                type: 'task',
+              }),
+            );
+          }),
+        );
 
-          // Update delegation status from result messages
-          if (event.payload.type === 'result') {
+        track(
+          await listen<SubtaskCompletedPayload>('swarm:subtask_completed', (event) => {
+            if (!mounted) return;
+            const { agent_id, subtask_id, output } = event.payload;
+            const content = describeSubtaskOutput(output);
+            setAgents((prev) => settleAgent(prev, agent_id, 'completed'));
+            setMessages((prev) =>
+              appendMessage(prev, {
+                id: `${subtask_id}-result`,
+                fromAgent: agent_id,
+                toAgent: 'orchestrator',
+                content,
+                timestamp: Date.now(),
+                type: 'result',
+              }),
+            );
             setDelegations((prev) =>
               prev.map((d) =>
-                d.agentId === event.payload.fromAgent && d.status === 'running'
-                  ? { ...d, status: 'completed', result: event.payload.content }
+                d.agentId === agent_id && d.status === 'running'
+                  ? { ...d, status: 'completed', result: content }
                   : d,
               ),
             );
-          }
-        });
-        if (mounted) unlisteners.push(unlistenMessage);
-        else unlistenMessage();
+          }),
+        );
 
-        const unlistenComplete = await listen<{ result: SwarmResult }>(
-          'swarm:complete',
-          (event) => {
+        track(
+          await listen<SubtaskFailedPayload>('swarm:subtask_failed', (event) => {
+            if (!mounted) return;
+            const { agent_id, subtask_id, error: subtaskError } = event.payload;
+            const content = subtaskError ?? 'Subtask failed';
+            setAgents((prev) => settleAgent(prev, agent_id, 'error'));
+            setMessages((prev) =>
+              appendMessage(prev, {
+                id: `${subtask_id}-error`,
+                fromAgent: agent_id,
+                toAgent: 'orchestrator',
+                content,
+                timestamp: Date.now(),
+                type: 'error',
+              }),
+            );
+            setDelegations((prev) =>
+              prev.map((d) =>
+                d.agentId === agent_id && d.status === 'running'
+                  ? { ...d, status: 'error', result: content }
+                  : d,
+              ),
+            );
+          }),
+        );
+
+        // The full SwarmResult arrives on the swarm_execute_goal reply; this
+        // event only closes out the live view for runs the user did not start
+        // from this panel (delegations, scheduler-triggered goals).
+        track(
+          await listen<SwarmCompletedPayload>('swarm:completed', () => {
             if (!mounted) return;
             setExecuting(false);
-            if (event.payload.result) {
-              setResults((prev) => [event.payload.result, ...prev].slice(0, 20));
-            }
             refreshStats();
-          },
+          }),
         );
-        if (mounted) unlisteners.push(unlistenComplete);
-        else unlistenComplete();
       } catch (e) {
         console.warn('[AgentCollaboration] Failed to setup listeners:', e);
       }

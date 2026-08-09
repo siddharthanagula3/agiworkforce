@@ -35,6 +35,36 @@ export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
   'jira',
 ];
 
+/**
+ * Persist key. It used to be `connectors-store`, which the stale duplicate in
+ * `stores/settings/connectors.ts` also claims at version 4. Both modules are
+ * evaluated (that one via `settingsStore`'s re-export), so each rehydration
+ * overwrote the other's payload: this store kept reading back a v4 blob, ran
+ * its `version < 6` migration, and reset `supportedConnectorIds` on every
+ * boot. Only this store has UI consumers, so it moved to a private key.
+ */
+const CONNECTORS_PERSIST_KEY = 'agiworkforce-connectors-store';
+const LEGACY_SHARED_PERSIST_KEY = 'connectors-store';
+
+/**
+ * One-time move of the pre-rename payload onto {@link CONNECTORS_PERSIST_KEY},
+ * so an upgrade does not blank the connector list on first paint. Runs before
+ * `create()` because persist rehydrates during store construction. The legacy
+ * entry is left in place — the duplicate store still owns it.
+ */
+function adoptLegacyPersistedState(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (window.localStorage.getItem(CONNECTORS_PERSIST_KEY) !== null) return;
+    const legacy = window.localStorage.getItem(LEGACY_SHARED_PERSIST_KEY);
+    if (legacy !== null) window.localStorage.setItem(CONNECTORS_PERSIST_KEY, legacy);
+  } catch {
+    // Storage unavailable (private mode, quota) — start from defaults instead.
+  }
+}
+
+adoptLegacyPersistedState();
+
 // CON-25: `ConnectorPermState`, `ConnectorPermissions`, the persisted
 // `connectorPermissions` map, and the `setToolPermission` / `getToolPermission`
 // actions were removed. They had ZERO readers: real per-tool enforcement runs in
@@ -341,7 +371,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
         },
       }),
       {
-        name: 'connectors-store',
+        name: CONNECTORS_PERSIST_KEY,
         // CON-25: v7 drops the dead `connectorPermissions` map from persisted
         // state so stale allow/deny entries stop being rehydrated on upgrade.
         version: 7,

@@ -168,7 +168,12 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
         },
       })),
       {
-        name: 'agiworkforce-chat-preferences',
+        // `stores/settings/chatPrefs.ts` declares a twin of this store and is
+        // the copy the app actually reaches (via `settingsStore`); it keeps
+        // `agiworkforce-chat-preferences` and the data written under it. Two
+        // stores on one key clobber each other's payload on rehydrate, so this
+        // module persists separately.
+        name: 'agiworkforce-chat-preferences-store',
         version: 2,
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,

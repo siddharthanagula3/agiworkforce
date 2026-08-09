@@ -1074,6 +1074,35 @@ export function initializeExecutionGoalSubscription(): void {
   });
 }
 
+/** Payload of `llm:stream_chunk` (core/agi/executors/llm_executor.rs). */
+interface LlmStreamChunkPayload {
+  tool_id: string;
+  content: string;
+  chunk_index: number;
+}
+
+/** Payload of `agi:tool_stream` (ui/events/tool_stream.rs — internally tagged on `type`). */
+interface ToolStreamPayload {
+  event: {
+    type: 'started' | 'progress' | 'output_chunk' | 'completed' | 'error' | 'cancelled';
+    tool_id: string;
+  };
+}
+
+/** The `command` field of `agi:terminal_command` (ui/events/frontend_events.rs). */
+interface TerminalCommandPayload {
+  id: string;
+  command: string;
+  cwd: string;
+  exitCode?: number | null;
+  stdout?: string | null;
+  stderr?: string | null;
+}
+
+// Which tool's LLM stream the reasoning pane is currently mirroring, so an
+// unrelated tool finishing mid-stream does not clear the streaming indicator.
+let streamingToolId: string | null = null;
+
 export async function initializeExecutionListeners() {
   if (listenersInitialized) {
     return;
@@ -1087,31 +1116,38 @@ export async function initializeExecutionListeners() {
   }
 
   try {
-    const unlisten8 = await listen<{ step_id: string; chunk: string }>(
-      'agi:llm_chunk',
-      ({ payload }) => {
-        const state = useExecutionStore.getState();
-        state.appendLLMReasoning(payload.step_id, payload.chunk);
-        state.setStreaming(true);
-      },
-    );
+    const unlisten8 = await listen<LlmStreamChunkPayload>('llm:stream_chunk', ({ payload }) => {
+      streamingToolId = payload.tool_id;
+      const state = useExecutionStore.getState();
+      state.appendLLMStream(payload.content);
+      state.setStreaming(true);
+    });
     unlistenFunctions.push(unlisten8);
 
-    const unlisten9 = await listen<{ step_id: string }>('agi:llm_complete', () => {
+    // LlmExecutor has no terminal "stream done" event of its own; the tool
+    // stream it runs inside is what reports completion, keyed by the same
+    // tool_id the chunks carry.
+    const unlisten9 = await listen<ToolStreamPayload>('agi:tool_stream', ({ payload }) => {
+      const { type, tool_id } = payload.event;
+      if (type !== 'completed' && type !== 'error' && type !== 'cancelled') return;
+      if (streamingToolId !== null && streamingToolId !== tool_id) return;
+      streamingToolId = null;
       useExecutionStore.getState().setStreaming(false);
     });
     unlistenFunctions.push(unlisten9);
 
-    const unlisten10 = await listen<{ command: string; output: string; exit_code?: number }>(
-      'agi:terminal_output',
+    const unlisten10 = await listen<{ command: TerminalCommandPayload }>(
+      'agi:terminal_command',
       ({ payload }) => {
+        const { command } = payload;
         useExecutionStore.getState().addTerminalLog({
-          id: `terminal_${Date.now()}`,
+          id: command.id,
           timestamp: Date.now(),
-          command: payload.command,
-          output: payload.output,
-          exitCode: payload.exit_code,
-          isError: payload.exit_code !== undefined && payload.exit_code !== 0,
+          command: command.command,
+          output: [command.stdout, command.stderr].filter(Boolean).join('\n'),
+          exitCode: command.exitCode ?? undefined,
+          isError:
+            command.exitCode !== null && command.exitCode !== undefined && command.exitCode !== 0,
         });
       },
     );
