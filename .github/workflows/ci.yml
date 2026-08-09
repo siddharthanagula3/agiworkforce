@@ -784,16 +784,25 @@ jobs:
         # step at line 162. Test-target lints surface a separate 36-error backlog
         # that pre-dates this job's feature scoping; tracked as follow-up rather
         # than gating shipping-binary lint here.
+        #
+        # NB3: `sentry` is NOT in the feature list because agiworkforce-desktop
+        # has no such feature. Cargo rejects an unknown feature before it lints
+        # anything ("none of the selected packages contains this feature"), so
+        # while it was listed this lane failed on every commit and linted zero
+        # lines. It went unnoticed because the lane only runs after `check`
+        # passes, which had not happened since 2026-07-21. Every name below is
+        # verified against [features] in apps/desktop/src-tauri/Cargo.toml, and
+        # `pnpm check:workflow-cargo-features` re-verifies it on every run.
+        #
+        # NB4: the rationale above lives OUTSIDE the shell script on purpose. A
+        # `#` comment cannot sit between a line-continuation backslash and its
+        # continuation: the shell joins the two lines first, so the comment
+        # swallows the rest of the command. That truncated `cargo clippy
+        # --workspace --lib` (no features, no `-D warnings`), then tried to run
+        # `--features` as a command and exited 127. Guarded by
+        # `pnpm check:workflow-cargo-features`.
         run: |
           cargo clippy --workspace --lib \
-            # NB3: `sentry` is NOT in this list because agiworkforce-desktop has no
-            # such feature. Cargo rejects an unknown feature before it lints
-            # anything ("none of the selected packages contains this feature"),
-            # so while it was listed this lane failed on every commit and linted
-            # zero lines. It went unnoticed because the lane only runs after
-            # `check` passes, which had not happened since 2026-07-21.
-            # Every name below is verified against [features] in
-            # apps/desktop/src-tauri/Cargo.toml.
             --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/webrtc-support,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
             -- -D warnings
 

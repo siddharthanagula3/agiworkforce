@@ -10,6 +10,8 @@
  * the web CSRF check by design — see apps/web/lib/csrf.ts).
  */
 
+import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
+
 import { api } from './api';
 import { API_URL } from '@/lib/constants';
 
@@ -140,12 +142,6 @@ export async function listConnectedConnectors(): Promise<ConnectedConnector[]> {
 // ---------------------------------------------------------------------------
 // Per-user connector OAuth (apps/web/app/api/connectors/oauth/start/route.ts)
 // ---------------------------------------------------------------------------
-
-/**
- * Path that begins the hosted per-user OAuth flow. Mirrors
- * `CONNECTOR_OAUTH_START_PATH` in apps/web/lib/connectors/oauth-registry.ts.
- */
-const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
 
 export interface ConnectorOAuthStart {
   connectorId: string;

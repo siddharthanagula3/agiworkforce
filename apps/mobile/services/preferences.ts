@@ -11,6 +11,11 @@
  * in Cloud Mode; Local Mode has no account and must keep using its device-local
  * store.
  */
+import {
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  managedCloudPreferencesNamespacePath,
+} from '@agiworkforce/cloud-contracts';
+
 import { api } from '@/services/api';
 
 interface PreferenceReadResponse {
@@ -28,7 +33,7 @@ interface PreferenceReadResponse {
  */
 export async function fetchPreferenceNamespace(namespace: string): Promise<unknown> {
   const data = await api.get<PreferenceReadResponse>(
-    `/api/settings/preferences?namespace=${encodeURIComponent(namespace)}`,
+    managedCloudPreferencesNamespacePath(namespace),
   );
   const settings = data?.settings;
   return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
@@ -38,7 +43,7 @@ export async function savePreferenceNamespace<T extends object>(
   namespace: string,
   value: T,
 ): Promise<void> {
-  await api.put('/api/settings/preferences', { namespace, value });
+  await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value });
 }
 
 /**
@@ -50,7 +55,7 @@ export async function savePreferenceNamespace<T extends object>(
  * cannot clobber a key this app does not know about.
  */
 export async function fetchAccountSettings(): Promise<Record<string, unknown>> {
-  const data = await api.get<PreferenceReadResponse>('/api/settings/preferences');
+  const data = await api.get<PreferenceReadResponse>(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH);
   const settings = data?.settings;
   return settings && typeof settings === 'object' && !Array.isArray(settings)
     ? (settings as Record<string, unknown>)
@@ -58,5 +63,5 @@ export async function fetchAccountSettings(): Promise<Record<string, unknown>> {
 }
 
 export async function saveAccountSettings(settings: Record<string, unknown>): Promise<void> {
-  await api.put('/api/settings/preferences', { settings });
+  await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { settings });
 }

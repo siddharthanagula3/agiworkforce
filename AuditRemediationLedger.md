@@ -69,7 +69,7 @@ must be recorded with the same evidence a fix gets.
 4. **CM — Contract mismatch:** “Two things that should match, don’t.”
 5. **HC — Hardcoding:** “Where this repo hardcodes things it shouldn’t.”
 
-The screenshots were captured on **2026-08-08**. Several reports refer to an audit branch/commit around `chore/retro-stale-docs` / `7611c622b`; older supporting diligence material refers to `fix/audit-remediation-2026-07-25` / `9ba68da627f55ef6d8e0c6e0cb078dcce109a694`. **Line numbers and file locations may have moved. The finding remains open until the current equivalent is located and verified.**
+The screenshots were captured on **2026-08-08**. Several reports refer to an audit branch/commit around `chore/retire-stale-docs` / `7611c622b` (BASE-001 corrected the branch name from the reported `chore/retro-stale-docs`, which does not exist); older supporting diligence material refers to `fix/audit-remediation-2026-07-25` / `9ba68da627f55ef6d8e0c6e0cb078dcce109a694`. **Line numbers and file locations may have moved. The finding remains open until the current equivalent is located and verified.**
 
 ---
 
@@ -158,11 +158,249 @@ The screenshot reports are preserved in the source tags, but execution is reorde
 
 ## P0.1 Snapshot and working-state controls
 
-- [ ] **BASE-001 — Record the exact starting state.** Save branch, commit SHA, package-manager version, Rust toolchain, Node version, OS, environment mode, and `git status` in the remediation log.
-- [ ] **BASE-002 — Discover repository-owned commands.** Read root/package manifests, Cargo workspace, CI workflows, guardrail scripts, and `AGENTS.md`/equivalent instructions. Do not invent command names when the repository already defines them.
-- [ ] **BASE-003 — Create a reproducible baseline report.** Run all currently required lint, typecheck, unit-test, migration-test, build, and repository-guard commands. Record every failure before making broad changes.
+- [x] **BASE-001 — Record the exact starting state.** Save branch, commit SHA, package-manager version, Rust toolchain, Node version, OS, environment mode, and `git status` in the remediation log. This ledger is the remediation log; no baseline record existed anywhere in the repo before this entry (`grep -rl BASE-001` matched only this file).
+
+      Evidence: recorded 2026-08-09. Two baselines exist and they are not the same commit.
+
+      **Audit baseline** — what the findings in this ledger were captured against:
+      branch `chore/retire-stale-docs`, commit
+      `7611c622b9e1db99d5e9cf8fec2656d1bedec0bf` (`feat(billing): require two seats
+      to buy team`, 2026-08-08 11:35:13 -0500). Correction: §"Audit sources" above
+      spells this branch `chore/retro-stale-docs`; `git branch -a` has only
+      `chore/retire-stale-docs`. Corrected in place.
+
+      **Remediation baseline** — where the work is currently landing: branch
+      `fix/codeql-high-severity-batch-1`, commit
+      `73648df8c776f36d88e0c8b6a53b0051c2a4f939` (`docs(plan): the work queue is
+      empty — 86 done, 9 blocked, 3 reverted, 1 dismissed`), ahead of its remote by
+      55 commits. `git status --porcelain` → 0 lines immediately before this entry was
+      written (working tree clean); the only change after it is this ledger edit.
+
+      **Divergence, and it matters.** HEAD does not contain the audit commit:
+      `git merge-base --is-ancestor 7611c622b HEAD` → false. Merge base is
+      `86255ed3c` (`fix(ci): reclaim runner disk before the native sidecar build`,
+      2026-08-07). `86255ed3c..HEAD` is 92 commits; 8 commits on the audit branch are
+      absent from HEAD:
+
+      ```text
+      7611c622b feat(billing): require two seats to buy team
+      aa796be07 refactor(web): pair the pricing toggles and lift the title
+      8f8f00178 fix(web): remove the rule and dead space under the pricing header
+      7210322d1 refactor(web): cut the pricing page down to prices
+      73380216f feat(web): segment pricing by audience like chatgpt and claude
+      7ae6c910c feat(web): serve the product on the root domain
+      0e74383ca chore(docs): retire nine orphaned adrs and correct the decision index
+      7214d0c70 chore(docs): retire 228 stale documents and the readme-ownership guard
+      ```
+
+      Any finding touching web pricing, root-domain serving, or the retired ADR/doc
+      set must be verified against `chore/retire-stale-docs` as well as HEAD — a
+      `NOT APPLICABLE` proved only on HEAD says nothing about those 8 commits, and a
+      fix landed only on HEAD does not reach them.
+
+      **Toolchain, all matching their pins.** Node `v24.18.0` (`package.json`
+      `engines.node: "24"`; `.github/workflows/ci.yml:91` `node-version: 24`). pnpm
+      `9.15.3` (`package.json` `packageManager: pnpm@9.15.3`, `engines.pnpm: >=9.15.0`).
+      `rustc 1.94.0 (4a4ef493e 2026-03-02)` / `cargo 1.94.0`, active toolchain
+      `1.94.0-aarch64-apple-darwin` overridden by `rust-toolchain.toml` (`channel =
+      "1.94.0"`), which matches every CI pin (`ci.yml:255,552,750,813,854`,
+      `codeql.yml:47`, and `RUST_VERSION: '1.94.0'` in `release-cli.yml:25`,
+      `release-desktop.yml:41`, `build-windows-release.yml:22`).
+
+      **OS:** macOS 26.5.2, `Darwin 25.5.0 arm64` (aarch64-apple-darwin).
+
+      **Environment mode:** `NODE_ENV` is unset in the baseline shell, so surfaces
+      resolve to their framework development default. `.env.local` is present and
+      ignored by `.gitignore:195` (`.env*.local`); its contents are deliberately not
+      read or recorded here.
+
+- [x] **BASE-002 — Discover repository-owned commands.** Discovery performed; the
+      canonical map already existed and was extended to cover the Rust and
+      security gates it was missing.
+
+      Evidence: `docs/agent-context/commands.json` is the canonical command map
+      (`AGENTS.md:98`), enforced by `scripts/check-agent-context.mjs:367-412` and
+      `scripts/check-service-layer.mjs:118-123`. Discovery sources read this run:
+      root `package.json` (97 scripts), root `Cargo.toml` members
+      (`apps/desktop/src-tauri`, `apps/cli`, `crates/*` — 14 packages per `cargo
+      metadata`), 18 `.github/workflows/*.yml`, `scripts/check-*.mjs`, and
+      `AGENTS.md`. Every command string in `commands.json` was resolved against
+      real root/workspace scripts; the only two that do not resolve are the
+      package-manager builtin `pnpm install` and the `testSinglePackage`
+      placeholder template.
+
+      Gap found and closed: the map documented `cargo check --workspace` but none
+      of the blocking Rust or security gates, so an agent running BASE-003 would
+      have had to invent them. Added to `repoWide`: `rustClippy`,
+      `rustClippyWorkspace`, `rustFmtCheck`, `rustDependencyPolicy`,
+      `rustDependencyAdvisories`, `secretScan`, `dependencyAuditJs`; added to
+      `surfaces.desktop`: `rustTest`, `rustTestSingle`. Each string is copied from
+      its CI definition (`ci.yml:115`, `:169`, `:311`, `:322`, `:368`, `:392`,
+      `:836`; `release-cli.yml:94`), not composed.
+
+      Verified 2026-08-09: `node scripts/check-agent-context.mjs` → exit 0;
+      `node scripts/check-service-layer.mjs` → exit 0; `node
+      scripts/check-secrets.mjs` → exit 0. `cargo fmt --all -- --check` → exit 1
+      on a pre-existing diff in `apps/cli/src/models/streaming.rs:578` — a
+      baseline failure for BASE-003/BASE-004, not introduced here and not owned by
+      this task.
+
+- [x] **BASE-003 — Create a reproducible baseline report.** Baseline run recorded
+      below. Six required gates are red — including the web production build — plus
+      seven repo-defined commands that no workflow or hook enforces.
+
+      Evidence: run 2026-08-09 on branch `fix/codeql-high-severity-batch-1`, commit
+      `73648df8c776f36d88e0c8b6a53b0051c2a4f939` — the BASE-001 remediation baseline.
+      `git status --porcelain` was empty when the sweep started and still empty apart
+      from this ledger edit when the guard sweep finished; concurrent lanes began
+      writing to the tree afterwards, so re-running these commands later measures
+      their working tree, not this commit. Every command is a repo-owned command from
+      `package.json` / `docs/agent-context/commands.json`; none were invented, and
+      nothing was skipped to keep the report green.
+
+      Read `pnpm check:llm-operability` (`package.json:145`) with care: it is a
+      `&&` chain, so it stops at the first red guard and hides every guard after it.
+      It aborts at `check:module-reachability`, which is only the 14th of 38. The
+      guards were therefore also run one at a time; three more failures were behind
+      that wall.
+
+      **Green.** `pnpm lint` (45 tasks, 19.9s) · `pnpm lint:extension` ·
+      `pnpm typecheck:all` (45 tasks, 30.1s) · `pnpm test:l1:l2` ·
+      `pnpm test:db-migrate` · `pnpm audit --audit-level=high` (29 advisories, 2 high,
+      both already ignored by policy) · `pnpm check:secrets` ·
+      `pnpm check:hardcoded-arrays` · `pnpm check:protocol-types` ·
+      `pnpm check:lock-drift` · `pnpm sync:models:check` · `pnpm check:ui-gaps` ·
+      `pnpm check:ui-gaps:monotonic` (comparison skipped: no base ref locally) ·
+      `bash scripts/check-no-hardcoded-models.sh` ·
+      `node apps/desktop/scripts/check-wiring.mjs` · `cargo check --workspace` (1m37s) ·
+      `AGIWORKFORCE_SKIP_VENDORED_BWRAP=1 RUSTFLAGS='' CARGO_INCREMENTAL=0 cargo test
+      -p agiworkforce-desktop --lib` (`ci.yml:368`; 4694 passed, 0 failed, **32
+      ignored** — that ignore count is BASE-008's inventory, not a pass) ·
+      `cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings
+      -D unsafe-code` (4m41s) · and these individual guards, each exit 0:
+      surface-invariants, structure-conventions, mobile-hygiene, service-layer,
+      lane-ownership, generated-artifacts, report-retention, non-md-artifacts,
+      neon-migrations, workflow-cargo-features, codeowners, readme-ownership,
+      doc-status, hooks, hook-fire-sites, model-catalog, marketing-models,
+      availability-invariant, db-isolation, css-tokens, llm-failures, trust-boundaries,
+      capability-boundaries, provider-contracts, agent-context, audit-inventory,
+      capability-gaps, executable-docs, agent-context-indexes, repo-organization,
+      workspace-scripts, boundaries, cloud-contract-ownership, artifact-sync-ownership,
+      service-domain-ownership.
+
+      **Red, and required by CI or `.husky/pre-push`.**
+
+      1. `pnpm --filter @agiworkforce/web build` → exit 1. Turbopack compiles, then
+         page-data collection dies: `TypeError: (0 , o.createContext) is not a
+         function` at the `MarketingFooter` import — `app/about/page.tsx:5` on the
+         first run, `app/accessibility/page.tsx:4` on a second run, i.e. whichever
+         marketing page is collected first, reproduced twice. Mechanism, read from
+         source: `MarketingFooter` → `@shared/components/agi/AgiMark`
+         (`apps/web/shared/components/agi/AgiMark.tsx:6`, a re-export shim) →
+         the `@agiworkforce/ui` barrel `packages/ui/ui/src/index.ts`, which carries no
+         `'use client'` and re-exports client-only primitives that call
+         `React.createContext` at module scope —
+         `packages/ui/ui/src/primitives/Carousel.tsx:1` and
+         `packages/ui/ui/src/primitives/ToggleGroup.tsx:1`, re-exported at
+         `packages/ui/ui/src/index.ts:187` and `:265-270`.
+         A server component evaluating that barrel gets the RSC React build, where
+         `createContext` does not exist. Web is a deployable surface CI builds
+         (`ci.yml:224-231`). Not bisected — no checkout was performed.
+      2. `pnpm check:module-reachability` (`ci.yml:142`, and inside
+         `check:llm-operability`) → exit 1: "known unreachable baseline is stale;
+         remove wired/deleted path(s): apps/desktop/src/constants/timeouts.ts"
+         (`scripts/check-module-reachability.mjs:251`).
+      3. `pnpm check:surface-reachability` (inside `check:llm-operability`) → exit 1,
+         same stale path, second copy:
+         `scripts/config/surface-reachability-allowlist.json:58`.
+         2 and 3 are both fallout of `be38f2cf4` ("make the ipc timeouts apply to the
+         invoke callers actually use", ledger HARD-007/008/015), which wired
+         `constants/timeouts.ts` into `utils/ipc.ts`, `api/ollama.ts`, `api/mcp.ts` and
+         `stores/chat/agentWorkflowEvents.ts` without removing the two ratchet
+         entries. The file is genuinely reachable now; the fix is deleting one line
+         from each list, and it belongs to whoever owns those ratchets — not to this
+         reporting task.
+      4. `pnpm check:env-contract` (inside `check:llm-operability`) → exit 1: "web:
+         apps/web/lib/moderation/hash-denylist.ts reads undocumented environment
+         variable MODERATION_HASH_DENYLIST". Introduced by `7aa633875`.
+      5. `pnpm check:ci-guardrails` (inside `check:llm-operability`) → exit 1:
+         `vercel.json must include "\"source\": \"/v1/chat/completions\""`
+         (`scripts/check-ci-guardrails.mjs:473`). `438e154d4` (ledger MATCH-008) moved
+         that rewrite out of `vercel.json` into `apps/web/next.config.ts:98-99`, where
+         it still exists; the guard's assertion now names the wrong owner. This one is
+         a stale guard, not a lost route — but it is red, so pre-push is red.
+      6. `pnpm test` → exit 1. 42 of 45 turbo tasks pass; mobile fails 1 of 2767
+         (`apps/mobile/__tests__/paywall-bottom-sheet.test.tsx:165` expects
+         "Upgrade to Max", the sheet renders "Upgrade to Max 5x"). `9f36c2d1a` ("one
+         vocabulary for plan tiers") made "Max 5x" canonical
+         (`packages/contracts/types/src/billing-catalog.ts:167`) and added
+         a replacement asserting the new label at
+         `apps/mobile/src/features/chat/components/__tests__/PaywallBottomSheet.tierLabels.test.tsx:57`,
+         but left the old assertion behind. One stale expectation, not a product
+         defect.
+
+      Items 1-6 all trace to commits made after the merge base `86255ed3c`, i.e. by
+      this remediation today (`be38f2cf4`, `7aa633875`, `438e154d4`, `9f36c2d1a`,
+      and the `@agiworkforce/ui` barrel last touched by `c5d67f7be`). None are
+      inherited debt. BASE-004 should classify them as remediation regressions.
+
+      **Red, but not wired to CI or a hook** (repo-defined commands that no workflow
+      and no husky hook runs — real, lower priority):
+
+      - `pnpm format:check` → 733 files fail Prettier. Nothing enforces it; `lint`
+        and the Claude post-save hook do not cover the repo.
+      - `pnpm check:licenses` → "THIRD_PARTY_LICENSES.md not found"
+        (`scripts/check-licenses.mjs:146`). The file was deleted in `906fe5cda` and
+        never restored, while `AGENTS.md:88`, `docs/legal/README.md:68` and
+        `docs/agent-context/known-flaws.md:2762` still describe it as the place
+        third-party license obligations are recorded. Its pre-deletion content is
+        recoverable (`git show 906fe5cda^:THIRD_PARTY_LICENSES.md`). Restoring it is
+        a legal-content decision, not a mechanical fix.
+      - `pnpm check:reference-integrity` and `pnpm docs:check` → 43 undeclared
+        references, mostly `ExecutionPlan.md` citing paths that no longer resolve.
+      - `pnpm check:spec-artifacts` → all 8 expected artifacts missing
+        (engineering_rules, feature_matrix, competitor_matrix, implementation_map,
+        dependency_graph, release_checklist, roadmap, architecture_report); the
+        directory the checker expects them in does not exist.
+      - `cargo fmt --all -- --check` → exit 1 on
+        `apps/cli/src/models/streaming.rs:578` (already reported under BASE-002).
+        Gates the `v-cli-*` release workflow (`release-cli.yml:94`), not PR CI.
+      - `python3 scripts/check-no-conflict-markers.py` → 36 markers, all inside
+        untracked local artifacts (`tmp/uiref/agiw-full.tar`, the downloaded
+        `apps/extension-vscode/.vscode-test/` VS Code harness). The gate walks the
+        working tree with `os.walk` rather than `git ls-files`
+        (`scripts/check-no-conflict-markers.py:73-78`), so it is green on a fresh CI
+        checkout and red on any developer machine that has run the VS Code
+        integration tests. False positive locally, real ergonomics defect.
+
+      **Not run, and why.** Playwright/E2E (`e2e-tests.yml`, needs browsers and a dev
+      server), Semgrep (`ci.yml:206`, not installed), `cargo deny` (`ci.yml:311,322`,
+      needs `cargo install cargo-deny`), and the Chrome/VSIX packaging steps
+      (`ci.yml:233`, needs release fixtures), and `cargo test -p agiworkforce-cli`
+      (`ci.yml:369`; only the desktop half of that CI step was run). Those five are the
+      remaining gap in this baseline; treat them as unknown, not green.
+
 - [ ] **BASE-004 — Classify failures.** Separate pre-existing failures from remediation regressions, but do not ignore either category.
-- [ ] **BASE-005 — Establish a clean evidence directory.** Store machine-readable command results, benchmark outputs, screenshots, and migration proofs outside generated or committed source unless the repository defines a location.
+- [x] **BASE-005 — Establish a clean evidence directory.** NOT APPLICABLE — the task's own
+      escape clause fires: the repository already defines the location, so nothing new
+      should be established.
+
+      Evidence: `docs/current/agent-and-repo-operability.md:44-48` names the contract —
+      evidence belongs in `audit/`, generated reports in `reports/` or `audit/reports/`,
+      never at root. It is enforced, not just written down:
+      `scripts/check-repo-organization.mjs:184-198` keeps `audit/` a required root that
+      `scripts/clean-repo.mjs` may not delete or classify as stale, and its root allowlist
+      rejects any unclassified root directory or file, so evidence cannot be dropped beside
+      the source tree. `scripts/check-report-retention.mjs:9-46` requires
+      `Status`/`Owner`/`Purpose`/`Retention` metadata on each report root and child
+      collection. Both run in `pnpm check:llm-operability` (`package.json:145`), which
+      `pre-push` executes. Local scratch is kept out of committed source by `.gitignore`
+      (`/artifacts/`, `reports/generated/`, `reports/audit/gate-baseline/`, `test-results/`,
+      `playwright-report/`, root `/*.png`).
+
+      Verified 2026-08-09: `node scripts/check-repo-organization.mjs` → exit 0, "Repo
+      organization check passed."; `node scripts/check-report-retention.mjs` → exit 0,
+      "Report retention check passed." Use `audit/` for this remediation's evidence.
 
 ## P0.2 Repair known red guardrails first
 
@@ -185,7 +423,18 @@ The screenshot reports are preserved in the source tags, but execution is reorde
       checker already accounts for, not suppressions added to make this pass.
 
 - [ ] **BASE-008 — Audit skipped tests.** Inventory every `test.skip`, conditional no-op, ignored Rust test, quarantined suite, and CI exclusion. Each must be fixed, explicitly time-bounded with an owner, or removed with an evidence-backed reason. The prior audit found many Desktop visual/settings/GDPR tests silently skipping.
-- [ ] **BASE-009 — Add an audit-plan progress check.** Add a simple script that fails if this ledger contains open tasks when a release-completion command is invoked. It must not run in ordinary developer flows unless intentionally configured.
+- [x] **BASE-009 — Add an audit-plan progress check.** Add a simple script that fails if this ledger contains open tasks when a release-completion command is invoked. It must not run in ordinary developer flows unless intentionally configured.
+
+      Evidence: `scripts/check-audit-progress.mjs` parses this ledger (skipping fenced
+      code blocks) and exits 1 while any `- [ ]` remains, grouping open items by task ID.
+      Its only caller is step `[9/9]` of `scripts/launch-readiness-check.sh:135-144`, the
+      manual pre-tag release-completion command; it is not registered in `package.json`,
+      turbo, or any workflow, so no ordinary developer flow runs it.
+
+      Runs 2026-08-09: repo root → exit 1, "524 of 535 tasks ... are still open";
+      fixture with every box checked → exit 0, "535 ledger tasks, all closed"; missing
+      ledger → exit 1 (fails closed). `node scripts/check-repo-organization.mjs` and
+      `node scripts/check-workspace-scripts.mjs` stay green.
 
 **Phase 0 exit criteria**
 
@@ -1166,12 +1415,87 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 ## 7A. Delete or correct known false artifacts
 
-- [ ] **DOC-001 — Remove stale `google_batch_*` wiring documentation/allowlist entries.**
+- [x] **DOC-001 — Remove stale `google_batch_*` wiring documentation/allowlist entries.** FIXED — the allowlist arm was already clean (see BASE-006); the documentation arm was still open.
+
+      Allowlist arm, NOT APPLICABLE: `grep -c google_batch apps/desktop/wiring-allowlist.json`
+      → `0`, and `node apps/desktop/scripts/check-wiring.mjs` → exit 0, "Wiring check
+      passed: 1272 registrations, 1268 frontend calls ..., 1270 Rust command definitions,
+      4 reviewed orphan allowlist entries, 65 reviewed reachability allowlist entries."
+      The 11 entries the audit cites at `wiring-allowlist.json:223-263` were removed in
+      `4354d3d8b`; the audit's checker path (`scripts/check-wiring.mjs`) is also wrong —
+      it lives at `apps/desktop/scripts/check-wiring.mjs`.
+
+      Documentation arm, FIXED 2026-08-09: deleted `examples/google-batch-api.ts` — a
+      16 KB example that documented the cut feature and imported 13 symbols from
+      `../apps/desktop/src/api/googleBatch`, a module that no longer exists, so it could
+      not compile. Nothing referenced it (no `package.json` script, no import, no doc
+      link; `examples/multi-provider-chat.ts` is the only scripted example, via
+      `demo:multi-provider`). `node scripts/check-repo-organization.mjs` → exit 0 after
+      the delete (`examples/` is a required root and still holds `hooks/` and
+      `multi-provider-chat.ts`).
+
+      Left in place deliberately: `docs/agent-context/known-flaws.md:576-579` and
+      `docs/current/parity-implementation-matrix.md:162` are accurate *historical*
+      records that the feature was cut, not stale capability claims; `audit/` files are
+      the triage queue and keep their original evidence.
+
+      OPEN residue (not this task's to touch): the `google/embeddings` harness in
+      `packages/ai/model-registry/catalog/harnesses.json:118-124` still names
+      `"adapter": "desktop-google-batch"`, pointing at the deleted Desktop module. It is
+      inert descriptive metadata — no TS or Rust code branches on the string — but it is
+      mirrored into four generated registries (`packages/ai/model-registry/generated/registry.json:1056`,
+      `crates/agiworkforce-model-registry/src/generated/model_registry.json:1056`,
+      `crates/agiworkforce-protocol/src/generated/model_registry.json:1056`), so
+      correcting it means editing the shared catalog and re-running
+      `packages/ai/model-registry/scripts/compile.mjs`.
+
 - [ ] **DOC-002 — Remove false training-preference copy.**
 - [ ] **DOC-003 — Remove false Mobile store/rating copy and links.**
 - [ ] **DOC-004 — Remove deleted-path entries from repo maps and surface docs.**
 - [ ] **DOC-005 — Remove fabricated metrics from template automations and demos.**
-- [ ] **DOC-006 — Remove fake/deprecated model IDs and release names from developer demos.**
+- [x] **DOC-006 — Remove fake/deprecated model IDs and release names from developer demos.** FIXED — the release-name arm was already satisfied; the model-ID arm was still open and is now closed.
+
+      Release-name arm, SATISFIED: the audit's only cited site is
+      `audit/master-checklist-gap-audit-2026-08-05.md:456` → `apps/web/app/dev/inline-toolcall-demo/page.tsx:28-30`,
+      "hardcodes a non-existent `https://www.anthropic.com/news/claude-4-7` URL and a
+      fabricated release title". `git blame -L 26,36` shows those lines were rewritten in
+      `4354d3d8b` (2026-08-07, after the audit): the fixture now points at the real
+      `https://www.anthropic.com/news` / "Anthropic · News"
+      (`apps/web/app/dev/inline-toolcall-demo/page.tsx:32-33`), and the invented release
+      survives only inside the comment that records its removal (lines 28-31).
+
+      Model-ID arm, FIXED 2026-08-09: `examples/multi-provider-chat.ts` — the repo's only
+      scripted developer demo (`package.json:170`, `demo:multi-provider`) — pinned
+      `claude-haiku-4.5` for its Anthropic target. That ID was retired from the canonical
+      catalog in `f62274b63` (2026-07-28, "retire haiku 4.5") and the demo, authored in
+      `75cc0ef5a`, was never updated. `packages/ai/providers/anthropic/src/translate.ts:293`
+      sends `req.model` to the wire verbatim, so every run with `ANTHROPIC_API_KEY` set was
+      a guaranteed 404. Repointed to `claude-sonnet-5` — the cheapest Anthropic model the
+      catalog still serves ($3/1M in), matching the demo's cheap-tier intent on the OpenAI
+      side (`gpt-5.4-mini`). Verified: a scratch checker that resolves every `model: '...'`
+      literal in the demo against `packages/contracts/types/src/models.json` exits 1 before
+      the change (`[claude-haiku-4.5] not in models.json`) and 0 after;
+      `node scripts/check-model-catalog-integrity.mjs` → exit 0;
+      `npx tsx examples/multi-provider-chat.ts "ping"` with no keys reaches the demo's own
+      documented "No providers available" exit, proving it still compiles and runs.
+
+      OPEN residue (guard ownership, not this task's to touch): the class guard
+      `scripts/check-model-catalog-integrity.mjs` cannot catch this recurrence — its
+      `SCAN_ROOTS` is `['apps', 'packages', 'services']` (line 149), so `examples/` and
+      `tools/` are never walked, and `claude-haiku-4.5` is absent from
+      `REMOVED_SELECTABLE_MODEL_IDS`/`DISALLOWED_SUBSTRING` (lines 58-127) even though the
+      catalog dropped it. Closing that needs two edits to a shared guard script.
+
+      OPEN residue (separate subtree): `tools/skill-vetting` hardcodes retired Anthropic
+      IDs — `src/skillspector/providers/anthropic/provider.py:45,47`
+      (`claude-opus-4-6`, `claude-sonnet-4-6`) and
+      `src/skillspector/providers/anthropic_proxy/provider.py:209` (`claude-sonnet-4-6`).
+      `claude-opus-4-6` is explicitly on this repo's removed-ID denylist
+      (`scripts/check-model-catalog-integrity.mjs:59-60,119-120`). It is a developer tool,
+      not a demo, and its defaults are backed by its own bundled registry
+      (`.../anthropic/model_registry.yaml:16,20,24` — `claude-opus-4-5`,
+      `claude-sonnet-4-6`, `claude-opus-4-6`), so correcting it means editing that registry
+      plus both providers plus their tests.
 
 ## 7B. Rewrite stale capability statements
 

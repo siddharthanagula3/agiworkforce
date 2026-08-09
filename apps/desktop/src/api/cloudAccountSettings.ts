@@ -30,6 +30,8 @@
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
   MANAGED_CLOUD_REFLECT_PATH,
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  managedCloudPreferencesNamespacePath,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudReflectRecapSchema,
@@ -518,9 +520,8 @@ export async function getCloudPreferenceNamespace(
   namespace: string,
 ): Promise<Record<string, unknown>> {
   const request = createManagedCloudRequestContext(`Cloud ${namespace} preferences`);
-  const query = new URLSearchParams({ namespace });
   const response = await request.fetch(
-    `${CLOUD_API_BASE_URL}/api/settings/preferences?${query.toString()}`,
+    `${CLOUD_API_BASE_URL}${managedCloudPreferencesNamespacePath(namespace)}`,
     { method: 'GET', headers: await request.getHeaders() },
   );
   if (!response.ok)
@@ -536,11 +537,14 @@ export async function saveCloudPreferenceNamespace(
   value: Record<string, unknown>,
 ): Promise<void> {
   const request = createManagedCloudRequestContext(`Cloud ${namespace} preference save`);
-  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/preferences`, {
-    method: 'PUT',
-    headers: await request.getHeaders(),
-    body: JSON.stringify({ namespace, value }),
-  });
+  const response = await request.fetch(
+    `${CLOUD_API_BASE_URL}${MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH}`,
+    {
+      method: 'PUT',
+      headers: await request.getHeaders(),
+      body: JSON.stringify({ namespace, value }),
+    },
+  );
   if (!response.ok)
     throw await failure(request, response, `Could not save your ${namespace} settings`);
   request.assertBoundary();

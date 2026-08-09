@@ -61,6 +61,20 @@ describe('AdminConsolePage — managed compute status honesty', () => {
     },
   );
 
+  // The Identity tile used to say SSO sign-in and SCIM "remain intentionally
+  // deferred" while the readiness row on the SAME page said both were
+  // implemented. Both cannot be true, and the code says implemented:
+  // apps/web/lib/server/sso/clerk-enterprise-connections.ts provisions Clerk
+  // enterprise connections and apps/web/app/api/scim/v2/** serves SCIM 2.0.
+  it('does not describe implemented identity capabilities as deferred', () => {
+    const { container } = render(<AdminConsolePage />);
+    const text = container.textContent ?? '';
+
+    expect(text).not.toMatch(/deferred/i);
+    expect(text).toMatch(/SCIM 2\.0 provisioning/);
+    expect(text).toMatch(/enterprise_controls/);
+  });
+
   it('treats any other env value (including "1", the retired opt-in value) as open/public-alpha', () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', '1');
     const { container } = render(<AdminConsolePage />);

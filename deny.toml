@@ -4,9 +4,12 @@
 #   cargo deny check            # all four checks
 #   cargo deny check licenses   # single check
 #
-# CI wiring: not yet wired (this file lands ahead of the CI job as part of
-# the W5 guardrail batch; see the delta reported to the orchestrator for the
-# proposed `.github/workflows/ci.yml` job).
+# CI wiring: wired in `.github/workflows/ci.yml` (job `check`, native scope).
+# `cargo deny check bans sources licenses` and `cargo deny check advisories
+# --allow unmaintained --allow unsound --allow notice` both block the merge;
+# a third step runs the full `cargo deny check advisories` as a non-blocking
+# report for the maintenance classes tracked under
+# RUST-DEPENDENCY-ADVISORIES-01 in docs/agent-context/known-flaws.md.
 
 [graph]
 # No target-triple pruning: the workspace ships macOS, Linux, and Windows

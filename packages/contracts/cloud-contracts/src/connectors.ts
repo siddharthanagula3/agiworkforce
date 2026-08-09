@@ -7,6 +7,8 @@
  *   GET    /api/connectors/custom         list the user's custom remote-MCP connectors
  *   POST   /api/connectors/custom         add + persist a new custom connector
  *   DELETE /api/connectors/custom         remove one (?id=<row uuid>)
+ *   GET    /api/connectors/oauth/start    begin a per-user OAuth grant
+ *   GET    /api/connectors/oauth/callback the broker's registered redirect URI
  *
  * Mirrors `apps/web/app/api/connectors/route.ts` and
  * `apps/web/app/api/connectors/custom/route.ts` (both read in full for this
@@ -219,3 +221,37 @@ export type CreateCustomConnectorResponse = z.infer<typeof CreateCustomConnector
  */
 export const DeleteCustomConnectorResponseSchema = DisconnectResponseSchema;
 export type DeleteCustomConnectorResponse = DisconnectResponse;
+
+// ---------------------------------------------------------------------------
+// Per-user connector OAuth broker — the two addresses every surface must agree
+// on (apps/web/app/api/connectors/oauth/{start,callback}/route.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a client sends the user to begin authorization for `connectorId`.
+ *
+ * This is a CROSS-SURFACE address, which is why it lives here rather than in
+ * the (server-only) registry that used to own it. Three consumers read it and
+ * none of them can be fixed by a build:
+ *
+ *   - apps/web builds the outgoing link (`buildConnectorOAuthStartPath`,
+ *     `apps/web/lib/connectors/oauth-registry.ts`);
+ *   - apps/mobile appends `&mode=json` and asks for the authorize URL instead
+ *     of following the 302 (`apps/mobile/services/connectors.ts`);
+ *   - the shared chat UI ACCEPTS a Connect button only when the server's
+ *     `connectUrl` is exactly this path, so a drifted copy there does not
+ *     produce a wrong link — it rejects a genuine card and the button vanishes
+ *     (`packages/ui/unified-chat/src/lib/connector-connect-required.ts`, which
+ *     restates the literal because the shared UI package has no dependency on
+ *     this one; `apps/web/__tests__/contracts/connector-oauth-paths.test.ts`
+ *     pins that copy to this constant).
+ */
+export const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
+
+/**
+ * Where the hosted callback is mounted. The redirect URI registered with each
+ * provider is this path on the operator's configured origin, so moving the
+ * route without re-registering breaks every live provider — hence the contract
+ * test that asserts a handler still exists here.
+ */
+export const CONNECTOR_OAUTH_CALLBACK_PATH = '/api/connectors/oauth/callback';

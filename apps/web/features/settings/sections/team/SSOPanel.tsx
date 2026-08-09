@@ -7,9 +7,13 @@ import { getCsrfToken } from '@/lib/client/csrf';
  * Enterprise SSO configuration, nested inside the Team section.
  *
  * The server is the authority on entitlement: this panel asks
- * `GET /api/admin/sso` and renders nothing at all when that call is refused.
- * It never decides from a plan string on the client, and it never advertises a
- * control the caller cannot actually use.
+ * `GET /api/admin/sso` and renders nothing at all when that call is refused as
+ * unauthenticated or unentitled. It never decides from a plan string on the
+ * client, and it never advertises a control the caller cannot actually use.
+ *
+ * Refused is not the same as broken. Any other failure reply — or no reply at
+ * all — is reported as a server problem, because hiding the panel on a 500
+ * tells an enterprise admin that SSO left their plan.
  */
 
 type ConnectionStatus =
@@ -127,6 +131,8 @@ export function SSOPanel({
 }) {
   // `null` means "not entitled or not yet known" — the panel stays invisible.
   const [connections, setConnections] = useState<Connection[] | null>(null);
+  // The list could not be read for a reason that is NOT lack of entitlement.
+  const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -143,15 +149,27 @@ export function SSOPanel({
         credentials: 'same-origin',
       });
       if (!response.ok) {
-        // 403 means this organization is not entitled to enterprise controls.
-        // Show nothing rather than dangling a control that cannot be used.
-        setConnections(null);
+        // Only an entitlement or auth answer means "this org does not have SSO";
+        // hide the panel rather than dangle a control that cannot be used.
+        //
+        // Every other status is the server failing, and it must not be dressed
+        // up as an absent feature. Collapsing a 500/503 into a hidden panel is
+        // how an outage reads to an enterprise admin as "SSO was taken away" —
+        // they reconfigure or open a ticket against a product that is fine.
+        if (response.status === 401 || response.status === 403) {
+          setConnections(null);
+          setUnavailable(false);
+          return;
+        }
+        setUnavailable(true);
         return;
       }
       const body = (await response.json()) as { connections: Connection[] };
       setConnections(body.connections);
+      setUnavailable(false);
     } catch {
-      setConnections(null);
+      // A network failure is equally not evidence that SSO is unavailable.
+      setUnavailable(true);
     }
   }, [organizationId]);
 
@@ -188,7 +206,33 @@ export function SSOPanel({
   );
 
   if (connections === null) {
-    return null;
+    // Nothing loaded. Stay invisible only when SSO genuinely is not on this
+    // plan; say so plainly when the read failed instead.
+    if (!unavailable) {
+      return null;
+    }
+
+    return (
+      <section style={cardStyle} aria-labelledby="sso-panel-heading">
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+          <div
+            id="sso-panel-heading"
+            style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}
+          >
+            Single sign-on (SAML / OIDC)
+          </div>
+        </div>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p role="alert" style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
+            Single sign-on settings could not be loaded. This is a problem reaching the server, not
+            a change to your plan — any existing connections keep working.
+          </p>
+          <button type="button" onClick={() => void load()} style={{ alignSelf: 'flex-start' }}>
+            Retry
+          </button>
+        </div>
+      </section>
+    );
   }
 
   async function handleCreate(event: FormEvent) {

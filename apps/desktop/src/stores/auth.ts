@@ -262,7 +262,7 @@ interface AuthActions {
   // Billing Methods (from billingStore)
   //
   // Customer/subscription records are populated by the cloud auth
-  // orchestrator from the web `/api/auth/me` response. Checkout, portal, and
+  // orchestrator from the web `/api/me` response. Checkout, portal, and
   // cancellation route through the web REST API (`lib/stripeCheckout.ts`).
   // The desktop client never holds Stripe secrets or talks to Stripe directly.
   // ─────────────────────────────────────────────────────────────────────────
@@ -1029,7 +1029,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         // Billing Methods (from billingStore)
         //
         // Subscription/customer records are set by the cloud auth orchestrator
-        // from the web `/api/auth/me` response — the desktop never queries
+        // from the web `/api/me` response — the desktop never queries
         // Stripe directly. Checkout/portal/cancel go through the web REST API
         // (`lib/stripeCheckout.ts`). No Stripe secrets live on the client.
         // ═══════════════════════════════════════════════════════════════════

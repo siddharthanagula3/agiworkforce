@@ -2580,8 +2580,8 @@ const ChatComposerNewComponent = ({
             )}
 
             {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai
-              Chat/Cowork parity, sitting immediately right of "+" (reference:
-              docs/design/ui-ux-reference-2026-07). Backed: 'agiwork' reveals
+              Chat/Cowork parity, sitting immediately right of "+".
+              Backed: 'agiwork' reveals
               the below-composer "Project or folder" picker and the selection
               threads through send meta → createConversation → server project
               context. Hidden below sm (relocated into the + menu "Mode" row)

@@ -285,18 +285,262 @@ impl Default for PlaywrightConfig {
     }
 }
 
-/// First candidate path that exists on disk, else `fallback`.
+/// Operator override for the executable the browser-control runtime launches.
 ///
-/// `fallback` is a bare executable name resolved through `PATH` by the
-/// launcher, matching what the Windows Chrome probe does when none of its
-/// known install locations are present.
-#[cfg(not(windows))]
-fn first_existing_or(candidates: &[String], fallback: &str) -> String {
-    candidates
+/// Set it to the absolute path of the browser *binary* (on macOS that is the
+/// file inside `Contents/MacOS`, not the `.app` bundle directory). It is read
+/// by [`executable_override`] and takes precedence over install-location
+/// discovery for both Chromium and Firefox.
+const BROWSER_EXECUTABLE_ENV: &str = "AGIWORKFORCE_BROWSER_EXECUTABLE";
+
+/// Read and validate [`BROWSER_EXECUTABLE_ENV`].
+///
+/// Returns `Ok(None)` when the variable is unset or empty (discovery then
+/// runs normally). A variable that is set but unusable is a configuration
+/// mistake, so it fails loudly with a message that says how to fix it rather
+/// than silently falling back to a different browser than the operator asked
+/// for.
+fn executable_override() -> Result<Option<String>> {
+    match std::env::var(BROWSER_EXECUTABLE_ENV) {
+        Ok(value) => validate_executable_override(&value),
+        // NotPresent, or non-UTF-8 which we cannot use as a path here anyway.
+        Err(_) => Ok(None),
+    }
+}
+
+/// The pure half of [`executable_override`], split out so the validation rules
+/// can be tested without mutating this process's environment.
+fn validate_executable_override(raw: &str) -> Result<Option<String>> {
+    let configured = raw.trim();
+    if configured.is_empty() {
+        return Ok(None);
+    }
+
+    if configured.contains('\0') {
+        return Err(Error::Other(format!(
+            "{BROWSER_EXECUTABLE_ENV} contains a null byte and cannot be used as a path."
+        )));
+    }
+
+    let path = std::path::Path::new(configured);
+    if !path.is_absolute() {
+        return Err(Error::Other(format!(
+            "{BROWSER_EXECUTABLE_ENV} must be an absolute path to a browser executable, got \"{configured}\"."
+        )));
+    }
+
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        Error::Other(format!(
+            "{BROWSER_EXECUTABLE_ENV} points at \"{configured}\", which cannot be read: {error}"
+        ))
+    })?;
+
+    if !metadata.is_file() {
+        return Err(Error::Other(format!(
+            "{BROWSER_EXECUTABLE_ENV} points at \"{configured}\", which is not a file. On macOS point it at the binary inside the bundle, e.g. \"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\"."
+        )));
+    }
+
+    Ok(Some(configured.to_string()))
+}
+
+/// Locate `name` on `PATH`, returning the absolute path of the first match.
+///
+/// On Windows the bare name and the `.exe` form are both tried so a caller can
+/// pass either spelling.
+fn find_on_path(name: &str) -> Option<String> {
+    let search_path = std::env::var_os("PATH")?;
+
+    for dir in std::env::split_paths(&search_path) {
+        let direct = dir.join(name);
+        if direct.is_file() {
+            return Some(direct.to_string_lossy().into_owned());
+        }
+
+        if cfg!(windows) && !name.to_ascii_lowercase().ends_with(".exe") {
+            let with_ext = dir.join(format!("{name}.exe"));
+            if with_ext.is_file() {
+                return Some(with_ext.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    None
+}
+
+/// Resolve a browser executable from known install locations, then `PATH`.
+///
+/// Discovery order is: absolute `install_paths` in the order given, then each
+/// name in `path_names` looked up on `PATH`. When nothing is installed this
+/// returns a typed error naming every location that was probed and the
+/// override env var — the launcher used to hand a bare name to `spawn` and
+/// surface the kernel's bare "No such file or directory" instead.
+fn resolve_browser_executable(
+    install_paths: &[String],
+    path_names: &[&str],
+    browser_label: &str,
+) -> Result<String> {
+    if let Some(found) = install_paths
         .iter()
-        .find(|path| std::path::Path::new(path).exists())
-        .cloned()
-        .unwrap_or_else(|| fallback.to_string())
+        .find(|path| std::path::Path::new(path).is_file())
+    {
+        return Ok(found.clone());
+    }
+
+    for name in path_names {
+        if let Some(found) = find_on_path(name) {
+            return Ok(found);
+        }
+    }
+
+    Err(Error::Other(format!(
+        "No {browser_label} installation found. Looked for [{}] on disk and for [{}] on PATH. Install one of them, or set {BROWSER_EXECUTABLE_ENV} to the absolute path of the browser executable.",
+        install_paths.join(", "),
+        path_names.join(", "),
+    )))
+}
+
+/// Locate a Chromium-based browser for the current platform.
+///
+/// The non-Windows arms used to return the bare literal `"chromium"`, which
+/// does not exist on a stock macOS install (Chrome ships inside an `.app`
+/// bundle), so every browser-control session failed on a normal Mac. Each
+/// platform now probes its real install locations before falling back to a
+/// `PATH` lookup, and reports a diagnostic instead of a bare spawn failure
+/// when nothing is installed.
+fn discover_chromium() -> Result<String> {
+    #[cfg(windows)]
+    {
+        // Build the user-profile Chrome path by resolving LOCALAPPDATA at runtime;
+        // %USERNAME% is not expanded by Path::exists(), so we use the env var instead.
+        let user_installs = std::env::var("LOCALAPPDATA")
+            .map(|local| {
+                let root = std::path::PathBuf::from(local);
+                vec![
+                    root.join(r"Google\Chrome\Application\chrome.exe")
+                        .to_string_lossy()
+                        .into_owned(),
+                    root.join(r"Microsoft\Edge\Application\msedge.exe")
+                        .to_string_lossy()
+                        .into_owned(),
+                    root.join(r"BraveSoftware\Brave-Browser\Application\brave.exe")
+                        .to_string_lossy()
+                        .into_owned(),
+                ]
+            })
+            .unwrap_or_default();
+
+        let candidates: Vec<String> = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+        ]
+        .iter()
+        .map(|p| (*p).to_string())
+        .chain(user_installs)
+        .collect();
+
+        resolve_browser_executable(
+            &candidates,
+            &["chrome", "msedge", "brave", "chromium"],
+            "Chromium-based browser",
+        )
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let home_app = std::env::var("HOME")
+            .map(|home| {
+                format!("{home}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+            })
+            .ok();
+
+        let candidates: Vec<String> = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ]
+        .iter()
+        .map(|p| (*p).to_string())
+        .chain(home_app)
+        .collect();
+
+        resolve_browser_executable(
+            &candidates,
+            &["google-chrome", "chromium", "chrome"],
+            "Chromium-based browser",
+        )
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        let candidates: Vec<String> = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/snap/bin/chromium",
+            "/usr/bin/microsoft-edge",
+            "/usr/local/bin/chromium",
+        ]
+        .iter()
+        .map(|p| (*p).to_string())
+        .collect();
+
+        resolve_browser_executable(
+            &candidates,
+            &[
+                "google-chrome",
+                "google-chrome-stable",
+                "chromium",
+                "chromium-browser",
+                "microsoft-edge",
+            ],
+            "Chromium-based browser",
+        )
+    }
+}
+
+/// Locate Firefox for the current platform.
+///
+/// Same defect class as [`discover_chromium`]: this arm used to return the
+/// bare literal `"firefox"`, which is not on `PATH` on a stock macOS or
+/// Windows install.
+fn discover_firefox() -> Result<String> {
+    #[cfg(windows)]
+    let candidates: Vec<String> = [
+        r"C:\Program Files\Mozilla Firefox\firefox.exe",
+        r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
+    ]
+    .iter()
+    .map(|p| (*p).to_string())
+    .collect();
+
+    #[cfg(target_os = "macos")]
+    let candidates: Vec<String> = ["/Applications/Firefox.app/Contents/MacOS/firefox"]
+        .iter()
+        .map(|p| (*p).to_string())
+        .chain(
+            std::env::var("HOME")
+                .map(|home| format!("{home}/Applications/Firefox.app/Contents/MacOS/firefox"))
+                .ok(),
+        )
+        .collect();
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    let candidates: Vec<String> = [
+        "/usr/bin/firefox",
+        "/usr/bin/firefox-esr",
+        "/snap/bin/firefox",
+        "/usr/local/bin/firefox",
+    ]
+    .iter()
+    .map(|p| (*p).to_string())
+    .collect();
+
+    resolve_browser_executable(&candidates, &["firefox", "firefox-esr"], "Firefox")
 }
 
 pub struct PlaywrightBridge {
@@ -512,84 +756,28 @@ impl PlaywrightBridge {
         }
 
         let exe = match browser_type {
-            BrowserType::Chromium => {
-                #[cfg(windows)]
-                {
-                    // Build the user-profile Chrome path by resolving LOCALAPPDATA at runtime;
-                    // %USERNAME% is not expanded by Path::exists(), so we use the env var instead.
-                    let user_chrome = std::env::var("LOCALAPPDATA")
-                        .map(|local| {
-                            std::path::PathBuf::from(local)
-                                .join("Google")
-                                .join("Chrome")
-                                .join("Application")
-                                .join("chrome.exe")
-                        })
-                        .ok();
-
-                    let system_paths: &[&str] = &[
-                        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                    ];
-
-                    let found = system_paths
-                        .iter()
-                        .map(|p| std::path::PathBuf::from(p))
-                        .chain(user_chrome.into_iter())
-                        .find(|p| p.exists());
-
-                    found
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "chrome".to_string())
+            BrowserType::Chromium => match executable_override()? {
+                Some(configured) => {
+                    tracing::info!(
+                        "Using browser executable from {}: {}",
+                        BROWSER_EXECUTABLE_ENV,
+                        configured
+                    );
+                    configured
                 }
-
-                // The non-Windows arm used to be the bare literal "chromium",
-                // which does not exist on a stock macOS install (Chrome ships
-                // inside an .app bundle) — so every browser-tool session
-                // errored on a normal Mac. Mirror the Windows probe instead.
-                #[cfg(target_os = "macos")]
-                {
-                    let home_app = std::env::var("HOME")
-                        .map(|home| {
-                            format!(
-                                "{home}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                            )
-                        })
-                        .ok();
-
-                    let candidates: Vec<String> = [
-                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-                        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-                        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-                    ]
-                    .iter()
-                    .map(|p| (*p).to_string())
-                    .chain(home_app)
-                    .collect();
-
-                    first_existing_or(&candidates, "chromium")
+                None => discover_chromium()?,
+            },
+            BrowserType::Firefox => match executable_override()? {
+                Some(configured) => {
+                    tracing::info!(
+                        "Using browser executable from {}: {}",
+                        BROWSER_EXECUTABLE_ENV,
+                        configured
+                    );
+                    configured
                 }
-
-                #[cfg(all(not(windows), not(target_os = "macos")))]
-                {
-                    let candidates: Vec<String> = [
-                        "/usr/bin/google-chrome",
-                        "/usr/bin/google-chrome-stable",
-                        "/usr/bin/chromium",
-                        "/usr/bin/chromium-browser",
-                        "/snap/bin/chromium",
-                        "/usr/bin/microsoft-edge",
-                        "/usr/local/bin/chromium",
-                    ]
-                    .iter()
-                    .map(|p| (*p).to_string())
-                    .collect();
-
-                    first_existing_or(&candidates, "chromium")
-                }
-            }
-            BrowserType::Firefox => "firefox".to_string(),
+                None => discover_firefox()?,
+            },
             BrowserType::Webkit => {
                 return Err(Error::Other(
                     "WebKit browser not yet supported on this platform".to_string(),
@@ -999,23 +1187,104 @@ mod tests {
     async fn test_browser_command_building() {
         let bridge = PlaywrightBridge::new().await.unwrap();
         let options = BrowserOptions::default();
-        let result = bridge.build_browser_command(&BrowserType::Chromium, &options);
-        assert!(result.is_ok());
+        match bridge.build_browser_command(&BrowserType::Chromium, &options) {
+            // Discovery must hand back a real executable, never a bare name.
+            Ok((exe, _args)) => assert!(
+                std::path::Path::new(&exe).is_file(),
+                "resolved browser executable does not exist: {exe}"
+            ),
+            // No browser installed on this host: the failure has to explain itself.
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    message.contains(BROWSER_EXECUTABLE_ENV),
+                    "diagnostic does not mention the override env var: {message}"
+                );
+            }
+        }
     }
 
-    #[cfg(not(windows))]
     #[test]
-    fn first_existing_or_prefers_a_real_path_and_falls_back_to_the_bare_name() {
-        // A path that always exists on every unix host this builds for.
-        let real = "/usr/bin".to_string();
+    fn resolve_browser_executable_prefers_an_install_path_then_path_lookup() {
+        // `sh` exists at a fixed location on unix and on PATH everywhere the
+        // desktop app builds, so it stands in for a browser binary here.
+        let install = if cfg!(windows) {
+            r"C:\Windows\System32\cmd.exe".to_string()
+        } else {
+            "/bin/sh".to_string()
+        };
+        let path_name = if cfg!(windows) { "cmd" } else { "sh" };
         let missing = "/definitely/not/installed/chrome".to_string();
 
         assert_eq!(
-            first_existing_or(&[missing.clone(), real.clone()], "chromium"),
-            real
+            resolve_browser_executable(
+                &[missing.clone(), install.clone()],
+                &[path_name],
+                "test browser"
+            )
+            .unwrap(),
+            install
         );
-        assert_eq!(first_existing_or(&[missing], "chromium"), "chromium");
-        assert_eq!(first_existing_or(&[], "chromium"), "chromium");
+
+        // No install path matches, so it has to fall through to PATH.
+        let from_path =
+            resolve_browser_executable(std::slice::from_ref(&missing), &[path_name], "test browser")
+                .unwrap();
+        assert!(std::path::Path::new(&from_path).is_file());
+    }
+
+    #[test]
+    fn resolve_browser_executable_reports_every_probe_when_nothing_is_installed() {
+        let error = resolve_browser_executable(
+            &["/definitely/not/installed/chrome".to_string()],
+            &["definitely-not-a-real-browser-binary"],
+            "Chromium-based browser",
+        )
+        .expect_err("must not resolve a browser that is not installed");
+
+        let message = error.to_string();
+        assert!(message.contains("/definitely/not/installed/chrome"), "{message}");
+        assert!(message.contains("definitely-not-a-real-browser-binary"), "{message}");
+        assert!(message.contains(BROWSER_EXECUTABLE_ENV), "{message}");
+    }
+
+    #[test]
+    fn executable_override_ignores_unset_and_blank_values() {
+        assert_eq!(validate_executable_override("").unwrap(), None);
+        assert_eq!(validate_executable_override("   ").unwrap(), None);
+    }
+
+    #[test]
+    fn executable_override_accepts_an_absolute_existing_binary() {
+        let binary = if cfg!(windows) {
+            r"C:\Windows\System32\cmd.exe"
+        } else {
+            "/bin/sh"
+        };
+        assert_eq!(
+            validate_executable_override(&format!("  {binary}  ")).unwrap(),
+            Some(binary.to_string())
+        );
+    }
+
+    #[test]
+    fn executable_override_rejects_relative_missing_and_directory_paths() {
+        for bad in [
+            "chrome",
+            "./chrome",
+            "/definitely/not/installed/chrome",
+            // The real macOS mistake: pointing at the .app bundle directory
+            // instead of the binary inside Contents/MacOS.
+            "/Applications",
+        ] {
+            let message = validate_executable_override(bad)
+                .expect_err(&format!("must reject {bad}"))
+                .to_string();
+            assert!(
+                message.contains(BROWSER_EXECUTABLE_ENV),
+                "diagnostic for {bad} does not name the env var: {message}"
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]

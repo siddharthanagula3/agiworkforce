@@ -324,7 +324,7 @@ export default function RootLayout() {
     return () => stopCloudSyncLoop();
   }, [isMmkvReady, isClerkSignedIn, clerkUserId]);
 
-  // Tier refresh — fetch /api/auth/me once after the Clerk session is available
+  // Tier refresh — fetch /api/me once after the Clerk session is available
   // and persist the result to MMKV-backed tierStore. The persisted value is used
   // immediately on the next cold start so the UI shows the correct tier without
   // waiting for the network call.
