@@ -1,14 +1,37 @@
 import { test, expect } from '@playwright/test';
+import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
+/**
+ * Chat workflow E2E.
+ *
+ * WHY THE SESSION IS SEEDED, and why this suite proved nothing before it was.
+ * The previous revision did `page.goto('/')` and nothing else, then guarded all
+ * 13 tests with `test.skip(!(await control.isVisible()))`. This project runs the
+ * plain-browser web-target bundle, so `supportsLocalAppMode` is false, the app
+ * boots in Cloud mode, and `App.tsx` renders `<AuthPage />` until a cloud session
+ * exists — the same trick `v3-smoke.spec.ts` and `gdpr.spec.ts` document.
+ *
+ * So every control these tests look for was behind a login screen, every
+ * `isVisible()` was false, and all 13 skipped. Playwright reports a skip exactly
+ * like a pass, so the suite was green in CI while asserting nothing at all: the
+ * failure it existed to catch — chat is unreachable — was the state that made it
+ * green.
+ *
+ * The skips are gone rather than made conditional on something better. A control
+ * this suite needs and cannot find is a failure, and it should say so.
+ */
 test.describe('Chat Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await injectMockCloudAuth(page);
+    await mockCloudApi(page);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expectCloudShellReady(page);
   });
 
   test('should create a new conversation', async ({ page }) => {
     const newChatButton = page.getByRole('button', { name: /new chat/i });
-    test.skip(!(await newChatButton.isVisible()), 'New chat button not available');
+    await expect(newChatButton, 'New chat button not available').toBeVisible();
 
     await newChatButton.click();
     await expect(page.getByTestId('conversation-list').locator('li').first()).toBeVisible();
@@ -16,7 +39,7 @@ test.describe('Chat Workflow', () => {
 
   test('should send a message and receive response', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
-    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+    await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await chatInput.fill('Hello, how are you?');
     const sendButton = page.getByRole('button', { name: /send/i });
@@ -28,17 +51,17 @@ test.describe('Chat Workflow', () => {
 
   test('should display conversation history', async ({ page }) => {
     const conversationsList = page.getByTestId('conversation-list');
-    test.skip(!(await conversationsList.isVisible()), 'Conversation list not available');
+    await expect(conversationsList, 'Conversation list not available').toBeVisible();
 
     await expect(conversationsList).toBeVisible();
   });
 
   test('should pin/unpin conversations', async ({ page }) => {
     const conversationItem = page.getByTestId('conversation-item').first();
-    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
+    await expect(conversationItem, 'No conversation items available').toBeVisible();
 
     const pinButton = conversationItem.getByRole('button', { name: /pin/i });
-    test.skip(!(await pinButton.isVisible()), 'Pin button not present');
+    await expect(pinButton, 'Pin button not present').toBeVisible();
 
     await pinButton.click();
     await expect(pinButton).toHaveAttribute('aria-label', /Unpin/i);
@@ -46,11 +69,11 @@ test.describe('Chat Workflow', () => {
 
   test('should delete a conversation', async ({ page }) => {
     const conversationItem = page.getByTestId('conversation-item').first();
-    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
+    await expect(conversationItem, 'No conversation items available').toBeVisible();
 
     const initialCount = await page.getByTestId('conversation-item').count();
     const deleteButton = conversationItem.getByRole('button', { name: /delete/i });
-    test.skip(!(await deleteButton.isVisible()), 'Delete button not present');
+    await expect(deleteButton, 'Delete button not present').toBeVisible();
 
     await deleteButton.click();
 
@@ -65,7 +88,7 @@ test.describe('Chat Workflow', () => {
 
   test('should search conversations', async ({ page }) => {
     const searchInput = page.getByRole('searchbox', { name: /search/i });
-    test.skip(!(await searchInput.isVisible()), 'Search input not available');
+    await expect(searchInput, 'Search input not available').toBeVisible();
 
     await searchInput.fill('test');
     await page.waitForTimeout(500);
@@ -76,7 +99,7 @@ test.describe('Chat Workflow', () => {
 
   test('should display streaming response', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
-    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+    await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await chatInput.fill('Tell me a long story');
     const sendButton = page.getByRole('button', { name: /send/i });
@@ -89,11 +112,11 @@ test.describe('Chat Workflow', () => {
 
   test('should edit a message', async ({ page }) => {
     const messageItem = page.getByTestId('message-item').last();
-    test.skip(!(await messageItem.isVisible()), 'No messages available to edit');
+    await expect(messageItem, 'No messages available to edit').toBeVisible();
 
     await messageItem.hover();
     const editButton = messageItem.getByRole('button', { name: /edit/i });
-    test.skip(!(await editButton.isVisible()), 'Edit button not present');
+    await expect(editButton, 'Edit button not present').toBeVisible();
 
     await editButton.click();
 
@@ -109,7 +132,7 @@ test.describe('Chat Workflow', () => {
 
   test('should display message statistics', async ({ page }) => {
     const statsButton = page.getByRole('button', { name: /stats/i });
-    test.skip(!(await statsButton.isVisible()), 'Stats button not available');
+    await expect(statsButton, 'Stats button not available').toBeVisible();
 
     await statsButton.click();
 
@@ -120,7 +143,7 @@ test.describe('Chat Workflow', () => {
 
   test('should handle offline state gracefully', async ({ page, context }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
-    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+    await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await context.setOffline(true);
     await chatInput.fill('This should fail');
@@ -153,20 +176,14 @@ test.describe('Chat Workflow', () => {
       }
     }
 
-    test.skip(
-      !(await chatInput.isVisible({ timeout: 5000 }).catch(() => false)),
-      'Chat input not available',
-    );
+    await expect(chatInput, 'Chat input not available').toBeVisible({ timeout: 5000 });
 
     const testQuery = 'What is the capital of France?';
     await chatInput.fill(testQuery);
     expect(await chatInput.inputValue()).toBe(testQuery);
 
     const sendButton = page.getByRole('button', { name: /send/i });
-    test.skip(
-      !(await sendButton.isVisible({ timeout: 2000 }).catch(() => false)),
-      'Send button not available',
-    );
+    await expect(sendButton, 'Send button not available').toBeVisible({ timeout: 2000 });
 
     await sendButton.click();
 
@@ -198,21 +215,24 @@ test.describe('Chat AGI Integration', () => {
 
   test('should detect and submit goal-like messages', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
-    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+    await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await chatInput.fill('Create a React component for user authentication');
     const sendButton = page.getByRole('button', { name: /send/i });
     await sendButton.click();
 
+    // The skip that used to sit here was followed by an assertion of the exact
+    // predicate it skipped on — visible, or skip; then assert visible. That
+    // assertion could never fail. `gdpr.spec.ts` carried six of the same shape.
     const agiIndicator = page.getByTestId('agi-submitted');
-    const agiVisible = await agiIndicator.isVisible({ timeout: 3000 }).catch(() => false);
-    test.skip(!agiVisible, 'AGI submission indicator not implemented');
-    await expect(agiIndicator).toBeVisible();
+    await expect(agiIndicator, 'AGI submission indicator not rendered').toBeVisible({
+      timeout: 3000,
+    });
   });
 
   test('should not submit non-goal messages to AGI', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
-    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+    await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await chatInput.fill('Hello');
     const sendButton = page.getByRole('button', { name: /send/i });
