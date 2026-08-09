@@ -7,6 +7,7 @@ import {
   listCloudConversations,
 } from '../api/cloudApi';
 import { getTaskModelForProvider } from '../constants/llm';
+import { assertRegisteredCommand } from '../utils/ipc';
 import { isCloudWeb, isDesktopUiDevLocal, isTauri, isTestEnvironment } from './runtimeEnvironment';
 
 export {
@@ -245,6 +246,14 @@ async function handleCloudWebCommand<T>(
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
+    // This module — not utils/ipc — is where 178 renderer modules get their
+    // invoke, so the registry check has to run here or it covers almost
+    // nothing. It is not total: StartupRecoveryBootstrap.tsx,
+    // services/analyticsQueries.ts, lib/newChatReset.ts and
+    // lib/browserAutomation.ts import @tauri-apps/api/core directly and still
+    // reach Rust unchecked.
+    assertRegisteredCommand(command);
+
     // @wdio/tauri-plugin 1.2 registers browser.tauri.mock() handlers here, but
     // its window.__TAURI__.core wrapper does not intercept the official Tauri
     // 2 API's non-writable window.__TAURI_INTERNALS__.invoke primitive. Route
