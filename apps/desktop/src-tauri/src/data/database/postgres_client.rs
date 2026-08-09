@@ -432,7 +432,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Postgres on DATABASE_URL; run with --ignored after starting one"]
     async fn test_create_pool() {
         let client = PostgresClient::new();
         let config =
@@ -446,7 +446,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Postgres on DATABASE_URL; run with --ignored after starting one"]
     async fn test_execute_query() {
         let client = PostgresClient::new();
         let config =

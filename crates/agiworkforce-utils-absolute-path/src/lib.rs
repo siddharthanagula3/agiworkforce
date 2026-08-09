@@ -404,7 +404,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[ignore]
+    #[ignore = "depends on a platform-specific filesystem layout"]
     fn from_absolute_path_with_removed_current_dir_child() {
         if std::env::var_os("AGIWORKFORCE_ABSOLUTE_PATH_REMOVED_CWD_CHILD").is_none() {
             return;
