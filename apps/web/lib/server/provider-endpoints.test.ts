@@ -50,7 +50,7 @@ describe('provider API root resolution', () => {
   it('strips a trailing slash so joined paths never double up', () => {
     process.env['ANTHROPIC_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/';
     expect(providerApiUrl('anthropic', 'messages')).toBe(
-      'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/messages',
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages',
     );
   });
 
@@ -63,6 +63,52 @@ describe('provider API root resolution', () => {
   it('drops a plaintext override', () => {
     process.env['ANTHROPIC_BASE_URL'] = 'http://api.anthropic.com/v1';
     expect(providerApiUrl('anthropic', 'models')).toBe('https://api.anthropic.com/v1/models');
+  });
+});
+
+/**
+ * ANTHROPIC_BASE_URL is read under two incompatible conventions in this repo
+ * and neither is going away:
+ *
+ *   - `packages/ai/providers/anthropic/src/index.ts:75` -> `@anthropic-ai/sdk`,
+ *     whose `baseURL` must NOT carry `/v1` (it posts `/v1/messages` itself).
+ *     `lib/services/provider-adapter-service.ts:182-201` feeds it the raw
+ *     validated override.
+ *   - `lib/ai-sdk/providers.ts:106-112` -> `@ai-sdk/anthropic`, whose `baseURL`
+ *     MUST carry `/v1` (it appends only `/messages`).
+ *
+ * So an operator's single value is `/v1`-carrying for one path and not for the
+ * other. These direct fetch sites must land on a real endpoint either way:
+ * concatenating blindly yields `<root>/messages` (404, missing `/v1`) for the
+ * no-`/v1` spelling, or `<root>/v1/v1/messages` for the other. Both spellings
+ * must normalize to the same URL.
+ */
+describe('ANTHROPIC_BASE_URL is version-agnostic (both repo conventions resolve alike)', () => {
+  const EXPECTED = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages';
+
+  it('resolves the no-/v1 spelling (@anthropic-ai/sdk convention) to a /v1 path', () => {
+    process.env['ANTHROPIC_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic';
+    expect(providerApiUrl('anthropic', 'messages')).toBe(EXPECTED);
+  });
+
+  it('resolves the /v1-carrying spelling (@ai-sdk/anthropic convention) without doubling /v1', () => {
+    process.env['ANTHROPIC_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1';
+    expect(providerApiUrl('anthropic', 'messages')).toBe(EXPECTED);
+    expect(providerApiUrl('anthropic', 'messages')).not.toContain('/v1/v1/');
+  });
+
+  it('keeps an interior /v1 that belongs to the gateway path, not the provider version', () => {
+    process.env['ANTHROPIC_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic';
+    expect(providerApiUrl('anthropic', 'files/file_1/content')).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/files/file_1/content',
+    );
+  });
+
+  it('leaves OPENAI_BASE_URL alone — both OpenAI SDKs agree the root carries /v1', () => {
+    process.env['OPENAI_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai';
+    expect(providerApiUrl('openai', 'audio/transcriptions')).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/audio/transcriptions',
+    );
   });
 });
 
@@ -123,7 +169,7 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
     await persistGeneratedFile({
       userId: 'user_1',
       ref: { provider: 'openai', filename: 'report.pdf', containerId: 'cntr_1', fileId: 'file_1' },
-      model: 'gpt-5.5',
+      model: 'gpt-5.6',
     });
 
     expect(fetchSpy).toHaveBeenCalled();
@@ -139,14 +185,34 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
     await persistGeneratedFile({
       userId: 'user_1',
       ref: { provider: 'anthropic', filename: 'report.pdf', fileId: 'file_abc' },
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-5',
     });
 
     expect(fetchSpy).toHaveBeenCalled();
     const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
-    expect(
-      urls.some((u) => u.startsWith('https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/')),
-    ).toBe(true);
+    // Exact URL, not a prefix: the Files API lives under `/v1`, and the
+    // override here is written in the no-`/v1` (@anthropic-ai/sdk) spelling —
+    // a blind join would emit `.../anthropic/files/...` and 404.
+    expect(urls).toContain(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/files/file_abc/content',
+    );
     expect(urls.some((u) => u.includes('api.anthropic.com'))).toBe(false);
+  });
+
+  it('sends the Anthropic file download to the same URL when the override carries /v1', async () => {
+    process.env['ANTHROPIC_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1';
+    fetchSpy.mockResolvedValue(fetchOk('pdf-bytes', 'application/pdf'));
+
+    await persistGeneratedFile({
+      userId: 'user_1',
+      ref: { provider: 'anthropic', filename: 'report.pdf', fileId: 'file_abc' },
+      model: 'claude-sonnet-5',
+    });
+
+    const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(urls).toContain(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/files/file_abc/content',
+    );
+    expect(urls.some((u) => u.includes('/v1/v1/'))).toBe(false);
   });
 });

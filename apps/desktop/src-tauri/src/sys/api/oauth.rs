@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::sys::error::{Error, Result};
+use crate::sys::security::egress_policy::public_destination_redirect_policy;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuth2Config {
@@ -96,8 +97,15 @@ impl Clone for OAuth2Client {
 
 impl OAuth2Client {
     pub fn new(config: OAuth2Config) -> crate::sys::error::Result<Self> {
+        // `token_url` is judged once, by `ensure_oauth_endpoints_public`, before
+        // this client is built. That check is worth nothing on its own while the
+        // client then follows up to ten `Location:` headers unjudged: the three
+        // token calls below POST `client_secret` in a form body, and a 307/308
+        // preserves both method and body, so an allowed token endpoint that
+        // redirects can replay the secret to a destination nobody judged.
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
+            .redirect(public_destination_redirect_policy())
             .build()
             .map_err(|e| {
                 crate::sys::error::Error::Other(format!(
@@ -353,5 +361,98 @@ mod tests {
         assert!(url.contains("scope=read"));
         assert!(url.contains("code_challenge="));
         assert!(url.contains("code_challenge_method=S256"));
+    }
+
+    /// The token endpoint is judged once, before this client exists. That check
+    /// is worthless while the client follows `Location:` unjudged: a 307
+    /// preserves method AND body, so the `client_secret` in the form body is
+    /// replayed verbatim to wherever the redirect points. This asserts the
+    /// second hop into loopback is never opened — and therefore that the secret
+    /// never leaves for it.
+    #[tokio::test]
+    async fn token_requests_do_not_replay_the_client_secret_across_a_redirect() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        /// Answers every connection with a fixed response, counting hits and
+        /// recording the request bytes it saw.
+        async fn serve(
+            response: String,
+            hits: Arc<AtomicUsize>,
+            seen: Arc<std::sync::Mutex<Vec<String>>>,
+        ) -> std::net::SocketAddr {
+            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+            let address = listener.local_addr().expect("local addr");
+            tokio::spawn(async move {
+                while let Ok((mut stream, _)) = listener.accept().await {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    let mut buffer = [0_u8; 2048];
+                    let read = stream.read(&mut buffer).await.unwrap_or(0);
+                    seen.lock()
+                        .expect("record request")
+                        .push(String::from_utf8_lossy(&buffer[..read]).to_string());
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                }
+            });
+            address
+        }
+
+        let sink_hits = Arc::new(AtomicUsize::new(0));
+        let sink_seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = serve(
+            "HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}".to_string(),
+            Arc::clone(&sink_hits),
+            Arc::clone(&sink_seen),
+        )
+        .await;
+
+        let token_hits = Arc::new(AtomicUsize::new(0));
+        let token = serve(
+            format!(
+                "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://{sink}/steal\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+            ),
+            Arc::clone(&token_hits),
+            Arc::new(std::sync::Mutex::new(Vec::new())),
+        )
+        .await;
+
+        let client = OAuth2Client::new(OAuth2Config {
+            client_id: "test_client".to_string(),
+            client_secret: Some("SUPER_SECRET".to_string()),
+            auth_url: format!("http://{token}/authorize"),
+            token_url: format!("http://{token}/token"),
+            redirect_uri: "http://localhost:3000".to_string(),
+            scopes: vec![],
+            use_pkce: false,
+        })
+        .expect("create OAuth2 client for test");
+
+        let result = client.exchange_code("auth_code", None).await;
+        assert!(
+            result.is_err(),
+            "a token redirect into loopback must not be followed"
+        );
+
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        // Leak first: when this fires it prints the bytes that escaped, which is
+        // the whole point of the test.
+        let leaked = sink_seen.lock().expect("read recorded requests").clone();
+        assert!(
+            leaked.is_empty(),
+            "client_secret was replayed to the redirect target: {leaked:?}"
+        );
+        assert_eq!(
+            sink_hits.load(Ordering::SeqCst),
+            0,
+            "the client followed a redirect into loopback"
+        );
+        assert_eq!(
+            token_hits.load(Ordering::SeqCst),
+            1,
+            "the token endpoint itself should still be called once"
+        );
     }
 }

@@ -70,7 +70,10 @@ import {
   ScheduledTaskCancellationAttemptCoordinator,
   selectScheduledTaskCancellationCredential,
 } from './features/background/scheduled-task-cancellation';
-import { publishAuthorizedScheduledTaskNotification } from './features/background/scheduled-task-notifications';
+import {
+  publishAuthorizedScheduledTaskNotification,
+  scheduledTaskNotificationAuthority,
+} from './features/background/scheduled-task-notifications';
 import { getPlatformPrompt } from './features/content/platform-prompts';
 import { migrateAutofillProfile } from './features/content/autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
@@ -1275,6 +1278,13 @@ async function taskNotificationsEnabled(): Promise<boolean> {
   }
 }
 
+/**
+ * No schedule binding here on purpose. Both call sites are proven ownerful or
+ * proven unbound: the Managed Cloud branch has already resolved `credential`
+ * before it announces the run, and the other call is past the
+ * `hasManagedBoundary` early return, so its task has no `managedCloudAccountId`
+ * to state. Adding a binding parameter would compute a value nothing reads.
+ */
 async function notifyScheduledTaskRunning(
   taskName: string,
   signal: AbortSignal,
@@ -1974,18 +1984,24 @@ interface ScheduledTaskCompletionNotice {
    * linkable conversation, and the fence must still hold in that case.
    */
   runOwner?: ManagedCloudOwner;
-  /** Set when the schedule is bound to a Managed Cloud account. */
-  boundAccountId?: string;
   signal?: AbortSignal;
 }
 
+/**
+ * No schedule binding here either, for the same reason. `completeScheduledTaskRun`
+ * only reaches this after a run journal exists, and a journal always carries a
+ * resolved `owner` (`ScheduledTaskRunJournal.owner` is required and the journal
+ * parser rejects a record without one), so the fence always decides on the
+ * owner. `executeScheduledTask`'s own completion call is on the device-local
+ * branch, past the `hasManagedBoundary` early return, so its task has no
+ * `managedCloudAccountId` to state.
+ */
 async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotice): Promise<void> {
   const { taskName, answer = '', conversationId, conversationOwner } = notice;
   const fenceOwner = notice.runOwner ?? conversationOwner;
   await publishAuthorizedScheduledTaskNotification(
     {
       ...(fenceOwner ? { owner: fenceOwner } : {}),
-      ...(notice.boundAccountId !== undefined ? { boundAccountId: notice.boundAccountId } : {}),
       ...(notice.signal ? { signal: notice.signal } : {}),
     },
     {
@@ -2005,19 +2021,20 @@ async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotic
   );
 }
 
+/**
+ * The failure text names the schedule, and `owner` is undefined whenever the
+ * run threw before it proved who authorized it — so this is the one notifier
+ * that must be told which schedule it is talking about.
+ */
 async function notifyScheduledTaskFailed(
   taskName: string,
   detail: string,
-  owner?: ManagedCloudOwner,
-  signal?: AbortSignal,
-  boundAccountId?: string,
+  owner: ManagedCloudOwner | undefined,
+  signal: AbortSignal | undefined,
+  schedule: { managedCloudAccountId?: string },
 ): Promise<void> {
   await publishAuthorizedScheduledTaskNotification(
-    {
-      ...(owner ? { owner } : {}),
-      ...(boundAccountId !== undefined ? { boundAccountId } : {}),
-      ...(signal ? { signal } : {}),
-    },
+    scheduledTaskNotificationAuthority({ schedule, resolvedOwner: owner, signal }),
     {
       isEnabled: taskNotificationsEnabled,
       isOwnerRetired: isRetiredManagedCloudOwner,
@@ -2053,7 +2070,6 @@ async function completeScheduledTaskRun(
     ...(outcome.conversationId !== undefined ? { conversationId: outcome.conversationId } : {}),
     ...(outcome.conversationOwner ? { conversationOwner: outcome.conversationOwner } : {}),
     runOwner: outcome.journal.owner,
-    boundAccountId: outcome.journal.owner.accountId,
     ...(signal ? { signal } : {}),
   });
 }
@@ -2213,12 +2229,15 @@ async function recoverScheduledTaskRun(
     }
     await abandonScheduledTaskRun(latest ?? journal, credential);
     const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
+    // Recovery runs off the run journal, not the schedule record, so there is
+    // no binding to state. The journal's owner is always resolved, so the fence
+    // decides on it.
     await notifyScheduledTaskFailed(
       journal.taskName,
       `could not be recovered: ${detail}`,
       journal.owner,
       lease.controller.signal,
-      journal.owner.accountId,
+      {},
     );
   } finally {
     endHeartbeat();
@@ -2480,11 +2499,10 @@ async function executeScheduledTask(
       scheduledTaskExecutions.isCurrent(lease),
     );
     if (!recorded) throw new ScheduledTaskCancelledError();
+    // Device-local branch only: `hasManagedBoundary` returned above, so
+    // `task.managedCloudAccountId` is undefined here by construction.
     await notifyScheduledTaskCompleted({
       taskName: task.name,
-      ...(task.managedCloudAccountId !== undefined
-        ? { boundAccountId: task.managedCloudAccountId }
-        : {}),
       signal: lease.controller.signal,
     });
   } catch (error) {
@@ -2495,14 +2513,17 @@ async function executeScheduledTask(
     if (error instanceof ScheduledTaskAuthorityError) {
       logger.warn(error.message, { taskId: task.id });
       if (error.notifyCurrentUser) {
+        // `managedExecutionOwner` is undefined here whenever
+        // `requireScheduledTaskCredential` threw before the assignment that
+        // captures it — the signed-out and session-replaced cases. The
+        // schedule's binding is then the only thing left saying whose schedule
+        // this notification would be about.
         await publishAuthorizedScheduledTaskNotification(
-          {
+          scheduledTaskNotificationAuthority({
+            schedule: task,
+            resolvedOwner: managedExecutionOwner,
             signal: lease.controller.signal,
-            ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
-            ...(task.managedCloudAccountId !== undefined
-              ? { boundAccountId: task.managedCloudAccountId }
-              : {}),
-          },
+          }),
           {
             isEnabled: taskNotificationsEnabled,
             isOwnerRetired: isRetiredManagedCloudOwner,
@@ -2518,14 +2539,16 @@ async function executeScheduledTask(
     }
     if (error instanceof ScheduledTaskRecoveryPendingError) {
       logger.warn(error.message, { taskId: task.id });
+      // Every throw that lands here happens after `managedExecutionOwner` was
+      // captured, so the owner decides and the binding is not consulted. The
+      // real schedule is still passed rather than an empty one, because an
+      // empty one would assert something untrue about a bound task.
       await publishAuthorizedScheduledTaskNotification(
-        {
+        scheduledTaskNotificationAuthority({
+          schedule: task,
+          resolvedOwner: managedExecutionOwner,
           signal: lease.controller.signal,
-          ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
-          ...(task.managedCloudAccountId !== undefined
-            ? { boundAccountId: task.managedCloudAccountId }
-            : {}),
-        },
+        }),
         {
           isEnabled: taskNotificationsEnabled,
           isOwnerRetired: isRetiredManagedCloudOwner,
@@ -2544,7 +2567,7 @@ async function executeScheduledTask(
       detail,
       managedExecutionOwner,
       lease.controller.signal,
-      task.managedCloudAccountId,
+      task,
     );
     throw error;
   } finally {

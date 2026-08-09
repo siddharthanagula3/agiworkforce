@@ -10,6 +10,7 @@ import {
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 
@@ -477,7 +478,11 @@ export async function createCloudCodeSession(
           REPOSITORY_WORKSPACE_PATH,
         )}`,
         cwd: DEFAULT_WORKSPACE_PATH,
-        timeoutMs: 60_000,
+        // HARD-008: the sandbox command deadline, named once in
+        // `lib/deadline-policy.ts`, not re-picked here. Same number as before —
+        // it is the E2B executor's own ceiling — but it is now the same symbol
+        // the Cloud Code agent loop clamps against.
+        timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
       });
       if (!clone.ok) {
         throw new CloudCodeUnavailableError(
@@ -567,7 +572,8 @@ export async function runCloudCodeCommand(
     const result = await executor.runCommand({
       command,
       cwd: session.workspacePath,
-      timeoutMs: 60_000,
+      // HARD-008: see the clone above — one named sandbox command deadline.
+      timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
     });
     const completedAt = new Date();
     const scoped = ownerSql(owner, 2);

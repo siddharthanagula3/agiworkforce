@@ -15,11 +15,17 @@
  * OpenTelemetry dependency: it stores and formats ids, it does not export spans
  * to a collector. Choosing a collector/vendor is a separate decision.
  *
- * `node:async_hooks` is aliased to `shared/lib/async-hooks-stub.ts` for browser
- * bundles (see `next.config.ts`), where the stub degrades to a synchronous
- * single-slot store. Client components therefore get correct behaviour for
- * synchronous chains and no isolation guarantee beyond that — server routes,
- * the only place spans are emitted, run against the real AsyncLocalStorage.
+ * `node:async_hooks` is aliased to `shared/lib/async-hooks-stub.ts` under the
+ * Turbopack `browser` condition only (see `next.config.ts`), where the stub
+ * degrades to a synchronous single-slot store. Client components therefore get
+ * correct behaviour for synchronous chains and no isolation guarantee beyond
+ * that. Server routes — the only place spans are emitted — resolve the real
+ * builtin. That was NOT true until 2026-08-09: the alias also carried a
+ * `default:` condition, which Turbopack applies to the server compilation, so
+ * the built server ran on the stub and this module propagated nothing past the
+ * first `await`. `async-hooks-alias.test.ts` pins the condition set; the build
+ * output is the actual proof, so re-check `.next/server` for the stub body if
+ * that alias is ever touched again.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
