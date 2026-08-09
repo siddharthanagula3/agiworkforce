@@ -10,7 +10,11 @@ const { dbHolder, verifyScimTokenMock, recordSyncEventMock, getSubscriptionMock 
   () => ({
     dbHolder: { current: null as unknown },
     verifyScimTokenMock: vi.fn(),
-    recordSyncEventMock: vi.fn(async () => {}),
+    // Rest parameter, not `()`: the mock is invoked through a spread below, and
+    // a zero-arg signature makes that spread a TS2556 compile error that vitest
+    // never sees but `tsc --noEmit` — and therefore the production build —
+    // does.
+    recordSyncEventMock: vi.fn(async (..._args: unknown[]) => {}),
     getSubscriptionMock: vi.fn(),
   }),
 );
