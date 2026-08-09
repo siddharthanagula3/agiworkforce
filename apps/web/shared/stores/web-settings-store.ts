@@ -3,15 +3,32 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-export type Theme = 'dark' | 'light' | 'system';
-export type ChatFont = 'default' | 'system' | 'dyslexic';
-export type ResponseStyle = 'concise' | 'balanced' | 'detailed' | 'technical';
+/**
+ * Web settings that are device-local by design.
+ *
+ * EVERY field here must have a production consumer. That rule is enforced by
+ * `apps/web/__tests__/settings-store-fields-are-consumed.test.ts`, which reads
+ * this file, extracts the `SettingsState` members, and fails when one is never
+ * read or never written outside of tests.
+ *
+ * The rule exists because this store had accumulated six members that no screen
+ * touched: `theme` (the real one lives in `ThemeContext`, reached through
+ * `useAppTheme`), `chatFont`, `showTokenCount`, `streamingEnabled`,
+ * `responseStyle` (the real one is `features/chat/stores/style-store`, read by
+ * `ChatComposerNew`) and `notifications` (the real ones are persisted
+ * server-side by `NotificationsSection` through `/api/settings/preferences`).
+ * A duplicate field with no reader is worse than a missing one: it looks
+ * settable, and it gives a second answer to a question that already has one.
+ *
+ * An earlier `chatFontSize` and `defaultModel` were removed for the same
+ * reason; see `NotificationsSection.tsx` for the same rule applied to the
+ * server-persisted namespace.
+ */
+
 /**
  * Transcript text scale. Backed by a REAL CSS hook — see the
  * `html[data-chat-text-size]` rules in `app/globals.css` and the applier in
- * `shared/components/AppearancePreferences.tsx`. A previous `chatFontSize`
- * field was removed because it had no reader and no stylesheet behind it, so
- * changing it did nothing visible.
+ * `shared/components/AppearancePreferences.tsx`.
  */
 export type ChatTextSize = 'small' | 'default' | 'large';
 
@@ -22,34 +39,15 @@ export interface CustomCommand {
   template: string;
 }
 
-export interface NotificationPreferences {
-  emailWeeklySummary: boolean;
-  emailAgentTaskComplete: boolean;
-  emailBillingAlerts: boolean;
-  pushTaskComplete: boolean;
-  pushMention: boolean;
-}
-
 interface SettingsState {
-  theme: Theme;
-  chatFont: ChatFont;
   chatTextSize: ChatTextSize;
   /** Soft-wrap long lines in fenced code blocks instead of scrolling them. */
   codeBlockWrap: boolean;
-  showTokenCount: boolean;
-  streamingEnabled: boolean;
-  responseStyle: ResponseStyle;
-  notifications: NotificationPreferences;
+  /** Slash commands the user defined; consumed by `SlashCommandMenu`. */
   customCommands: CustomCommand[];
   // Actions
-  setTheme: (theme: Theme) => void;
-  setChatFont: (font: ChatFont) => void;
   setChatTextSize: (size: ChatTextSize) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
-  setShowTokenCount: (show: boolean) => void;
-  setStreamingEnabled: (enabled: boolean) => void;
-  setResponseStyle: (style: ResponseStyle) => void;
-  setNotification: (key: keyof NotificationPreferences, value: boolean) => void;
   addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
   updateCustomCommand: (id: string, cmd: Partial<Omit<CustomCommand, 'id'>>) => void;
   deleteCustomCommand: (id: string) => void;
@@ -58,30 +56,11 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      theme: 'dark',
-      chatFont: 'default',
       chatTextSize: 'default',
       codeBlockWrap: false,
-      showTokenCount: false,
-      streamingEnabled: true,
-      responseStyle: 'balanced',
       customCommands: [],
-      notifications: {
-        emailWeeklySummary: true,
-        emailAgentTaskComplete: true,
-        emailBillingAlerts: true,
-        pushTaskComplete: false,
-        pushMention: false,
-      },
-      setTheme: (theme) => set({ theme }),
-      setChatFont: (font) => set({ chatFont: font }),
       setChatTextSize: (size) => set({ chatTextSize: size }),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
-      setShowTokenCount: (show) => set({ showTokenCount: show }),
-      setStreamingEnabled: (enabled) => set({ streamingEnabled: enabled }),
-      setResponseStyle: (style) => set({ responseStyle: style }),
-      setNotification: (key, value) =>
-        set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
       addCustomCommand: (cmd) =>
         set((s) => ({
           customCommands: [

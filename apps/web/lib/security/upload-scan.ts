@@ -8,6 +8,12 @@ import 'server-only';
  * those look at the BYTES, so a file whose declared type disagrees with its
  * actual content — the classic type-confusion vector — passed cleanly.
  *
+ * Two ingest paths run this, and they are the only two that accept
+ * user-supplied bytes: `/api/uploads/chat-attachment/complete` (chat
+ * attachments) and `POST /api/projects/[id]/knowledge-files` via
+ * `lib/server/project-knowledge-extraction.ts` (project sources). Both delete
+ * the stored object on rejection.
+ *
  * This scans the real bytes. It is deliberately signature- and
  * structure-based rather than a virus-definition database: the checks below
  * catch the file shapes that are dangerous *because of how this product serves
@@ -35,6 +41,12 @@ import 'server-only';
  *   (b) scanning at presign time, which means proxying the upload through the
  *       server and giving up direct-to-R2 uploads (Vercel caps bodies ~4.5MB).
  * Both are cost/architecture calls, not code changes.
+ *
+ * A second, narrower limitation: this does NOT reject `text/html` for carrying
+ * script, because a knowledge file legitimately can be a saved web page and
+ * refusing it would break the feature. What stops that markup executing is the
+ * serving side — see `lib/security/served-bytes.ts`, which demotes every
+ * browser-executable type to an opaque download on both byte-serving routes.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 

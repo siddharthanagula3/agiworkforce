@@ -13,6 +13,7 @@ pub mod blocked_paths;
 pub mod command_validator;
 pub mod dispatch_hmac;
 pub mod dm_protection;
+pub mod egress_policy;
 pub mod encryption;
 pub mod env_filter;
 pub mod exec_gate;

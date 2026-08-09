@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { McpClient } from '../../api/mcp';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Dialog } from '@/components/ui/Dialog';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { Input } from '@/ui/Input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/ui/Tabs';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Dialog } from '@/ui/Dialog';
 import { toast } from 'sonner';
 import {
   Search,

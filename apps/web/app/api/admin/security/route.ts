@@ -6,7 +6,8 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
-import { createError, type AppError } from '@/lib/errors';
+import { createError, isAppError, type AppError } from '@/lib/errors';
+import { assertAccountActive } from '@/lib/api-auth';
 import { readJsonBody } from '@/lib/read-json-body';
 
 /** Convert an AppError to a NextResponse with structured error body. */
@@ -37,14 +38,40 @@ function errorResponse(err: AppError, headers?: Record<string, string>): NextRes
  * Requires admin authentication via service role or admin user.
  */
 
-async function verifyAdminAccess(
-  request: NextRequest,
-): Promise<{ isAdmin: boolean; userId?: string; error?: string }> {
+type AdminAccess =
+  | { isAdmin: true; userId: string }
+  | { isAdmin: false; reason: string; appError: AppError };
+
+function adminDenied(reason: string, appError: AppError): AdminAccess {
+  return { isAdmin: false, reason, appError };
+}
+
+/**
+ * CRIT-014: this is the ONLY authenticated entry point on the admin control
+ * plane that does not route through `getClerkAuthUser`, so it was also the only
+ * one that never read `profiles.account_status`. Every other authenticated
+ * route calls `assertAccountActive` inside `getClerkAuthUser` (lib/api-auth.ts);
+ * this one verified the Clerk JWT and the `publicMetadata.role` claim and
+ * stopped there.
+ *
+ * That mattered because the suspend action below writes `account_status` and
+ * does NOT touch Clerk — only `ban-user` calls `clerk.users.banUser`, which
+ * revokes Clerk sessions. So a SUSPENDED admin kept a valid Clerk session, kept
+ * `role: 'admin'`, and kept full use of this route: reading the security event
+ * feed and suspending, banning, or reactivating other accounts. Suspension was
+ * enforced across the entire product except on the surface that issues it.
+ *
+ * `assertAccountActive` is called with the id proved by the token, and its
+ * status distinctions are preserved: 403 for a suspended/banned account, 503
+ * when the status lookup itself fails (it fails closed after one retry).
+ */
+async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return { isAdmin: false, error: 'Missing authorization header' };
+    return adminDenied('Missing authorization header', createError.unauthorized());
   }
 
+  let adminUserId: string;
   try {
     const { clerkClient, verifyToken } = await import('@clerk/nextjs/server');
     const client = await clerkClient();
@@ -56,7 +83,7 @@ async function verifyAdminAccess(
     const userId = payload.sub;
 
     if (!userId) {
-      return { isAdmin: false, error: 'Invalid or expired token' };
+      return adminDenied('Invalid or expired token', createError.unauthorized());
     }
 
     const user = await client.users.getUser(userId);
@@ -64,16 +91,26 @@ async function verifyAdminAccess(
     // Verify admin via publicMetadata.role (set by Clerk dashboard or admin API only)
     const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
     const role = meta?.['role'];
-    const isAdmin = role === 'admin' || role === 'owner';
 
-    if (isAdmin) {
-      return { isAdmin: true, userId };
+    if (role !== 'admin' && role !== 'owner') {
+      return adminDenied('User does not have admin privileges', createError.unauthorized());
     }
 
-    return { isAdmin: false, error: 'User does not have admin privileges' };
+    adminUserId = userId;
   } catch {
-    return { isAdmin: false, error: 'Invalid or expired token' };
+    return adminDenied('Invalid or expired token', createError.unauthorized());
   }
+
+  try {
+    await assertAccountActive(adminUserId);
+  } catch (error) {
+    return adminDenied(
+      'Admin account is suspended, banned, or unverifiable',
+      isAppError(error) ? error : createError.serviceUnavailable('Unable to verify account status'),
+    );
+  }
+
+  return { isAdmin: true, userId: adminUserId };
 }
 
 export async function GET(request: NextRequest) {
@@ -83,11 +120,11 @@ export async function GET(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     // Verify admin access
-    const { isAdmin, error: authError } = await verifyAdminAccess(request);
+    const access = await verifyAdminAccess(request);
 
-    if (!isAdmin) {
-      logger.warn({ error: authError }, 'Unauthorized security dashboard access attempt');
-      return errorResponse(createError.unauthorized());
+    if (!access.isAdmin) {
+      logger.warn({ error: access.reason }, 'Unauthorized security dashboard access attempt');
+      return errorResponse(access.appError);
     }
 
     const { searchParams } = new URL(request.url);
@@ -181,12 +218,14 @@ export async function POST(request: NextRequest) {
     if (csrfError) return csrfError;
 
     // Verify admin access
-    const { isAdmin, userId: adminUserId, error: authError } = await verifyAdminAccess(request);
+    const access = await verifyAdminAccess(request);
 
-    if (!isAdmin) {
-      logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
-      return errorResponse(createError.unauthorized());
+    if (!access.isAdmin) {
+      logger.warn({ error: access.reason }, 'Unauthorized security admin action attempt');
+      return errorResponse(access.appError);
     }
+
+    const adminUserId = access.userId;
 
     // Body size guard: cap admin payloads to prevent memory exhaustion from oversized JSON
     const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
@@ -245,8 +284,13 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // Session invalidation is handled at the middleware level:
-        // auth middleware checks account_status on every request and rejects suspended users.
+        // The Clerk session is intentionally left alive: suspension is enforced
+        // on the NEXT request by `assertAccountActive` (lib/api-auth.ts), which
+        // every authenticated API route reaches through `getClerkAuthUser` —
+        // and, since CRIT-014, which this route reaches through
+        // `verifyAdminAccess` above. It is a read of `profiles.account_status`
+        // — NOT anything in `proxy.ts`, which only decides which routes require
+        // a signed-in session and never reads account status.
 
         // Log the admin action
         await logSecurityEvent({

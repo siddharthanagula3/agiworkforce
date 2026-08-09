@@ -25,9 +25,9 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useGit } from '../../hooks/useGit';
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { Checkbox } from '@/ui/Checkbox';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 interface GitStatusPanelProps {
   /** Repository path to display status for */

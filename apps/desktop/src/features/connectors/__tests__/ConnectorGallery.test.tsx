@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorGallery } from '../ConnectorGallery';
 import { useConnectorsStore } from '../../../stores/connectorsStore';
 import { McpClient } from '@/api/mcp';
-import { TooltipProvider } from '@/components/ui/Tooltip';
+import { TooltipProvider } from '@/ui/Tooltip';
 
 vi.mock('@/api/mcp', () => ({
   McpClient: {

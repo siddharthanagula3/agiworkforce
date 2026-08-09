@@ -237,16 +237,6 @@ const tsTargets = [
       'apps/desktop/src/api/tutorials.ts',
       'apps/desktop/src/api/undo.ts',
       'apps/desktop/src/api/workflow.ts',
-      'apps/desktop/src/components/ui/AccessibleDialog.tsx',
-      'apps/desktop/src/components/ui/Accordion.tsx',
-      'apps/desktop/src/components/ui/Collapsible.tsx',
-      'apps/desktop/src/components/ui/ContextMenu.tsx',
-      'apps/desktop/src/components/ui/FormField.tsx',
-      'apps/desktop/src/components/ui/HoverCard.tsx',
-      'apps/desktop/src/components/ui/LoadingButton.tsx',
-      'apps/desktop/src/components/ui/ResponsiveContainer.tsx',
-      'apps/desktop/src/components/ui/Table.tsx',
-      'apps/desktop/src/components/ui/index.ts',
       'apps/desktop/src/constants/index.ts',
       // constants/timeouts.ts was here and is not any more: wave 4 pointed the
       // four api modules that actually execute at these constants, so the file

@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { CaptureResult } from '../../types/capture';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { Separator } from '@/components/ui/Separator';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/Dialog';
+import { Separator } from '@/ui/Separator';
 import { OCRViewer } from './OCRViewer';
 
 interface CapturePreviewProps {

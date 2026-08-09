@@ -1,8 +1,8 @@
+use crate::sys::security::egress_policy::{self, EgressDenial};
 use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -130,7 +130,6 @@ pub struct ToolExecutionGuard {
     allowed_tools: std::sync::RwLock<HashMap<String, ToolPolicy>>,
     rate_limiters: Arc<Mutex<HashMap<String, RateLimiter>>>,
     allowed_paths: std::sync::RwLock<Vec<PathBuf>>,
-    blocked_domains: Vec<String>,
 }
 
 impl ToolExecutionGuard {
@@ -1469,12 +1468,6 @@ impl ToolExecutionGuard {
                 paths.push(PathBuf::from("/tmp"));
                 paths
             }),
-            blocked_domains: vec![
-                "localhost".to_string(),
-                "127.0.0.1".to_string(),
-                "0.0.0.0".to_string(),
-                "169.254.169.254".to_string(),
-            ],
         }
     }
 
@@ -2375,66 +2368,37 @@ impl ToolExecutionGuard {
         Ok(())
     }
 
+    /// Judge a tool-supplied URL against the one host-authoritative egress
+    /// policy (`sys::security::egress_policy`). The same policy governs the
+    /// renderer-reachable `api_*` commands, so an LLM tool call and an
+    /// `invoke()` cannot reach different sets of destinations.
+    ///
+    /// DNS rebinding is out of scope here: a name that resolves to a public
+    /// address at this check and a private one at connect time still connects.
+    /// Closing that needs connect-time address pinning or a network-level
+    /// firewall rule.
     fn validate_url(&self, url: &str) -> std::result::Result<(), SecurityError> {
         debug!("Validating URL: {}", url);
 
-        let parsed = url::Url::parse(url)
-            .map_err(|_| SecurityError::InvalidParameter(format!("Invalid URL format: {}", url)))?;
-
-        let scheme = parsed.scheme();
-        if scheme != "http" && scheme != "https" {
-            warn!("Insecure protocol detected: {}", scheme);
-            return Err(SecurityError::InsecureProtocol(scheme.to_string()));
-        }
-
-        if let Some(host) = parsed.host_str() {
-            for blocked in &self.blocked_domains {
-                if host == blocked || host.starts_with(&format!("{}.", blocked)) {
-                    warn!("Blocked domain detected: {}", host);
-                    return Err(SecurityError::BlockedDomain(host.to_string()));
-                }
+        match egress_policy::ensure_public_http_destination(url) {
+            Ok(()) => Ok(()),
+            Err(EgressDenial::InvalidUrl(raw)) => Err(SecurityError::InvalidParameter(format!(
+                "Invalid URL format: {}",
+                raw
+            ))),
+            Err(EgressDenial::MissingHost(raw)) => Err(SecurityError::InvalidParameter(format!(
+                "URL has no host: {}",
+                raw
+            ))),
+            Err(EgressDenial::UnsupportedScheme(scheme)) => {
+                warn!("Insecure protocol detected: {}", scheme);
+                Err(SecurityError::InsecureProtocol(scheme))
             }
-
-            // Judge IP literals numerically, never by string prefix: prefixes missed
-            // whole ranges (CGNAT, 0.0.0.0/8, multicast) and over-blocked legitimate
-            // names like `fcc.gov`. `url::Url` has already canonicalized the decimal,
-            // octal, hex and IPv6-mapped spellings (`http://2130706433/`,
-            // `http://0x7f000001/`, `::ffff:127.0.0.1`) into these variants, so one
-            // numeric check covers every encoding of the same address.
-            match parsed.host() {
-                Some(url::Host::Ipv4(ip)) => {
-                    if is_internal_ipv4(ip) {
-                        warn!("Private/reserved IPv4 address detected: {}", host);
-                        return Err(SecurityError::BlockedDomain(host.to_string()));
-                    }
-                }
-                Some(url::Host::Ipv6(ip)) => {
-                    if is_internal_ipv6(ip) {
-                        warn!("Private/reserved IPv6 address detected: {}", host);
-                        return Err(SecurityError::BlockedDomain(host.to_string()));
-                    }
-                }
-                Some(url::Host::Domain(domain)) => {
-                    // A name whose leading labels spell a dotted quad (`10.0.0.1.nip.io`)
-                    // is a rebinding shortcut to that address; judge it by the address.
-                    if let Some(ip) = leading_ipv4_literal(domain) {
-                        if is_internal_ipv4(ip) {
-                            warn!("Hostname encodes a private IPv4 address: {}", host);
-                            return Err(SecurityError::BlockedDomain(host.to_string()));
-                        }
-                    }
-                }
-                None => {}
+            Err(EgressDenial::InternalDestination(host)) => {
+                warn!("Blocked internal destination: {}", host);
+                Err(SecurityError::BlockedDomain(host))
             }
-
-            // SECURITY NOTE: DNS rebinding attacks (where a domain resolves to a private IP
-            // after the initial check) cannot be fully prevented at the URL validation level.
-            // Mitigations include: pinning DNS results, validating the resolved IP at connect
-            // time, and using network-level controls (firewall rules blocking private ranges
-            // for outbound connections from the application).
         }
-
-        Ok(())
     }
 
     fn validate_terminal_command(&self, command: &str) -> std::result::Result<(), SecurityError> {
@@ -2794,58 +2758,6 @@ impl Default for ToolExecutionGuard {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// True when an IPv4 address is not routable on the public internet.
-/// Kept in lockstep with the web egress policy (`apps/web/lib/egress-policy.ts`),
-/// which is the reference list for what counts as internal.
-fn is_internal_ipv4(ip: Ipv4Addr) -> bool {
-    let [a, b, _, _] = ip.octets();
-    ip.is_loopback() // 127.0.0.0/8
-        || ip.is_private() // 10/8, 172.16/12, 192.168/16
-        || ip.is_link_local() // 169.254/16 — cloud metadata (IMDS)
-        || ip.is_broadcast()
-        || ip.is_documentation()
-        || a == 0 // 0.0.0.0/8 — "this network"; most stacks route it to the local host
-        || (a == 100 && (64..=127).contains(&b)) // 100.64/10 CGNAT — carrier and mesh-VPN peers
-        || a >= 224 // 224/4 multicast + 240/4 reserved
-}
-
-/// True when an IPv6 address is not routable on the public internet. IPv4 riding
-/// inside IPv6 (mapped, compatible, or NAT64) is judged as the IPv4 address it carries,
-/// so `::ffff:169.254.169.254` cannot smuggle a metadata request past the guard.
-fn is_internal_ipv6(ip: Ipv6Addr) -> bool {
-    if let Some(v4) = ip.to_ipv4() {
-        return is_internal_ipv4(v4);
-    }
-    let seg = ip.segments();
-    if seg[0] == 0x0064 && seg[1] == 0xff9b {
-        let v4 = Ipv4Addr::new(
-            (seg[6] >> 8) as u8,
-            (seg[6] & 0xff) as u8,
-            (seg[7] >> 8) as u8,
-            (seg[7] & 0xff) as u8,
-        );
-        return is_internal_ipv4(v4);
-    }
-    ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || (seg[0] & 0xfe00) == 0xfc00 // fc00::/7 unique local
-        || (seg[0] & 0xffc0) == 0xfe80 // fe80::/10 link-local
-}
-
-/// Reads a dotted quad off the front of a hostname (`10.0.0.1.nip.io`), if present.
-fn leading_ipv4_literal(domain: &str) -> Option<Ipv4Addr> {
-    let mut labels = domain.split('.');
-    let quad = [
-        labels.next()?,
-        labels.next()?,
-        labels.next()?,
-        labels.next()?,
-    ]
-    .join(".");
-    quad.parse().ok()
 }
 
 #[cfg(test)]

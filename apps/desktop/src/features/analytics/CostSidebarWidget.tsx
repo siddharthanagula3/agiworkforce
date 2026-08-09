@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { TrendingUp, Wallet, PieChart, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '@/ui/Button';
+import { Skeleton } from '@/ui/Skeleton';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/Tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/ui/Tooltip';
 import { formatCredits, dollarsToCredits } from '../../utils/credits';
 
 interface CostSidebarWidgetProps {

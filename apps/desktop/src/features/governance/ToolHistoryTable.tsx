@@ -10,7 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useToolStore } from '../../stores/chat/toolStore';
 import type { ActionLogEntry } from '../../stores/chat/toolStore';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 const STATUS_COLORS: Record<string, string> = {
   success: 'text-emerald-400 bg-emerald-500/10',

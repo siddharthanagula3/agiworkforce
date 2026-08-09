@@ -12,8 +12,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
-
-const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
+import { providerApiUrl } from '@/lib/server/provider-endpoints';
 
 /**
  * B4 fix: validate that the first 12 bytes of an upload look like a known
@@ -253,7 +252,7 @@ async function handleTranscriptions(request: NextRequest) {
     forwardForm.append('language', language);
   }
 
-  const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+  const response = await fetch(providerApiUrl('openai', 'audio/transcriptions'), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`,

@@ -3,10 +3,10 @@ import { AlertTriangle, Check, Eye, EyeOff, Loader2, Network, Trash2 } from 'luc
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
 import { invoke } from '@/lib/tauri-mock';
 import { useSettingsStore } from '@/stores/settingsStore';
 

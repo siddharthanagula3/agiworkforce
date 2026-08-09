@@ -54,6 +54,7 @@ import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
 import { getBillingPlanPricing } from '@agiworkforce/types';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 
 interface WebAppShellProps {
   children: React.ReactNode;
@@ -62,6 +63,7 @@ interface WebAppShellProps {
 export function WebAppShell({ children }: WebAppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { openSettings } = useSettingsModal();
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
@@ -265,11 +267,15 @@ export function WebAppShell({ children }: WebAppShellProps) {
         id: 'customize',
         label: 'Customize',
         icon: Settings,
-        onClick: () => router.push('/settings/general'),
+        // CRIT-008: open the modal in place. `/settings/general` renders a
+        // SettingsModalRedirect whose only job is to reopen this modal and
+        // replace back to /chat, so routing there tore down and remounted
+        // whatever page the shell was wrapping.
+        onClick: () => openSettings('general'),
         isActive: false,
       },
     ],
-    [pathname, router],
+    [openSettings, pathname, router],
   );
 
   // ---- Account footer ----
@@ -325,7 +331,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
               <DropdownMenuSeparator />
             </>
           )}
-          <DropdownMenuItem onClick={() => router.push('/settings/general')}>
+          {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
+          <DropdownMenuItem onClick={() => openSettings('general')}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>

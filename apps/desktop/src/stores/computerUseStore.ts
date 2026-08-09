@@ -6,17 +6,15 @@ import { toast } from 'sonner';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useAppModeStore, selectPrivacyMode } from './appModeStore';
+// Picking an on-device provider is not a boundary cross out of the Local
+// workspace. The classification itself lives in one place (types/provider) so
+// this store, the model picker, and the tier gate cannot disagree about which
+// runtimes count as local.
+import { isLocalProvider } from '../types/provider';
 
 /** Wire values of the Rust `ChatExecutionMode` enum (sys/commands/chat/types.rs,
  *  `#[serde(rename_all = "snake_case")]`). */
 type OpaExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
-
-// On-device providers (mirrors the classification in App.tsx model filtering);
-// picking one is not a boundary cross out of the Local workspace.
-const LOCAL_PROVIDERS = new Set(['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm']);
-
-const isLocalProvider = (provider: string | null): boolean =>
-  provider !== null && LOCAL_PROVIDERS.has(provider.toLowerCase());
 
 /**
  * TRUST BOUNDARY (desktop-trust-boundary-01): every OPA task submission

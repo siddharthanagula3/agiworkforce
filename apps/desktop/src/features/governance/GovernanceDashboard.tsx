@@ -21,8 +21,8 @@ import { AuditLog } from './AuditLog';
 import { PendingApprovals } from './PendingApprovals';
 import { SafetyPolicies } from './SafetyPolicies';
 import { ToolHistoryTable } from './ToolHistoryTable';
-import { Button } from '@/components/ui/Button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Button } from '@/ui/Button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 
 type GovernanceTab = 'overview' | 'approvals' | 'audit' | 'policies' | 'history';
 

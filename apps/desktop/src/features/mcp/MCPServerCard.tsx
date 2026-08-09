@@ -1,8 +1,8 @@
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
 import { Server, Plug, PlugZap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
 

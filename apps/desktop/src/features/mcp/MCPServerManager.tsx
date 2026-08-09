@@ -17,15 +17,15 @@ import { McpClient } from '../../api/mcp';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import type { McpServerConfig, McpServerInfo, McpServersConfig } from '../../types/mcp';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Dialog } from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Spinner } from '@/components/ui/Spinner';
-import { Switch } from '@/components/ui/Switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
+import { Dialog } from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Spinner } from '@/ui/Spinner';
+import { Switch } from '@/ui/Switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { MCPLogsViewer } from './MCPLogsViewer';
 
 /** Editable configuration options for an MCP server */

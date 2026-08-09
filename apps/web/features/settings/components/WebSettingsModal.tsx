@@ -31,7 +31,7 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsPlugin, SettingsSkill } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
@@ -84,7 +84,11 @@ interface ApiSkill {
 }
 
 // ---------------------------------------------------------------------------
-// URL segment <-> section key mapping
+// URL segment -> section key mapping.
+//
+// INBOUND ONLY. This resolves a deep link (`/settings/<segment>`) to the
+// section the modal should open at. Nothing writes the URL in the other
+// direction — see handleSectionChange for why.
 // ---------------------------------------------------------------------------
 
 const SECTION_TO_SEGMENT: Record<string, string> = {
@@ -172,7 +176,6 @@ export function WebSettingsModal({
   onClose,
   initialSection = 'general',
 }: WebSettingsModalProps) {
-  const router = useRouter();
   const pathname = usePathname();
 
   // Derive section from current URL path (deep-link support)
@@ -200,24 +203,26 @@ export function WebSettingsModal({
     }
   }, [open, initialSection, sectionFromPath]);
 
-  const handleSectionChange = useCallback(
-    (key: string) => {
-      setActiveSection(key);
-      const segment = SECTION_TO_SEGMENT[key];
-      if (segment) {
-        const href =
-          key === 'connectors'
-            ? '/connectors'
-            : key === 'skills'
-              ? '/skills'
-              : key === 'plugins'
-                ? '/apps'
-                : `/settings/${segment}`;
-        router.replace(href, { scroll: false });
-      }
-    },
-    [router],
-  );
+  /**
+   * Rail selection is local state. It does NOT navigate.
+   *
+   * CRIT-008. This used to `router.replace` the section's deep-link route
+   * (`/connectors`, `/skills`, `/apps`, `/settings/<segment>`). Every one of
+   * those routes renders <SettingsModalRedirect>, whose entire job is to
+   * reopen this modal and `router.replace('/chat')` — so the URL bounced
+   * straight back one tick later, and the page underneath the modal was
+   * unmounted and remounted on every single rail click (twice, plus a server
+   * render of the force-dynamic /settings layout). The shareable URL it looked
+   * like it was producing never survived the round trip. `help` was worse:
+   * `SETTINGS_NAV_GROUPS_WEB` lists it and there is no `/settings/help` route,
+   * so clicking Help left the user on a 404.
+   *
+   * Deep links INTO the modal are unchanged — those routes are the entry
+   * points, not the section switcher.
+   */
+  const handleSectionChange = useCallback((key: string) => {
+    setActiveSection(key);
+  }, []);
 
   // ── Connected connectors state ─────────────────────────────────────────────
   // Three REAL sources (no optimistic fakery):

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, X, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import type { ApprovalRequest, ApprovalRiskLevel } from '../../stores/chat/toolStore';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
 

@@ -105,8 +105,8 @@ export default function ItProvidersPage() {
               v: 'Resumable sessions and visible tool approvals for after-action review.',
             },
             {
-              k: 'BYOK enforcement',
-              v: 'Require BYOK org-wide on enterprise contracts. Zero managed-cloud spend unless you opt in.',
+              k: 'BYOK posture',
+              v: 'Every seat can run fully local, or on your own provider keys on Desktop and CLI, so client work need not reach our infrastructure. Requiring that org-wide is not a shipped control — no surface enforces an org policy today — so it is scoped on an enterprise contract.',
             },
           ]}
         />

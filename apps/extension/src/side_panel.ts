@@ -18,7 +18,7 @@ import {
   type ProviderId,
   type RoutingTaskType,
 } from '@agiworkforce/types';
-import { getExtensionSendQueue } from './sendQueue';
+import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
 import {
   clearChildren,
   setText,
@@ -124,6 +124,7 @@ import {
   clearAuthToken,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
+  MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   type ManagedModelAccess,
 } from './features/cloud-bridge/freeTrialClient';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
@@ -4417,9 +4418,13 @@ function admitComposerAttachment(dataUrl: string): boolean {
 
 /**
  * Accept files from a drag-drop, paste or file-picker event and append their
- * data URLs to `pendingAttachments`. Files are pre-filtered on type and size so
- * an obviously doomed file is never read into memory; `admitComposerAttachment`
- * then enforces the transport's count and total-byte caps on append.
+ * data URLs to `pendingAttachments`. Files are pre-filtered on type and on the
+ * canonical per-file attachment ceiling
+ * (`MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES`, the same
+ * `MAX_CHAT_ATTACHMENT_BYTES` the web composer and the upload presign route
+ * use) so an obviously doomed file is never read into memory;
+ * `admitComposerAttachment` then enforces the transport's count and total-byte
+ * caps on append.
  *
  * Round-2 audit P0 #3 — chrome-ext composer drag-drop + paste-image wire,
  * 2026-05-21. Reuses the existing attachment preview UI; no schema work
@@ -4427,7 +4432,6 @@ function admitComposerAttachment(dataUrl: string): boolean {
  * pendingAttachments per the round-3 fix in commit `38034fedb`.
  */
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
-  const MAX_BYTES = 10 * 1024 * 1024;
   composerAttachmentNotice = null;
   const candidates = Array.from(files);
   const incoming: File[] = [];
@@ -4436,8 +4440,8 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
       composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
       continue;
     }
-    if (file.size > MAX_BYTES) {
-      composerAttachmentNotice = `Each image must be under ${attachmentBudgetLabel(MAX_BYTES)}.`;
+    if (file.size > MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES) {
+      composerAttachmentNotice = `Each image must be under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES)}.`;
       continue;
     }
     incoming.push(file);

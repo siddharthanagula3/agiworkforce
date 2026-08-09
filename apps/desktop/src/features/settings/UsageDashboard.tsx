@@ -14,8 +14,8 @@ import { BarChart3, RefreshCw, SlidersHorizontal, TrendingUp } from 'lucide-reac
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
-import { Progress } from '@/components/ui/Progress';
-import { Button } from '@/components/ui/Button';
+import { Progress } from '@/ui/Progress';
+import { Button } from '@/ui/Button';
 import {
   useBillingUsageStore,
   selectBudget,

@@ -28,6 +28,8 @@ import {
   extractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
+import { deleteObject, objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -43,6 +45,32 @@ function projectKnowledgeResponse(row: Record<string, unknown>, projectId: strin
     ...file,
     storageUri: `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
   };
+}
+
+/**
+ * A file rejected by content inspection is DELETED from storage, not merely
+ * left unregistered. The presign step handed the browser a direct PUT URL, so
+ * the bytes are already in the bucket by the time this handler runs; without
+ * this they would sit there indefinitely, still readable through the storage
+ * key and still counted by nothing. Deleting shrinks the exposure to the
+ * seconds between the PUT and this rejection.
+ */
+async function purgeRejectedKnowledgeUpload(
+  userId: string,
+  projectId: string,
+  storageUri: string,
+): Promise<void> {
+  const objectKey = objectKeyFromStorageUri(storageUri);
+  if (!objectKey) return;
+  try {
+    await deleteObject(objectKey);
+  } catch (deleteError) {
+    // Loud: the bytes stay in the bucket until somebody removes them by hand.
+    logger.error(
+      { err: deleteError, userId, projectId, objectKey },
+      '[knowledge-files] CRITICAL: could not delete a rejected upload from storage',
+    );
+  }
 }
 
 function isSchemaNotReady(error: unknown): boolean {
@@ -281,6 +309,39 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     extractedText = extraction.extractedText;
   } catch (error) {
     if (error instanceof ProjectKnowledgeExtractionError) {
+      // Content inspection rejected the bytes (structural scan or the
+      // known-illegal-media denylist). Nothing is registered, the object is
+      // removed from storage, and the verdict is recorded — the uploader only
+      // ever sees the generic message the extractor already set.
+      if (error.code === 'content_rejected' || error.code === 'known_illegal_media') {
+        const storageUri = body.storageUri.trim();
+        logger.warn(
+          {
+            userId,
+            projectId,
+            fileName: body.fileName.trim(),
+            code: error.code,
+            findings: error.detail.findings,
+          },
+          '[knowledge-files] rejected a project source that failed content inspection',
+        );
+        await purgeRejectedKnowledgeUpload(userId, projectId, storageUri);
+        recordModerationEvent({
+          surface: 'upload',
+          action: 'block',
+          categories:
+            error.code === 'known_illegal_media' ? ['known_illegal_media'] : ['active_content'],
+          ruleIds: [
+            error.code === 'known_illegal_media'
+              ? 'upload.hash-denylist'
+              : 'upload.content-inspection',
+          ],
+          userId,
+          ...(error.detail.sha256 ? { contentSha256: error.detail.sha256 } : {}),
+          ...(error.detail.listLabel ? { listLabel: error.detail.listLabel } : {}),
+          storageKey: storageUri,
+        });
+      }
       throw createError.validation(error.message);
     }
     logger.error({ error, projectId }, 'Failed to extract project knowledge file');

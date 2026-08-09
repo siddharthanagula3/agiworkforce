@@ -7,14 +7,14 @@
 import { memo, useCallback, useState } from 'react';
 import { ChevronDown, ChevronUp, Star, Trash2 } from 'lucide-react';
 
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card, CardContent, CardHeader } from '@/ui/Card';
 import { cn } from '@/lib/utils';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { formatRelativeTime } from '@/lib/utils';
 
 /**

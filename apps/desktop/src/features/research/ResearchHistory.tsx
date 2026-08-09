@@ -8,11 +8,11 @@ import { memo, useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { History, Clock, BookOpen, ChevronRight, Trash2, Search, ExternalLink } from 'lucide-react';
 
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/ui/Button';
+import { Card, CardContent } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Input } from '@/ui/Input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+} from '@/ui/AlertDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { cn } from '@/lib/utils';
 import { useResearchStore, selectHistory, type ResearchHistoryEntry } from '@/stores/researchStore';
 

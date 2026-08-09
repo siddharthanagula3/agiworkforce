@@ -2,7 +2,7 @@
  * Cross-surface contract test: chrome ext pairing flow against the desktop
  * bridge POST /pair endpoint at 127.0.0.1:8787.
  *
- * Pins the joint between `apps/extension/src/pairing.ts` (the IDLE→REQUESTING
+ * Pins the joint between `apps/extension/src/features/native-bridge/pairing.ts` (the IDLE→REQUESTING
  * →PAIRED state machine) and `apps/desktop/.../websocket_server.rs`
  * `handle_http_pair` (the E2 desktop responder, closed at desktop commit
  * 948ceeb7f) by simulating the desktop responder in jsdom.
@@ -31,7 +31,7 @@ import {
   requestPairing,
   unpair,
   _resetStateForTesting,
-} from '../src/pairing';
+} from '../src/features/native-bridge/pairing';
 
 // ── Chrome storage shim (matches pairing.test.ts) ─────────────────────────────
 

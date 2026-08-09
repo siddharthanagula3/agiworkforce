@@ -36,6 +36,7 @@ interface Connection {
   domainVerifiedAt: string | null;
   serviceProvider: { acsUrl: string | null; entityId: string | null; metadataUrl: string | null };
   domainVerification: { recordType: 'TXT'; recordName: string; recordValue: string } | null;
+  domainChallengeExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -342,7 +343,25 @@ export function SSOPanel({
                   <CopyRow label="Record type" value={connection.domainVerification.recordType} />
                   <CopyRow label="Record name" value={connection.domainVerification.recordName} />
                   <CopyRow label="Record value" value={connection.domainVerification.recordValue} />
+                  {connection.domainChallengeExpiresAt ? (
+                    <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 11 }}>
+                      This challenge expires{' '}
+                      {new Date(connection.domainChallengeExpiresAt).toLocaleString()}. Reissue it
+                      to get a fresh record.
+                    </p>
+                  ) : null}
                 </div>
+              ) : !connection.domainVerifiedAt ? (
+                // Unverified with no live challenge: it lapsed, so say that
+                // rather than leaving the admin staring at a Verify button that
+                // cannot succeed.
+                <p
+                  role="status"
+                  style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12 }}
+                >
+                  The domain verification challenge has expired. Reissue it to get a new DNS TXT
+                  record, publish that record, then verify.
+                </p>
               ) : null}
 
               {connection.serviceProvider.acsUrl ? (
@@ -366,21 +385,42 @@ export function SSOPanel({
               {isOwner ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                   {!connection.domainVerifiedAt ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      style={buttonStyle}
-                      onClick={() =>
-                        void mutate(
-                          '/api/admin/sso/verify-domain',
-                          'POST',
-                          { connectionId: connection.id },
-                          'Domain verification failed.',
-                        )
-                      }
-                    >
-                      Verify domain
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy || !connection.domainVerification}
+                        style={buttonStyle}
+                        onClick={() =>
+                          void mutate(
+                            '/api/admin/sso/verify-domain',
+                            'POST',
+                            { connectionId: connection.id },
+                            'Domain verification failed.',
+                          )
+                        }
+                      >
+                        Verify domain
+                      </button>
+                      {/* Challenges expire, so the reissue endpoint has to be
+                          reachable from here — otherwise a lapsed challenge is
+                          a dead end for everyone who does not call the API by
+                          hand. */}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        style={secondaryButtonStyle}
+                        onClick={() =>
+                          void mutate(
+                            '/api/admin/sso/verify-domain',
+                            'PUT',
+                            { connectionId: connection.id },
+                            'Could not reissue the domain challenge.',
+                          )
+                        }
+                      >
+                        Reissue challenge
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"

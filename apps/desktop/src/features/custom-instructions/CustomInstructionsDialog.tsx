@@ -2,7 +2,7 @@ import { FileText, Globe, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Label } from '@/components/ui/Label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+} from '@/ui/Dialog';
+import { Label } from '@/ui/Label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 
 interface CustomInstructionsDialogProps {
   open: boolean;

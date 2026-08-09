@@ -34,19 +34,19 @@ import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
 import { isTauri } from '@/lib/tauri-mock';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/ui/Dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
+} from '@/ui/DropdownMenu';
 import { useShallow } from 'zustand/react/shallow';
 import {
   useArtifactStore,

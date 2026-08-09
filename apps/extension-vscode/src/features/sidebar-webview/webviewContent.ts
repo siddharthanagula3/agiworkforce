@@ -1777,7 +1777,7 @@ export function getWebviewContent(
         </p>
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
-          <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Retention &amp; training settings</button>
+          <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Privacy &amp; data controls</button>
         </div>
       </article>
 

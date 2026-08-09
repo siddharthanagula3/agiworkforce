@@ -1,11 +1,11 @@
 import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Card } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
 import { FileText, Plus, Minus, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/Tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/ui/Tooltip';
 
 interface ChangeSummaryProps {
   className?: string;

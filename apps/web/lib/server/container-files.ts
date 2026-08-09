@@ -6,6 +6,7 @@ import {
   type GeneratedFileWire,
 } from '@/lib/server/generated-file-persist';
 import { logger } from '@/lib/logger';
+import { providerApiUrl } from '@/lib/server/provider-endpoints';
 
 /**
  * Track A — provider-native code execution: fetch the files a model created in
@@ -85,7 +86,10 @@ async function fetchOpenAIContainerFile(
   const apiKey = process.env['OPENAI_API_KEY'];
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
   const res = await fetch(
-    `https://api.openai.com/v1/containers/${containerId}/files/${fileId}/content`,
+    providerApiUrl(
+      'openai',
+      `containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/content`,
+    ),
     { headers: { Authorization: `Bearer ${apiKey}` } },
   );
   if (!res.ok) throw new Error(`OpenAI container file fetch failed (HTTP ${res.status})`);
@@ -96,9 +100,10 @@ async function fetchOpenAIContainerFile(
 async function fetchAnthropicFile(fileId: string): Promise<{ data: Buffer; contentType: string }> {
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
-  const res = await fetch(`https://api.anthropic.com/v1/files/${fileId}/content`, {
-    headers: anthropicHeaders(apiKey),
-  });
+  const res = await fetch(
+    providerApiUrl('anthropic', `files/${encodeURIComponent(fileId)}/content`),
+    { headers: anthropicHeaders(apiKey) },
+  );
   if (!res.ok) throw new Error(`Anthropic file fetch failed (HTTP ${res.status})`);
   const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
   return { data: Buffer.from(await res.arrayBuffer()), contentType };
@@ -114,7 +119,7 @@ async function fetchAnthropicFilename(fileId: string): Promise<string> {
   try {
     const apiKey = process.env['ANTHROPIC_API_KEY'];
     if (!apiKey) return fileId;
-    const res = await fetch(`https://api.anthropic.com/v1/files/${fileId}`, {
+    const res = await fetch(providerApiUrl('anthropic', `files/${encodeURIComponent(fileId)}`), {
       headers: anthropicHeaders(apiKey),
     });
     if (!res.ok) return fileId;

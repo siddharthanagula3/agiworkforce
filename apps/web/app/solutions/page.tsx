@@ -105,7 +105,7 @@ export default function SolutionsPage() {
             {
               meta: 'Procurement',
               title: 'Enterprise rollout',
-              body: 'BYOK enforcement today; identity, audit, and retention scoped by contract.',
+              body: 'Per-seat BYOK on Desktop and CLI today; org-wide policy, identity, audit, and retention scoped by contract.',
               href: '/enterprise',
             },
             {

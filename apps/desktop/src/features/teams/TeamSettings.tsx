@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { useTeamStore } from '../../stores/teamStore';
 import { TeamRole, type Team } from '../../types/teams';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { Save, Trash2 } from 'lucide-react';
 
 interface TeamSettingsProps {

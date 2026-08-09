@@ -15,9 +15,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ban, Lock, Monitor, Plus, RefreshCcw, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Switch } from '@/ui/Switch';
 import { invoke } from '@/lib/tauri-mock';
 import {
   useComputerUseStore,

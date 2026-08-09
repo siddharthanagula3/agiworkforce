@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
 
 // ── Types ──────────────────────────────────────────────────────────────────

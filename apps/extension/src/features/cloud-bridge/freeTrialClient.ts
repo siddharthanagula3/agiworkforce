@@ -22,6 +22,7 @@
 
 import {
   createManagedCloudAgentRunClient,
+  MAX_CHAT_ATTACHMENT_BYTES,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
@@ -63,7 +64,17 @@ export const MANAGED_CHAT_MAX_INPUT_CHARS = 32_000;
 /** Bound the request envelope before it reaches the privileged web route. */
 export const MANAGED_CHAT_MAX_MESSAGES = 100;
 export const MANAGED_CHAT_MAX_ATTACHMENTS = 5;
+/** Total decoded attachment bytes allowed in one managed-chat request envelope. */
 export const MANAGED_CHAT_MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_BYTES;
+/**
+ * Per-file ceiling for a single composer attachment, read from the canonical
+ * chat-attachment contract rather than restated here. The request envelope cap
+ * above is a *total* across up to `MANAGED_CHAT_MAX_ATTACHMENTS` files, so a
+ * surface that pre-filters individual files needs this narrower number; before
+ * this constant existed the side panel carried its own 10 MB literal and turned
+ * away files every other client accepts.
+ */
+export const MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 export const MANAGED_CHAT_DEFAULT_TIMEOUT_MS = 90_000;
 /** Maximum size of one not-yet-dispatched SSE event. */
 export const MANAGED_CHAT_MAX_SSE_FRAME_CHARS = 1_048_576;

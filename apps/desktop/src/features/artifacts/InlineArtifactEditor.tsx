@@ -9,7 +9,7 @@
 import { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { computeLineDiff, type ArtifactDiff } from '@/lib/diffUtils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import type { Artifact } from '@/stores/artifactStore';
 
 interface InlineArtifactEditorProps {

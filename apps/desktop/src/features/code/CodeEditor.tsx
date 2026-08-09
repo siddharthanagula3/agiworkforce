@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
 import { configureMonacoTypescript, getMonacoTheme } from '../../lib/monaco-config';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface CodeEditorProps {
   defaultValue?: string;

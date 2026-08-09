@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { AlertCircle, Check, Download, Info, Loader2, RefreshCw, Settings2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
-import { Label } from '@/components/ui/Label';
+import { Button } from '@/ui/Button';
+import { Switch } from '@/ui/Switch';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { useUpdater } from '../../hooks/useUpdater';
+} from '@/ui/Select';
+import { useUpdater } from '../../features/updates/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
 import { UpdateDialog } from '../../features/updates';
 

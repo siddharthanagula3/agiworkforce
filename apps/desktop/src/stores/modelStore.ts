@@ -33,7 +33,7 @@ import {
 } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
-import type { Provider } from '../types/provider';
+import { isLocalProvider, type Provider } from '../types/provider';
 import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
 import type { PlanTier } from '../lib/cloudAccountTypes';
@@ -376,7 +376,10 @@ export const useModelStore = create<ModelState>()(
               }
             }
 
-            if (provider !== 'ollama' && modelId !== 'auto') {
+            // On-device runtimes are exempt from the tier gate: they cost the
+            // user nothing and never leave the machine. Gating one would
+            // replace the pick with a managed_cloud model.
+            if (!isLocalProvider(provider) && modelId !== 'auto') {
               const currentPlan = (() => {
                 try {
                   return useAccountStore.getState()?.plan ?? 'free';
@@ -971,8 +974,7 @@ export const initializeModelStoreFromSettings = async () => {
     })();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
-    // For subscription-only model, only managed_cloud and ollama are in defaultModels
-    // Fall back to 'auto' for any other provider (should not happen in practice)
+    // Fall back to 'auto' for any provider without a stored default model.
     const defaultModels = settingsStore.llmConfig.defaultModels as Record<string, string>;
     const defaultModel = defaultModels[defaultProvider] ?? 'auto';
 
@@ -982,7 +984,9 @@ export const initializeModelStoreFromSettings = async () => {
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
         await modelStore.selectModel('auto', 'managed_cloud');
       } else if (
-        defaultProvider !== 'ollama' &&
+        // A local default stays local at startup — never downgraded to
+        // managed_cloud because the plan does not cover it.
+        !isLocalProvider(defaultProvider) &&
         currentPlan &&
         !isModelAllowedForTier(defaultModel, normalizeSubscriptionTier(currentPlan))
       ) {
@@ -1036,8 +1040,8 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
       const isSimpleMode = useUIStore.getState().mode === 'simple';
       const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
       const isAutoSelection = selectedModel === 'auto' || selectedModel?.startsWith('auto');
-      const isOllamaSelection =
-        selectedProvider === 'ollama' || selectedMetadata?.provider === 'ollama';
+      const isLocalSelection =
+        isLocalProvider(selectedProvider) || isLocalProvider(selectedMetadata?.provider);
 
       if (isSimpleMode) {
         // Simple Mode always uses the one self-routing Auto selection.
@@ -1053,7 +1057,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
         } else if (
           selectedModel &&
           !isAutoSelection &&
-          !isOllamaSelection &&
+          !isLocalSelection &&
           !isModelAllowedForTier(selectedModel, normalizedTier)
         ) {
           await selectModel('auto', 'managed_cloud');

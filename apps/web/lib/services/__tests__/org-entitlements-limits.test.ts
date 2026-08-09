@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { BILLING_PLAN_PRODUCT_LIMITS, toEnforceableBillingPlanLimit } from '@agiworkforce/types';
 
@@ -57,37 +58,136 @@ describe('organization limit conversion', () => {
    * The fix above went to the second copy of this defect; the first was fixed
    * in `free-plan-entitlements.ts` and the copy here survived because the fix
    * went to a call site rather than to the owner. This is what stops a third.
+   *
+   * BIZ-005 — this guard used to walk `apps/web` only and match the single
+   * literal `function toEnforceable<...>Limit(`. Both limits were wrong for the
+   * defect it names:
+   *
+   *   - `BILLING_PLAN_PRODUCT_LIMITS` and the converter live in
+   *     `packages/contracts/types` and are read by web, desktop AND mobile
+   *     (`getPlanMaxScheduledTasks` in `apps/desktop/src/features/schedules`,
+   *     `apps/mobile/app/(app)/schedules`). A third copy on any of those
+   *     surfaces was invisible here while the failure message said "no surface".
+   *   - Both historical copies happened to be named `toEnforceableLimit` and
+   *     declared with the `function` keyword. `const toEnforceableLimit = (…)`,
+   *     or the same body under any other name, walked straight past.
+   *
+   * So the walk now covers every workspace app and package, and the match is on
+   * the SHAPE — a `BillingPlanLimit`-typed parameter converted to a number, or
+   * the exact `typeof x === 'number' ? x : 0` fallback that produced the zero.
+   * Display formatters (`formatLimit`, `limitLabel`, `formatPlanLimit`) take the
+   * same input but return a string, so they are not conversions and do not trip.
    */
-  it('no surface redeclares the limit conversion', () => {
-    const webRoot = path.resolve(import.meta.dirname, '../../..');
-    const skip = new Set(['node_modules', '.next', 'dist', '.turbo', 'e2e', '__tests__']);
-    const offenders: string[] = [];
+  it('no workspace surface redeclares the limit conversion', async () => {
+    // apps/web/lib/services/__tests__ -> repo root.
+    const repoRoot = path.resolve(import.meta.dirname, '../../../../..');
+    const skip = new Set([
+      'node_modules',
+      '.next',
+      '.turbo',
+      '.git',
+      'dist',
+      'build',
+      'out',
+      'target',
+      'coverage',
+      'e2e',
+      '__tests__',
+      '__mocks__',
+    ]);
 
-    const walk = (dir: string): void => {
+    /**
+     * The module that OWNS the conversion. Everything else must import it.
+     * Anchored to the real path so a rename cannot silently exempt a copy.
+     */
+    const canonical = path.join('packages', 'contracts', 'types', 'src', 'billing-catalog.ts');
+    expect(
+      fs.existsSync(path.join(repoRoot, canonical)),
+      `${canonical} is the canonical converter this guard exempts; it moved or was renamed`,
+    ).toBe(true);
+
+    // Comments quote the defective body on purpose (see the block above
+    // `getOrganizationEntitlements`), so match code only.
+    const stripComments = (src: string): string =>
+      src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
+
+    const patterns: ReadonlyArray<{ readonly why: string; readonly re: RegExp }> = [
+      {
+        why: 'declares its own toEnforceable…Limit',
+        re: /\b(?:function|const|let|var)\s+toEnforceable\w*Limit\b/,
+      },
+      {
+        why: 'converts a BillingPlanLimit parameter to a number',
+        re: /:\s*BillingPlanLimit(?:\s*\|\s*undefined)?\s*\)\s*:\s*(?:number|null)\b/,
+      },
+      {
+        why: "reproduces the `typeof x === 'number' ? x : 0` collapse",
+        re: /typeof\s+([A-Za-z_$][\w$]*)\s*===\s*'number'\s*\?\s*\1\s*:\s*0/,
+      },
+    ];
+
+    const sources: string[] = [];
+    const collect = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (skip.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-          walk(full);
+          collect(full);
           continue;
         }
         if (!/\.tsx?$/.test(entry.name)) continue;
+        const rel = path.relative(repoRoot, full);
+        if (rel === canonical) continue;
+        sources.push(rel);
+      }
+    };
 
-        const src = fs.readFileSync(full, 'utf8');
-        // A local FUNCTION that maps BillingPlanLimit to a number. Importing
-        // the canonical one is the whole point and must not trip this.
-        if (/function\s+toEnforceable\w*Limit\s*\(/.test(src)) {
-          offenders.push(path.relative(webRoot, full));
+    for (const workspace of ['apps', 'packages']) {
+      const root = path.join(repoRoot, workspace);
+      expect(fs.existsSync(root), `${workspace}/ not found from ${repoRoot}`).toBe(true);
+      collect(root);
+    }
+    // A workspace-wide walk that silently found nothing would pass forever.
+    expect(sources.length).toBeGreaterThan(500);
+
+    const offenders: string[] = [];
+    let next = 0;
+    // Reading ~4k files one at a time costs seconds of wall clock; the reads
+    // are independent, so a small pool keeps this inside a normal test budget.
+    const reader = async (): Promise<void> => {
+      while (next < sources.length) {
+        const rel = sources[next++];
+        if (rel === undefined) return;
+        let raw: string;
+        try {
+          raw = await fsp.readFile(path.join(repoRoot, rel), 'utf8');
+        } catch {
+          // Another worktree operation removed the file mid-walk; nothing to scan.
+          continue;
+        }
+        // Cheap pre-filter: the third pattern is the only one that can fire
+        // without one of these tokens, and it is a limit conversion only when
+        // the file also talks about the catalog's non-numeric limit states.
+        if (!raw.includes('BillingPlanLimit') && !raw.includes("'unlimited'")) continue;
+
+        const src = stripComments(raw);
+        for (const { why, re } of patterns) {
+          if (re.test(src)) {
+            offenders.push(`${rel} — ${why}`);
+            break;
+          }
         }
       }
     };
-    walk(webRoot);
+    await Promise.all(Array.from({ length: 32 }, reader));
+    offenders.sort();
 
     expect(
       offenders,
-      `these files declare their own BillingPlanLimit converter instead of importing ` +
-        `toEnforceableBillingPlanLimit. Every copy so far has omitted the 'custom' arm and ` +
-        `silently denied Enterprise the feature:\n  ${offenders.join('\n  ')}`,
+      `these files convert a BillingPlanLimit themselves instead of importing ` +
+        `toEnforceableBillingPlanLimit from @agiworkforce/types. Every copy so far has omitted ` +
+        `the 'custom' arm and silently denied Enterprise the feature:\n  ${offenders.join('\n  ')}`,
     ).toEqual([]);
-  });
+    // Cold CI disks make a workspace-wide read slower than the default budget.
+  }, 60_000);
 });

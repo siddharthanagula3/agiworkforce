@@ -18,11 +18,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn, debounce } from '../../lib/utils';
 import { invoke } from '../../utils/ipc';
-import { Button } from '@/components/ui/Button';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { Input } from '@/components/ui/Input';
-import { usePrompt } from '@/components/ui/PromptDialog';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { useConfirm } from '@/ui/ConfirmDialog';
+import { Input } from '@/ui/Input';
+import { usePrompt } from '@/ui/PromptDialog';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 export interface FileNode {
   name: string;

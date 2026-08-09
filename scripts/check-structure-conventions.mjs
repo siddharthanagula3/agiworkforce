@@ -606,6 +606,12 @@ const mobileFeatureForbiddenImports = [
 ];
 
 const retiredDesktopFeatureShimPaths = [
+  // SCALE-PURE-003: the Phase 5 reorg moved this hook to
+  // src/features/updates/useUpdater.ts and left a `export * from` forwarder
+  // behind so old import paths kept resolving. Its one caller
+  // (features/settings/UpdateSettings.tsx) now imports the real module, the
+  // forwarder is deleted, and this line stops it coming back.
+  'apps/desktop/src/hooks/useUpdater.ts',
   'apps/desktop/src/components/Analytics/index.ts',
   'apps/desktop/src/components/Errors/ErrorToast.tsx',
   'apps/desktop/src/components/ErrorBoundary.tsx',
@@ -618,6 +624,33 @@ const retiredDesktopFeatureShimPaths = [
   'apps/desktop/src/components/ResourceMonitor/index.ts',
   'apps/desktop/src/components/StatusBanner.tsx',
   'apps/desktop/src/components/Updates/index.tsx',
+];
+
+// SCALE-PURE-003: forwarding modules the Extension reorg left at the old paths.
+// Each was a one-line `export * from` onto the real module under
+// `src/features/**`, so the app carried two import paths for one
+// implementation. `src/pairing.ts` was the inverse — the implementation stayed
+// at the retired path and `features/native-bridge/pairing.ts` forwarded to it —
+// and moved into the feature directory when its forwarder was removed.
+const retiredExtensionShimPaths = [
+  'apps/extension/src/inPagePanel/launcher.ts',
+  'apps/extension/src/inPagePanel/panel.ts',
+  'apps/extension/src/inPagePanel/panelStyles.ts',
+  'apps/extension/src/pairing.ts',
+  'apps/extension/src/platform-prompts.ts',
+  'apps/extension/src/sendQueue.ts',
+];
+
+// Only markers that cannot collide with a legitimate path are listed. Bare
+// `'./pairing'` and `'./sendQueue'` are excluded on purpose: those are how
+// `src/features/native-bridge/index.ts` re-exports its own directory, which is
+// a barrel rather than a second path to one module. Re-creating either deleted
+// file is caught by retiredExtensionShimPaths above instead.
+const extensionForbiddenImports = [
+  './inPagePanel/launcher',
+  './inPagePanel/panel',
+  './platform-prompts',
+  '/src/pairing',
 ];
 
 const retiredDesktopComponentDomains = [
@@ -684,6 +717,14 @@ const retiredDesktopComponentDomains = [
   'Voice',
   'Workflows',
   'editing',
+  // SCALE-PURE-003: `src/components/ui/` was a 39-file forwarding layer left
+  // behind by the Phase 5 reorg — every file was `export * from '../../ui/X'`
+  // and its own header promised a "Step B (deferred)" deletion with no owner
+  // and no date, so it never happened. All 172 importers now name
+  // `@/ui/X` (or `./ui/X`) directly and the directory is gone. Listing the
+  // domain here keeps the directory empty and makes any re-introduced
+  // `@/components/ui` import fail this check.
+  'ui',
   'v3',
 ];
 
@@ -815,6 +856,27 @@ for (const file of walk('apps/desktop/src')) {
   for (const marker of desktopFeatureForbiddenImports) {
     if (body.includes(marker)) {
       errors.push(`${file} imports retired Desktop feature shim: ${marker}`);
+    }
+  }
+}
+
+// SCALE-PURE-003 (Extension arm). These five modules were `export * from` the
+// real implementation under `src/features/**`, each carrying an `@deprecated`
+// note and no owner or removal date, so callers kept resolving through the old
+// path indefinitely. The implementations never moved back; only the forwarders
+// are gone, and every caller now imports the feature path directly.
+for (const retiredExtensionShimPath of retiredExtensionShimPaths) {
+  if (exists(retiredExtensionShimPath)) {
+    errors.push(`Retired Extension shim must stay removed: ${retiredExtensionShimPath}`);
+  }
+}
+
+for (const file of walk('apps/extension')) {
+  if (!/\.(ts|tsx)$/.test(file)) continue;
+  const body = readText(file);
+  for (const marker of extensionForbiddenImports) {
+    if (body.includes(marker)) {
+      errors.push(`${file} imports retired Extension shim: ${marker}`);
     }
   }
 }

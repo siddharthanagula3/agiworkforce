@@ -93,8 +93,19 @@ export function hasSelfServeUpgradePath(value: string | null | undefined): boole
 export interface BillingPlanPricing {
   id: BillingPlanTier;
   label: string;
-  monthlyPriceUsd: number;
-  yearlyPriceUsd: number;
+  /**
+   * Published USD list price, or ABSENT when the plan has no published price.
+   *
+   * Absent is not zero. Enterprise is negotiated per contract, and the `0` that
+   * used to sit here was a placeholder indistinguishable from a genuinely free
+   * plan: price formatters in this repo map 0 to "Free", and
+   * `getPlanPriceCents('enterprise')` handed callers 0 cents. Contract-priced
+   * plans now carry no amount at all and set `contractPriced`, so a price
+   * cannot be printed by accident; use `isContractPricedPlan` /
+   * `getPlanPriceUsd() === null` to render the contract state instead.
+   */
+  monthlyPriceUsd?: number;
+  yearlyPriceUsd?: number;
   /** India-specific monthly price in INR, when it differs from a straight USD conversion. */
   monthlyPriceInr?: number;
   /**
@@ -104,11 +115,17 @@ export interface BillingPlanPricing {
    * as the whole org's bill.
    */
   perSeat?: boolean;
+  /**
+   * True when the amount is set by a signed contract rather than published.
+   * Mutually exclusive with `monthlyPriceUsd`/`yearlyPriceUsd`, which is
+   * enforced by `packages/contracts/types/src/__tests__/billing-catalog.test.ts`.
+   */
+  contractPriced?: true;
 }
 
 /** Whether `plan` is billed per seat (quantity-aware checkout is mandatory). */
 export function isPerSeatBillingPlan(plan: string | null | undefined): boolean {
-  return BILLING_PLAN_PRICING[normalizeBillingPlanTier(plan)].perSeat === true;
+  return getBillingPlanPricing(plan).perSeat === true;
 }
 
 /**
@@ -129,7 +146,12 @@ export function normalizePurchasableSeats(value: unknown): number | null {
   return value;
 }
 
-export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> = {
+// `satisfies` rather than a type annotation: each entry keeps its own literal
+// shape, so `BILLING_PLAN_PRICING.pro.monthlyPriceUsd` stays a plain `number`
+// while `BILLING_PLAN_PRICING.enterprise.monthlyPriceUsd` is a compile error and
+// indexing by a runtime tier yields `number | undefined`. That is what stops a
+// contract-priced plan from silently rendering as "$0" / "Free".
+export const BILLING_PLAN_PRICING = {
   'local-only': {
     id: 'local-only',
     label: 'Local Mode',
@@ -205,10 +227,11 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
   enterprise: {
     id: 'enterprise',
     label: 'Enterprise',
-    monthlyPriceUsd: 0,
-    yearlyPriceUsd: 0,
+    // No published amount. Enterprise is priced per signed contract, so there is
+    // deliberately no monthlyPriceUsd/yearlyPriceUsd to read.
+    contractPriced: true,
   },
-};
+} satisfies Record<BillingPlanTier, BillingPlanPricing>;
 
 /** Product surfaces that render plan-selection / upgrade / comparison lists. */
 export type BillingSurface = 'web' | 'desktop' | 'mobile';
@@ -342,7 +365,11 @@ export interface BillingPlanProductLimits {
   customMcpServers: BillingPlanLimit;
   /**
    * Total bytes of project knowledge files a user may hold across all
-   * projects. Enforced in `apps/web/lib/services/project-context-service.ts`.
+   * projects. Enforced on upload in
+   * `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, which sums
+   * `byte_count` across every project the user owns before admitting the file.
+   * (`project-context-service.ts` bounds the per-project file COUNT it reads
+   * into context — a different dimension, and not this ceiling.)
    *
    * Only a per-file byte cap and a 20-files-per-project count cap existed, so
    * a user could hold unbounded total storage by spreading large files across
@@ -751,19 +778,64 @@ export function getBillingPlanPricing(plan: string | null | undefined): BillingP
   return BILLING_PLAN_PRICING[normalizeBillingPlanTier(plan)];
 }
 
+/**
+ * True when `plan` is priced by contract and therefore has NO published amount.
+ * Price-rendering surfaces must branch on this instead of printing a number.
+ */
+export function isContractPricedPlan(plan: string | null | undefined): boolean {
+  return getBillingPlanPricing(plan).contractPriced === true;
+}
+
+/**
+ * Published USD list price, or `null` when the plan publishes no price
+ * (contract-priced Enterprise, or an interval a plan does not sell).
+ * Callers must render the null case as contract/unavailable, never as `$0`.
+ */
 export function getPlanPriceUsd(
   plan: string | null | undefined,
   interval: BillingInterval = 'monthly',
-): number {
+): number | null {
   const pricing = getBillingPlanPricing(plan);
-  return interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;
+  const amount = interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;
+  return typeof amount === 'number' ? amount : null;
 }
 
+/** Published price in minor units, or `null` when the plan publishes no price. */
 export function getPlanPriceCents(
   plan: string | null | undefined,
   interval: BillingInterval = 'monthly',
+): number | null {
+  const usd = getPlanPriceUsd(plan, interval);
+  return usd === null ? null : Math.round(usd * 100);
+}
+
+/**
+ * Tiers that publish a list price. Enterprise is excluded because its amount
+ * lives in a signed contract, not in this catalog.
+ */
+export type PublishedPricePlanTier = Exclude<BillingPlanTier, 'enterprise'>;
+
+/**
+ * Published USD list price for a tier that is statically known to have one.
+ *
+ * Use this wherever the caller's own types already exclude contract pricing —
+ * it returns a plain `number`, so no call site needs a `?? 0` fallback (that
+ * fallback is precisely how Enterprise came to render as "$0"/"Free").
+ */
+export function getPublishedPlanPriceUsd(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval = 'monthly',
 ): number {
-  return Math.round(getPlanPriceUsd(plan, interval) * 100);
+  const pricing = BILLING_PLAN_PRICING[plan];
+  return interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;
+}
+
+/** Published price in minor units for a tier statically known to publish one. */
+export function getPublishedPlanPriceCents(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval = 'monthly',
+): number {
+  return Math.round(getPublishedPlanPriceUsd(plan, interval) * 100);
 }
 
 /** India-specific monthly price in INR for `plan`, or null if not defined (USD-only tier). */

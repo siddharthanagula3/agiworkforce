@@ -41,13 +41,13 @@ import type {
 } from '@/stores/notificationStore';
 import { useSettingsDialogStore } from '@/stores/settingsDialogStore';
 import type { SettingsTab } from '@/stores/settingsDialogStore';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Badge } from '@/components/ui/Badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Skeleton } from '@/ui/Skeleton';
+import { Badge } from '@/ui/Badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/ui/Popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 
 // ============================================================================
 // Types

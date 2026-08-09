@@ -35,10 +35,11 @@ vi.mock('@/lib/server/sso/domain-verification', async (importOriginal) => {
 });
 
 import { POST as VERIFY, PUT as REISSUE } from '../verify-domain/route';
+import { issueDomainVerificationToken } from '@/lib/server/sso/domain-verification';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const CONNECTION_ID = '22222222-2222-4222-8222-222222222222';
-const TOKEN = 'a'.repeat(48);
+const TOKEN = issueDomainVerificationToken();
 
 function req(method: string) {
   return new Request('http://localhost/api/admin/sso/verify-domain', {

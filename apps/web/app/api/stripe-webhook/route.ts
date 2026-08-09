@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import { withSpan, type ActiveSpan } from '@/lib/observability/span';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { checkRateLimit, verifyStripeSignature } from './lib/verify';
 import { checkIdempotency, markEventSucceeded, markEventFailed } from './lib/idempotency';
@@ -34,15 +35,32 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
+/**
+ * Stripe webhook ingress.
+ *
+ * This route does not go through `withErrorHandler`, so the `billing` span here
+ * is what establishes the trace context (SCALE-VER-006): every `logger.*` line
+ * below — and every span inside `dispatchStripeEvent` — shares one `trace_id`,
+ * which is how a disputed charge is traced from Stripe's event id to the credit
+ * grant it produced.
+ */
 export async function POST(request: NextRequest) {
+  return withSpan('stripe.webhook', { kind: 'server', domain: 'billing' }, (span) =>
+    handleStripeWebhook(request, span),
+  );
+}
+
+async function handleStripeWebhook(request: NextRequest, span: ActiveSpan) {
   // H5: Rate limit webhook endpoint to prevent abuse (generous limit for legitimate Stripe traffic)
   const rateLimitResponse = await checkRateLimit(request);
   if (rateLimitResponse) {
+    span.setAttributes({ 'stripe.webhook.outcome': 'rate_limited' });
     return rateLimitResponse;
   }
 
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
     logger.error('Stripe not configured');
+    span.setAttributes({ 'stripe.webhook.outcome': 'not_configured' });
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
@@ -50,15 +68,19 @@ export async function POST(request: NextRequest) {
 
   const verifyResult = await verifyStripeSignature(request, stripe, STRIPE_WEBHOOK_SECRET);
   if ('error' in verifyResult) {
+    span.setAttributes({ 'stripe.webhook.outcome': 'signature_rejected' });
     return verifyResult.error;
   }
   const { event } = verifyResult;
+  span.setAttributes({ 'stripe.event.id': event.id, 'stripe.event.type': event.type });
 
   const idempotencyResult = await checkIdempotency(db, event.id);
   if ('error' in idempotencyResult) {
+    span.setAttributes({ 'stripe.webhook.outcome': 'idempotency_error' });
     return idempotencyResult.error;
   }
   if (!idempotencyResult.shouldProcess) {
+    span.setAttributes({ 'stripe.webhook.outcome': `skipped_${idempotencyResult.state}` });
     if (idempotencyResult.state === 'processing') {
       return NextResponse.json(
         { error: 'Event processing is still in progress' },
@@ -89,6 +111,7 @@ export async function POST(request: NextRequest) {
     );
 
     await markEventFailed(db, event.id, errorMessage);
+    span.setAttributes({ 'stripe.webhook.outcome': 'dispatch_failed' });
 
     // WEB-7 (audit 2026-05-03): return a generic body. The previous
     // `errorMessage` interpolation leaked internal details (column names,
@@ -101,5 +124,6 @@ export async function POST(request: NextRequest) {
   }
 
   logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');
+  span.setAttributes({ 'stripe.webhook.outcome': 'processed' });
   return NextResponse.json({ received: true, eventType: event.type }, { status: 200 });
 }

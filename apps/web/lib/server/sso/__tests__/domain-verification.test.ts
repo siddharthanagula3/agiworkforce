@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  DOMAIN_VERIFICATION_CHALLENGE_TTL_MS,
+  domainChallengeExpiresAt,
   domainVerificationInstructions,
+  isDomainChallengeExpired,
   issueDomainVerificationToken,
   verifyDomainOwnership,
   type TxtResolver,
@@ -26,14 +29,77 @@ function resolverThrowing(code: string): TxtResolver {
 describe('issueDomainVerificationToken', () => {
   it('issues a high-entropy hex token that satisfies the database constraint', () => {
     const token = issueDomainVerificationToken();
-    expect(token).toMatch(/^[a-f0-9]{48}$/);
-    expect(token.length).toBeGreaterThanOrEqual(32);
-    expect(token.length).toBeLessThanOrEqual(64);
+    // sso_connections_domain_verification_token_shape (migration 0083).
+    expect(token).toMatch(/^[a-f0-9]{32,64}$/);
   });
 
   it('does not repeat', () => {
     const tokens = new Set(Array.from({ length: 200 }, () => issueDomainVerificationToken()));
     expect(tokens.size).toBe(200);
+  });
+
+  it('carries its own expiry so a challenge cannot outlive its window', () => {
+    const now = Date.UTC(2026, 7, 9, 12, 0, 0);
+    const token = issueDomainVerificationToken(now);
+
+    const expiresAt = domainChallengeExpiresAt(token);
+    expect(expiresAt).not.toBeNull();
+    // Truncated to whole seconds by the hex encoding.
+    expect(expiresAt!.getTime()).toBe(
+      Math.floor((now + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS) / 1000) * 1000,
+    );
+  });
+});
+
+/**
+ * CRIT-011: the challenge lifecycle has to close. An unexpiring challenge lets
+ * a tenant hold a live claim on a domain it does not own indefinitely, so any
+ * future lapse in that domain's DNS control becomes an instant verification.
+ */
+describe('domain challenge expiry', () => {
+  const now = Date.UTC(2026, 7, 9, 12, 0, 0);
+
+  it('accepts a freshly issued challenge', () => {
+    expect(isDomainChallengeExpired(issueDomainVerificationToken(now), now)).toBe(false);
+  });
+
+  it('accepts it one second before the deadline', () => {
+    const token = issueDomainVerificationToken(now);
+    expect(isDomainChallengeExpired(token, now + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS - 1000)).toBe(
+      false,
+    );
+  });
+
+  it('rejects it once the window has passed', () => {
+    const token = issueDomainVerificationToken(now);
+    expect(isDomainChallengeExpired(token, now + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS + 1000)).toBe(
+      true,
+    );
+  });
+
+  it('treats a token that carries no expiry as expired rather than as unexpiring', () => {
+    // The shape issued before this format existed. Fail closed: the way out is
+    // PUT /api/admin/sso/verify-domain, not an unbounded challenge.
+    expect(isDomainChallengeExpired('a'.repeat(48), now)).toBe(true);
+    expect(domainChallengeExpiresAt('a'.repeat(48))).toBeNull();
+  });
+
+  it('does NOT verify an expired challenge even when the record IS published', async () => {
+    const token = issueDomainVerificationToken(now);
+    const value = `agiworkforce-sso-verification=${token}`;
+    const resolveTxt = vi.fn(async () => [[value]]);
+
+    await expect(
+      verifyDomainOwnership(
+        'example.com',
+        token,
+        { resolveTxt },
+        now + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS + 1,
+      ),
+    ).resolves.toEqual({ verified: false, reason: 'challenge_expired' });
+
+    // And it does not spend a DNS lookup deciding that.
+    expect(resolveTxt).not.toHaveBeenCalled();
   });
 });
 
@@ -48,7 +114,9 @@ describe('domainVerificationInstructions', () => {
 });
 
 describe('verifyDomainOwnership', () => {
-  const token = 'a'.repeat(48);
+  // A live challenge. Tokens carry their own expiry, so a hand-written literal
+  // would be read as a lapsed pre-expiry token and short-circuit every case.
+  const token = issueDomainVerificationToken();
   const value = `agiworkforce-sso-verification=${token}`;
 
   it('verifies when the published record matches', async () => {
@@ -77,7 +145,7 @@ describe('verifyDomainOwnership', () => {
   });
 
   it('does NOT verify when another connection’s token is published', async () => {
-    const other = `agiworkforce-sso-verification=${'b'.repeat(48)}`;
+    const other = `agiworkforce-sso-verification=${issueDomainVerificationToken()}`;
     await expect(
       verifyDomainOwnership('example.com', token, resolverReturning([[other]])),
     ).resolves.toEqual({ verified: false, reason: 'token_mismatch' });

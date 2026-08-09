@@ -14,7 +14,7 @@
  * So the dialog must not send the user to Cloud mode for a hosted link.
  */
 import { Lock, X } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import type { Artifact } from '@/stores/artifactStore';
 
 interface ShareArtifactDialogProps {

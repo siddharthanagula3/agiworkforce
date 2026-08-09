@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 import { QuickQuery } from '../index';
 import { useModelStore } from '../../../stores/modelStore';
 import { useAccountStore } from '../../../stores/auth';
-import { TooltipProvider } from '@/components/ui/Tooltip';
+import { TooltipProvider } from '@/ui/Tooltip';
 
 function renderQuickQuery(props: ComponentProps<typeof QuickQuery>) {
   return render(

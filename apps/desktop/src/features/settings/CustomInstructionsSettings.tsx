@@ -10,10 +10,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
+} from '@/ui/AlertDialog';
+import { Button } from '@/ui/Button';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
 
 export function CustomInstructionsSettings() {
   // Use selectors to prevent unnecessary re-renders

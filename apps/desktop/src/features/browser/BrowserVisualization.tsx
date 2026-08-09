@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { BrowserActionLog } from './BrowserActionLog';
 import { BrowserViewer } from './BrowserViewer';
 

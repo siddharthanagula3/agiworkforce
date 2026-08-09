@@ -54,20 +54,27 @@ describe('public marketing copy regressions', () => {
 
     const cliInstall = readWebFile('app/cli/page.tsx');
 
-    // Coming-soon posture (restructure 2026-07-09): the agi binary is not
-    // distributed yet, so the /cli page advertises NO install command at all —
-    // not cargo, not the unverified brew tap or curl installer. This supersedes
-    // the earlier "only advertise the cargo path" rule.
-    expect(cliInstall, 'cli page must show the coming-soon posture').toContain('coming soon');
-    expect(
-      cliInstall,
-      'cli page must not advertise a cargo install while coming soon',
-    ).not.toContain('cargo install');
+    // The /cli page advertises NO install command: not cargo, not the brew tap,
+    // not the curl installer. The CLI is released (`v-cli-1.0.0`, five platform
+    // archives on the GitHub release), but none of those three channels serves
+    // it — `@agiworkforce/cli` is still absent from the npm registry — so any
+    // of them on this page would be a false install path.
+    //
+    // The page's RELEASE STATE is no longer asserted here. It used to require
+    // the literal "coming soon", which went stale the moment the CLI shipped
+    // and left this file enforcing the false claim. It now comes from
+    // `SURFACE_STATUS.cli`, and `distribution-state.test.ts` is the guard.
+    expect(cliInstall, 'cli page must not advertise a cargo install').not.toContain(
+      'cargo install',
+    );
     expect(cliInstall, 'cli page must not advertise the unverified curl installer').not.toContain(
       'install.sh',
     );
     expect(cliInstall, 'cli page must not advertise the unverified brew tap').not.toContain(
       'brew install',
+    );
+    expect(cliInstall, 'cli page must read its status from the registry').toContain(
+      'SURFACE_STATUS.cli',
     );
   });
 

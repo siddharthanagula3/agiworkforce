@@ -3,7 +3,7 @@ import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useUpdater } from './useUpdater';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import { cn } from '../../lib/utils';
 
 interface UpdateDialogProps {

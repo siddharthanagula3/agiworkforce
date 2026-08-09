@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Card } from '@/components/ui/Card';
+import { Card } from '@/ui/Card';
 import { invoke } from '../../../lib/tauri-mock';
 
 interface PeriodStats {

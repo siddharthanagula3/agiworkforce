@@ -66,6 +66,49 @@ describe('project knowledge file bytes and deletion', () => {
     expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.user_id = $3');
   });
 
+  // CRIT-005 — `.html`, `.xml` and `.svg` are accepted knowledge-file types and
+  // this route serves them from the app's own origin. Echoing the stored type
+  // with `inline` made an uploaded document execute as script against the
+  // uploader's session. Also the backstop for rows registered before ingest
+  // scanning existed, which cannot be rescanned.
+  it.each([
+    ['text/html', 'page.html'],
+    ['image/svg+xml', 'logo.svg'],
+    ['application/xml', 'feed.xml'],
+  ])('serves an uploaded %s source as an opaque download', async (mimeType, fileName) => {
+    const bytes = Buffer.from('<script>fetch("/api/me").then(r=>r.json())</script>', 'utf8');
+    mocks.query.mockResolvedValue([
+      {
+        mime_type: mimeType,
+        file_name: fileName,
+        storage_uri: `knowledge-files/projects/project-1/${fileName}`,
+      },
+    ]);
+    mocks.getObject.mockResolvedValue({ data: bytes, contentType: mimeType });
+
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1'),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/octet-stream');
+    expect(response.headers.get('content-disposition')).toBe('attachment');
+    expect(await response.text()).toBe(bytes.toString('utf8'));
+  });
+
+  it('keeps an explicit download an attachment with its filename', async () => {
+    const response = await GET(
+      new NextRequest(
+        'https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1?download=true',
+      ),
+      context,
+    );
+
+    expect(response.headers.get('content-type')).toBe('text/plain');
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="notes.txt"');
+  });
+
   it('soft-deletes metadata before removing the backing object', async () => {
     const order: string[] = [];
     mocks.execute.mockImplementation(async () => {

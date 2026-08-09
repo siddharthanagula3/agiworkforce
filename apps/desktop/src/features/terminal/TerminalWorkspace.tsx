@@ -3,7 +3,7 @@ import { Terminal } from './Terminal';
 import { TerminalAIAssistant } from './TerminalAIAssistant';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Plus,
   X,
@@ -21,9 +21,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Spinner } from '@/components/ui/Spinner';
+} from '@/ui/DropdownMenu';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Spinner } from '@/ui/Spinner';
 
 interface TerminalWorkspaceProps {
   className?: string;

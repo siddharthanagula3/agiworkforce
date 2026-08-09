@@ -207,9 +207,9 @@ export default function ProvidersPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Pick the model after you start, not before."
-          body="Get notified when Desktop and CLI open, add a key or a local runtime, and change your mind mid-thread whenever the work changes shape."
+          body="Desktop and the CLI are released. Add a key or a local runtime, and change your mind mid-thread whenever the work changes shape."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Check availability' },
             { href: '/byok', label: 'Set Up BYOK' },
             { href: '/local', label: 'Run AGI Locally' },
           ]}

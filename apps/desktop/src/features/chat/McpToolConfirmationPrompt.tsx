@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, ShieldAlert, X } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
 import { useToolStore, type ApprovalRequest } from '@/stores/chat/toolStore';
 import { cn } from '@/lib/utils';

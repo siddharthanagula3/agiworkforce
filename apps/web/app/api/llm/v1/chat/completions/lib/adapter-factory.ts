@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
+import { withSpan, type ActiveSpan } from '@/lib/observability/span';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import { computeAnthropicCacheConfig } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
@@ -142,10 +143,43 @@ export async function startProviderStream(
   signal: AbortSignal,
   mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error,
 ): Promise<AsyncIterable<StreamChunk>> {
+  return withSpan(
+    'gen_ai.stream.start',
+    {
+      kind: 'client',
+      domain: 'model',
+      attributes: {
+        'gen_ai.request.model': chatRequest.model,
+        'gen_ai.request.tool_count': chatRequest.tools?.length ?? 0,
+        'gen_ai.request.stream': true,
+      },
+    },
+    (span) => startProviderStreamInner(adapter, chatRequest, signal, mapError, span),
+  );
+}
+
+/**
+ * The stream-start body, split out so the span above wraps exactly the
+ * connect-and-peek window.
+ *
+ * The span's `duration_ms` is therefore time-to-first-chunk (TTFT), NOT the
+ * duration of the whole completion — the returned iterable is consumed by the
+ * caller long after this resolves. Per-turn token usage is emitted separately
+ * by `response-builder.ts`/`stream-transform.ts` and shares the same
+ * `trace_id`.
+ */
+async function startProviderStreamInner(
+  adapter: ProviderAdapter,
+  chatRequest: ChatRequest,
+  signal: AbortSignal,
+  mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error,
+  span: ActiveSpan,
+): Promise<AsyncIterable<StreamChunk>> {
   const iterator = adapter.stream(chatRequest, signal)[Symbol.asyncIterator]();
   const first = await iterator.next();
   if (!first.done && first.value.type === 'error') {
     const mapped = mapError(first.value);
+    span.setAttributes({ 'gen_ai.response.error_code': first.value.code ?? 'unknown' });
     // Carry the structured HTTP status (the error chunk's `code` is
     // `String(res.status)` for HTTP failures) onto the thrown Error so the
     // shared `classifyError` — which reads `.status`, never message text —

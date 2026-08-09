@@ -6,11 +6,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 
 import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import { useDocumentStore } from '../../stores/documentStore';
 import type { DocumentMetadata } from '../../types/document';
 

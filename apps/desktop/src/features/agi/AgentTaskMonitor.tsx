@@ -22,7 +22,7 @@ import {
 } from '../../stores/backgroundTaskStore';
 import { ActionTimeline } from './ActionTimeline';
 import { OperatorDrillDown } from './OperatorDrillDown';
-import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
+import { SectionErrorBoundary } from '@/ui/SectionErrorBoundary';
 
 function formatRelativeTime(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime();

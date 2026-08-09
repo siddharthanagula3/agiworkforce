@@ -26,7 +26,7 @@ import {
   type ChatPreferences,
   type VoiceInputHotkey,
 } from '../../stores/settingsStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 // ---------------------------------------------------------------------------
 // Inline shortcuts not stored in DEFAULT_SHORTCUTS

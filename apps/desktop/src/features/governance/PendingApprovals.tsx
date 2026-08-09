@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { ApprovalRequest } from '../../stores/governanceStore';
 import { ApprovalModal } from './ApprovalModal';
 import { CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface PendingApprovalsProps {
   requests: ApprovalRequest[];

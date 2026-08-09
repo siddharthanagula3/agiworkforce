@@ -48,8 +48,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog';
-import { Badge } from '@/components/ui/Badge';
+} from '@/ui/AlertDialog';
+import { Badge } from '@/ui/Badge';
 import {
   Dialog,
   DialogContent,
@@ -57,16 +57,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
-import { EmptyState } from '@/components/ui/EmptyState';
+} from '@/ui/Select';
+import { Switch } from '@/ui/Switch';
+import { EmptyState } from '@/ui/EmptyState';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

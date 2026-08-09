@@ -1,0 +1,186 @@
+/**
+ * CRIT-014 — the admin control plane must enforce account status on itself.
+ *
+ * `/api/admin/security` is the only authenticated route that does not go
+ * through `getClerkAuthUser`, so it was the only one that never read
+ * `profiles.account_status`. Since `?action=suspend-user` writes that column and
+ * deliberately does not revoke the Clerk session, a suspended admin kept a valid
+ * token, kept `publicMetadata.role: 'admin'`, and kept the ability to read the
+ * security feed and suspend/ban/reactivate other accounts.
+ *
+ * Revert `assertAccountActive` out of `verifyAdminAccess` and every test in the
+ * first two blocks below fails: the route answers 200 to a suspended admin and
+ * writes `account_status = 'banned'` on their behalf.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+const {
+  mockAssertAccountActive,
+  mockExecute,
+  mockGetUser,
+  mockVerifyToken,
+  mockGetDashboardSummary,
+  mockLogSecurityEvent,
+  mockBanUser,
+} = vi.hoisted(() => ({
+  mockAssertAccountActive: vi.fn(),
+  mockExecute: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockVerifyToken: vi.fn(),
+  mockGetDashboardSummary: vi.fn(),
+  mockLogSecurityEvent: vi.fn(),
+  mockBanUser: vi.fn(),
+}));
+
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/security-audit', () => ({
+  logSecurityEvent: (...args: unknown[]) => mockLogSecurityEvent(...args),
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi.fn(async () => []),
+    execute: (...args: unknown[]) => mockExecute(...args),
+  })),
+}));
+vi.mock('@/lib/services/security-monitoring-service', () => ({
+  SecurityMonitoringService: {
+    getDashboardSummary: (...args: unknown[]) => mockGetDashboardSummary(...args),
+  },
+}));
+vi.mock('@clerk/nextjs/server', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+  clerkClient: async () => ({
+    users: {
+      getUser: (...args: unknown[]) => mockGetUser(...args),
+      banUser: (...args: unknown[]) => mockBanUser(...args),
+      unbanUser: vi.fn(),
+    },
+  }),
+}));
+
+// Imported by the route under test; the account-status read is the behaviour
+// being asserted, so it is controlled rather than exercised against Postgres.
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
+}));
+
+import { GET, POST } from '../route';
+import { createError } from '@/lib/errors';
+
+const ADMIN_ID = 'user_admin_1';
+const TARGET_ID = 'user_target_2';
+
+function adminRequest(url: string, method: 'GET' | 'POST', body?: unknown) {
+  return new Request(url, {
+    method,
+    headers: {
+      authorization: 'Bearer test-admin-token',
+      'content-type': 'application/json',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }) as never;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockVerifyToken.mockResolvedValue({ sub: ADMIN_ID });
+  mockGetUser.mockResolvedValue({ publicMetadata: { role: 'admin' } });
+  mockAssertAccountActive.mockResolvedValue(undefined);
+  mockGetDashboardSummary.mockResolvedValue({ metrics: {}, alerts: [], top_ips: [] });
+  mockExecute.mockResolvedValue(undefined);
+  mockLogSecurityEvent.mockResolvedValue(undefined);
+  mockBanUser.mockResolvedValue(undefined);
+});
+
+describe('GET /api/admin/security — suspended admin', () => {
+  it('reads account status for the id proved by the token', async () => {
+    await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
+    expect(mockAssertAccountActive).toHaveBeenCalledWith(ADMIN_ID);
+  });
+
+  it('refuses a suspended admin with 403 and never reaches the dashboard service', async () => {
+    mockAssertAccountActive.mockRejectedValue(
+      createError.forbidden('Your account has been suspended. Please contact support.'),
+    );
+
+    const response = await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
+
+    expect(response.status).toBe(403);
+    expect(mockGetDashboardSummary).not.toHaveBeenCalled();
+  });
+
+  it('propagates the fail-closed 503 when the status lookup itself fails', async () => {
+    mockAssertAccountActive.mockRejectedValue(
+      createError.serviceUnavailable('Unable to verify account status. Please try again shortly.'),
+    );
+
+    const response = await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
+
+    expect(response.status).toBe(503);
+    expect(mockGetDashboardSummary).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/security — suspended admin cannot act on other accounts', () => {
+  it.each(['suspend-user', 'ban-user', 'reactivate-user'])(
+    'refuses %s and writes no account_status row',
+    async (action) => {
+      mockAssertAccountActive.mockRejectedValue(createError.forbidden('suspended'));
+
+      const response = await POST(
+        adminRequest(`https://app.test/api/admin/security?action=${action}`, 'POST', {
+          userId: TARGET_ID,
+          reason: 'escalation test',
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(mockBanUser).not.toHaveBeenCalled();
+      expect(mockLogSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('POST /api/admin/security — an active admin is unaffected', () => {
+  it('still bans a target account and records the audit event', async () => {
+    const response = await POST(
+      adminRequest('https://app.test/api/admin/security?action=ban-user', 'POST', {
+        userId: TARGET_ID,
+        reason: 'abuse',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("'banned'"), [TARGET_ID]);
+    expect(mockLogSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ADMIN_ID, eventType: 'admin_action' }),
+    );
+  });
+});
+
+describe('verifyAdminAccess still rejects non-admins before touching account status', () => {
+  it('returns 401 for a signed-in non-admin', async () => {
+    mockGetUser.mockResolvedValue({ publicMetadata: { role: 'member' } });
+
+    const response = await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
+
+    expect(response.status).toBe(401);
+    expect(mockAssertAccountActive).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when no bearer token is presented', async () => {
+    const response = await GET(
+      new Request('https://app.test/api/admin/security', { method: 'GET' }) as never,
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockAssertAccountActive).not.toHaveBeenCalled();
+  });
+});

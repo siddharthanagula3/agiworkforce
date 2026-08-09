@@ -72,21 +72,27 @@ const PLAN_TAGLINES: Record<PlanCardId, string> = {
 
 const PLAN_CARD_IDS: readonly PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
 
-const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.filter((id) =>
-  isPlanSelectableOnSurface(id, 'web'),
-).map((id) => {
+const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.flatMap((id) => {
+  if (!isPlanSelectableOnSurface(id, 'web')) return [];
   const display = getBillingPlanDisplay(id);
-  return {
-    id,
-    name: display.pricing.label,
-    monthlyPrice: display.pricing.monthlyPriceUsd,
-    yearlyPrice: display.pricing.yearlyPriceUsd,
-    annualAvailable: display.annualAvailable,
-    perSeat: display.pricing.perSeat === true,
-    tagline: PLAN_TAGLINES[id],
-    features: display.features,
-    popular: id === 'pro',
-  };
+  // This dialog renders a priced card, and `formatPrice` below turns 0 into
+  // "Free", so it may only show plans that publish a price. A contract-priced
+  // plan is dropped here rather than defaulted with `?? 0` (BIZ-020).
+  const { monthlyPriceUsd, yearlyPriceUsd } = display;
+  if (monthlyPriceUsd === null || yearlyPriceUsd === null) return [];
+  return [
+    {
+      id,
+      name: display.pricing.label,
+      monthlyPrice: monthlyPriceUsd,
+      yearlyPrice: yearlyPriceUsd,
+      annualAvailable: display.annualAvailable,
+      perSeat: display.pricing.perSeat === true,
+      tagline: PLAN_TAGLINES[id],
+      features: display.features,
+      popular: id === 'pro',
+    },
+  ];
 });
 
 // ---------------------------------------------------------------------------

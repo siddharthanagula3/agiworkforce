@@ -14,14 +14,14 @@ import {
   Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Label } from '@/components/ui/Label';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
+} from '@/ui/Select';
 import { useVoiceInputStore, type PostProcessingMode } from '../../stores/settingsStore';
 import {
   useVoiceModeStore,

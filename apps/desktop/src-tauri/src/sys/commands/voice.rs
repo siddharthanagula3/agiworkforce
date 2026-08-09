@@ -5,8 +5,8 @@
 use crate::features::speech::{
     create_tts_provider, BargeInConfig, BargeInHandle, BargeInStats, DeepgramConfig, DeepgramState,
     DeepgramStreamingStats, PiperLocal, PiperVoiceDefinitions, PiperVoiceInfo, PttConfig,
-    PushToTalk, SynthesisConfig, TranscriptionConfig, TtsConfig, TtsInterruptReason, TtsPlayer,
-    TtsProvider, Voice, VoiceWake, WakeWordConfig, WhisperLocal, WhisperModelInfo,
+    PushToTalk, SynthesisConfig, SystemTts, TranscriptionConfig, TtsConfig, TtsInterruptReason,
+    TtsPlayer, TtsProvider, Voice, VoiceWake, WakeWordConfig, WhisperLocal, WhisperModelInfo,
     WhisperModelSize,
 };
 #[cfg(feature = "vad")]
@@ -722,6 +722,28 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
 // TTS Commands
 // =============================================================================
 
+/// Whether the configured TTS provider can actually speak.
+///
+/// `TtsProvider::System` is the DEFAULT, so the previous
+/// `matches!(provider, TtsProvider::System)` test reported
+/// `tts_available: true` on every platform — including the Windows and Linux
+/// builds where `SystemTts::speak_sync` only ever returns "System TTS not
+/// implemented for this platform". Settings > Voice rendered "TTS: System" and
+/// Voice Mode entered `phase: 'speaking'` before swallowing the error, so the
+/// user was shown an available feature that produced silence.
+///
+/// `system_tts_supported` is passed in rather than read here so the false arm —
+/// the one that only occurs on Windows and Linux — stays reachable from a test
+/// running on any host. The single production caller passes
+/// `SystemTts::platform_supported()`.
+fn tts_provider_available(config: &TtsConfig, system_tts_supported: bool) -> bool {
+    match config.provider {
+        TtsProvider::System => system_tts_supported,
+        // Network providers are reachable exactly when a key is configured.
+        TtsProvider::ElevenLabs | TtsProvider::OpenAi => config.api_key.is_some(),
+    }
+}
+
 /// Get voice capabilities
 #[tauri::command]
 pub async fn voice_get_capabilities(
@@ -744,15 +766,17 @@ pub async fn voice_get_capabilities(
         .join(local_whisper.model_size.model_filename());
     let local_stt_available = whisper_model_path.exists();
 
-    // Check if local piper voice is available
-    let piper_model_path = local_piper
-        .models_dir
-        .join(format!("{}.onnx", local_piper.voice_id));
-    let local_tts_available = piper_model_path.exists();
+    // Local Piper TTS needs BOTH the voice model and the piper binary. Checking
+    // only `<voice>.onnx` made Settings > Voice print "Local TTS: <voice>" for a
+    // user who downloaded a voice but never ran `voice_download_piper_binary`,
+    // and `voice_tts_speak_local` then failed with "Piper binary not found".
+    // `PiperLocal::new` is the exact constructor that command calls and it
+    // verifies both, so this cannot drift away from what speaking requires.
+    let local_tts_available =
+        PiperLocal::new(local_piper.models_dir.clone(), &local_piper.voice_id).is_ok();
 
     Ok(VoiceCapabilities {
-        tts_available: tts_config.api_key.is_some()
-            || matches!(tts_config.provider, TtsProvider::System),
+        tts_available: tts_provider_available(&tts_config, SystemTts::platform_supported()),
         tts_provider: format!("{:?}", tts_config.provider),
         tts_playing,
         wake_word_enabled: wake.get_config().enabled,
@@ -2285,5 +2309,86 @@ pub async fn speech_stop_and_transcribe(
             tracing::error!("[dictation] Transcription failed: {}", e);
             Err(format!("Transcription failed: {}", e))
         }
+    }
+}
+
+#[cfg(test)]
+mod tts_availability_tests {
+    use super::*;
+
+    /// THE regression. `TtsConfig::default()` — System provider, no api key —
+    /// is what every user who never opened voice settings runs. On Windows and
+    /// Linux `SystemTts` cannot speak a word, yet `voice_get_capabilities`
+    /// reported `tts_available: true`, so Settings > Voice printed
+    /// "TTS: System". Reproducible from any host because platform support is a
+    /// parameter.
+    #[test]
+    fn system_provider_is_unavailable_where_the_platform_cannot_speak() {
+        let config = TtsConfig::default();
+        assert!(matches!(config.provider, TtsProvider::System));
+        assert!(
+            !tts_provider_available(&config, false),
+            "System TTS must not report available on a platform with no speak arm"
+        );
+    }
+
+    #[test]
+    fn system_provider_is_available_where_the_platform_can_speak() {
+        assert!(tts_provider_available(&TtsConfig::default(), true));
+    }
+
+    /// Selecting System must never be self-certifying: an api key belonging to
+    /// a network provider does not teach the OS synthesiser new platforms. The
+    /// old expression `api_key.is_some() || matches!(provider, System)` passed
+    /// this for the wrong reason on both arms.
+    #[test]
+    fn an_api_key_does_not_make_system_tts_available() {
+        let config = TtsConfig {
+            provider: TtsProvider::System,
+            api_key: Some("sk-irrelevant-to-the-os-synthesiser".to_string()),
+            ..TtsConfig::default()
+        };
+        assert!(!tts_provider_available(&config, false));
+    }
+
+    /// The network arms keep their real gate: reachable exactly when keyed, and
+    /// never affected by whether the OS synthesiser happens to work here.
+    #[test]
+    fn network_providers_remain_gated_on_a_configured_key() {
+        for provider in [TtsProvider::ElevenLabs, TtsProvider::OpenAi] {
+            for system_supported in [false, true] {
+                let unkeyed = TtsConfig {
+                    provider,
+                    api_key: None,
+                    ..TtsConfig::default()
+                };
+                assert!(
+                    !tts_provider_available(&unkeyed, system_supported),
+                    "{provider:?} without a key must not report available"
+                );
+
+                let keyed = TtsConfig {
+                    provider,
+                    api_key: Some("sk-test".to_string()),
+                    ..TtsConfig::default()
+                };
+                assert!(
+                    tts_provider_available(&keyed, system_supported),
+                    "{provider:?} with a key must report available"
+                );
+            }
+        }
+    }
+
+    /// The production call site must pass the real platform fact. If someone
+    /// hardcodes `true` there, this test still passes — so it is pinned by the
+    /// adapter-level test in `features::speech::tts` instead. What this pins is
+    /// that the two agree for the config the command actually reads.
+    #[test]
+    fn production_capability_matches_the_adapter_on_this_host() {
+        assert_eq!(
+            tts_provider_available(&TtsConfig::default(), SystemTts::platform_supported()),
+            SystemTts::platform_supported()
+        );
     }
 }

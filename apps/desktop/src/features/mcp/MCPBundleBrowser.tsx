@@ -6,12 +6,12 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { useConfirm } from '@/ui/ConfirmDialog';
 import {
   Search,
   Download,

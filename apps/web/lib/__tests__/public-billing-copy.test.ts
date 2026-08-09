@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BILLING_PLAN_PRICING, getModelsForTierAndSurface } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  getModelsForTierAndSurface,
+  type BillingPlanPricing,
+} from '@agiworkforce/types';
 
 const webRoot = resolve(import.meta.dirname, '../..');
 
@@ -232,7 +236,12 @@ describe('App Store listing truth', () => {
     // not a guard: it passes "Team — $200 per seat/mo" because $200 is Max 15x's
     // monthly price. Each priced bullet names its plan by the catalog's own
     // label, so the amounts on that line are checked against that plan.
-    const byLabel = new Map(Object.values(BILLING_PLAN_PRICING).map((plan) => [plan.label, plan]));
+    const byLabel = new Map(
+      Object.values(BILLING_PLAN_PRICING).map((plan): [string, BillingPlanPricing] => [
+        plan.label,
+        plan,
+      ]),
+    );
 
     let priced = 0;
     for (const line of read(listingPath).split('\n')) {
@@ -247,7 +256,11 @@ describe('App Store listing truth', () => {
         `priced line names no plan in the billing catalog: ${line.trim()}`,
       ).toBeDefined();
 
-      const charged = [plan!.monthlyPriceUsd, plan!.yearlyPriceUsd].filter((usd) => usd > 0);
+      // A contract-priced plan publishes no amount at all, so `charged` is empty
+      // and any dollar figure on its bullet fails — a listing may not invent one.
+      const charged = [plan!.monthlyPriceUsd, plan!.yearlyPriceUsd].filter(
+        (usd): usd is number => typeof usd === 'number' && usd > 0,
+      );
       expect(
         [...amounts].sort((a, b) => a - b),
         `${label} is charged ${charged.join('/')} USD but the listing prints ${amounts.join('/')}`,

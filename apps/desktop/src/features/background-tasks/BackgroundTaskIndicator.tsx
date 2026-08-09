@@ -8,9 +8,9 @@ import { useState, useCallback } from 'react';
 import { Loader2, Activity } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/ui/Popover';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 import { BackgroundTasksPanel } from './BackgroundTasksPanel';
 
 interface BackgroundTaskIndicatorProps {

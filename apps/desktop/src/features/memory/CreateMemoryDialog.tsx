@@ -7,7 +7,7 @@
 import { memo, useCallback, useState } from 'react';
 import { Brain, Loader2, Plus } from 'lucide-react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -16,18 +16,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
+import { Textarea } from '@/ui/Textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Slider } from '@/components/ui/Slider';
+} from '@/ui/Select';
+import { Slider } from '@/ui/Slider';
 import { cn } from '@/lib/utils';
 import { useMemoryStore, type MemoryCategory } from '@/stores/memoryStore';
 import { toast } from 'sonner';

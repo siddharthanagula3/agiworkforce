@@ -23,7 +23,7 @@ import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

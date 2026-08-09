@@ -20,10 +20,10 @@ import {
 } from 'lucide-react';
 import { invoke, listen } from '@/lib/tauri-mock';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { useConfirm } from '@/ui/ConfirmDialog';
 
 // Types matching the Rust backend
 type ExtensionStatus =

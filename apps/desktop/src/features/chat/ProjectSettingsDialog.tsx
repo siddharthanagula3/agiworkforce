@@ -6,14 +6,14 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Label } from '@/components/ui/Label';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Badge } from '@/components/ui/Badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+} from '@/ui/Dialog';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Textarea } from '@/ui/Textarea';
+import { Label } from '@/ui/Label';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Badge } from '@/ui/Badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import {
   FolderPlus,
   Folder,

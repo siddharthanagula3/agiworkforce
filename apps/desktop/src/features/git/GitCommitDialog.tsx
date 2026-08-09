@@ -11,7 +11,7 @@ import { Check, GitCommit as GitCommitIcon, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useGit } from '../../hooks/useGit';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -19,10 +19,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Textarea } from '@/ui/Textarea';
 
 interface GitCommitDialogProps {
   /** Whether the dialog is open */

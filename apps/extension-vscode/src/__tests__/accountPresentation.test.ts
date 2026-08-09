@@ -49,7 +49,7 @@ describe('AGI Cloud account presentation', () => {
       '$(shield) Autonomy: Edit automatically',
       '$(warning) Review generated code and commands',
       '$(lock) Developer session boundary: Local',
-      '$(eye) Retention & training controls',
+      '$(eye) Privacy & data controls',
     ]);
     expect(items[2]?.description).toContain('AI output can be wrong');
     expect(items[3]?.description).toContain("Ada Lovelace's Cloud plan is not used");

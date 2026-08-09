@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ApprovalRequest } from '../../stores/governanceStore';
 import { useGovernanceStore } from '../../stores/governanceStore';
 import { useAuthStore } from '../../stores/auth';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { X, CheckCircle, XCircle } from 'lucide-react';
 
 interface ApprovalModalProps {

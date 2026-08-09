@@ -7,7 +7,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir } from '@tauri-apps/api/path';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { errorTracking } from '../../../../services/errorTracking';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 

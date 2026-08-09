@@ -854,7 +854,10 @@ export default function WebChatPage() {
   const usageBanner = (
     <UsageWarningBanner
       warning={liveUsageWarning}
-      onUpgrade={() => router.push('/settings/usage')}
+      // CRIT-008: `/settings/usage` renders a SettingsModalRedirect that
+      // replaces back to /chat, so pushing it unmounted and remounted this
+      // page one tick after leaving it. Open the modal in place instead.
+      onUpgrade={() => openSettings('usage')}
       onDismiss={() => setUsageWarningDismissed(true)}
     />
   );
@@ -2876,7 +2879,8 @@ export default function WebChatPage() {
               <DropdownMenuSeparator />
             </>
           )}
-          <DropdownMenuItem onClick={() => router.push('/settings/general')}>
+          {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
+          <DropdownMenuItem onClick={() => openSettings('general')}>
             <Settings className="mr-2 h-4 w-4" />
             {t('common:settings')}
           </DropdownMenuItem>
@@ -2993,7 +2997,8 @@ export default function WebChatPage() {
           budgetPercent={managedBudgetPercent}
           onOpenUsage={() => {
             setMobileNavOpen(false);
-            router.push('/settings/usage');
+            // CRIT-008: open in place — /settings/usage only bounces to /chat.
+            openSettings('usage');
           }}
           onSelect={(id) => {
             setMobileNavOpen(false);

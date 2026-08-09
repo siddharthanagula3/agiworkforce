@@ -4,9 +4,10 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::sys::api::{
-    ApiClient, ApiRequest, ApiResponse, OAuth2Client, OAuth2Config, PkceChallenge, RequestTemplate,
-    ResponseParser, TokenResponse,
+    ApiClient, ApiRequest, ApiResponse, HttpMethod, OAuth2Client, OAuth2Config, PkceChallenge,
+    RequestTemplate, ResponseParser, TokenResponse,
 };
+use crate::sys::security::egress_policy::ensure_public_http_destination;
 
 pub struct ApiState {
     client: OnceCell<ApiClient>,
@@ -56,6 +57,55 @@ impl ApiState {
             .await
             .map_err(|e| format!("API request failed: {}", e))
     }
+
+    /// Execute a request whose URL was chosen by the WebView.
+    ///
+    /// The WebView's CSP `connect-src` allowlist only governs `fetch`/`XHR`
+    /// issued by renderer JavaScript. `invoke()`-ing one of the `api_*` commands
+    /// moves the request into the Rust process, where that allowlist has no
+    /// effect, so the destination is judged here against the same
+    /// `egress_policy` the tool guard applies to LLM-supplied URLs. Every
+    /// renderer-facing `api_*` command routes through this method — the
+    /// unchecked [`Self::execute_request`] is for URLs the app builds itself
+    /// from an already-validated base (account, credits, OAuth), which are
+    /// allowed to reach a `localhost` API server in development.
+    pub async fn execute_renderer_request(
+        &self,
+        request: ApiRequest,
+    ) -> Result<ApiResponse, String> {
+        ensure_public_http_destination(&request.url).map_err(|denial| denial.to_string())?;
+        self.execute_request(request).await
+    }
+}
+
+/// Judge the two endpoints of a renderer-supplied OAuth 2.0 client.
+///
+/// `token_url` is where `api_oauth_exchange_code` / `api_oauth_refresh_token` /
+/// `api_oauth_client_credentials` later POST the client secret, and `auth_url`
+/// is where the user is sent to authenticate — both are chosen by the renderer,
+/// so both go through the same egress policy as any other renderer-supplied
+/// destination, before the client is stored. `redirect_uri` is deliberately not
+/// judged: it is the loopback callback the browser returns to, not a
+/// destination this process connects out to.
+fn ensure_oauth_endpoints_public(config: &OAuth2Config) -> Result<(), String> {
+    for (field, value) in [
+        ("authUrl", config.auth_url.as_str()),
+        ("tokenUrl", config.token_url.as_str()),
+    ] {
+        ensure_public_http_destination(value).map_err(|denial| format!("{field}: {denial}"))?;
+    }
+    Ok(())
+}
+
+/// Build the request a JSON-bodied shorthand command sends.
+fn json_body_request(method: HttpMethod, url: String, body: String) -> ApiRequest {
+    ApiRequest {
+        method,
+        url,
+        body: Some(body),
+        headers: HashMap::from([("Content-Type".to_string(), "application/json".to_string())]),
+        ..Default::default()
+    }
 }
 
 #[tauri::command]
@@ -69,11 +119,7 @@ pub async fn api_request(
         request.url
     );
 
-    state
-        .get_client()?
-        .execute(request)
-        .await
-        .map_err(|e| format!("API request failed: {}", e))
+    state.execute_renderer_request(request).await
 }
 
 #[tauri::command]
@@ -81,10 +127,12 @@ pub async fn api_get(url: String, state: State<'_, ApiState>) -> Result<ApiRespo
     tracing::info!("Executing GET request to {}", url);
 
     state
-        .get_client()?
-        .get(&url)
+        .execute_renderer_request(ApiRequest {
+            method: HttpMethod::Get,
+            url,
+            ..Default::default()
+        })
         .await
-        .map_err(|e| format!("GET request failed: {}", e))
 }
 
 #[tauri::command]
@@ -96,10 +144,8 @@ pub async fn api_post_json(
     tracing::info!("Executing POST request to {}", url);
 
     state
-        .get_client()?
-        .post_json(&url, &body)
+        .execute_renderer_request(json_body_request(HttpMethod::Post, url, body))
         .await
-        .map_err(|e| format!("POST request failed: {}", e))
 }
 
 #[tauri::command]
@@ -111,10 +157,8 @@ pub async fn api_put_json(
     tracing::info!("Executing PUT request to {}", url);
 
     state
-        .get_client()?
-        .put_json(&url, &body)
+        .execute_renderer_request(json_body_request(HttpMethod::Put, url, body))
         .await
-        .map_err(|e| format!("PUT request failed: {}", e))
 }
 
 #[tauri::command]
@@ -122,10 +166,12 @@ pub async fn api_delete(url: String, state: State<'_, ApiState>) -> Result<ApiRe
     tracing::info!("Executing DELETE request to {}", url);
 
     state
-        .get_client()?
-        .delete(&url)
+        .execute_renderer_request(ApiRequest {
+            method: HttpMethod::Delete,
+            url,
+            ..Default::default()
+        })
         .await
-        .map_err(|e| format!("DELETE request failed: {}", e))
 }
 
 #[tauri::command]
@@ -166,6 +212,8 @@ pub async fn api_oauth_create_client(
     state: State<'_, ApiState>,
 ) -> Result<(), String> {
     tracing::info!("Creating OAuth 2.0 client: {}", client_id);
+
+    ensure_oauth_endpoints_public(&config)?;
 
     let oauth_client =
         OAuth2Client::new(config).map_err(|e| format!("Failed to create OAuth client: {}", e))?;
@@ -303,6 +351,116 @@ pub async fn api_validate_template(template_str: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Packet-level negative test for the WebView egress bypass.
+    ///
+    /// The renderer's CSP cannot restrict a request that Rust makes on its
+    /// behalf, so the proof that `api_*` is governed has to be that no TCP
+    /// connection reaches the forbidden destination. A real listener on
+    /// loopback counts connections; the guard must keep that count at zero.
+    #[tokio::test]
+    async fn renderer_requests_never_reach_loopback() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind loopback listener");
+        let addr = listener.local_addr().expect("listener has no address");
+
+        let connections = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&connections);
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                observed.fetch_add(1, Ordering::SeqCst);
+                // Answer so an unguarded client finishes fast instead of
+                // hanging the test on the 30s request timeout.
+                let _ = tokio::io::AsyncWriteExt::write_all(
+                    &mut stream,
+                    b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                )
+                .await;
+            }
+        });
+
+        let state = ApiState::new().expect("Failed to create ApiState");
+        let error = state
+            .execute_renderer_request(ApiRequest {
+                method: HttpMethod::Get,
+                url: format!("http://{addr}/"),
+                ..Default::default()
+            })
+            .await
+            .expect_err("a loopback destination must be refused");
+        assert!(
+            error.contains("egress policy"),
+            "refusal should name the policy, got: {error}"
+        );
+
+        // Give a request that did escape time to land before counting.
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            0,
+            "an api_* command opened a connection to loopback"
+        );
+    }
+
+    #[tokio::test]
+    async fn renderer_requests_refuse_metadata_local_names_and_odd_schemes() {
+        let state = ApiState::new().expect("Failed to create ApiState");
+
+        for url in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://localhost:11434/api/tags",
+            "http://[::1]:8080/",
+            "http://10.0.0.1.nip.io/",
+            "file:///etc/passwd",
+        ] {
+            let result = state
+                .execute_renderer_request(ApiRequest {
+                    method: HttpMethod::Get,
+                    url: url.to_string(),
+                    ..Default::default()
+                })
+                .await;
+            assert!(result.is_err(), "{url} must be refused");
+        }
+    }
+
+    /// The token endpoint receives the client secret, so a renderer must not be
+    /// able to point it at the local machine or a metadata service.
+    #[test]
+    fn oauth_endpoints_must_be_public() {
+        let public = OAuth2Config {
+            client_id: "test_client".to_string(),
+            client_secret: Some("shhh".to_string()),
+            auth_url: "https://idp.example.com/oauth/authorize".to_string(),
+            token_url: "https://idp.example.com/oauth/token".to_string(),
+            // A loopback callback is normal for a native OAuth client and must
+            // stay allowed — the browser returns to it, we do not connect to it.
+            redirect_uri: "http://localhost:3000/callback".to_string(),
+            scopes: vec!["read".to_string()],
+            use_pkce: true,
+        };
+        assert!(ensure_oauth_endpoints_public(&public).is_ok());
+
+        let stolen_secret = OAuth2Config {
+            token_url: "http://127.0.0.1:9/token".to_string(),
+            ..public.clone()
+        };
+        let error = ensure_oauth_endpoints_public(&stolen_secret)
+            .expect_err("a loopback token endpoint must be refused");
+        assert!(error.starts_with("tokenUrl:"), "got: {error}");
+
+        let metadata_auth = OAuth2Config {
+            auth_url: "http://169.254.169.254/latest/meta-data/".to_string(),
+            ..public
+        };
+        let error = ensure_oauth_endpoints_public(&metadata_auth)
+            .expect_err("a link-local auth endpoint must be refused");
+        assert!(error.starts_with("authUrl:"), "got: {error}");
+    }
 
     #[tokio::test]
     async fn test_api_state_creation() {

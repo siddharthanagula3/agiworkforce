@@ -17,7 +17,7 @@ import {
   type AgentTask,
   type AgentTaskLiveStep,
 } from '../../stores/agentTaskStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface StepData {
   id: string;

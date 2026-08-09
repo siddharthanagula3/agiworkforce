@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { automation } from '@agiworkforce/desktop-command-client';
 import { CircleStop, Mic, MicOff, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { listen } from '@/lib/tauri-mock';
 import { cn } from '@/lib/utils';
 import {

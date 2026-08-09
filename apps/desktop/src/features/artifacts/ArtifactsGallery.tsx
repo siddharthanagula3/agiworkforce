@@ -14,7 +14,7 @@ import { Copy, Layers, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { EmptyState } from '@/ui/EmptyState';
 import { useArtifactStore, type ArtifactSummary, type ArtifactType } from '@/stores/artifactStore';
 import { ArtifactTypeIcon } from '@/lib/artifactUtils';
 import { ArtifactCategoryFilter, type ArtifactCategory } from './ArtifactCategoryFilter';

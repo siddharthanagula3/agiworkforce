@@ -171,19 +171,23 @@ export async function POST(request: NextRequest): Promise<Response> {
       const message =
         outcome.reason === 'lookup_failed'
           ? 'The DNS lookup failed. This is a resolver problem, not a missing record — retry shortly.'
-          : outcome.reason === 'token_mismatch'
-            ? 'A verification record exists but its value does not match this connection’s challenge.'
-            : 'The verification TXT record was not found. DNS changes can take several minutes to propagate.';
+          : outcome.reason === 'challenge_expired'
+            ? 'This verification challenge has expired. Reissue one with PUT /api/admin/sso/verify-domain, publish the new TXT record, then verify again.'
+            : outcome.reason === 'token_mismatch'
+              ? 'A verification record exists but its value does not match this connection’s challenge.'
+              : 'The verification TXT record was not found. DNS changes can take several minutes to propagate.';
 
       return NextResponse.json(
         {
           verified: false,
           reason: outcome.reason,
           error: message,
-          domainVerification: domainVerificationInstructions(
-            row.domain,
-            row.domain_verification_token,
-          ),
+          // Repeating the instructions for a lapsed challenge would send the
+          // admin to publish a record this endpoint will never accept.
+          domainVerification:
+            outcome.reason === 'challenge_expired'
+              ? null
+              : domainVerificationInstructions(row.domain, row.domain_verification_token),
         },
         { status },
       );
