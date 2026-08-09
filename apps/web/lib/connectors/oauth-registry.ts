@@ -53,15 +53,21 @@
 
 import 'server-only';
 
+import {
+  CONNECTOR_OAUTH_CALLBACK_PATH,
+  CONNECTOR_OAUTH_START_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
 
-/** Path the hosted callback is mounted at. Must match the registered redirect URI. */
-export const CONNECTOR_OAUTH_CALLBACK_PATH = '/api/connectors/oauth/callback';
-
-/** Path a client sends the user to in order to begin authorization. */
-export const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
+/**
+ * Both broker addresses are cross-surface contract values (mobile and the
+ * shared chat UI read the start path too), so they are declared once in
+ * `@agiworkforce/cloud-contracts` and re-exported here for the server-side
+ * callers that already import them from this module.
+ */
+export { CONNECTOR_OAUTH_CALLBACK_PATH, CONNECTOR_OAUTH_START_PATH };
 
 /**
  * connectorId shape. Lower-case, no underscore: the id becomes the MCP

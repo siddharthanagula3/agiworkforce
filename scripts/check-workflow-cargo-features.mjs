@@ -128,6 +128,40 @@ for (const file of workflowFiles) {
   }
 }
 
+// Same failure shape, different cause: a step that dies during argument
+// parsing lints nothing while looking like an ordinary red build.
+//
+// A `#` comment cannot sit between a line-continuation backslash and the line
+// it continues. The shell strips `\<newline>` before tokenising, so the comment
+// swallows the remainder of the command, and every following line becomes a
+// separate command. `Clippy (all features)` shipped exactly that: the NB3
+// rationale was pasted mid-command, which silently reduced the gate to
+// `cargo clippy --workspace --lib` (no features, no `-D warnings`) and then
+// exited 127 on `--features: command not found`.
+//
+// Text check, not a shell parse: `bash -n` accepts the broken form — it is
+// valid syntax, just not the command anyone wrote.
+let continuationChecked = 0;
+for (const file of workflowFiles) {
+  const lines = fs.readFileSync(path.join(WORKFLOWS, file), 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].replace(/\s+$/, '');
+    // `\\` is an escaped backslash, not a continuation.
+    if (!line.endsWith('\\') || line.endsWith('\\\\')) continue;
+    continuationChecked += 1;
+    let next = i + 1;
+    while (next < lines.length && lines[next].trim() === '') next += 1;
+    if (next < lines.length && lines[next].trim().startsWith('#')) {
+      errors.push(
+        `${file}:${i + 1}: a comment follows a line-continuation backslash.\n` +
+          `    The shell joins the lines first, so the comment truncates the command ` +
+          `and the rest of it runs as separate commands.\n` +
+          `    Move the comment above the \`run:\` key.`,
+      );
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error('Workflow cargo-feature check failed:\n');
   for (const error of errors) console.error(`- ${error}\n`);
@@ -136,5 +170,6 @@ if (errors.length > 0) {
 
 console.log(
   `Workflow cargo-feature check passed (${referenceCount} qualified reference(s) across ` +
-    `${workflowFiles.length} workflow(s), against ${manifests.size} crate(s)).`,
+    `${workflowFiles.length} workflow(s), against ${manifests.size} crate(s); ` +
+    `${continuationChecked} line continuation(s) checked for comment truncation).`,
 );

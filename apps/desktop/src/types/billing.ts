@@ -3,7 +3,7 @@
  *
  * These describe the subscription/customer/usage shapes surfaced to the
  * desktop UI. Subscription and customer records are populated by the cloud
- * auth orchestrator from the web `/api/auth/me` response (see
+ * auth orchestrator from the web `/api/me` response (see
  * `stores/authOrchestrator.ts`); the desktop never talks to Stripe directly.
  *
  * Historically these lived in `services/stripe.ts` alongside a client-side

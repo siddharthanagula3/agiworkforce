@@ -48,7 +48,12 @@ async function discoverTargets(): Promise<DemoTarget[]> {
     targets.push({
       label: 'anthropic',
       adapter: createAnthropicAdapter({ apiKey: process.env['ANTHROPIC_API_KEY'] }),
-      model: 'claude-haiku-4.5',
+      // Model ids are sent to the provider verbatim (see the adapter's
+      // translate step), so they must be ids the catalog still serves —
+      // packages/contracts/types/src/models.json. `claude-haiku-4.5` used to
+      // sit here and was retired from the catalog in f62274b63, which made this
+      // demo 404 for anyone who had an ANTHROPIC_API_KEY set.
+      model: 'claude-sonnet-5',
     });
   } else {
     console.error(`${ANSI_DIM}  skip anthropic: ANTHROPIC_API_KEY not set${ANSI_RESET}`);

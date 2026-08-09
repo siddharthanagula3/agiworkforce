@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Tooling/security owner
-Last updated: 2026-05-20
+Last updated: 2026-08-09
 Kind: ts-package
 Criticality: high
 
@@ -12,9 +12,21 @@ Shared browser automation primitives backed by Playwright Core.
 
 ## Consumers
 
-Chrome extension only (`apps/extension`). No other workspace package depends on
-this one: Desktop browser automation is a separate Rust/CDP stack under
-`apps/desktop/src-tauri/src/automation/browser`, and Web does not use it at all.
+None today. No file in the repository imports this package: `grep -rn
+"agiworkforce/browser-tool" --include="*.ts" --include="*.tsx" --include="*.js"`
+matches only this package's own header comment.
+
+`apps/extension/package.json` still lists `"@agiworkforce/browser-tool":
+"workspace:*"`, but that entry is now stale. The extension's only importer was a
+type-only `import type { BrowserAction }` in
+`apps/extension/src/features/content/browserTool.ts`, and that file was deleted
+with its bridge in `bfce749b3` (2026-08-09) because the bridge had no caller.
+The manifest entry should be dropped the next time a `pnpm-lock.yaml` change is
+safe to land.
+
+Desktop browser automation is a separate Rust/CDP stack under
+`apps/desktop/src-tauri/src/automation/browser`, and Web does not use this
+package at all. Neither has ever depended on it.
 
 ## Public API / Exports
 

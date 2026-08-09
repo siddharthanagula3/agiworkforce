@@ -3749,15 +3749,21 @@ interface SlashCommandMeta {
   captureContext: boolean;
   /** One-line description shown in the autocomplete menu. */
   hint: string;
+  /**
+   * When true the command also gets a one-tap chip under the composer. The
+   * chip row used to repeat its own array of command names, so renaming a
+   * command here left a chip that sent an unexpandable string as chat text.
+   */
+  chip?: boolean;
 }
 
 /**
  * The panel's slash commands, in menu order.
  *
- * Single source of truth: both `expandSlashCommand` (submit-time) and the
- * autocomplete menu read this. Four separate strings promised "/ for commands"
- * while nothing listened for the key, so the commands were undiscoverable
- * unless you already knew them.
+ * Single source of truth: `expandSlashCommand` (submit-time), the autocomplete
+ * menu, and the composer chip row all read this. Four separate strings promised
+ * "/ for commands" while nothing listened for the key, so the commands were
+ * undiscoverable unless you already knew them.
  */
 const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
   '/summarize': {
@@ -3766,6 +3772,7 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Summarize this page concisely. Include key points, main arguments, and any important details.',
     captureContext: true,
     hint: 'Key points and main arguments of this page',
+    chip: true,
   },
   '/tldr': {
     display: '/tldr',
@@ -3778,6 +3785,7 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
     prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
     captureContext: true,
     hint: 'Plain-language explanation of this page',
+    chip: true,
   },
   '/translate': {
     display: '/translate',
@@ -3792,6 +3800,7 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Extract the key structured data from this page: names, dates, numbers, prices, and any tabular information.',
     captureContext: true,
     hint: 'Pull out names, dates, numbers and tables',
+    chip: true,
   },
   '/code': {
     display: '/code',
@@ -3799,8 +3808,17 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
     captureContext: true,
     hint: 'Find and explain code on this page',
+    chip: true,
   },
 };
+
+/**
+ * Composer chips, derived from the one command list so a chip can never name a
+ * command the expander does not know.
+ */
+const PROMPT_CHIP_COMMANDS: SlashCommandMeta[] = Object.values(SLASH_COMMANDS).filter(
+  (meta) => meta.chip === true,
+);
 
 /** Commands whose name starts with `fragment` (`/tr` -> `/translate`). */
 function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
@@ -8554,7 +8572,8 @@ function buildUI(): void {
   composerBar.appendChild(quickModeToggle);
 
   const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
-  for (const cmd of ['/summarize', '/explain', '/extract', '/code']) {
+  for (const meta of PROMPT_CHIP_COMMANDS) {
+    const cmd = meta.display;
     const chip = el('button', { class: 'sp-cmd-chip', type: 'button' }, cmd);
     chip.addEventListener('click', () => sendMessage(cmd));
     promptChipsRow.appendChild(chip);

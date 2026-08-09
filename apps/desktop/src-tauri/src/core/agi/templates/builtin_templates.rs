@@ -358,7 +358,7 @@ fn create_data_entry_agent() -> AgentTemplate {
         "data-entry-agent".to_string(),
         "Data Entry Agent".to_string(),
         TemplateCategory::DataEntry,
-        "Automates data entry by extracting data from documents, validating it, and entering it into target systems with UI automation. Achieves 99%+ accuracy.".to_string(),
+        "Automates data entry by extracting data from documents, validating it, and entering it into target systems with UI automation.".to_string(),
     )
     .with_icon("⌨️".to_string())
     .with_tools(vec![
@@ -486,7 +486,7 @@ fn create_email_management_agent() -> AgentTemplate {
         "email-management-agent".to_string(),
         "Email Management Agent".to_string(),
         TemplateCategory::Operations,
-        "Automates email inbox management by sorting, prioritizing, drafting responses, and archiving. Achieves inbox zero efficiently.".to_string(),
+        "Automates email inbox management by sorting, prioritizing, drafting responses, and archiving.".to_string(),
     )
     .with_icon("📧".to_string())
     .with_tools(vec![
@@ -1652,7 +1652,7 @@ fn create_job_application_agent() -> AgentTemplate {
         "job-application-agent".to_string(),
         "Job Application Agent".to_string(),
         TemplateCategory::HR,
-        "Automates job applications by finding relevant postings, tailoring resumes, filling out application forms, and tracking application status. Saves hours per application.".to_string(),
+        "Automates job applications by finding relevant postings, tailoring resumes, filling out application forms, and tracking application status.".to_string(),
     )
     .with_icon("💼".to_string())
     .with_tools(vec![
@@ -1763,7 +1763,7 @@ fn create_research_agent() -> AgentTemplate {
         "research-agent".to_string(),
         "Research Agent".to_string(),
         TemplateCategory::Research,
-        "Automates research by searching multiple sources, extracting relevant information, synthesizing findings, and creating comprehensive reports. Saves hours of manual research.".to_string(),
+        "Automates research by searching multiple sources, extracting relevant information, synthesizing findings, and creating comprehensive reports.".to_string(),
     )
     .with_icon("🔬".to_string())
     .with_tools(vec![

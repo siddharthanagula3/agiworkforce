@@ -26,12 +26,28 @@
  * `fetch` (`guardedFetch`), where chats, files, telemetry, and account calls
  * originate today. It does NOT intercept the Tauri Rust backend's own `reqwest`
  * calls; those sit OUTSIDE this guard and must honor the trust boundary on their
- * own. As of 2026-06-25 the Rust paths that can reach our cloud are: account/auth
- * (infra, SSRF-allowlisted to `*.agiworkforce.com` in `sys/account/mod.rs`) and a
- * DORMANT cloud-sync/device client (`integrations/sync` — declared but never
- * instantiated or exposed via a Tauri command, so it does not egress in practice).
- * If that sync client is ever wired up, gate it on `privacyMode === 'managed'` the
- * same way this guard does. See known-flaws and the Rust-egress audit.
+ * own. As of 2026-08-09 the Rust paths that can reach our cloud are:
+ *
+ *   1. Account/auth infra (`sys/account/mod.rs`), SSRF-allowlisted to
+ *      `*.agiworkforce.com`. Account auth is not conversation data.
+ *   2. `ManagedCloudProvider` (`core/llm/providers/managed_cloud_provider.rs`),
+ *      which POSTs chat content to `get_api_base_url()/api/llm/v1/chat/completions`.
+ *      This one is live, and this guard does not and cannot stop it — what keeps it
+ *      inside the boundary is the router: `effective_trust_mode` in
+ *      `core/llm/llm_router.rs` fails closed to `Local` when no trust mode was
+ *      threaded through, and `provider_matches_trust_mode` only matches
+ *      `Provider::ManagedCloud` under `TrustMode::ManagedCloud`. Registering the
+ *      provider (`llm_ensure_managed_cloud`, `ensure_managed_cloud_provider`) opens
+ *      no socket; only a routed send does. Treat that router pair, not this file, as
+ *      the enforcement point for Rust chat egress.
+ *   3. A DORMANT cloud-sync/device client (`integrations/sync` — declared but never
+ *      instantiated outside its own test, and exposed by no Tauri command, so it does
+ *      not egress in practice). If it is ever wired up, gate it on
+ *      `privacyMode === 'managed'` the same way this guard does.
+ *
+ * There is no single host-authoritative egress policy spanning both layers yet:
+ * `sys/security/policy_integration::check_network_request` exists but has zero
+ * callers. See known-flaws `BYOK-RUST-EGRESS-01` and ledger CRIT-016.
  */
 
 // The private-boundary predicate lives in stores/privacyBoundary so egressGuard,

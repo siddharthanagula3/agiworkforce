@@ -12,6 +12,27 @@ import {
 
 export const MANAGED_CLOUD_SETTINGS_SYNC_PATH = '/api/settings/sync';
 
+/**
+ * The account settings document — `GET`/`PUT /api/settings/preferences`.
+ *
+ * Sibling to the delta-sync route above and backed by the same `user_settings`
+ * row, but a different contract: sync moves a cursored cloud-safe allowlist,
+ * preferences reads and writes one namespace (or the un-namespaced top-level
+ * document) outright. Web, Desktop and Mobile all call it, so it belongs next
+ * to the sync path rather than being retyped once per surface.
+ */
+export const MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH = '/api/settings/preferences';
+
+/**
+ * Read one namespace of the account settings document.
+ *
+ * Namespaces are caller-supplied strings (`profile`, `time-focus`, `safety`,
+ * …), so the encoding belongs here rather than at each call site.
+ */
+export function managedCloudPreferencesNamespacePath(namespace: string): string {
+  return `${MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH}?namespace=${encodeURIComponent(namespace)}`;
+}
+
 export type ManagedCloudSettingsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 export type ManagedCloudSettingsOperation = 'pull' | 'push';
 export type ManagedCloudSettingsEventPhase = 'start' | 'retry' | 'success' | 'error';

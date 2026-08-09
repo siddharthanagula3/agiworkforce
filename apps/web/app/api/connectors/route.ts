@@ -311,7 +311,18 @@ async function handleCreateConnector(request: NextRequest) {
   }
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
-  if (!VALID_CONNECTOR_IDS.has(body.connectorId) && !operatorMappedIds.has(body.connectorId)) {
+  // The three sources that make an id real must be the SAME three GET reports in
+  // `available` and DELETE accepts. VALID_CONNECTOR_IDS covers 34 of the 89
+  // catalog entries, so without the OAuth arm an operator who registers a
+  // platform OAuth app for any of the other 55 (airtable, gitlab, figma, …) gets
+  // an id that GET advertises as available — the directory renders a live
+  // Connect button for it — and POST then rejects with "Invalid connector ID"
+  // instead of handing back the 409 + oauthStartPath that opens consent.
+  if (
+    !VALID_CONNECTOR_IDS.has(body.connectorId) &&
+    !operatorMappedIds.has(body.connectorId) &&
+    !isConnectorOAuthConfigured(body.connectorId)
+  ) {
     throw createError.validation('Invalid connector ID');
   }
 

@@ -34,8 +34,9 @@ const root = process.cwd();
  * Credential formats with a vendor-assigned prefix.
  *
  * Kept in lockstep with the redactors named in the header. When a provider is
- * added to one, add it here — `__tests__` parity is asserted by
- * `scripts/__tests__/check-secrets.test.mjs`.
+ * added to one, add it here. This parity is maintained by hand and is NOT
+ * asserted by any test — nothing fails if the rosters drift apart, so check
+ * the three redactors yourself when adding a pattern.
  */
 const PATTERNS = [
   { name: 'PEM private key', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },

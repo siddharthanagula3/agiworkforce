@@ -69,13 +69,15 @@ describe('SSOPanel entitlement', () => {
     expect(screen.queryByText(/Single sign-on/i)).toBeNull();
   });
 
-  it('renders nothing when the request fails outright', async () => {
+  it('reports a failed request as a server problem, not as an absent feature', async () => {
     fetchMock.mockRejectedValue(new Error('network down'));
 
-    const { container } = render(<SSOPanel organizationId={ORG_ID} isOwner />);
+    render(<SSOPanel organizationId={ORG_ID} isOwner />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    // Hiding the panel is reserved for the entitlement answer above. An outage
+    // must not read to an enterprise admin as "SSO was removed from my plan".
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be loaded/i);
   });
 
   it('asks the server about this specific organization', async () => {

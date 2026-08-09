@@ -52,7 +52,16 @@
 /** Discriminant key. Mirrors `CONNECTOR_AUTHORIZATION_REQUIRED_KEY` server-side. */
 export const CONNECTOR_AUTHORIZATION_REQUIRED_KEY = 'agi_connector_authorization_required';
 
-/** Mirrors `CONNECTOR_OAUTH_START_PATH` in lib/connectors/oauth-registry.ts. */
+/**
+ * Mirrors `CONNECTOR_OAUTH_START_PATH` in `@agiworkforce/cloud-contracts`
+ * (packages/contracts/cloud-contracts/src/connectors.ts), which is the single
+ * declaration every other surface imports. This package deliberately has no
+ * dependency on the cloud contracts — it is the shared chat renderer, used by
+ * surfaces that never speak to the managed-cloud REST API — so the literal is
+ * restated here and pinned to the contract by
+ * `apps/web/__tests__/contracts/connector-oauth-paths.test.ts`, which fails if
+ * the two ever differ.
+ */
 export const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
 
 /** Mirrors `ConnectorAuthorizationReason` in lib/connectors/connect-required.ts. */
