@@ -16,6 +16,7 @@ const REMOVED_PROVIDER_IDS = [
 describe('provider health policy', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.resetModules();
   });
 
@@ -33,5 +34,45 @@ describe('provider health policy', () => {
       expect(providerIds).not.toContain(removedProvider);
       await expect(getFallbackRecommendation(removedProvider)).resolves.toBeNull();
     }
+  });
+
+  it('accepts a PROVIDER_HEALTH_URLS host the canonical provider list carries', async () => {
+    // Routing the DeepSeek ping through OpenRouter is a legitimate ops move.
+    // While this allowlist was retyped by hand it lacked OpenRouter (and
+    // DashScope, Moonshot, Zhipu, Cloudflare AI Gateway), so the override was
+    // dropped on the floor and the gateway silently kept pinging the default.
+    const pingUrl = 'https://openrouter.ai/api/v1/models';
+    const fetchMock = vi.fn().mockResolvedValue({ status: 401 });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv(
+      'PROVIDER_HEALTH_URLS',
+      JSON.stringify([{ id: 'deepseek', label: 'DeepSeek', pingUrl, family: 'deepseek' }]),
+    );
+
+    const { checkAllProviders } = await import('../../src/services/providerHealth');
+    const providers = await checkAllProviders();
+
+    expect(providers.map((provider) => provider.provider)).toEqual(['deepseek']);
+    expect(fetchMock).toHaveBeenCalledWith(pingUrl, expect.anything());
+  });
+
+  it('rejects a PROVIDER_HEALTH_URLS override aimed at loopback', async () => {
+    // `localhost` rides along on the canonical provider list as a local-dev
+    // carve-out for adapter base URLs. A health ping must leave the box, so it
+    // has to stay off this allowlist and fall back to the defaults.
+    const fetchMock = vi.fn().mockResolvedValue({ status: 401 });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv(
+      'PROVIDER_HEALTH_URLS',
+      JSON.stringify([
+        { id: 'openai', label: 'OpenAI', pingUrl: 'https://localhost/v1/models', family: 'gpt' },
+      ]),
+    );
+
+    const { checkAllProviders } = await import('../../src/services/providerHealth');
+    const providers = await checkAllProviders();
+
+    expect(providers.length).toBeGreaterThan(1);
+    expect(fetchMock).not.toHaveBeenCalledWith('https://localhost/v1/models', expect.anything());
   });
 });
