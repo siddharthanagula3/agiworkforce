@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "已置顶",
+    "actions": {
+      "more": "更多选项",
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "rename": "重命名",
+      "archive": "归档",
+      "delete": "删除",
+      "confirmDelete": "确认删除",
+      "confirmDeletePermanently": "确认永久删除",
+      "deletePermanently": "永久删除",
+      "restore": "恢复"
+    },
+    "projects": {
+      "newChat": "在项目中新建对话",
+      "open": "打开项目",
+      "newProject": "新建项目"
+    },
+    "mode": {
+      "local": "本地",
+      "cloud": "云端",
+      "aria": "在本地与云端之间切换",
+      "switchTo": "切换到{{mode}}",
+      "soon": "即将推出",
+      "cloudUnavailable": "AGI Cloud 可在桌面端使用——登录后即可使用托管模型和同步的对话。"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "研究",
       "automation": "自动化"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "登录",
+    "cloudSync": "云同步",
+    "archived": "已归档对话",
+    "noArchived": "没有已归档的对话",
+    "noConversations": "暂无对话",
+    "showActive": "返回活跃对话",
+    "showArchived": "显示已归档对话（{{count}}）"
   },
   "emptyChat": {
+    "neutralHeadline": "今天我能帮你做什么？",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "本地模式",
+    "cloudSyncAction": "云同步",
+    "cloudSyncAria": "设置托管云同步",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "未命名项目",
+      "empty": "暂无项目",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "项目设置"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "暂停定时任务 {{name}}",
+      "resumeAria": "恢复定时任务 {{name}}",
+      "deleteTitle": "删除定时任务？",
+      "deleteDescription": "将删除 {{name}}。此操作无法撤销。",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

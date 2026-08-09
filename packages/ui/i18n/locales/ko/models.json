@@ -7,7 +7,14 @@
     "google": "Google",
     "azure": "Azure OpenAI",
     "aws_bedrock": "AWS Bedrock",
-    "local": "로컬"
+    "local": "로컬",
+    "xai": "xAI",
+    "deepseek": "DeepSeek",
+    "perplexity": "Perplexity",
+    "qwen": "Qwen",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "lmstudio": "LM Studio"
   },
   "models": {
     "auto": "자동 (권장)",
@@ -42,5 +49,8 @@
   "docs": "문서",
   "vision": "비전",
   "image": "이미지 생성",
-  "video": "비디오 생성"
+  "video": "비디오 생성",
+  "comingSoonProviders": {
+    "aws_bedrock": "AWS Bedrock"
+  }
 }

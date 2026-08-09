@@ -9,7 +9,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from '@agiworkforce/ui';
+import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
@@ -88,10 +88,12 @@ const TRIMMED_FIELD_LABELS: Record<string, string> = {
 };
 
 export function StreamingThinkingStatus() {
+  const { t } = useUiTranslation('chat');
+
   return (
     <div
       role="status"
-      aria-label="Assistant is thinking"
+      aria-label={t('bubble.assistantThinking', 'Assistant is thinking')}
       className="flex items-center gap-2 text-[var(--chat-text-muted)]"
     >
       <span
@@ -127,6 +129,7 @@ interface CodeBlockProps {
 }
 
 function CodeBlock({ code, language }: CodeBlockProps) {
+  const { t } = useUiTranslation('chat');
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -149,7 +152,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
           <Button
             variant="ghost"
             size="icon"
-            aria-label={copied ? 'Copied' : 'Copy code'}
+            aria-label={copied ? t('bubble.copied', 'Copied') : t('bubble.copyCode', 'Copy code')}
             onClick={handleCopy}
             className={cn(
               'h-6 w-6 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
@@ -165,7 +168,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
           <Button
             variant="ghost"
             size="icon"
-            aria-label={copied ? 'Copied' : 'Copy code'}
+            aria-label={copied ? t('bubble.copied', 'Copied') : t('bubble.copyCode', 'Copy code')}
             onClick={handleCopy}
             className={cn(
               'h-6 w-6 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
@@ -464,6 +467,7 @@ function formatToolArgsPreview(toolCall: ToolCall): string | null {
 }
 
 function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
+  const { t } = useUiTranslation('chat');
   const preview = formatToolArgsPreview(toolCall);
   const hasResult = typeof toolCall.result === 'string' && toolCall.result.trim().length > 0;
 
@@ -495,7 +499,9 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
 
       {hasResult && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-xs text-[var(--chat-text-muted)]">Result</summary>
+          <summary className="cursor-pointer text-xs text-[var(--chat-text-muted)]">
+            {t('bubble.toolResult', 'Result')}
+          </summary>
           <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-[var(--chat-surface-overlay)] px-3 py-2 text-xs leading-relaxed text-[var(--chat-text-secondary)]">
             {toolCall.result}
           </pre>
@@ -513,6 +519,7 @@ function formatAttachmentSize(size: number | undefined): string | null {
 }
 
 function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) {
+  const { t } = useUiTranslation('chat');
   const hostBridge = useHostBridge();
   const [inFlightIds, setInFlightIds] = useState<Record<string, true>>({});
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
@@ -545,7 +552,7 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
     } catch {
       setDownloadErrors((previous) => ({
         ...previous,
-        [attachment.id]: 'Download failed. Try again.',
+        [attachment.id]: t('bubble.downloadFailed', 'Download failed. Try again.'),
       }));
     } finally {
       setInFlightIds((previous) => {
@@ -557,7 +564,10 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
   }
 
   return (
-    <div className="flex max-w-full flex-wrap justify-end gap-2" aria-label="Message attachments">
+    <div
+      className="flex max-w-full flex-wrap justify-end gap-2"
+      aria-label={t('bubble.messageAttachments', 'Message attachments')}
+    >
       {attachments.map((attachment) => {
         const isImage = attachment.type.toLowerCase().startsWith('image/');
         const isDownloading = Boolean(inFlightIds[attachment.id]);
@@ -579,7 +589,7 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
                   {attachment.name}
                 </span>
                 <span className="block truncate text-xs text-[var(--chat-text-muted)]">
-                  {[attachment.type || 'File', size].filter(Boolean).join(' · ')}
+                  {[attachment.type || t('bubble.file', 'File'), size].filter(Boolean).join(' · ')}
                 </span>
               </span>
               {hasDownload && (
@@ -620,6 +630,7 @@ export function MessageBubble({
   onResendApproval,
   artifactProjection,
 }: MessageBubbleProps) {
+  const { t } = useUiTranslation('chat');
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
@@ -711,7 +722,9 @@ export function MessageBubble({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={copied ? 'Copied' : 'Copy message'}
+            aria-label={
+              copied ? t('bubble.copied', 'Copied') : t('bubble.copyMessage', 'Copy message')
+            }
             onClick={handleCopy}
             className={cn(
               // AUDIT-FIX GOV-38: 44px touch target on phones (28px was below
@@ -892,7 +905,7 @@ export function MessageBubble({
             <button
               type="button"
               onClick={() => onRetry(message.id)}
-              aria-label="Retry this response"
+              aria-label={t('bubble.retryResponse', 'Retry this response')}
               className="shrink-0 rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--chat-surface-hover)]"
               style={{ color: 'var(--chat-destructive)' }}
             >

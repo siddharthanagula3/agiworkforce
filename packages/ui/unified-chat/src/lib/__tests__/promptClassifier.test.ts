@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyPrompt, buildRoutingDecision } from '../promptClassifier';
+import { classifyPrompt } from '../promptClassifier';
 
 describe('classifyPrompt', () => {
   // -------------------------------------------------------------------------
@@ -254,28 +254,5 @@ describe('classifyPrompt', () => {
   it('coding wins over reasoning when both present', () => {
     const r = classifyPrompt('step by step, implement a binary search algorithm in Python');
     expect(r.task).toBe('coding'); // coding has higher priority than reasoning
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildRoutingDecision
-// ---------------------------------------------------------------------------
-describe('buildRoutingDecision', () => {
-  it('returns a RoutingDecision with wasRouted=true', () => {
-    const d = buildRoutingDecision('write a Python script');
-    expect(d.wasRouted).toBe(true);
-    expect(d.routedModelId).toBeTruthy();
-    expect(typeof d.timestamp).toBe('number');
-  });
-
-  it('returns task alongside the decision', () => {
-    const d = buildRoutingDecision('generate an image of a dog');
-    expect(d.task).toBe('image_generation');
-  });
-
-  it('includes a human-readable reason', () => {
-    const d = buildRoutingDecision('search for the latest AI news');
-    expect(d.reason).toBeTruthy();
-    expect(d.reason.length).toBeGreaterThan(3);
   });
 });

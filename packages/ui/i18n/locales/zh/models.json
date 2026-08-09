@@ -7,7 +7,14 @@
     "google": "Google",
     "azure": "Azure OpenAI",
     "aws_bedrock": "AWS Bedrock",
-    "local": "本地"
+    "local": "本地",
+    "xai": "xAI",
+    "deepseek": "DeepSeek",
+    "perplexity": "Perplexity",
+    "qwen": "Qwen",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "lmstudio": "LM Studio"
   },
   "models": {
     "auto": "自动（推荐）",
@@ -42,5 +49,8 @@
   "docs": "文档",
   "vision": "视觉",
   "image": "图像生成",
-  "video": "视频生成"
+  "video": "视频生成",
+  "comingSoonProviders": {
+    "aws_bedrock": "AWS Bedrock"
+  }
 }

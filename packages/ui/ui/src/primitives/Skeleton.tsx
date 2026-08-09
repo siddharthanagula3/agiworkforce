@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Animation style */
@@ -51,6 +52,7 @@ function SkeletonText({
   className,
   ...props
 }: SkeletonTextProps) {
+  const { t } = useUiTranslation('common');
   const gapClass = {
     sm: 'space-y-1',
     md: 'space-y-2',
@@ -67,7 +69,7 @@ function SkeletonText({
     <div
       className={cn(gapClass[gap], className)}
       role="status"
-      aria-label="Loading content"
+      aria-label={t('loadingContent', 'Loading content')}
       {...props}
     >
       {Array.from({ length: lines }).map((_, index) => (
@@ -77,7 +79,7 @@ function SkeletonText({
           className={cn('h-4', index === lines - 1 ? lastLineWidthClass[lastLineWidth] : 'w-full')}
         />
       ))}
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">{t('loading', 'Loading...')}</span>
     </div>
   );
 }
@@ -106,11 +108,13 @@ function SkeletonCard({
   className,
   ...props
 }: SkeletonCardProps) {
+  const { t } = useUiTranslation('common');
+
   return (
     <div
       className={cn('rounded-lg border border-border bg-card p-4', className)}
       role="status"
-      aria-label="Loading card"
+      aria-label={t('loadingCard', 'Loading card')}
       {...props}
     >
       {showImage && <Skeleton animation={animation} className="mb-4 h-40 w-full rounded-md" />}
@@ -124,7 +128,7 @@ function SkeletonCard({
           </div>
         )}
       </div>
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">{t('loading', 'Loading...')}</span>
     </div>
   );
 }
@@ -153,11 +157,13 @@ function SkeletonListItem({
   className,
   ...props
 }: SkeletonListItemProps) {
+  const { t } = useUiTranslation('common');
+
   return (
     <div
       className={cn('flex items-start gap-3', className)}
       role="status"
-      aria-label="Loading item"
+      aria-label={t('loadingItem', 'Loading item')}
       {...props}
     >
       {showAvatar && (
@@ -173,7 +179,7 @@ function SkeletonListItem({
         <Skeleton animation={animation} className="h-4 w-1/3" />
         {textLines > 1 && <SkeletonText lines={textLines - 1} animation={animation} gap="sm" />}
       </div>
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">{t('loading', 'Loading...')}</span>
     </div>
   );
 }
@@ -199,11 +205,13 @@ function SkeletonChatMessage({
   className,
   ...props
 }: SkeletonChatMessageProps) {
+  const { t } = useUiTranslation('common');
+
   return (
     <div
       className={cn('flex gap-3', isUser && 'flex-row-reverse', className)}
       role="status"
-      aria-label="Loading message"
+      aria-label={t('loadingMessage', 'Loading message')}
       {...props}
     >
       <Skeleton animation={animation} className="h-8 w-8 shrink-0 rounded-full" />
@@ -214,7 +222,7 @@ function SkeletonChatMessage({
           style={{ width: '100%', minWidth: '200px', height: `${lines * 20 + 32}px` }}
         />
       </div>
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">{t('loading', 'Loading...')}</span>
     </div>
   );
 }
@@ -237,8 +245,10 @@ function SkeletonTableRow({
   className,
   ...props
 }: SkeletonTableRowProps) {
+  const { t } = useUiTranslation('common');
+
   return (
-    <tr className={className} role="status" aria-label="Loading row" {...props}>
+    <tr className={className} role="status" aria-label={t('loadingRow', 'Loading row')} {...props}>
       {Array.from({ length: columns }).map((_, index) => (
         <td key={index} className="p-3">
           <Skeleton
@@ -250,7 +260,7 @@ function SkeletonTableRow({
           />
         </td>
       ))}
-      <td className="sr-only">Loading...</td>
+      <td className="sr-only">{t('loading', 'Loading...')}</td>
     </tr>
   );
 }
@@ -276,17 +286,19 @@ function SkeletonFormField({
   className,
   ...props
 }: SkeletonFormFieldProps) {
+  const { t } = useUiTranslation('common');
+
   return (
     <div
       className={cn('space-y-2', className)}
       role="status"
-      aria-label="Loading form field"
+      aria-label={t('loadingFormField', 'Loading form field')}
       {...props}
     >
       {showLabel && <Skeleton animation={animation} className="h-4 w-24" />}
       <Skeleton animation={animation} className="h-10 w-full" />
       {showHelper && <Skeleton animation={animation} className="h-3 w-48" />}
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">{t('loading', 'Loading...')}</span>
     </div>
   );
 }

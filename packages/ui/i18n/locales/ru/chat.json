@@ -57,6 +57,9 @@
   "compactMode": "Компактный режим",
   "compactModeEnabled": "Компактный режим включён",
   "compactModeDisabled": "Компактный режим отключён",
+  "placeholderEmpty": "Чем я могу помочь сегодня?",
+  "shareConversation": "Поделиться беседой",
+  "openNavigation": "Открыть навигацию",
   "artifactPublish": {
     "untitled": "Опубликованный артефакт",
     "publishedOn": "Опубликовано {{date}}",

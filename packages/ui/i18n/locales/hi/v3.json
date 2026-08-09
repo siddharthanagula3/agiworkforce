@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "पिन किए गए",
+    "actions": {
+      "more": "और विकल्प",
+      "pin": "पिन करें",
+      "unpin": "पिन हटाएँ",
+      "rename": "नाम बदलें",
+      "archive": "संग्रहित करें",
+      "delete": "हटाएँ",
+      "confirmDelete": "हटाने की पुष्टि करें",
+      "confirmDeletePermanently": "स्थायी रूप से हटाने की पुष्टि करें",
+      "deletePermanently": "स्थायी रूप से हटाएँ",
+      "restore": "पुनर्स्थापित करें"
+    },
+    "projects": {
+      "newChat": "प्रोजेक्ट में नई चैट",
+      "open": "प्रोजेक्ट खोलें",
+      "newProject": "नया प्रोजेक्ट"
+    },
+    "mode": {
+      "local": "लोकल",
+      "cloud": "क्लाउड",
+      "aria": "लोकल और क्लाउड के बीच स्विच करें",
+      "switchTo": "{{mode}} पर स्विच करें",
+      "soon": "जल्द ही",
+      "cloudUnavailable": "AGI Cloud डेस्कटॉप पर उपलब्ध है — प्रबंधित मॉडल और सिंक की गई चैट उपयोग करने के लिए साइन इन करें।"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "रिसर्च",
       "automation": "ऑटोमेशन"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "साइन इन",
+    "cloudSync": "क्लाउड सिंक",
+    "archived": "संग्रहित चैट",
+    "noArchived": "कोई संग्रहित चैट नहीं",
+    "noConversations": "अभी कोई बातचीत नहीं",
+    "showActive": "सक्रिय चैट पर लौटें",
+    "showArchived": "संग्रहित चैट दिखाएँ ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "आज मैं आपकी क्या मदद कर सकता हूँ?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "लोकल मोड",
+    "cloudSyncAction": "क्लाउड सिंक",
+    "cloudSyncAria": "क्लाउड प्रबंधित सिंक सेट करें",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "बिना शीर्षक प्रोजेक्ट",
+      "empty": "अभी कोई प्रोजेक्ट नहीं",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "प्रोजेक्ट सेटिंग्स"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "शेड्यूल किया गया कार्य {{name}} रोकें",
+      "resumeAria": "शेड्यूल किया गया कार्य {{name}} फिर से शुरू करें",
+      "deleteTitle": "शेड्यूल किया गया कार्य हटाएँ?",
+      "deleteDescription": "{{name}} हटाया जाएगा। इसे पूर्ववत नहीं किया जा सकता।",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

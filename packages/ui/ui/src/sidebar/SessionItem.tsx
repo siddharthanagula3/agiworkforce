@@ -24,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';
 import type { SidebarProject, SidebarSession } from './types';
 
@@ -70,6 +71,7 @@ function SessionItemBase({
   onMoveToProject,
   onOpenCustomInstructions,
 }: SessionItemProps) {
+  const { t } = useUiTranslation('chat');
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +136,7 @@ function SessionItemBase({
           <div className="flex items-center gap-1.5">
             {session.starred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
             <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">
-              {session.title || 'Untitled'}
+              {session.title || t('sidebar.untitled', 'Untitled')}
             </span>
           </div>
           {preview && (
@@ -142,7 +144,7 @@ function SessionItemBase({
           )}
           {projectName && (
             <div className="mt-0.5 truncate text-[10px] text-[hsl(var(--muted-foreground))]">
-              in <span className="font-medium text-[hsl(var(--foreground))]/60">{projectName}</span>
+              {t('sidebar.inProject', 'in {{name}}', { name: projectName })}
             </div>
           )}
         </button>
@@ -159,7 +161,7 @@ function SessionItemBase({
           {session.hasCustomInstructions && onOpenCustomInstructions && (
             <button
               type="button"
-              title="Custom instructions"
+              title={t('sidebar.customInstructions', 'Custom instructions')}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenCustomInstructions(session.id);
@@ -174,8 +176,8 @@ function SessionItemBase({
             trigger={({ toggle }) => (
               <button
                 type="button"
-                title="More actions"
-                aria-label="Conversation actions"
+                title={t('sidebar.moreActions', 'More actions')}
+                aria-label={t('sidebar.conversationActions', 'Conversation actions')}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggle();
@@ -196,7 +198,7 @@ function SessionItemBase({
                       session.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />
                     }
                   >
-                    {session.pinned ? 'Unpin' : 'Pin'}
+                    {session.pinned ? t('sidebar.unpin', 'Unpin') : t('sidebar.pin', 'Pin')}
                   </MenuItem>
                 )}
                 {!simple && onStar && (
@@ -205,7 +207,7 @@ function SessionItemBase({
                     onSelect={() => onStar(session.id)}
                     icon={<Star className="h-4 w-4" />}
                   >
-                    {session.starred ? 'Unstar' : 'Star'}
+                    {session.starred ? t('sidebar.unstar', 'Unstar') : t('sidebar.star', 'Star')}
                   </MenuItem>
                 )}
                 {!simple && (
@@ -214,7 +216,7 @@ function SessionItemBase({
                     onSelect={() => setIsRenaming(true)}
                     icon={<Pencil className="h-4 w-4" />}
                   >
-                    Rename
+                    {t('sidebar.rename', 'Rename')}
                   </MenuItem>
                 )}
                 {!simple && onShare && (
@@ -223,14 +225,14 @@ function SessionItemBase({
                     onSelect={() => onShare(session.id)}
                     icon={<Link2 className="h-4 w-4" />}
                   >
-                    Share
+                    {t('sidebar.share', 'Share')}
                   </MenuItem>
                 )}
                 {!simple && onMoveToProject && projects && projects.length > 0 && (
                   <>
                     <MenuSeparator />
                     <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      Move to project
+                      {t('sidebar.moveToProject', 'Move to project')}
                     </div>
                     {projects.map((project) => (
                       <MenuItem
@@ -261,7 +263,7 @@ function SessionItemBase({
                             onSelect={() => onRestore(session.id)}
                             icon={<ArchiveRestore className="h-4 w-4" />}
                           >
-                            Restore
+                            {t('sidebar.restore', 'Restore')}
                           </MenuItem>
                         )
                       : onArchive && (
@@ -270,7 +272,7 @@ function SessionItemBase({
                             onSelect={() => onArchive(session.id)}
                             icon={<Archive className="h-4 w-4" />}
                           >
-                            Archive
+                            {t('sidebar.archive', 'Archive')}
                           </MenuItem>
                         )}
                   </>
@@ -281,7 +283,7 @@ function SessionItemBase({
                   icon={<Trash2 className="h-4 w-4" />}
                   destructive
                 >
-                  Delete
+                  {t('sidebar.delete', 'Delete')}
                 </MenuItem>
               </>
             )}

@@ -11,7 +11,7 @@ import {
   Brain,
   Sparkles,
 } from 'lucide-react';
-import { AgiMark } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 import {
   siAnthropic,
   siGoogle,
@@ -286,12 +286,20 @@ interface ThinkingToggleProps {
 }
 
 function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProps) {
+  const { t } = useUiTranslation('models');
+
   return (
     <button
       type="button"
-      aria-label={enabled ? 'Disable thinking mode' : 'Enable thinking mode'}
+      aria-label={
+        enabled
+          ? t('selector.disableThinking', 'Disable thinking mode')
+          : t('selector.enableThinking', 'Enable thinking mode')
+      }
       aria-pressed={enabled}
-      title={`Thinking: ${enabled ? EFFORT_LABEL[enabledEffort] : 'Off'}`}
+      title={t('selector.thinkingState', 'Thinking: {{state}}', {
+        state: enabled ? EFFORT_LABEL[enabledEffort] : t('selector.thinkingOff', 'Off'),
+      })}
       onClick={(e) => {
         e.stopPropagation();
         onChange(!enabled);
@@ -321,6 +329,7 @@ interface BestAutoRowProps {
 }
 
 function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProps) {
+  const { t } = useUiTranslation('models');
   const lastDecision = useModelStore(selectLastRoutingDecision);
   const routedModel = lastDecision?.wasRouted ? modelsById[lastDecision.routedModelId] : null;
   const taskLabel = lastDecision?.wasRouted
@@ -347,7 +356,9 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
         <ProviderLogo providerKey="agi-cloud" size={16} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold leading-tight">Best (auto)</span>
+            <span className="text-sm font-semibold leading-tight">
+              {t('selector.bestAuto', 'Best (auto)')}
+            </span>
             <span
               className={cn(
                 'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
@@ -481,6 +492,7 @@ export function ModelSelector({
   onProviderSwitchUpgradeRequired,
   disabled = false,
 }: ModelSelectorProps) {
+  const { t } = useUiTranslation('models');
   const { models, selectedModelId, displayName, selectModel } = useModel();
   const hostBridge = useHostBridge();
   const activeConversation = useChatStore((state) =>
@@ -636,7 +648,7 @@ export function ModelSelector({
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label="Select model"
+          aria-label={t('selector.selectModel', 'Select model')}
           disabled={disabled}
           className={cn(
             'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
@@ -668,14 +680,20 @@ export function ModelSelector({
           {/* Provider count badge — surfaces differentiator */}
           <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-3 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
-              Model
+              {t('selector.model', 'Model')}
             </span>
             <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary)]">
               {executionMode === 'local_only'
-                ? 'Local'
+                ? t('selector.local', 'Local')
                 : executionMode === 'byok'
                   ? 'BYOK'
-                  : `${sortedGroups.length} ${sortedGroups.length === 1 ? 'Provider' : 'Providers'}`}
+                  : sortedGroups.length === 1
+                    ? t('selector.providerCountOne', '{{count}} Provider', {
+                        count: sortedGroups.length,
+                      })
+                    : t('selector.providerCountOther', '{{count}} Providers', {
+                        count: sortedGroups.length,
+                      })}
             </span>
           </div>
 
@@ -685,17 +703,20 @@ export function ModelSelector({
               <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
                 <div className="font-medium text-[var(--chat-text-primary)]">
                   {executionMode === 'local_only'
-                    ? 'No local models detected'
+                    ? t('selector.noLocalModels', 'No local models detected')
                     : executionMode === 'byok'
-                      ? 'No BYOK models configured'
-                      : 'No managed models available'}
+                      ? t('selector.noByokModels', 'No BYOK models configured')
+                      : t('selector.noManagedModels', 'No managed models available')}
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
                   {executionMode === 'local_only'
-                    ? 'Start a local runtime and download a model.'
+                    ? t('selector.noLocalModelsHint', 'Start a local runtime and download a model.')
                     : executionMode === 'byok'
-                      ? 'Add a provider API key in Models & Keys.'
-                      : 'Managed model capacity is currently unavailable.'}
+                      ? t('selector.noByokModelsHint', 'Add a provider API key in Models & Keys.')
+                      : t(
+                          'selector.noManagedModelsHint',
+                          'Managed model capacity is currently unavailable.',
+                        )}
                 </p>
                 {onSettingsClick && (
                   <Popover.Close asChild>
@@ -797,8 +818,8 @@ export function ModelSelector({
                                   {!isSelectable && (
                                     <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]">
                                       {m.availability === 'coming_soon'
-                                        ? 'Coming soon'
-                                        : 'Unavailable'}
+                                        ? t('selector.comingSoon', 'Coming soon')
+                                        : t('selector.unavailable', 'Unavailable')}
                                     </span>
                                   )}
                                 </div>
@@ -872,7 +893,7 @@ export function ModelSelector({
                   )}
                 >
                   <Settings size={13} />
-                  <span>Manage API Keys</span>
+                  <span>{t('selector.manageApiKeys', 'Manage API Keys')}</span>
                 </button>
               </Popover.Close>
             </div>
