@@ -155,6 +155,19 @@ jobs:
         # (*Definitions.ts, *Catalog.ts) are exempt. Exit 1 = anti-pattern.
         run: pnpm check:hardcoded-arrays
 
+      - name: Secret scan (CRIT-017)
+        # Repository-owned credential scanning over every tracked file. BLOCKING
+        # on purpose: a committed credential is already in history by the time
+        # anyone reads an advisory warning, so the only useful moment to stop it
+        # is before the merge.
+        #
+        # Not entropy analysis — every pattern matches a vendor-prefixed
+        # credential format, so a hit is a credential SHAPE rather than "this
+        # looks random". Reviewed fixtures live in
+        # scripts/secret-scan-allowlist.json keyed on (path, format), and an
+        # entry that stops matching fails the job as stale.
+        run: pnpm check:secrets
+
       - name: Lock-vs-build drift check (AP-09, advisory)
         # R27-PARITY: compares model ID references in Claude memory lock files
         # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
