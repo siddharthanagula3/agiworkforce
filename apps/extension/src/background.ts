@@ -16,6 +16,7 @@
 
 import type { ExtensionMessage, ExtensionResponse, ConnectionStatus, ScheduledTask } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
 import {
@@ -4532,14 +4533,14 @@ function setupContextMenu(): void {
   });
 
   const menuItems: chrome.contextMenus.CreateProperties[] = [
-    { id: 'ask-agi-workforce', title: 'Ask AGI Workforce about "%s"', contexts: ['selection'] },
-    { id: 'explain-selection', title: 'Explain this', contexts: ['selection'] },
-    { id: 'translate-selection', title: 'Translate this', contexts: ['selection'] },
-    { id: 'summarize-page', title: 'Summarize this page', contexts: ['page'] },
-    { id: 'capture-element', title: 'Capture Element', contexts: ['all'] },
-    { id: 'get-element-info', title: 'Get Element Info', contexts: ['all'] },
-    { id: 'discover-webmcp-tools', title: 'Discover AI Tools on Page', contexts: ['all'] },
-    { id: 'add-to-tab-group', title: 'Add Tab to AGI Workforce Group', contexts: ['page'] },
+    { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
+    { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
+    { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
+    { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
+    { id: 'capture-element', title: t('menuCaptureElement'), contexts: ['all'] },
+    { id: 'get-element-info', title: t('menuGetElementInfo'), contexts: ['all'] },
+    { id: 'discover-webmcp-tools', title: t('menuDiscoverWebmcpTools'), contexts: ['all'] },
+    { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
     // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
     // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
   ];

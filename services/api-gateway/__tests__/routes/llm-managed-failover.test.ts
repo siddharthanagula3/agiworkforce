@@ -6,10 +6,11 @@
  * header; its absence means the selection is an explicit user contract and
  * the gateway must never rotate providers. These tests pin the failover
  * boundary alongside the safety pins in llm-provider-model-id.test.ts:
- * rotation happens only for pre-first-byte availability failures, every
- * attempt re-passes tier admission, billing settles once with the serving
- * attempt's usage, and the response attributes the model that actually
- * served the request.
+ * rotation happens only pre-first-byte and only for an availability failure
+ * or a credential rejection (which condemns the rejected provider's own
+ * remaining routes too), every attempt re-passes tier admission, billing
+ * settles once with the serving attempt's usage, and the response attributes
+ * the model that actually served the request.
  */
 import express from 'express';
 import request from 'supertest';
@@ -222,6 +223,9 @@ const PRIMARY_FLAGSHIP = 'claude-opus-5'; // anthropic
 const FALLBACK_FLAGSHIP = 'gpt-5.6-sol'; // openai
 const PRIMARY_PRO = 'claude-sonnet-5'; // anthropic
 const FALLBACK_PRO = 'gemini-3.6-flash'; // google
+// A second flagship on the PRIMARY's provider: the route a rejected
+// credential must skip rather than replay.
+const SAME_PROVIDER_FLAGSHIP = 'claude-fable-5'; // anthropic
 
 describe('Managed gateway failover — resolver fallback plan consumption', () => {
   beforeEach(() => {
@@ -299,12 +303,47 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
     );
   });
 
-  it('never rotates after a terminal credential failure even when a plan is present', async () => {
-    state.adapterModes.push('terminal-error');
+  it('rotates after a credential failure: a rejected key condemns one provider, not the turn', async () => {
+    state.adapterModes.push('terminal-error', 'success');
 
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .set(MANAGED_FALLBACK_MODELS_HEADER, FALLBACK_FLAGSHIP)
+      .send({
+        model: PRIMARY_FLAGSHIP,
+        messages: [{ role: 'user', content: 'hello' }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(state.buildCalls).toEqual(['anthropic', 'openai']);
+    expect(response.body.model).toBe(FALLBACK_FLAGSHIP);
+    expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1);
+  });
+
+  it('skips remaining routes on the provider whose credential was rejected', async () => {
+    // The second anthropic route would replay the same rejected key; only the
+    // google route can authenticate, so it is the one that serves.
+    state.adapterModes.push('terminal-error', 'success');
+
+    const response = await request(createApp())
+      .post('/api/llm/v1/chat/completions')
+      .set(MANAGED_FALLBACK_MODELS_HEADER, `${SAME_PROVIDER_FLAGSHIP},${FALLBACK_PRO}`)
+      .send({
+        model: PRIMARY_FLAGSHIP,
+        messages: [{ role: 'user', content: 'hello' }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(state.buildCalls).toEqual(['anthropic', 'google']);
+    expect(response.body.model).toBe(FALLBACK_PRO);
+  });
+
+  it('surfaces the credential failure when every remaining route is the rejected provider', async () => {
+    state.adapterModes.push('terminal-error');
+
+    const response = await request(createApp())
+      .post('/api/llm/v1/chat/completions')
+      .set(MANAGED_FALLBACK_MODELS_HEADER, SAME_PROVIDER_FLAGSHIP)
       .send({
         model: PRIMARY_FLAGSHIP,
         messages: [{ role: 'user', content: 'hello' }],

@@ -4,6 +4,7 @@
   "version": "1.2.0",
   "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
   "author": "AGI",
+  "default_locale": "en",
   "homepage_url": "https://agiworkforce.com",
   "incognito": "not_allowed",
   "permissions": [
@@ -63,14 +64,14 @@
         "default": "Ctrl+Shift+A",
         "mac": "Command+Shift+A"
       },
-      "description": "Open AGI side panel"
+      "description": "__MSG_commandOpenSidePanel__"
     },
     "capture_page": {
       "suggested_key": {
         "default": "Ctrl+Shift+C",
         "mac": "Command+Shift+C"
       },
-      "description": "Capture current page"
+      "description": "__MSG_commandCapturePage__"
     }
   },
   "side_panel": {

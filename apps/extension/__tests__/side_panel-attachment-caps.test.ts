@@ -63,6 +63,12 @@ const chromeMock = vi.hoisted(() => {
     permissions: { contains: vi.fn(async () => true) },
     action: { onClicked: event() },
     sidePanel: { setPanelBehavior: vi.fn(async () => undefined) },
+    // src/i18n.ts resolves every label through chrome.i18n — in the packaged
+    // extension Chrome serves _locales/en/messages.json, and there is no
+    // second catalog to fall back to. Echo the key: this suite asserts on
+    // attachments, not on copy, and a key rendered where English was expected
+    // fails loudly instead of silently.
+    i18n: { getMessage: vi.fn((key: string) => key) },
   };
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from '../ModelSelector';
 import { useChatStore } from '../../stores/chatStore';
-import { useModelStore } from '../../stores/modelStore';
+import { CLOUD_FALLBACK_MODELS, useModelStore } from '../../stores/modelStore';
 import { HostBridgeContext } from '../../lib/hostBridge';
 import type { ChatExecutionMode } from '@agiworkforce/types';
 import type { ModelInfo } from '../../lib/types';
@@ -67,6 +67,19 @@ const managedModel: ModelInfo = {
   isByok: false,
 };
 
+type TauriWindow = Window & { __TAURI_INTERNALS__?: unknown };
+
+/**
+ * zustand `persist` lazy-writes, so a desktop session that never touched a
+ * mode setter leaves no `app-mode-store` entry — the state the selector must
+ * still read as Local.
+ */
+function seedDesktopShellWithoutPersistedMode() {
+  window.localStorage.removeItem('app-mode-store');
+  (window as TauriWindow).__TAURI_INTERNALS__ = {};
+  useChatStore.setState({ activeConversationId: null, conversations: [] });
+}
+
 function seedConversation(executionMode: ChatExecutionMode, model?: string) {
   useChatStore.setState({
     activeConversationId: 'conversation-1',
@@ -98,6 +111,7 @@ describe('ModelSelector execution-boundary admission', () => {
   afterEach(() => {
     cleanup();
     window.localStorage.clear();
+    delete (window as TauriWindow).__TAURI_INTERNALS__;
   });
 
   it('shows only local models for a local-only conversation', () => {
@@ -109,6 +123,31 @@ describe('ModelSelector execution-boundary admission', () => {
     expect(screen.getAllByText('Llama Local').length).toBeGreaterThan(0);
     expect(screen.queryByText('GPT Direct')).toBeNull();
     expect(screen.queryByText('Auto Balanced')).toBeNull();
+  });
+
+  it('stays on the local catalog in the desktop shell with no persisted mode', () => {
+    seedDesktopShellWithoutPersistedMode();
+    render(<ModelSelector />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.getByText('Local')).toBeTruthy();
+    expect(screen.getAllByText('Llama Local').length).toBeGreaterThan(0);
+    expect(screen.queryByText('GPT Direct')).toBeNull();
+    expect(screen.queryByText('Auto Balanced')).toBeNull();
+  });
+
+  it('never substitutes the cloud fallback catalog for an empty local catalog', () => {
+    seedDesktopShellWithoutPersistedMode();
+    useModelStore.setState({ models: [], selectedModelId: '' });
+    render(<ModelSelector />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.getByText('No local models detected')).toBeTruthy();
+    for (const fallback of CLOUD_FALLBACK_MODELS) {
+      expect(screen.queryByText(fallback.name)).toBeNull();
+    }
   });
 
   it('shows only direct-provider models for a BYOK conversation', () => {

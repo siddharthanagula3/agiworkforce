@@ -219,7 +219,6 @@ export default function RootLayout() {
   // font FAILURE counts as resolved — a missing typeface must never gate the
   // app, it just falls back, which is the same contract as the render below.
   useLaunchSplashRelease(isMmkvReady && (fontsLoaded || fontError !== null));
-  const session = useAuthStore((s) => s.session);
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
@@ -613,8 +612,17 @@ export default function RootLayout() {
   //   1. scheme = `agiworkforce` AND hostname = exactly `pair`, OR
   //   2. scheme = `https` AND hostname is one of the two verified AGI
   //      domains, with the pair route as the leading segment.
+  //
+  // #386: gated on isClerkSignedIn instead of the legacy session, which
+  // `useAuthStore.initialize()` never assigns — it is null for the life of the
+  // process, so this effect returned on its first line for every URL. That
+  // killed the deep-link route only: an `agiworkforce://pair/...` tap and an
+  // `https://agiworkforce.com/pair...` App Link / Universal Link tap. It did
+  // NOT affect QR scanning (the QR carries the gateway's `agiw:<code>:<token>`
+  // payload, parsed by the in-app scanner) or manual entry (the companion
+  // screen's own input) — neither goes through here.
   useEffect(() => {
-    if (!url || !session || !isInitialized) return;
+    if (!url || !isClerkSignedIn || !isInitialized) return;
 
     const parsed = Linking.parse(url);
     const scheme = (parsed.scheme ?? '').toLowerCase();
@@ -647,7 +655,7 @@ export default function RootLayout() {
       }
       router.push({ pathname: '/(app)/companion' as const, params: { pairingCode: code } });
     }
-  }, [url, session, isInitialized, router]);
+  }, [url, isClerkSignedIn, isInitialized, router]);
 
   // Import iOS Share Extension drafts from the supported App Group handoff.
   // Share extensions cannot reliably launch their containing app, so the

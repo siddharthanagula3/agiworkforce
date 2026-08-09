@@ -1,5 +1,11 @@
 export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect';
 
+// Local/Cloud trust-boundary resolver. Mirrored from index.ts because
+// apps/desktop/vite.config.ts aliases the package root to this file: the
+// shared unified-chat ModelSelector imports this symbol, so without the
+// mirror the desktop bundle fails to build with MISSING_EXPORT.
+export { resolveClientChatExecutionMode } from './mode';
+
 export { command, commandWithWarning } from './desktop-command';
 export type { CommandResult } from './desktop-command';
 

@@ -735,11 +735,13 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
     ).toBeUndefined();
   });
 
-  it('applies pulled language namespace: locale maps to speechLanguage', async () => {
+  // `locale` is Desktop's interface language; only `speechLocale` may retune
+  // this device's voices. See __tests__/cloudSettingsMapping.test.ts.
+  it('applies pulled language namespace: speechLocale maps to speechLanguage', async () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith(SETTINGS_SYNC_PATH))
         return {
-          settings: { language: { locale: 'fr' } },
+          settings: { language: { locale: 'de', speechLocale: 'fr' } },
           cursor: '8',
           hasMore: false,
         } as never;
