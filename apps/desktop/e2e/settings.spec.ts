@@ -85,6 +85,8 @@ test.describe('Settings and Configuration', () => {
     const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
     const cpuVisible = await cpuInput.isVisible({ timeout: 2000 }).catch(() => false);
 
+    // llm-guardrail-allow: no cpu/memory limit control exists in apps/desktop/src; tracked under BASE-008 as a test for unbuilt UI.
+
     test.skip(!cpuVisible, 'Resource limits UI not present in current build');
     await settingsPage.setResourceLimit('cpu', '75');
     await settingsPage.setResourceLimit('memory', '85');
@@ -103,6 +105,8 @@ test.describe('Settings and Configuration', () => {
       .or(page.getByTestId('autonomous-toggle'))
       .first();
     const toggleVisible = await autonomousToggle.isVisible({ timeout: 2000 }).catch(() => false);
+
+    // llm-guardrail-allow: no autonomous-mode toggle exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
 
     test.skip(!toggleVisible, 'Autonomous mode toggle not present in current build');
     await settingsPage.toggleAutonomousMode(true);
@@ -124,6 +128,8 @@ test.describe('Settings and Configuration', () => {
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
+    // llm-guardrail-allow: auto-approval is Local-only by design (DesktopCloudSettingsModal.tsx:641); this spec drives the cloud shell.
+
     test.skip(!checkboxVisible, 'Auto-approval checkbox not present in current build');
     await settingsPage.toggleAutoApproval(true);
     await settingsPage.saveSettings();
@@ -139,6 +145,8 @@ test.describe('Settings and Configuration', () => {
     const resetButtonVisible = await settingsPage.resetButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
+
+    // llm-guardrail-allow: no settings reset control exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
 
     test.skip(!resetButtonVisible, 'Reset button not present in current build');
 
