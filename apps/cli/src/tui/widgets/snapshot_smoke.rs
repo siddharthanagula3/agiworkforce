@@ -214,7 +214,9 @@ fn slash_palette_empty_filter_shows_all_commands_baseline() {
         RegistryCommand::new("resume", "Resume a saved chat"),
         RegistryCommand::new("theme", "Choose a syntax highlighting theme"),
     ]);
-    let rendered = popup.render();
+    // Pinned to English so the baselines do not move with the developer's own
+    // `LANG` now that the palette chrome is translated.
+    let rendered = super::i18n::with_locale("en", || popup.render());
     insta::assert_snapshot!("slash_palette_empty_filter_all_commands_baseline", rendered);
 }
 
@@ -234,7 +236,7 @@ fn slash_palette_filter_narrows_to_matching_command() {
     popup.handle_key(KeyAction::Char('e'));
     popup.handle_key(KeyAction::Char('s'));
     popup.handle_key(KeyAction::Char('u'));
-    let rendered = popup.render();
+    let rendered = super::i18n::with_locale("en", || popup.render());
     assert!(
         rendered.contains("/resume"),
         "expected /resume in filtered palette, got:\n{rendered}"

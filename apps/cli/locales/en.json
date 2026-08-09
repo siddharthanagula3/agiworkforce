@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Commands",
+  "command_popup.empty": "(no matching commands)",
+  "command_popup.hint": "Type to filter   ↑↓ navigate   Enter select   Esc cancel",
+  "agent_picker.title": "Agents",
+  "agent_picker.count": "{count} agent(s)",
+  "agent_picker.search_placeholder": "type to filter agents...",
+  "agent_picker.empty_no_agents": "No agents found. Create one with: /agents create <name>",
+  "agent_picker.empty_no_match": "No agents match filter.",
+  "agent_picker.no_description": "(no description)",
+  "agent_picker.none_selected": "(no agent selected)"
+}

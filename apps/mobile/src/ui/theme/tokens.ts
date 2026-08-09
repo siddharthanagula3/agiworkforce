@@ -37,6 +37,9 @@ const mobileNativeColors = {
     purple: '#7c3aed',
     purpleSurface: 'rgba(124, 58, 237, 0.12)',
     progressTrack: 'rgba(17, 17, 17, 0.08)',
+    // Brand amber, identical in both palettes on purpose: it identifies the
+    // product rather than a surface, and matches `--agi-amber` on web.
+    brandAmber: '#f0a84a',
     white: '#ffffff',
     black: '#000000',
     transparent: 'transparent',
@@ -100,6 +103,7 @@ const mobileNativeColors = {
     purple: '#a78bfa',
     purpleSurface: 'rgba(167, 139, 250, 0.14)',
     progressTrack: 'rgba(255, 255, 255, 0.08)',
+    brandAmber: '#f0a84a',
     white: '#ffffff',
     black: '#000000',
     transparent: 'transparent',

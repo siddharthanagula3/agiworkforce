@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Commandes",
+  "command_popup.empty": "(aucune commande correspondante)",
+  "command_popup.hint": "Tapez pour filtrer   ↑↓ naviguer   Entrée sélectionner   Échap annuler",
+  "agent_picker.title": "Agents",
+  "agent_picker.count": "{count} agent(s)",
+  "agent_picker.search_placeholder": "tapez pour filtrer les agents...",
+  "agent_picker.empty_no_agents": "Aucun agent trouvé. Créez-en un avec : /agents create <name>",
+  "agent_picker.empty_no_match": "Aucun agent ne correspond au filtre.",
+  "agent_picker.no_description": "(aucune description)",
+  "agent_picker.none_selected": "(aucun agent sélectionné)"
+}
