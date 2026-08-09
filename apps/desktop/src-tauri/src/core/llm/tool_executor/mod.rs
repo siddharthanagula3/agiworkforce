@@ -34,8 +34,8 @@ use crate::core::llm::{ToolCall, ToolDefinition};
 use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::tool_confirmation::{
-    request_folder_access_confirmation, request_tool_confirmation, ToolConfirmationState,
-    FOLDER_ACCESS_TOOL_NAME,
+    enforce_agent_mode_gate, request_folder_access_confirmation, request_tool_confirmation,
+    ToolConfirmationState, FOLDER_ACCESS_TOOL_NAME,
 };
 use crate::sys::commands::undo::UndoState;
 use crate::sys::security::tool_guard::RiskLevel;
@@ -2462,6 +2462,51 @@ impl ToolExecutor {
         use crate::sys::commands::mcp_oauth::connector_id_for_server_name;
         use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest};
 
+        // ── Agent-mode gate ─────────────────────────────────────────────────
+        // MCP tools skip `check_safety_tier_and_confirm` entirely, and an
+        // "always allow" connector permission returns `None` below without
+        // reaching `request_tool_confirmation`, so this is the only place the
+        // mode is consulted for them. Fails closed like the state lookups
+        // below when the confirmation subsystem is missing.
+        let mode_gate = match app_handle.try_state::<ToolConfirmationState>() {
+            Some(state) => enforce_agent_mode_gate(app_handle, &state, &tool_call.name),
+            None => Err(format!(
+                "Cannot execute '{}': safety confirmation system unavailable.",
+                tool_call.name
+            )),
+        };
+        if let Err(message) = mode_gate {
+            self.emit_tool_action(
+                action_id,
+                &tool_call.name,
+                "blocked",
+                metadata_snapshot,
+                Some(message.clone()),
+            );
+            self.emit_tool_metrics(
+                action_id,
+                &tool_call.name,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+            emit_tool_error(
+                app_handle,
+                action_id,
+                &message,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+            return Some(ToolResult {
+                success: false,
+                data: json!({ "error": message, "blocked_by_mode": true }),
+                error: Some(message),
+                metadata: HashMap::from([
+                    ("tool_name".to_string(), json!(tool_call.name)),
+                    ("blocked_by_mode".to_string(), json!(true)),
+                ]),
+            });
+        }
+
         let mcp_state = match app_handle.try_state::<McpState>() {
             Some(s) => s,
             None => {
@@ -2746,11 +2791,15 @@ impl ToolExecutor {
         }
     }
 
-    /// Check the safety tier for a tool and request user confirmation if required.
+    /// Enforce the agent mode, then check the safety tier for a tool and
+    /// request user confirmation if required.
     /// Returns Ok(()) if the tool can proceed, Err with a message if denied or timed out.
-    async fn check_safety_tier_and_confirm(
+    ///
+    /// Generic over the Tauri runtime so `tauri::test::mock_app()` can drive
+    /// the gates directly.
+    async fn check_safety_tier_and_confirm<R: tauri::Runtime>(
         &self,
-        app_handle: &tauri::AppHandle,
+        app_handle: &tauri::AppHandle<R>,
         tool_name: &str,
         parameters: &Value,
         action_id: &str,
@@ -2769,6 +2818,16 @@ impl ToolExecutor {
                 ));
             }
         };
+
+        // ── Agent-mode gate ─────────────────────────────────────────────────
+        // Runs before every other check. `request_tool_confirmation` also
+        // enforces the mode, but the paths below can return Ok(()) without
+        // ever calling it: a stored "always allow" short-circuits, and so
+        // does any tool whose safety tier needs no user action. Safe and Plan
+        // mode were therefore advisory for exactly the tools that never
+        // prompt (memory_forget, api_download, skill, …).
+        enforce_agent_mode_gate(app_handle, &confirmation_state, tool_name)
+            .map_err(|message| anyhow!(message))?;
 
         // ── Stored approval-policy check ────────────────────────────────────
         // Before computing the safety tier (which may involve a blocking dialog),
@@ -2922,6 +2981,152 @@ impl ToolExecutor {
                 .join(", ")
         } else {
             "No parameters".to_string()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tool_mode_gate_tests {
+    //! Safe/Plan mode must gate every tool, not only the ones that prompt.
+    //!
+    //! `check_safety_tier_and_confirm` reached the mode gate exclusively via
+    //! `request_tool_confirmation`, which it never calls for a tool whose
+    //! safety tier needs no user action, nor for a tool carrying a stored
+    //! "always allow" policy. Both shortcuts are exercised below.
+    use super::*;
+    use crate::sys::commands::tool_confirmation::AgentMode;
+
+    /// Tools registered at RiskLevel::Low or Medium-without-approval, so
+    /// their safety tier returns Ok(()) before any confirmation is requested.
+    /// None of them is read-only: they delete memories, schedule work, write
+    /// downloaded bytes to disk, or discard an open transaction.
+    const NON_READ_ONLY_QUIET_TOOLS: &[&str] = &[
+        "memory_forget",
+        "schedule_reminder",
+        "api_download",
+        "cloud_download",
+        "db_transaction_rollback",
+        "create_artifact",
+        "skill",
+    ];
+
+    fn executor_with_mode(mode: AgentMode) -> (tauri::App<tauri::test::MockRuntime>, ToolExecutor) {
+        let app = tauri::test::mock_app();
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(mode);
+        app.handle().manage(state);
+        // The executor holds no app handle: `check_safety_tier_and_confirm`
+        // takes the handle it gates on as an argument.
+        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        (app, executor)
+    }
+
+    #[tokio::test]
+    async fn safe_mode_refuses_non_read_only_tools_that_never_prompt() {
+        let (app, executor) = executor_with_mode(AgentMode::Safe);
+        for tool_name in NON_READ_ONLY_QUIET_TOOLS {
+            let result = executor
+                .check_safety_tier_and_confirm(
+                    app.handle(),
+                    tool_name,
+                    &json!({}),
+                    "action-id",
+                    Instant::now(),
+                )
+                .await;
+            let error = result
+                .expect_err(&format!("{} must be refused in safe mode", tool_name))
+                .to_string();
+            assert!(
+                error.contains("not permitted in safe mode"),
+                "{} was refused for the wrong reason: {}",
+                tool_name,
+                error
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_mode_refuses_non_read_only_tools_that_never_prompt() {
+        let (app, executor) = executor_with_mode(AgentMode::Plan);
+        for tool_name in NON_READ_ONLY_QUIET_TOOLS {
+            assert!(
+                executor
+                    .check_safety_tier_and_confirm(
+                        app.handle(),
+                        tool_name,
+                        &json!({}),
+                        "action-id",
+                        Instant::now(),
+                    )
+                    .await
+                    .is_err(),
+                "{} must be refused in plan mode",
+                tool_name
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_always_allow_does_not_survive_safe_mode() {
+        let app = tauri::test::mock_app();
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(AgentMode::Safe);
+        // "Approve and remember" on an earlier Build-mode turn.
+        state.remember_choice("api_download", true);
+        assert_eq!(state.get_remembered_choice("api_download"), Some(true));
+        app.handle().manage(state);
+
+        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+
+        let error = executor
+            .check_safety_tier_and_confirm(
+                app.handle(),
+                "api_download",
+                &json!({}),
+                "action-id",
+                Instant::now(),
+            )
+            .await
+            .expect_err("a remembered approval must not defeat safe mode")
+            .to_string();
+        assert!(error.contains("not permitted in safe mode"), "{}", error);
+    }
+
+    #[tokio::test]
+    async fn build_mode_still_runs_quiet_tools_without_prompting() {
+        let (app, executor) = executor_with_mode(AgentMode::Build);
+        // Only the app-internal writers: a tool the guard classifies as
+        // needing confirmation would block this test on the dialog it can
+        // never receive an answer to.
+        for tool_name in ["create_artifact", "skill", "memory_forget"] {
+            executor
+                .check_safety_tier_and_confirm(
+                    app.handle(),
+                    tool_name,
+                    &json!({}),
+                    "action-id",
+                    Instant::now(),
+                )
+                .await
+                .unwrap_or_else(|e| panic!("{} must stay allowed in build mode: {}", tool_name, e));
+        }
+    }
+
+    #[tokio::test]
+    async fn safe_mode_still_allows_read_only_tools() {
+        let (app, executor) = executor_with_mode(AgentMode::Safe);
+        for tool_name in ["file_read", "memory_search", "git_status"] {
+            executor
+                .check_safety_tier_and_confirm(
+                    app.handle(),
+                    tool_name,
+                    &json!({}),
+                    "action-id",
+                    Instant::now(),
+                )
+                .await
+                .unwrap_or_else(|e| panic!("{} must stay allowed in safe mode: {}", tool_name, e));
         }
     }
 }
