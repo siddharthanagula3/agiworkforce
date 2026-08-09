@@ -33,12 +33,11 @@ import { logger } from '@/lib/logger';
  *     applied on top via `isPromoExpired` (from `@agiworkforce/routing`, the
  *     same date-boundary logic `effectiveInputPrice`/`effectiveOutputPrice`
  *     use). No model currently sets both.
- * Cache-write rates come from the catalog when declared. When they are not,
- * the fallback depends on the provider's token accounting: Anthropic-style
- * disjoint accounting falls back to the published 1.25x (5m) / 2x (1h)
- * surcharges, while inclusive-prompt providers (OpenAI/Gemini/DeepSeek) fall
- * back to the plain input rate -- a model that declares no write price is not
- * charged a write surcharge it never published.
+ * Cache read/write rates come from the catalog when declared; when they are
+ * not, `resolveCacheRates` below decides. It is the single definition inside
+ * this app; the gateway and the desktop calculator mirror its numbers, and
+ * `apps/cli/src/model_catalog.rs` still does not (it prices an unpriced cache
+ * read at $0 for non-OpenAI/Anthropic providers) — a known, untracked-here gap.
  */
 
 export interface TokenUsage {
@@ -82,6 +81,81 @@ export interface ModelPricing {
   cachedWrite1hCostPer1MTokens?: number; // Cost per 1M 1-hour-TTL cache-write tokens
   /** True for Anthropic-style accounting where input_tokens excludes cache tokens. */
   cacheTokensDisjointFromInput?: boolean;
+}
+
+/** The subset of a model's rates needed to price its cached tokens. */
+export type CacheRateInputs = Pick<
+  ModelPricing,
+  | 'inputCostPer1MTokens'
+  | 'cachedInputCostPer1MTokens'
+  | 'cachedWriteCostPer1MTokens'
+  | 'cachedWrite1hCostPer1MTokens'
+  | 'cacheTokensDisjointFromInput'
+>;
+
+/**
+ * Multipliers on the input rate for a cache WRITE the catalog leaves unpriced.
+ *
+ * There is no read entry: an unpriced cache READ is billed at the plain input
+ * rate, so there is no multiplier to name (see `resolveCacheRates`).
+ *
+ * This is the one definition for the web surfaces (`calculateCost`,
+ * `lib/cost-tracker.ts`, `lib/prompt-cache-helper.ts`). The desktop calculator
+ * (`apps/desktop/src-tauri/src/core/llm/cost_calculator.rs`) and the gateway
+ * (`services/api-gateway/src/services/managedUsageBilling.ts`) mirror these
+ * numbers — neither can import from this app — so the three must change
+ * together. `apps/cli/src/model_catalog.rs:427` carries a fourth, still
+ * unconverged copy (tracked gap, out of this module's reach).
+ */
+export const CACHE_WRITE_FALLBACK_MULTIPLIERS = {
+  /** Anthropic's published 5m-TTL cache-write surcharge. */
+  write5m: 1.25,
+  /** Anthropic's published 1h-TTL cache-write surcharge. */
+  write1h: 2,
+} as const;
+
+/**
+ * Per-million cache read/write rates for already-resolved pricing.
+ *
+ * Catalog-declared rates win. An unpriced cache READ falls back to the FULL
+ * input rate: a discount the provider does not publish is never invented, and
+ * over-costing a cached token is recoverable where billing a tenth of the real
+ * rate is not. That branch keys on the ABSENCE of a catalog `cached_input`
+ * price and NOT on `capabilities.caching` — no billing path checks that
+ * capability — so it covers both `minimax-m3` (caching declared, no read
+ * price) and models that report cached tokens without declaring caching at
+ * all. `grok-4.5` (xai, $2/M input, no `cached_input`, `caching: false`) is the
+ * live example: it is in `tierAllowedModels.flagship_additions`, its adapter
+ * fills cached-token counts from `prompt_tokens_details.cached_tokens`, and
+ * its cache reads bill at $2/M here instead of the $0.20/M a flat 0.1x used to
+ * invent.
+ *
+ * The write fallback is provider-shaped: with
+ * Anthropic-style disjoint accounting the written tokens are billed ONLY as a
+ * write, so an undeclared rate falls back to the published surcharges. With
+ * inclusive-prompt accounting (OpenAI/Gemini/DeepSeek) the written tokens are
+ * part of the prompt and are subtracted from the billable-input bucket, so an
+ * undeclared write rate falls back to the plain input rate — that is exactly
+ * "free cache writes" (each token billed once, at the input rate), which is
+ * what pre-GPT-5.6 OpenAI models get. The GPT-5.6 family declares
+ * `cached_write` (1.25x input) and is billed for it.
+ */
+export function resolveCacheRates(pricing: CacheRateInputs): {
+  read: number;
+  write5m: number;
+  write1h: number;
+} {
+  const input = pricing.inputCostPer1MTokens;
+  const disjoint = pricing.cacheTokensDisjointFromInput === true;
+  return {
+    read: pricing.cachedInputCostPer1MTokens ?? input,
+    write5m:
+      pricing.cachedWriteCostPer1MTokens ??
+      (disjoint ? input * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m : input),
+    write1h:
+      pricing.cachedWrite1hCostPer1MTokens ??
+      (disjoint ? input * CACHE_WRITE_FALLBACK_MULTIPLIERS.write1h : input),
+  };
 }
 
 // Default fallback if provider is unknown
@@ -196,10 +270,11 @@ export class LLMCostCalculator {
       // (OpenAI/Gemini/DeepSeek) the cached count is a SUBSET of promptTokens and must
       // be subtracted; for Anthropic the cache tokens are disjoint (additional), so
       // promptTokens already excludes them — don't subtract.
-      const cacheReadRate =
-        pricing.cachedInputCostPer1MTokens ?? pricing.inputCostPer1MTokens * 0.1;
-      const { write5m: cacheWrite5mRate, write1h: cacheWrite1hRate } =
-        this.resolveCacheWriteRates(pricing);
+      const {
+        read: cacheReadRate,
+        write5m: cacheWrite5mRate,
+        write1h: cacheWrite1hRate,
+      } = resolveCacheRates(pricing);
 
       const billableInput = pricing.cacheTokensDisjointFromInput
         ? promptTokens
@@ -221,38 +296,13 @@ export class LLMCostCalculator {
   }
 
   /**
-   * Resolve the per-million cache-WRITE rates for already-resolved pricing.
-   *
-   * Catalog-declared rates win. The fallback is provider-shaped: with
-   * Anthropic-style disjoint accounting the written tokens are billed ONLY as a
-   * write, so an undeclared rate falls back to Anthropic's published 1.25x (5m)
-   * / 2x (1h) surcharges. With inclusive-prompt accounting (OpenAI/Gemini/
-   * DeepSeek) the written tokens are part of the prompt and are subtracted from
-   * the billable-input bucket, so an undeclared write rate falls back to the
-   * plain input rate — that is exactly "free cache writes" (each token billed
-   * once, at the input rate), which is what pre-GPT-5.6 OpenAI models get. The
-   * GPT-5.6 family declares `cached_write` (1.25x input) and is billed for it.
-   */
-  static resolveCacheWriteRates(pricing: ModelPricing): { write5m: number; write1h: number } {
-    const disjoint = pricing.cacheTokensDisjointFromInput === true;
-    return {
-      write5m:
-        pricing.cachedWriteCostPer1MTokens ??
-        (disjoint ? pricing.inputCostPer1MTokens * 1.25 : pricing.inputCostPer1MTokens),
-      write1h:
-        pricing.cachedWrite1hCostPer1MTokens ??
-        (disjoint ? pricing.inputCostPer1MTokens * 2.0 : pricing.inputCostPer1MTokens),
-    };
-  }
-
-  /**
    * Per-million cache-write rate (5m/default TTL) for a model on `now`.
    * Used by the prompt-cache analytics path so it reports the same write price
    * the billing path charges.
    */
   static getCacheWriteCostPerMtok(provider: string, model: string, now: Date = new Date()): number {
     try {
-      return this.resolveCacheWriteRates(this.getPricing(provider, model, now)).write5m;
+      return resolveCacheRates(this.getPricing(provider, model, now)).write5m;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }

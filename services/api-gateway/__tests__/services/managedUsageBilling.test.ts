@@ -343,6 +343,23 @@ describe('managed usage OpenAI cache-write billing', () => {
     ).toBe(138);
   });
 
+  it('bills an unpriced cache read at the full input rate', () => {
+    // grok-4.5 publishes no cached_input and IS billable here: it is in
+    // tierAllowedModels.flagship_additions, which routes/llm.ts turns into
+    // FLAGSHIP_ALLOWED_MODELS, and its xAI adapter reuses the OpenAI stream
+    // translator, so prompt_tokens_details.cached_tokens reaches this ledger.
+    // The full $2/M is charged, matching apps/web's LLMCostCalculator and the
+    // desktop calculator; a 90%-off fallback would bill 20 cents for a discount
+    // the catalog does not publish.
+    expect(
+      calculateManagedUsageCostCents(
+        'grok-4.5',
+        { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 1_000_000 },
+        PRICED_ON,
+      ),
+    ).toBe(200);
+  });
+
   it('keeps writes free for a pre-5.6 OpenAI model that declares no write price', () => {
     const base = { inputTokens: 1_000_000, outputTokens: 0 };
     const withWrites = calculateManagedUsageCostCents(
