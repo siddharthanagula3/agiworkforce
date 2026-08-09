@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Comandos",
+  "command_popup.empty": "(no hay comandos coincidentes)",
+  "command_popup.hint": "Escribe para filtrar   ↑↓ navegar   Enter seleccionar   Esc cancelar",
+  "agent_picker.title": "Agentes",
+  "agent_picker.count": "{count} agente(s)",
+  "agent_picker.search_placeholder": "escribe para filtrar agentes...",
+  "agent_picker.empty_no_agents": "No se encontraron agentes. Crea uno con: /agents create <name>",
+  "agent_picker.empty_no_match": "Ningún agente coincide con el filtro.",
+  "agent_picker.no_description": "(sin descripción)",
+  "agent_picker.none_selected": "(ningún agente seleccionado)"
+}

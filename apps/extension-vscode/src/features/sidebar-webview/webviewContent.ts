@@ -2850,7 +2850,11 @@ export function getWebviewContent(
     var attachmentBatchSeq = 0;
     var attachmentGeneration = 0;
 
-    var MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // matches host Zod cap
+    // The host's attachFiles Zod ceiling, in decimal bytes. A larger bound
+    // here is not a looser limit — it is a dropped batch: the schema rejects
+    // the whole message, so the sibling files lose their ack and their chips
+    // never leave "uploading".
+    var MAX_ATTACHMENT_BYTES = 10000000;
 
     function invalidateAttachmentBatches() {
       attachmentGeneration++;

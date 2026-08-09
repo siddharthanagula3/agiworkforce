@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "कमांड",
+  "command_popup.empty": "(कोई मेल खाता कमांड नहीं)",
+  "command_popup.hint": "फ़िल्टर करने के लिए टाइप करें   ↑↓ नेविगेट   Enter चुनें   Esc रद्द करें",
+  "agent_picker.title": "एजेंट",
+  "agent_picker.count": "{count} एजेंट",
+  "agent_picker.search_placeholder": "एजेंट फ़िल्टर करने के लिए टाइप करें...",
+  "agent_picker.empty_no_agents": "कोई एजेंट नहीं मिला। बनाएँ: /agents create <name>",
+  "agent_picker.empty_no_match": "कोई एजेंट फ़िल्टर से मेल नहीं खाता।",
+  "agent_picker.no_description": "(कोई विवरण नहीं)",
+  "agent_picker.none_selected": "(कोई एजेंट चयनित नहीं)"
+}

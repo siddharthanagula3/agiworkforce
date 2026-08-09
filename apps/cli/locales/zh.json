@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "命令",
+  "command_popup.empty": "(没有匹配的命令)",
+  "command_popup.hint": "输入以筛选   ↑↓ 导航   Enter 选择   Esc 取消",
+  "agent_picker.title": "智能体",
+  "agent_picker.count": "{count} 个智能体",
+  "agent_picker.search_placeholder": "输入以筛选智能体...",
+  "agent_picker.empty_no_agents": "未找到智能体。创建：/agents create <name>",
+  "agent_picker.empty_no_match": "没有智能体匹配筛选条件。",
+  "agent_picker.no_description": "(无描述)",
+  "agent_picker.none_selected": "(未选择智能体)"
+}

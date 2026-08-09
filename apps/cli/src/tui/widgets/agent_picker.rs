@@ -18,6 +18,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
+use super::i18n::{keys, t, t_args};
 use crate::agents::AgentDefinition;
 use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
@@ -131,8 +132,14 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
 
     // ── outer border ──────────────────────────────────────────────────────────
     let agent_count = state.agents.len();
-    let badge = format!(" {agent_count} agent(s) ");
-    let hint = " Agents ";
+    let badge = format!(
+        " {} ",
+        t_args(
+            keys::AGENT_PICKER_COUNT,
+            &[("count", &agent_count.to_string())]
+        )
+    );
+    let hint = format!(" {} ", t(keys::AGENT_PICKER_TITLE));
     let title_line = Line::from(vec![
         Span::styled(hint, Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
@@ -184,7 +191,7 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
     let prompt = Span::styled("/ ", prompt_style);
     let text = if state.search.is_empty() {
         Span::styled(
-            "type to filter agents...",
+            t(keys::AGENT_PICKER_SEARCH_PLACEHOLDER),
             Style::default()
                 .fg(ui_muted())
                 .add_modifier(Modifier::ITALIC),
@@ -209,9 +216,9 @@ fn render_divider(frame: &mut ratatui::Frame, area: Rect, width: u16) {
 fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) {
     if state.filtered.is_empty() {
         let msg = if state.agents.is_empty() {
-            "No agents found. Create one with: /agents create <name>"
+            t(keys::AGENT_PICKER_EMPTY_NO_AGENTS)
         } else {
-            "No agents match filter."
+            t(keys::AGENT_PICKER_EMPTY_NO_MATCH)
         };
         frame.render_widget(
             Paragraph::new(Span::styled(msg, Style::default().fg(ui_muted()))),
@@ -237,9 +244,13 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
         .map(|(i, agent)| {
             let is_cursor = i == state.cursor;
             let cursor_marker = if is_cursor { "\u{276f}" } else { " " };
+            // Still English: `agent_scope_label` computes `global`/`user`/
+            // `project` from where the file lives, so it is prose, not a
+            // frontmatter identifier — it belongs in the catalogs, and moving it
+            // there means changing `crate::agents`, outside this widget.
             let scope = agent_scope_label(agent);
             let desc = if agent.description.is_empty() {
-                "(no description)"
+                t(keys::AGENT_PICKER_NO_DESCRIPTION)
             } else {
                 agent.description.as_str()
             };
@@ -272,6 +283,9 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
 }
 
 fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) {
+    // `model`, `tools` and `max_turns` are not translated: they echo the agent
+    // frontmatter keys the user edits, and `default`/`all` are the literal
+    // values accepted there. Translating them would name fields that don't exist.
     if let Some(agent) = state.selected_agent() {
         let model = agent.model.as_deref().unwrap_or("default");
         let tools = agent
@@ -297,7 +311,7 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
     } else {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                " (no agent selected)",
+                format!(" {}", t(keys::AGENT_PICKER_NONE_SELECTED)),
                 Style::default().fg(ui_muted()),
             )),
             area,
@@ -460,8 +474,51 @@ mod tests {
         let mut state = picker_with_agents(agents);
         state.cursor = 1;
 
-        let terminal = draw_picker(&state, 84, 18);
+        // Pinned to English so the baseline does not move with the developer's
+        // own `LANG`.
+        let terminal = super::super::i18n::with_locale("en", || draw_picker(&state, 84, 18));
         insta::assert_snapshot!("agent_picker_overlay_baseline", terminal.backend());
+    }
+
+    #[test]
+    fn overlay_chrome_is_translated() {
+        let state = picker_with_agents(vec![make_agent("researcher", "deep research")]);
+        let spanish = super::super::i18n::with_locale("es", || {
+            draw_picker(&state, 84, 18).backend().to_string()
+        });
+        for expected in [
+            " Agentes ",
+            "1 agente(s)",
+            "escribe para filtrar agentes...",
+        ] {
+            assert!(
+                spanish.contains(expected),
+                "expected {expected:?} in the Spanish overlay:\n{spanish}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_states_are_translated() {
+        let none = picker_with_agents(vec![]);
+        let german = super::super::i18n::with_locale("de", || {
+            draw_picker(&none, 84, 18).backend().to_string()
+        });
+        assert!(
+            german.contains("Keine Agenten gefunden."),
+            "expected the translated no-agents state:\n{german}"
+        );
+
+        let mut filtered = picker_with_agents(vec![make_agent("researcher", "deep research")]);
+        filtered.search = "zzz".to_string();
+        filtered.rebuild_filtered();
+        let german = super::super::i18n::with_locale("de", || {
+            draw_picker(&filtered, 84, 18).backend().to_string()
+        });
+        assert!(
+            german.contains("Keine Agenten entsprechen dem Filter."),
+            "expected the translated no-match state:\n{german}"
+        );
     }
 
     #[test]

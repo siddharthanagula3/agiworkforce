@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "명령",
+  "command_popup.empty": "(일치하는 명령 없음)",
+  "command_popup.hint": "입력하여 필터   ↑↓ 이동   Enter 선택   Esc 취소",
+  "agent_picker.title": "에이전트",
+  "agent_picker.count": "에이전트 {count}개",
+  "agent_picker.search_placeholder": "입력하여 에이전트 필터...",
+  "agent_picker.empty_no_agents": "에이전트가 없습니다. 생성: /agents create <name>",
+  "agent_picker.empty_no_match": "필터와 일치하는 에이전트가 없습니다.",
+  "agent_picker.no_description": "(설명 없음)",
+  "agent_picker.none_selected": "(에이전트가 선택되지 않음)"
+}

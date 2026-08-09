@@ -532,6 +532,8 @@ export const extensions = {
 };
 
 export const env = {
+  /** VS Code's display language. Tests that exercise l10n reassign it. */
+  language: 'en',
   isTelemetryEnabled: true,
   createTelemetryLogger: vi.fn((_sender: unknown, _options?: unknown) => new MockTelemetryLogger()),
   openExternal: vi.fn().mockResolvedValue(true),

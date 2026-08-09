@@ -205,7 +205,7 @@ export function AddCustomConnectorModal({
             style={inputStyle}
           />
 
-          {error ? <Text style={{ fontSize: 13, color: '#ef4444' }}>{error}</Text> : null}
+          {error ? <Text style={{ fontSize: 13, color: colors.agentError }}>{error}</Text> : null}
 
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
             <Pressable
@@ -241,7 +241,13 @@ export function AddCustomConnectorModal({
                 <ActivityIndicator color={colors.textPrimary} />
               ) : (
                 <Text
-                  style={{ color: canSubmit ? '#ffffff' : colors.textMuted, fontWeight: '700' }}
+                  // The enabled button paints `colors.teal`, which inverts per
+                  // theme, so the label has to invert with it — a fixed white
+                  // disappeared on the light accent in dark mode.
+                  style={{
+                    color: canSubmit ? colors.accentText : colors.textMuted,
+                    fontWeight: '700',
+                  }}
                 >
                   Add
                 </Text>

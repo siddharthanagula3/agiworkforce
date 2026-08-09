@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "الأوامر",
+  "command_popup.empty": "(لا توجد أوامر مطابقة)",
+  "command_popup.hint": "اكتب للتصفية   ↑↓ التنقل   Enter التحديد   Esc الإلغاء",
+  "agent_picker.title": "الوكلاء",
+  "agent_picker.count": "{count} وكيل",
+  "agent_picker.search_placeholder": "اكتب لتصفية الوكلاء...",
+  "agent_picker.empty_no_agents": "لم يتم العثور على وكلاء. أنشئ واحدًا: /agents create <name>",
+  "agent_picker.empty_no_match": "لا يوجد وكيل مطابق للتصفية.",
+  "agent_picker.no_description": "(لا يوجد وصف)",
+  "agent_picker.none_selected": "(لم يتم تحديد وكيل)"
+}
