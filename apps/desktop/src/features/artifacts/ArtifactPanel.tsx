@@ -350,12 +350,19 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   }, []);
 
   /**
-   * Publish via the canonical artifact-publish service.
+   * Export via the canonical artifact-publish service.
    *
-   * Wires @agiworkforce/artifacts publishArtifact with the Tauri localFileWriter
-   * adapter. Cloud artifact publishing is not built yet (no waitlist for it);
-   * the toast says "coming soon". Versioning and inline edit-in-place remain
-   * open product gaps.
+   * Wires @agiworkforce/artifacts publishArtifact with the Tauri
+   * localFileWriter adapter and `privacyMode: 'local'`, so this always writes a
+   * `file://` copy under the app data directory and never leaves the device.
+   *
+   * Desktop injects no `CloudPublisher` — the web adapter
+   * (apps/web/features/chat/components/artifacts/publishArtifactClient.ts,
+   * CAP-015) is the only one that exists — so there is no hosted-URL result to
+   * handle here. This used to end in a "Cloud publish is coming soon" toast on
+   * an arm that `privacyMode: 'local'` can never reach: an unreachable branch
+   * advertising a launch gate the product does not have (see
+   * constants/cloudAvailability.ts — desktop copy never says "coming soon").
    */
   const handlePublish = useCallback(async () => {
     if (!activeArtifactId) return;
@@ -370,33 +377,23 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         (artifact.metadata as Record<string, unknown> & { Code?: { language?: string } })?.Code
           ?.language ?? undefined;
 
-      const publishFn = makeDesktopPublishCallback(
-        {
-          id: artifact.id,
-          title: artifact.title,
-          content: artifact.content,
-          type: artifact.artifact_type,
-          language,
-        },
-        'local',
-      );
+      const publishFn = makeDesktopPublishCallback({
+        id: artifact.id,
+        title: artifact.title,
+        content: artifact.content,
+        type: artifact.artifact_type,
+        language,
+      });
 
       const result = await publishFn();
 
-      if (result.kind === 'local') {
-        toast.success(`Artifact saved to ${result.shareUrl}`, {
-          action: {
-            label: 'Copy path',
-            onClick: () => void navigator.clipboard.writeText(result.shareUrl),
-          },
-          duration: 6000,
-        });
-      } else {
-        // Cloud artifact publishing is not built yet (no waitlist exists for it).
-        toast.info('Cloud publish is coming soon for the desktop app.', {
-          duration: 6000,
-        });
-      }
+      toast.success(`Artifact saved to ${result.shareUrl}`, {
+        action: {
+          label: 'Copy path',
+          onClick: () => void navigator.clipboard.writeText(result.shareUrl),
+        },
+        duration: 6000,
+      });
     } catch (err) {
       console.error('[ArtifactPanel] handlePublish failed:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to publish artifact');

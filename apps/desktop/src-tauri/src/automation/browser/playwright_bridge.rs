@@ -975,6 +975,12 @@ impl PlaywrightBridge {
     // Used by: CDP browser automation API
     #[allow(dead_code)]
     pub async fn navigate(&self, url: &str) -> Result<()> {
+        // Same policy as `CdpClient::navigate`: `core::agent::executor` drives
+        // this bridge directly and only validated the scheme, so the
+        // always-blocked financial-host list has to be checked here too.
+        crate::automation::computer_use::ensure_navigation_url_allowed(url)
+            .map_err(Error::Other)?;
+
         let ws_url = self.first_page_ws_url().await?;
         let params = serde_json::json!({ "url": url });
 

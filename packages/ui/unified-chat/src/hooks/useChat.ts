@@ -20,7 +20,7 @@ import type {
   CloudApprovalTurnProjection,
   CloudRunReattachment,
 } from '../lib/runtime';
-import type { Attachment, ChatMessage } from '../lib/types';
+import type { Attachment, ChatMessage, MessageRouting } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { CLOUD_FALLBACK_MODELS, useModelStore } from '../stores/modelStore';
@@ -929,6 +929,11 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       let resolvedModelId = preflightModelState.selectedModelId;
       let resolvedProvider: string | undefined = selectedModel.provider;
       const isAutoSelection = resolvedModelId.startsWith('auto');
+      // Per-message routing provenance for the assistant turn we are about to
+      // create. Populated only when the Auto router actually chose the model,
+      // so the footer's "Auto routed: … · Pin to <model>" row appears on the
+      // turns it describes and nowhere else.
+      let autoRouting: MessageRouting | undefined;
       const requiresRegistryAdmission =
         isAutoSelection || executionMode === 'cloud_managed' || executionMode === 'byok';
 
@@ -992,13 +997,22 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           resolvedProvider = decision.provider;
 
           if (isAutoSelection) {
+            const routingReason = `${decision.reason} via ${decision.harnessId}`;
             preflightModelState.setRoutingDecision({
               routedModelId: decision.modelKey,
               taskType: decision.taskType,
-              reason: `${decision.reason} via ${decision.harnessId}`,
+              reason: routingReason,
               wasRouted: true,
               timestamp: Date.now(),
             });
+            autoRouting = {
+              source: 'auto',
+              reason: routingReason,
+              task: decision.taskType,
+              // The concrete model the router landed on — pinning replaces the
+              // `auto` alias with this id for subsequent turns.
+              pinModel: decision.modelKey,
+            };
           }
         }
       }
@@ -1160,6 +1174,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           content: '',
           timestamp: new Date(startedAtMs).toISOString(),
           isStreaming: true,
+          // Read by ProvenanceFooter to show what Auto picked and to offer
+          // "Pin to <model>". Absent on manual selections.
+          ...(autoRouting ? { routing: autoRouting } : {}),
           ...(effectiveWorkMode === 'agiwork'
             ? {
                 metadata: {

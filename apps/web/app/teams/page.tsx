@@ -59,7 +59,16 @@ export default function TeamsPage() {
             {
               meta: 'Knowledge',
               title: 'Shared projects instead of scattered prompts',
-              body: 'Store files, instructions, memory, chats, and artifacts under the workstream so the team stops rebuilding context.',
+              // Name only what sharing a project actually grants. Migration
+              // 0086's `user_projects_org_shared_read` and
+              // `project_knowledge_files_tenant_isolation` widen SELECT to the
+              // project row (its instructions) and its knowledge files, and
+              // nothing else: conversations under a shared project stay
+              // personal, which apps/web/app/api/projects/__tests__/
+              // route.org-shared.test.ts asserts by name. The previous copy
+              // promised the team stopped rebuilding context from stored
+              // memory, chats, and artifacts, none of which a member can read.
+              body: 'Share a project’s instructions and knowledge files with the workspace, with per-member access, so the team stops rebuilding the same brief. Chats and memory stay personal to each member.',
               href: '/features/projects',
             },
             {

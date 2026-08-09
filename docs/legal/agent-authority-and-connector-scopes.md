@@ -212,17 +212,28 @@ Narrowing either is a behaviour change and is tracked as a gap, not a copy fix.
 
 ## 8. Known gaps this file deliberately records rather than papers over
 
-1. **No OAuth flow exists on web for any branded catalog connector**, while the
-   public consent dialog previously implied stored OAuth tokens. Copy fixed
-   2026-08-05; the underlying directory still lists connectors that cannot connect.
+1. **A branded catalog connector can only be OAuth-connected where the operator
+   configured it.** The hosted broker now exists end to end
+   (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in
+   `apps/web/lib/connectors/oauth-store.ts`), but
+   `apps/web/lib/connectors/oauth-registry.ts` ships **zero** providers on
+   purpose — a provider becomes connectable only when an operator supplies its
+   endpoints and client credentials. `GET /api/connectors` reports the ids that
+   are genuinely connectable in a given deployment, and the catalog labels every
+   other entry from that answer, so an unconfigured connector renders as
+   unavailable rather than offering a Connect button that 501s.
 2. **`gmail.modify` and the full `auth/calendar` scope** are broader than the
    advertised capability. Narrowing is a behaviour change.
 3. **The GitHub App installation permission set is not declared in this repo**, so
    it cannot be documented from code.
-4. **`ToolPermissionsPanel.tsx` has no importer** — there is no standing per-tool
-   permission UI on web. The only web control is the in-chat approval card
-   (`ToolTimeline.tsx` ~L630-640), reachable only while a tool is asking.
-   Marketing copy claiming a standing per-tool web UI is unsupported.
+4. **The standing per-tool permission UI on web is GitHub-only.**
+   `ToolPermissionsPanel.tsx` is imported and rendered by
+   `features/connectors/pages/ConnectorsPage.tsx`, but its "Tool permissions"
+   button is gated on `hasWireToolNames(connector.id)` — true only for `github`,
+   because only that catalog entry holds real wire tool names (see gap 5). For
+   every other connector the sole web control remains the in-chat approval card
+   (`ToolTimeline.tsx`), reachable only while a tool is asking. Marketing copy
+   claiming a standing per-tool web UI across connectors is still unsupported.
 5. **`CONNECTOR_TOOLS` in `features/connectors/config/connector-logos.ts`** lists
    tool names for connectors with no runtime implementation. Only the `github`
    entry (L564) mirrors real wire names.

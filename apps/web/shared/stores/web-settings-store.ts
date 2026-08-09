@@ -40,17 +40,6 @@ interface SettingsState {
   streamingEnabled: boolean;
   responseStyle: ResponseStyle;
   notifications: NotificationPreferences;
-  /**
-   * Advanced mode toggle state. When true, the manually-selected model
-   * (`advancedModelId`) is used instead of auto-routing.
-   * Only meaningful for tiers where `allowManualSelection === true` (Pro, Max).
-   * Persisted to localStorage so the choice survives page refreshes.
-   */
-  /**
-   * The model ID the user has explicitly chosen in Advanced mode.
-   * `null` means "not yet picked" — the chat layer falls back to auto-routing.
-   * Only applied when `advancedMode === true`.
-   */
   customCommands: CustomCommand[];
   // Actions
   setTheme: (theme: Theme) => void;

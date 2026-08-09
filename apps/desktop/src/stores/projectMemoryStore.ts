@@ -3,8 +3,13 @@
  * Project Memory Store
  *
  * Manages project-scoped long-term memory: project context, coding styles,
- * architectural decisions, and semantic search across project memories.
+ * architectural decisions, and content search across project memories.
  * Backed by SQLite via Tauri commands (project_memory module).
+ *
+ * `searchProjectMemories` is a literal substring match, NOT semantic retrieval:
+ * the backing command runs `content LIKE '%<query>%'` ordered by importance
+ * (core/agi/project_memory.rs `search_project_memories`). There are no
+ * embeddings on this path — do not surface it to users as semantic search.
  */
 import { toast } from 'sonner';
 import { create } from 'zustand';

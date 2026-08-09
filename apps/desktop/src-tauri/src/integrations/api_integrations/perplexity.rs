@@ -78,6 +78,12 @@ fn default_search_domain_filter() -> Vec<String> {
     vec![]
 }
 
+/// Perplexity rejects a `search_domain_filter` longer than 20 entries
+/// (docs.perplexity.ai/guides/search-domain-filters, verified 2026-08-09).
+/// Callers pass curated vertical allowlists, so clamp rather than error: a
+/// slightly narrower allowlist still searches, a rejected request does not.
+pub const MAX_SEARCH_DOMAIN_FILTERS: usize = 20;
+
 fn default_return_citations() -> bool {
     true
 }
@@ -142,13 +148,42 @@ impl PerplexityClient {
         self.search_with_model(query, self.default_model).await
     }
 
-    /// Search with a specific model
+    /// Search with a specific model, across the whole web.
     pub async fn search_with_model(
         &self,
         query: &str,
         model: PerplexityModel,
     ) -> Result<PerplexityResponse> {
-        let request = PerplexityRequest {
+        self.search_with_model_in_domains(query, model, Vec::new())
+            .await
+    }
+
+    /// Search with a specific model, restricted to `domains`.
+    ///
+    /// An empty `domains` means "search the whole web" — Perplexity applies no
+    /// allowlist. A non-empty list is an ALLOWLIST: only those domains are
+    /// searched, which is what makes a typed search (code, academic, news) an
+    /// actual vertical rather than a relabelled general search.
+    pub async fn search_with_model_in_domains(
+        &self,
+        query: &str,
+        model: PerplexityModel,
+        domains: Vec<String>,
+    ) -> Result<PerplexityResponse> {
+        self.send_request(&Self::search_request(model, query, domains))
+            .await
+    }
+
+    /// Build the request body for a search. Pure and public so callers can
+    /// assert a vertical's domain allowlist actually reaches the wire without
+    /// performing a network round trip.
+    pub fn search_request(
+        model: PerplexityModel,
+        query: &str,
+        mut domains: Vec<String>,
+    ) -> PerplexityRequest {
+        domains.truncate(MAX_SEARCH_DOMAIN_FILTERS);
+        PerplexityRequest {
             model: model.wire_id(),
             messages: vec![Message {
                 role: "user".to_string(),
@@ -156,11 +191,9 @@ impl PerplexityClient {
             }],
             temperature: Some(0.2),
             max_tokens: Some(4096),
-            search_domain_filter: vec![],
+            search_domain_filter: domains,
             return_citations: true,
-        };
-
-        self.send_request(&request).await
+        }
     }
 
     /// Deep research query - uses sonar-deep-research for comprehensive analysis
@@ -312,6 +345,36 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("sonar"));
         assert!(json.contains("What is AI?"));
+    }
+
+    #[test]
+    fn search_request_carries_the_domain_allowlist_and_clamps_it() {
+        let request = PerplexityClient::search_request(
+            PerplexityModel::SonarPro,
+            "how do I parse json in rust",
+            vec!["github.com".to_string(), "docs.rs".to_string()],
+        );
+        assert_eq!(request.search_domain_filter, vec!["github.com", "docs.rs"]);
+        assert_eq!(request.model, PerplexityModel::SonarPro.wire_id());
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"search_domain_filter\""));
+        assert!(json.contains("docs.rs"));
+
+        // Perplexity rejects more than MAX_SEARCH_DOMAIN_FILTERS entries, so an
+        // oversized allowlist must be trimmed rather than sent and refused.
+        let oversized: Vec<String> = (0..MAX_SEARCH_DOMAIN_FILTERS + 5)
+            .map(|i| format!("example{i}.com"))
+            .collect();
+        let clamped =
+            PerplexityClient::search_request(PerplexityModel::Sonar, "query", oversized.clone());
+        assert_eq!(
+            clamped.search_domain_filter.len(),
+            MAX_SEARCH_DOMAIN_FILTERS
+        );
+        assert_eq!(
+            clamped.search_domain_filter,
+            oversized[..MAX_SEARCH_DOMAIN_FILTERS]
+        );
     }
 
     #[test]

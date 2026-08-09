@@ -52,8 +52,10 @@ async function handleGetProjects(request: NextRequest) {
   // filter. It is resolved entirely server-side from `organization_members`
   // plus `organization_shared_projects`, honouring an explicit per-member
   // `access = 'none'` denial. Nothing on the wire influences it, and
-  // `route.cross-org-isolation.test.ts` fails if the scope is dropped or the
-  // predicate stops binding it.
+  // `__tests__/route.org-shared.test.ts` fails if the scope is dropped or the
+  // predicate stops binding it. (The similarly named
+  // `settings/organization/shared/__tests__/route.cross-org-isolation.test.ts`
+  // fences the share-management routes, not this read.)
   //
   // Shared projects are ADDITIVE to the caller's own. Conversations stay
   // personal: `conversation_count` still binds `c.user_id = $1`, so a member

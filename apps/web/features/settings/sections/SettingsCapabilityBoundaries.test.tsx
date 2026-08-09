@@ -37,14 +37,30 @@ vi.mock('@agiworkforce/ui', async () => {
 });
 
 describe('Web Settings capability boundaries', () => {
-  it('shows only the notification channel with a real sender', async () => {
+  it('shows only the notification channels with a real sender', async () => {
     render(<NotificationsSection />);
 
-    expect(screen.getByText('Browser replies only')).toBeInTheDocument();
+    expect(screen.getByText('Three channels have a sender')).toBeInTheDocument();
     expect(
-      screen.getByText(/Email, task, schedule, project, usage, tips, and marketing channels/),
+      screen.getByText(/Project, usage, billing, security, connector, tips, and marketing/),
     ).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
+  });
+
+  // Regression, same shape as the security one below: the boundary copy said
+  // "Browser replies only" and listed email and schedule as unavailable while
+  // the Email and Mobile push groups render right underneath it, both backed by
+  // real senders (notification-email-service / push-notification-service, both
+  // dispatched from notifyScheduleCompleted). Under-claiming a shipped channel
+  // is still a false statement, and this test previously locked that claim in.
+  it('does not deny the email and push schedule channels, which are implemented', () => {
+    render(<NotificationsSection />);
+
+    expect(screen.queryByText('Browser replies only')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Email, task, schedule, project/)).not.toBeInTheDocument();
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Mobile push')).toBeInTheDocument();
+    expect(screen.getAllByText('Scheduled task finished')).toHaveLength(2);
   });
 
   it('does not imply unsupported account factors or trusted contacts', () => {

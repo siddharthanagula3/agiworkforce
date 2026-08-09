@@ -35,6 +35,10 @@ const NAMESPACE = 'notifications';
 // `lib/services/schedule-notification-service.ts` calls it after a scheduled
 // run is finalized. It defaults to OFF: installing the app registers a device,
 // which is not the same as agreeing to be pushed.
+//
+// 'emailScheduleDone' was RE-ADDED under the same rule: its sender is
+// `lib/services/notification-email-service.ts`, called from the same
+// `notifyScheduleCompleted` dispatch. Also OFF by default.
 export type NotifKey = 'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone';
 
 interface NotifSpec {
@@ -191,11 +195,13 @@ export function NotificationsSection() {
         }}
       >
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
-          Browser replies only
+          Three channels have a sender
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Email, task, schedule, project, usage, tips, and marketing channels are not available. AGI
-          does not save controls for notification senders that are not running.
+          Browser replies, plus scheduled-task results by email and mobile push — the toggles below
+          are the complete list. Project, usage, billing, security, connector, tips, and marketing
+          channels are not available. AGI does not save controls for notification senders that are
+          not running.
         </p>
       </section>
 

@@ -255,4 +255,17 @@ describe('handleNotificationResponse — no dead-end deep links', () => {
     fireNotification({ type: 'agent_failed' });
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
   });
+
+  // PP-23 — the web push producer and this client disagreed on the event name.
+  // `apps/web/lib/services/schedule-notification-service.ts` sends
+  // `{ type: 'schedule_run', taskId }`; the union here only had
+  // `schedule_triggered`, so the one push the backend actually sends fell to
+  // `default:` and opened app home. Assert the wire literal, not the union
+  // member, because it is the producer's string that has to keep matching.
+  it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {
+    signIn();
+    fireNotification({ type: 'schedule_run', taskId: 'task-1' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/schedules' });
+    expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(app)' });
+  });
 });
