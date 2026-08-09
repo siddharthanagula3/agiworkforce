@@ -1,0 +1,150 @@
+{
+  "suite": "golden",
+  "version": 1,
+  "passThreshold": 0.9,
+  "cases": [
+    {
+      "id": "golden/arithmetic-product",
+      "family": "reasoning",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What is 17 multiplied by 23? Reply with the number only.",
+      "checks": [
+        { "kind": "includesAny", "values": ["391"] },
+        { "kind": "maxWords", "limit": 4 }
+      ]
+    },
+    {
+      "id": "golden/date-offset",
+      "family": "reasoning",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "If today is 2026-03-01, what is the date 45 days later? Reply with YYYY-MM-DD only.",
+      "checks": [
+        { "kind": "includesAny", "values": ["2026-04-15"] },
+        { "kind": "maxWords", "limit": 4 }
+      ]
+    },
+    {
+      "id": "golden/unit-conversion",
+      "family": "reasoning",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "How many minutes are in 3.5 hours? Reply with the number only.",
+      "checks": [
+        { "kind": "includesAny", "values": ["210"] },
+        { "kind": "maxWords", "limit": 4 }
+      ]
+    },
+    {
+      "id": "golden/json-extraction",
+      "family": "extraction",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Extract the order id and the total from this line. Reply with compact JSON using the keys orderId and total, and nothing else: \"Order A-4471 shipped on 12 May, total $128.50.\"",
+      "checks": [
+        { "kind": "matches", "pattern": "^\\s*\\{" },
+        { "kind": "includesAll", "values": ["orderId", "A-4471", "total"] },
+        { "kind": "includesAny", "values": ["128.50", "128.5"] },
+        { "kind": "maxWords", "limit": 20 }
+      ]
+    },
+    {
+      "id": "golden/instruction-format",
+      "family": "instruction_following",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "List the three additive primary colours of light as a lowercase comma-separated list. No other text.",
+      "checks": [
+        { "kind": "includesAll", "values": ["red", "green", "blue"] },
+        { "kind": "excludesAll", "values": ["yellow"] },
+        { "kind": "maxWords", "limit": 5 }
+      ],
+      "notes": "Additive primaries, not the subtractive set — a model that answers red/yellow/blue answered a different question."
+    },
+    {
+      "id": "golden/sql-count",
+      "family": "coding",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a single SQL statement that returns the number of rows in the table orders. Reply with the statement only.",
+      "checks": [
+        { "kind": "matches", "pattern": "count\\s*\\(\\s*\\*\\s*\\)" },
+        { "kind": "includesAny", "values": ["orders"] },
+        { "kind": "maxWords", "limit": 15 }
+      ]
+    },
+    {
+      "id": "golden/js-semantics",
+      "family": "coding",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "In JavaScript, what does [1, 2, 3].at(-1) evaluate to? Reply with the value only.",
+      "checks": [
+        { "kind": "includesAny", "values": ["3"] },
+        { "kind": "maxWords", "limit": 4 }
+      ]
+    },
+    {
+      "id": "golden/summary-budget",
+      "family": "summarisation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Summarise this in 20 words or fewer: \"The 2 a.m. deploy failed because the migration ran before the feature flag existed, so every request to the billing page returned a 500 until an engineer created the flag by hand.\"",
+      "checks": [
+        { "kind": "includesAny", "values": ["flag", "migration"] },
+        { "kind": "maxWords", "limit": 20 }
+      ]
+    },
+    {
+      "id": "golden/no-such-source",
+      "family": "research",
+      "risk": "high",
+      "expected": "answer",
+      "prompt": "Quote the exact revenue figure from the AGI Workforce internal memo titled \"Q9 Falcon Review\". If you do not have that document, say so plainly.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "(don'?t|do not|no)\\s+(have|know|access)|not\\s+aware|unable to (find|verify|access)|cannot (find|verify|access)|no such|does not exist|no record"
+        },
+        { "kind": "excludesAll", "values": ["$", "million", "billion"] }
+      ],
+      "notes": "No such memo exists. The failure this row catches is a confident fabricated figure, which is why any currency amount fails the row."
+    },
+    {
+      "id": "golden/translation",
+      "family": "translation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Translate \"good morning\" into French. Reply with the translation only.",
+      "checks": [
+        { "kind": "includesAny", "values": ["bonjour"] },
+        { "kind": "maxWords", "limit": 4 }
+      ]
+    },
+    {
+      "id": "golden/classification",
+      "family": "classification",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Classify the sentiment of this review as exactly one word — positive, negative, or neutral: \"The battery dies in an hour and support never replied.\"",
+      "checks": [
+        { "kind": "matches", "pattern": "^\\W*negative\\b" },
+        { "kind": "maxWords", "limit": 3 }
+      ]
+    },
+    {
+      "id": "golden/structured-tool-args",
+      "family": "agentic",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Reply with a JSON object only, using the keys city and unit, for this request: \"what is the weather in Oslo in celsius\".",
+      "checks": [
+        { "kind": "matches", "pattern": "^\\s*\\{" },
+        { "kind": "includesAll", "values": ["city", "Oslo", "unit"] },
+        { "kind": "includesAny", "values": ["celsius"] },
+        { "kind": "maxWords", "limit": 20 }
+      ]
+    }
+  ]
+}

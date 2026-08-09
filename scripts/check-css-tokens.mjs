@@ -150,8 +150,91 @@ function declaredTokens(files) {
   return { declared, hslTriplets };
 }
 
+/**
+ * Overlays that render through a Portal are appended to <body>, so they are
+ * siblings in one stacking context and their z-index values are compared against
+ * each other — not against the subtree they were written in. A raw literal there
+ * is therefore a silent claim about every other overlay in the app, and it is
+ * wrong as soon as one of them moves: `z-50` on Select, DropdownMenu, ContextMenu,
+ * Menubar, HoverCard and Tooltip put them all underneath a Dialog after Dialog
+ * moved to `--z-modal` (300), so the Select inside GlobalSearchDialog's
+ * DialogContent rendered behind the dialog that owned it.
+ *
+ * These files must express their layer as `z-[var(--z-<layer>,<fallback>)]`, in a
+ * class or in an inline style. The list is the set of primitives that are on the
+ * shared scale today, not every portalled component: it exists to stop these
+ * regressing to a literal. Sheet.tsx and Drawer.tsx are deliberately absent —
+ * they still carry `z-50` and have no render path in any app, so nothing has
+ * established where they belong (see ExecutionPlan #99 notes). NavigationMenu's
+ * `z-[1]` indicator and Calendar's `z-20` nav are local to their own stacking
+ * context and are fine. A missing file is an error, so a rename cannot quietly
+ * drop a file from the gate.
+ */
+const PORTAL_OVERLAYS = [
+  'packages/ui/ui/src/primitives/AlertDialog.tsx',
+  'packages/ui/ui/src/primitives/ContextMenu.tsx',
+  'packages/ui/ui/src/primitives/Dialog.tsx',
+  'packages/ui/ui/src/primitives/DropdownMenu.tsx',
+  'packages/ui/ui/src/primitives/HoverCard.tsx',
+  'packages/ui/ui/src/primitives/Menubar.tsx',
+  'packages/ui/ui/src/primitives/Popover.tsx',
+  'packages/ui/ui/src/primitives/Select.tsx',
+  'packages/ui/ui/src/primitives/Toast.tsx',
+  'packages/ui/ui/src/primitives/Tooltip.tsx',
+];
+
+/**
+ * Both ways a component can hardcode a layer:
+ *  - a Tailwind utility carrying a literal — `z-50`, `z-[100]`, `-z-10`;
+ *  - an inline style — `style={{ zIndex: 50 }}`, `zIndex: '50'`.
+ * The second form bypassed the class-only version of this rule, and it is the
+ * shape the untouched offenders use (GalleryClient.tsx, FilePreviewModal.tsx).
+ * `zIndex: 'var(--z-modal, 300)'` is allowed, same as the class form.
+ */
+const RAW_Z_INDEX_PATTERNS = [
+  /(?<![\w-])-?z-(?:\d+|\[(?!var\()[^\]]*\])/g,
+  /\bzIndex\s*:\s*(?!['"`]?\s*var\()['"`]?-?\d+/g,
+];
+
+/** Where the `--z-*` layers referenced by those classes are declared. */
+const Z_SCALE_CSS = 'apps/web/app/globals.css';
+
+/** Blanks comments while preserving line numbers, so prose about `z-50` is not a hit. */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (match, lead) => lead + ' '.repeat(match.length - lead.length));
+}
+
+function checkPortalOverlays() {
+  for (const file of PORTAL_OVERLAYS) {
+    const abs = path.join(root, file);
+    if (!fs.existsSync(abs)) {
+      errors.push(
+        `${file} is listed as a portal overlay but does not exist — update PORTAL_OVERLAYS.`,
+      );
+      continue;
+    }
+    stripComments(fs.readFileSync(abs, 'utf8'))
+      .split('\n')
+      .forEach((line, index) => {
+        for (const re of RAW_Z_INDEX_PATTERNS) {
+          for (const m of line.matchAll(re)) {
+            errors.push(
+              `${file}:${index + 1} sets a raw z-index (\`${m[0].trim()}\`). This overlay is ` +
+                `portalled to <body>, so its layer is only meaningful relative to the others: use ` +
+                `var(--z-<layer>, <fallback>) from the scale in ${Z_SCALE_CSS}.`,
+            );
+          }
+        }
+      });
+  }
+}
+
 const errors = [];
 let referenced = 0;
+
+checkPortalOverlays();
 
 for (const surface of SURFACES) {
   const { declared, hslTriplets } = declaredTokens(surface.stylesheets);
@@ -222,5 +305,6 @@ if (errors.length > 0) {
 
 console.log(
   `CSS token check passed (${referenced} custom-property references across ` +
-    `${SURFACES.length} surfaces, all resolvable).`,
+    `${SURFACES.length} surfaces, all resolvable; ${PORTAL_OVERLAYS.length} portal overlays ` +
+    `free of raw z-index literals in classes and inline styles).`,
 );

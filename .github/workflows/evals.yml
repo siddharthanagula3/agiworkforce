@@ -1,0 +1,127 @@
+name: AI output quality evals
+
+# The two jobs answer different questions.
+#
+# `harness` runs on every change to the harness and proves the harness itself:
+# the graders reject the failures they claim to reject, the corpora are well
+# formed, and the gate fails a system that answers badly. It calls no provider
+# and measures no model.
+#
+# `live-quality` is the measurement, and it is the only job whose result says
+# anything about a model. It bills real tokens (33 rows, one non-streaming
+# Messages call each, 512 output tokens max), so it runs weekly on a schedule
+# and on demand from the Actions tab — not per push or per PR.
+#
+# What it measures, exactly: the catalog's default Anthropic model answering a
+# bare single-turn prompt. No system prompt, no capability preamble, no routing,
+# no tools, no streaming. It therefore catches a change of model or of provider
+# behaviour; it does NOT catch a regression in the product's own prompts
+# (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts,
+# lib/capability-preamble.ts) or in routing (packages/ai/routing), because it
+# does not execute either of them. Extending the responder to the product chat
+# path is the work that would make this a prompt/routing regression gate.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/evals/**'
+      - 'packages/contracts/types/src/models.json'
+      - '.github/workflows/evals.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/evals/**'
+      - 'packages/contracts/types/src/models.json'
+      - '.github/workflows/evals.yml'
+  schedule:
+    # Weekly on Monday at 05:40 UTC, matching the other scheduled jobs in this
+    # repo. Scheduled runs ignore the `paths` filters above, which is the point:
+    # model quality moves without anything in this directory changing.
+    - cron: '40 5 * * 1'
+  workflow_dispatch:
+
+# Keyed on the event as well as the ref, and only PR runs are cancellable: a
+# weekly measurement cancelled by a push to main is a week with no measurement,
+# which looks identical to a week that passed.
+concurrency:
+  group: evals-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: these jobs only read the checkout.
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: Eval harness (offline)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck the harness
+        run: pnpm exec tsc --noEmit -p tools/evals/tsconfig.json
+
+      # `pnpm lint` is `turbo run lint` over the workspace, and tools/ is not a
+      # workspace package, so nothing else in CI ever lints this directory.
+      - name: Lint the harness
+        run: pnpm exec eslint tools/evals --max-warnings=0
+
+      - name: Run the harness
+        run: pnpm exec vitest run tools/evals
+
+  live-quality:
+    name: Live model quality (paid, weekly + on demand)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      AGIWORKFORCE_LIVE_TEST: '1'
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Without the key the live corpora skip themselves and the run would be
+      # green while measuring nothing, so say so and stop instead. On the weekly
+      # schedule this is the signal that no quality measurement is happening:
+      # a red Monday means the secret is missing, not that the model regressed.
+      - name: Require the provider key
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "ANTHROPIC_API_KEY is not set for this repository; the live corpora cannot run." >&2
+            exit 1
+          fi
+
+      - name: Measure output quality
+        run: pnpm exec vitest run tools/evals
