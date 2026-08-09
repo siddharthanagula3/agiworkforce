@@ -91,8 +91,26 @@ export function validateRequiredEnvVars(): ValidationResult {
   // Stripe price IDs (required for checkout to work)
   const priceIdVars = ['STRIPE_PRICE_PRO_MONTHLY', 'STRIPE_PRICE_PRO_YEARLY'];
 
-  // Optional tiers (waitlist or not yet launched)
+  // Optional tiers (waitlist or not yet launched), plus Team.
+  //
+  // Team is NOT waitlisted — it is selectable on the pricing page and sold per
+  // seat with a two-seat minimum — but its Price IDs were absent from this
+  // file entirely, in both the error and the warning list. So a deployment
+  // could boot clean while every Team checkout failed, and nothing said so.
+  //
+  // Warning rather than error, matching Max and Enterprise: a deployment that
+  // does not sell Team is correctly configured without these, and failing boot
+  // would be wrong for it. lib/pricing.ts already fails CLOSED at checkout
+  // time when a Price ID is missing; this only makes the gap visible at boot
+  // instead of at a customer's first purchase attempt.
+  //
+  // INR monthly is listed because Team is sold in USD and INR; INR yearly is
+  // deliberately absent — there is no Team yearly INR Price (founder
+  // undecided), and an INR yearly request falls back to the USD Price.
   const optionalPriceVars = [
+    'STRIPE_PRICE_TEAM_MONTHLY_USD',
+    'STRIPE_PRICE_TEAM_MONTHLY_INR',
+    'STRIPE_PRICE_TEAM_YEARLY_USD',
     'STRIPE_PRICE_MAX_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_YEARLY',
