@@ -120,7 +120,7 @@
     "db:migrate": "node scripts/neon-migrate.mjs",
     "db:rls-probe": "node apps/web/scripts/rls-probe.mjs",
     "test:db-migrate": "node --test scripts/neon-migrate.test.mjs",
-    "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs && node --test scripts/production-deploy-scope.test.mjs scripts/verify-gateway-deployment.test.mjs",
+    "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs && node --test scripts/production-deploy-scope.test.mjs scripts/verify-deployment.test.mjs scripts/verify-gateway-deployment.test.mjs",
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
     "check:readme-ownership": "node scripts/check-readme-ownership.mjs",
     "check:doc-status": "node scripts/check-doc-status.mjs",

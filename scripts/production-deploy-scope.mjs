@@ -65,6 +65,10 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === '.github/workflows/ci.yml' ||
       file === 'scripts/production-deploy-scope.mjs' ||
       file === 'scripts/production-deploy-scope.test.mjs';
+    // The web gate and its self-test: an edit to either must redeploy web, or
+    // the deploy job that runs them never fires for the change that broke them.
+    const webDeployContract =
+      file === 'scripts/verify-deployment.mjs' || file === 'scripts/verify-deployment.test.mjs';
     const gatewayDeployContract =
       file === '.dockerignore' ||
       file === 'scripts/verify-gateway-deployment.mjs' ||
@@ -74,6 +78,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
       sharedBuildFile ||
       sharedPackage ||
       deployContract ||
+      webDeployContract ||
       isWithin(file, 'apps/web') ||
       file === 'vercel.json' ||
       file === '.vercelignore'
