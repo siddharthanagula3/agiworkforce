@@ -663,9 +663,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Homebrew now refuses third-party tap formulae until they are explicitly
+      # trusted, which broke this job outright:
+      #
+      #   Refusing to load formula wix/brew/applesimutils from untrusted tap wix/brew.
+      #
+      # Trust is granted to THE ONE FORMULA, not the whole tap, and certainly not
+      # by exporting HOMEBREW_NO_REQUIRE_TAP_TRUST=1. That env var disables the
+      # check globally for every formula in the job — it is a supply-chain
+      # control, and switching it off to make CI green is the same move that let
+      # a crashed Semgrep report success for months. Homebrew documents it as
+      # not recommended and slated for removal.
       - name: Install Detox simulator utilities
         run: |
           brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils
           brew install applesimutils
           pnpm --filter @agiworkforce/mobile exec detox build-framework-cache
 
