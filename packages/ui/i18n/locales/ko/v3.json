@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "고정됨",
+    "actions": {
+      "more": "추가 옵션",
+      "pin": "고정",
+      "unpin": "고정 해제",
+      "rename": "이름 변경",
+      "archive": "보관",
+      "delete": "삭제",
+      "confirmDelete": "삭제 확인",
+      "confirmDeletePermanently": "영구 삭제 확인",
+      "deletePermanently": "영구 삭제",
+      "restore": "복원"
+    },
+    "projects": {
+      "newChat": "프로젝트에서 새 채팅",
+      "open": "프로젝트 열기",
+      "newProject": "새 프로젝트"
+    },
+    "mode": {
+      "local": "로컬",
+      "cloud": "클라우드",
+      "aria": "로컬과 클라우드 전환",
+      "switchTo": "{{mode}}(으)로 전환",
+      "soon": "곧 제공",
+      "cloudUnavailable": "AGI Cloud는 데스크톱에서 사용할 수 있습니다. 로그인하면 관리형 모델과 동기화된 채팅을 이용할 수 있습니다."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "리서치",
       "automation": "자동화"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "로그인",
+    "cloudSync": "클라우드 동기화",
+    "archived": "보관된 채팅",
+    "noArchived": "보관된 채팅이 없습니다",
+    "noConversations": "아직 대화가 없습니다",
+    "showActive": "활성 채팅으로 돌아가기",
+    "showArchived": "보관된 채팅 보기({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "오늘은 무엇을 도와드릴까요?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "로컬 모드",
+    "cloudSyncAction": "클라우드 동기화",
+    "cloudSyncAria": "관리형 클라우드 동기화 설정",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "제목 없는 프로젝트",
+      "empty": "아직 프로젝트가 없습니다",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "프로젝트 설정"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "예약 작업 {{name}} 일시중지",
+      "resumeAria": "예약 작업 {{name}} 재개",
+      "deleteTitle": "예약 작업을 삭제할까요?",
+      "deleteDescription": "{{name}}을(를) 삭제합니다. 되돌릴 수 없습니다.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

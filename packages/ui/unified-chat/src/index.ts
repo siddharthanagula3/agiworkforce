@@ -60,7 +60,7 @@ export {
   showsThinkingSwitch,
 } from './lib/thinkingPolicy';
 export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
-export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
+export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';
 export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
 export {
   getModelsAdmittedForExecutionMode,

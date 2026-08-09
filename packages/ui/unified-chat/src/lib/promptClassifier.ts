@@ -7,8 +7,19 @@
  *   Tier 3 — attachment signals (vision, document)
  *
  * Maps each classified task to a RoutingSlot scoped by the active auto-mode
- * tier (economy → balanced → premium), so model selection always respects
- * the user's chosen quality/cost envelope.
+ * tier (economy → balanced → premium).
+ *
+ * THIS MODULE DOES NOT SELECT MODELS AND MUST NOT BE MADE TO. Which model a
+ * turn may reach depends on trust boundary, plan tier, runtime profile,
+ * lifecycle and harness admission — none of which this file knows. That
+ * decision has exactly one implementation, `resolveAutoRoute`
+ * (`@agiworkforce/routing`), called on the live send path in
+ * `hooks/useChat.ts` (`sendMessage` → `requiresRegistryAdmission` branch).
+ * A `buildRoutingDecision` helper here used to dereference the slot table
+ * into a model id with zero eligibility checks; it had no callers and was
+ * deleted rather than hardened, so there is no second routing engine to
+ * drift. `classifyPrompt` below is retained for its taxonomy and `TASK_LABEL`
+ * only, and currently has no production caller either.
  *
  * References:
  *   LiteLLM Auto Routing: https://docs.litellm.ai/docs/proxy/auto_routing
@@ -17,8 +28,7 @@
  *   RouteLLM paper: https://arxiv.org/abs/2406.18665
  */
 
-import { getRoutingSlotModel, type RoutingSlot } from '@agiworkforce/types';
-import type { RoutingDecision, RoutingTaskType } from '@agiworkforce/types';
+import type { RoutingSlot } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Task taxonomy (mirrors NVIDIA 11-category classifier + extras)
@@ -379,36 +389,6 @@ export function classifyPrompt(
   return { task: 'general', slot: SLOT_MAP.general[tier], reason: TASK_REASONS.general, signals };
 }
 
-// Map ClassifiedTask → RoutingTaskType for RoutingDecision
-function toRoutingTaskType(task: ClassifiedTask): RoutingTaskType {
-  switch (task) {
-    case 'computer_use':
-      return 'computer-use';
-    case 'image_generation':
-      return 'image_generation';
-    case 'video_generation':
-      return 'multimodal';
-    case 'deep_research':
-      return 'research';
-    case 'search':
-      return 'research';
-    case 'coding':
-      return 'coding';
-    case 'reasoning':
-      return 'reasoning';
-    case 'vision':
-      return 'multimodal';
-    case 'long_context':
-      return 'long_context';
-    case 'creative_writing':
-      return 'creative_writing';
-    case 'simple_chat':
-      return 'simple_chat';
-    case 'general':
-      return 'general';
-  }
-}
-
 /** Human-readable label for routing decision badge in the UI. */
 export const TASK_LABEL: Record<ClassifiedTask, string> = {
   computer_use: 'computer use',
@@ -424,23 +404,3 @@ export const TASK_LABEL: Record<ClassifiedTask, string> = {
   simple_chat: 'chat',
   general: 'general',
 };
-
-/**
- * Classify a prompt and return a full RoutingDecision including the resolved
- * model ID. Call this when auto-mode is active, before sending to the runtime.
- */
-export function buildRoutingDecision(
-  content: string,
-  options: ClassifyOptions = {},
-): RoutingDecision & { task: ClassifiedTask } {
-  const result = classifyPrompt(content, options);
-  const routedModelId = getRoutingSlotModel(result.slot);
-  return {
-    routedModelId,
-    taskType: toRoutingTaskType(result.task),
-    reason: result.reason,
-    wasRouted: true,
-    timestamp: Date.now(),
-    task: result.task,
-  };
-}

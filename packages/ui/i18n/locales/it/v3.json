@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Fissati",
+    "actions": {
+      "more": "Altre opzioni",
+      "pin": "Fissa",
+      "unpin": "Rimuovi dai fissati",
+      "rename": "Rinomina",
+      "archive": "Archivia",
+      "delete": "Elimina",
+      "confirmDelete": "Conferma l'eliminazione",
+      "confirmDeletePermanently": "Conferma l'eliminazione definitiva",
+      "deletePermanently": "Elimina definitivamente",
+      "restore": "Ripristina"
+    },
+    "projects": {
+      "newChat": "Nuova chat nel progetto",
+      "open": "Apri il progetto",
+      "newProject": "Nuovo progetto"
+    },
+    "mode": {
+      "local": "Locale",
+      "cloud": "Cloud",
+      "aria": "Passa da Locale a Cloud",
+      "switchTo": "Passa a {{mode}}",
+      "soon": "Presto",
+      "cloudUnavailable": "AGI Cloud è disponibile su desktop: accedi per usare i modelli gestiti e le chat sincronizzate."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "Ricerca",
       "automation": "Automazioni"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Accedi",
+    "cloudSync": "Sincronizzazione cloud",
+    "archived": "Chat archiviate",
+    "noArchived": "Nessuna chat archiviata",
+    "noConversations": "Ancora nessuna conversazione",
+    "showActive": "Torna alle chat attive",
+    "showArchived": "Mostra le chat archiviate ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "Come posso aiutarti oggi?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Modalità locale",
+    "cloudSyncAction": "Sincronizzazione cloud",
+    "cloudSyncAria": "Configura la sincronizzazione cloud gestita",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "Progetto senza titolo",
+      "empty": "Ancora nessun progetto",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "Impostazioni del progetto"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "Metti in pausa l'attività pianificata {{name}}",
+      "resumeAria": "Riprendi l'attività pianificata {{name}}",
+      "deleteTitle": "Eliminare l'attività pianificata?",
+      "deleteDescription": "Elimina {{name}}. L'operazione non può essere annullata.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

@@ -20,6 +20,7 @@
  */
 
 import { ArrowUp, Clock, Loader2, Square } from 'lucide-react';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 
 export type SendButtonMode = 'send' | 'stop' | 'queue';
@@ -50,6 +51,8 @@ export function SendButton({
   className,
   sendShortcutLabel = 'Enter',
 }: SendButtonProps) {
+  const { t } = useUiTranslation('chat');
+
   // ── Stop state ──────────────────────────────────────────────────────────
   if (mode === 'stop') {
     return (
@@ -62,8 +65,8 @@ export function SendButton({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
           className,
         )}
-        title="Stop generation"
-        aria-label="Stop the current response"
+        title={t('composer.stopGeneration', 'Stop generation')}
+        aria-label={t('composer.stopCurrentResponse', 'Stop the current response')}
       >
         <Square className="h-4 w-4" fill="currentColor" aria-hidden="true" />
       </button>
@@ -85,8 +88,11 @@ export function SendButton({
             : 'bg-amber-500 text-white shadow-md hover:bg-amber-600',
           className,
         )}
-        title="Queue message · will send after the current response finishes"
-        aria-label="Add message to queue"
+        title={t(
+          'composer.queueHint',
+          'Queue message · will send after the current response finishes',
+        )}
+        aria-label={t('composer.queueMessage', 'Add message to queue')}
       >
         <Clock className="h-4 w-4" aria-hidden="true" />
       </button>
@@ -109,8 +115,20 @@ export function SendButton({
           : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed',
         className,
       )}
-      title={isSending ? 'Sending…' : `Send message (${sendShortcutLabel})`}
-      aria-label={isSending ? 'Sending message…' : `Send message (${sendShortcutLabel})`}
+      title={
+        isSending
+          ? t('composer.sending', 'Sending…')
+          : t('composer.sendWithShortcut', 'Send message ({{shortcut}})', {
+              shortcut: sendShortcutLabel,
+            })
+      }
+      aria-label={
+        isSending
+          ? t('composer.sendingMessage', 'Sending message…')
+          : t('composer.sendWithShortcut', 'Send message ({{shortcut}})', {
+              shortcut: sendShortcutLabel,
+            })
+      }
     >
       {isSending ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

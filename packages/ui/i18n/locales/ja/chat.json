@@ -57,6 +57,9 @@
   "compactMode": "コンパクトモード",
   "compactModeEnabled": "コンパクトモードが有効になりました",
   "compactModeDisabled": "コンパクトモードが無効になりました",
+  "placeholderEmpty": "今日は何をお手伝いしましょうか？",
+  "shareConversation": "会話を共有",
+  "openNavigation": "ナビゲーションを開く",
   "artifactPublish": {
     "untitled": "公開されたアーティファクト",
     "publishedOn": "{{date}} に公開",

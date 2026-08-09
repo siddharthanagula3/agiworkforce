@@ -94,6 +94,21 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// The RLS preamble is batched to keep the per-query round-trip count down:
+// BEGIN travels with SET LOCAL ROLE, and both claim GUCs share one
+// parameterized SELECT. These helpers read a binding out of whichever
+// statement happens to carry it.
+function findClientCall(fragment: string): Call | undefined {
+  return state.clientCalls.find((c) => c.sql.includes(fragment));
+}
+
+function boundClaims(): { sub: unknown; org: unknown } | undefined {
+  const call = findClientCall("set_config('request.jwt.claim.sub'");
+  if (!call?.params) return undefined;
+  // Parameter order follows the statement: subject first, organization second.
+  return { sub: call.params[0], org: call.params[1] };
+}
+
 // Helper: a JWT with a known `sub` claim. Header / signature are dummy —
 // we never verify, we just decode the middle segment.
 function makeJwt(payload: Record<string, unknown>): string {
@@ -211,14 +226,9 @@ describe('NeonDatabaseAdapter.transaction', () => {
       await tx.execute('update profiles set name = $1', ['Ada']);
       return null;
     });
-    const setLocal = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.sub'"),
-    );
-    expect(setLocal).toBeDefined();
-    expect(setLocal?.params).toEqual(['user-42']);
+    expect(boundClaims()?.sub).toBe('user-42');
     // Privilege restriction: per-user queries must run as the non-bypass role.
-    const setRole = state.clientCalls.find((c) => c.sql === 'SET LOCAL ROLE app_rls');
-    expect(setRole).toBeDefined();
+    expect(findClientCall('SET LOCAL ROLE app_rls')).toBeDefined();
   });
 });
 
@@ -276,10 +286,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
     const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
     const rows = await scoped.query<{ id: number }>('select id from t');
     expect(rows).toEqual([{ id: 7 }]);
-    const setLocal = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.sub'"),
-    );
-    expect(setLocal?.params).toEqual(['user-abc']);
+    expect(boundClaims()?.sub).toBe('user-abc');
   });
 
   it('propagates the opt-in flag to the withUser child so nested binding still works', async () => {
@@ -321,13 +328,9 @@ describe('NeonDatabaseAdapter.withUser', () => {
     const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
     const rows = await scoped.query<{ id: number }>('select id from t');
     expect(rows).toEqual([{ id: 7 }]);
-    const setLocal = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.sub'"),
-    );
-    expect(setLocal?.params).toEqual(['user-abc']);
+    expect(boundClaims()?.sub).toBe('user-abc');
     // Privilege restriction: per-user queries must run as the non-bypass role.
-    const setRole = state.clientCalls.find((c) => c.sql === 'SET LOCAL ROLE app_rls');
-    expect(setRole).toBeDefined();
+    expect(findClientCall('SET LOCAL ROLE app_rls')).toBeDefined();
   });
 
   it('throws DataLayerConfigError when the JWT is malformed', () => {
@@ -370,10 +373,7 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
       .withUser(makeJwt({ sub: 'user-abc' }))
       .withOrg('22222222-2222-4222-8222-222222222222');
     await scoped.query('select id from t');
-    const setOrg = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.org_id'"),
-    );
-    expect(setOrg?.params).toEqual(['22222222-2222-4222-8222-222222222222']);
+    expect(boundClaims()?.org).toBe('22222222-2222-4222-8222-222222222222');
   });
 
   it('composes in either order without changing the resulting scope', async () => {
@@ -382,18 +382,13 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
     const jwt = makeJwt({ sub: 'user-xyz' });
 
     await makeAdapter().withUser(jwt).withOrg(org).query('select 1');
-    const first = {
-      sub: state.clientCalls.find((c) => c.sql.includes("claim.sub'"))?.params,
-      org: state.clientCalls.find((c) => c.sql.includes("claim.org_id'"))?.params,
-    };
+    const first = boundClaims();
 
     state.clientCalls.length = 0;
     await makeAdapter().withOrg(org).withUser(jwt).query('select 1');
-    const second = {
-      sub: state.clientCalls.find((c) => c.sql.includes("claim.sub'"))?.params,
-      org: state.clientCalls.find((c) => c.sql.includes("claim.org_id'"))?.params,
-    };
+    const second = boundClaims();
 
+    expect(first).toEqual({ sub: 'user-xyz', org });
     expect(second).toEqual(first);
   });
 
@@ -404,11 +399,8 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
     await makeAdapter()
       .withUser(makeJwt({ sub: 'user-abc' }))
       .query('select 1');
-    const setOrg = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.org_id'"),
-    );
-    expect(setOrg).toBeDefined();
-    expect(setOrg?.params).toEqual(['']);
+    expect(findClientCall("set_config('request.jwt.claim.org_id'")).toBeDefined();
+    expect(boundClaims()?.org).toBe('');
   });
 
   it('clears the organization when passed null', async () => {
@@ -418,10 +410,7 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
       .withOrg('44444444-4444-4444-8444-444444444444')
       .withOrg(null);
     await scoped.query('select 1');
-    const setOrg = state.clientCalls.find((c) =>
-      c.sql.includes("set_config('request.jwt.claim.org_id'"),
-    );
-    expect(setOrg?.params).toEqual(['']);
+    expect(boundClaims()?.org).toBe('');
   });
 
   it('refuses to rebind tenancy inside an open transaction', async () => {
@@ -433,6 +422,58 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
         return null;
       }),
     ).rejects.toThrow(/BEFORE opening a/);
+  });
+});
+
+describe('NeonDatabaseAdapter RLS preamble round trips', () => {
+  // Every statement the adapter sends on a scoped call is a full Neon RTT
+  // that lands before the caller's own query. The preamble used to cost four
+  // of them (BEGIN, SET LOCAL ROLE, one set_config per GUC); batching what
+  // the wire protocol allows cuts that to two.
+  const makeScoped = () =>
+    new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
+    }).withUser(makeJwt({ sub: 'user-abc' }));
+
+  it('sends 4 statements for a user-scoped read', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    await makeScoped().query('select id from t');
+    expect(state.clientCalls.map((c) => c.sql)).toEqual([
+      'BEGIN; SET LOCAL ROLE app_rls',
+      "SELECT set_config('request.jwt.claim.sub', $1, true), " +
+        "set_config('request.jwt.claim.org_id', $2, true)",
+      'select id from t',
+      'COMMIT',
+    ]);
+  });
+
+  it('sends 4 statements for a user-scoped write', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 1 });
+    const n = await makeScoped().execute('update profiles set name = $1', ['Ada']);
+    expect(n).toBe(1);
+    expect(state.clientCalls).toHaveLength(4);
+  });
+
+  it('batches the role switch ahead of the caller query, not alongside it', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    await makeScoped().query('select id from t');
+    const sqls = state.clientCalls.map((c) => c.sql);
+    // The privilege restriction must still land before anything the caller
+    // asked for — batching it away would hand the caller the BYPASSRLS owner.
+    expect(sqls.findIndex((s) => s.includes('SET LOCAL ROLE app_rls'))).toBeLessThan(
+      sqls.indexOf('select id from t'),
+    );
+  });
+
+  it('leaves the unscoped transaction preamble at a bare BEGIN', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    await adapter.transaction(async () => null);
+    // No bound subject: no role switch, no GUCs — just the transaction.
+    expect(state.clientCalls.map((c) => c.sql)).toEqual(['BEGIN', 'COMMIT']);
   });
 });
 

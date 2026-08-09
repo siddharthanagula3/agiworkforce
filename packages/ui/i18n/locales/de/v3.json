@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Angeheftet",
+    "actions": {
+      "more": "Weitere Optionen",
+      "pin": "Anheften",
+      "unpin": "Lösen",
+      "rename": "Umbenennen",
+      "archive": "Archivieren",
+      "delete": "Löschen",
+      "confirmDelete": "Löschen bestätigen",
+      "confirmDeletePermanently": "Endgültiges Löschen bestätigen",
+      "deletePermanently": "Endgültig löschen",
+      "restore": "Wiederherstellen"
+    },
+    "projects": {
+      "newChat": "Neuer Chat im Projekt",
+      "open": "Projekt öffnen",
+      "newProject": "Neues Projekt"
+    },
+    "mode": {
+      "local": "Lokal",
+      "cloud": "Cloud",
+      "aria": "Zwischen Lokal und Cloud wechseln",
+      "switchTo": "Zu {{mode}} wechseln",
+      "soon": "Bald",
+      "cloudUnavailable": "AGI Cloud ist auf dem Desktop verfügbar – melde dich an, um verwaltete Modelle und synchronisierte Chats zu nutzen."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "Recherche",
       "automation": "Automatisierungen"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Anmelden",
+    "cloudSync": "Cloud-Sync",
+    "archived": "Archivierte Chats",
+    "noArchived": "Keine archivierten Chats",
+    "noConversations": "Noch keine Unterhaltungen",
+    "showActive": "Zurück zu aktiven Chats",
+    "showArchived": "Archivierte Chats anzeigen ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "Wie kann ich dir heute helfen?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Lokaler Modus",
+    "cloudSyncAction": "Cloud-Sync",
+    "cloudSyncAria": "Verwaltete Cloud-Synchronisierung einrichten",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "Unbenanntes Projekt",
+      "empty": "Noch keine Projekte",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "Projekteinstellungen"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "Geplante Aufgabe {{name}} pausieren",
+      "resumeAria": "Geplante Aufgabe {{name}} fortsetzen",
+      "deleteTitle": "Geplante Aufgabe löschen?",
+      "deleteDescription": "{{name}} wird gelöscht. Das kann nicht rückgängig gemacht werden.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

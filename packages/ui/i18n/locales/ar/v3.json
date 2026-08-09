@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "المثبَّتة",
+    "actions": {
+      "more": "خيارات أخرى",
+      "pin": "تثبيت",
+      "unpin": "إلغاء التثبيت",
+      "rename": "إعادة تسمية",
+      "archive": "أرشفة",
+      "delete": "حذف",
+      "confirmDelete": "تأكيد الحذف",
+      "confirmDeletePermanently": "تأكيد الحذف النهائي",
+      "deletePermanently": "حذف نهائي",
+      "restore": "استعادة"
+    },
+    "projects": {
+      "newChat": "محادثة جديدة في المشروع",
+      "open": "فتح المشروع",
+      "newProject": "مشروع جديد"
+    },
+    "mode": {
+      "local": "محلي",
+      "cloud": "سحابي",
+      "aria": "التبديل بين المحلي والسحابي",
+      "switchTo": "التبديل إلى {{mode}}",
+      "soon": "قريبًا",
+      "cloudUnavailable": "يتوفر AGI Cloud على سطح المكتب — سجّل الدخول لاستخدام النماذج المُدارة والمحادثات المتزامنة."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "بحث",
       "automation": "الأتمتة"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "تسجيل الدخول",
+    "cloudSync": "المزامنة السحابية",
+    "archived": "المحادثات المؤرشفة",
+    "noArchived": "لا توجد محادثات مؤرشفة",
+    "noConversations": "لا توجد محادثات بعد",
+    "showActive": "العودة إلى المحادثات النشطة",
+    "showArchived": "عرض المحادثات المؤرشفة ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "كيف يمكنني مساعدتك اليوم؟",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "الوضع المحلي",
+    "cloudSyncAction": "المزامنة السحابية",
+    "cloudSyncAria": "إعداد المزامنة السحابية المُدارة",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "مشروع بلا عنوان",
+      "empty": "لا توجد مشاريع بعد",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "إعدادات المشروع"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "إيقاف المهمة المجدولة {{name}} مؤقتًا",
+      "resumeAria": "استئناف المهمة المجدولة {{name}}",
+      "deleteTitle": "حذف المهمة المجدولة؟",
+      "deleteDescription": "سيتم حذف {{name}}. لا يمكن التراجع عن هذا الإجراء.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

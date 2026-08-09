@@ -42,6 +42,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem } from '../sidebar/Menu';
 import type {
   SettingsDataAdapter,
@@ -1078,6 +1079,7 @@ function ConnectorsPanel({
   adapter?: SettingsDataAdapter;
   connectorDisclosure?: React.ReactNode;
 }) {
+  const { t } = useUiTranslation('settings');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<ConnectorTab>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -1225,7 +1227,7 @@ function ConnectorsPanel({
             {connectors.length > 0 ? (
               <div
                 role="tablist"
-                aria-label="Filter connectors"
+                aria-label={t('connectors.filter', 'Filter connectors')}
                 className="flex items-center gap-1"
               >
                 {CONNECTOR_TABS.map((tab) => (
@@ -1243,7 +1245,7 @@ function ConnectorsPanel({
                         : 'border border-border text-muted-foreground hover:bg-muted',
                     )}
                   >
-                    {tab.label}
+                    {t(`connectors.tab.${tab.key}`, tab.label)}
                     <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
                   </button>
                 ))}
@@ -1882,8 +1884,9 @@ export function SettingsModal({
   adapter,
   connectorDisclosure,
   navBadges,
-  title = 'Settings',
+  title,
 }: SettingsModalProps) {
+  const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
 
   // Grouped nav (preferred): filter items within each group, dropping groups
@@ -1945,7 +1948,7 @@ export function SettingsModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideCloseButton={false}
-        closeLabel="Close settings"
+        closeLabel={t('modal.close', 'Close settings')}
         aria-describedby={undefined}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
@@ -1953,15 +1956,15 @@ export function SettingsModal({
       >
         {/* Left nav */}
         <nav
-          aria-label="Settings navigation"
+          aria-label={t('modal.navigation', 'Settings navigation')}
           className="flex max-h-[42%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:py-5"
         >
           {/* Title */}
           <DialogTitle className="mb-3 px-4 pr-12 text-[15px] font-semibold leading-normal text-foreground md:pr-4">
-            {title}
+            {title ?? t('modal.title', 'Settings')}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Search and configure AGI settings.
+            {t('modal.description', 'Search and configure AGI settings.')}
           </DialogDescription>
 
           {/* Search */}
@@ -1972,8 +1975,8 @@ export function SettingsModal({
             />
             <input
               type="search"
-              aria-label="Search settings"
-              placeholder="Search"
+              aria-label={t('modal.searchLabel', 'Search settings')}
+              placeholder={t('modal.searchPlaceholder', 'Search')}
               value={navSearch}
               onChange={(e) => setNavSearch(e.target.value)}
               className={cn(
@@ -1997,7 +2000,7 @@ export function SettingsModal({
                     <NavButton
                       key={item.key}
                       itemKey={item.key}
-                      label={item.label}
+                      label={t(`nav.${item.key}`, item.label)}
                       Icon={item.icon}
                       isActive={activeSection === item.key}
                       onClick={onSectionChange}
@@ -2007,7 +2010,9 @@ export function SettingsModal({
                 </div>
               ))}
               {visibleGroups.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">No matches.</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  {t('modal.noMatches', 'No matches.')}
+                </p>
               )}
             </div>
           ) : (
@@ -2016,7 +2021,7 @@ export function SettingsModal({
                 <NavButton
                   key={entry.key}
                   itemKey={entry.key}
-                  label={entry.label}
+                  label={t(`nav.${entry.key}`, entry.label)}
                   Icon={entry.icon}
                   isActive={activeSection === entry.key}
                   onClick={onSectionChange}

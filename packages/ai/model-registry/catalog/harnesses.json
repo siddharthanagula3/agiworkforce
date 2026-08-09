@@ -20,6 +20,13 @@
       "trustModes": ["local"],
       "features": {}
     },
+    "lmstudio/chat-completions": {
+      "provider": "lmstudio",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-lmstudio",
+      "trustModes": ["local"],
+      "features": {}
+    },
     "openai/responses": {
       "provider": "openai",
       "apiFamily": "responses",

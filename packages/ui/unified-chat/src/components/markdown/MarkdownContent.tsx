@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -214,6 +214,28 @@ const markdownComponents: Components = {
   ),
 };
 
+// Hoisted so the three arrays are built once rather than on every render of
+// every visible message. react-markdown rebuilds its unified processor per
+// render either way (`createProcessor` is not memoized upstream), so stability
+// here buys the allocations back, not the parse — the memo boundary below is
+// what keeps the parse itself off the streaming path.
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<
+  typeof ReactMarkdown
+>['remarkPlugins'];
+
+// Order: raw HTML parsed -> sanitized -> math rendered as KaTeX spans
+// (rehype-katex must run before rehype-highlight so highlight never sees
+// language-math code blocks, which would otherwise produce block-level div/pre
+// nodes and trigger a p > div hydration error when math appears inline) ->
+// syntax highlighted. rehypeRaw without a sanitizer is an XSS hazard on this
+// live path.
+const REHYPE_PLUGINS = [
+  rehypeRaw,
+  [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
+  rehypeKatex,
+  rehypeHighlight,
+] satisfies React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'];
+
 export interface MarkdownContentProps {
   content: string;
   isStreaming?: boolean;
@@ -227,27 +249,34 @@ export interface MarkdownContentProps {
  * (raw HTML -> sanitize -> KaTeX -> syntax highlight) and the KaTeX CSS
  * import are both load-bearing — see inline comments below and
  * markdownSanitizeSchema.ts.
+ *
+ * Exported memoized (see below). Scoped to what the two live call paths
+ * actually do, because the saving is not uniform across them:
+ *
+ * - Desktop (App.tsx -> DesktopShellV3 -> ChatInterface -> MessageList ->
+ *   MessageBubble -> ThinkingBlock:274). Nothing on that chain has a memo
+ *   boundary, so every token of the *answer* re-rendered the reasoning body
+ *   above it and re-parsed the whole already-finished reasoning text. This
+ *   memo bails there — that is the large win.
+ * - Web (/chat -> WebChatPage -> ChatMessageList -> apps/web MessageBubble
+ *   :1166). That bubble is already memoized on content, so finished messages
+ *   did not re-render before this either; what this memo saves there is the
+ *   mid-turn renders where metadata changes while content does not.
+ *
+ * It does NOT make the message that is actively streaming cheaper: its content
+ * genuinely changes on every token, so it re-parses either way.
  */
-export function MarkdownContent({ content, isStreaming }: MarkdownContentProps) {
+function MarkdownContentImpl({ content, isStreaming }: MarkdownContentProps) {
   // Convert \[...\] and \(...\) to $$...$$/$...$ before remark-math runs,
   // since remark-math only recognises dollar-sign delimiters by default.
-  const processedContent = preprocessMath(content);
+  // Keyed on `content` alone so a bare isStreaming flip (caret on/off at the
+  // end of a turn) does not rescan the whole answer.
+  const processedContent = useMemo(() => preprocessMath(content), [content]);
   return (
     <>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        // Order: raw HTML parsed -> sanitized -> math rendered as KaTeX spans
-        // (rehype-katex must run before rehype-highlight so highlight never
-        // sees language-math code blocks, which would otherwise produce
-        // block-level div/pre nodes and trigger a p > div hydration error
-        // when math appears inline) -> syntax highlighted.
-        // rehypeRaw without a sanitizer is an XSS hazard on this live path.
-        rehypePlugins={[
-          rehypeRaw,
-          [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
-          rehypeKatex,
-          rehypeHighlight,
-        ]}
+        remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
         components={markdownComponents}
       >
         {processedContent}
@@ -258,3 +287,10 @@ export function MarkdownContent({ content, isStreaming }: MarkdownContentProps) 
     </>
   );
 }
+
+/**
+ * Both props are primitives, so React's default shallow comparison is exactly
+ * the right identity: re-parse only when the text or the caret state changes.
+ */
+export const MarkdownContent = React.memo(MarkdownContentImpl);
+MarkdownContent.displayName = 'MarkdownContent';

@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
@@ -264,6 +265,7 @@ export function ChatInput({
   voiceInputController,
   slashCommandHost,
 }: ChatInputProps) {
+  const { t } = useUiTranslation('chat');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachmentDestinationKey = `${attachmentContextKey ?? 'default'}:${
     conversationId ?? 'no-conversation'
@@ -347,7 +349,9 @@ export function ChatInput({
   const scopeLabel =
     activePickerProject?.name ??
     entitledFolderLabel ??
-    (canUseAgiWork ? 'Project or folder' : 'Project');
+    (canUseAgiWork
+      ? t('composer.projectOrFolder', 'Project or folder')
+      : t('composer.project', 'Project'));
   const filteredPickerProjects = projectPicker
     ? projectPicker.projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
@@ -470,20 +474,20 @@ export function ChatInput({
   const voiceIsDisabled = voiceIsBusy || voiceState === 'unsupported';
   const voiceLabel =
     voiceState === 'listening'
-      ? 'Stop recording'
+      ? t('composer.voiceStopRecording', 'Stop recording')
       : voiceState === 'transcribing'
-        ? 'Transcribing voice'
+        ? t('composer.voiceTranscribing', 'Transcribing voice')
         : voiceState === 'processing'
-          ? 'Processing voice request'
+          ? t('composer.voiceProcessing', 'Processing voice request')
           : voiceState === 'awaiting_action'
-            ? 'Voice action awaiting approval'
+            ? t('composer.voiceAwaitingApproval', 'Voice action awaiting approval')
             : voiceState === 'executing'
-              ? 'Running voice action'
+              ? t('composer.voiceExecuting', 'Running voice action')
               : voiceState === 'stopping'
-                ? 'Stopping voice action'
+                ? t('composer.voiceStopping', 'Stopping voice action')
                 : voiceState === 'unsupported'
-                  ? 'Voice input unavailable'
-                  : (voiceInputController?.idleLabel ?? 'Voice input');
+                  ? t('composer.voiceUnsupported', 'Voice input unavailable')
+                  : (voiceInputController?.idleLabel ?? t('composer.voiceIdle', 'Voice input'));
 
   // Auto-focus on mount
   useEffect(() => {
@@ -748,8 +752,8 @@ export function ChatInput({
     const content =
       typedContent ||
       (destinationAttachedFiles.length === 1
-        ? 'Please analyze the attached file.'
-        : 'Please analyze the attached files.');
+        ? t('composer.analyzeAttachedFile', 'Please analyze the attached file.')
+        : t('composer.analyzeAttachedFiles', 'Please analyze the attached files.'));
 
     // Read current agent control state and forward to onSend
     let agentMode: string | undefined;
@@ -800,6 +804,7 @@ export function ChatInput({
     canUseAgiWork,
     workMode,
     activeProjectId,
+    t,
   ]);
 
   const handleKeyDown = useCallback(
@@ -854,12 +859,12 @@ export function ChatInput({
   const [focused, setFocused] = useState(false);
 
   const placeholder = disabled
-    ? (disabledMessage ?? 'Connect to start chatting')
+    ? (disabledMessage ?? t('composer.connectToChat', 'Connect to start chatting'))
     : noModelSelected
-      ? 'Select a model to start'
+      ? t('composer.selectModelToStart', 'Select a model to start')
       : hasMessages
-        ? 'Reply…'
-        : 'How can I help you today?';
+        ? t('composer.reply', 'Reply…')
+        : t('placeholderEmpty', 'How can I help you today?');
 
   return (
     <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
@@ -950,7 +955,7 @@ export function ChatInput({
             disabled && 'cursor-not-allowed opacity-50',
           )}
           style={{ maxHeight: 240, overflowY: 'auto' }}
-          aria-label="Chat message input"
+          aria-label={t('composer.messageInput', 'Chat message input')}
         />
 
         {/* Bottom toolbar.
@@ -999,7 +1004,7 @@ export function ChatInput({
                   <button
                     ref={plusButtonRef}
                     type="button"
-                    aria-label="Add attachment"
+                    aria-label={t('composer.addAttachment', 'Add attachment')}
                     aria-expanded={attachmentMenuOpen}
                     className={cn(
                       // Round "+" trigger matching web's composer (h-9 rounded-full,
@@ -1028,7 +1033,7 @@ export function ChatInput({
               {projectPicker && canUseAgiWork && (
                 <div
                   role="group"
-                  aria-label="Composer mode"
+                  aria-label={t('composer.mode', 'Composer mode')}
                   className="flex shrink-0 items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/40 p-0.5 text-xs font-medium"
                 >
                   {(['chat', 'agiwork'] as const).map((mode) => (
@@ -1046,7 +1051,7 @@ export function ChatInput({
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
                     >
-                      {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : 'AGI Work'}
                     </button>
                   ))}
                 </div>
@@ -1170,7 +1175,11 @@ export function ChatInput({
                 scopeHasSelection ? 'pr-1' : 'pr-2.5',
                 disabled && 'cursor-not-allowed opacity-50',
               )}
-              aria-label={canUseAgiWork ? 'Project or folder' : 'Project'}
+              aria-label={
+                canUseAgiWork
+                  ? t('composer.projectOrFolder', 'Project or folder')
+                  : t('composer.project', 'Project')
+              }
               aria-expanded={scopePickerOpen}
               title={scopeHasSelection ? scopeLabel : undefined}
             >
@@ -1188,7 +1197,9 @@ export function ChatInput({
                 onClick={handleClearScopeSelection}
                 className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
                 aria-label={
-                  canUseAgiWork ? 'Clear project or folder selection' : 'Clear project selection'
+                  canUseAgiWork
+                    ? t('composer.clearProjectOrFolder', 'Clear project or folder selection')
+                    : t('composer.clearProject', 'Clear project selection')
                 }
               >
                 <X className="h-3 w-3" />
@@ -1202,15 +1213,17 @@ export function ChatInput({
                 type="text"
                 value={projectQuery}
                 onChange={(e) => setProjectQuery(e.target.value)}
-                placeholder="Search projects..."
-                aria-label="Search projects"
+                placeholder={t('projects.searchPlaceholder', 'Search projects...')}
+                aria-label={t('composer.searchProjects', 'Search projects')}
                 autoFocus
                 className="mb-1.5 w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/30 px-3 py-2 text-sm text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-placeholder)]"
               />
               <div className="max-h-56 overflow-y-auto">
                 {filteredPickerProjects.length === 0 && (
                   <div className="px-3 py-2 text-sm text-[var(--chat-text-secondary)]">
-                    {projectPicker.projects.length === 0 ? 'No projects yet' : 'No projects found'}
+                    {projectPicker.projects.length === 0
+                      ? t('composer.noProjectsYet', 'No projects yet')
+                      : t('projects.none', 'No projects found')}
                   </div>
                 )}
                 {filteredPickerProjects.map((project) => (
@@ -1257,7 +1270,9 @@ export function ChatInput({
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]" />
                     <span className="flex-1 text-left">
-                      {entitledFolderLabel ? 'Choose a different folder' : 'Choose a local folder'}
+                      {entitledFolderLabel
+                        ? t('composer.chooseDifferentFolder', 'Choose a different folder')
+                        : t('composer.chooseLocalFolder', 'Choose a local folder')}
                     </span>
                   </button>
                 </>

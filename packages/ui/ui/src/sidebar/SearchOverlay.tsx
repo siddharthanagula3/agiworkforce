@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 import type { SidebarSession } from './types';
 
 export interface SearchOverlayProps {
@@ -29,6 +30,7 @@ export function SearchOverlay({
   onSelect,
   onClose,
 }: SearchOverlayProps) {
+  const { t } = useUiTranslation('chat');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function SearchOverlay({
             <Search className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
             <input
               ref={inputRef}
-              placeholder="Search conversations..."
+              placeholder={t('sidebar.searchConversations', 'Search conversations...')}
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               className="flex-1 bg-transparent text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
@@ -75,7 +77,7 @@ export function SearchOverlay({
           <div className="max-h-96 overflow-y-auto p-2">
             {results.length === 0 ? (
               <div className="px-3 py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                No conversations found
+                {t('sidebar.noConversationsFound', 'No conversations found')}
               </div>
             ) : (
               results.slice(0, 10).map((conv) => (
@@ -94,7 +96,7 @@ export function SearchOverlay({
                   )}
                 >
                   <div className="text-sm font-medium text-[hsl(var(--foreground))]">
-                    {conv.title || 'Untitled'}
+                    {conv.title || t('sidebar.untitled', 'Untitled')}
                   </div>
                   {(conv.lastMessage ?? conv.preview) && (
                     <div className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">

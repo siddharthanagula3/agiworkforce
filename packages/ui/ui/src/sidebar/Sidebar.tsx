@@ -44,6 +44,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';
 import { SearchOverlay } from './SearchOverlay';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
@@ -178,6 +179,9 @@ export function Sidebar(props: SidebarProps) {
     onMoveToProject,
     onOpenCustomInstructions,
   } = props;
+
+  const { t } = useUiTranslation('chat');
+  const { t: tCommon } = useUiTranslation('common');
 
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
@@ -504,28 +508,60 @@ export function Sidebar(props: SidebarProps) {
     if (navItems) return navItems;
     const items: SidebarNavItem[] = [];
     if (onOpenProjects) {
-      items.push({ id: 'projects', label: 'Projects', icon: FolderOpen, onClick: onOpenProjects });
+      items.push({
+        id: 'projects',
+        label: t('sidebar.projects', 'Projects'),
+        icon: FolderOpen,
+        onClick: onOpenProjects,
+      });
     }
     if (onOpenSkills) {
-      items.push({ id: 'skills', label: 'Skills', icon: Sparkles, onClick: onOpenSkills });
+      items.push({
+        id: 'skills',
+        label: t('sidebar.skills', 'Skills'),
+        icon: Sparkles,
+        onClick: onOpenSkills,
+      });
     }
     return items;
-  }, [navItems, onOpenProjects, onOpenSkills]);
+  }, [navItems, onOpenProjects, onOpenSkills, t]);
 
   /* ---------------- collapsed icon-rail ---------------- */
   if (collapsed) {
     return (
       <div className="flex w-16 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out">
         <div className="flex flex-col items-center gap-4 p-3">
-          <RailButton label="Expand sidebar" icon={PanelLeft} onClick={onToggleCollapse} />
-          <RailButton label="New chat" icon={SquarePen} onClick={onNewChat} />
-          <RailButton label="Search" icon={Search} onClick={handleOpenSearch} />
+          <RailButton
+            label={t('sidebar.expandSidebar', 'Expand sidebar')}
+            icon={PanelLeft}
+            onClick={onToggleCollapse}
+          />
+          <RailButton
+            label={t('sidebar.newChatAction', 'New chat')}
+            icon={SquarePen}
+            onClick={onNewChat}
+          />
+          <RailButton
+            label={tCommon('search', 'Search')}
+            icon={Search}
+            onClick={handleOpenSearch}
+          />
           {onOpenProjects && (
-            <RailButton label="Projects" icon={FolderOpen} onClick={onOpenProjects} />
+            <RailButton
+              label={t('sidebar.projects', 'Projects')}
+              icon={FolderOpen}
+              onClick={onOpenProjects}
+            />
           )}
-          {onOpenSkills && <RailButton label="Skills" icon={Sparkles} onClick={onOpenSkills} />}
+          {onOpenSkills && (
+            <RailButton
+              label={t('sidebar.skills', 'Skills')}
+              icon={Sparkles}
+              onClick={onOpenSkills}
+            />
+          )}
           <div
-            title={mode === 'local' ? 'Local' : 'Cloud'}
+            title={mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
             className={cn(
               'h-2 w-2 rounded-full',
               mode === 'local' ? 'bg-emerald-400' : 'bg-blue-400',
@@ -571,7 +607,7 @@ export function Sidebar(props: SidebarProps) {
             <button
               type="button"
               onClick={onToggleCollapse}
-              aria-label="Collapse sidebar"
+              aria-label={t('sidebar.collapseSidebar', 'Collapse sidebar')}
               className="flex h-8 w-8 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
             >
               <PanelLeft className="h-4 w-4" />
@@ -580,11 +616,11 @@ export function Sidebar(props: SidebarProps) {
               <button
                 type="button"
                 onClick={onNewChat}
-                aria-label="New chat"
+                aria-label={t('sidebar.newChatAction', 'New chat')}
                 className="flex items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
               >
                 <SquarePen className="h-4 w-4" />
-                New Chat
+                {t('newChat', 'New Chat')}
               </button>
             </div>
           </div>
@@ -594,7 +630,7 @@ export function Sidebar(props: SidebarProps) {
             className="flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
           >
             <Search className="h-4 w-4" />
-            <span>Search</span>
+            <span>{tCommon('search', 'Search')}</span>
             <span className="ml-auto flex items-center gap-1">
               <kbd className="rounded bg-[hsl(var(--card))] px-1.5 py-0.5 text-xs">
                 {modKeySymbol}
@@ -641,7 +677,9 @@ export function Sidebar(props: SidebarProps) {
                     >
                       <FolderOpen className="h-3 w-3" />
                     </span>
-                    <span className="max-w-[100px] truncate">{selectedProject?.name || 'All'}</span>
+                    <span className="max-w-[100px] truncate">
+                      {selectedProject?.name || tCommon('all', 'All')}
+                    </span>
                     <ChevronDown className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
                   </button>
                 )}
@@ -655,7 +693,7 @@ export function Sidebar(props: SidebarProps) {
                       icon={<MessageSquare className="h-4 w-4" />}
                       active={!selectedProjectFilter}
                     >
-                      All Conversations
+                      {t('sidebar.allConversations', 'All Conversations')}
                     </MenuItem>
                     <MenuSeparator />
                     {projects.map((project) => (
@@ -686,8 +724,8 @@ export function Sidebar(props: SidebarProps) {
               <button
                 type="button"
                 onClick={() => onSelectProjectFilter(null)}
-                aria-label="Clear filter"
-                title="Clear filter"
+                aria-label={t('sidebar.clearFilter', 'Clear filter')}
+                title={t('sidebar.clearFilter', 'Clear filter')}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               >
                 <X className="h-3 w-3" />
@@ -700,7 +738,11 @@ export function Sidebar(props: SidebarProps) {
               <button
                 type="button"
                 onClick={() => setShowArchived((v) => !v)}
-                title={showArchived ? 'Show active' : `Archived (${archivedCount})`}
+                title={
+                  showArchived
+                    ? t('sidebar.showActive', 'Show active')
+                    : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
+                }
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
                   showArchived
@@ -732,10 +774,14 @@ export function Sidebar(props: SidebarProps) {
                   <button
                     type="button"
                     onClick={() => setProjectsSectionCollapsed((v) => !v)}
-                    aria-label={projectsSectionCollapsed ? 'Expand projects' : 'Collapse projects'}
+                    aria-label={
+                      projectsSectionCollapsed
+                        ? t('sidebar.expandProjects', 'Expand projects')
+                        : t('sidebar.collapseProjects', 'Collapse projects')
+                    }
                     className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                   >
-                    <span>Projects</span>
+                    <span>{t('sidebar.projects', 'Projects')}</span>
                     <ChevronRight
                       className={cn(
                         'h-3 w-3 shrink-0 transition-transform',
@@ -758,8 +804,8 @@ export function Sidebar(props: SidebarProps) {
                     {onProjectCreate && (
                       <button
                         type="button"
-                        aria-label="New project"
-                        title="New project"
+                        aria-label={t('sidebar.newProject', 'New project')}
+                        title={t('sidebar.newProject', 'New project')}
                         onClick={(e) => {
                           e.stopPropagation();
                           onProjectCreate();
@@ -776,8 +822,8 @@ export function Sidebar(props: SidebarProps) {
                       trigger={({ toggle }) => (
                         <button
                           type="button"
-                          aria-label="Organize chats"
-                          title="Organize chats"
+                          aria-label={t('sidebar.organizeChats', 'Organize chats')}
+                          title={t('sidebar.organizeChats', 'Organize chats')}
                           onClick={(e) => {
                             e.stopPropagation();
                             toggle();
@@ -793,7 +839,7 @@ export function Sidebar(props: SidebarProps) {
                         <>
                           {/* Non-interactive section label */}
                           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                            Organize chats
+                            {t('sidebar.organizeChats', 'Organize chats')}
                           </div>
                           <MenuSeparator />
                           <MenuItem
@@ -806,7 +852,7 @@ export function Sidebar(props: SidebarProps) {
                               ) : undefined
                             }
                           >
-                            In one list
+                            {t('sidebar.organizeOneList', 'In one list')}
                           </MenuItem>
                           <MenuItem
                             close={close}
@@ -818,7 +864,7 @@ export function Sidebar(props: SidebarProps) {
                               ) : undefined
                             }
                           >
-                            By project
+                            {t('sidebar.organizeByProject', 'By project')}
                           </MenuItem>
                         </>
                       )}
@@ -832,7 +878,7 @@ export function Sidebar(props: SidebarProps) {
                     {pinnedProjects.length > 0 && (
                       <div className="mb-2">
                         <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]/60">
-                          Pinned
+                          {t('sidebar.pinned', 'Pinned')}
                         </div>
                         {pinnedProjects.map((project) => (
                           <ProjectRow
@@ -884,7 +930,7 @@ export function Sidebar(props: SidebarProps) {
                         onClick={() => setShowAllProjects(true)}
                         className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
                       >
-                        Show more
+                        {t('showMore', 'Show more')}
                       </button>
                     )}
                     {showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
@@ -893,7 +939,7 @@ export function Sidebar(props: SidebarProps) {
                         onClick={() => setShowAllProjects(false)}
                         className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
                       >
-                        Show less
+                        {t('showLess', 'Show less')}
                       </button>
                     )}
                   </>
@@ -904,14 +950,14 @@ export function Sidebar(props: SidebarProps) {
             {/* Chats section header + pinned sessions */}
             {(pinned.length > 0 || grouped.size > 0) && (
               <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                Chats
+                {t('sidebar.chats', 'Chats')}
               </div>
             )}
 
             {pinned.length > 0 && (
               <div className="mb-4">
                 <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                  <Pin className="h-3 w-3" /> Pinned
+                  <Pin className="h-3 w-3" /> {t('sidebar.pinned', 'Pinned')}
                 </div>
                 {pinned.map(renderSessionRow)}
               </div>
@@ -933,7 +979,7 @@ export function Sidebar(props: SidebarProps) {
                     <span className="flex items-center gap-1">
                       {group === 'today' && <Calendar className="h-3 w-3" />}
                       {group === 'yesterday' && <Clock className="h-3 w-3" />}
-                      {TEMPORAL_LABELS[group]}
+                      {t(`sidebar.temporal.${group}`, TEMPORAL_LABELS[group])}
                     </span>
                     <span className="ml-auto text-[hsl(var(--muted-foreground))]">
                       ({convs.length})
@@ -950,7 +996,11 @@ export function Sidebar(props: SidebarProps) {
                 so a background refetch on an already-populated list never
                 replaces real rows with placeholders. */}
             {visible.length === 0 && isLoading && (
-              <div className="space-y-1 px-2 py-1" role="status" aria-label="Loading conversations">
+              <div
+                className="space-y-1 px-2 py-1"
+                role="status"
+                aria-label={t('sidebar.loadingConversations', 'Loading conversations')}
+              >
                 {[0, 1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
@@ -968,7 +1018,7 @@ export function Sidebar(props: SidebarProps) {
               <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                 <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Couldn&apos;t load conversations
+                  {t('sidebar.loadFailed', "Couldn't load conversations")}
                 </p>
                 <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]/60">{error}</p>
               </div>
@@ -978,7 +1028,9 @@ export function Sidebar(props: SidebarProps) {
               <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                 <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]/30" />
                 <p className="text-sm text-[hsl(var(--muted-foreground))]/60">
-                  {showArchived ? 'No archived conversations' : 'No conversations yet'}
+                  {showArchived
+                    ? t('sidebar.noArchivedConversations', 'No archived conversations')
+                    : t('sidebar.noConversations', 'No conversations yet')}
                 </p>
                 {!showArchived && (
                   <button
@@ -986,7 +1038,7 @@ export function Sidebar(props: SidebarProps) {
                     onClick={onNewChat}
                     className="mt-2 text-xs text-[hsl(var(--primary))] hover:underline"
                   >
-                    Start a new chat
+                    {t('sidebar.startNewChat', 'Start a new chat')}
                   </button>
                 )}
               </div>
@@ -1003,7 +1055,9 @@ export function Sidebar(props: SidebarProps) {
             <button
               type="button"
               onClick={onOpenUsage}
-              title={`${Math.round(budgetPercent)}% of token budget used`}
+              title={t('sidebar.budgetUsed', '{{percent}}% of token budget used', {
+                percent: Math.round(budgetPercent),
+              })}
               className="group flex w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]"
             >
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-[hsl(var(--muted))]">
@@ -1030,7 +1084,11 @@ export function Sidebar(props: SidebarProps) {
               <button
                 type="button"
                 onClick={onModeClick}
-                title={mode === 'local' ? 'Local mode' : 'Cloud mode'}
+                title={
+                  mode === 'local'
+                    ? t('sidebar.localMode', 'Local mode')
+                    : t('sidebar.cloudMode', 'Cloud mode')
+                }
                 className={cn(
                   'shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors',
                   mode === 'local'
@@ -1038,7 +1096,7 @@ export function Sidebar(props: SidebarProps) {
                     : 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30',
                 )}
               >
-                {mode === 'local' ? 'Local' : 'Cloud'}
+                {mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
               </button>
             )}
           </div>
@@ -1111,6 +1169,7 @@ function ProjectRow({
   onDelete,
   onSelectSession,
 }: ProjectRowProps) {
+  const { t } = useUiTranslation('chat');
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isExpanded = expandedProjectIds.has(project.id);
@@ -1153,7 +1212,9 @@ function ProjectRow({
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
           onClick={toggleExpand}
           aria-label={
-            isExpanded ? `Collapse project ${project.name}` : `Expand project ${project.name}`
+            isExpanded
+              ? t('sidebar.collapseProject', 'Collapse project {{name}}', { name: project.name })
+              : t('sidebar.expandProject', 'Expand project {{name}}', { name: project.name })
           }
           aria-expanded={isExpanded}
         >
@@ -1186,8 +1247,10 @@ function ProjectRow({
           {onNewChat && (
             <button
               type="button"
-              aria-label={`New chat in ${project.name}`}
-              title="New chat in project"
+              aria-label={t('sidebar.newChatInProjectNamed', 'New chat in {{name}}', {
+                name: project.name,
+              })}
+              title={t('sidebar.newChatInProject', 'New chat in project')}
               onClick={(e) => {
                 e.stopPropagation();
                 onNewChat(project.id);
@@ -1205,8 +1268,10 @@ function ProjectRow({
             trigger={({ toggle }) => (
               <button
                 type="button"
-                aria-label={`More options for ${project.name}`}
-                title="More options"
+                aria-label={t('sidebar.moreOptionsFor', 'More options for {{name}}', {
+                  name: project.name,
+                })}
+                title={t('sidebar.moreOptions', 'More options')}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggle();
@@ -1229,7 +1294,7 @@ function ProjectRow({
                       onSelect={() => onShare(project.id)}
                       icon={<Upload className="h-4 w-4" />}
                     >
-                      Share project
+                      {t('sidebar.shareProject', 'Share project')}
                     </MenuItem>
                   )}
                   {onRename && (
@@ -1238,7 +1303,7 @@ function ProjectRow({
                       onSelect={() => onRename(project.id)}
                       icon={<Pencil className="h-4 w-4" />}
                     >
-                      Rename project
+                      {t('sidebar.renameProject', 'Rename project')}
                     </MenuItem>
                   )}
                   {onSettings && (
@@ -1247,7 +1312,7 @@ function ProjectRow({
                       onSelect={() => onSettings(project.id)}
                       icon={<Settings className="h-4 w-4" />}
                     >
-                      Project settings
+                      {t('sidebar.projectSettings', 'Project settings')}
                     </MenuItem>
                   )}
                   {onOpen && (
@@ -1256,7 +1321,7 @@ function ProjectRow({
                       onSelect={() => onOpen(project.id)}
                       icon={<Folder className="h-4 w-4" />}
                     >
-                      Project home
+                      {t('sidebar.projectHome', 'Project home')}
                     </MenuItem>
                   )}
                   {(onShare || onRename || onSettings || onOpen) && onPin && <MenuSeparator />}
@@ -1266,7 +1331,9 @@ function ProjectRow({
                       onSelect={() => onPin(project.id)}
                       icon={<Pin className="h-4 w-4" />}
                     >
-                      {project.pinned ? 'Unpin project' : 'Pin project'}
+                      {project.pinned
+                        ? t('sidebar.unpinProject', 'Unpin project')
+                        : t('sidebar.pinProject', 'Pin project')}
                     </MenuItem>
                   )}
                   {onDelete && (
@@ -1276,7 +1343,7 @@ function ProjectRow({
                       icon={<Trash2 className="h-4 w-4" />}
                       destructive
                     >
-                      Delete project
+                      {t('sidebar.deleteProject', 'Delete project')}
                     </MenuItem>
                   )}
                 </>
@@ -1291,7 +1358,7 @@ function ProjectRow({
         <div className="mt-0.5 pl-4">
           {projectSessions.length === 0 ? (
             <p className="px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]/60 italic">
-              No chats yet
+              {t('noChats', 'No chats yet')}
             </p>
           ) : (
             <>
@@ -1313,11 +1380,11 @@ function ProjectRow({
                     {isActive && (
                       <span
                         className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--primary))]"
-                        aria-label="Active conversation"
+                        aria-label={t('sidebar.activeConversation', 'Active conversation')}
                       />
                     )}
                     <span className="flex-1 truncate text-xs">
-                      {session.title || 'Untitled chat'}
+                      {session.title || t('sidebar.untitledChat', 'Untitled chat')}
                     </span>
                   </button>
                 );
@@ -1334,7 +1401,7 @@ function ProjectRow({
                   }
                   className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
                 >
-                  Show more
+                  {t('showMore', 'Show more')}
                 </button>
               )}
               {showAllChats && projectSessions.length > PROJECT_CHATS_SHOW_LIMIT && (
@@ -1349,7 +1416,7 @@ function ProjectRow({
                   }
                   className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
                 >
-                  Show less
+                  {t('showLess', 'Show less')}
                 </button>
               )}
             </>

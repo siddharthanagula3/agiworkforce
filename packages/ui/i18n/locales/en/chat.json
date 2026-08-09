@@ -58,6 +58,8 @@
   "compactModeEnabled": "Compact mode enabled",
   "compactModeDisabled": "Compact mode disabled",
   "placeholderEmpty": "How can I help you today?",
+  "shareConversation": "Share conversation",
+  "openNavigation": "Open navigation",
   "artifactPublish": {
     "untitled": "Published artifact",
     "publishedOn": "Published {{date}}",

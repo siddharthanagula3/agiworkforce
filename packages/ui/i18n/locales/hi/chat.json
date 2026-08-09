@@ -57,6 +57,9 @@
   "compactMode": "कॉम्पैक्ट मोड",
   "compactModeEnabled": "कॉम्पैक्ट मोड सक्षम",
   "compactModeDisabled": "कॉम्पैक्ट मोड अक्षम",
+  "placeholderEmpty": "आज मैं आपकी क्या मदद कर सकता हूँ?",
+  "shareConversation": "बातचीत साझा करें",
+  "openNavigation": "नेविगेशन खोलें",
   "artifactPublish": {
     "untitled": "प्रकाशित आर्टिफ़ैक्ट",
     "publishedOn": "{{date}} को प्रकाशित",
