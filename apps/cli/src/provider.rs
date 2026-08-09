@@ -182,13 +182,13 @@ pub fn default_temperature(model_id: &str) -> Option<f64> {
         return Some(0.0);
     }
 
-    // Current Gemini 3.5+ models deprecate sampling parameters and may reject
-    // them in future API revisions, so omit temperature for these exact IDs.
-    if matches!(lower.as_str(), "gemini-3.5-flash-lite" | "gemini-3.6-flash") {
-        return None;
-    }
-
-    // Earlier Gemini models default to 1.0.
+    // Gemini models default to 1.0. This used to carry an exact-ID list
+    // (`gemini-3.5-flash-lite`/`gemini-3.6-flash` => None) on the speculation
+    // that those releases "may reject sampling parameters in future API
+    // revisions" — nothing in the repo backs that, and models.json flags no
+    // Gemini model. Models whose provider genuinely rejects sampling parameters
+    // are excluded at the request boundary from the catalog flag
+    // (`models::streaming::effective_temperature`), not from a list here.
     if lower.starts_with("gemini") {
         return Some(1.0);
     }
@@ -899,9 +899,24 @@ mod tests {
 
     #[test]
     fn test_default_temperature_gemini() {
-        assert_eq!(default_temperature("gemini-3.1-pro-preview"), Some(1.0));
-        assert_eq!(default_temperature("gemini-3.5-flash-lite"), None);
-        assert_eq!(default_temperature("gemini-3.6-flash"), None);
+        // No Gemini model currently carries reasoning.rejectsSamplingParameters,
+        // so every one of them takes the family default. If a Gemini release
+        // starts rejecting temperature, set the flag in models.curation.json —
+        // do not add an ID back here. The flag is enforced in
+        // `models::streaming::effective_temperature`, which is what the request
+        // body actually reads.
+        for id in [
+            "gemini-3.1-pro-preview",
+            "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+        ] {
+            assert_eq!(
+                default_temperature(id),
+                Some(1.0),
+                "{id} must take the Gemini family default — per-model sampling \
+                 exclusions belong in models.json, not in an ID arm here"
+            );
+        }
     }
 
     #[test]

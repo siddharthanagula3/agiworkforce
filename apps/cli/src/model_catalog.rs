@@ -317,6 +317,8 @@ struct SharedModelMetadata {
     /// Absent on all current models → always deserializes to None.
     #[serde(default, rename = "requiresEnvironment")]
     requires_environment: Option<String>,
+    #[serde(default)]
+    reasoning: Option<SharedModelReasoning>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -324,6 +326,14 @@ struct SharedModelCapabilities {
     tools: bool,
     vision: bool,
     thinking: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedModelReasoning {
+    /// models.json `reasoning.rejectsSamplingParameters` — the provider errors on
+    /// `temperature` / `top_p` / `top_k` for this model.
+    #[serde(default, rename = "rejectsSamplingParameters")]
+    rejects_sampling_parameters: Option<bool>,
 }
 
 static SHARED_CATALOG: OnceLock<Option<SharedModelsCatalog>> = OnceLock::new();
@@ -1373,6 +1383,29 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
         .and_then(|m| m.quality_tier.clone())
 }
 
+/// True when models.json declares that this model's provider rejects sampling
+/// parameters (`temperature`, `top_p`, `top_k`).
+///
+/// Unknown models return `false` — a local or BYO endpoint gets the caller's
+/// normal sampling defaults rather than being silently stripped. Adding a model
+/// to this set is a catalog edit (`reasoning.rejectsSamplingParameters` in
+/// `models.curation.json`), never a new branch at a call site.
+pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {
+    let Some(catalog) = shared_catalog() else {
+        return false;
+    };
+    catalog
+        .models
+        .values()
+        .find(|meta| {
+            let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
+            api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
+        })
+        .and_then(|meta| meta.reasoning.as_ref())
+        .and_then(|reasoning| reasoning.rejects_sampling_parameters)
+        .unwrap_or(false)
+}
+
 /// Return the three canonical Anthropic primary models for the v3 model picker,
 /// in display order: Opus (flagship) → Sonnet (balanced) → Haiku (fast).
 ///
@@ -1855,6 +1888,41 @@ mod tests {
                  ONBOARDING_MODEL_SPECS should be derived from the catalog"
             );
         }
+    }
+
+    /// `voice.rs` owns its STT model as a `const` because the transcription
+    /// endpoint is not routed through the chat catalog. Its doc comment claims
+    /// the ID is absent from models.json, which is false — `gpt-4o-transcribe`
+    /// is a `modelType: "stt"` entry — so the constant can silently outlive a
+    /// retired model. While the literal is still there, this pins it: it must
+    /// name a live OpenAI STT model in the shared catalog.
+    ///
+    /// Conditional by design. Replacing the const with a catalog lookup is the
+    /// real remediation (#61); this test must not stand in its way, so it stops
+    /// once the literal is gone rather than demanding it stay.
+    #[test]
+    fn no_hardcoded_model_ids_voice_stt_pinned_to_catalog() {
+        let voice_src = include_str!("voice.rs");
+        let Some(literal) = voice_src
+            .split("const OPENAI_STT_MODEL: &str = \"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+        else {
+            return;
+        };
+
+        let catalog = shared_catalog().expect("bundled models.json must parse");
+        let entry = catalog.models.get(literal).unwrap_or_else(|| {
+            panic!("voice.rs OPENAI_STT_MODEL = \"{literal}\" is not in models.json")
+        });
+        assert_eq!(
+            entry.model_type, "stt",
+            "voice.rs OPENAI_STT_MODEL = \"{literal}\" is not a speech-to-text model"
+        );
+        assert_eq!(
+            entry.provider, "openai",
+            "voice.rs posts OPENAI_STT_MODEL to OpenAI's transcription endpoint"
+        );
     }
 
     /// Site 2 fix: design_system.rs capability_for_model must not contain

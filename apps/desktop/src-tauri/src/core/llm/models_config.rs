@@ -342,14 +342,68 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
             | Provider::LmStudio
             | Provider::LlamaCpp
             | Provider::Vllm => "llama4-maverick",
-            _ => {
-                debug_assert!(
-                    CONFIG.models.contains_key("gpt-5.6-luna"),
-                    "Fallback model 'gpt-5.6-luna' not found in models.json"
-                );
-                "gpt-5.6-luna"
-            }
+            _ => catalog_fallback_model(),
         })
+}
+
+/// Last-resort model for a cloud provider that has no `defaultModel` in the
+/// catalog (Bedrock, OpenRouter, NVIDIA NIM, and the aggregators that carry no
+/// `providers` entry at all).
+///
+/// Walks `providersInOrder` — the catalog's own preference order — and takes the
+/// first provider that declares a default. The previous code returned a literal
+/// model ID guarded by `debug_assert!`, which is compiled out of release builds,
+/// so a catalog rename would have shipped a dead ID to users with no signal.
+///
+/// Note what this does and does not buy: the result is guaranteed to be a live
+/// catalog entry, not to be servable by the provider that asked. Bedrock,
+/// OpenRouter, Together and NVIDIA NIM declare no `defaultModel` and no
+/// canonicalization, so they land on another provider's ID either way — the fix
+/// is a catalog entry for those providers, not a different literal here.
+///
+/// The empty-string arm is the `Option` the iterator forces and is unreachable
+/// while any provider declares a default; `get_default_model_returns_non_empty_for_all_providers`
+/// fails if it is ever taken.
+fn catalog_fallback_model() -> &'static str {
+    CONFIG
+        .providers_in_order
+        .iter()
+        .filter_map(|provider_id| CONFIG.providers.get(provider_id))
+        .filter_map(|p| p.default_model.as_deref())
+        .find(|model_id| !model_id.is_empty() && CONFIG.models.contains_key(*model_id))
+        .unwrap_or("")
+}
+
+/// Pick a catalog model by provider, `modelType`, and `qualityTier`.
+///
+/// `taskRouting` in `models.json` only covers chat-shaped tasks, so non-chat
+/// modalities (`search`, `stt`, …) have no routing entry to read and their call
+/// sites used to retype wire IDs. Selecting on the catalog's own `modelType` and
+/// `qualityTier` keeps those sites catalog-backed.
+///
+/// Ties break on input price then ID because `CONFIG.models` is a `HashMap` and
+/// its iteration order would otherwise make the choice vary between runs.
+pub fn get_model_by_type_and_tier(
+    provider: &Provider,
+    model_type: &str,
+    quality_tier: &str,
+) -> Option<&'static str> {
+    let provider_str = provider.as_string();
+    CONFIG
+        .models
+        .values()
+        .filter(|entry| {
+            entry.provider == provider_str
+                && entry.model_type == model_type
+                && entry.quality_tier == quality_tier
+                && entry.deprecated != Some(true)
+        })
+        .min_by(|a, b| {
+            a.input_cost
+                .total_cmp(&b.input_cost)
+                .then_with(|| a.id.cmp(&b.id))
+        })
+        .map(|entry| entry.id.as_str())
 }
 
 /// Model for a specific task type (snake_case task name).
@@ -862,6 +916,118 @@ mod tests {
                 provider
             );
         }
+    }
+
+    /// The cloud-provider fallback used to be a literal guarded by
+    /// `debug_assert!`, which release builds strip — a catalog rename shipped a
+    /// dead model ID. Every cloud default must resolve in the catalog.
+    #[test]
+    fn get_default_model_resolves_in_catalog_for_cloud_providers() {
+        for provider in [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::Google,
+            Provider::Perplexity,
+            Provider::XAI,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Moonshot,
+            Provider::Minimax,
+            Provider::Zhipu,
+            Provider::ManagedCloud,
+            // No catalog `providers` entry at all — these exercise the fallback.
+            Provider::Together,
+            Provider::Bedrock,
+            Provider::OpenRouter,
+            Provider::NvidiaNim,
+        ] {
+            let model = get_default_model(&provider);
+            assert!(
+                CONFIG.models.contains_key(model),
+                "{provider:?}.default_model = \"{model}\" is not in models.json"
+            );
+        }
+
+        // Providers with no catalog entry must land on the catalog's own first
+        // choice, not on an ID typed into this file.
+        let first_catalog_default = CONFIG
+            .providers_in_order
+            .iter()
+            .filter_map(|provider_id| CONFIG.providers.get(provider_id))
+            .filter_map(|p| p.default_model.as_deref())
+            .find(|model_id| CONFIG.models.contains_key(*model_id))
+            .expect("models.json must declare at least one provider default");
+        assert_eq!(
+            get_default_model(&Provider::Bedrock),
+            first_catalog_default,
+            "the no-default-model fallback must be read from providersInOrder"
+        );
+    }
+
+    /// The routing and command layers must name models through this module, not
+    /// by literal. Each entry below was an inline ID at the cited call site; a
+    /// literal reappearing there is drift that outlives the next catalog
+    /// regeneration silently, which is how ghost model IDs reach users.
+    #[test]
+    fn no_hardcoded_model_ids_in_routing_and_commands() {
+        let sources: &[(&str, &str, &[&str])] = &[
+            (
+                "core/llm/llm_router.rs",
+                include_str!("llm_router.rs"),
+                &["\"sonar\"", "\"sonar-deep-research\""],
+            ),
+            (
+                "core/llm/tool_executor/llm_tools.rs",
+                include_str!("tool_executor/llm_tools.rs"),
+                &["\"gpt-5.6-luna\""],
+            ),
+            (
+                "sys/commands/completion.rs",
+                include_str!("../../sys/commands/completion.rs"),
+                &["\"glm-5.2\""],
+            ),
+            (
+                "sys/commands/voice.rs",
+                include_str!("../../sys/commands/voice.rs"),
+                &["\"gpt-4o-transcribe\""],
+            ),
+        ];
+
+        for &(path, src, literals) in sources {
+            for &literal in literals {
+                assert!(
+                    !src.contains(literal),
+                    "{path} names model literal {literal} — resolve it through \
+                     models_config::get_task_model / get_model_by_type_and_tier instead"
+                );
+            }
+        }
+    }
+
+    /// Non-chat modalities have no `taskRouting` entry, so their call sites
+    /// resolve through `modelType` + `qualityTier` instead.
+    #[test]
+    fn get_model_by_type_and_tier_resolves_non_chat_modalities() {
+        let stt = get_model_by_type_and_tier(&Provider::OpenAI, "stt", "balanced")
+            .expect("openai must expose a balanced stt model");
+        assert_eq!(
+            CONFIG.models[stt].model_type, "stt",
+            "resolved stt model must be an stt entry"
+        );
+
+        let fast_search = get_model_by_type_and_tier(&Provider::Perplexity, "search", "fast")
+            .expect("perplexity must expose a fast search model");
+        let deep_search = get_model_by_type_and_tier(&Provider::Perplexity, "search", "best")
+            .expect("perplexity must expose a best-tier search model");
+        assert_ne!(
+            fast_search, deep_search,
+            "quick search and deep research must not collapse onto one model"
+        );
+
+        assert!(
+            get_model_by_type_and_tier(&Provider::Anthropic, "stt", "balanced").is_none(),
+            "anthropic ships no stt model — the lookup must not invent one"
+        );
     }
 
     #[test]

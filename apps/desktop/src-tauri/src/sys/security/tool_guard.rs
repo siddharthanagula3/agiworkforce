@@ -795,6 +795,24 @@ impl ToolExecutionGuard {
             },
         );
 
+        // Code symbol search — read-only ripgrep pass, same tier as grep_search.
+        // Parameters mirror the registry contract in `core/agi/tools/mod.rs`
+        // and the alias promotion in `ToolExecutor::normalize_tool_arguments`.
+        allowed_tools.insert(
+            "code_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "query".to_string(),
+                    "type".to_string(),
+                    "language".to_string(),
+                    "root".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
         // Grep search — read-only content search
         allowed_tools.insert(
             "grep_search".to_string(),
@@ -3308,6 +3326,78 @@ mod tests {
             )
             .await
             .expect("file_list pagination parameters should be allowed");
+    }
+
+    /// `code_search` is dispatched by the tool executor and sits in
+    /// `READ_ONLY_TOOLS`, so a missing policy entry made it fail closed as
+    /// `UnauthorizedTool` in every agent mode, Safe included.
+    #[tokio::test]
+    async fn test_code_search_allowed_with_registry_parameters() {
+        let guard = ToolExecutionGuard::new();
+
+        guard
+            .validate_tool_call(
+                "code_search",
+                &serde_json::json!({
+                    "query": "ToolExecutionGuard",
+                    "type": "type",
+                    "language": "rust",
+                    "root": "apps/desktop/src-tauri"
+                }),
+            )
+            .await
+            .expect("code_search canonical parameters should be allowed");
+
+        assert_eq!(
+            guard.get_safety_tier("code_search"),
+            ToolSafetyTier::Safe,
+            "code_search is a read-only search and must not prompt"
+        );
+
+        let off_contract = guard
+            .validate_tool_call(
+                "code_search",
+                &serde_json::json!({ "query": "x", "command": "rm -rf /" }),
+            )
+            .await;
+        assert!(off_contract.is_err());
+        assert!(off_contract
+            .unwrap_err()
+            .to_string()
+            .contains("not allowed"));
+    }
+
+    /// Reachability guard for the policy entry above.
+    ///
+    /// `build_chat_tools` advertises `registry.list_tools()` minus
+    /// `CHAT_TOOL_SCHEMA_EXCLUSIONS` (only the two `media_generate_*` aliases),
+    /// and `register_all_tools` registers `code_search`. So the chat model is
+    /// told about `code_search`, calls it, and `ToolExecutor::execute_tool_call`
+    /// runs `validate_tool_call` against `allowed_tools` before dispatch. If
+    /// either end of that path moves — the tool leaves the registry, or it gets
+    /// excluded from the chat schema — this policy entry stops protecting a live
+    /// path and this test says so.
+    #[tokio::test]
+    async fn test_code_search_is_advertised_to_the_chat_model() {
+        let advertised = crate::sys::commands::chat::tools::build_chat_tools(None, None);
+
+        assert!(
+            advertised.iter().any(|tool| tool.name == "code_search"),
+            "code_search must be in the chat tool schema for its guard policy to \
+             be on a live path; advertised: {:?}",
+            advertised.iter().map(|t| &t.name).collect::<Vec<_>>()
+        );
+
+        // Every advertised tool the guard has no policy for dies at
+        // `validate_tool_call` with `UnauthorizedTool`. code_search must not be
+        // one of them.
+        let guard = ToolExecutionGuard::new();
+        assert_eq!(
+            guard.get_safety_tier("code_search"),
+            ToolSafetyTier::Safe,
+            "an advertised tool with no policy entry falls through to \
+             RequiresConfirmation and then fails closed"
+        );
     }
 
     #[tokio::test]

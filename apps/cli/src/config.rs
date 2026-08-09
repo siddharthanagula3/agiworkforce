@@ -133,6 +133,18 @@ fn default_max_tokens() -> u32 {
     8192
 }
 
+/// Placeholder the model catalog backfills when `models.json` records no
+/// `maxOutputTokens`. A reading at or below it says nothing about the model's
+/// real capacity, so it must never be used as a ceiling.
+const UNSTATED_MAX_OUTPUT_TOKENS: u32 = 4_096;
+
+/// Output capacity the catalog states for `model`, or `None` when the catalog
+/// does not know the model or records no capacity for it.
+pub fn stated_max_output_tokens(model: &str) -> Option<u32> {
+    let stated = u32::try_from(crate::model_catalog::find(model)?.max_output_tokens).ok()?;
+    (stated > UNSTATED_MAX_OUTPUT_TOKENS).then_some(stated)
+}
+
 impl DefaultConfig {
     fn new() -> Self {
         Self {
@@ -792,6 +804,18 @@ impl CliConfig {
         out
     }
 
+    /// Output budget for a single request against `model`.
+    ///
+    /// `default.max_tokens` is one number for every model — effort presets and
+    /// `--max-tokens` both write it — so it has to be trimmed to whatever the
+    /// model at hand can actually emit before it reaches a provider.
+    pub fn effective_max_tokens(&self, model: &str) -> u32 {
+        match stated_max_output_tokens(model) {
+            Some(limit) => self.default.max_tokens.min(limit),
+            None => self.default.max_tokens,
+        }
+    }
+
     /// Validate the configuration, returning an error if any field is out of range.
     pub fn validate(&self) -> Result<()> {
         if self.default.model.is_empty() {
@@ -1156,6 +1180,36 @@ mod tests {
 
         config.default.max_tokens = 200_000;
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_effective_max_tokens_clamps_to_stated_capacity() {
+        let mut config = CliConfig::default();
+        let limit = stated_max_output_tokens("claude-opus-5")
+            .expect("claude-opus-5 states an output capacity in the bundled catalog");
+
+        config.default.max_tokens = limit + 50_000;
+        assert_eq!(config.effective_max_tokens("claude-opus-5"), limit);
+
+        config.default.max_tokens = 2_048;
+        assert_eq!(config.effective_max_tokens("claude-opus-5"), 2_048);
+    }
+
+    #[test]
+    fn test_effective_max_tokens_keeps_config_when_capacity_unstated() {
+        // The catalog backfills a placeholder for models `models.json` says
+        // nothing about; that placeholder must not become a ceiling.
+        assert_eq!(
+            stated_max_output_tokens("model-the-catalog-never-heard-of"),
+            None
+        );
+
+        let mut config = CliConfig::default();
+        config.default.max_tokens = 32_768;
+        assert_eq!(
+            config.effective_max_tokens("model-the-catalog-never-heard-of"),
+            32_768
+        );
     }
 
     #[test]
