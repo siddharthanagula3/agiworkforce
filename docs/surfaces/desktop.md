@@ -129,11 +129,38 @@ and refuses upload unless Windows reports every shipping executable as Authentic
 
 All 10+ providers route through `@agiworkforce/provider-protocol` via `packages/client/desktop-command-client`. Desktop is the first surface that wires every provider end-to-end. See [docs/surfaces/cli.md](cli.md) for the canonical list (CLI registers all 12 named + Custom).
 
+## Dispatch and scheduled routines (shipped; verified 2026-08-09)
+
+Mobile-to-Desktop Dispatch and on-device scheduled routines both exist in code, which is what the
+`/agi-work` marketing page claims ("Scheduled routines and mobile-to-desktop dispatch ship with the
+Desktop app"). Evidence:
+
+- **Outbound signing exists** — this closes the old "W6 #15 outbound signer" item, which said
+  desktop could receive but not sign. `signOutbound()`
+  (`apps/desktop/src/services/dispatch.ts:313`) invokes the Rust `dispatch_hmac_sign` command, and
+  every outbound companion control message is signed through it in `sendCompanionControl()`
+  (`apps/desktop/src/stores/connectionStore.ts:241`).
+- **Inbound dispatch runs a real task** — the runtime is started at
+  `apps/desktop/src/App.tsx:649` (`initializeCoworkDispatchRuntime`), and a
+  `dispatch.task.create` control message submits an actual agent goal
+  (`apps/desktop/src/services/coworkDispatch.ts:412-468`), streaming status back to Mobile.
+- **Dispatch is default-deny per device** — `apps/desktop/src/stores/coworkDispatchStore.ts` starts
+  `enabled: false`; only Settings → Cowork turns it on, and a task arriving while it is off is
+  rejected with that reason. Pairing alone never grants execution authority.
+- **Scheduled routines are real and persisted** — the scheduler lives in
+  `apps/desktop/src-tauri/src/sys/commands/scheduler.rs`, its store is created at
+  `apps/desktop/src-tauri/src/lib.rs:812-844` (SQLite `scheduler.db`, temp-dir fallback), and its
+  commands are registered at `apps/desktop/src-tauri/src/lib.rs:2022-2032`. The UI is
+  `AgiWorkScheduled`, mounted in `apps/desktop/src/features/v3/DesktopShellV3.tsx:831`.
+
+There is still no Dispatch **subpanel** in the desktop shell; dispatch is configured in
+Settings → Cowork and observed from Mobile. The deeper "desktop routines product" tracked as
+CAP-049 is about that missing surface and the host-relay contract, not about the transport above.
+
 ## Current open work (Wave 6, in flight)
 
-1. **W6 #15** — Desktop Dispatch outbound signer (hard deadline 2026-06-05). Currently mobile can send to desktop but desktop can't sign outbound. Without this, mobile rejects desktop signals after 2026-06-05.
-2. **W6 #19** — Remove `?? 'gpt-5.4'` hardcoded fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
-3. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
+1. **W6 #19** — Remove `?? 'gpt-5.4'` hardcoded fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
+2. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
 
 ## Gotchas
 

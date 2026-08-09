@@ -16,7 +16,12 @@ const PROVIDERS: { name: string; slug?: string }[] = [
   { name: 'Gemini', slug: 'gemini' },
   { name: 'Grok', slug: 'xai' },
   { name: 'DeepSeek', slug: 'deepseek' },
-  { name: 'Mistral', slug: 'mistral' },
+  // Mistral was here until 2026-07-22: `5a165d78b` removed the provider from
+  // models.json and every `mistral-*` id now canonicalizes to claude-sonnet-5,
+  // so the home page was drawing a lane to a provider the router cannot reach.
+  // Perplexity is in the catalog, has an adapter in packages/ai/providers, and
+  // is listed on /providers and /byok.
+  { name: 'Perplexity', slug: 'perplexity' },
   { name: 'Qwen', slug: 'qwen' },
   { name: 'Ollama', slug: 'ollama' },
 ];

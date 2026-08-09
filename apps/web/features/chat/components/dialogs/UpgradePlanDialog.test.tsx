@@ -67,9 +67,25 @@ describe('UpgradePlanDialog', () => {
     expect(onUpgrade).toHaveBeenCalledWith('max', false);
     expect(onUpgrade).toHaveBeenCalledWith('pro', true);
     expect(onUpgrade).not.toHaveBeenCalledWith('team', expect.anything());
-    expect(screen.getByRole('link', { name: 'Contact sales' })).toHaveAttribute(
+  });
+
+  it('prices Team per seat and hands off to the seat control instead of sales', () => {
+    render(
+      <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'See all plans' }));
+
+    // Team is a published per-seat price, not a negotiated one. "Custom" and a
+    // sales hand-off contradicted BILLING_PLAN_PRICING.team and the pricing
+    // page, which sells Team self-serve.
+    expect(screen.queryByText('Custom')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Contact sales' })).toBeNull();
+    expect(screen.getByText('$25')).toBeTruthy();
+    expect(screen.getByText('USD / seat / month')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Choose seats' })).toHaveAttribute(
       'href',
-      '/contact-sales?plan=team',
+      '/pricing#pricing-team-title',
     );
   });
 });

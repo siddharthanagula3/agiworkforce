@@ -40,15 +40,26 @@ export default function ApiDocsPage() {
               {'}'}&apos;
             </pre>
           </div>
+          <p className="agi-page-lede" style={{ marginTop: 16, marginBottom: 0 }}>
+            Two credentials reach this API and they are not interchangeable. An AGI API key (
+            <code>sk_live_…</code>, issued under Settings → API Keys) authenticates the model
+            catalog, audio transcriptions, and the credit balance. Chat completions and embeddings
+            take a session bearer token. Every operation in the bundle below names the credential it
+            accepts.
+          </p>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">Reference</p>
           <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
-            The public OpenAPI bundle, Postman collection, and SDK examples publish at public
-            launch. For now, use the quick-start route and BYOK setup guide.
+            The OpenAPI 3 bundle is published. It describes every endpoint that ships and the
+            credential each one takes. There is no Postman collection and no client SDK — call the
+            REST endpoints directly.
           </p>
           <div className="agi-cta-row">
-            <Link href="/docs/byok-env" className="agi-cta-primary">
+            <a href="/openapi.json" className="agi-cta-primary">
+              OpenAPI bundle
+            </a>
+            <Link href="/docs/byok-env" className="agi-cta-ghost">
               BYOK setup
             </Link>
             <Link href="/waitlist" className="agi-cta-ghost">

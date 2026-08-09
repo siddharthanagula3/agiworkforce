@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Mobile Legal · Privacy Policy and Terms of Service',
@@ -9,6 +10,21 @@ export const metadata = buildMetadata({
     'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and public-alpha Cloud modes.',
   path: '/mobile/legal',
 });
+
+/**
+ * Legal copy is the last place a distribution claim should outrun the product.
+ * The in-app-purchase clause below used to open "The App is free to download
+ * and use." — a present-tense availability statement for an app with ZERO
+ * `v-mobile-*` release tags and no App Store or Google Play listing. That is
+ * the CRIT-007 class of claim (store availability asserted without a listing),
+ * stated in the document a store reviewer reads first.
+ *
+ * So the clause branches on the same release-state registry `/download` and the
+ * home hero already read. When mobile ships, flipping `SURFACE_STATUS.mobile`
+ * off `COMING_SOON_LABEL` restores the download wording everywhere at once
+ * instead of leaving this page behind.
+ */
+const MOBILE_UNRELEASED = SURFACE_STATUS.mobile === COMING_SOON_LABEL;
 
 const EFFECTIVE_DATE = '2026-07-12';
 const COMPANY = 'AGI Automation LLC';
@@ -324,10 +340,13 @@ export default function MobileLegalPage() {
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">In-app purchases</span>
               <span className="agi-colophon-val">
-                The App is free to download and use. Future in-app purchases for cloud features will
-                be processed via Apple App Store or Google Play billing. All purchases are subject
-                to the relevant store&rsquo;s refund policy. Subscription purchases are governed by
-                StoreKit (iOS) or Google Play Billing (Android).
+                {MOBILE_UNRELEASED
+                  ? 'The App carries no purchase price. It is not published to the App Store or Google Play yet, so there is nothing to install today. '
+                  : 'The App is free to download and use. '}
+                Future in-app purchases for cloud features will be processed via Apple App Store or
+                Google Play billing. All purchases are subject to the relevant store&rsquo;s refund
+                policy. Subscription purchases are governed by StoreKit (iOS) or Google Play Billing
+                (Android).
               </span>
             </div>
             <div className="agi-colophon-row">

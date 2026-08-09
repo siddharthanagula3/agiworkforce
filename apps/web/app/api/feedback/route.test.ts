@@ -138,4 +138,37 @@ describe('POST /api/feedback', () => {
     expect(response.status).toBe(400);
     expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
   });
+
+  it('redacts secrets out of the free text and the attached logs before the insert', async () => {
+    const apiKey = `sk-${'A'.repeat(40)}`;
+    const response = await POST(
+      request({
+        subject: `Auth broken with ${apiKey}`,
+        message: `I pasted my key ${apiKey} into the composer and it failed.`,
+        metadata: {
+          source: 'desktop',
+          platform: 'macos',
+          version: '1.0.0',
+          user_agent: 'AGI Desktop',
+        },
+        logs: `ERROR request rejected Authorization: Bearer ${'b'.repeat(30)} key=${apiKey}`,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, storedSubject, storedMessage, storedMetadata] = feedbackRouteMocks.query.mock
+      .calls[0]?.[1] as [string | null, string, string, string];
+
+    expect(storedSubject).not.toContain(apiKey);
+    expect(storedSubject).toContain('[redacted:api-key]');
+    expect(storedMessage).not.toContain(apiKey);
+    expect(storedMessage).toContain('[redacted:api-key]');
+    // The surrounding user prose must survive — redaction, not rejection.
+    expect(storedMessage).toContain('into the composer and it failed.');
+
+    expect(storedMetadata).not.toContain(apiKey);
+    expect(storedMetadata).not.toContain('b'.repeat(30));
+    expect(storedMetadata).toContain('[redacted:api-key]');
+    expect(storedMetadata).toContain('[redacted:bearer-token]');
+  });
 });

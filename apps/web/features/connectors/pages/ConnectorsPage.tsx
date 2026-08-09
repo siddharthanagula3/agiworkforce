@@ -340,10 +340,11 @@ function InspectMcpServerDialog({
           <div className="rounded-xl border border-border bg-white/[0.02] p-4">
             <div className="mb-3 flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-foreground">Browse MCP directory</span>
+              <span className="text-sm font-medium text-foreground">MCP reference servers</span>
             </div>
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              Explore community-built MCP servers for databases, APIs, dev tools, and more.
+              A short hand-picked list of stdio servers you install from Desktop or the CLI. Not a
+              browsable registry — use the official MCP registry to search community servers.
             </p>
             <div className="flex gap-2">
               <Button
@@ -352,7 +353,7 @@ function InspectMcpServerDialog({
                 className="h-8 flex-1 text-xs border-border hover:border-border"
                 asChild
               >
-                <a href="/connectors/mcp-directory">Browse directory</a>
+                <a href="/connectors/mcp-directory">View reference list</a>
               </Button>
               <Button
                 variant="ghost"

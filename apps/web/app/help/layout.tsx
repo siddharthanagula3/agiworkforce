@@ -1,9 +1,17 @@
 import type { Metadata } from 'next';
 
+/**
+ * These descriptions are the copy search engines and link previews quote, so
+ * they must not promise a support channel that does not exist. `/community`
+ * (apps/web/app/community/page.tsx) states plainly that there is no Discord,
+ * forum, or Slack workspace — the real channels are the changelog and the
+ * contact mailbox — so "community support" was removed here rather than left
+ * to contradict it.
+ */
 export const metadata: Metadata = {
   title: 'Help Center',
   description:
-    'Get help with AGI. Step-by-step guides, troubleshooting articles, and community support for AI automation.',
+    'Get help with AGI. Step-by-step guides and troubleshooting articles for AI automation, plus a contact route to a human.',
   keywords: [
     'AGI help',
     'AI agent support',
@@ -14,7 +22,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Help Center',
     description:
-      'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
+      'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
     type: 'website',
     url: 'https://agiworkforce.com/help',
     images: [
@@ -30,7 +38,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Help Center',
     description:
-      'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
+      'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
     images: ['/api/og'],
     creator: '@agiworkforce',
   },
