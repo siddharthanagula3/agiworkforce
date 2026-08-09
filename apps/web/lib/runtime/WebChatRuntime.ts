@@ -15,6 +15,11 @@ import type {
   ChatMessage,
 } from '@agiworkforce/unified-chat';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
+import {
+  MANAGED_CLOUD_CHAT_BASE_PATH,
+  managedCloudConversationMessagesPath,
+  managedCloudConversationPath,
+} from '@agiworkforce/cloud-contracts';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
@@ -340,7 +345,7 @@ export class WebChatRuntime implements ChatRuntime {
 
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     const token = await getAuthToken();
-    const res = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+    const res = await fetch(managedCloudConversationMessagesPath(conversationId), {
       headers: { Authorization: `Bearer ${token}` },
     });
     // GOV-27: surface the failure. Returning [] here rendered a deleted or
@@ -352,7 +357,7 @@ export class WebChatRuntime implements ChatRuntime {
 
   async createConversation(title = 'New Conversation'): Promise<string | Conversation> {
     const token = await getAuthToken();
-    const res = await fetch('/api/chat/conversations', {
+    const res = await fetch(MANAGED_CLOUD_CHAT_BASE_PATH, {
       method: 'POST',
       headers: await authHeaders(token),
       body: JSON.stringify({ title }),
@@ -365,7 +370,7 @@ export class WebChatRuntime implements ChatRuntime {
 
   async deleteConversation(conversationId: string): Promise<void> {
     const token = await getAuthToken();
-    const res = await fetch(`/api/chat/conversations/${conversationId}`, {
+    const res = await fetch(managedCloudConversationPath(conversationId), {
       method: 'DELETE',
       headers: await authHeaders(token),
     });
@@ -377,7 +382,7 @@ export class WebChatRuntime implements ChatRuntime {
 
   async renameConversation(conversationId: string, title: string): Promise<void> {
     const token = await getAuthToken();
-    const res = await fetch(`/api/chat/conversations/${conversationId}`, {
+    const res = await fetch(managedCloudConversationPath(conversationId), {
       method: 'PATCH',
       headers: await authHeaders(token),
       body: JSON.stringify({ title }),
@@ -388,7 +393,7 @@ export class WebChatRuntime implements ChatRuntime {
 
   async loadConversations(): Promise<Conversation[]> {
     const token = await getAuthToken();
-    const res = await fetch('/api/chat/conversations', {
+    const res = await fetch(MANAGED_CLOUD_CHAT_BASE_PATH, {
       headers: { Authorization: `Bearer ${token}` },
     });
     // GOV-27: an empty list and a failed fetch are different facts. Returning
