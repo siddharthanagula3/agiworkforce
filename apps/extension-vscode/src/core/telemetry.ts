@@ -26,21 +26,44 @@ type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents]
 // ─── Secret redaction (D3) ──────────────────────────────────────────────────
 
 /**
- * Patterns that match common secret / credential formats. Anything matching
- * is replaced with a fixed marker before being sent to the telemetry endpoint.
+ * Patterns that match common secret / credential formats, paired with the text
+ * that replaces a match. Anything matching is replaced before the value leaves
+ * the extension — this runs on telemetry properties AND on the git diff that
+ * `contextBuilder` forwards to the model, so a gap here is a live credential in
+ * an upstream prompt.
+ *
+ * Kept in parity with the Rust redactor (`apps/cli/src/secret_redaction.rs`)
+ * and the shared TS one (`packages/platform/utils/src/logger.ts`); those two
+ * caught credential URLs, Groq, xAI and fine-grained GitHub PATs while this
+ * table did not.
+ *
  * Order matters: more specific patterns first so we don't double-redact.
+ * Character classes are kept mutually exclusive around their separators so a
+ * non-matching line cannot backtrack.
  */
-const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/g, // JWT
-  /Bearer\s+[A-Za-z0-9._\-+/=]{8,}/gi, // Bearer tokens
-  /sk-ant-[A-Za-z0-9_-]{20,}/g, // Anthropic API key
-  /sk-proj-[A-Za-z0-9_-]{20,}/g, // OpenAI project key
-  /sk-[A-Za-z0-9]{20,}/g, // Generic OpenAI sk-
-  /sk_(live|test)_[A-Za-z0-9_]{16,}/g, // Stripe + AGI live/test keys
-  /xox[baprs]-[A-Za-z0-9-]{10,}/g, // Slack tokens
-  /ghp_[A-Za-z0-9]{30,}/g, // GitHub PAT
-  /AIza[A-Za-z0-9_-]{30,}/g, // Google API key
-  /AKIA[A-Z0-9]{16}/g, // AWS access key
+const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [
+    /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g,
+    '[REDACTED]',
+  ], // PEM private key block
+  [/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/g, '[REDACTED]'], // JWT
+  [/Bearer\s+[A-Za-z0-9._\-+/=]{8,}/gi, '[REDACTED]'], // Bearer tokens
+  [/sk-ant-[A-Za-z0-9_-]{20,}/g, '[REDACTED]'], // Anthropic API key
+  [/sk-proj-[A-Za-z0-9_-]{20,}/g, '[REDACTED]'], // OpenAI project key
+  [/sk-[A-Za-z0-9]{20,}/g, '[REDACTED]'], // Generic OpenAI sk-
+  [/(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_]{16,}/g, '[REDACTED]'], // Stripe + AGI live/test keys
+  [/gsk_[A-Za-z0-9]{48,}/g, '[REDACTED]'], // Groq API key
+  [/xai-[A-Za-z0-9]{20,}/g, '[REDACTED]'], // xAI API key
+  [/xox[baprs]-[A-Za-z0-9-]{10,}/g, '[REDACTED]'], // Slack tokens
+  [/github_pat_[A-Za-z0-9_]{22,}/g, '[REDACTED]'], // GitHub fine-grained PAT
+  [/gh[pousr]_[A-Za-z0-9]{30,}/g, '[REDACTED]'], // GitHub classic PAT / OAuth / refresh
+  [/AIza[A-Za-z0-9_-]{30,}/g, '[REDACTED]'], // Google API key
+  [/A(?:KIA|SIA)[A-Z0-9]{16}/g, '[REDACTED]'], // AWS access / session key id
+  [/\b([a-z][a-z0-9+.-]*):\/\/[^\s:@/]+:[^\s@/]+@/gi, '$1://[REDACTED]@'], // credentials in a URL (DATABASE_URL et al)
+  [
+    /\b([A-Za-z0-9_]{0,32}(?:password|passwd|api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token))["']?\s*[=:]\s*["']?[^\s,'"}]{8,}/gi,
+    '$1=[REDACTED]',
+  ], // named credential assignment
 ];
 
 /**
@@ -50,8 +73,8 @@ const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
 export function redactSecrets(input: string): string {
   if (typeof input !== 'string' || input.length === 0) return input;
   let out = input;
-  for (const pattern of SECRET_PATTERNS) {
-    out = out.replace(pattern, '[REDACTED]');
+  for (const [pattern, replacement] of SECRET_PATTERNS) {
+    out = out.replace(pattern, replacement);
   }
   return out;
 }
