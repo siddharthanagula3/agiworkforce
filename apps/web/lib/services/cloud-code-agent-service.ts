@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import { logger } from '@/lib/logger';
@@ -104,6 +105,37 @@ function settledTurnCostCents(provider: string, model: string, usage: CloudCodeT
   return Math.max(MINIMUM_BILLED_TURN_CENTS, costCents);
 }
 
+/**
+ * Every model a flagship routing slot points at.
+ *
+ * Built from the slot registry rather than listing slot names, because the
+ * flagship model is reached through more than one slot (`flagship_coding` and
+ * `flagship_coding_pro_plus` are the same model) and `getSlotForModel` returns
+ * only the FIRST declared slot for a model. A predicate written against the
+ * `_pro_plus` slot names alone therefore never fires for the model IDs the
+ * client actually sends, which is how a flagship model reaches a provider
+ * flagged as standard.
+ */
+const FLAGSHIP_MODEL_IDS: ReadonlySet<string> = new Set(
+  Object.values(SLOT_REGISTRY)
+    .filter((definition) => definition.slot.startsWith('flagship_'))
+    .map((definition) => definition.modelId),
+);
+
+/**
+ * Whether the turn's model counts against the rolling flagship weekly cap.
+ *
+ * WHY THIS IS DERIVED HERE. `is_flagship` used to come from an optional
+ * caller-supplied flag that no caller ever set, so every Cloud Code turn
+ * reserved as `false` and the flagship weekly ceiling was never consulted — on
+ * a surface that makes up to `CLOUD_CODE_AGENT_MAX_STEPS` provider calls per
+ * turn. The cap has to key off the model actually sent to the provider, which
+ * is this turn's `model`, not off a caller's claim about it.
+ */
+function isFlagshipModel(model: string): boolean {
+  return FLAGSHIP_MODEL_IDS.has(normalizeModelId(model) ?? model);
+}
+
 export interface StartCloudCodeAgentTurnInput {
   db: DatabaseAdapter;
   owner: CloudCodeOwner;
@@ -113,7 +145,6 @@ export interface StartCloudCodeAgentTurnInput {
   planTier: string;
   idempotencyKey: string;
   signal: AbortSignal;
-  isFlagship?: boolean;
 }
 
 export interface CloudCodeAgentTurnRecord {
@@ -156,6 +187,7 @@ export async function startCloudCodeAgentTurn(
   }
 
   const provider = resolveProviderFromModel(model);
+  const isFlagship = isFlagshipModel(model);
 
   // Reserve BEFORE any provider work. A failure here must prevent the turn.
   const reservation: ManagedUsageRequestReservation = await reserveManagedUsageRequest({
@@ -167,7 +199,7 @@ export async function startCloudCodeAgentTurn(
     model,
     estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
     planTier,
-    isFlagship: input.isFlagship ?? false,
+    isFlagship,
   });
 
   const turnRows = await db.query<{ id: string }>(
@@ -220,7 +252,7 @@ export async function startCloudCodeAgentTurn(
           operationKey: `provider:${step + 1}`,
           estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
           planTier,
-          isFlagship: input.isFlagship ?? false,
+          isFlagship,
         });
       },
       onEvent: async (event: CloudCodeAgentEvent) => {
