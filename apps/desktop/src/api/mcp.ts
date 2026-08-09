@@ -1,3 +1,9 @@
+import {
+  MCP_INIT_TIMEOUT_MS,
+  MCP_OAUTH_TIMEOUT_MS,
+  MCP_TIMEOUT_MS,
+  MCP_TOOL_CALL_TIMEOUT_MS,
+} from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 import type {
   McpServerConfig,
@@ -38,10 +44,6 @@ export type {
   McpExtensionInfo,
   McpExtensionPackageInfo,
 };
-
-const MCP_TIMEOUT_MS = 30000;
-const MCP_TOOL_CALL_TIMEOUT_MS = 120000;
-const MCP_INIT_TIMEOUT_MS = 60000;
 
 interface RetryConfig {
   maxRetries: number;
@@ -333,8 +335,6 @@ export async function mcpGetToolSchemas(): Promise<unknown[]> {
 // ============================================================================
 // MCP OAuth Functions
 // ============================================================================
-
-const MCP_OAUTH_TIMEOUT_MS = 60000;
 
 /**
  * Available OAuth providers with their display configuration

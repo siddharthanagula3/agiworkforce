@@ -33,7 +33,7 @@ function listenedEventNames(relativePath: string): string[] {
   const source = readFileSync(resolve(__dirname, relativePath), 'utf8');
   const names = new Set<string>();
   for (const match of source.matchAll(/\blisten\s*(?:<[^>]*>)?\s*\(\s*'([^']+)'/g)) {
-    names.add(match[1]);
+    if (match[1]) names.add(match[1]);
   }
   return [...names];
 }

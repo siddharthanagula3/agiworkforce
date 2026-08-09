@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts", "__tests__/**/*.ts"],
+  // The base config excludes `**/*.test.ts` repo-wide; here the tests are the
+  // deliverable, so they are typechecked with everything else.
+  "exclude": ["node_modules"]
+}

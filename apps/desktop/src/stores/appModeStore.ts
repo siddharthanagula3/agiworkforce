@@ -140,12 +140,13 @@ export const useAppModeStore = create<AppModeState>()(
 
 // Prime persistence on first load. zustand `persist` lazy-writes only on the
 // first state mutation, so a session that never calls a setter leaves
-// `localStorage['app-mode-store']` absent. The shared unified-chat ModelSelector
-// detects desktop Local mode by reading that key (readPersistedDesktopMode);
-// when it is absent the selector wrongly falls back to the cloud model catalog
-// in Local mode (a trust-boundary-confusing label, not an egress breach — the
-// guard still blocks the call). A one-time no-op setState forces persist to
-// write the current partialized snapshot (mode included) without changing state.
+// `localStorage['app-mode-store']` absent. Shared UI reads this key through
+// `resolveClientChatExecutionMode` (@agiworkforce/client-runtime), which now
+// resolves an absent or unreadable entry inside the Tauri shell as Local, so
+// this write is no longer what keeps the model picker off the cloud catalog —
+// it only makes the persisted state explicit for readers (and wdio specs) that
+// inspect the key directly. A one-time no-op setState forces persist to write
+// the current partialized snapshot (mode included) without changing state.
 if (typeof window !== 'undefined' && !window.localStorage.getItem('app-mode-store')) {
   useAppModeStore.setState((state) => ({ ...state }));
 }

@@ -1,6 +1,7 @@
 import { agent } from '@agiworkforce/desktop-command-client';
 import type { BrowserActivityEventDetail } from '@agiworkforce/types';
 import { EVENTS } from '../../constants/event-names';
+import { INVOKE_TIMEOUT_MS } from '../../constants/timeouts';
 import { invoke, listen, type UnlistenFn, isTauri } from '../../lib/tauri-mock';
 import type { NotificationSettings } from '../../hooks/useNotifications';
 import { sha256 } from '../../lib/hash';
@@ -440,14 +441,15 @@ export async function applyAgentPlanUpdate(payload: AgentPlanUpdateEvent): Promi
     if (isTauri) {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       try {
-        const INVOKE_TIMEOUT_MS = 10000;
         await Promise.race([
           agent.agentSetWorkflowHash(workflowHash),
           new Promise<never>((_, reject) => {
             timeoutId = setTimeout(
               () =>
                 reject(
-                  new Error('Timeout: agent_set_workflow_hash did not respond within 10 seconds'),
+                  new Error(
+                    `Timeout: agent_set_workflow_hash did not respond within ${INVOKE_TIMEOUT_MS / 1000} seconds`,
+                  ),
                 ),
               INVOKE_TIMEOUT_MS,
             );

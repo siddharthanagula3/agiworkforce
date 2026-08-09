@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 
+import { IPC_TIMEOUT_MS } from '../constants/timeouts';
 import { REGISTERED_COMMANDS } from './registeredCommands';
 
 type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
@@ -52,7 +53,6 @@ export function assertRegisteredCommand(command: string): void {
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const WINDOW_MS = 1000;
 const MAX_REQS_PER_WINDOW = 30;
-const DEFAULT_TIMEOUT_MS = 30000;
 const COMMAND_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 // Overrides for the `invoke` below — this module's, not `lib/tauri-mock`'s,
@@ -62,7 +62,7 @@ const COMMAND_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 // file_watch_start, file_watch_stop, file_write, file_rename, file_delete and
 // get_file_diff. An entry for anything else is inert however correct its
 // spelling, and an entry whose key is not a registered command is worse: it
-// reads as an override while the call silently takes DEFAULT_TIMEOUT_MS — which
+// reads as an override while the call silently takes IPC_TIMEOUT_MS — which
 // is how `read_file` sat here for a command actually named `file_read`.
 // `src/utils/__tests__/ipc.test.ts` pins the keys against both facts.
 export const COMMAND_TIMEOUTS: Record<string, number> = {
@@ -250,7 +250,7 @@ export async function invoke<T = unknown>(command: string, args?: Json): Promise
 
   await rateLimit(command);
 
-  const timeout = COMMAND_TIMEOUTS[command] ?? DEFAULT_TIMEOUT_MS;
+  const timeout = COMMAND_TIMEOUTS[command] ?? IPC_TIMEOUT_MS;
 
   const invokeArgs =
     args === null || typeof args !== 'object' || Array.isArray(args) ? undefined : args;
