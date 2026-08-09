@@ -604,6 +604,11 @@ impl SwarmOrchestrator {
                                 serde_json::json!({
                                     "goal_id": goal.id,
                                     "subtask_id": subtask_id,
+                                    // AgentCollaborationPanel keys its agent roster by
+                                    // agent_id; without it the panel cannot retire the
+                                    // agent row that swarm:subtask_started created.
+                                    "agent_id": task_result.agent_id,
+                                    "output": result.output,
                                     "execution_time_ms": task_result.execution_time_ms,
                                 }),
                             );
@@ -626,6 +631,7 @@ impl SwarmOrchestrator {
                                     serde_json::json!({
                                         "goal_id": goal.id,
                                         "subtask_id": subtask_id,
+                                        "agent_id": task_result.agent_id,
                                         "error": task_result.error,
                                     }),
                                 );

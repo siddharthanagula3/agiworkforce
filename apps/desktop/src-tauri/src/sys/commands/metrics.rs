@@ -1,6 +1,6 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::data::metrics::{
     AutomationPerformance, AutomationRun, BenchmarkComparison, Comparison, MetricsComparison,
@@ -34,12 +34,13 @@ pub async fn get_realtime_stats(
 #[tauri::command]
 pub async fn record_automation_metrics(
     request: RecordAutomationRequest,
+    app: AppHandle,
     session: State<'_, SessionState>,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<MetricsSnapshot, String> {
     let user_id = get_session_user_id(&session)?;
     let mut run = AutomationRun::new(
-        user_id,
+        user_id.clone(),
         request.automation_name,
         request.estimated_manual_time_ms,
         request.actual_execution_time_ms,
@@ -55,7 +56,20 @@ pub async fn record_automation_metrics(
         run.quality_score = quality;
     }
 
-    collector.0.record_automation_run(run).await
+    let snapshot = collector.0.record_automation_run(run).await?;
+
+    // The collector already broadcasts to realtime (websocket) clients; the
+    // renderer is not one of them, so it needs the recomputed day total here.
+    match build_day_stats(&collector.0, &user_id) {
+        Ok(new_stats) => {
+            if let Err(e) = app.emit("metrics:updated", MetricsUpdate { new_stats }) {
+                tracing::error!("[Metrics] Failed to emit metrics:updated: {}", e);
+            }
+        }
+        Err(e) => tracing::error!("[Metrics] Failed to rebuild day stats after run: {}", e),
+    }
+
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -202,6 +216,15 @@ pub struct DayStats {
     pub top_automation: String,
     #[serde(rename = "topAutomationTimeSaved")]
     pub top_automation_time_saved: f64,
+}
+
+/// Payload for the `metrics:updated` event. Mirrors `MetricsUpdate` in
+/// `src/types/roi.ts`; the optional milestone fields are omitted until the
+/// milestone row shape (`MilestoneData`) is reconciled with the UI `Milestone`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricsUpdate {
+    #[serde(rename = "newStats")]
+    pub new_stats: DayStats,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -408,7 +431,14 @@ pub async fn get_today_stats(
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<DayStats, String> {
     let user_id = get_session_user_id(&session)?;
-    let stats = collector.0.get_realtime_stats(&user_id)?;
+    build_day_stats(&collector.0, &user_id)
+}
+
+fn build_day_stats(
+    collector: &RealtimeMetricsCollector,
+    user_id: &str,
+) -> Result<DayStats, String> {
+    let stats = collector.get_realtime_stats(user_id)?;
 
     // Calculate change from yesterday using daily breakdown
     let now = Utc::now().timestamp();
@@ -416,8 +446,7 @@ pub async fn get_today_stats(
     let one_day_ago = now - (24 * 60 * 60);
 
     let yesterday_rows = collector
-        .0
-        .get_daily_breakdown(&user_id, two_days_ago, one_day_ago)
+        .get_daily_breakdown(user_id, two_days_ago, one_day_ago)
         .unwrap_or_default();
     let yesterday_minutes: f64 = yesterday_rows
         .iter()

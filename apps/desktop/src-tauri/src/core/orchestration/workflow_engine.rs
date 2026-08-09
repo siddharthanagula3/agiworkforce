@@ -2,6 +2,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -302,18 +304,38 @@ enum WorkflowDatabase {
 
 pub struct WorkflowEngine {
     database: WorkflowDatabase,
+    /// Set once during Tauri setup. Every execution — manual, scheduled, or
+    /// event-triggered — funnels its status and log writes through this engine,
+    /// so holding the handle here is what makes `workflow:*` events reach the UI
+    /// from background tasks that have no `State` access of their own.
+    app_handle: OnceLock<AppHandle>,
 }
 
 impl WorkflowEngine {
     pub fn new(db_path: String) -> Self {
         Self {
             database: WorkflowDatabase::Path(db_path),
+            app_handle: OnceLock::new(),
         }
     }
 
     pub fn new_main_database(access: crate::data::db::key_management::MainDatabaseAccess) -> Self {
         Self {
             database: WorkflowDatabase::Main(access),
+            app_handle: OnceLock::new(),
+        }
+    }
+
+    pub fn set_app_handle(&self, handle: AppHandle) {
+        let _ = self.app_handle.set(handle);
+    }
+
+    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {
+        let Some(app) = self.app_handle.get() else {
+            return;
+        };
+        if let Err(e) = app.emit(event, payload) {
+            tracing::error!("[Workflow] Failed to emit {}: {}", event, e);
         }
     }
 
@@ -566,6 +588,25 @@ impl WorkflowEngine {
         )
         .map_err(|e| format!("Failed to update execution: {}", e))?;
 
+        self.emit(
+            "workflow:status_changed",
+            serde_json::json!({
+                "execution_id": execution_id,
+                "status": &status,
+                "node_id": current_node_id,
+            }),
+        );
+
+        if status == WorkflowStatus::Failed {
+            self.emit(
+                "workflow:error",
+                serde_json::json!({
+                    "execution_id": execution_id,
+                    "error": error.unwrap_or_else(|| "Workflow failed".to_string()),
+                }),
+            );
+        }
+
         Ok(())
     }
 
@@ -628,8 +669,8 @@ impl WorkflowEngine {
         let log_id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();
 
-        let data_json = if let Some(d) = data {
-            serde_json::to_string(&d).map_err(|e| format!("Failed to serialize data: {}", e))?
+        let data_json = if let Some(d) = &data {
+            serde_json::to_string(d).map_err(|e| format!("Failed to serialize data: {}", e))?
         } else {
             "null".to_string()
         };
@@ -646,6 +687,18 @@ impl WorkflowEngine {
                 now,
             ],
         ).map_err(|e| format!("Failed to add execution log: {}", e))?;
+
+        self.emit(
+            "workflow:log",
+            WorkflowExecutionLog {
+                id: log_id.clone(),
+                execution_id: execution_id.to_string(),
+                node_id: node_id.to_string(),
+                event_type,
+                data,
+                timestamp: now,
+            },
+        );
 
         Ok(log_id)
     }
