@@ -92,7 +92,10 @@ surfaces move monthly, so treat every claim below as a historical record of what
 was true that day, not as current fact. Re-verify against official product docs
 before using any of it to justify scope. The parity target was source-backed by
 those docs plus the local Claude reference folder at
-`/Users/siddhartha/Desktop/claude_reference`.
+`/Users/siddhartha/Desktop/claude_reference`. The most recent dated competitor
+re-verification lives in `docs/current/parity-implementation-matrix.md`
+("Competitor Deltas", verified 2026-07-09); where the two disagree, the newer
+dated entry wins.
 
 OpenAI/ChatGPT baseline:
 
@@ -114,7 +117,8 @@ Anthropic/Claude baseline:
 - Claude Code IDE integration supports VS Code, Cursor, Windsurf, and JetBrains-style workflows, editor context, diagnostics, diff viewing, file references, and quick launch.
 - Claude in Chrome is a browser-control extension with explicit permissions and prompt-injection defenses.
 
-Official sources used for the current baseline:
+Official sources as they stood when this snapshot was captured (several have
+since moved or redirected — re-fetch before citing):
 
 - OpenAI ChatGPT capabilities: https://help.openai.com/en/articles/9260256-chatgpt-capabilities-overview
 - OpenAI ChatGPT apps/connectors: https://help.openai.com/en/articles/11487775-connectors-in-chatgpt

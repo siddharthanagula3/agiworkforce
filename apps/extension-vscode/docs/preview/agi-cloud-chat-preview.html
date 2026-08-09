@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AGI for VS Code — Cloud Chat Preview</title>
+    <title>AGI for VS Code — Cloud Chat Preview (superseded)</title>
+    <!--
+      SUPERSEDED DESIGN EXPLORATION — NOT the shipped extension.
+
+      Status: Superseded
+      Owner: Extension lead
+      Last updated: 2026-08-09
+
+      Drawn for the abandoned "cloud-only" rebrand of the VS Code extension
+      (commit 7c75c22e2, 2026-06-13). The extension that ships is local-first:
+      chat, agent runs and session history are hosted by the local `agi
+      app-server`, sign-in is optional and only unlocks the cloud-backed extras,
+      and the chat header names the active boundary — Local, BYOK, or Managed
+      Cloud. See ../../README.md and docs/current/trust-mode-surface-matrix.md.
+      Kept only as a visual reference for the palette and layout; every
+      capability statement inside it is stale.
+    -->
     <style>
       /* ─────────────────────────────────────────────────────────────
      AGI for VS Code · Cloud chat · production visual preview (v2)
@@ -866,7 +882,9 @@
               ><svg width="18" height="18"><use href="#agimark" /></svg></span
           ></span>
           <h1>AGI for VS Code</h1>
-          <span class="sub">· cloud chat · preview v2 (website palette)</span>
+          <span class="sub"
+            >· superseded cloud-only exploration · preview v2 (website palette)</span
+          >
         </div>
         <div class="toggle">
           <button
@@ -1137,11 +1155,17 @@ if (!res.ok) throw new ChatError(res.status);</pre
       </div>
 
       <p class="caption">
+        <b>Superseded — visual reference only.</b> This mock was drawn for a cloud-only rebrand of
+        the extension that was not kept. The shipped extension is local-first: chat, agent runs and
+        session history are hosted by the local <code>agi app-server</code>, sign-in is optional and
+        only unlocks the cloud-backed extras, and the chat header names the active boundary — Local,
+        BYOK, or Managed Cloud. Read no capability claim off this page.
+      </p>
+      <p class="caption">
         <b>Preview v2 — website palette.</b> Cool near-black <b>#09090b</b>, grey surfaces,
         off-white ink, with the Linear <b>indigo #5e6ad2</b> as the single accent — and the real
         <b>12-spoke AGI mark</b>, rendered mono. Toggle to see the signed-in chat and the “Sign in
-        to AGI” states. No BYOK key entry; model is AGI Cloud; usage is one shared meter; identical
-        across VS Code / Cursor / Windsurf / Antigravity.
+        to AGI” states.
       </p>
     </div>
 

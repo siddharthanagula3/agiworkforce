@@ -5,48 +5,60 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export const metadata = buildMetadata({
-  title: 'MCP Directory',
+  title: 'MCP Reference Servers',
   description:
-    'Reference MCP servers you can connect to AGI. A full browsable, searchable directory is coming soon.',
+    'A short hand-picked list of stdio MCP servers Desktop can install. This is not a browsable registry — use the official MCP registry for that.',
   path: '/connectors/mcp-directory',
 });
 
-const FEATURED_MCPS = [
+// Hand-picked subset of the servers Desktop's built-in registry can actually
+// install (see mcp_get_registry in apps/desktop/src-tauri/src/sys/commands/mcp.rs).
+// Keep this list a subset of that registry: every entry here claims Desktop can
+// install it, so adding a server Desktop does not carry makes the page lie.
+// All of them are stdio (npm/pip) processes, which is why none can be added from
+// the browser — the web custom-connector dialog only accepts remote HTTP/SSE URLs.
+const REFERENCE_MCPS = [
   {
     name: 'Filesystem',
     description: 'Read and write files on your local machine.',
+    pkg: '@modelcontextprotocol/server-filesystem',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'local'],
+    tags: ['stdio', 'local'],
+  },
+  {
+    name: 'Git',
+    description: 'Repository status, diffs, branches, and commits.',
+    pkg: 'mcp-server-git',
+    url: 'https://github.com/modelcontextprotocol/servers',
+    tags: ['stdio', 'developer'],
   },
   {
     name: 'GitHub',
-    description: 'Repos, issues, PRs, and code search via GitHub API.',
+    description: 'Repos, issues, and pull requests via the GitHub API.',
+    pkg: '@modelcontextprotocol/server-github',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'developer'],
+    tags: ['stdio', 'developer'],
   },
   {
     name: 'Postgres',
     description: 'Query and manage PostgreSQL databases.',
+    pkg: '@modelcontextprotocol/server-postgres',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'database'],
-  },
-  {
-    name: 'Brave Search',
-    description: 'Web and local search powered by Brave.',
-    url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'search'],
+    tags: ['stdio', 'database'],
   },
   {
     name: 'Slack',
-    description: 'Post messages and read channels via Slack API.',
+    description: 'Post messages and read channels via the Slack API.',
+    pkg: '@modelcontextprotocol/server-slack',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'productivity'],
+    tags: ['stdio', 'productivity'],
   },
   {
-    name: 'Puppeteer',
-    description: 'Browser automation and web scraping via Puppeteer.',
+    name: 'Memory',
+    description: 'Persistent knowledge-graph storage for long-term context.',
+    pkg: '@modelcontextprotocol/server-memory',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['official', 'automation'],
+    tags: ['stdio', 'data'],
   },
 ];
 
@@ -61,20 +73,21 @@ export default function McpDirectoryPage() {
             Back to Connectors
           </Link>
           <h1 className="agi-page-h1" style={{ marginTop: 18 }}>
-            MCP Directory.
+            MCP reference servers.
           </h1>
           <p className="agi-page-lede">
-            A full browsable, searchable directory is coming soon. Until then, here are a few
-            well-known reference servers &mdash; all maintained in the official Model Context
-            Protocol servers repository. Copy a server&rsquo;s setup into the custom connector
-            dialog when you are ready to connect it.
+            This is a short hand-picked list, not a registry &mdash; we do not host a browsable or
+            searchable MCP directory, and there is no plan date for one. Every server below is a
+            stdio process, so it runs on Desktop or the CLI, not in the browser. Desktop&rsquo;s
+            built-in server browser installs each of these by name. To search the full catalogue of
+            community servers, use the official MCP registry.
           </p>
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Reference servers &middot; official repo</p>
+          <p className="agi-section-eyebrow">Installable from Desktop &middot; stdio</p>
           <div className="agi-route-grid">
-            {FEATURED_MCPS.map((mcp) => (
+            {REFERENCE_MCPS.map((mcp) => (
               <a
                 key={mcp.name}
                 href={mcp.url}
@@ -85,6 +98,9 @@ export default function McpDirectoryPage() {
                 <span className="agi-route-meta">{mcp.tags.join(' / ')}</span>
                 <span className="agi-route-title">{mcp.name}</span>
                 <span className="agi-route-body">{mcp.description}</span>
+                <code className="agi-route-body" style={{ marginTop: 10, fontSize: '0.78em' }}>
+                  {mcp.pkg}
+                </code>
                 <span
                   className="agi-cta-ghost"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 18 }}
@@ -102,9 +118,10 @@ export default function McpDirectoryPage() {
             <div>
               <h2 className="agi-launch-title">Bring your own tools.</h2>
               <p className="agi-launch-body">
-                The official MCP registry lists hundreds of community-contributed servers. AGI
-                should expose each server only inside the mode and permission boundary the user
-                selected.
+                The official MCP registry lists hundreds of community-contributed servers. We do not
+                mirror, curate, or sign any of them. On the web, the custom connector dialog accepts
+                a remote HTTP or SSE MCP endpoint and your own token; stdio servers like the ones
+                above have no URL, so add those from Desktop or the CLI instead.
               </p>
             </div>
             <a

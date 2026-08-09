@@ -21,6 +21,14 @@
  * untrusted — it is recorded in metadata as `claimed_user_id`, never written
  * to the attributing `user_id` column. Only a server-verified Clerk session
  * attributes feedback to an account.
+ *
+ * REDACTION IS SERVER-SIDE. The desktop client filters its own log lines
+ * (`filter_sensitive_data` in apps/desktop/src-tauri/src/sys/commands/
+ * feedback.rs), but this is a public HTTP route: the web composer posts to it
+ * too, older desktop builds keep posting to it, and any client can post to it
+ * directly. So the same `redactSecrets` the support handoff uses runs here
+ * BEFORE the insert, on the free-text fields and the attached log blob. A
+ * pasted API key never lands in `public.feedback`.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,6 +40,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { redactSecrets } from '@/lib/support/handoff/transcript';
 
 /** Cap the attached diagnostic log so one submission can't bloat the table. */
 const MAX_LOGS_CHARS = 20_000;
@@ -90,6 +99,14 @@ async function handleSubmitFeedback(request: NextRequest) {
   }
   const { subject, message, user_id: claimedUserId, metadata, logs } = parsed.data;
 
+  // See module doc: redaction runs on the server, before the insert, because
+  // client-side filtering cannot be relied on for a public route.
+  const safeSubject = redactSecrets(subject);
+  const safeMessage = redactSecrets(message);
+  // A replacement marker can be longer than the secret it replaced, so re-apply
+  // the cap after redaction rather than trusting the pre-redaction length.
+  const safeLogs = typeof logs === 'string' ? redactSecrets(logs).slice(0, MAX_LOGS_CHARS) : null;
+
   // Soft auth — attribute the feedback when signed in, accept it anonymously
   // otherwise (Local-only users have no Cloud account to require here).
   const { userId } = await auth();
@@ -101,8 +118,8 @@ async function handleSubmitFeedback(request: NextRequest) {
        values ($1, $2, $3, $4::jsonb)`,
       [
         userId ?? null,
-        subject,
-        message,
+        safeSubject,
+        safeMessage,
         JSON.stringify({
           source: metadata.source ?? 'desktop',
           platform: metadata.platform,
@@ -114,13 +131,13 @@ async function handleSubmitFeedback(request: NextRequest) {
           ...(metadata.message_id ? { message_id: metadata.message_id } : {}),
           ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
           ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
-          ...(logs ? { logs } : {}),
+          ...(safeLogs ? { logs: safeLogs } : {}),
         }),
       ],
     );
   } catch (error) {
     logger.error(
-      { error, userId, subject, source: metadata.source ?? 'desktop' },
+      { error, userId, subject: safeSubject, source: metadata.source ?? 'desktop' },
       'Failed to store feedback',
     );
     throw createError.internal('Failed to submit feedback');

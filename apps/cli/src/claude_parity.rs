@@ -857,8 +857,10 @@ pub fn render_agents(arg: &str) -> String {
 pub fn render_chrome() -> String {
     [
         "Chrome integration",
-        "  Use the AGI Chrome extension for browser context and page actions.",
-        "  Install or inspect the extension from apps/extension-vscode or the Chrome listing when packaged.",
+        "  Browser context and page actions belong to the AGI Chrome extension, which talks to",
+        "  the AGI Desktop app over the com.agiworkforce.browser native-messaging host.",
+        "  The CLI ships no browser-control tool and cannot drive Chrome itself.",
+        "  Install or inspect the extension from apps/extension or the Chrome listing when packaged.",
         "  CLI engine compatibility: MCP, tools, permissions, and session context remain owned by the Rust CLI.",
     ]
     .join("\n")
@@ -1355,6 +1357,39 @@ mod tests {
                 }
                 other => panic!("expected system message for {command}, got {other:?}"),
             }
+        }
+    }
+
+    /// `/chrome` is the CLI's only statement about browser control, so it must
+    /// not sell one. The CLI registers no browser tool (`features/exec/tools`
+    /// is bash/files/dirs/git/web) and no `--chrome` flag; page actions run in
+    /// the Chrome extension against the Desktop app's
+    /// `com.agiworkforce.browser` native-messaging host
+    /// (`apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`).
+    /// The copy must therefore name the real owner and the real source path —
+    /// `apps/extension`, not the VS Code extension.
+    #[test]
+    fn chrome_command_does_not_claim_the_cli_can_drive_a_browser() {
+        let message = render_chrome();
+
+        assert!(
+            message.contains("cannot drive Chrome itself"),
+            "/chrome must say the CLI has no browser control: {message}"
+        );
+        assert!(
+            message.contains("com.agiworkforce.browser"),
+            "/chrome must name the Desktop native-messaging host that owns page actions: {message}"
+        );
+        assert!(
+            message.contains("apps/extension")
+                && !message.contains("apps/extension-vscode"),
+            "/chrome must point at the Chrome extension, not the VS Code extension: {message}"
+        );
+        for overclaim in ["--chrome", "--no-chrome", "Extension: Installed", "Status:"] {
+            assert!(
+                !message.contains(overclaim),
+                "/chrome must not advertise `{overclaim}`, which the CLI does not implement: {message}"
+            );
         }
     }
 

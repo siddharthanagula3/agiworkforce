@@ -695,15 +695,9 @@ const MessageBubbleComponent = function MessageBubble({
         computeSession,
         generatedFile,
         artifactManifest,
-        versions: [
-          {
-            id: `v1-${message.id}`,
-            content: documentData?.content ?? message.content,
-            timestamp: message.timestamp,
-            description: 'Generated file manifest',
-          },
-        ],
-        currentVersion: 0,
+        // No synthesised `versions` entry: a generated file has exactly one
+        // revision here, and inventing a one-item history only ever produced a
+        // "v1" label. Real history comes from the artifacts store.
       },
     ];
   }, [
@@ -711,7 +705,6 @@ const MessageBubbleComponent = function MessageBubble({
     message.content,
     message.id,
     message.metadata,
-    message.timestamp,
     generatedFiles,
     generatedTextContent,
     toGeneratedFile,

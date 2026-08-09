@@ -49,6 +49,13 @@ interface PlanCard {
   monthlyPrice: number;
   yearlyPrice: number;
   annualAvailable: boolean;
+  /**
+   * True when `monthlyPrice`/`yearlyPrice` are PER SEAT rather than per
+   * account (`BillingPlanPricing.perSeat`). The catalog requires every
+   * price-rendering surface to say "/seat"; a bare amount would read as the
+   * whole organization's bill.
+   */
+  perSeat: boolean;
   tagline: string;
   features: string[];
   popular?: boolean;
@@ -60,7 +67,7 @@ const PLAN_TAGLINES: Record<PlanCardId, string> = {
   pro: 'Higher capacity plus managed developer surfaces.',
   max: 'High capacity for intensive multi-step work.',
   max_15x: 'The highest-capacity individual plan, including video generation.',
-  team: 'Contracted managed capacity with shared administration.',
+  team: 'Pro-level capacity for every seat, plus shared organization administration.',
 };
 
 const PLAN_CARD_IDS: readonly PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
@@ -75,6 +82,7 @@ const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.filter((id) =>
     monthlyPrice: display.pricing.monthlyPriceUsd,
     yearlyPrice: display.pricing.yearlyPriceUsd,
     annualAvailable: display.annualAvailable,
+    perSeat: display.pricing.perSeat === true,
     tagline: PLAN_TAGLINES[id],
     features: display.features,
     popular: id === 'pro',
@@ -128,12 +136,13 @@ interface PlanCardProps {
 
 function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
   const usesAnnual = annual && plan.annualAvailable;
+  // Team is a published per-seat price ($25/seat/mo, $240/seat/yr), not a
+  // negotiated one — rendering "Custom" here contradicted both the catalog and
+  // the pricing page, which sells it self-serve.
   const displayPrice =
-    plan.id === 'team'
-      ? 'Custom'
-      : usesAnnual && plan.monthlyPrice > 0
-        ? annualPerMonth(plan.yearlyPrice)
-        : formatPrice(plan.monthlyPrice);
+    usesAnnual && plan.monthlyPrice > 0
+      ? annualPerMonth(plan.yearlyPrice)
+      : formatPrice(plan.monthlyPrice);
   const savingsPct = annualSavingsPct(plan.monthlyPrice, plan.yearlyPrice);
 
   return (
@@ -156,8 +165,10 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
         <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
         <div className="mt-1 flex items-baseline gap-1">
           <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
-          {plan.id !== 'team' && plan.monthlyPrice > 0 && (
-            <span className="text-xs text-muted-foreground">USD / month</span>
+          {plan.monthlyPrice > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {plan.perSeat ? 'USD / seat / month' : 'USD / month'}
+            </span>
           )}
         </div>
         {usesAnnual && savingsPct > 0 && (
@@ -180,12 +191,16 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
       </ul>
 
       <div className="mt-auto">
-        {plan.id === 'team' ? (
+        {plan.perSeat ? (
+          // Per-seat checkout needs a seat quantity, and this dialog has no
+          // seat control — `onUpgrade` would send a one-seat organization.
+          // Hand off to the pricing page's Team card, which owns the seat
+          // input and the real checkout call, instead of a sales dead end.
           <a
             className="flex h-9 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
-            href="/contact-sales?plan=team"
+            href="/pricing#pricing-team-title"
           >
-            Contact sales
+            Choose seats
           </a>
         ) : isCurrent ? (
           <Button className="h-9 w-full rounded-xl text-sm" variant="outline" disabled>

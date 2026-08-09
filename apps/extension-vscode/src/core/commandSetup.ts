@@ -496,9 +496,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     // ── API key / auth commands ─────────────────────────────────────────────────
     register('agi-workforce.signIn', async () => {
-      // Cloud-only surface: secretless device sign-in. Opens the browser connect
-      // page, then polls for the approved token through the shared device-auth
-      // service used by the CLI.
+      // Secretless device sign-in. Opens the browser connect page, then polls
+      // for the approved token through the shared device-auth service used by
+      // the CLI. Sign-in is optional and only unlocks the cloud-backed extras
+      // (inline completions, Account & Usage); local developer sessions keep
+      // running through the AGI CLI without it, and provider BYOK is owned by
+      // that same `agi` app-server (`agi login <provider>`). This surface is
+      // not cloud-only — see utils/api.ts getAuthToken.
       const ok = await signInToAgiCloud(context.secrets);
       if (ok) {
         await refreshAccountTierCache(context);

@@ -95,7 +95,8 @@ const PROVIDER_PILLS: { name: string; slug?: string }[] = [
   { name: 'Grok' },
   { name: 'DeepSeek', slug: 'deepseek' },
   { name: 'Qwen', slug: 'qwen' },
-  { name: 'Mistral', slug: 'mistral' },
+  // No Mistral pill: `5a165d78b` (2026-07-22) removed the provider from
+  // models.json, so advertising it would be a claim the catalog cannot back.
   { name: 'Perplexity', slug: 'perplexity' },
   { name: 'Moonshot AI', slug: 'moonshot' },
   { name: 'ZhipuAI' },

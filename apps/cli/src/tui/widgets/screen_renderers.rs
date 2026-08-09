@@ -582,36 +582,14 @@ pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[Stri
     )
 }
 
-// ---------------------------------------------------------------------------
-// /chrome — extension status (capture 600)
-// ---------------------------------------------------------------------------
-
-pub fn render_chrome() -> String {
-    let body = vec![
-        "  AGI in Chrome works with the Chrome extension to let you control your browser".to_string(),
-        "  directly from the AGI CLI. Navigate websites, fill forms, capture screenshots,".to_string(),
-        "  record GIFs, and debug with console logs and network requests.".to_string(),
-        String::new(),
-        "    Status:    Enabled".to_string(),
-        "    Extension: Installed".to_string(),
-        String::new(),
-        "  ❯ Manage permissions".to_string(),
-        "    Reconnect extension".to_string(),
-        "    Enabled by default: Yes".to_string(),
-        String::new(),
-        "  Usage: agi --chrome or agi --no-chrome".to_string(),
-        String::new(),
-        "  Site-level permissions are inherited from the Chrome extension. Manage permissions in the".to_string(),
-        "  Chrome extension settings to control which sites AGI can browse, click, and type on.".to_string(),
-        String::new(),
-        "  Learn more: https://code.agiworkforce.com/docs/chrome".to_string(),
-    ];
-    frame(
-        "AGI in Chrome (Beta)".to_string(),
-        &body,
-        "Enter to confirm · Esc to cancel",
-    )
-}
+// `/chrome` has no overlay here on purpose. The CLI ships no browser-control
+// tool, and both the TUI and the REPL answer `/chrome` from
+// `crate::claude_parity::render_chrome`, which points at the Chrome extension +
+// Desktop native-messaging host that actually own page actions. The overlay
+// that used to live here was a copy of another CLI's screen: it advertised
+// navigation, form filling, screenshots and GIF recording "directly from the
+// AGI CLI", plus a hardcoded "Status: Enabled / Extension: Installed" and
+// `agi --chrome` flags that do not exist.
 
 // ---------------------------------------------------------------------------
 // /ide — IDE selection dialog (capture 601)
@@ -1160,18 +1138,6 @@ mod tests {
     }
 
     #[test]
-    fn chrome_shows_status_extension_and_actions() {
-        let s = render_chrome();
-        assert!(s.contains("AGI in Chrome (Beta)"));
-        assert!(s.contains("Status:    Enabled"));
-        assert!(s.contains("Extension: Installed"));
-        assert!(s.contains("❯ Manage permissions"));
-        assert!(s.contains("Reconnect extension"));
-        assert!(s.contains("Usage: agi --chrome or agi --no-chrome"));
-        assert!(s.contains("Learn more: https://code.agiworkforce.com/docs/chrome"));
-    }
-
-    #[test]
     fn ide_empty_state_explains_missing_extension() {
         let s = render_ide(&[]);
         assert!(s.contains("Select IDE"));
@@ -1195,7 +1161,6 @@ mod tests {
         assert!(render_skills(&[]).contains(&divider));
         assert!(render_permissions(PermissionsTab::Allow, &[], &[], &[], &[]).contains(&divider));
         assert!(render_plugin(PluginTab::Discover, &[], &[]).contains(&divider));
-        assert!(render_chrome().contains(&divider));
         assert!(render_ide(&[]).contains(&divider));
         // M11 additions:
         assert!(render_usage(&UsageSummary::default()).contains(&divider));

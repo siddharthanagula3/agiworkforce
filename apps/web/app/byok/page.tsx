@@ -6,6 +6,7 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import { byokProviderLabels } from './byok-providers';
 import { WaitlistForm } from './WaitlistForm';
 
 export const metadata = buildMetadata({
@@ -14,21 +15,9 @@ export const metadata = buildMetadata({
   path: '/byok',
 });
 
-const BYOK_PROVIDERS = [
-  'Anthropic',
-  'OpenAI',
-  'Google',
-  'xAI',
-  'DeepSeek',
-  'Qwen',
-  'Moonshot AI',
-  'Perplexity',
-  'ZhipuAI',
-  'Mistral AI',
-  'Groq',
-  'OpenRouter',
-  'NVIDIA NIM',
-];
+// Resolved from the canonical model catalog, not typed by hand — see
+// ./byok-providers.ts for why the hand-typed list was wrong.
+const BYOK_PROVIDERS = byokProviderLabels();
 
 export default function ByokPage() {
   return (

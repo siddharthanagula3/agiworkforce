@@ -11,6 +11,14 @@ export const metadata = buildMetadata({
   path: '/enterprise',
 });
 
+/**
+ * When the enterprise control and compliance rows below were last reviewed
+ * against the codebase. Rendered on the page — an undated "honest as of today"
+ * is the same defect /trust was rewritten to remove (it promised "claims with
+ * dates" and rendered none). Change this when you change a row.
+ */
+const STATUS_AS_OF = '5 August 2026';
+
 export default function EnterprisePage() {
   return (
     <div data-design="agi">
@@ -72,7 +80,7 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: 'Enterprise controls are being built and are scoped per contract. Nothing below is a self-serve toggle you can enable today — treat each as a commitment we make in writing, with dates, during procurement.',
+              v: `Reviewed ${STATUS_AS_OF}. Enterprise controls are being built and are scoped per contract. Nothing below is a self-serve toggle you can enable today — treat each as a commitment we make in writing, with dates, during procurement.`,
             },
             {
               k: 'SSO',
@@ -106,7 +114,7 @@ export default function EnterprisePage() {
         />
 
         <LedgerSection
-          eyebrow="Compliance posture, honest as of today"
+          eyebrow={`Compliance posture as of ${STATUS_AS_OF}`}
           title="We claim only what is complete."
           rows={[
             {

@@ -44,15 +44,12 @@ function toArtifactData(a: SharedArtifact): ArtifactData {
     language: a.language,
     title: a.title,
     content: a.content,
-    versions: [
-      {
-        id: `v1-${a.id}`,
-        content: a.content,
-        timestamp: new Date(a.createdAt),
-        description: 'Initial version',
-      },
-    ],
-    currentVersion: 0,
+    // No `versions` / `currentVersion`: this used to emit a synthesised
+    // one-entry history ("Initial version") for every derived artifact, which
+    // is what made every artifact report version 1. Version history is owned by
+    // the shared store's content-keyed `versionsById` and read through
+    // `getArtifactVersions`; the panel passes it to ArtifactPreview as
+    // `versionHistory`.
   };
 }
 
@@ -86,16 +83,7 @@ export function hasArtifacts(markdown: string): boolean {
   return hasArtifactsShared(markdown);
 }
 
-/** Artifact statistics for analytics. */
-export function getArtifactStats(artifacts: ArtifactData[]) {
-  const stats = {
-    total: artifacts.length,
-    byType: {} as Record<string, number>,
-    totalVersions: 0,
-  };
-  for (const artifact of artifacts) {
-    stats.byType[artifact.type] = (stats.byType[artifact.type] || 0) + 1;
-    stats.totalVersions += artifact.versions?.length || 1;
-  }
-  return stats;
-}
+// `getArtifactStats` lived here and was exported for "analytics" with no caller
+// anywhere in the repo. Its only non-trivial field, `totalVersions`, summed
+// `artifact.versions?.length || 1` over the synthesised one-entry histories
+// above, so it could only ever return the artifact count. Removed with them.
