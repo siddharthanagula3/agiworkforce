@@ -54,7 +54,14 @@ function sqlRelationReferences(sql) {
     const remainder = sql.slice((match.index ?? 0) + match[0].length);
     if (
       (operation === 'from' && /\bdistinct\s*$/i.test(prefix)) ||
-      (operation === 'update' && /\bdo\s*$/i.test(prefix)) ||
+      // `update` here is a keyword, not a statement, in two shapes:
+      //   ON CONFLICT ... DO UPDATE SET     (upsert)
+      //   ... FOR [NO KEY] UPDATE [OF alias] (row lock)
+      // The lock form is what made this checker report a table called `of`,
+      // since the identifier after `UPDATE` is a column-list alias rather than
+      // a relation. `FOR SHARE OF` needs no entry — `share` is not one of the
+      // operations matched above.
+      (operation === 'update' && /\b(?:do|for|for\s+no\s+key)\s*$/i.test(prefix)) ||
       ((operation === 'from' || operation === 'join') && remainder.match(/^\s*\(/)) ||
       cteNames.has(relation)
     ) {
