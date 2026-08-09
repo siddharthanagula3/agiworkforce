@@ -59,6 +59,21 @@ const COLOR_PATTERNS = [
 const INLINE_COMMENT_RE = /^\s*\/\//;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 
+/**
+ * `rgb(...)`/`hsl(...)` written with a `${}` interpolation is a colour being
+ * *computed* at runtime (a serializer, an alpha override), not a hardcoded
+ * literal — the channel values come from tokens or from user input. The gate's
+ * rule is "no hardcoded colour literals"; flagging these produced a false
+ * positive that the only available workarounds (change the product's colour
+ * serialization, or baseline it) both made worse. Genuine literals such as
+ * `rgba(0, 0, 0, 0.5)` contain no interpolation and are still flagged.
+ */
+function isInterpolatedFunctionalColor(codeOnly, matchIndex) {
+  const close = codeOnly.indexOf(')', matchIndex);
+  const call = close === -1 ? codeOnly.slice(matchIndex) : codeOnly.slice(matchIndex, close + 1);
+  return call.includes('${');
+}
+
 function absolute(rel) {
   return path.join(root, rel);
 }
@@ -107,6 +122,12 @@ function scanFile(relPath) {
       let m;
       while ((m = regex.exec(codeOnly)) !== null) {
         if (rule === 'named-color' && /<Badge\b/.test(codeOnly)) {
+          continue;
+        }
+        if (
+          (rule === 'rgba' || rule === 'hsla') &&
+          isInterpolatedFunctionalColor(codeOnly, m.index)
+        ) {
           continue;
         }
         hits.push({

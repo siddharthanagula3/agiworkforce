@@ -79,6 +79,18 @@ const nextConfig: NextConfig = {
   // MUST live here, not in vercel.json — Vercel ignores vercel.json rewrites
   // for Next.js projects, which left the api host serving /_not-found for
   // every /v1 path in production (verified via x-matched-path, 2026-07-17).
+  //
+  // Necessary but not sufficient. Rewrites are step 6 of Next's routing order
+  // and proxy.ts is step 3, so the api-host bounce there still sees the raw
+  // `/v1/...` path — not the rewritten `/api/llm/v1/...` its `/api/` guard
+  // assumes — and 307s the request to the app host, where the `has` host
+  // condition below can no longer match. That bounce must exempt `/v1/*` and
+  // `/health` for any of this to fire. Redirecting instead of rewriting is not
+  // an option: the hop is cross-origin, so clients drop the Authorization
+  // header and a caller's API key never reaches the handler.
+  //
+  // Live as of 2026-08-09: api.agiworkforce.com/v1/chat/completions answers
+  // 307 → agiworkforce.com/v1/chat/completions → 404 /_not-found.
   async rewrites() {
     const apiHost = [{ type: 'host' as const, value: 'api.agiworkforce.com' }];
     return [

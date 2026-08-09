@@ -4,6 +4,7 @@ import { useClerk, useUser } from '@clerk/nextjs';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
@@ -29,15 +30,17 @@ function formatUserCode(value: string): string {
   return clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
 }
 
-function getErrorMessage(body: unknown): string {
-  if (!body || typeof body !== 'object') return 'Approval failed';
+// `fallback` is passed in rather than baked in because this runs at module
+// scope, outside any component, where the active locale's `t` is unavailable.
+function getErrorMessage(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object') return fallback;
   const error = (body as { error?: unknown }).error;
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === 'string' && message.trim()) return message;
   }
-  return 'Approval failed';
+  return fallback;
 }
 
 function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDetails | null {
@@ -91,6 +94,7 @@ function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDeta
 
 function DeviceForm() {
   const searchParams = useSearchParams();
+  const { t, i18n } = useTranslation(['auth', 'common']);
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
   const isDesktopSurface = searchParams.get('surface') === 'desktop';
@@ -118,6 +122,15 @@ function DeviceForm() {
     null;
   const hasCompleteCode = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code);
 
+  // Error copy here is read through `i18n.t`, not the `t` from useTranslation,
+  // and `i18n` (the instance, stable for the life of the tree) is what the dep
+  // array carries. `t` gets a new identity on every `languageChanged`, and
+  // app/i18n/index.ts fires one on every page load (the post-hydration
+  // `changeLanguage()`); depending on it would abort the in-flight lookup, reset
+  // the card back to "Verifying the requesting app…", and issue a second
+  // GET /api/auth/device/code on a screen where the user is making a trust
+  // decision. `i18n.t` resolves against the active language when it is called,
+  // so the message is still localized.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasCompleteCode) {
       setDetails(null);
@@ -138,10 +151,11 @@ function DeviceForm() {
     })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) throw new Error(getErrorMessage(body));
+        if (!response.ok)
+          throw new Error(getErrorMessage(body, i18n.t('auth:device.approvalFailed')));
         const parsed = parseDeviceAuthorizationDetails(body);
         if (!parsed || parsed.user_code !== code) {
-          throw new Error('The device request could not be verified. Start sign-in again.');
+          throw new Error(i18n.t('auth:device.unverifiedRequest'));
         }
         if (!controller.signal.aborted) {
           setDetails(parsed);
@@ -150,26 +164,26 @@ function DeviceForm() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLookupError(error instanceof Error ? error.message : 'Device request lookup failed');
+        setLookupError(error instanceof Error ? error.message : i18n.t('auth:device.lookupFailed'));
         setLookupState('error');
       });
 
     return () => controller.abort();
-  }, [code, hasCompleteCode, isLoaded, isSignedIn]);
+  }, [code, hasCompleteCode, isLoaded, isSignedIn, i18n]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isLoaded) return;
     if (!isSignedIn) {
       setMessage({
-        text: 'Sign in before approving this device request.',
+        text: t('auth:device.signInFirst'),
         type: 'error',
       });
       return;
     }
     if (lookupState !== 'ready' || !details || details.user_code !== code) {
       setMessage({
-        text: 'Verify the requesting app and requested access before approving.',
+        text: t('auth:device.verifyBeforeApproving'),
         type: 'error',
       });
       return;
@@ -181,7 +195,7 @@ function DeviceForm() {
       const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
       const csrfJson = (await csrfRes.json().catch(() => null)) as { token?: string } | null;
       if (!csrfRes.ok || !csrfJson?.token) {
-        throw new Error('Failed to acquire CSRF token');
+        throw new Error(t('auth:device.csrfFailed'));
       }
 
       const res = await fetch('/api/auth/device/approve', {
@@ -192,14 +206,17 @@ function DeviceForm() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(getErrorMessage(body));
+        throw new Error(getErrorMessage(body, t('auth:device.approvalFailed')));
       }
       setMessage({
-        text: 'Device approved. Return to the app that opened this page; sign-in will finish automatically.',
+        text: t('auth:device.approved'),
         type: 'info',
       });
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'Approval failed', type: 'error' });
+      setMessage({
+        text: err instanceof Error ? err.message : t('auth:device.approvalFailed'),
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -216,33 +233,32 @@ function DeviceForm() {
 
   return (
     <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
-      <p className="agi-section-eyebrow">Authorize a device</p>
+      <p className="agi-section-eyebrow">{t('auth:device.eyebrow')}</p>
       <h1 id="device-auth-title" className="agi-device-auth-title">
-        Connect a device.
+        {t('auth:device.title')}
       </h1>
       <p className="agi-device-auth-lede">
-        Confirm the code, signed-in account, and verified requesting app below.{' '}
-        <strong>Only approve a request you started.</strong>
+        {t('auth:device.lede')} <strong>{t('auth:device.ledeWarning')}</strong>
       </p>
       {isLoaded && !isSignedIn ? (
         <div role="alert" className="agi-device-auth-alert agi-device-auth-alert--error">
-          Sign in before approving this device request. <Link href={signInHref}>Sign in</Link>
+          {t('auth:device.signInFirst')} <Link href={signInHref}>{t('common:navSignIn')}</Link>
         </div>
       ) : null}
       {isLoaded && isSignedIn ? (
-        <div className="agi-device-auth-account" aria-label="Signed-in account">
+        <div className="agi-device-auth-account" aria-label={t('auth:device.accountRegion')}>
           <div>
-            <span>Approving as</span>
-            <strong>{accountName || accountEmail || 'Signed-in AGI account'}</strong>
+            <span>{t('auth:device.approvingAs')}</span>
+            <strong>{accountName || accountEmail || t('auth:device.signedInFallback')}</strong>
             {accountEmail && accountEmail !== accountName ? <small>{accountEmail}</small> : null}
           </div>
           <button type="button" onClick={() => void onSwitchAccount()} disabled={switchingAccount}>
-            {switchingAccount ? 'Switching…' : 'Use a different account'}
+            {switchingAccount ? t('auth:device.switching') : t('auth:device.useDifferentAccount')}
           </button>
         </div>
       ) : null}
       <form onSubmit={onSubmit} className="agi-device-auth-form">
-        <label htmlFor="device-code">Device code</label>
+        <label htmlFor="device-code">{t('auth:device.codeLabel')}</label>
         <input
           id="device-code"
           name="user_code"
@@ -262,7 +278,7 @@ function DeviceForm() {
         />
         {lookupState === 'loading' ? (
           <p role="status" className="agi-device-auth-lookup">
-            Verifying the requesting app…
+            {t('auth:device.verifyingApp')}
           </p>
         ) : null}
         {lookupState === 'error' && lookupError ? (
@@ -272,9 +288,9 @@ function DeviceForm() {
         ) : null}
         {lookupState === 'ready' && details ? (
           <section className="agi-device-auth-request" aria-labelledby="device-auth-request-title">
-            <span>Verified requesting app</span>
+            <span>{t('auth:device.verifiedRequestingApp')}</span>
             <h2 id="device-auth-request-title">{details.client.name}</h2>
-            <p>This approval grants:</p>
+            <p>{t('auth:device.approvalGrants')}</p>
             <ul>
               {details.scopes.map((scope) => (
                 <li key={scope.id}>
@@ -302,32 +318,35 @@ function DeviceForm() {
           className="agi-cta-primary agi-device-auth-submit"
         >
           {!isLoaded
-            ? 'Checking...'
+            ? t('auth:device.checking')
             : isSignedIn
               ? loading
-                ? 'Approving...'
+                ? t('auth:device.approving')
                 : lookupState === 'loading'
-                  ? 'Verifying request…'
-                  : 'Approve device'
-              : 'Sign in required'}
+                  ? t('auth:device.verifyingRequest')
+                  : t('auth:device.approve')
+              : t('auth:device.signInRequired')}
         </button>
       </form>
       <div className="agi-device-auth-note">
-        <strong>Using AGI Cloud models?</strong> Approval signs this device into your account. Local
-        Mode remains local and does not require account access.
+        <strong>{t('auth:device.cloudNoteHeading')}</strong> {t('auth:device.cloudNoteBody')}
         {!isDesktopSurface ? (
           <>
             {' '}
-            <Link href="/pricing">Compare plans &rarr;</Link>
+            <Link href="/pricing">{t('auth:device.comparePlans')}</Link>
           </>
         ) : null}
       </div>
       <p className="agi-device-auth-cancel">
-        {isDesktopSurface ? 'Close this window to cancel.' : <Link href="/">Cancel</Link>}
+        {isDesktopSurface ? (
+          t('auth:device.closeToCancel')
+        ) : (
+          <Link href="/">{t('common:cancel')}</Link>
+        )}
       </p>
       <p className="agi-device-auth-legal">
-        Review the <Link href="/terms">Terms of Service</Link> and{' '}
-        <Link href="/privacy">Privacy Policy</Link>.
+        {t('auth:device.legalPrefix')} <Link href="/terms">{t('auth:device.termsLink')}</Link>{' '}
+        {t('auth:and')} <Link href="/privacy">{t('auth:device.privacyLink')}</Link>.
       </p>
     </section>
   );

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderBare, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createInstance } from 'i18next';
+import { I18nextProvider, initReactI18next } from 'react-i18next';
+import { baseInitOptions } from '@agiworkforce/i18n';
 import type React from 'react';
 
 import AuthDevicePage from './page';
@@ -71,6 +74,17 @@ vi.mock('@shared/components/layout/Header', () => ({
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <footer>Footer</footer>,
 }));
+
+/**
+ * A private i18next instance per render, so a bundle override in one test
+ * cannot leak into the next one through the app-wide singleton.
+ */
+function render(ui: React.ReactElement, overrides?: Record<string, unknown>) {
+  const instance = createInstance();
+  void instance.use(initReactI18next).init({ ...baseInitOptions, lng: 'en' });
+  if (overrides) instance.addResourceBundle('en', 'auth', overrides, true, true);
+  return renderBare(<I18nextProvider i18n={instance}>{ui}</I18nextProvider>);
+}
 
 describe('/auth/device page', () => {
   beforeEach(() => {
@@ -297,5 +311,81 @@ describe('/auth/device page', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Code not found or expired');
     });
     expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
+  });
+
+  // Pairing is the one sign-in a CLI/desktop user cannot skip, so English baked
+  // into the JSX locks every non-English user out of the trust decision. These
+  // two tests pin the copy to the corpus from both ends: swapping the bundle
+  // must change what renders, and every key the page asks for must exist.
+  it('renders the pairing copy from the shared corpus, not from baked-in English', async () => {
+    render(<AuthDevicePage />, {
+      device: {
+        title: 'CORPUS_TITLE',
+        codeLabel: 'CORPUS_CODE_LABEL',
+        useDifferentAccount: 'CORPUS_SWITCH_ACCOUNT',
+        cloudNoteBody: 'CORPUS_TRUST_NOTE',
+        approve: 'CORPUS_APPROVE',
+      },
+    });
+
+    expect(screen.getByRole('heading', { name: 'CORPUS_TITLE' })).toBeVisible();
+    expect(screen.getByLabelText('CORPUS_CODE_LABEL')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'CORPUS_SWITCH_ACCOUNT' })).toBeVisible();
+    expect(screen.getByText(/CORPUS_TRUST_NOTE/)).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'CORPUS_APPROVE' })).toBeVisible();
+    expect(screen.queryByText('Connect a device.')).not.toBeInTheDocument();
+  });
+
+  // app/i18n/index.ts calls `i18n.changeLanguage()` from a post-hydration
+  // setTimeout on every page load, and i18next emits `languageChanged` even when
+  // the language is unchanged — which mints a new `t`. If the lookup effect
+  // depended on `t`, that would abort the in-flight request, flip the verified
+  // client and scope list back to "Verifying the requesting app…", and re-issue
+  // the lookup, on the screen where the user approves device access.
+  it('does not re-run the device lookup when the language settles after hydration', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const instance = createInstance();
+    await instance.use(initReactI18next).init({ ...baseInitOptions, lng: 'en' });
+
+    renderBare(
+      <I18nextProvider i18n={instance}>
+        <AuthDevicePage />
+      </I18nextProvider>,
+    );
+
+    const lookups = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/auth/device/code?'))
+        .length;
+
+    expect(await screen.findByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(lookups()).toBe(1);
+
+    await act(async () => {
+      await instance.changeLanguage('en');
+    });
+
+    expect(lookups()).toBe(1);
+    expect(screen.getByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(screen.queryByText('Verifying the requesting app…')).not.toBeInTheDocument();
+  });
+
+  it('asks only for auth keys the English corpus actually defines', () => {
+    const source = readFileSync(resolve(process.cwd(), 'app/auth/device/page.tsx'), 'utf8');
+    const authBundle = JSON.parse(
+      readFileSync(resolve(process.cwd(), '../../packages/ui/i18n/locales/en/auth.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    const referenced = [...source.matchAll(/t\('auth:([^']+)'\)/g)].map((match) => match[1]!);
+    expect(referenced.length).toBeGreaterThan(0);
+
+    for (const key of referenced) {
+      const value = key
+        .split('.')
+        .reduce<unknown>(
+          (node, segment) => (node as Record<string, unknown> | undefined)?.[segment],
+          authBundle,
+        );
+      expect(typeof value, `auth.json is missing '${key}'`).toBe('string');
+    }
   });
 });
