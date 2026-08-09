@@ -320,6 +320,23 @@ const MINUTE_MS = 60_000;
  */
 export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
 
+/**
+ * Scheduled runs one `/api/cron/run-schedules` invocation attempts, platform-wide.
+ *
+ * The sweep drains in waves of ten claims (the concurrency ceiling of
+ * `processDueScheduleRuns`) until this many rows are attempted or the serverless
+ * budget runs out, so this number times the deployed cron cadence is the total
+ * daily throughput every tier's `maxScheduledTasks` shares. It lives here rather
+ * than in the route because the quotas below are what it bounds, and separating
+ * the two is what let them drift an order of magnitude apart.
+ *
+ * A sweep whose waves each burn their full per-task timeout stops early; the
+ * unclaimed rows stay due and are picked up FIFO by the next sweep. Turning this
+ * ceiling into a floor needs either more invocations per day (a paid cron
+ * cadence) or invocation chaining — until then, size quotas against it, not above.
+ */
+export const PLATFORM_SCHEDULE_RUNS_PER_SWEEP = 50;
+
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;
@@ -367,18 +384,20 @@ export interface BillingPlanProductLimits {
    *
    * These values are ALSO bounded by what the platform can actually execute, and
    * that is the tighter constraint. Due schedules run only when
-   * `/api/cron/run-schedules` fires (`vercel.json`), and each invocation claims at
-   * most `processDueScheduleRuns({ limit })` rows — a bound set by Vercel's
+   * `/api/cron/run-schedules` fires (`vercel.json`), and each invocation attempts
+   * at most `PLATFORM_SCHEDULE_RUNS_PER_SWEEP` rows — a bound set by Vercel's
    * `maxDuration`, not by choice. Total daily throughput is therefore
-   * `invocations/day * limit`, shared across ALL users.
+   * `invocations/day * PLATFORM_SCHEDULE_RUNS_PER_SWEEP`, shared across ALL users.
    *
    * Sizing these above that ceiling does not fail loudly: unclaimed rows stay due
    * and are picked up FIFO, so the symptom is a silently growing backlog and runs
-   * landing days late. Founder decision 2026-08-04 lowered these to fit an hourly
-   * sweep (24 * 10 = 240 runs/day). If the deployed cron cadence or the per-invocation
-   * limit changes, re-derive these numbers — and update `SWEEP_INTERVAL_MS` in
-   * `apps/web/lib/schedules/schedule-time.ts`, which `schedule-cadence.test.ts` pins
-   * to `vercel.json`.
+   * landing days late. That is exactly what happened — these were sized for an
+   * hourly sweep that was never deployed, against a daily cron that ran one
+   * ten-row batch. `schedule-cadence.test.ts` now derives the ceiling from
+   * `vercel.json` and fails when the sum of these quotas exceeds it, so the two
+   * cannot drift apart again. If the cadence changes, also update
+   * `SWEEP_INTERVAL_MS` in `apps/web/lib/schedules/schedule-time.ts`, which the
+   * same test pins to `vercel.json`.
    */
   maxScheduledTasks: BillingPlanLimit;
 }
