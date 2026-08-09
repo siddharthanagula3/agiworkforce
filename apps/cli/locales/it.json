@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Comandi",
+  "command_popup.empty": "(nessun comando corrispondente)",
+  "command_popup.hint": "Digita per filtrare   ↑↓ naviga   Invio seleziona   Esc annulla",
+  "agent_picker.title": "Agenti",
+  "agent_picker.count": "{count} agente/i",
+  "agent_picker.search_placeholder": "digita per filtrare gli agenti...",
+  "agent_picker.empty_no_agents": "Nessun agente trovato. Creane uno con: /agents create <name>",
+  "agent_picker.empty_no_match": "Nessun agente corrisponde al filtro.",
+  "agent_picker.no_description": "(nessuna descrizione)",
+  "agent_picker.none_selected": "(nessun agente selezionato)"
+}

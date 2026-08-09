@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Befehle",
+  "command_popup.empty": "(keine passenden Befehle)",
+  "command_popup.hint": "Tippen zum Filtern   ↑↓ navigieren   Enter auswählen   Esc abbrechen",
+  "agent_picker.title": "Agenten",
+  "agent_picker.count": "{count} Agent(en)",
+  "agent_picker.search_placeholder": "tippen, um Agenten zu filtern...",
+  "agent_picker.empty_no_agents": "Keine Agenten gefunden. Erstelle einen mit: /agents create <name>",
+  "agent_picker.empty_no_match": "Keine Agenten entsprechen dem Filter.",
+  "agent_picker.no_description": "(keine Beschreibung)",
+  "agent_picker.none_selected": "(kein Agent ausgewählt)"
+}

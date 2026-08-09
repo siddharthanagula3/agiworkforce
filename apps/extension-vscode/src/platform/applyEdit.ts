@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../l10n';
 
 /**
  * Extract the first fenced code block matching the given language from text.
@@ -63,33 +64,34 @@ export async function applyLlmEdit(
     edit.replace(editor.document.uri, selection, codeBlock);
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {
-      vscode.window.showWarningMessage(
-        'AGI Workforce: Could not auto-apply edit — document may have changed.',
-      );
+      vscode.window.showWarningMessage(t('applyEdit.autoApplyFailed'));
       await openInNewTab(llmResponse, commandLabel);
       return;
     }
     return;
   }
 
+  // The returned choice is the button's own label, so both must come from the
+  // same lookup — comparing against an English literal would drop every click
+  // in a translated VS Code.
+  const applyInline = t('applyEdit.applyInline');
+  const viewInNewTab = t('applyEdit.viewInNewTab');
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce: Apply ${commandLabel} result?`,
+    t('applyEdit.prompt', { command: commandLabel }),
     { modal: false },
-    'Apply Inline',
-    'View in New Tab',
+    applyInline,
+    viewInNewTab,
   );
 
-  if (choice === 'Apply Inline') {
+  if (choice === applyInline) {
     const edit = new vscode.WorkspaceEdit();
     edit.replace(editor.document.uri, selection, codeBlock);
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {
-      vscode.window.showWarningMessage(
-        'AGI Workforce: Could not apply edit — document may have changed.',
-      );
+      vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
       await openInNewTab(llmResponse, commandLabel);
     }
-  } else if (choice === 'View in New Tab') {
+  } else if (choice === viewInNewTab) {
     await openInNewTab(llmResponse, commandLabel);
   }
   // 'Cancel' or dismissed — do nothing

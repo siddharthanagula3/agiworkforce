@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "コマンド",
+  "command_popup.empty": "(一致するコマンドがありません)",
+  "command_popup.hint": "入力して絞り込み   ↑↓ 移動   Enter 選択   Esc キャンセル",
+  "agent_picker.title": "エージェント",
+  "agent_picker.count": "{count} 件のエージェント",
+  "agent_picker.search_placeholder": "入力してエージェントを絞り込み...",
+  "agent_picker.empty_no_agents": "エージェントが見つかりません。作成: /agents create <name>",
+  "agent_picker.empty_no_match": "フィルターに一致するエージェントがありません。",
+  "agent_picker.no_description": "(説明なし)",
+  "agent_picker.none_selected": "(エージェント未選択)"
+}

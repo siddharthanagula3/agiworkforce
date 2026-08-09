@@ -13,6 +13,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../l10n';
 
 interface FailureRecord {
   subsystem: string;
@@ -91,18 +92,19 @@ function refresh(): void {
     statusBarItem.hide();
     return;
   }
+  // `$(warning)` is codicon markup, not prose — it stays outside the catalog.
   statusBarItem.text =
     failures.length === 1
-      ? `$(warning) AGI: ${failures[0]?.subsystem ?? 'subsystem'} unavailable`
-      : `$(warning) AGI: ${failures.length} subsystems unavailable`;
-  statusBarItem.tooltip = 'Click for details';
+      ? `$(warning) ${t('subsystemHealth.oneUnavailable', { subsystem: failures[0]?.subsystem ?? 'subsystem' })}`
+      : `$(warning) ${t('subsystemHealth.manyUnavailable', { count: failures.length })}`;
+  statusBarItem.tooltip = t('subsystemHealth.detailsTooltip');
   statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
   statusBarItem.show();
 }
 
 async function showFailureDetail(): Promise<void> {
   if (failures.length === 0) {
-    void vscode.window.showInformationMessage('AGI Workforce: all subsystems healthy.');
+    void vscode.window.showInformationMessage(t('subsystemHealth.allHealthy'));
     return;
   }
   const items: vscode.QuickPickItem[] = failures.map((f) => ({
@@ -111,7 +113,7 @@ async function showFailureDetail(): Promise<void> {
     detail: f.message,
   }));
   await vscode.window.showQuickPick(items, {
-    title: 'AGI Workforce — Subsystem Failures',
-    placeHolder: 'Failures recorded during this session',
+    title: t('subsystemHealth.failuresTitle'),
+    placeHolder: t('subsystemHealth.failuresPlaceholder'),
   });
 }

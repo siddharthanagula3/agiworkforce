@@ -4,7 +4,9 @@
 //! `packages/ai/routing/src/classify.ts` (`classifyTaskLocally`) — the same
 //! taxonomy VS Code runs through `apps/extension-vscode/src/integrations/
 //! routingTask.ts` for every Auto turn. Heuristic changes must land in the TS
-//! canonical first and be mirrored here; do not fork the taxonomy.
+//! canonical first and be mirrored here; do not fork the taxonomy. The mirror
+//! is not left to reviewer discipline: `canonical_classifier_patterns_match`
+//! re-reads the canonical source at test time and fails on any drift.
 //!
 //! Scope mirrors the VS Code adapter exactly: classify only the CURRENT
 //! presentation input (no history sum, no sticky-pivot) — conversation
@@ -30,7 +32,7 @@ static RE_IMAGE_SLASH: Lazy<Regex> =
 /// Natural-language image generation phrases ("make an image of …").
 static RE_IMAGE_PHRASE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)\b(generate|create|make|draw)\s+(an?\s+)?(image|picture|photo|illustration|logo|mockup|wireframe)",
+        r"(?i)\b(generate|create|make|draw)\s+(me\s+)?(an?\s+|some\s+)?(\w+\s+){0,2}(image|picture|photo|photograph|illustration|logo|mockup|wireframe|artwork|drawing|painting|sketch|portrait|poster|banner|avatar|thumbnail|wallpaper)\b",
     )
     .expect("valid regex")
 });
@@ -80,10 +82,19 @@ static RE_CREATIVE_WRITING: Lazy<Regex> = Lazy::new(|| {
 
 /// Neutral chars-per-token estimate used at classification time — the actual
 /// provider is not yet known, matching the TS `sumTokens` default path.
-const TOKENS_PER_CHAR_DEFAULT: f64 = 1.0 / 3.5;
+const TOKENS_PER_CHAR_DEFAULT: f64 = 1.0 / CHARS_PER_TOKEN_DEFAULT;
 
 /// Long-context threshold in estimated tokens (canonical spec value).
 const LONG_CONTEXT_TOKENS: usize = 50_000;
+
+/// Chars-per-token divisor behind `TOKENS_PER_CHAR_DEFAULT`, named so the
+/// canonical-parity test can compare a number instead of a source string.
+const CHARS_PER_TOKEN_DEFAULT: f64 = 3.5;
+
+/// Simple-chat bounds, mirroring the canonical `message.length < 80 &&
+/// message.split(RE_WHITESPACE).length < 15`. Named for the parity test.
+const SIMPLE_CHAT_MAX_CHARS: usize = 80;
+const SIMPLE_CHAT_MAX_WORDS: usize = 15;
 
 fn estimate_tokens_default(text: &str) -> usize {
     (text.len() as f64 * TOKENS_PER_CHAR_DEFAULT).ceil() as usize
@@ -141,7 +152,9 @@ pub fn classify_turn_task(message: &str, has_image_attachment: bool) -> RoutingT
     }
 
     // 10. Simple chat — cheap length check before the word split.
-    if message.len() < 80 && message.split_whitespace().count() < 15 {
+    if message.len() < SIMPLE_CHAT_MAX_CHARS
+        && message.split_whitespace().count() < SIMPLE_CHAT_MAX_WORDS
+    {
         return RoutingTaskType::SimpleChat;
     }
 
@@ -271,6 +284,189 @@ mod tests {
                      owners, risks, and follow-ups in a structured way for the whole team"
             .to_string();
         assert_eq!(classify_turn_task(&prose, false), RoutingTaskType::General);
+    }
+
+    /// Canonical classifier source, read at test time. The port is only
+    /// faithful for as long as this file agrees with it, so the agreement is
+    /// checked mechanically instead of being asserted in a comment.
+    fn canonical_source() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/ai/routing/src/classify.ts");
+        std::fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!(
+                "canonical classifier unreadable at {}: {error}",
+                path.display()
+            )
+        })
+    }
+
+    /// Extract `const <name> = /pattern/flags;` from the canonical source and
+    /// return it as a Rust `regex` pattern.
+    ///
+    /// Hand-rolled rather than regex-matched because the canonical literals
+    /// contain both escaped slashes (`RE_IMAGE_SLASH`) and an unescaped slash
+    /// inside a character class (`RE_REASONING_MATH`), which no non-greedy
+    /// `/(.*?)/` can delimit correctly.
+    fn canonical_pattern(source: &str, name: &str) -> String {
+        let declaration = format!("const {name} =");
+        let start = source
+            .find(&declaration)
+            .unwrap_or_else(|| panic!("canonical classifier no longer declares {name}"))
+            + declaration.len();
+        let rest = &source[start..];
+        let open = rest
+            .find('/')
+            .unwrap_or_else(|| panic!("{name} is no longer a regex literal"));
+        let body: Vec<char> = rest[open + 1..].chars().collect();
+
+        let mut pattern = String::new();
+        let mut in_class = false;
+        let mut index = 0;
+        let close = loop {
+            let Some(&character) = body.get(index) else {
+                panic!("{name} has an unterminated regex literal");
+            };
+            match character {
+                // A JS literal must escape `/`; a Rust pattern must not.
+                '\\' => {
+                    let &next = body.get(index + 1).expect("escape needs a character");
+                    if next != '/' {
+                        pattern.push('\\');
+                    }
+                    pattern.push(next);
+                    index += 2;
+                }
+                '[' => {
+                    in_class = true;
+                    pattern.push(character);
+                    index += 1;
+                }
+                ']' => {
+                    in_class = false;
+                    pattern.push(character);
+                    index += 1;
+                }
+                '/' if !in_class => break index,
+                _ => {
+                    pattern.push(character);
+                    index += 1;
+                }
+            }
+        };
+
+        let flags: String = body[close + 1..]
+            .iter()
+            .take_while(|character| character.is_ascii_alphabetic())
+            .collect();
+        if flags.contains('i') {
+            return format!("(?i){pattern}");
+        }
+        pattern
+    }
+
+    /// Read the integer following `marker` in the canonical source, tolerating
+    /// JavaScript numeric separators (`50_000`).
+    fn canonical_number(source: &str, marker: &str) -> String {
+        let start = source
+            .find(marker)
+            .unwrap_or_else(|| panic!("canonical classifier no longer contains `{marker}`"))
+            + marker.len();
+        source[start..]
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == '_')
+            .filter(|character| *character != '_')
+            .collect()
+    }
+
+    /// Read the decimal following `marker` in the canonical source.
+    fn canonical_decimal(source: &str, marker: &str) -> f64 {
+        let start = source
+            .find(marker)
+            .unwrap_or_else(|| panic!("canonical classifier no longer contains `{marker}`"))
+            + marker.len();
+        let digits: String = source[start..]
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == '.')
+            .collect();
+        digits
+            .parse()
+            .unwrap_or_else(|error| panic!("`{marker}` is not followed by a number: {error}"))
+    }
+
+    #[test]
+    fn canonical_classifier_patterns_match() {
+        let source = canonical_source();
+
+        // `RE_COMPUTER_USE` and `RE_WHITESPACE` are deliberately unported (see
+        // the module doc: no CLI attachment carries the `screenshot` type, and
+        // the word split uses `split_whitespace`), so they are not compared.
+        for (name, ported) in [
+            ("RE_IMAGE_SLASH", &*RE_IMAGE_SLASH),
+            ("RE_IMAGE_PHRASE", &*RE_IMAGE_PHRASE),
+            ("RE_CODE_FENCE", &*RE_CODE_FENCE),
+            ("RE_CODING", &*RE_CODING),
+            ("RE_REASONING_VERB", &*RE_REASONING_VERB),
+            ("RE_REASONING_MATH", &*RE_REASONING_MATH),
+            ("RE_AGENTIC", &*RE_AGENTIC),
+            ("RE_RESEARCH", &*RE_RESEARCH),
+            ("RE_CREATIVE_WRITING", &*RE_CREATIVE_WRITING),
+        ] {
+            assert_eq!(
+                ported.as_str(),
+                canonical_pattern(&source, name),
+                "{name} has drifted from packages/ai/routing/src/classify.ts"
+            );
+        }
+    }
+
+    /// Every threshold is compared against the RUST constant, never against a
+    /// literal repeated in the test: an edit on either side must fail here, or
+    /// the parity check only guards one direction.
+    #[test]
+    fn canonical_classifier_thresholds_match() {
+        let source = canonical_source();
+
+        assert_eq!(
+            canonical_decimal(&source, "const TOKENS_PER_CHAR_DEFAULT = 1 / "),
+            CHARS_PER_TOKEN_DEFAULT,
+            "the chars-per-token baseline differs between this port and packages/ai/routing/src/classify.ts"
+        );
+        assert_eq!(
+            canonical_number(&source, "cumulativeTokens > "),
+            LONG_CONTEXT_TOKENS.to_string(),
+            "the long-context threshold differs between this port and packages/ai/routing/src/classify.ts"
+        );
+        assert_eq!(
+            canonical_number(&source, "message.length < "),
+            SIMPLE_CHAT_MAX_CHARS.to_string(),
+            "the simple-chat character bound differs between this port and packages/ai/routing/src/classify.ts"
+        );
+        assert_eq!(
+            canonical_number(&source, "message.split(RE_WHITESPACE).length < "),
+            SIMPLE_CHAT_MAX_WORDS.to_string(),
+            "the simple-chat word bound differs between this port and packages/ai/routing/src/classify.ts"
+        );
+    }
+
+    #[test]
+    fn image_phrase_covers_the_canonical_medium_nouns() {
+        // The narrower pre-sync pattern required the medium noun to follow the
+        // article immediately, so these fell through to a text model and came
+        // back as prose describing a picture that was never drawn.
+        assert_eq!(
+            classify_turn_task("draw a portrait of a fox", false),
+            RoutingTaskType::ImageGeneration
+        );
+        assert_eq!(
+            classify_turn_task("make me a watercolor painting of the harbor", false),
+            RoutingTaskType::ImageGeneration
+        );
+        // The noun list is still the whole guard: a generation verb alone must
+        // not route a text request to an image model.
+        assert_eq!(
+            classify_turn_task("generate the quarterly report", false),
+            RoutingTaskType::SimpleChat
+        );
     }
 
     #[test]

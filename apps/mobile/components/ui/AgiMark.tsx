@@ -13,15 +13,6 @@ import { useThemeColors } from '@/src/ui/theme';
 const SPOKE_COUNT = 12;
 const INNER_R = 4.6;
 const OUTER_R = 9;
-/**
- * Brand amber — the accent spoke, so rotation reads as motion.
- *
- * Sampled from the brand asset (AGI-Logo-Color-*-Transparent.png) and matching
- * `--agi-amber` in apps/web/app/globals.css, so the mark is the same colour on
- * every surface. An earlier hand-picked value here was noticeably darker.
- */
-const BRAND_AMBER = '#f0a84a';
-
 const STROKE_W = 1.5;
 const SPOKES = Array.from({ length: SPOKE_COUNT }, (_, i) => {
   const angle = (i * 360) / SPOKE_COUNT;
@@ -74,7 +65,7 @@ export function AgiMark({ size = 24, mono = false, spinning = false, accentColor
   // indistinguishable from the base, matching the shared web mark.
   const requestedAccent = accentColor ?? colors.teal;
   const accent =
-    requestedAccent.toLowerCase() === baseColor.toLowerCase() ? BRAND_AMBER : requestedAccent;
+    requestedAccent.toLowerCase() === baseColor.toLowerCase() ? colors.brandAmber : requestedAccent;
 
   const markSvg = (
     <Svg width={size} height={size} viewBox="0 0 24 24">

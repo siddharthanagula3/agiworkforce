@@ -1,10 +1,29 @@
 import { View, Pressable, Linking } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import type { ToolSearchResult } from '@/types/chat';
 
-const BADGE_PALETTE = ['#5B8DEF', '#E4572E', '#17A398', '#A45EE5', '#F2A007', '#DA4167'];
+/**
+ * Five accent tokens, so a domain keeps a stable badge colour that still tracks
+ * the active theme — the previous fixed hex palette read as a foreign,
+ * over-saturated set of hues against the dark surfaces.
+ *
+ * Five, not six: the palette must stay distinct in BOTH themes, and the theme
+ * has only five separated hues. `purple` is deliberately excluded — it is
+ * '#a78bfa' in the dark palette, byte-identical to `agentThinking`, so
+ * including it would collapse two badge slots onto one colour in dark mode.
+ * Anything added here must differ from every other entry in both palettes.
+ */
+function badgePalette(colors: ColorScheme): readonly string[] {
+  return [
+    colors.agentActive,
+    colors.agentError,
+    colors.agentSuccess,
+    colors.agentWarning,
+    colors.agentThinking,
+  ];
+}
 
 function hostnameOf(url: string): string {
   try {
@@ -14,10 +33,11 @@ function hostnameOf(url: string): string {
   }
 }
 
-function badgeColorFor(hostname: string): string {
+function badgeColorFor(hostname: string, colors: ColorScheme): string {
+  const palette = badgePalette(colors);
   let hash = 0;
   for (let i = 0; i < hostname.length; i++) hash = (hash * 31 + hostname.charCodeAt(i)) >>> 0;
-  return BADGE_PALETTE[hash % BADGE_PALETTE.length]!;
+  return palette[hash % palette.length]!;
 }
 
 /**
@@ -58,7 +78,7 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
             paddingVertical: 8,
             paddingHorizontal: 10,
             borderRadius: 8,
-            backgroundColor: pressed ? colors.surfaceHover : 'transparent',
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
           }}
         >
           <View
@@ -68,10 +88,10 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
               borderRadius: 5,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: badgeColorFor(hostname),
+              backgroundColor: badgeColorFor(hostname, colors),
             }}
           >
-            <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '700' }}>
+            <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
               {hostname.charAt(0).toUpperCase()}
             </Text>
           </View>

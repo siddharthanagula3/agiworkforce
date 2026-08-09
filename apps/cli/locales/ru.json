@@ -1,0 +1,12 @@
+{
+  "command_popup.title": "Команды",
+  "command_popup.empty": "(нет подходящих команд)",
+  "command_popup.hint": "Введите для фильтра   ↑↓ навигация   Enter выбрать   Esc отмена",
+  "agent_picker.title": "Агенты",
+  "agent_picker.count": "агентов: {count}",
+  "agent_picker.search_placeholder": "введите, чтобы отфильтровать агентов...",
+  "agent_picker.empty_no_agents": "Агенты не найдены. Создайте: /agents create <name>",
+  "agent_picker.empty_no_match": "Нет агентов, подходящих под фильтр.",
+  "agent_picker.no_description": "(нет описания)",
+  "agent_picker.none_selected": "(агент не выбран)"
+}

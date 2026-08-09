@@ -17,6 +17,16 @@ import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
 import { useThemeColors } from '@/src/ui/theme';
+// `darkTokens` IS the dark palette (tokens.ts exports `colors` as
+// mobileNativeColors.dark). Only `transparent` is read from it below, because
+// that one value is byte-identical in both palettes and the module-scope
+// StyleSheet cannot call useThemeColors(). Do NOT take surface/text/accent
+// values from it here — they would bake dark values into light mode, and the
+// AP-02 gate cannot catch that because a token reference is not a literal.
+// Imported from the token module rather than the barrel: 38 mobile suites
+// jest.mock('@/src/ui/theme') without a `colors` export, and a module-scope
+// read of the barrel crashes them at import time.
+import { colors as darkTokens } from '@/src/ui/theme/tokens';
 
 // KaTeX CDN — pinned minor version for stability.
 const KATEX_VERSION = '0.16.21';
@@ -283,7 +293,7 @@ const styles = StyleSheet.create({
   },
   webView: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: darkTokens.transparent,
   },
   // Accent-tinted colours are applied by the components below: the accent
   // differs per theme (#111111 light, #f4f4f4 dark), so a module-scope

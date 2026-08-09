@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import { t } from '../l10n';
 import { Config } from '../platform/config';
 import { getAccountToken, getApiKey } from '../utils/api';
 
@@ -29,13 +30,13 @@ export async function validateAdvancedFeatureFlags(
       getApiKey(context.secrets),
     ]);
     if (!hasInlineCompletionCredential(accountToken, apiKey)) {
+      // The choice comes back as the button's own label, so it and the
+      // comparison must resolve through the same lookup.
+      const openAccount = t('advancedFeatures.openAccount');
       void vscode.window
-        .showInformationMessage(
-          'AGI Workforce inline completions need AGI Cloud sign-in or an AGI API key.',
-          'Open account',
-        )
+        .showInformationMessage(t('advancedFeatures.inlineNeedsCredential'), openAccount)
         .then((choice) => {
-          if (choice === 'Open account') {
+          if (choice === openAccount) {
             void vscode.commands.executeCommand('agi-workforce.showAccountUsage');
           }
         });
