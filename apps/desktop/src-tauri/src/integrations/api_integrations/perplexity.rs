@@ -17,6 +17,8 @@ pub enum PerplexityModel {
 }
 
 impl PerplexityModel {
+    /// Catalog ID for this variant. Every one of these must exist in
+    /// `packages/contracts/types/src/models.json` — see `variants_exist_in_catalog`.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Sonar => "sonar",
@@ -24,6 +26,18 @@ impl PerplexityModel {
             Self::SonarReasoning => "sonar-reasoning-pro",
             Self::SonarDeepResearch => "sonar-deep-research",
         }
+    }
+
+    /// ID to put on the wire. The catalog owns `apiModelId`, so a Perplexity-side
+    /// rename of an ID this enum still names reaches the request body without the
+    /// enum being retyped.
+    ///
+    /// It does not detect a *retired* ID: `get_api_model_id` returns its input
+    /// unchanged when the key is absent, so a variant dropped from the catalog
+    /// keeps putting the dead literal on the wire. `variants_exist_in_catalog`
+    /// is what fails in that case, in CI, not this function at runtime.
+    pub fn wire_id(&self) -> String {
+        crate::core::llm::models_config::get_api_model_id(self.as_str())
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
@@ -135,7 +149,7 @@ impl PerplexityClient {
         model: PerplexityModel,
     ) -> Result<PerplexityResponse> {
         let request = PerplexityRequest {
-            model: model.as_str().to_string(),
+            model: model.wire_id(),
             messages: vec![Message {
                 role: "user".to_string(),
                 content: query.to_string(),
@@ -228,6 +242,31 @@ mod tests {
             PerplexityModel::SonarDeepResearch.as_str(),
             "sonar-deep-research"
         );
+    }
+
+    /// Every variant must name a live Perplexity search model in the shared
+    /// catalog. Without this the enum can outlive a retired Sonar ID and keep
+    /// putting it on the wire.
+    #[test]
+    fn variants_exist_in_catalog() {
+        use crate::core::llm::models_config::config;
+
+        for model in [
+            PerplexityModel::Sonar,
+            PerplexityModel::SonarPro,
+            PerplexityModel::SonarReasoning,
+            PerplexityModel::SonarDeepResearch,
+        ] {
+            let entry = config().models.get(model.as_str()).unwrap_or_else(|| {
+                panic!(
+                    "PerplexityModel::{model:?} = \"{}\" is not in models.json",
+                    model.as_str()
+                )
+            });
+            assert_eq!(entry.provider, "perplexity", "{model:?} changed provider");
+            assert_eq!(entry.model_type, "search", "{model:?} is not a search model");
+            assert!(!model.wire_id().is_empty(), "{model:?} has no wire id");
+        }
     }
 
     #[test]

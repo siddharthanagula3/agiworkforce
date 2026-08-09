@@ -5,6 +5,7 @@
 //! Desktop database model and injects the active trust-compatible router.
 
 use crate::core::llm::llm_router::{LLMRouter, RouterPreferences};
+use crate::core::llm::models_config;
 use crate::core::llm::{ChatMessage, LLMRequest};
 use crate::data::db::models::{Message, MessageRole};
 use agiworkforce_agent_core::context::{
@@ -45,6 +46,50 @@ impl Default for CompactionConfig {
             auto_compact_enabled: true,
             auto_compact_threshold: 0.95,
             auto_compact_cooldown_secs: 120,
+        }
+    }
+}
+
+/// Conservative window for a BYOK/local model the bundled catalog does not
+/// describe. Matches the automatic pass in `sys::commands::chat::context_monitor`.
+pub const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
+
+/// Context window recorded for `model` in the bundled catalog.
+///
+/// Compaction budgets are meaningless without one: a flat budget either throws
+/// away most of a million-token window or fails to free room in a small one.
+pub fn resolve_context_window(model: Option<&str>) -> usize {
+    let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) else {
+        return DEFAULT_CONTEXT_WINDOW;
+    };
+    let canonical_model_id = models_config::get_canonicalized_id(model);
+    models_config::config()
+        .models
+        .get(&canonical_model_id)
+        .map(|entry| entry.context_window as usize)
+        .filter(|window| *window > 0)
+        .unwrap_or(DEFAULT_CONTEXT_WINDOW)
+}
+
+impl CompactionConfig {
+    /// Budgets scaled to a real context window: compact at the same
+    /// `auto_compact_threshold` the automatic pass uses and target half the
+    /// window, leaving room for the reply and the turns that follow.
+    ///
+    /// Close to, but not identical to, `sys::commands::chat::context_monitor`:
+    /// that pass subtracts the caller's live `reserved_output_tokens` from the
+    /// window before applying the threshold, while `compact_messages` below
+    /// re-adds a fixed 4_096 reserve. Both exist for the same reason — a budget
+    /// derived from the model's own window instead of a flat constant that
+    /// squeezes a million-token conversation down to ~50k.
+    pub fn for_context_window(context_window: usize) -> Self {
+        let defaults = Self::default();
+        let context_window = context_window.max(1);
+        Self {
+            max_tokens: ((context_window as f64 * defaults.auto_compact_threshold as f64) as usize)
+                .max(1),
+            target_tokens: (context_window / 2).max(1),
+            ..defaults
         }
     }
 }
@@ -339,5 +384,32 @@ mod tests {
             .contains(UNTRUSTED_SUMMARY_MARKER));
         assert_eq!(result.messages[result.messages.len() - 2].id, 3);
         assert_eq!(result.messages[result.messages.len() - 1].id, 4);
+    }
+
+    #[test]
+    fn compaction_budgets_scale_with_the_catalog_context_window() {
+        let wide = resolve_context_window(Some("claude-opus-5"));
+        assert!(
+            wide > DEFAULT_CONTEXT_WINDOW,
+            "claude-opus-5 should report its catalog window, got {wide}"
+        );
+        assert_eq!(resolve_context_window(None), DEFAULT_CONTEXT_WINDOW);
+        assert_eq!(
+            resolve_context_window(Some("  ")),
+            DEFAULT_CONTEXT_WINDOW,
+            "a blank model name is unknown, not a zero window"
+        );
+        assert_eq!(
+            resolve_context_window(Some("some-byok-local-model")),
+            DEFAULT_CONTEXT_WINDOW
+        );
+
+        let config = CompactionConfig::for_context_window(wide);
+        assert_eq!(config.target_tokens, wide / 2);
+        assert!(config.max_tokens > config.target_tokens);
+        assert!(
+            config.target_tokens > CompactionConfig::default().target_tokens,
+            "a wide window must not be squeezed to the flat default budget"
+        );
     }
 }

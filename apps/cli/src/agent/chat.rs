@@ -671,7 +671,11 @@ message -- revise and call `update_plan` again.\n\n",
             );
         }
 
-        let max_tokens = config.default.max_tokens;
+        // `default.max_tokens` is one number for every model — `--max-tokens`
+        // and the `--effort` presets both write it — so trim it to what the
+        // session's model can actually emit. Asking a 128k-output model for
+        // 200k is a provider 400, not a longer answer.
+        let max_tokens = config.effective_max_tokens(&self.model);
 
         let tool_defs = self.effective_tool_definitions();
         let available_tool_names = tool_defs
@@ -910,7 +914,7 @@ message -- revise and call `update_plan` again.\n\n",
         }
         fork_messages.push(Message::text("user", question));
 
-        let max_tokens = config.default.max_tokens;
+        let max_tokens = config.effective_max_tokens(&self.model);
 
         let result = models::stream_completion(
             config,
