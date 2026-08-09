@@ -1591,6 +1591,9 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             // Keep backend capability enforcement in sync with loaded settings.
+            // Without this the backend falls back to its defaults, which means a
+            // capability the user turned off on disk runs enabled for the whole
+            // session — surface that rather than logging it and moving on.
             try {
               await invoke('sync_capabilities', {
                 capabilities:
@@ -1600,6 +1603,14 @@ export const useSettingsStore = create<SettingsState>()(
               });
             } catch (error) {
               console.error('Failed to sync capabilities to backend:', error);
+              set(
+                {
+                  error:
+                    'Capability settings could not be applied. Disabled capabilities are not being enforced — restart the app before running tools.',
+                },
+                undefined,
+                'settings/loadSettings/capabilitySyncFailed',
+              );
             }
 
             // FIX-003: Sync allowed directories to the backend security guard
@@ -1652,6 +1663,26 @@ export const useSettingsStore = create<SettingsState>()(
               features,
               personalization,
             } = get();
+
+            // Push capability toggles BEFORE persisting. This sync is the only
+            // input to backend tool gating, so persisting first and syncing
+            // after leaves a failed sync with the opt-out on disk and the
+            // capability still live for the rest of the session. Rethrowing
+            // hands the failure to the outer catch, which surfaces it instead
+            // of reporting a save the backend is not enforcing.
+            //
+            // Trade-off, deliberate: this makes the whole save atomic on the
+            // sync, so a sync failure also blocks persisting unrelated settings
+            // (theme, API keys, custom models). That is the fail-closed side of
+            // the choice — the alternative persists an opt-out the backend is
+            // not applying.
+            try {
+              await invoke('sync_capabilities', { capabilities: features });
+            } catch (error) {
+              console.error('Failed to sync capabilities to backend:', error);
+              throw error;
+            }
+
             await invoke('settings_save', {
               settings: {
                 llmConfig,
@@ -1703,13 +1734,6 @@ export const useSettingsStore = create<SettingsState>()(
             // `chatPreferences.agentMode`/`autoApproveTools` fields are a
             // best-effort mirror for UI/export purposes only, not a write
             // path for backend gating state.
-
-            // Sync capability toggles on explicit save.
-            try {
-              await invoke('sync_capabilities', { capabilities: features });
-            } catch (error) {
-              console.error('Failed to sync capabilities to backend:', error);
-            }
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
