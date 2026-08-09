@@ -135,15 +135,44 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MiB
 
 /**
  * Explicit MIME prefixes accepted as inline attachments. Anything outside
- * this set is rejected at the composer before it ever reaches a provider.
+ * this set — or outside `IMAGE_ATTACHMENT_MIME_TYPES`, which images are
+ * matched against by exact type rather than by prefix — is rejected at the
+ * composer before it ever reaches a provider.
  */
 export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] = [
-  'image/',
   'application/pdf',
   'text/',
   'application/json',
   'application/xml',
 ];
+
+/**
+ * Raster image types accepted as attachments.
+ *
+ * Deliberately an explicit roster rather than an `image/` prefix. SVG is
+ * markup, not a raster image: it carries `<script>`, inline event handlers,
+ * and `<foreignObject>`, and object storage hands an upload back under the
+ * Content-Type the client declared at presign time. An accepted SVG is
+ * therefore stored XSS on the storage origin — reachable the moment the
+ * browser's direct PUT lands, before any server-side step runs.
+ */
+export const IMAGE_ATTACHMENT_MIME_TYPES: readonly string[] = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
+/**
+ * Types and extensions refused ahead of every allowlist. Checked first because
+ * the same SVG bytes also arrive as `text/xml` or `application/xml`, both of
+ * which a prefix in `ALLOWED_ATTACHMENT_MIME_PREFIXES` matches.
+ */
+export const DENIED_ATTACHMENT_MIME_TYPES: readonly string[] = ['image/svg+xml', 'image/svg'];
+
+export const DENIED_ATTACHMENT_EXTENSIONS: readonly string[] = ['svg', 'svgz'];
 
 /**
  * File-extension fallback for files whose MIME type the browser reports as
@@ -186,11 +215,18 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
 /**
  * Single source of truth for the `<input accept="...">` value used by every
  * file-picker in the composer. Keeps the picker, drag-drop, and paste paths
- * accepting exactly the same set.
+ * accepting exactly the same set — the image types are spelled out rather than
+ * globbed as `image/*` so the picker never offers a file the validator below
+ * will refuse.
  */
-export const ALLOWED_ATTACHMENT_ACCEPT =
-  'image/*,application/pdf,text/*,application/json,application/xml,' +
-  ALLOWED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+export const ALLOWED_ATTACHMENT_ACCEPT = [
+  ...IMAGE_ATTACHMENT_MIME_TYPES,
+  'application/pdf',
+  'text/*',
+  'application/json',
+  'application/xml',
+  ...ALLOWED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`),
+].join(',');
 
 /**
  * Result of validating a candidate attachment file. Composers should surface
@@ -248,16 +284,26 @@ export function validateAttachmentMeta(
       message: `${name} is larger than the ${limitMb} MiB attachment limit.`,
     };
   }
-  const mime = (mimeType ?? '').toLowerCase();
+  // Strip `; charset=…` before matching: an unstripped parameter defeats an
+  // equality check while still satisfying a `startsWith` prefix, which is
+  // exactly how a denied type would slip back in.
+  const mime = (mimeType ?? '').split(';', 1)[0]!.trim().toLowerCase();
+  const ext = fileExtension(name);
+  const unsupported: AttachmentValidation = {
+    ok: false,
+    reason: 'unsupported-type',
+    message: `${name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
+  };
+  if (DENIED_ATTACHMENT_MIME_TYPES.includes(mime) || DENIED_ATTACHMENT_EXTENSIONS.includes(ext)) {
+    return unsupported;
+  }
   const mimeAllowed =
-    mime.length > 0 && ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(fileExtension(name));
+    mime.length > 0 &&
+    (IMAGE_ATTACHMENT_MIME_TYPES.includes(mime) ||
+      ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)));
+  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(ext);
   if (!mimeAllowed && !extAllowed) {
-    return {
-      ok: false,
-      reason: 'unsupported-type',
-      message: `${name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
-    };
+    return unsupported;
   }
   return { ok: true };
 }
