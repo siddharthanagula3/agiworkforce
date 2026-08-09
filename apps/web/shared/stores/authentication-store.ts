@@ -131,6 +131,12 @@ const APP_STORAGE_KEY_PATTERNS: readonly RegExp[] = [
   /^agent-metrics-storage$/,
   /^__clerk_db_jwt$/,
   /^sb-[a-z0-9]+-auth-token$/i,
+  // `APIClient` (shared/lib/api.ts) persists bearer/refresh material under
+  // these unprefixed keys. Nothing calls its login() today — the session is a
+  // Clerk cookie — but browsers that signed in before that migration still
+  // hold them, and no other sign-out path removes them.
+  /^auth_token$/,
+  /^refresh_token$/,
 ];
 
 function isAppOwnedStorageKey(key: string): boolean {
@@ -478,8 +484,11 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          // Logout from auth service · proceed with cleanup even if this fails
-          await authService.logout();
+          // Ends the Clerk session · proceed with cleanup even if this fails
+          const result = await authService.logout();
+          if (result?.error) {
+            console.warn('[Auth] Clerk sign-out failed, proceeding with cleanup:', result.error);
+          }
         } catch (err) {
           console.warn('[Auth] authService.logout() failed, proceeding with cleanup:', err);
         }
