@@ -1,5 +1,5 @@
 //! Integration tests for the automation subsystem.
-//! These tests require a display server and are marked with #[ignore] by default.
+//! These tests require a display server and are marked with #[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"] by default.
 //! Run with: cargo test --test automation_integration -- --ignored
 
 use std::process::Command;
@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_complete_notepad_automation_workflow() {
     let mut notepad = Command::new("notepad.exe")
         .spawn()
@@ -28,7 +28,7 @@ fn test_complete_notepad_automation_workflow() {
 /// Requires: Display server, clipboard access
 /// Verifies: Text can be copied and pasted via the automation layer
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_clipboard_paste_workflow() {
     // ClipboardManager is re-exported from automation::input
     use agiworkforce_desktop::automation::input::ClipboardManager;
@@ -51,7 +51,7 @@ fn test_clipboard_paste_workflow() {
 /// Requires: Display server, screen capture permissions
 /// Verifies: Screenshot can be taken and optionally processed with OCR
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_screenshot_and_ocr_workflow() {
     // Use the public capture_primary_screen function
     use agiworkforce_desktop::automation::screen::capture_primary_screen;
@@ -93,7 +93,7 @@ fn test_automation_service_singleton() {
 /// Requires: Display server, multiple monitors
 /// Verifies: Screenshots can be captured from all connected displays
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_multi_monitor_screenshot() {
     use agiworkforce_desktop::automation::screen::list_displays;
 
@@ -114,7 +114,7 @@ fn test_multi_monitor_screenshot() {
 /// Requires: Display server, accessibility permissions
 /// Verifies: UI elements can be found and clicked
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_element_click_workflow() {
     // MouseSimulator is re-exported from automation::input
     use agiworkforce_desktop::automation::input::MouseSimulator;
@@ -135,7 +135,7 @@ fn test_element_click_workflow() {
 /// Requires: Display server, input permissions
 /// Verifies: Text can be typed via the keyboard automation layer
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_text_input_workflow() {
     // KeyboardSimulator is re-exported from automation::input
     use agiworkforce_desktop::automation::input::KeyboardSimulator;
@@ -152,7 +152,7 @@ fn test_text_input_workflow() {
 /// Requires: Display server, input permissions
 /// Verifies: Mouse can perform drag operations
 #[test]
-#[ignore]
+#[ignore = "end-to-end OS automation; needs a desktop session and steals focus, opt-in via --ignored"]
 fn test_drag_and_drop_workflow() {
     // MouseSimulator is re-exported from automation::input
     use agiworkforce_desktop::automation::input::MouseSimulator;

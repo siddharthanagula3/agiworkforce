@@ -1054,11 +1054,11 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // BackgroundAgentManager (requires AppHandle -- marked #[ignore])
+    // BackgroundAgentManager (requires AppHandle -- marked #[ignore = "needs a live Tauri AppHandle, which only exists inside a running app"])
     // ------------------------------------------------------------------
 
     #[test]
-    #[ignore] // BackgroundAgentManager::new() requires a Tauri AppHandle
+    #[ignore = "needs a live Tauri AppHandle, which only exists inside a running app"] // BackgroundAgentManager::new() requires a Tauri AppHandle
     fn test_background_agent_manager_new_requires_app_handle() {
         // This test documents the limitation: the manager cannot be constructed
         // without a real or mocked AppHandle from the Tauri test infrastructure.

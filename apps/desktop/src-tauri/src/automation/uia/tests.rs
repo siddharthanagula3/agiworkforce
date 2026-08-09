@@ -123,7 +123,7 @@ mod element_tree_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_find_notepad_window() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -240,7 +240,7 @@ mod pattern_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_check_patterns() {
         let service = UIAutomationService::new().expect("Failed to create service");
         let windows = service.list_windows().expect("Failed to list windows");
@@ -271,7 +271,7 @@ mod action_tests {
     use super::super::UIAutomationService;
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_invoke_pattern_structure() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -283,7 +283,7 @@ mod action_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_set_value_pattern_structure() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -295,7 +295,7 @@ mod action_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_get_value_pattern_structure() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -307,7 +307,7 @@ mod action_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_set_toggle_pattern_structure() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -356,7 +356,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "Windows UI Automation against a live window; Windows-only and opt-in via --ignored"]
     fn test_notepad_automation_workflow() {
         use std::process::Command;
         use std::thread;

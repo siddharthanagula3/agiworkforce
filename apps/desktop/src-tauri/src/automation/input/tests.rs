@@ -177,7 +177,7 @@ mod keyboard_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     async fn test_send_text_integration() {
         let mut keyboard = KeyboardSimulator::new().unwrap();
 
@@ -186,7 +186,7 @@ mod keyboard_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_press_key_integration() {
         let mut keyboard = KeyboardSimulator::new().unwrap();
 
@@ -195,7 +195,7 @@ mod keyboard_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_hotkey_integration() {
         let mut keyboard = KeyboardSimulator::new().unwrap();
 
@@ -238,7 +238,7 @@ mod mouse_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_move_to_integration() {
         let mut mouse = MouseSimulator::new().unwrap();
 
@@ -250,7 +250,7 @@ mod mouse_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_click_integration() {
         let mut mouse = MouseSimulator::new().unwrap();
 
@@ -260,7 +260,7 @@ mod mouse_tests {
 
     #[test]
     #[cfg(windows)]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_click_rect_center_integration() {
         let mut mouse = MouseSimulator::new().unwrap();
 
@@ -276,7 +276,7 @@ mod mouse_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_drag_integration() {
         let mut mouse = MouseSimulator::new().unwrap();
 
@@ -285,7 +285,7 @@ mod mouse_tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "drives real OS input; needs a desktop session and steals focus, so it is opt-in via --ignored"]
     fn test_scroll_integration() {
         let mut mouse = MouseSimulator::new().unwrap();
 
