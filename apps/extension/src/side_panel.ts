@@ -121,6 +121,8 @@ import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
   clearAuthToken,
+  MANAGED_CHAT_MAX_ATTACHMENTS,
+  MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   type ManagedModelAccess,
 } from './features/cloud-bridge/freeTrialClient';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
@@ -1861,6 +1863,12 @@ function injectStyles(): void {
       transition: background 0.12s, color 0.12s;
     }
     .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-attachment-notice {
+      flex: 1 1 100%;
+      color: var(--agi-ext-danger);
+      font-size: 11px;
+      line-height: 1.4;
+    }
 
     /* ── Composer bottom bar: persistent page-context chip ── */
     #sp-composer-bar {
@@ -4028,6 +4036,7 @@ function sendMessage(text: string): void {
     _ctx.pendingPageContext = null;
     const attachmentsToSend = pendingAttachments.slice();
     pendingAttachments.length = 0;
+    composerAttachmentNotice = null;
     updateContextButton();
     updateAttachmentPreview();
 
@@ -4103,6 +4112,7 @@ function sendMessage(text: string): void {
   // CHAT_MESSAGE payload below actually carries the user's attachments.
   const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
+  composerAttachmentNotice = null;
   updateContextButton();
   updateAttachmentPreview();
 
@@ -4322,10 +4332,75 @@ function readFileAsDataUrl(file: File): Promise<string | null> {
 }
 
 /**
- * Accept files from a drag-drop or paste event and append their data URLs to
- * `pendingAttachments`. Enforces the same caps as the VS Code webview: max
- * 8 files per call total (including any already pending) and 10 MB per file.
- * Image-only filter matches the existing +menu accept="image/*" behavior.
+ * The only data-URL shapes the managed transport will send. Mirrors
+ * SUPPORTED_IMAGE_DATA_URL in `features/cloud-bridge/freeTrialClient.ts`:
+ * anything outside this set makes createMultimodalUserContent throw, which the
+ * user would only discover as a failed turn after pressing send.
+ */
+const COMPOSER_ATTACHMENT_MIME_TYPES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+const COMPOSER_ATTACHMENT_ACCEPT = Array.from(COMPOSER_ATTACHMENT_MIME_TYPES).join(',');
+const COMPOSER_ATTACHMENT_DATA_URL =
+  /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
+
+/** Decoded byte length of a base64 data URL, as the transport counts it. */
+function composerAttachmentBytes(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
+
+function pendingAttachmentBytes(): number {
+  let total = 0;
+  for (const dataUrl of pendingAttachments) total += composerAttachmentBytes(dataUrl);
+  return total;
+}
+
+/** Rejection reason for the most recent intake attempt, shown next to the chips. */
+let composerAttachmentNotice: string | null = null;
+
+function attachmentBudgetLabel(bytes: number): string {
+  return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
+}
+
+/**
+ * The single append point for composer attachments. Every intake path — drag,
+ * paste, the `+` menu file picker and the `+` menu screenshot — goes through
+ * here so the composer can never hold more than `executeChromeManagedChat`
+ * will accept (`assertAttachmentBudget`: at most MANAGED_CHAT_MAX_ATTACHMENTS
+ * images totalling MANAGED_CHAT_MAX_ATTACHMENT_BYTES decoded bytes). Over-cap
+ * intake used to be admitted here and rejected on the wire, which destroyed
+ * the turn the user had already typed.
+ */
+function admitComposerAttachment(dataUrl: string): boolean {
+  if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
+    composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
+    return false;
+  }
+  if (pendingAttachments.length >= MANAGED_CHAT_MAX_ATTACHMENTS) {
+    composerAttachmentNotice = `Only ${MANAGED_CHAT_MAX_ATTACHMENTS} images can be sent with one message.`;
+    return false;
+  }
+  if (
+    pendingAttachmentBytes() + composerAttachmentBytes(dataUrl) >
+    MANAGED_CHAT_MAX_ATTACHMENT_BYTES
+  ) {
+    composerAttachmentNotice = `Attachments must total under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)}.`;
+    return false;
+  }
+  pendingAttachments.push(dataUrl);
+  return true;
+}
+
+/**
+ * Accept files from a drag-drop, paste or file-picker event and append their
+ * data URLs to `pendingAttachments`. Files are pre-filtered on type and size so
+ * an obviously doomed file is never read into memory; `admitComposerAttachment`
+ * then enforces the transport's count and total-byte caps on append.
  *
  * Round-2 audit P0 #3 — chrome-ext composer drag-drop + paste-image wire,
  * 2026-05-21. Reuses the existing attachment preview UI; no schema work
@@ -4334,19 +4409,28 @@ function readFileAsDataUrl(file: File): Promise<string | null> {
  */
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
   const MAX_BYTES = 10 * 1024 * 1024;
-  const MAX_TOTAL_ATTACHMENTS = 8;
-  const incoming: File[] = Array.from(files).filter(
-    (file) => file.type.startsWith('image/') && file.size <= MAX_BYTES,
-  );
-  if (incoming.length === 0) return;
+  composerAttachmentNotice = null;
+  const candidates = Array.from(files);
+  const incoming: File[] = [];
+  for (const file of candidates) {
+    if (!COMPOSER_ATTACHMENT_MIME_TYPES.has(file.type.toLowerCase())) {
+      composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
+      continue;
+    }
+    if (file.size > MAX_BYTES) {
+      composerAttachmentNotice = `Each image must be under ${attachmentBudgetLabel(MAX_BYTES)}.`;
+      continue;
+    }
+    incoming.push(file);
+  }
+  if (incoming.length === 0) {
+    updateAttachmentPreview();
+    return;
+  }
 
-  const remainingSlots = Math.max(0, MAX_TOTAL_ATTACHMENTS - pendingAttachments.length);
-  if (remainingSlots === 0) return;
-  const accepted = incoming.slice(0, remainingSlots);
-
-  void Promise.all(accepted.map(readFileAsDataUrl)).then((results) => {
+  void Promise.all(incoming.map(readFileAsDataUrl)).then((results) => {
     for (const dataUrl of results) {
-      if (dataUrl) pendingAttachments.push(dataUrl);
+      if (dataUrl) admitComposerAttachment(dataUrl);
     }
     updateAttachmentPreview();
   });
@@ -4356,7 +4440,7 @@ function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
   clearChildren(bar);
-  if (pendingAttachments.length === 0) {
+  if (pendingAttachments.length === 0 && !composerAttachmentNotice) {
     bar.style.display = 'none';
     return;
   }
@@ -4383,11 +4467,22 @@ function updateAttachmentPreview(): void {
     const idx = i;
     removeBtn.addEventListener('click', () => {
       pendingAttachments.splice(idx, 1);
+      // Freeing a slot or bytes invalidates whatever the last rejection said.
+      composerAttachmentNotice = null;
       updateAttachmentPreview();
     });
     chip.appendChild(thumb);
     chip.appendChild(removeBtn);
     bar.appendChild(chip);
+  }
+  if (composerAttachmentNotice) {
+    bar.appendChild(
+      el(
+        'div',
+        { class: 'sp-attachment-notice', role: 'status', 'aria-live': 'polite' },
+        composerAttachmentNotice,
+      ),
+    );
   }
 }
 
@@ -8058,7 +8153,7 @@ function buildUI(): void {
   // items (screenshots, copied images) so users don't have to round-trip
   // through the +menu. Mirrors `packages/ui/unified-chat/ChatInput.tsx` and the
   // VS Code webview composer wire. Image-only kind, single readAsDataURL per
-  // file, the existing 8-attachment cap below applies on append.
+  // file; acceptIncomingComposerFiles applies the transport caps on append.
   inputEl.addEventListener('paste', (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -8128,7 +8223,8 @@ function buildUI(): void {
       { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
       (resp: { success?: boolean; data?: string } | undefined) => {
         if (chrome.runtime.lastError || !resp?.success || !resp.data) return;
-        pendingAttachments.push(resp.data);
+        composerAttachmentNotice = null;
+        admitComposerAttachment(resp.data);
         updateAttachmentPreview();
       },
     );
@@ -8143,22 +8239,15 @@ function buildUI(): void {
   fileItem.appendChild(document.createTextNode('Add an image'));
   const fileInput = el('input', {
     type: 'file',
-    accept: 'image/*',
+    // Narrower than image/* so the picker offers only what the wire accepts.
+    accept: COMPOSER_ATTACHMENT_ACCEPT,
     class: 'sp-attach-file-input',
     id: 'sp-attach-file-input',
   }) as HTMLInputElement;
   fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === 'string') {
-        pendingAttachments.push(result);
-        updateAttachmentPreview();
-      }
-    };
-    reader.readAsDataURL(file);
+    const picked = fileInput.files;
+    if (!picked || picked.length === 0) return;
+    acceptIncomingComposerFiles(picked);
     fileInput.value = '';
   });
   fileItem.addEventListener('click', () => {
@@ -8499,9 +8588,9 @@ function buildUI(): void {
 
   // 2026-05-21 — drag-drop image attachments onto the composer. Highlights
   // the shell while a Files drag is in flight; on drop we route through
-  // acceptIncomingComposerFiles which handles size cap, image-only filter,
-  // and the 8-attachment ceiling. Matches the VS Code webview behaviour
-  // shipped in this same session.
+  // acceptIncomingComposerFiles which handles the size cap, the image-type
+  // filter and the transport's count and byte ceilings. Matches the VS Code
+  // webview behaviour shipped in this same session.
   composerShell.addEventListener('dragover', (event: DragEvent) => {
     const types = event.dataTransfer?.types;
     if (!types) return;
