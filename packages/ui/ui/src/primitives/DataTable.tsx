@@ -24,6 +24,7 @@ import {
 import { Input } from './Input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './Table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
+import { useUiTranslation } from '../i18n';
 
 // Helper to build a sortable column header, e.g. columns: ColumnDef<Row>[] = [
 //   { accessorKey: 'name', header: createSortableHeader('Name') },
@@ -68,6 +69,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = 'Search...',
   filterOptions = [],
 }: DataTableProps<TData, TValue>) {
+  const { t } = useUiTranslation('common');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -124,7 +126,9 @@ export function DataTable<TData, TValue>({
                 <SelectValue placeholder={filter.label} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All {filter.label}</SelectItem>
+                <SelectItem value="all">
+                  {t('allOf', 'All {{label}}', { label: filter.label })}
+                </SelectItem>
                 {filter.options.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
@@ -198,7 +202,7 @@ export function DataTable<TData, TValue>({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results found.
+                  {t('noResultsFound', 'No results found.')}
                 </TableCell>
               </TableRow>
             )}
@@ -209,12 +213,14 @@ export function DataTable<TData, TValue>({
       {/* Pagination */}
       <div className="flex items-center justify-between space-x-2">
         <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{' '}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {t('rowsSelected', '{{selected}} of {{total}} row(s) selected.', {
+            selected: table.getFilteredSelectedRowModel().rows.length,
+            total: table.getFilteredRowModel().rows.length,
+          })}
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-2">
-            <p className="text-sm font-medium">Rows per page</p>
+            <p className="text-sm font-medium">{t('rowsPerPage', 'Rows per page')}</p>
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => {
@@ -234,7 +240,10 @@ export function DataTable<TData, TValue>({
             </Select>
           </div>
           <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            {t('pageOf', 'Page {{page}} of {{total}}', {
+              page: table.getState().pagination.pageIndex + 1,
+              total: table.getPageCount(),
+            })}
           </div>
           <div className="flex items-center space-x-2">
             <Button

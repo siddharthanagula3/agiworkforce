@@ -270,11 +270,50 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   }
 
   /**
+   * Open the transaction and bind the RLS session context for `client`.
+   *
+   * The statements are batched into as few network round trips as the
+   * Postgres wire protocol allows, because every one of them costs a full
+   * Neon RTT before the caller's own query even starts:
+   *
+   * - `BEGIN` and `SET LOCAL ROLE` carry no bound parameters, so they travel
+   *   together as one simple-protocol batch.
+   * - The two GUCs need bound parameters, and the extended protocol carries
+   *   exactly one statement per message — but a single `SELECT` may call
+   *   `set_config` more than once, so they still share one round trip.
+   *
+   * Semantics are unchanged from issuing them separately: the whole preamble
+   * runs inside the transaction opened by `BEGIN`, so both `SET LOCAL ROLE`
+   * and the `set_config(..., true)` bindings are transaction-scoped and
+   * cannot leak to the next borrower of this pooled connection.
+   */
+  private async beginRlsScope(client: PoolClient): Promise<void> {
+    if (this.boundSub === null) {
+      await client.query('BEGIN');
+      return;
+    }
+    // Privilege restriction: run per-user queries as the NON-BYPASSRLS
+    // `app_rls` role so RLS policies actually apply. The owner role Neon
+    // connects as has BYPASSRLS and would otherwise ignore every policy.
+    await client.query('BEGIN; SET LOCAL ROLE app_rls');
+    // Bind the RLS subject, plus the active organization for tenancy policies
+    // (0073). The org GUC is bound even when null so a pooled connection can
+    // never inherit a previous request's workspace context. set_config(...,
+    // true) is the transaction-local (SET LOCAL) form and, unlike
+    // `SET LOCAL ... = $1`, accepts a parameter.
+    await client.query(
+      "SELECT set_config('request.jwt.claim.sub', $1, true), " +
+        "set_config('request.jwt.claim.org_id', $2, true)",
+      [this.boundSub, this.boundOrgId ?? ''],
+    );
+  }
+
+  /**
    * Run a parameterized SELECT through the pool. If a JWT subject has been
    * bound via `withUser()`, every call checks out a dedicated client, runs
-   * `SET LOCAL request.jwt.claim.sub = $1` first, then the user query, and
-   * releases the client. Otherwise we go straight through `pool.query` for
-   * the cheaper path.
+   * the RLS preamble (see {@link beginRlsScope}) first, then the user query,
+   * and releases the client. Otherwise we go straight through `pool.query`
+   * for the cheaper path.
    */
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     const pool = await this.getPool();
@@ -284,22 +323,9 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
     const client = await pool.connect();
     try {
-      // SET LOCAL is transaction-scoped, so we wrap in a one-shot
-      // transaction. This makes the GUC binding cheap and isolated.
-      await client.query('BEGIN');
-      // Privilege restriction: run per-user queries as the NON-BYPASSRLS
-      // `app_rls` role so RLS policies actually apply. The owner role Neon
-      // connects as has BYPASSRLS and would otherwise ignore every policy.
-      await client.query('SET LOCAL ROLE app_rls');
-      // Bind the RLS subject. set_config(..., true) is the transaction-local
-      // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
-      await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
-      // Bind the active organization for tenancy policies (0073). Always bound,
-      // even when null, so a pooled connection can never inherit a previous
-      // request's workspace context.
-      await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
-        this.boundOrgId ?? '',
-      ]);
+      // SET LOCAL is transaction-scoped, so a bound subject forces a one-shot
+      // transaction around the read; the GUCs die with it.
+      await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rows as T[];
@@ -328,20 +354,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      // Privilege restriction: run per-user queries as the NON-BYPASSRLS
-      // `app_rls` role so RLS policies actually apply. The owner role Neon
-      // connects as has BYPASSRLS and would otherwise ignore every policy.
-      await client.query('SET LOCAL ROLE app_rls');
-      // Bind the RLS subject. set_config(..., true) is the transaction-local
-      // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
-      await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
-      // Bind the active organization for tenancy policies (0073). Always bound,
-      // even when null, so a pooled connection can never inherit a previous
-      // request's workspace context.
-      await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
-        this.boundOrgId ?? '',
-      ]);
+      await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rowCount ?? 0;
@@ -370,22 +383,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     const pool = await this.getPool();
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      if (this.boundSub !== null) {
-        // Privilege restriction: run per-user queries as the NON-BYPASSRLS
-        // `app_rls` role so RLS policies actually apply. The owner role Neon
-        // connects as has BYPASSRLS and would otherwise ignore every policy.
-        await client.query('SET LOCAL ROLE app_rls');
-        // Bind the RLS subject. set_config(..., true) is the transaction-local
-        // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
-        await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
-        // Bind the active organization for tenancy policies (0073). Always bound,
-        // even when null, so a pooled connection can never inherit a previous
-        // request's workspace context.
-        await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
-          this.boundOrgId ?? '',
-        ]);
-      }
+      await this.beginRlsScope(client);
       const tx = new NeonTransactionAdapter(client);
       const result = await fn(tx);
       await client.query('COMMIT');

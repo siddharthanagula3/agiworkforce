@@ -22,6 +22,7 @@ import * as ToastPrimitives from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { AlertCircle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cn } from '../cn';
+import { useUiTranslation } from '../i18n';
 
 const ToastProvider = ToastPrimitives.Provider;
 
@@ -143,6 +144,8 @@ interface ToastCloseProps extends React.ComponentPropsWithoutRef<typeof ToastPri
 }
 
 function ToastClose({ className, ref, ...props }: ToastCloseProps) {
+  const { t } = useUiTranslation('common');
+
   return (
     <ToastPrimitives.Close
       ref={ref}
@@ -151,7 +154,7 @@ function ToastClose({ className, ref, ...props }: ToastCloseProps) {
         className,
       )}
       data-toast-close=""
-      aria-label="Dismiss notification"
+      aria-label={t('dismissNotification', 'Dismiss notification')}
       {...props}
     >
       <X className="h-4 w-4" aria-hidden="true" />

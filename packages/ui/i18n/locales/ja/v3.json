@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "ピン留め済み",
+    "actions": {
+      "more": "その他の操作",
+      "pin": "ピン留め",
+      "unpin": "ピン留めを解除",
+      "rename": "名前を変更",
+      "archive": "アーカイブ",
+      "delete": "削除",
+      "confirmDelete": "削除を確認",
+      "confirmDeletePermanently": "完全削除を確認",
+      "deletePermanently": "完全に削除",
+      "restore": "復元"
+    },
+    "projects": {
+      "newChat": "プロジェクト内に新しいチャット",
+      "open": "プロジェクトを開く",
+      "newProject": "新しいプロジェクト"
+    },
+    "mode": {
+      "local": "ローカル",
+      "cloud": "クラウド",
+      "aria": "ローカルとクラウドを切り替える",
+      "switchTo": "{{mode}} に切り替える",
+      "soon": "近日公開",
+      "cloudUnavailable": "AGI Cloud はデスクトップでご利用いただけます。ログインするとマネージドモデルと同期されたチャットを使えます。"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "リサーチ",
       "automation": "自動化"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "ログイン",
+    "cloudSync": "クラウド同期",
+    "archived": "アーカイブ済みのチャット",
+    "noArchived": "アーカイブ済みのチャットはありません",
+    "noConversations": "まだ会話がありません",
+    "showActive": "アクティブなチャットに戻る",
+    "showArchived": "アーカイブ済みのチャットを表示（{{count}}）"
   },
   "emptyChat": {
+    "neutralHeadline": "今日は何をお手伝いしましょうか？",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "ローカルモード",
+    "cloudSyncAction": "クラウド同期",
+    "cloudSyncAria": "マネージドクラウド同期を設定",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "無題のプロジェクト",
+      "empty": "まだプロジェクトがありません",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "プロジェクト設定"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "予約タスク {{name}} を一時停止",
+      "resumeAria": "予約タスク {{name}} を再開",
+      "deleteTitle": "予約タスクを削除しますか？",
+      "deleteDescription": "{{name}} を削除します。この操作は取り消せません。",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

@@ -38,6 +38,32 @@
     "newSession": "Nueva sesión",
     "searchKbd": "Buscar (⌘K)",
     "recents": "Recientes",
+    "pinned": "Fijados",
+    "actions": {
+      "more": "Más opciones",
+      "pin": "Fijar",
+      "unpin": "Dejar de fijar",
+      "rename": "Renombrar",
+      "archive": "Archivar",
+      "delete": "Eliminar",
+      "confirmDelete": "Confirmar eliminación",
+      "confirmDeletePermanently": "Confirmar eliminación permanente",
+      "deletePermanently": "Eliminar permanentemente",
+      "restore": "Restaurar"
+    },
+    "projects": {
+      "newChat": "Nuevo chat en el proyecto",
+      "open": "Abrir proyecto",
+      "newProject": "Nuevo proyecto"
+    },
+    "mode": {
+      "local": "Local",
+      "cloud": "Nube",
+      "aria": "Cambiar entre Local y Nube",
+      "switchTo": "Cambiar a {{mode}}",
+      "soon": "Pronto",
+      "cloudUnavailable": "AGI Cloud está disponible en el escritorio: inicia sesión para usar modelos gestionados y chats sincronizados."
+    },
     "groups": {
       "lastHour": "Última hora",
       "today": "Hoy",
@@ -65,13 +91,24 @@
       "research": "Investigación",
       "automation": "Automatizaciones"
     },
-    "account": "Cuenta"
+    "account": "Cuenta",
+    "signIn": "Iniciar sesión",
+    "cloudSync": "Sincronización en la nube",
+    "archived": "Chats archivados",
+    "noArchived": "No hay chats archivados",
+    "noConversations": "Aún no hay conversaciones",
+    "showActive": "Volver a los chats activos",
+    "showArchived": "Mostrar chats archivados ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "¿En qué puedo ayudarte hoy?",
     "greetMorning": "Buenos días, {{name}}",
     "greetDay": "¿En qué puedo ayudarte, {{name}}?",
     "greetNight": "Es de madrugada, {{name}}",
     "fallbackName": "tú",
+    "modeLabel": "Modo Local",
+    "cloudSyncAction": "Sincronización en la nube",
+    "cloudSyncAria": "Configurar la sincronización gestionada en la nube",
     "chipPrompts": {
       "code": "Ayúdame a escribir código para ",
       "write": "Ayúdame a escribir ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "Proyectos AGI Work",
       "newProject": "Nuevo proyecto",
+      "untitled": "Proyecto sin título",
+      "empty": "Aún no hay proyectos",
       "updated": "Actualizado {{when}}",
-      "sessions": "{{count}} sesiones"
+      "sessions": "{{count}} sesiones",
+      "settings": "Ajustes del proyecto"
     },
     "scheduled": {
       "title": "Tareas programadas",
@@ -319,6 +359,10 @@
       "nextRun": "Próxima ejecución",
       "paused": "Pausado",
       "empty": "Aún no hay tareas programadas. Pulsa \"Programar nueva tarea\" para empezar.",
+      "pauseAria": "Pausar la tarea programada {{name}}",
+      "resumeAria": "Reanudar la tarea programada {{name}}",
+      "deleteTitle": "¿Eliminar la tarea programada?",
+      "deleteDescription": "Se eliminará {{name}}. Esta acción no se puede deshacer.",
       "emptyTitle": "No hay tareas programadas"
     },
     "compose": {

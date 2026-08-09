@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 import { MessageBubble, StreamingThinkingStatus } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
@@ -71,6 +72,7 @@ export function MessageList({
   onToolReject,
   approvalTurnExpired,
 }: MessageListProps) {
+  const { t } = useUiTranslation('chat');
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -220,7 +222,10 @@ export function MessageList({
               <button
                 type="button"
                 onClick={() => onContinueGeneration?.(lastMessage.id)}
-                aria-label="Continue generating the previous response"
+                aria-label={t(
+                  'list.continueGeneratingAria',
+                  'Continue generating the previous response',
+                )}
                 className="
                   inline-flex items-center gap-2
                   rounded-full border px-3 py-1.5
@@ -248,7 +253,7 @@ export function MessageList({
                 >
                   <path d="M5 3l14 9-14 9V3z" />
                 </svg>
-                <span>Continue generating</span>
+                <span>{t('list.continueGenerating', 'Continue generating')}</span>
               </button>
             </div>
           </div>
@@ -282,18 +287,23 @@ export function MessageList({
               </svg>
               <span>
                 {getStreamErrorMessage(lastMessage)
-                  ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
-                  : 'This response may be incomplete — the connection to the model was interrupted.'}
+                  ? t('list.incompleteWithReason', 'Response may be incomplete: {{reason}}', {
+                      reason: getStreamErrorMessage(lastMessage),
+                    })
+                  : t(
+                      'list.incomplete',
+                      'This response may be incomplete — the connection to the model was interrupted.',
+                    )}
               </span>
               {onRegenerateMessage && (
                 <button
                   type="button"
                   onClick={() => onRegenerateMessage(lastMessage.id)}
-                  aria-label="Regenerate this response"
+                  aria-label={t('list.regenerateAria', 'Regenerate this response')}
                   className="ml-auto shrink-0 rounded-md px-2 py-1 font-medium transition hover:bg-[var(--chat-surface-hover)]"
                   style={{ color: 'var(--chat-destructive)' }}
                 >
-                  Retry
+                  {t('retry', 'Retry')}
                 </button>
               )}
             </div>
@@ -308,10 +318,10 @@ export function MessageList({
           onClick={handleJumpToBottom}
           aria-label={
             unreadCount > 0
-              ? `Scroll to latest (${unreadCount} new ${
-                  unreadCount === 1 ? 'message' : 'messages'
-                })`
-              : 'Scroll to latest'
+              ? t('list.scrollToLatestUnread', 'Scroll to latest ({{count}} new)', {
+                  count: unreadCount,
+                })
+              : t('list.scrollToLatest', 'Scroll to latest')
           }
           className="
             absolute bottom-4 left-1/2 z-10 -translate-x-1/2
@@ -342,7 +352,11 @@ export function MessageList({
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           ) : null}
-          <span>{unreadCount > 0 ? 'New messages' : 'Scroll to latest'}</span>
+          <span>
+            {unreadCount > 0
+              ? t('stream.newMessages', 'New messages')
+              : t('list.scrollToLatest', 'Scroll to latest')}
+          </span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="14"

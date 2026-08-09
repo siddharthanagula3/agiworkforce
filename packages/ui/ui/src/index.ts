@@ -10,6 +10,7 @@
 export { ProviderMark, hasProviderMark } from './ProviderMark';
 export { AgiMark } from './AgiMark';
 export { cn } from './cn';
+export { useUiTranslation, type UiNamespace, type UiTranslate, type UiTranslation } from './i18n';
 export { isApplePlatform, primaryModifierLabel, shortcutLabel } from './platformKeys';
 export { lucideToolIcon } from './toolIcon';
 export {

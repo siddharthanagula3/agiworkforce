@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Search, X } from 'lucide-react';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
 import type {
@@ -116,6 +117,7 @@ interface SearchOverlayProps {
 }
 
 function SearchOverlay({ open, onClose }: SearchOverlayProps) {
+  const { t } = useUiTranslation('chat');
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const conversations = useChatStore((s) => s.conversations);
@@ -157,7 +159,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
       aria-modal="true"
       role="dialog"
-      aria-label="Search conversations"
+      aria-label={t('interface.searchConversations', 'Search conversations')}
     >
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
@@ -179,7 +181,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search conversations..."
+            placeholder={t('sidebar.searchConversations', 'Search conversations...')}
             className={cn(
               'flex-1 bg-transparent text-sm text-[var(--chat-text-primary)]',
               'placeholder:text-[var(--chat-text-muted)]',
@@ -190,7 +192,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
             type="button"
             onClick={onClose}
             className="flex h-6 w-6 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] transition-colors"
-            aria-label="Close search"
+            aria-label={t('stream.closeSearch', 'Close search')}
           >
             <X size={14} />
           </button>
@@ -200,7 +202,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
         <div className="max-h-72 overflow-y-auto py-1.5">
           {query.trim() && results.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-[var(--chat-text-muted)]">
-              No conversations found.
+              {t('interface.noConversationsFound', 'No conversations found.')}
             </p>
           )}
           {!query.trim() && (
@@ -422,6 +424,8 @@ export function ChatInterface({
   deriveMessageArtifacts,
   showProvenanceFooter = true,
 }: ChatInterfaceProps) {
+  const { t } = useUiTranslation('chat');
+
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
   useTheme();
   useKeyboard({ enabled: enableShortcuts });
@@ -802,11 +806,11 @@ export function ChatInterface({
       activeView === 'connectors'
     ) {
       const labels: Record<string, string> = {
-        customize: 'Customize Hub',
-        projects: 'Projects',
-        'project-detail': 'Project',
-        skills: 'Skills',
-        connectors: 'Connectors',
+        customize: t('interface.customizeHub', 'Customize Hub'),
+        projects: t('sidebar.projects', 'Projects'),
+        'project-detail': t('composer.project', 'Project'),
+        skills: t('sidebar.skills', 'Skills'),
+        connectors: t('interface.connectors', 'Connectors'),
       };
       return (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-[var(--chat-text-muted)]">
@@ -855,7 +859,7 @@ export function ChatInterface({
           ) : messageLoadState.status === 'error' && activeConversationId ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <p className="text-sm font-medium text-[var(--chat-text-primary)]">
-                Could not load this conversation
+                {t('interface.conversationLoadFailed', 'Could not load this conversation')}
               </p>
               <p className="max-w-md text-xs text-[var(--chat-text-muted)]">
                 {messageLoadState.message}
@@ -865,7 +869,7 @@ export function ChatInterface({
                 onClick={() => setMessageLoadAttempt((attempt) => attempt + 1)}
                 className="rounded-lg bg-[var(--chat-surface-hover)] px-3 py-1.5 text-xs text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-accent-primary)]/10"
               >
-                Try again
+                {t('interface.tryAgain', 'Try again')}
               </button>
             </div>
           ) : hasMessages && activeConversationId ? (
@@ -962,17 +966,17 @@ export function ChatInterface({
             <div className="absolute inset-0 z-50 flex justify-end bg-black/35">
               <section
                 className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-2xl"
-                aria-label="Rewind checkpoints"
+                aria-label={t('interface.rewindCheckpoints', 'Rewind checkpoints')}
               >
                 <header className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
                   <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">
-                    Rewind checkpoints
+                    {t('interface.rewindCheckpoints', 'Rewind checkpoints')}
                   </h2>
                   <button
                     type="button"
                     onClick={() => setRewindTimelineOpen(false)}
                     className="rounded p-1 text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
-                    aria-label="Close rewind checkpoints"
+                    aria-label={t('interface.closeRewindCheckpoints', 'Close rewind checkpoints')}
                   >
                     <X className="h-4 w-4" />
                   </button>

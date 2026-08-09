@@ -18,6 +18,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Search, ChevronDown, ChevronUp, X, Sparkles, Activity } from 'lucide-react';
 import React, { useMemo, useRef, useEffect, useState, useCallback, useDeferredValue } from 'react';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useChatStore } from '../stores/chatStore';
@@ -54,6 +55,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   messages: messagesProp,
   className,
 }) => {
+  const { t } = useUiTranslation('chat');
   const prefersReducedMotion = useReducedMotion();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
@@ -266,8 +268,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                       navigateSearch(e.shiftKey ? 'prev' : 'next');
                     }
                   }}
-                  placeholder="Search messages..."
-                  aria-label="Search messages"
+                  placeholder={t('stream.searchPlaceholder', 'Search messages...')}
+                  aria-label={t('stream.searchMessages', 'Search messages')}
                   className="w-full pl-10 pr-4 py-2 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
                 />
               </div>
@@ -279,17 +281,24 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                   aria-atomic="true"
                 >
                   {searchMatches.length > 0
-                    ? `${currentMatchIndex + 1} of ${searchMatches.length}`
-                    : 'No matches'}
+                    ? t('stream.matchPosition', '{{position}} of {{total}}', {
+                        position: currentMatchIndex + 1,
+                        total: searchMatches.length,
+                      })
+                    : t('stream.noMatches', 'No matches')}
                 </span>
               )}
-              <div className="flex items-center gap-1" role="group" aria-label="Search navigation">
+              <div
+                className="flex items-center gap-1"
+                role="group"
+                aria-label={t('stream.searchNavigation', 'Search navigation')}
+              >
                 <button
                   type="button"
                   onClick={() => navigateSearch('prev')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Go to previous search match"
+                  aria-label={t('stream.previousMatch', 'Go to previous search match')}
                 >
                   <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
@@ -298,7 +307,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                   onClick={() => navigateSearch('next')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Go to next search match"
+                  aria-label={t('stream.nextMatch', 'Go to next search match')}
                 >
                   <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
@@ -311,7 +320,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                   setCurrentMatchIndex(0);
                 }}
                 className="p-1.5 rounded hover:bg-accent transition-colors"
-                aria-label="Close search"
+                aria-label={t('stream.closeSearch', 'Close search')}
               >
                 <X className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </button>
@@ -356,7 +365,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                     </motion.span>
                   )}
                   <span className="text-sm text-amber-700 dark:text-amber-200">
-                    {isSimpleMode ? 'Thinking about your question...' : 'Thinking...'}
+                    {isSimpleMode
+                      ? t('stream.thinkingSimple', 'Thinking about your question...')
+                      : t('thinking', 'Thinking...')}
                   </span>
                 </div>
               </div>
@@ -387,9 +398,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                   <span className="text-sm text-amber-700 dark:text-amber-200">
                     {isSimpleMode
                       ? agentGoal
-                        ? `Working on it... ${agentGoal.slice(0, 40)}${agentGoal.length > 40 ? '...' : ''}`
-                        : 'Working on your request...'
-                      : 'Running...'}
+                        ? t('stream.workingOnGoal', 'Working on it... {{goal}}', {
+                            goal: `${agentGoal.slice(0, 40)}${agentGoal.length > 40 ? '...' : ''}`,
+                          })
+                        : t('stream.workingOnRequest', 'Working on your request...')
+                      : t('stream.running', 'Running...')}
                   </span>
                 </div>
               </div>
@@ -451,10 +464,10 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
             transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
             onClick={scrollToBottom}
             className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-muted/90 backdrop-blur-xs border border-white/10 text-sm text-foreground hover:bg-accent/90 hover:text-white shadow-lg transition-colors z-10"
-            aria-label="Scroll to bottom"
+            aria-label={t('stream.scrollToBottom', 'Scroll to bottom')}
           >
             <ArrowDown className="h-4 w-4" />
-            <span>New messages</span>
+            <span>{t('stream.newMessages', 'New messages')}</span>
           </motion.button>
         )}
       </AnimatePresence>

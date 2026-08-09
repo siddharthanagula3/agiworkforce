@@ -57,6 +57,9 @@
   "compactMode": "紧凑模式",
   "compactModeEnabled": "紧凑模式已启用",
   "compactModeDisabled": "紧凑模式已禁用",
+  "placeholderEmpty": "今天我能帮你做什么？",
+  "shareConversation": "分享对话",
+  "openNavigation": "打开导航",
   "artifactPublish": {
     "untitled": "已发布的工件",
     "publishedOn": "发布于 {{date}}",

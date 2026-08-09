@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Закреплённые",
+    "actions": {
+      "more": "Ещё",
+      "pin": "Закрепить",
+      "unpin": "Открепить",
+      "rename": "Переименовать",
+      "archive": "В архив",
+      "delete": "Удалить",
+      "confirmDelete": "Подтвердить удаление",
+      "confirmDeletePermanently": "Подтвердить безвозвратное удаление",
+      "deletePermanently": "Удалить безвозвратно",
+      "restore": "Восстановить"
+    },
+    "projects": {
+      "newChat": "Новый чат в проекте",
+      "open": "Открыть проект",
+      "newProject": "Новый проект"
+    },
+    "mode": {
+      "local": "Локально",
+      "cloud": "Облако",
+      "aria": "Переключение между локальным режимом и облаком",
+      "switchTo": "Переключиться на {{mode}}",
+      "soon": "Скоро",
+      "cloudUnavailable": "AGI Cloud доступен на десктопе — войдите, чтобы использовать управляемые модели и синхронизированные чаты."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "Исследование",
       "automation": "Автоматизации"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Войти",
+    "cloudSync": "Облачная синхронизация",
+    "archived": "Архив чатов",
+    "noArchived": "Архивных чатов нет",
+    "noConversations": "Бесед пока нет",
+    "showActive": "Вернуться к активным чатам",
+    "showArchived": "Показать архивные чаты ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "Чем я могу помочь сегодня?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Локальный режим",
+    "cloudSyncAction": "Облачная синхронизация",
+    "cloudSyncAria": "Настроить управляемую облачную синхронизацию",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "Проект без названия",
+      "empty": "Проектов пока нет",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "Настройки проекта"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "Приостановить запланированную задачу {{name}}",
+      "resumeAria": "Возобновить запланированную задачу {{name}}",
+      "deleteTitle": "Удалить запланированную задачу?",
+      "deleteDescription": "Удалить {{name}}. Это действие нельзя отменить.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

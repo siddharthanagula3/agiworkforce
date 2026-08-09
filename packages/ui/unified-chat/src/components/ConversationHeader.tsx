@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Package, Pencil, Share2, X } from 'lucide-react';
+import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 
 export interface ConversationHeaderProps {
@@ -40,6 +41,7 @@ export function ConversationHeader({
   artifactsOpen = false,
   artifactCount = 0,
 }: ConversationHeaderProps = {}) {
+  const { t } = useUiTranslation('chat');
   const currentId = useChatStore((s) => s.activeConversationId);
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === currentId));
   const updateConversation = useChatStore((s) => s.updateConversation);
@@ -75,7 +77,7 @@ export function ConversationHeader({
 
   if (!conversation) return null;
 
-  const title = conversation.title || 'New Conversation';
+  const title = conversation.title || t('header.newConversation', 'New Conversation');
 
   return (
     <div className="flex items-center justify-between gap-2 border-b border-[var(--chat-border)] px-4 py-2">
@@ -89,7 +91,7 @@ export function ConversationHeader({
             if (e.key === 'Enter') commitRename();
             if (e.key === 'Escape') setEditing(false);
           }}
-          aria-label="Conversation title"
+          aria-label={t('header.conversationTitle', 'Conversation title')}
           className="min-w-0 flex-1 rounded border border-[var(--chat-border)] bg-[var(--chat-input-bg)] px-2 py-1 text-sm text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
         />
       ) : (
@@ -101,20 +103,34 @@ export function ConversationHeader({
       <div className="flex flex-shrink-0 items-center gap-1">
         {editing ? (
           <>
-            <HeaderAction label="Save title" onClick={commitRename} icon={Check} />
-            <HeaderAction label="Cancel rename" onClick={() => setEditing(false)} icon={X} />
+            <HeaderAction
+              label={t('header.saveTitle', 'Save title')}
+              onClick={commitRename}
+              icon={Check}
+            />
+            <HeaderAction
+              label={t('header.cancelRename', 'Cancel rename')}
+              onClick={() => setEditing(false)}
+              icon={X}
+            />
           </>
         ) : (
           <>
             {onRename ? (
-              <HeaderAction label="Rename conversation" onClick={beginRename} icon={Pencil} />
+              <HeaderAction
+                label={t('header.renameConversation', 'Rename conversation')}
+                onClick={beginRename}
+                icon={Pencil}
+              />
             ) : null}
             {onToggleArtifacts ? (
               <HeaderAction
                 label={
                   artifactCount > 0
-                    ? `Toggle artifacts panel (${artifactCount})`
-                    : 'Toggle artifacts panel'
+                    ? t('header.toggleArtifactsCount', 'Toggle artifacts panel ({{count}})', {
+                        count: artifactCount,
+                      })
+                    : t('header.toggleArtifacts', 'Toggle artifacts panel')
                 }
                 onClick={onToggleArtifacts}
                 icon={Package}
@@ -124,7 +140,7 @@ export function ConversationHeader({
             ) : null}
             {onShare ? (
               <HeaderAction
-                label="Share conversation"
+                label={t('header.shareConversation', 'Share conversation')}
                 onClick={() => void onShare(conversation.id)}
                 icon={Share2}
               />

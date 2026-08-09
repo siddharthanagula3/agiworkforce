@@ -7,7 +7,14 @@
     "google": "Google",
     "azure": "Azure OpenAI",
     "aws_bedrock": "AWS Bedrock",
-    "local": "Locale"
+    "local": "Locale",
+    "xai": "xAI",
+    "deepseek": "DeepSeek",
+    "perplexity": "Perplexity",
+    "qwen": "Qwen",
+    "moonshot": "Moonshot",
+    "zhipu": "Zhipu",
+    "lmstudio": "LM Studio"
   },
   "models": {
     "auto": "Auto (Consigliato)",
@@ -42,5 +49,8 @@
   "docs": "Documentazione",
   "vision": "Visione",
   "image": "Generazione di Immagini",
-  "video": "Generazione di Video"
+  "video": "Generazione di Video",
+  "comingSoonProviders": {
+    "aws_bedrock": "AWS Bedrock"
+  }
 }

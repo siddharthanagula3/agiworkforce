@@ -38,6 +38,32 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Épinglés",
+    "actions": {
+      "more": "Plus d'options",
+      "pin": "Épingler",
+      "unpin": "Désépingler",
+      "rename": "Renommer",
+      "archive": "Archiver",
+      "delete": "Supprimer",
+      "confirmDelete": "Confirmer la suppression",
+      "confirmDeletePermanently": "Confirmer la suppression définitive",
+      "deletePermanently": "Supprimer définitivement",
+      "restore": "Restaurer"
+    },
+    "projects": {
+      "newChat": "Nouveau chat dans le projet",
+      "open": "Ouvrir le projet",
+      "newProject": "Nouveau projet"
+    },
+    "mode": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "aria": "Basculer entre Local et Cloud",
+      "switchTo": "Basculer vers {{mode}}",
+      "soon": "Bientôt",
+      "cloudUnavailable": "AGI Cloud est disponible sur le bureau — connectez-vous pour utiliser les modèles gérés et les chats synchronisés."
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -65,13 +91,24 @@
       "research": "Recherche",
       "automation": "Automatisations"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Se connecter",
+    "cloudSync": "Synchronisation cloud",
+    "archived": "Chats archivés",
+    "noArchived": "Aucun chat archivé",
+    "noConversations": "Aucune conversation pour l'instant",
+    "showActive": "Retour aux chats actifs",
+    "showArchived": "Afficher les chats archivés ({{count}})"
   },
   "emptyChat": {
+    "neutralHeadline": "Comment puis-je vous aider aujourd'hui ?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Mode local",
+    "cloudSyncAction": "Synchronisation cloud",
+    "cloudSyncAria": "Configurer la synchronisation cloud gérée",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -307,8 +344,11 @@
     "projects": {
       "title": "AGI Work projects",
       "newProject": "New project",
+      "untitled": "Projet sans titre",
+      "empty": "Aucun projet pour l'instant",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "Paramètres du projet"
     },
     "scheduled": {
       "title": "Scheduled tasks",
@@ -319,6 +359,10 @@
       "nextRun": "Next run",
       "paused": "Paused",
       "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started.",
+      "pauseAria": "Mettre en pause la tâche planifiée {{name}}",
+      "resumeAria": "Reprendre la tâche planifiée {{name}}",
+      "deleteTitle": "Supprimer la tâche planifiée ?",
+      "deleteDescription": "Supprimer {{name}}. Cette action est irréversible.",
       "emptyTitle": "No scheduled tasks"
     },
     "compose": {

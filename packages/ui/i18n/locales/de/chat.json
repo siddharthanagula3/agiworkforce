@@ -57,6 +57,9 @@
   "compactMode": "Kompakt-Modus",
   "compactModeEnabled": "Kompakt-Modus aktiviert",
   "compactModeDisabled": "Kompakt-Modus deaktiviert",
+  "placeholderEmpty": "Wie kann ich dir heute helfen?",
+  "shareConversation": "Unterhaltung teilen",
+  "openNavigation": "Navigation öffnen",
   "artifactPublish": {
     "untitled": "Veröffentlichtes Artefakt",
     "publishedOn": "Veröffentlicht am {{date}}",
