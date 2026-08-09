@@ -2,7 +2,11 @@ import 'server-only';
 
 import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MAX_PURCHASABLE_SEATS, isPerSeatBillingPlan } from '@agiworkforce/types';
+import {
+  MAX_PURCHASABLE_SEATS,
+  isEntitledSubscriptionStatus,
+  isPerSeatBillingPlan,
+} from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 
 /**
@@ -148,8 +152,10 @@ export async function persistPurchasedSeatsOnOrganization(
   const organization = existing[0];
 
   if (!organization) {
-    // The buyer has not created an organization yet. Seats are paid for and the
-    // entitlement is provisioned; the seat count attaches when the org exists.
+    // The buyer has not created an organization yet — the normal order, since
+    // creating one requires a Team plan. Seats are paid for and the entitlement
+    // is provisioned; the count is read back from Stripe by
+    // `resolvePurchasedSeatsForOwner` when the organization is created.
     logger.warn(
       { ownerUserId: input.ownerUserId, seats: input.seats, planTier: input.planTier },
       'Per-seat subscription has no organization to attach seats to yet',
@@ -184,4 +190,64 @@ export async function persistPurchasedSeatsOnOrganization(
     'CRITICAL: purchased seat count is below the seats already occupied; licensed_seats left unchanged',
   );
   return 'below_consumed_seats';
+}
+
+/** The only Stripe surface a seat read-back needs. */
+export type SubscriptionSeatReader = Pick<Stripe, 'subscriptions'>;
+
+export interface OwnerPurchasedSeats {
+  /** Seats Stripe is billing this owner right now. */
+  seats: number;
+  /** Per-seat tier the subscription is recorded at. */
+  planTier: string;
+}
+
+/**
+ * Read back the seat count an owner has ALREADY paid for.
+ *
+ * Every purchase precedes the organization it pays for — creating one requires
+ * a Team plan — so `persistPurchasedSeatsOnOrganization` reports
+ * `no_organization` for a first-time buyer and nothing writes `licensed_seats`
+ * afterwards. Stripe is the only record of the quantity at that point: the
+ * subscriptions table has no seat column, and checkout metadata is neither
+ * durable nor authoritative. Provisioning therefore reads the subscription item
+ * back here, under the same authority rule as every other seat derivation.
+ *
+ * Reports the seat count and the tier it was bought under — NOT the Stripe
+ * anchors. Binding an organization to a subscription id stays with the webhook,
+ * which owns `idx_organizations_stripe_subscription`'s uniqueness.
+ *
+ * Returns null when there is nothing per-seat to reconcile. THROWS when Stripe
+ * cannot be reached — the caller must refuse to provision rather than create an
+ * organization capped below what was bought, because `licensed_seats` cannot be
+ * raised again from the product.
+ */
+export async function resolvePurchasedSeatsForOwner(
+  db: DatabaseAdapter,
+  getStripe: () => SubscriptionSeatReader,
+  ownerUserId: string,
+): Promise<OwnerPurchasedSeats | null> {
+  const [row] = await db.query<{
+    plan_tier: string | null;
+    status: string | null;
+    stripe_subscription_id: string | null;
+  }>(
+    `select plan_tier, status, stripe_subscription_id
+       from public.subscriptions
+      where user_id = $1
+      limit 1`,
+    [ownerUserId],
+  );
+
+  if (!row?.stripe_subscription_id) return null;
+  // Same entitlement rule the capability gate uses, so a subscription that
+  // grants Team administration and one that grants seats cannot disagree.
+  if (!isEntitledSubscriptionStatus(row.status)) return null;
+  const planTier = row.plan_tier ?? '';
+  if (!isPerSeatBillingPlan(planTier)) return null;
+
+  const subscription = await getStripe().subscriptions.retrieve(row.stripe_subscription_id);
+  const purchased = buildPurchasedSeatRecord(planTier, subscription);
+
+  return { seats: purchased.seats, planTier };
 }
