@@ -374,49 +374,65 @@ export const useConnectorsStore = create<ConnectorsState>()(
         name: CONNECTORS_PERSIST_KEY,
         // CON-25: v7 drops the dead `connectorPermissions` map from persisted
         // state so stale allow/deny entries stop being rehydrated on upgrade.
-        version: 7,
+        // v8 drops the in-flight OAuth bookkeeping for the same reason.
+        version: 8,
         migrate: (persistedState, version) => {
+          // Applied before the version chain below, not as another arm of it:
+          // every arm returns early, so a reset placed last would only ever run
+          // for a payload stored at v7. Any pre-v8 payload carries in-flight
+          // OAuth bookkeeping whose timeout timer died with the process that
+          // wrote it, so it has to be cleared whatever version we migrate from.
+          const incoming =
+            version < 8
+              ? ({
+                  ...(persistedState as object),
+                  pendingOAuth: {},
+                  oauthStartedAt: {},
+                } as ConnectorsState)
+              : (persistedState as ConnectorsState);
           if (version < 3) {
             return {
-              ...(persistedState as object),
+              ...(incoming as object),
               connectedIds: [],
               loading: {},
               error: {},
-              pendingOAuth: {},
-              oauthStartedAt: {},
               _oauthTimers: {},
             } as unknown as ConnectorsState;
           }
           if (version < 4) {
             return {
-              ...(persistedState as ConnectorsState),
-              oauthStartedAt: {},
+              ...incoming,
               _oauthTimers: {},
             } as ConnectorsState;
           }
           if (version < 6) {
             return {
-              ...(persistedState as ConnectorsState),
+              ...incoming,
               supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
             } as ConnectorsState;
           }
           if (version < 7) {
-            const { connectorPermissions: _dropped, ...rest } =
-              persistedState as ConnectorsState & {
-                connectorPermissions?: unknown;
-              };
+            const { connectorPermissions: _dropped, ...rest } = incoming as ConnectorsState & {
+              connectorPermissions?: unknown;
+            };
             void _dropped;
             return rest as ConnectorsState;
           }
-          return persistedState as ConnectorsState;
+          return incoming;
         },
-        // Do not persist timer IDs — they are runtime-only
+        // Do not persist timer IDs — they are runtime-only. `pendingOAuth` and
+        // `oauthStartedAt` track a browser round-trip that cannot outlive the
+        // process: the timeout timer that would resolve them lives only in
+        // `_oauthTimers`, so a restart used to rehydrate a connector stuck
+        // mid-flow with nothing left to time it out. Nothing selects either
+        // field today (they are written by `connect`/`completeOAuth`/
+        // `timeoutOAuth` and read by no view), which is why they were on the
+        // persisted-field-has-reader list — restore them to `partialize` only
+        // if a view starts rendering an in-flight flow across restarts.
         partialize: (state) => ({
           connectedIds: state.connectedIds,
           loading: state.loading,
           error: state.error,
-          pendingOAuth: state.pendingOAuth,
-          oauthStartedAt: state.oauthStartedAt,
           supportedConnectorIds: state.supportedConnectorIds,
         }),
       },

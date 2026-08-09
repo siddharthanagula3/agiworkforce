@@ -2,7 +2,13 @@ import { Loader2, Rocket, Sparkles, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { useAgentTaskStore } from '../../stores/agentTaskStore';
+import {
+  DEFAULT_GOAL_ITERATIONS,
+  DEFAULT_PARALLEL_AGENTS,
+  MAX_GOAL_ITERATIONS,
+  MAX_PARALLEL_AGENTS,
+  useAgentTaskStore,
+} from '../../stores/agentTaskStore';
 import { useIsMounted } from '../../hooks/useIsMounted';
 
 type ExecutionMode = 'auto' | 'sequential' | 'parallel' | 'swarm';
@@ -18,7 +24,8 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
   const shouldUseSwarm = useAgentTaskStore((s) => s.shouldUseSwarm);
 
   const [goal, setGoal] = useState('');
-  const [maxIterations, setMaxIterations] = useState(10);
+  const [maxIterations, setMaxIterations] = useState(DEFAULT_GOAL_ITERATIONS);
+  const [parallelAgents, setParallelAgents] = useState(DEFAULT_PARALLEL_AGENTS);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('auto');
   const [submitting, setSubmitting] = useState(false);
   // Task creator panel may close mid-submit (user closes the panel or
@@ -62,7 +69,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
           await submitGoalAuto(trimmed);
           break;
         case 'parallel':
-          await submitGoal(trimmed, { maxIterations, parallel: true });
+          await submitGoal(trimmed, { numAgents: parallelAgents, parallel: true });
           break;
         default:
           await submitGoal(trimmed, { maxIterations, parallel: false });
@@ -81,6 +88,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
     goal,
     isMounted,
     maxIterations,
+    parallelAgents,
     executionMode,
     submitGoal,
     submitGoalSwarm,
@@ -161,7 +169,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
         </div>
       </div>
 
-      {(executionMode === 'sequential' || executionMode === 'parallel') && (
+      {executionMode === 'sequential' && (
         <div>
           <label
             htmlFor="agent-task-iterations"
@@ -173,7 +181,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
             id="agent-task-iterations"
             type="range"
             min={1}
-            max={20}
+            max={MAX_GOAL_ITERATIONS}
             value={maxIterations}
             onChange={(e) => setMaxIterations(Number(e.target.value))}
             className="w-full accent-teal-500"
@@ -181,9 +189,40 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
           />
           <div className="mt-1 flex justify-between text-xs text-slate-500">
             <span>1</span>
-            <span>10</span>
-            <span>20</span>
+            <span>{MAX_GOAL_ITERATIONS}</span>
           </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Execute-and-reflect passes one agent may take. Reaching the limit stops the run and
+            marks it failed, so raise it for goals that need more passes.
+          </p>
+        </div>
+      )}
+
+      {executionMode === 'parallel' && (
+        <div>
+          <label
+            htmlFor="agent-task-agents"
+            className="mb-1.5 block text-sm font-medium text-slate-300"
+          >
+            Parallel agents: {parallelAgents}
+          </label>
+          <input
+            id="agent-task-agents"
+            type="range"
+            min={1}
+            max={MAX_PARALLEL_AGENTS}
+            value={parallelAgents}
+            onChange={(e) => setParallelAgents(Number(e.target.value))}
+            className="w-full accent-teal-500"
+            disabled={submitting}
+          />
+          <div className="mt-1 flex justify-between text-xs text-slate-500">
+            <span>1</span>
+            <span>{MAX_PARALLEL_AGENTS}</span>
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Each agent plans and runs the goal in its own sandbox; the best result wins.
+          </p>
         </div>
       )}
 

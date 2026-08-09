@@ -237,23 +237,9 @@ interface UIState {
 // Constants & Helpers
 // =============================================================================
 
-const MAX_DRAFT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const STORAGE_VERSION = 1;
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-const cleanOldDrafts = (drafts: Map<number | null, DraftMessage>) => {
-  const now = Date.now();
-  const cleaned = new Map(drafts);
-
-  for (const [key, draft] of cleaned.entries()) {
-    if (now - new Date(draft.timestamp).getTime() > MAX_DRAFT_AGE_MS) {
-      cleaned.delete(key);
-    }
-  }
-
-  return cleaned;
-};
 
 // Storage fallback for SSR/non-browser environments
 const storageFallback: Storage = {
@@ -972,16 +958,14 @@ export const useUIStore = create<UIState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        // `drafts`, `inputHeight` and `showMarkdownPreview` are composer state
+        // that no composer reads back — `getDraft`, `setInputHeight` and
+        // `toggleMarkdownPreview` have no callers — and the legacy
+        // `sidecarOpen`/`sidecarSection`/`sidecarWidth` triple was superseded by
+        // the `sidecar` object below. Writing them to disk advertised restored
+        // input and a restored panel that no mount point ever restores.
         partialize: (state) => ({
-          // Input state to persist
-          drafts: Array.from(state.drafts.entries()),
-          inputHeight: state.inputHeight,
-          showMarkdownPreview: state.showMarkdownPreview,
-
           // Sidecar state to persist
-          sidecarOpen: state.sidecarOpen,
-          sidecarSection: state.sidecarSection,
-          sidecarWidth: state.sidecarWidth,
           sidebarWidth: state.sidebarWidth,
           sidebarCollapsed: state.sidebarCollapsed,
           sidecar: state.sidecar,
@@ -993,12 +977,6 @@ export const useUIStore = create<UIState>()(
         }),
         merge: (persistedState: unknown, currentState) => {
           const persisted = persistedState as Partial<{
-            drafts: Array<[number | null, DraftMessage]>;
-            inputHeight: number;
-            showMarkdownPreview: boolean;
-            sidecarOpen: boolean;
-            sidecarSection: SidecarSection;
-            sidecarWidth: number;
             sidebarWidth: number;
             sidebarCollapsed: boolean;
             sidecar: SidecarState;
@@ -1007,19 +985,9 @@ export const useUIStore = create<UIState>()(
             showModeSwitcherHint: boolean;
           }>;
 
-          const drafts = new Map<number | null, DraftMessage>(persisted?.drafts || []);
-          const cleanedDrafts = cleanOldDrafts(drafts);
-
           return {
             ...currentState,
-            // Input state
-            drafts: cleanedDrafts,
-            inputHeight: persisted?.inputHeight ?? currentState.inputHeight,
-            showMarkdownPreview: persisted?.showMarkdownPreview ?? currentState.showMarkdownPreview,
             // Sidecar state
-            sidecarOpen: persisted?.sidecarOpen ?? currentState.sidecarOpen,
-            sidecarSection: persisted?.sidecarSection ?? currentState.sidecarSection,
-            sidecarWidth: persisted?.sidecarWidth ?? currentState.sidecarWidth,
             sidebarWidth: persisted?.sidebarWidth ?? currentState.sidebarWidth,
             sidebarCollapsed: persisted?.sidebarCollapsed ?? currentState.sidebarCollapsed,
             sidecar: persisted?.sidecar

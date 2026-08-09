@@ -1089,7 +1089,11 @@ export const useImageGalleryStore = create<ImageGalleryState>()(
       {
         name: 'image-gallery-store',
         version: 1,
-        partialize: (state) => ({ images: state.images, selectedStyle: state.selectedStyle }),
+        // `selectedStyle` is no longer written to disk: no style picker mounts
+        // this store, so a persisted value was a preference no screen could ever
+        // show back. A legacy payload still merges its old value in once on
+        // hydration; nothing reads it, and the next write drops it for good.
+        partialize: (state) => ({ images: state.images }),
       },
     ),
     { name: 'ImageGalleryStore', enabled: import.meta.env.DEV },

@@ -1,45 +1,24 @@
-export type PlanTier =
-  | 'local-only'
-  | 'byok'
-  | 'free'
-  | 'basic'
-  | 'pro'
-  | 'max'
-  | 'max_15x'
-  | 'team'
-  | 'enterprise';
+import {
+  BILLING_PLAN_PRICING,
+  normalizeBillingPlanTier,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
-const VALID_PLAN_TIERS: readonly PlanTier[] = [
-  'local-only',
-  'byok',
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-  'team',
-  'enterprise',
-] as const;
+// The shared billing catalog is the only tier taxonomy — the same rule
+// planModels.ts follows. A hand-maintained copy here silently dropped Max 15x
+// and Team from auth and feature gating after a Cloud sync, and a second copy of
+// the labels let the desktop advertise a plan name the checkout never sells.
+export type PlanTier = BillingPlanTier;
 
 export function asPlanTier(value: string | null | undefined): PlanTier {
-  const normalized = value?.toLowerCase();
-  if (normalized && VALID_PLAN_TIERS.includes(normalized as PlanTier)) {
-    return normalized as PlanTier;
-  }
-  return 'free';
+  return normalizeBillingPlanTier(value);
 }
 
-export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
-  'local-only': 'Local Mode',
-  byok: 'Local Mode + BYOK',
-  free: 'Free',
-  basic: 'Basic',
-  pro: 'Pro',
-  max: 'Max 5x',
-  max_15x: 'Max 15x',
-  team: 'Team',
-  enterprise: 'Enterprise',
-};
+export const PLAN_DISPLAY_NAMES: Readonly<Record<PlanTier, string>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(BILLING_PLAN_PRICING).map(([tier, pricing]) => [tier, pricing.label]),
+  ) as Record<PlanTier, string>,
+);
 
 export interface Profile {
   id: string;

@@ -22,6 +22,8 @@ import {
   applyAgentTaskGoalError,
   applyAgentTaskGoalExecutionStarted,
   applyAgentTaskStateChanged,
+  MAX_GOAL_ITERATIONS,
+  MAX_PARALLEL_AGENTS,
   useAgentTaskStore,
 } from '../agentTaskStore';
 import { useAppModeStore } from '../appModeStore';
@@ -181,7 +183,7 @@ describe('agentTaskStore', () => {
       });
 
       const { submitGoal } = useAgentTaskStore.getState();
-      const taskId = await submitGoal('Parallel task', { parallel: true, maxIterations: 3 });
+      const taskId = await submitGoal('Parallel task', { parallel: true, numAgents: 3 });
 
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_parallel', {
         request: {
@@ -198,6 +200,43 @@ describe('agentTaskStore', () => {
       expect(tasks[0]!.id).toBe('goal-parallel-123');
       expect(tasks[0]!.status).toBe('queued');
       expect(tasks[0]!.result).toContain('0.95');
+    });
+
+    it('holds a caller-supplied agent count inside the engine fan-out ceiling', async () => {
+      mockInvoke.mockResolvedValue({
+        goalId: 'goal-parallel-clamped',
+        bestResult: { score: 0.5, result: { success: true, error: null } },
+      });
+
+      const { submitGoal } = useAgentTaskStore.getState();
+      await submitGoal('Parallel task', { parallel: true, numAgents: 50 });
+      await submitGoal('Parallel task', { parallel: true, numAgents: 0 });
+
+      expect(mockInvoke).toHaveBeenNthCalledWith(
+        1,
+        'agi_submit_goal_parallel',
+        expect.objectContaining({
+          request: expect.objectContaining({ numAgents: MAX_PARALLEL_AGENTS }),
+        }),
+      );
+      expect(mockInvoke).toHaveBeenNthCalledWith(
+        2,
+        'agi_submit_goal_parallel',
+        expect.objectContaining({ request: expect.objectContaining({ numAgents: 1 }) }),
+      );
+    });
+
+    it('caps the sequential iteration ceiling the engine is asked for', async () => {
+      mockInvoke.mockResolvedValue({ goalId: 'goal-sequential-clamped' });
+
+      await useAgentTaskStore.getState().submitGoal('Long task', { maxIterations: 500 });
+
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'agi_submit_goal',
+        expect.objectContaining({
+          request: expect.objectContaining({ maxSteps: MAX_GOAL_ITERATIONS }),
+        }),
+      );
     });
 
     it('records a parallel result error without inferring lifecycle state', async () => {
