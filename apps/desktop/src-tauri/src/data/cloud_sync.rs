@@ -367,8 +367,12 @@ struct ApplyCounts {
 }
 
 impl ApplyCounts {
-    fn record(&mut self, _written: bool) {
-        self.applied += 1;
+    fn record(&mut self, written: bool) {
+        if written {
+            self.applied += 1;
+        } else {
+            self.failed += 1;
+        }
     }
 
     fn defer(&mut self) {
@@ -1772,6 +1776,7 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                 }
                 Err(error) => {
                     warn!(cloud_id = %d.id, error = %error, "cloud_sync: pulled message insert failed");
+                    counts.failed += 1;
                 }
             }
         }
@@ -1913,6 +1918,8 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> ApplyCounts {
                     }
                     Err(error) => {
                         warn!(cloud_id = %p.cloud_id, error = %error, "cloud_sync: buffered message replay failed");
+                        counts.failed += 1;
+                        replayed = false;
                     }
                 }
             }
@@ -2015,7 +2022,7 @@ fn cursor_after_page(
     next: &str,
     page: &(ApplyCounts, ApplyCounts, ApplyCounts),
 ) -> String {
-    let failed = 0;
+    let failed = page.0.failed + page.1.failed + page.2.failed;
     if failed > 0 {
         warn!(
             failed,
