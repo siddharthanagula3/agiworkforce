@@ -176,7 +176,8 @@
     "check:knip:production": "knip --production",
     "check:marketing-models": "node scripts/check-marketing-models.mjs",
     "check:workflow-cargo-features": "node scripts/check-workflow-cargo-features.mjs",
-    "check:secrets": "node scripts/check-secrets.mjs"
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:vacuous-e2e": "node scripts/check-vacuous-e2e.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
