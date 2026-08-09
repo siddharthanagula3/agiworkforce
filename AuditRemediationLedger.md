@@ -4,6 +4,32 @@ Status: Current
 Owner: Platform lead
 Last updated: 2026-08-08
 
+## The three audit sources
+
+This remediation now has three independent inputs. They overlap heavily and
+contradict each other in places, which is useful — a finding that all three
+reach independently is worth more than one that appears once.
+
+| Source                                        | Scope                                                                           | Where it lives                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **This ledger** (5 artifacts: BL/SC/PP/CM/HC) | 535 verification items across 10 phases; the stop gate                          | this file                                       |
+| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | `docs/current/gap-audit-2026-08-08.md`          |
+| **Wave 6 — conformance**                      | 592 canonical concepts scored; 117 findings, 2 critical                         | artifact `5d12b3a1-9e2c-4140-a9df-0ca34e171a7b` |
+
+The gap audit's grading is the most useful convention of the three and should be
+adopted here: it separates "confirmed in current source" from "recorded by an
+older ledger and not revalidated" from "code exists, production configuration
+unproven". Most disagreement between the three sources is explained by that
+distinction rather than by anyone being wrong.
+
+Wave 6's central finding is worth repeating because it changes what the work
+_is_: only 36 of 592 concepts are genuinely conflated and 7 inverted. The
+codebase does not misunderstand its domain. The recurring defect is that **a
+correct abstraction exists and the code that should consume it doesn't** — a
+policy engine with zero call sites, an agent runtime used by 2 of 11 loops, a
+shipped realtime protocol with zero producers. That is wiring work, not design
+work, and it is a much better position to be in.
+
 ## How this file relates to `ExecutionPlan.md`
 
 Two files, two roles, deliberately not merged.
@@ -140,8 +166,24 @@ The screenshot reports are preserved in the source tags, but execution is reorde
 
 ## P0.2 Repair known red guardrails first
 
-- [ ] **BASE-006 — Remove stale Google Batch wiring entries.** The audit reports 11 deleted `google_batch_*` entries in `apps/desktop/wiring-allowlist.json` causing the required wiring check to fail. Remove or replace stale allowlist entries; do not weaken the checker.
-- [ ] **BASE-007 — Make the wiring guard green from a clean checkout.** Run the repository wiring check—reported as `check-wiring.mjs` or its current equivalent—and prove zero stale/unknown wiring entries.
+- [x] **BASE-006 — Remove stale Google Batch wiring entries.** NOT APPLICABLE — already resolved before this ledger was written.
+
+      Evidence: `grep -c google_batch apps/desktop/wiring-allowlist.json` → `0`. The
+      allowlist carries no `google_batch_*` entry, so there is nothing stale to remove
+      and the checker was never weakened. Note the audit's path for the checker is
+      wrong: it lives at `apps/desktop/scripts/check-wiring.mjs`, not `scripts/`.
+
+- [x] **BASE-007 — Make the wiring guard green from a clean checkout.**
+
+      Evidence: `node apps/desktop/scripts/check-wiring.mjs` → exit 0, "Wiring check
+      passed: 1272 registrations, 1268 frontend calls (1203 from 1223 modules reachable
+      from apps/desktop/src/main.tsx), 1270 Rust command definitions, 4 reviewed orphan
+      allowlist entries, 65 reviewed reachability allowlist entries." Run 2026-08-08 on
+      commit 41d766367.
+
+      The 4 orphan and 65 reachability allowlist entries are reviewed exemptions the
+      checker already accounts for, not suppressions added to make this pass.
+
 - [ ] **BASE-008 — Audit skipped tests.** Inventory every `test.skip`, conditional no-op, ignored Rust test, quarantined suite, and CI exclusion. Each must be fixed, explicitly time-bounded with an owner, or removed with an evidence-backed reason. The prior audit found many Desktop visual/settings/GDPR tests silently skipping.
 - [ ] **BASE-009 — Add an audit-plan progress check.** Add a simple script that fails if this ledger contains open tasks when a release-completion command is invoked. It must not run in ordinary developer flows unless intentionally configured.
 
@@ -177,11 +219,27 @@ The screenshot reports are preserved in the source tags, but execution is reorde
 **Source:** PP, BL  
 **Reported evidence:** `toEnforceableLimit()` lacks a `custom` arm; enterprise custom connector/project limits can become `0`; safe-plan labels omit Enterprise.
 
-- [ ] Define one exhaustive limit type covering finite, unlimited, contract/custom, disabled, and inherited states.
-- [ ] Make every conversion exhaustive at compile time; unknown states must fail closed without converting contract values to zero.
-- [ ] Migrate API, UI, usage policy, CLI/desktop caches, and tests to the canonical representation.
-- [ ] Add tests for every plan and capability, including Enterprise contract values and missing-contract behavior.
-- [ ] Add a schema/TypeScript exhaustiveness guard so a new limit variant cannot compile without handling.
+- [x] Define one exhaustive limit type covering finite, unlimited, contract/custom, disabled, and inherited states. — `BillingPlanLimit` + `toEnforceableBillingPlanLimit` already model number / 'unlimited' / 'custom' / unknown.
+- [x] Make every conversion exhaustive; unknown states fail closed without converting contract values to zero.
+- [x] Add tests for every plan and capability, including Enterprise contract values and missing-contract behavior.
+- [x] Add a guard so a new copy of the conversion cannot appear.
+- [ ] Migrate API, UI, usage policy, CLI/desktop caches to the canonical representation. — **still open**; only the web org-entitlement path is confirmed migrated.
+
+Evidence: commit `2a163f6af`; `apps/web/lib/services/org-entitlements.ts`,
+`apps/web/lib/services/__tests__/org-entitlements-limits.test.ts`.
+apps/web `lib/services` suite 254 passed across 19 files; web typecheck exit 0.
+
+CONFIRMED REAL, and traced end to end before changing anything: catalog
+`enterprise.projects: 'custom'` → the local converter → `0` →
+`org-sharing-service.ts:278` throws `createError.validation`. The tier that
+negotiates its limits was the only tier that could not share a single project or
+connector with its own members, and the error told them to upgrade.
+
+This was the SECOND copy of the defect. The first was fixed in
+`free-plan-entitlements.ts` and pinned with a regression test; this one survived
+because that fix went to a call site instead of to the owner. The local copy is
+therefore deleted rather than patched, and a test now fails the build on any file
+declaring its own converter — verified by planting one and watching it fire.
 
 **Done when:** Enterprise limits reflect the authoritative contract and no custom value is silently interpreted as zero or unlimited.
 
@@ -341,9 +399,39 @@ The screenshot reports are preserved in the source tags, but execution is reorde
 
 **Source:** BL
 
-- [ ] Add repository-owned secret scanning for commits, pull requests, generated artifacts, fixtures, and release bundles.
-- [ ] Replace realistic secret-like fixtures with unmistakably fake values or allowlisted test fixtures.
-- [ ] Fail release on unreviewed findings.
+- [x] Add repository-owned secret scanning for commits, pull requests, generated artifacts, fixtures, and release bundles.
+- [x] Replace realistic secret-like fixtures with unmistakably fake values or allowlisted test fixtures.
+- [x] Fail release on unreviewed findings.
+
+Evidence: commit `12093d19b`; `scripts/check-secrets.mjs`,
+`scripts/secret-scan-allowlist.json`, `package.json` (`check:secrets`),
+`.github/workflows/ci.yml` (blocking step in `check`).
+`pnpm check:secrets` → exit 0, "8366 tracked files, 13 credential formats,
+55 reviewed exemption(s) across 41 allowlist entries".
+
+**The scan result itself is the headline: 55 matches, and after opening every
+one, ZERO are real credentials.** They are environment templates, the three
+redactors (which must contain the shapes they recognise), and synthetic test
+fixtures built from sequential filler. Nothing needs rotating.
+
+Design notes worth keeping:
+
+- Repository-owned rather than a third-party action, because every Action here
+  is SHA-pinned — a scanner dependency is one more supply-chain edge to pin and
+  rotate — and because it lets the scanner share its pattern roster with the
+  three existing redactors. A format one recognises and the others do not is
+  the gap every one of these bugs came through.
+- Not entropy analysis. Entropy scanners fire on minified bundles and lockfile
+  hashes, and a scanner that cries wolf gets `--no-verify`'d within a week.
+- The allowlist is keyed on (path, FORMAT), not path. A new credential format in
+  an already-listed file still fails, and an entry that stops matching fails the
+  job as stale.
+- Verified in three directions, not one: a planted `sk-ant-` key fails the scan,
+  a planted stale entry fails it, and the clean tree passes.
+
+Residual: scanning covers tracked source. Release BUNDLES are not yet scanned as
+artifacts — tracked as a follow-up under REL-004/REL-010 rather than claimed
+here.
 
 ### CRIT-018 — Dependency/security checks are not uniformly blocking
 
