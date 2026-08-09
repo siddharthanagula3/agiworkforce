@@ -42,6 +42,9 @@ const allowedRootFiles = new Set([
   // Merging them would lose one or the other — a ledger entry has no collision
   // key, and a queue item has no acceptance criteria.
   'AuditRemediationLedger.md',
+  // Items the remediation cannot finish in code: dashboard toggles, credentials,
+  // and product decisions. Root-level so it is seen, not filed away.
+  'FoundersAssistance.md',
   'ExecutionPlan.md',
   'Cargo.lock',
   'Cargo.toml',
