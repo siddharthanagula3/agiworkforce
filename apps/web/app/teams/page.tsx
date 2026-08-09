@@ -5,10 +5,15 @@ import { FeatureGrid, LedgerSection } from '@/features/marketing/components/Land
 import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
+// The description previously listed "usage visibility" among the team controls.
+// Usage is user-scoped only (apps/web/app/api/usage/route.ts takes no
+// organization dimension) and there is no per-project/team budget or showback
+// roll-up, so the description now names what the page's Usage tile actually
+// claims: Local, BYOK, and Cloud spend stay separate.
 export const metadata = buildMetadata({
   title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
   description:
-    'Team workspace controls for AGI: shared projects, admin policy, connector governance, usage visibility, BYOK enforcement, and public-alpha managed cloud.',
+    'Team workspace controls for AGI: shared projects, admin policy, connector governance, separated Local/BYOK/Cloud spend, BYOK enforcement, and public-alpha managed cloud.',
   path: '/teams',
 });
 

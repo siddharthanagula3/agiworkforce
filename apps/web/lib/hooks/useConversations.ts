@@ -7,6 +7,8 @@ import { useChatStore, type Conversation, type Message } from '@shared/stores/we
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import {
+  MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationResponseSchema,
   ManagedCloudCreateConversationResponseSchema,
@@ -46,8 +48,15 @@ function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
   return parsed.data as Message['metadata'];
 }
 
-const CONVERSATIONS_PAGE_SIZE = 50;
-const PROJECT_CONVERSATIONS_PAGE_SIZE = 100;
+/**
+ * Both page sizes come from the conversations wire contract rather than local
+ * literals: the default is what `GET /api/chat/conversations` itself falls back
+ * to, and the project list deliberately asks for the contract maximum — the
+ * route clamps `limit` to that same ceiling, so a larger local number would be
+ * silently reduced and a stale local copy could drift below it.
+ */
+const CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
+const PROJECT_CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 
 function useConversationAuthHeaders() {
   const { getToken, isLoaded, isSignedIn } = useAuth();

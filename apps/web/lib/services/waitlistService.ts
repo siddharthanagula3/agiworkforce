@@ -19,8 +19,15 @@
  * `getNeonDb()` internally and are documented as such.
  *
  * The `validateInviteCode` method calls the `validate_and_redeem_invite_code`
- * security-definer RPC · the only permitted path to read invite state. Direct
- * SELECT on `beta_invites` is blocked by RLS.
+ * RPC. That RPC is NOT security-definer and `beta_invites` has NO row-level
+ * security in the Neon schema (`apps/web/db/neon/0020_functions.sql:1-13`
+ * documents the port dropping `auth.uid()`/`auth.role()`/SECURITY DEFINER;
+ * RLS exists only on `web_artifacts*`, see `0039_artifact_cloud_sync.sql:85`).
+ * Authorization is caller-enforced at the route layer, and the live redemption
+ * path — `apps/web/app/api/claim-offer/route.ts` — deliberately reads
+ * `beta_invites` with a direct SELECT (`:54-57`) and then redeems through
+ * `claim_beta_invite`. Treat this module's RPC as one of two redemption paths,
+ * not as a privileged gate.
  */
 import 'server-only';
 
@@ -88,10 +95,17 @@ export async function joinWaitlist(
 
 // ---------------------------------------------------------------------------
 // validateInviteCode
-// Calls validate_and_redeem_invite_code RPC (migration 20260523000000).
-// Must be called with a db adapter bound to an authenticated user via
-// db.withUser(jwt); returns 'unauthenticated' when auth.uid() is null.
-// Parameter order: p_code, p_surface, p_source (matches function signature).
+// Calls validate_and_redeem_invite_code RPC.
+//
+// UNWIRED — no production caller today; the shipping redemption path is
+// POST /api/claim-offer, which uses the `claim_beta_invite` RPC instead.
+// Do not wire this up as-is: the deployed function is
+// `validate_and_redeem_invite_code(p_user_id text, p_code text, p_surface text,
+// p_source text)` (`apps/web/db/neon/0020_functions.sql:1440-1445`) — FOUR
+// parameters — while the query below binds three, so a real call raises
+// `function ... does not exist`. The 'unauthenticated' member of
+// InviteCodeError is likewise vestigial: the Neon port has no auth.uid() and
+// this RPC can never return it.
 // ---------------------------------------------------------------------------
 
 export async function validateInviteCode(

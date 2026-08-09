@@ -116,7 +116,12 @@ export default function BusinessPage() {
             {
               meta: 'Teams',
               title: 'Team workspaces',
-              body: 'Shared projects, connector policy, and usage visibility.',
+              // Previously "usage visibility". Usage is reported per user
+              // (apps/web/app/api/usage/route.ts is user-scoped and has no
+              // organization dimension); there is no org/project budget,
+              // showback, or admin usage roll-up anywhere in the product, so a
+              // team-control list must not imply one.
+              body: 'Shared projects, connector policy, and separated Local, BYOK, and Cloud spend.',
               href: '/teams',
             },
             {

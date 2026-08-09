@@ -29,6 +29,7 @@
 
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
+  MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_REFLECT_PATH,
   MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
   managedCloudPreferencesNamespacePath,
@@ -158,7 +159,12 @@ export interface CloudArchivedConversationPage {
   nextOffset: number;
 }
 
-export const CLOUD_ARCHIVED_PAGE_SIZE = 50;
+/**
+ * Page size comes from the conversations wire contract — the same constant the
+ * route itself falls back to when `limit` is absent, and the same one Web and
+ * Mobile page with. A locally written `50` would be a fourth copy free to drift.
+ */
+export const CLOUD_ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
 export async function listCloudArchivedConversations(
   offset = 0,

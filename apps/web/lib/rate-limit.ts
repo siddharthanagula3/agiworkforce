@@ -93,11 +93,12 @@ export const rateLimitConfigs = {
     window: '1 h', // 20 GenAI content reports per hour — generous for real triage use, blocks spam
     failClosed: false, // Don't block a trust-and-safety report if Redis fails
   },
-  'mobile-iap-verify': {
-    limit: 10,
-    window: '1 m', // 10 verify attempts per minute — allows retries, blocks receipt-replay abuse
-    failClosed: true, // Security-sensitive (billing writes): block if Redis fails
-  },
+  // NOTE: the former 'mobile-iap-verify' bucket was removed alongside
+  // POST /api/mobile/iap/verify (commit 77169d3f1, decision
+  // docs/decisions/2026-07-30-mobile-store-billing-boundary.md). No store
+  // receipt is accepted server-side today, so the config had no caller and
+  // implied a verified billing-write path that does not exist. Reinstate it
+  // with the endpoint when MS-5 ships real StoreKit/Play products.
   'claim-offer': {
     limit: 3,
     window: '1 h', // 3 requests per hour

@@ -32,6 +32,22 @@ export interface ManagedUsageSummaryState {
   refresh: () => Promise<void>;
 }
 
+/**
+ * BIZ-026 — how often the snapshot is re-read while the tab is visible.
+ *
+ * The summary used to be fetched exactly once per mount. On the chat page that
+ * made the pre-emptive warning unreachable: a user who opened chat at 60% of a
+ * window and worked up to 100% kept the mount-time snapshot, so
+ * `selectUsageWarning` never crossed its threshold and the first signal was
+ * still the refused turn the banner exists to prevent. The same freeze made
+ * "Resets in 3 hours" permanent, because the caller's memo only recomputes
+ * `Date.now()` when this object changes.
+ *
+ * One minute is the granularity `formatUsageResetIn` can express ("Resets in
+ * N min"), so polling faster could not change a rendered label.
+ */
+const REVALIDATE_INTERVAL_MS = 60_000;
+
 export function useManagedUsageSummary(): ManagedUsageSummaryState {
   const [usage, setUsage] = useState<ManagedUsageSummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,26 +57,54 @@ export function useManagedUsageSummary(): ManagedUsageSummaryState {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [stale, setStale] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  /**
+   * `background` refreshes deliberately do not touch `loading`/`error`: they
+   * would otherwise spin the Settings refresh button and pop the error alert
+   * once a minute on their own. A background failure still reports itself
+   * through `stale`, which the "Last updated" line renders as "(refresh
+   * failed)" — so silence is never mistaken for fresh data.
+   */
+  const load = useCallback(async (background: boolean) => {
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const response = await fetch('/api/usage', { credentials: 'include' });
       if (!response.ok) throw new Error('Could not load usage');
       setUsage((await response.json()) as ManagedUsageSummaryResponse);
       setLastUpdatedAt(new Date());
       setStale(false);
+      if (background) setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load usage');
+      if (!background) setError(err instanceof Error ? err.message : 'Could not load usage');
       setStale(true);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
+
+  const refresh = useCallback(() => load(false), [load]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    // Hidden tabs are not polled — a backgrounded chat tab does not need a
+    // countdown — but returning to one re-reads immediately rather than
+    // showing whatever was true when the user left.
+    const revalidateWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load(true);
+    };
+    const timer = setInterval(revalidateWhenVisible, REVALIDATE_INTERVAL_MS);
+    document.addEventListener('visibilitychange', revalidateWhenVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', revalidateWhenVisible);
+    };
+  }, [load]);
 
   return { usage, loading, error, lastUpdatedAt, stale, refresh };
 }

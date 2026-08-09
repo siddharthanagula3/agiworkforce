@@ -42,6 +42,31 @@ function formatIsoDate(iso: string): string {
     : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/**
+ * Who bills this plan, and where it can actually be managed.
+ *
+ * `subscription_source` is derived server-side in `/api/me` from the
+ * subscription row: `stripe` when there is a `stripe_subscription_id`, then
+ * `apple`/`google` for the store transaction columns (migration 0046), and
+ * `manual` for a row provisioned without any of them. Because `stripe` is
+ * checked first, an `apple`/`google` row provably has NO Stripe subscription
+ * and no Stripe-held card, so only those two lose the portal button here — a
+ * `manual` row keeps it, since such an account can still own a Stripe customer
+ * carrying earlier invoices. Labels mirror Mobile's `subscriptionSource.ts` so
+ * both surfaces name the owner the same way.
+ */
+const BILLING_SOURCE_LABEL: Record<string, string> = {
+  stripe: 'AGI Workforce (card on file)',
+  apple: 'the Apple App Store',
+  google: 'Google Play',
+  manual: 'your organization',
+};
+
+const STORE_SUBSCRIPTION_URL: Record<string, string> = {
+  apple: 'https://apps.apple.com/account/subscriptions',
+  google: 'https://play.google.com/store/account/subscriptions',
+};
+
 function formatMoney(minorUnits: number, currency: string): string {
   try {
     return new Intl.NumberFormat('en-US', {
@@ -169,7 +194,17 @@ export function BillingSection() {
   const planPricing = BILLING_PLAN_PRICING[tier as keyof typeof BILLING_PLAN_PRICING];
 
   const isFreeTier = tier === 'free';
+
+  // BIZ-044 (billing diagnostics): name the billing owner instead of assuming
+  // Stripe. A store-owned row has no Stripe subscription and no Stripe card, so
+  // both the portal button and the card row would be dead controls for it.
+  const billingSource = subscription?.subscription_source ?? null;
+  const storeManagementUrl = billingSource ? (STORE_SUBSCRIPTION_URL[billingSource] ?? null) : null;
+  const isStoreBilled = storeManagementUrl !== null;
+
   const isManagedPaid = !isFreeTier && subscription?.status === 'active';
+  /** Only a Stripe-billed account has a Stripe customer to read cards/invoices from. */
+  const hasStripeBilling = isManagedPaid && !isStoreBilled;
 
   // Real Stripe data (empty for free/unbilled users — the routes return [] when
   // there is no Stripe customer, which we render as an honest empty state).
@@ -179,8 +214,9 @@ export function BillingSection() {
   useEffect(() => {
     let cancelled = false;
     // Only paid/managed accounts have a Stripe customer; skip the calls for
-    // free users to avoid pointless 200-empty round-trips.
-    if (!isManagedPaid) {
+    // free users, and for store-billed rows whose card and receipts live with
+    // Apple or Google, to avoid pointless 200-empty round-trips.
+    if (!hasStripeBilling) {
       setPaymentMethods([]);
       setInvoices([]);
       return;
@@ -213,7 +249,7 @@ export function BillingSection() {
     return () => {
       cancelled = true;
     };
-  }, [isManagedPaid]);
+  }, [hasStripeBilling]);
 
   const defaultCard =
     paymentMethods?.find((pm) => pm.is_default)?.card ?? paymentMethods?.[0]?.card;
@@ -329,6 +365,13 @@ export function BillingSection() {
                   {subscription?.status ?? 'inactive'}
                 </span>
               </Row>
+              {billingSource && billingSource !== 'none' && (
+                <Row label="Billed through">
+                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                    {BILLING_SOURCE_LABEL[billingSource] ?? billingSource}
+                  </span>
+                </Row>
+              )}
               {subscription?.current_period_end && (
                 <Row label="Renews">
                   <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
@@ -371,7 +414,27 @@ export function BillingSection() {
           >
             {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
           </Link>
-          {!isFreeTier && (
+          {/* A store-owned subscription cannot be managed in the Stripe portal —
+              send the user to the store that actually holds it. */}
+          {!isFreeTier && isStoreBilled && (
+            <a
+              href={storeManagementUrl as string}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '7px 14px',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--text-2)',
+                fontSize: 13,
+                textDecoration: 'none',
+              }}
+            >
+              {billingSource === 'apple' ? 'Manage in the App Store' : 'Manage on Google Play'}
+            </a>
+          )}
+          {!isFreeTier && !isStoreBilled && (
             <button
               type="button"
               onClick={openPortal}
@@ -404,8 +467,9 @@ export function BillingSection() {
         )}
       </section>
 
-      {/* Payment section (paid users only) */}
-      {isManagedPaid && (
+      {/* Payment section (Stripe-billed users only — a store-billed plan's card
+          is held by Apple or Google and is not readable or editable here) */}
+      {hasStripeBilling && (
         <section
           style={{
             border: '1px solid var(--settings-border)',
@@ -575,9 +639,11 @@ export function BillingSection() {
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
               {invoices === null
                 ? 'Loading invoices…'
-                : isFreeTier
-                  ? 'Invoices appear here once you are billed on a paid plan.'
-                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+                : isStoreBilled
+                  ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
+                  : isFreeTier
+                    ? 'Invoices appear here once you are billed on a paid plan.'
+                    : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
             </p>
           </div>
         )}

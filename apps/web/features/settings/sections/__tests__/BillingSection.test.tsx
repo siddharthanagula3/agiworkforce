@@ -1,15 +1,25 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+
+interface MockSubscription {
+  tier: string;
+  display_name: string;
+  status: string;
+  current_period_end: number | null;
+  subscription_source?: string;
+}
+
+let mockSubscription: MockSubscription = {
+  tier: 'pro',
+  display_name: 'Pro',
+  status: 'active',
+  current_period_end: 1_800_000_000,
+};
 
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: unknown) => unknown) =>
     selector({
-      subscription: {
-        tier: 'pro',
-        display_name: 'Pro',
-        status: 'active',
-        current_period_end: 1_800_000_000,
-      },
+      subscription: mockSubscription,
       creditBalance_cents: 1_200,
       dailyUsage_cents: 300,
       dailyLimit_cents: 500,
@@ -19,6 +29,16 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 import { BillingSection } from '../BillingSection';
 
 const originalFetch = global.fetch;
+
+beforeEach(() => {
+  mockSubscription = {
+    tier: 'pro',
+    display_name: 'Pro',
+    status: 'active',
+    current_period_end: 1_800_000_000,
+    subscription_source: 'stripe',
+  };
+});
 
 afterEach(() => {
   global.fetch = originalFetch;
@@ -36,5 +56,68 @@ describe('BillingSection', () => {
     expect(screen.queryByText("Today's usage")).toBeNull();
     expect(screen.queryByText('$12.00')).toBeNull();
     expect(screen.queryByText('$3.00')).toBeNull();
+  });
+
+  // BIZ-044: the billing owner is one of the diagnostics a customer must be
+  // able to read for themselves. It also decides which management control is
+  // real: /api/portal can only open a session for a Stripe-billed row.
+  it('names the billing owner and keeps the Stripe portal for a Stripe-billed plan', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Billed through')).toBeTruthy();
+    expect(screen.getByText('AGI Workforce (card on file)')).toBeTruthy();
+    expect(screen.getByText('Manage billing')).toBeTruthy();
+  });
+
+  it('sends an App Store-billed plan to Apple instead of the Stripe portal', () => {
+    mockSubscription.subscription_source = 'apple';
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    global.fetch = fetchMock;
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('the Apple App Store')).toBeTruthy();
+
+    const manage = screen.getByText('Manage in the App Store') as HTMLAnchorElement;
+    expect(manage.getAttribute('href')).toBe('https://apps.apple.com/account/subscriptions');
+
+    // The Stripe-only controls are gone: the portal button, and the card row
+    // that would render "No card on file" for a card Apple holds.
+    expect(screen.queryByText('Manage billing')).toBeNull();
+    expect(screen.queryByText('No card on file')).toBeNull();
+    expect(screen.queryByText('Add payment method')).toBeNull();
+
+    // No Stripe round-trips for an account with no Stripe customer.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends a Play-billed plan to Google and says where receipts live', () => {
+    mockSubscription.subscription_source = 'google';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Google Play')).toBeTruthy();
+    const manage = screen.getByText('Manage on Google Play') as HTMLAnchorElement;
+    expect(manage.getAttribute('href')).toBe('https://play.google.com/store/account/subscriptions');
+    expect(
+      screen.getByText(
+        'Receipts for this plan are issued by Google Play and are not available here.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('labels an operator-provisioned plan without removing the portal', () => {
+    mockSubscription.subscription_source = 'manual';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('your organization')).toBeTruthy();
+    // A manual row may still have a Stripe customer carrying past invoices, so
+    // the portal stays reachable.
+    expect(screen.getByText('Manage billing')).toBeTruthy();
   });
 });

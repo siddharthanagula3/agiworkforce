@@ -5,8 +5,16 @@
  * State is split into per-domain slices under ./billing/:
  *   costSlice.ts         — cost overview / analytics
  *   usageSlice.ts        — Stripe usage tracking (automations, tokens, storage …)
- *   budgetSlice.ts       — token budget enforcement and alerts
+ *   budgetSlice.ts       — token budget alerts (display only, see below)
  *   analyticsSlice.ts    — performance metrics and ROI
+ *
+ * `budgetSlice` enforces nothing: it raises warning/danger/exceeded alerts and
+ * never blocks a request, and no production caller feeds it — `addTokenUsage`
+ * and `setBudgetEnabled` have no callers, so `budget.enabled` stays `false`.
+ * The spend cap that actually stops a managed-cloud request is `costSlice`'s
+ * `setMonthlyBudget`, persisted to the local `billing.monthly_budget` setting
+ * and enforced in Rust by `provider_access.rs::check_billing_and_budget`
+ * before send. Wiring the token budget to real usage is ledger BIZ-027.
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
