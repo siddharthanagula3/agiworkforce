@@ -95,7 +95,7 @@
       "name": "providers",
       "path": "packages/ai/providers",
       "kind": "package-group",
-      "purpose": "unknown"
+      "purpose": "`packages/ai/providers` contains provider-specific adapters for model APIs and local runtimes. These packages translate vendor/local provider behavior into AGI-owned schemas and event contracts."
     },
     {
       "name": "@agiworkforce/providers-anthropic",
@@ -179,7 +179,7 @@
       "name": "@agiworkforce/routing",
       "path": "packages/ai/routing",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Shared model/provider routing logic for selecting providers, models, fallbacks, and routing metadata."
     },
     {
       "name": "@agiworkforce/search",
@@ -269,7 +269,7 @@
       "name": "@agiworkforce/browser-tool",
       "path": "packages/tools/browser-tool",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Shared browser automation primitives backed by Playwright Core."
     },
     {
       "name": "@agiworkforce/mcp",
@@ -317,7 +317,7 @@
       "name": "skill-vetting",
       "path": "tools/skill-vetting",
       "kind": "tool",
-      "purpose": "unknown"
+      "purpose": "Pre-install security scanner for agent **skills / plugins / MCP servers**. This is the trust differentiator for a privacy-first marketplace: every skill/plugin/MCP is scanned _before_ install and again at install-time (rug-pull diff), an..."
     }
   ]
 }
