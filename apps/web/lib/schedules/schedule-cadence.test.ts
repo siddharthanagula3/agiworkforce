@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { BILLING_PLAN_PRODUCT_LIMITS, PLATFORM_SCHEDULE_RUNS_PER_SWEEP } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import {
   assertDeliverableCadence,
@@ -110,6 +111,27 @@ describe('schedule cadence floor', () => {
         ),
       ).not.toThrow();
     }
+  });
+
+  /**
+   * The cadence floor caps a task at one run per sweep, so a tier granting N
+   * tasks can put N runs into a single sweep's queue. Selling more of those than
+   * the platform attempts per day does not fail loudly — the overflow stays due
+   * and lands days late — which is how these quotas came to be sized for an
+   * hourly sweep that was never deployed.
+   */
+  it('sells no more scheduled tasks than the deployed sweep attempts in a day', () => {
+    const runsPerDay = firingsPerDay(deployedSweepSchedule()) * PLATFORM_SCHEDULE_RUNS_PER_SWEEP;
+    const quotas = Object.values(BILLING_PLAN_PRODUCT_LIMITS)
+      .map((limits) => limits.maxScheduledTasks)
+      // Enterprise is 'custom': a negotiated contract, sized against capacity by
+      // hand rather than by this table.
+      .filter((quota): quota is number => typeof quota === 'number');
+
+    expect(quotas.reduce((total, quota) => total + quota, 0)).toBeLessThanOrEqual(runsPerDay);
+    // And no single tier may outrun a whole sweep on its own, or one user's
+    // backlog starves every other user's due tasks indefinitely.
+    expect(Math.max(...quotas)).toBeLessThanOrEqual(PLATFORM_SCHEDULE_RUNS_PER_SWEEP);
   });
 
   it('leaves one-time schedules alone', () => {
