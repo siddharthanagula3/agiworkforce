@@ -213,6 +213,19 @@ fn search_success_payload(
     access_timestamp: u64,
     duration_ms: u64,
 ) -> Value {
+    // `results` is the model-facing field and every string in it — title, url,
+    // snippet, domain — is authored by whoever the search provider ranked. It
+    // goes to the model as ONE fenced block rather than a JSON array: in an
+    // array each attacker-authored value sits outside any fence, so fencing the
+    // container alone would protect nothing.
+    //
+    // The parsed array is deliberately NOT carried alongside. This whole payload
+    // is serialized into the model message, so a raw `results` array next to the
+    // fence would re-expose every attacker-authored snippet outside it and the
+    // fence would protect nothing — the closing marker would appear twice, which
+    // is exactly what `search_results_are_fenced` asserts against. Nothing reads
+    // a structured array from here today; a future citation renderer must take it
+    // from `metadata`, which is not model-facing.
     json!({
         "query": query,
         "results": fence_untrusted_web(SEARCH_RESULTS_TAG, &render_search_results(results)),
