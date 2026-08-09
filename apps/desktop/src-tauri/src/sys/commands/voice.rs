@@ -39,6 +39,33 @@ pub struct VoiceSettings {
     pub language: Option<String>,
 }
 
+/// Cloud speech-to-text model, read off the catalog rather than retyped here.
+///
+/// STT has no `taskRouting` entry, so the balanced-tier `stt` model is the
+/// catalog's statement of which transcription model this build should call.
+///
+/// This value is posted verbatim as the multipart `model` field to
+/// `api.openai.com/v1/audio/transcriptions` (and to the managed-cloud proxy in
+/// front of it), so it must be the wire ID: the catalog lookup returns the
+/// display ID, and `get_api_model_id` maps it to `apiModelId`. Today the two
+/// are identical for `gpt-4o-transcribe`; they need not stay that way.
+///
+/// If the catalog ever carries no cloud STT entry this yields an empty string,
+/// which the transcription endpoint rejects with a request error — an obvious
+/// failure rather than a retired ID that looks valid. `models_config`'s
+/// `get_model_by_type_and_tier_resolves_non_chat_modalities` asserts the entry
+/// is present, so that path is not reachable with the shipped catalog.
+fn default_cloud_stt_model() -> String {
+    match crate::core::llm::models_config::get_model_by_type_and_tier(
+        &crate::core::llm::Provider::OpenAI,
+        "stt",
+        "balanced",
+    ) {
+        Some(model_id) => crate::core::llm::models_config::get_api_model_id(model_id),
+        None => String::new(),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum VoiceProvider {
@@ -135,7 +162,7 @@ impl VoiceState {
         Self {
             settings: Arc::new(Mutex::new(VoiceSettings {
                 provider: VoiceProvider::Cloud,
-                model: "gpt-4o-transcribe".to_string(),
+                model: default_cloud_stt_model(),
                 language: None,
             })),
             client: Client::new(),

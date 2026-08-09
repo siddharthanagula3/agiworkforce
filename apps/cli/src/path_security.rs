@@ -74,10 +74,12 @@ pub fn clear_additional_workspace_roots_for_tests() {
 /// Directories whose contents the CLI loads as TRUSTED, always-on instructions
 /// for every future session in a project.
 ///
-/// `memory.rs` glob-loads `.agiworkforce/rules/*.md` into the system prompt of
-/// every session, and `custom_commands.rs` loads `.agiworkforce/commands/**/*.md`
-/// as slash commands. Neither is fenced as untrusted, because both are meant to
-/// be authored by the human who owns the repository.
+/// `memory.rs::load_rules` reads `.agiworkforce/rules/*.md` into the system
+/// prompt of every session, and `custom_commands.rs::default_roots` registers
+/// `.agiworkforce/commands`, `.claude/commands` and `~/.agiworkforce/prompts/claude`,
+/// each recursively globbed for `*.md` and offered as slash commands. None of
+/// them is fenced as untrusted, because all are meant to be authored by the
+/// human who owns the repository.
 ///
 /// Nothing stopped the AGENT writing them. `validate_workspace_path` enforces
 /// containment only — is this path under an allowed root — and
@@ -92,15 +94,99 @@ pub fn clear_additional_workspace_roots_for_tests() {
 ///
 /// Reads are unaffected — the CLI must load these to work. Only agent WRITES
 /// are refused. A human edits them with their own editor, which is the point.
-const AGENT_INSTRUCTION_DIRS: &[&str] = &[".agiworkforce/rules", ".agiworkforce/commands"];
+///
+/// Every entry must be a directory some loader in this crate reads as trusted
+/// instructions. The match is a substring one, so a bare `.claude/commands`
+/// covers the project root and the `~/.claude/commands` user root alike.
+const AGENT_INSTRUCTION_DIRS: &[&str] = &[
+    ".agiworkforce/rules",
+    ".agiworkforce/commands",
+    ".claude/commands",
+    ".agiworkforce/prompts/claude",
+];
 
 /// True when `path` lands inside a directory the agent must not author.
 fn is_agent_instruction_path(path: &Path) -> bool {
-    // Compare with forward slashes so the check behaves the same on Windows.
-    let normalized = path.to_string_lossy().replace('\\', "/");
+    // Compare with forward slashes so the check behaves the same on Windows,
+    // and case-insensitively because macOS and Windows default to
+    // case-insensitive filesystems: `.AGIWORKFORCE/RULES/x.md` is the very same
+    // directory `memory.rs` globs, so it has to be the very same denial.
+    let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
     AGENT_INSTRUCTION_DIRS.iter().any(|dir| {
         normalized.contains(&format!("/{dir}/")) || normalized.starts_with(&format!("{dir}/"))
     })
+}
+
+/// Canonicalize the deepest existing ancestor of `path` and re-attach the
+/// components below it.
+///
+/// Resolves every symlink that `realpath` can resolve, i.e. every one whose
+/// target exists. A symlink whose target does not exist yet survives this
+/// untouched — see `resolve_for_denylist`, which is why that wrapper exists.
+fn resolve_existing_prefix(path: &Path) -> PathBuf {
+    for ancestor in path.ancestors() {
+        let Ok(canonical) = ancestor.canonicalize() else {
+            continue;
+        };
+        let below = path.strip_prefix(ancestor).unwrap_or_else(|_| Path::new(""));
+        return if below.as_os_str().is_empty() {
+            canonical
+        } else {
+            canonical.join(below)
+        };
+    }
+    // Reached when no ancestor exists on disk. An absolute path always ends its
+    // ancestor walk at a root that canonicalizes, so in practice this is the
+    // relative-path case, where the raw spelling is all there is to judge.
+    path.to_path_buf()
+}
+
+/// How many symlink hops to follow. Real paths resolve in one; the cap is only
+/// so a link cycle cannot spin here forever.
+const MAX_DENYLIST_LINK_HOPS: usize = 16;
+
+/// Resolve `path` to the location a write to it would actually land on.
+///
+/// The denylist matches on text, and `validate_workspace_path_with_cwd` hands
+/// back a not-yet-created file spelled exactly as the caller spelled it. Two
+/// spellings reach an instruction directory without ever containing its name:
+/// a different casing, where the filesystem is case-insensitive, and a symlink
+/// somewhere inside the project.
+///
+/// Canonicalizing the existing prefix collapses both — but only for a link
+/// whose target already exists. A link whose target is still absent is what an
+/// attacker actually commits, and it is invisible to both `exists` and
+/// `canonicalize`: the ancestor walk pops the link's own name and re-attaches
+/// it as raw text, dropping exactly the indirection it was meant to resolve.
+/// `tokio::fs::write` at the four write sites opens with `O_CREAT` and follows
+/// it regardless, materializing the target. So a dangling leaf link is read
+/// here by hand, with `symlink_metadata`, which does not follow, and its target
+/// resolved the same way — repeatedly, for chained links.
+fn resolve_for_denylist(path: &Path) -> PathBuf {
+    let mut resolved = resolve_existing_prefix(path);
+    for _ in 0..MAX_DENYLIST_LINK_HOPS {
+        let is_dangling_link = std::fs::symlink_metadata(&resolved)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false);
+        if !is_dangling_link {
+            return resolved;
+        }
+        let Ok(target) = std::fs::read_link(&resolved) else {
+            return resolved;
+        };
+        let next = if target.is_absolute() {
+            target
+        } else {
+            // A relative link target is relative to the directory holding the
+            // link, not to the process cwd.
+            resolved
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .join(target)
+        };
+        resolved = resolve_existing_prefix(&next);
+    }
+    resolved
 }
 
 /// Containment check plus the agent-instruction denylist.
@@ -117,7 +203,7 @@ pub fn validate_workspace_write_path_with_cwd(
     cwd: &Path,
 ) -> std::result::Result<PathBuf, String> {
     let validated = validate_workspace_path_with_cwd(path_str, cwd)?;
-    if is_agent_instruction_path(&validated) {
+    if is_agent_instruction_path(&resolve_for_denylist(&validated)) {
         return Err(format!(
             "Refusing to write {path_str}: this directory is loaded as trusted, always-on \
              instructions for every future session, so an agent write here would rewrite the \
@@ -329,7 +415,7 @@ mod agent_instruction_denylist_tests {
     /// as trusted always-on instructions — rewriting the agent's own
     /// instructions for that repository and every session after it.
     #[test]
-    fn refuses_agent_writes_to_the_rules_directory() {
+    fn rules_file_write_denied() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let rules = tmp.path().join(".agiworkforce").join("rules");
         fs::create_dir_all(&rules).expect("create rules dir");
@@ -341,6 +427,113 @@ mod agent_instruction_denylist_tests {
         )
         .expect_err("writing into .agiworkforce/rules must be refused");
         assert!(err.contains("trusted"), "unexpected message: {err}");
+    }
+
+    /// macOS and Windows resolve `.AGIWORKFORCE/RULES` to the same directory
+    /// `memory.rs` loads, so a denylist that only matches the lowercase
+    /// spelling is a denylist with a one-keystroke bypass.
+    #[test]
+    fn rules_file_write_denied_under_a_different_casing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(tmp.path().join(".agiworkforce").join("rules"))
+            .expect("create rules dir");
+        let target = tmp
+            .path()
+            .join(".AGIWORKFORCE")
+            .join("RULES")
+            .join("injected.md");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_err());
+    }
+
+    /// A symlink inside the project is a spelling of the rules directory that
+    /// contains none of its name. The containment check already canonicalizes
+    /// to accept it; the denylist has to canonicalize to refuse it.
+    #[cfg(unix)]
+    #[test]
+    fn rules_file_write_denied_through_a_symlinked_parent() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let rules = tmp.path().join(".agiworkforce").join("rules");
+        fs::create_dir_all(&rules).expect("create rules dir");
+        std::os::unix::fs::symlink(&rules, tmp.path().join("docs")).expect("create symlink");
+        let target = tmp.path().join("docs").join("injected.md");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_err());
+    }
+
+    /// The exploitable form of the symlink channel, and the one an attacker
+    /// actually commits: the link's target does not exist yet, so `exists` and
+    /// `canonicalize` both report the link as absent and the plain ancestor
+    /// walk hands back the innocent spelling. `fs::write` follows it anyway.
+    #[cfg(unix)]
+    #[test]
+    fn rules_file_write_denied_through_a_dangling_symlink() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(tmp.path().join(".agiworkforce").join("rules"))
+            .expect("create rules dir");
+        let link = tmp.path().join("NOTES.md");
+        std::os::unix::fs::symlink(
+            Path::new(".agiworkforce").join("rules").join("injected.md"),
+            &link,
+        )
+        .expect("create dangling symlink");
+        assert!(!link.exists(), "fixture must be a DANGLING link");
+
+        assert!(
+            validate_workspace_write_path_with_cwd(
+                link.to_str().expect("utf8 path"),
+                tmp.path()
+            )
+            .is_err(),
+            "a dangling link into the rules directory must be refused; \
+             fs::write follows it and materializes the target"
+        );
+    }
+
+    /// `custom_commands::default_roots` registers `<cwd>/.claude/commands`
+    /// alongside `<cwd>/.agiworkforce/commands` and globs both recursively for
+    /// `*.md`. Same always-on trust, same project directory, so same denial.
+    #[test]
+    fn claude_commands_file_write_denied() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let commands = tmp.path().join(".claude").join("commands");
+        fs::create_dir_all(&commands).expect("create .claude/commands");
+        let target = commands.join("evil.md");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_err());
+    }
+
+    /// Symlinks are not themselves the problem, so following them must not
+    /// turn into a blanket refusal of every link in a project.
+    #[cfg(unix)]
+    #[test]
+    fn still_allows_writes_through_a_symlink_to_an_ordinary_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("docs")).expect("create docs");
+        std::os::unix::fs::symlink(
+            Path::new("docs").join("notes.md"),
+            tmp.path().join("NOTES.md"),
+        )
+        .expect("create symlink");
+        let target = tmp.path().join("NOTES.md");
+
+        assert!(validate_workspace_write_path_with_cwd(
+            target.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_ok());
     }
 
     #[test]
