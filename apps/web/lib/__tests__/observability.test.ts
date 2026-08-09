@@ -98,7 +98,7 @@ describe('redactAttributes', () => {
       'gen_ai.usage.input_tokens': 1200,
       'gen_ai.usage.output_tokens': 40,
       'gen_ai.request.model': 'claude-sonnet-5',
-      'gen_ai.request.access_token': 'sk-ant-api03-abcdefghijklmnop',
+      'gen_ai.request.access_token': 'sk-ant-EXAMPLE-abcdefghijklmnop',
       'http.request.header.authorization': 'Bearer abcdefghijklmnop',
       api_key: 'whatever',
       'user.email': 'someone@example.com',
@@ -136,10 +136,10 @@ describe('redactAttributes', () => {
 
   it('masks secret-shaped substrings inside allowed string values', () => {
     const out = redactAttributes({
-      'error.message': 'auth failed for sk-ant-api03-AAAAAAAAAAAAAAAAAAAA on user a@b.com',
+      'error.message': 'auth failed for sk-ant-EXAMPLE-AAAAAAAAAAAAAAAAAAAA on user a@b.com',
     });
     const message = String(out['error.message']);
-    expect(message).not.toContain('sk-ant-api03-AAAAAAAAAAAAAAAAAAAA');
+    expect(message).not.toContain('sk-ant-EXAMPLE-AAAAAAAAAAAAAAAAAAAA');
     expect(message).not.toContain('a@b.com');
     expect(message).toContain(REDACTED);
   });
@@ -246,10 +246,10 @@ describe('withSpan', () => {
     const { withSpan } = await import('@/lib/observability/span');
     await expect(
       withSpan('failing', { domain: 'model' }, () => {
-        throw new Error('401 from key sk-ant-api03-AAAAAAAAAAAAAAAAAAAA');
+        throw new Error('401 from key sk-ant-EXAMPLE-AAAAAAAAAAAAAAAAAAAA');
       }),
     ).rejects.toThrow();
-    expect(String(emitted[0]!['error.message'])).not.toContain('sk-ant-api03');
+    expect(String(emitted[0]!['error.message'])).not.toContain('sk-ant-EXAMPLE');
   });
 
   it('redacts attributes added mid-span via setAttributes', async () => {
