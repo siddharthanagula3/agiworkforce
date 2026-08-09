@@ -7,6 +7,10 @@
  * - Conflict detection warns if the combo is already used
  * - Per-shortcut and global reset to defaults
  * - Search/filter by description
+ *
+ * In-app shortcuts are stored here and dispatched by the App shell router.
+ * OS-level hotkeys are owned by the Rust registry, so their rebinds go through
+ * `shortcuts_update` under the backend id and are only kept once it accepts.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,8 +21,9 @@ import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_CATEGORY_LABELS,
   serializeCombo,
-  parseCombo,
   formatComboDisplay,
+  resolveBinding,
+  toBackendAccelerator,
   type ShortcutDefinition,
   type ShortcutModifiers,
 } from '../../constants/shortcuts';
@@ -31,16 +36,10 @@ import { KeyboardShortcutsOverlay } from '@/features/chat/KeyboardShortcutsOverl
 // Helpers
 // ---------------------------------------------------------------------------
 
-function resolveShortcut(
-  shortcut: ShortcutDefinition,
-  customKeybindings: Record<string, string>,
-): { key: string; modifiers: ShortcutModifiers } {
-  const custom = customKeybindings[shortcut.id];
-  if (custom) {
-    const parsed = parseCombo(custom);
-    if (parsed) return parsed;
-  }
-  return { key: shortcut.key, modifiers: shortcut.modifiers };
+function describeShortcutError(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 function isModifierKey(key: string): boolean {
@@ -86,7 +85,7 @@ function ShortcutRow({
   onReset,
 }: ShortcutRowProps) {
   const captureRef = useRef<HTMLDivElement>(null);
-  const resolved = resolveShortcut(shortcut, customKeybindings);
+  const resolved = resolveBinding(shortcut, customKeybindings);
   const isCustomized = Boolean(customKeybindings[shortcut.id]);
 
   useEffect(() => {
@@ -149,6 +148,7 @@ function ShortcutRow({
             size="sm"
             className="h-7 px-2 text-xs"
             onClick={() => onEditStart(shortcut.id)}
+            aria-label={`Edit shortcut for ${shortcut.description}`}
           >
             Edit
           </Button>
@@ -202,7 +202,7 @@ export function KeybindingsSettings() {
   const activeCombos = React.useMemo(() => {
     const map = new Map<string, string>(); // serialized combo → shortcut ID
     for (const shortcut of DEFAULT_SHORTCUTS) {
-      const resolved = resolveShortcut(shortcut, customKeybindings);
+      const resolved = resolveBinding(shortcut, customKeybindings);
       const combo = serializeCombo(resolved.key, resolved.modifiers);
       map.set(combo, shortcut.id);
     }
@@ -230,32 +230,74 @@ export function KeybindingsSettings() {
         return;
       }
 
-      setCustomKeybinding(id, combo);
-      // Sync to Rust backend
-      void shortcutStoreUpdate(id, combo).catch((err: unknown) => {
-        console.warn('[KeybindingsSettings] Failed to sync shortcut to backend:', err);
-      });
-      toast.success('Shortcut updated');
       setEditingId(null);
+
+      const backendId = DEFAULT_SHORTCUTS.find((s) => s.id === id)?.backendId;
+      if (!backendId) {
+        setCustomKeybinding(id, combo);
+        toast.success('Shortcut updated');
+        return;
+      }
+
+      // OS-level hotkey: the Rust registry owns it and the OS can refuse the
+      // combo (another app already holds it). Persist only after the registry
+      // confirms, so a row can never advertise a binding nothing took.
+      void (async () => {
+        try {
+          await shortcutStoreUpdate(backendId, toBackendAccelerator(combo));
+          setCustomKeybinding(id, combo);
+          toast.success('Shortcut updated');
+        } catch (error) {
+          toast.error(`Could not update shortcut: ${describeShortcutError(error)}`);
+        }
+      })();
     },
     [activeCombos, setCustomKeybinding, shortcutStoreUpdate],
   );
 
   const handleReset = useCallback(
     (id: string) => {
-      resetCustomKeybinding(id);
-      toast.success('Shortcut reset to default');
+      const definition = DEFAULT_SHORTCUTS.find((s) => s.id === id);
+      const backendId = definition?.backendId;
+      if (!definition || !backendId) {
+        resetCustomKeybinding(id);
+        toast.success('Shortcut reset to default');
+        return;
+      }
+
+      const shipped = toBackendAccelerator(serializeCombo(definition.key, definition.modifiers));
+      void (async () => {
+        try {
+          await shortcutStoreUpdate(backendId, shipped);
+          resetCustomKeybinding(id);
+          toast.success('Shortcut reset to default');
+        } catch (error) {
+          toast.error(`Could not reset shortcut: ${describeShortcutError(error)}`);
+        }
+      })();
     },
-    [resetCustomKeybinding],
+    [resetCustomKeybinding, shortcutStoreUpdate],
   );
 
   const handleResetAll = useCallback(() => {
-    resetAllCustomKeybindings();
-    // Sync reset to Rust backend
-    void shortcutStoreReset().catch((err: unknown) => {
-      console.warn('[KeybindingsSettings] Failed to sync shortcut reset to backend:', err);
-    });
-    toast.success('All shortcuts reset to defaults');
+    void (async () => {
+      // `shortcuts_reset` answers with the restored registry. The store turns a
+      // rejected call into an empty list today; catching as well means a future
+      // rethrow still resets the in-app rows and still reports the failure
+      // instead of dying as an unhandled rejection.
+      let restored: unknown[] = [];
+      try {
+        restored = await shortcutStoreReset();
+      } catch (error) {
+        console.warn('[KeybindingsSettings] shortcuts_reset rejected:', error);
+      }
+      resetAllCustomKeybindings();
+      if (restored.length === 0) {
+        toast.error('In-app shortcuts were reset, but the system hotkeys could not be restored.');
+        return;
+      }
+      toast.success('All shortcuts reset to defaults');
+    })();
   }, [resetAllCustomKeybindings, shortcutStoreReset]);
 
   // Filter and group shortcuts
@@ -265,7 +307,7 @@ export function KeybindingsSettings() {
       !query ||
       s.description.toLowerCase().includes(query) ||
       s.category.includes(query) ||
-      s.action.toLowerCase().includes(query),
+      (s.action ?? s.backendId ?? '').toLowerCase().includes(query),
   );
 
   const categories = Array.from(
@@ -280,7 +322,7 @@ export function KeybindingsSettings() {
     const seen = new Map<string, string>(); // combo → first shortcut ID
 
     for (const shortcut of DEFAULT_SHORTCUTS) {
-      const resolved = resolveShortcut(shortcut, customKeybindings);
+      const resolved = resolveBinding(shortcut, customKeybindings);
       const combo = serializeCombo(resolved.key, resolved.modifiers);
 
       if (seen.has(combo)) {
@@ -310,7 +352,7 @@ export function KeybindingsSettings() {
               size="sm"
               onClick={() => setOverlayOpen(true)}
               className="text-xs"
-              title="View all shortcuts as a cheatsheet (Cmd+/)"
+              title="View all shortcuts as a cheatsheet"
             >
               <Eye className="h-3 w-3 mr-1.5" />
               View all shortcuts
@@ -418,13 +460,9 @@ export function KeybindingsSettings() {
           A shortcut already assigned to another action cannot be reused. Rebind the other action
           first.
         </p>
-        <p>Leader-key sequences (Ctrl+Space, then a key) are independent of these shortcuts.</p>
         <p>
-          Press{' '}
-          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">
-            Cmd+/
-          </kbd>{' '}
-          anywhere in the app to open the shortcuts cheatsheet.
+          System-wide hotkeys keep working while another app is in front, so the OS can refuse a
+          combination something else already holds. The row keeps its old key when that happens.
         </p>
       </div>
 

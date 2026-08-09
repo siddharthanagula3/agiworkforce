@@ -1,5 +1,7 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 
+import { REGISTERED_COMMANDS } from './registeredCommands';
+
 type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
 
 /**
@@ -18,15 +20,26 @@ function createCodedError(message: string, code: string): CodedError {
   return error;
 }
 
-function assertAllowedCommandName(command: string): void {
+/**
+ * Rejects any command the Rust `generate_handler!` registry does not answer.
+ *
+ * Exported so `src/lib/tauri-mock.ts` can call it: 178 renderer modules import
+ * their `invoke` from there, and only two (`features/code/FileTree.tsx`,
+ * `stores/editingStore.ts`) import this module's `invoke`. Coverage is still not
+ * total — `features/startup-recovery/StartupRecoveryBootstrap.tsx`,
+ * `services/analyticsQueries.ts`, `lib/newChatReset.ts` and
+ * `lib/browserAutomation.ts` import `@tauri-apps/api/core` directly and reach
+ * Rust without passing this check.
+ *
+ * @throws CodedError 'INVALID_COMMAND' if the name is not a Tauri command name
+ * @throws CodedError 'UNKNOWN_COMMAND' if the name is not registered in Rust
+ */
+export function assertRegisteredCommand(command: string): void {
   if (!COMMAND_NAME_PATTERN.test(command)) {
     throw createCodedError(`Invalid IPC command name: ${command}`, 'INVALID_COMMAND');
   }
 
-  if (
-    ALLOWED_GENERIC_COMMANDS.has(command) ||
-    ALLOWED_COMMAND_PREFIXES.some((prefix) => command.startsWith(prefix))
-  ) {
+  if (REGISTERED_COMMANDS.has(command)) {
     return;
   }
 
@@ -40,322 +53,21 @@ const MAX_PAYLOAD_BYTES = 256 * 1024;
 const WINDOW_MS = 1000;
 const MAX_REQS_PER_WINDOW = 30;
 const DEFAULT_TIMEOUT_MS = 30000;
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY_MS = 1000;
 const COMMAND_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
-const ALLOWED_COMMAND_PREFIXES = [
-  'account_',
-  'agent_',
-  'agi_',
-  'analytics_',
-  'api_',
-  'app_permissions_',
-  'auth_',
-  'background_task_',
-  'bg_',
-  'billing_',
-  'browser_',
-  'budget_',
-  'cache_',
-  'calendar_',
-  'canvas_',
-  'capture_',
-  'chat_',
-  'cloud_',
-  'code_',
-  'codebase_cache_',
-  'coding_checkpoint_',
-  'composer_',
-  'computer_use_',
-  'contact_',
-  'conversation_',
-  'coord_',
-  'db_',
-  'design_',
-  'device_link_',
-  'dir_',
-  'dispatch_hmac_',
-  'document_',
-  'email_',
-  'error_',
-  'extension_',
-  'feature_flag_',
-  'file_',
-  'form_undo_',
-  'format_',
-  'fs_',
-  'git_',
-  'knowledge_',
-  'llm_',
-  'lsp_',
-  'master_password_',
-  'mcp_',
-  'mcpb_',
-  'media_',
-  'memory_',
-  'messaging_',
-  'metrics_',
-  'notification_',
-  'oauth_',
-  'ocr_',
-  'ollama_',
-  'orchestrator_',
-  'privacy_',
-  'productivity_',
-  'project_',
-  'project_context_',
-  'research_',
-  'router_',
-  'scheduler_',
-  'screen_watcher_',
-  'search_',
-  'secret_manager_',
-  'settings_',
-  'settings_v2_',
-  'shortcuts_',
-  'skill_',
-  'speech_',
-  'swarm_',
-  'task_',
-  'terminal_',
-  'thinking_',
-  'timeout_',
-  'undo_',
-  'vision_',
-  'voice_',
-  'window_',
-  'workspace_',
-] as const;
-
-const ALLOWED_GENERIC_COMMANDS = new Set([
-  'accept_invitation',
-  'acknowledge_milestone',
-  'apply_changes',
-  'approve_operation',
-  'approve_request',
-  'auto_save_decision',
-  'calculate_risk_level',
-  'cancel_tool_confirmation',
-  'cancel_tool_execution',
-  'cancel_workflow',
-  'check_connectivity',
-  'clear_model_capability_cache',
-  'clear_project_memories',
-  'clear_remembered_tool_choice',
-  'clear_remembered_tool_choices',
-  'clear_sample_data',
-  'click_semantic',
-  'compare_to_industry_benchmark',
-  'compare_to_manual',
-  'compare_to_previous_period',
-  'complete_first_run',
-  'complete_onboarding_step',
-  'complete_tutorial',
-  'complete_tutorial_step',
-  'connect_slack',
-  'connect_teams',
-  'connect_websocket',
-  'connect_whatsapp',
-  'create_approval_request',
-  'create_team',
-  'create_workflow',
-  'delete_custom_agent',
-  'delete_project_memory',
-  'delete_team',
-  'delete_workflow',
-  'disconnect_platform',
-  'execute_code',
-  'execute_template',
-  'execute_terminal_command',
-  'execute_workflow',
-  'expire_timed_out_requests',
-  'export_roi_report',
-  'export_user_data',
-  'fetch_user_profile',
-  'find_all_elements_semantic',
-  'find_by_role',
-  'find_element_semantic',
-  'generate_image',
-  'get_accessibility_tree',
-  'get_agent_mode',
-  'get_all_templates',
-  'get_all_time_stats',
-  'get_approval_statistics',
-  'get_architectural_decisions',
-  'get_audit_events',
-  'get_auto_approve_all',
-  'get_benchmark_comparison',
-  'get_coding_styles',
-  'get_dom_semantic_graph',
-  'get_execution_logs',
-  'get_file_diff',
-  'get_first_run_session',
-  'get_first_run_statistics',
-  'get_installed_templates',
-  'get_interactive_elements',
-  'get_knowledge_by_category',
-  'get_local_user_id',
-  'get_manual_vs_automated_comparison',
-  'get_messaging_history',
-  'get_metrics_history',
-  'get_milestones',
-  'get_month_stats',
-  'get_next_execution_time',
-  'get_onboarding_status',
-  'get_outcome_tracking',
-  'get_pending_approvals',
-  'get_pending_confirmation_count',
-  'get_period_comparison',
-  'get_process_statistics',
-  'get_project_context',
-  'get_project_memories',
-  'get_prompt_completion',
-  'get_realtime_stats',
-  'get_recent_activity',
-  'get_recent_conversations',
-  'get_recent_knowledge',
-  'get_recommended_tutorial',
-  'get_session_info',
-  'get_settings',
-  'get_system_resources',
-  'get_team',
-  'get_team_activity',
-  'get_team_invitations',
-  'get_team_members',
-  'get_team_presence',
-  'get_team_resources',
-  'get_team_resources_by_type',
-  'get_template_by_id',
-  'get_template_categories',
-  'get_templates_by_category',
-  'get_today_stats',
-  'get_tool_safety_tier',
-  'get_tutorial',
-  'get_tutorial_progress',
-  'get_tutorial_stats',
-  'get_tutorials',
-  'get_user_credits',
-  'get_user_preference',
-  'get_user_rewards',
-  'get_user_team_activity',
-  'get_user_teams',
-  'get_user_tutorial_progress',
-  'get_user_workflows',
-  'get_week_stats',
-  'get_workflow',
-  'get_workflow_status',
-  'glob_search',
-  'grep_search',
-  'has_completed_first_run',
-  'has_reward',
-  'has_sample_data',
-  'has_unlocked_feature',
-  'install_template',
-  'invite_member',
-  'list_custom_agents',
-  'list_messaging_connections',
-  'load_custom_instructions',
-  'log_tool_execution',
-  'log_workflow_execution',
-  'open_file_location',
-  'pause_agent',
-  'pause_workflow',
-  'populate_sample_data',
-  'query_knowledge',
-  'record_automation_metrics',
-  'record_demo_results',
-  'record_help_session',
-  'record_step_view',
-  'refresh_agent_status',
-  'reject_operation',
-  'reject_request',
-  'remove_member',
-  'requires_approval',
-  'reset_onboarding',
-  'reset_session_cost',
-  'reset_tutorial',
-  'respond_tool_confirmation',
-  'resume_agent',
-  'resume_workflow',
-  'revert_changes',
-  'run_instant_demo',
-  'save_architectural_decision',
-  'save_coding_style',
-  'save_custom_agent',
-  'save_custom_instructions',
-  'save_project_context',
-  'schedule_workflow',
-  'select_demo',
-  'send_message',
-  'set_agent_mode',
-  'set_auto_approve_all',
-  'set_tool_approval_policy',
-  'set_user_offline',
-  'set_user_online',
-  'set_user_preference',
-  'share_milestone',
-  'share_resource',
-  'skip_first_run',
-  'skip_onboarding_step',
-  'skip_tutorial_step',
-  'start_agent_task',
-  'start_first_run_experience',
-  'start_tutorial',
-  'submit_tutorial_feedback',
-  'sync_capabilities',
-  'test_selector_strategies',
-  'toggle_trigger',
-  'track_workflow_view',
-  'transfer_team_ownership',
-  'trigger_workflow_on_event',
-  'type_semantic',
-  'uninstall_template',
-  'unregister_trigger',
-  'unshare_resource',
-  'update_allowed_directories',
-  'update_first_run_step',
-  'update_member_role',
-  'update_memory_importance',
-  'update_session_activity',
-  'update_team',
-  'update_team_settings',
-  'update_trigger',
-  'update_user_activity',
-  'update_workflow',
-  'upload_file',
-  'verify_audit_event',
-  'verify_audit_integrity',
-]);
-
-const COMMAND_TIMEOUTS: Record<string, number> = {
-  auth_login: 60000,
-  auth_register: 60000,
-  auth_refresh_token: 30000,
-
-  read_file: 60000,
+// Overrides for the `invoke` below — this module's, not `lib/tauri-mock`'s,
+// which reaches Rust by its own path and never reads this table. Only
+// FileTree.tsx and editingStore.ts call in here, so the only commands this table
+// can ever be consulted for are dir_list, dir_create, dir_delete,
+// file_watch_start, file_watch_stop, file_write, file_rename, file_delete and
+// get_file_diff. An entry for anything else is inert however correct its
+// spelling, and an entry whose key is not a registered command is worse: it
+// reads as an override while the call silently takes DEFAULT_TIMEOUT_MS — which
+// is how `read_file` sat here for a command actually named `file_read`.
+// `src/utils/__tests__/ipc.test.ts` pins the keys against both facts.
+export const COMMAND_TIMEOUTS: Record<string, number> = {
   file_write: 60000,
-
-  execute_command: 120000,
-
-  get_onboarding_status: 5000,
-
-  // Chat commands: blocking until the full LLM response (including agentic
-  // loops and SSE streaming) completes before returning. Use a 10-minute
-  // ceiling to cover deep-research and multi-step agentic sessions.
-  chat_send_message: 600000,
-  chat_continue_generation: 600000,
 };
-
-const RETRYABLE_COMMANDS = new Set([
-  'auth_refresh_token',
-  'get_onboarding_status',
-  'analytics_get_session_id',
-  'analytics_flush_events',
-  'mcp_check_server_health',
-]);
-
-const RETRYABLE_ERROR_CODES = new Set(['TIMEOUT', 'NETWORK_ERROR', 'SERVICE_UNAVAILABLE']);
 
 const buckets = new Map<string, number[]>();
 
@@ -455,65 +167,6 @@ export const TypeGuards = {
 };
 
 /**
- * Type guard to check if an error has a code property.
- */
-function isCodedError(error: unknown): error is CodedError {
-  return (
-    error instanceof Error && 'code' in error && typeof (error as CodedError).code === 'string'
-  );
-}
-
-function isRetryableError(error: unknown): boolean {
-  if (isCodedError(error)) {
-    return RETRYABLE_ERROR_CODES.has(error.code);
-  }
-
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    return (
-      message.includes('network') ||
-      message.includes('connection') ||
-      message.includes('timeout') ||
-      message.includes('unavailable')
-    );
-  }
-  return false;
-}
-
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  command: string,
-  maxRetries: number = MAX_RETRIES,
-): Promise<T> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-
-      if (attempt === maxRetries || !RETRYABLE_COMMANDS.has(command) || !isRetryableError(error)) {
-        throw error;
-      }
-
-      const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-
-      if (import.meta.env.DEV) {
-        console.warn(
-          `[IPC] Retry ${attempt + 1}/${maxRetries} for '${command}' after ${delay}ms. Error:`,
-          error,
-        );
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-}
-
-/**
  * Enforces rate limiting for IPC commands using a sliding window algorithm.
  * Prevents excessive calls to the same command within a time window.
  *
@@ -563,25 +216,29 @@ async function rateLimit(key: string): Promise<void> {
 }
 
 /**
- * Invokes a Tauri backend command with automatic rate limiting, timeout, and retry handling.
- * This is the primary way to communicate between the React frontend and Rust backend.
+ * Invokes a Tauri backend command with allowlist, payload-size, rate-limit and
+ * timeout enforcement.
+ *
+ * This is NOT the renderer's general invoke: FileTree.tsx and editingStore.ts
+ * are its only callers. Everything else imports `invoke` from
+ * `src/lib/tauri-mock.ts`, which enforces the allowlist but none of the rest.
  *
  * @param command - The Tauri command name to invoke
  * @param args - Optional JSON-serializable arguments to pass to the command
  * @returns The response from the Tauri command
+ * @throws CodedError with code 'UNKNOWN_COMMAND' if the command is not registered in Rust
  * @throws CodedError with code 'PAYLOAD_TOO_LARGE' if args exceed 256KB
  * @throws CodedError with code 'RATE_LIMIT' if too many calls to the same command
  * @throws CodedError with code 'TIMEOUT' if the command exceeds its timeout
  *
  * @example
- * const status = await invoke<OnboardingStatus>('get_onboarding_status');
  * await invoke('file_write', { path: '/tmp/test.txt', content: 'Hello' });
  */
 export async function invoke<T = unknown>(command: string, args?: Json): Promise<T> {
   if (!command || typeof command !== 'string' || command.trim().length === 0) {
     throw new Error('Invalid command name');
   }
-  assertAllowedCommandName(command);
+  assertRegisteredCommand(command);
 
   const size = byteLength(args);
   if (size > MAX_PAYLOAD_BYTES) {
@@ -591,13 +248,11 @@ export async function invoke<T = unknown>(command: string, args?: Json): Promise
     );
   }
 
-  return withRetry(async () => {
-    await rateLimit(command);
+  await rateLimit(command);
 
-    const timeout = COMMAND_TIMEOUTS[command] ?? DEFAULT_TIMEOUT_MS;
+  const timeout = COMMAND_TIMEOUTS[command] ?? DEFAULT_TIMEOUT_MS;
 
-    const invokeArgs =
-      args === null || typeof args !== 'object' || Array.isArray(args) ? undefined : args;
-    return withTimeout(tauriInvoke<T>(command, invokeArgs), timeout, command);
-  }, command);
+  const invokeArgs =
+    args === null || typeof args !== 'object' || Array.isArray(args) ? undefined : args;
+  return withTimeout(tauriInvoke<T>(command, invokeArgs), timeout, command);
 }

@@ -14,6 +14,7 @@ import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
+  canAccessModelForSubscriptionTier,
   evaluateModelEnvironment,
   getAutoRoutingProfiles as getCatalogAutoRoutingProfiles,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
@@ -25,7 +26,6 @@ import {
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
   getTierPolicy as getCatalogTierPolicy,
-  isModelAllowedForTier as isCatalogModelAllowedForTier,
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
@@ -195,21 +195,23 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
 
 // ---- Tier logic (reads arrays from JSON) ----
 
-const ECONOMY_MODELS = getCatalogAllowedModelsForTier('economy');
-const PRO_ADDITIONS = getCatalogAllowedModelsForTier('pro_additions');
-const FLAGSHIP_ADDITIONS = getCatalogAllowedModelsForTier('flagship_additions');
-
-export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
-  'local-only': [...ECONOMY_MODELS],
-  byok: [...ECONOMY_MODELS],
-  free: [...ECONOMY_MODELS],
-  basic: [...ECONOMY_MODELS],
-  pro: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  max: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  max_15x: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  team: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  enterprise: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-};
+/**
+ * Every model any subscription roster can offer, in catalog order.
+ *
+ * Only a universe to filter — the cascade itself is NOT rebuilt here. A local
+ * `TIER_ALLOWED_MODELS` table used to union these three rosters per tier, which
+ * put a second answer to "what may this plan select" in the same file as
+ * `isModelAllowedForTier`; once that function started reading each model's
+ * `tierPolicy.minTier` the two disagreed for Free (roster said 5 Economy models,
+ * gate refused 2 of them).
+ */
+const SELECTABLE_MODELS: readonly string[] = Array.from(
+  new Set([
+    ...getCatalogAllowedModelsForTier('economy'),
+    ...getCatalogAllowedModelsForTier('pro_additions'),
+    ...getCatalogAllowedModelsForTier('flagship_additions'),
+  ]),
+);
 
 // ---- Helper functions (unchanged signatures) ----
 
@@ -243,31 +245,24 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
 }
 
 export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
-  const accessTier = normalizeSubscriptionAccessTier(tier);
-  // local-only and byok users only access models through their own keys / Ollama,
-  // not through tier-gated managed-cloud lists; treat them like 'free' for any
-  // managed-cloud gating logic that calls into this function.
-  if (accessTier === 'free' || accessTier === 'basic') {
-    return isCatalogModelAllowedForTier(modelId, 'economy');
-  }
-  if (accessTier === 'pro') {
-    return (
-      isCatalogModelAllowedForTier(modelId, 'economy') ||
-      isCatalogModelAllowedForTier(modelId, 'pro_additions')
-    );
-  }
-  if (accessTier === 'max' || accessTier === 'enterprise') {
-    return (
-      isCatalogModelAllowedForTier(modelId, 'economy') ||
-      isCatalogModelAllowedForTier(modelId, 'pro_additions') ||
-      isCatalogModelAllowedForTier(modelId, 'flagship_additions')
-    );
-  }
-  return isCatalogModelAllowedForTier(modelId, 'economy');
+  // Delegated, not re-derived (apps/web/shared/config/llm.ts does the same). The
+  // local cascade collapsed Free into Basic and so sold Free the whole Economy
+  // roster, while the catalog gate also weighs each model's `tierPolicy.minTier`
+  // — the field FREE_TRIAL_MODELS is built from. Two Economy models carry
+  // minTier 'basic', so the copy here let a Free desktop pick models the server
+  // refuses.
+  return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
+/**
+ * The models `tier` may select — by construction the exact set for which
+ * `isModelAllowedForTier` answers true, so a roster and the gate that enforces
+ * it can never drift apart again. 'local-only' and 'byok' get an empty list:
+ * the managed-cloud gate fails closed for them (they route through the user's
+ * own keys), and pretending otherwise is what made the old table wrong.
+ */
 export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
-  return TIER_ALLOWED_MODELS[tier] ?? TIER_ALLOWED_MODELS.free;
+  return SELECTABLE_MODELS.filter((modelId) => isModelAllowedForTier(modelId, tier));
 }
 
 export function getProviderDefaultModel(provider: Provider): string | null {
