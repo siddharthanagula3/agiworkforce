@@ -41,7 +41,11 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
-import { meterSandboxComputeInterval } from './compute-metering';
+import {
+  E2B_COMPUTE_RATE_ENV,
+  meterSandboxComputeInterval,
+  sandboxComputeIsPriceable,
+} from './compute-metering';
 import {
   getE2BSession,
   saveE2BSession,
@@ -341,6 +345,19 @@ export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
  */
 export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecutor | null> {
   if (!e2bExecutionEnabled()) return null;
+
+  // GOV-5: sandbox compute that cannot be priced must not be sold. On a
+  // production runtime with no `AGI_E2B_COMPUTE_MICROUSD_PER_SECOND` every
+  // second inside this sandbox would deduct nothing and move no usage cap, so
+  // refuse the sandbox instead of serving it free. Off production the rate is
+  // optional and metering is simply inert.
+  if (!sandboxComputeIsPriceable()) {
+    logger.error(
+      { env: E2B_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
+      '[e2b] sandbox compute has no configured price; refusing to provision (fail-closed)',
+    );
+    return null;
+  }
 
   const conversationId = scope?.conversationId;
   const codeSessionId = scope?.resource?.kind === 'code_session' ? scope.resource.id : undefined;

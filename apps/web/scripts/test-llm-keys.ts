@@ -5,6 +5,14 @@
  */
 
 import 'dotenv/config';
+import { getModelMetadataById, requireProviderDefaultModel } from '@agiworkforce/types';
+
+// The probe below posts to api.anthropic.com, so it needs the catalog's wire ID
+// (apiModelId), not the display ID the rest of the app routes on.
+const anthropicProbeModelId = (() => {
+  const modelId = requireProviderDefaultModel('anthropic');
+  return getModelMetadataById(modelId)?.apiModelId ?? modelId;
+})();
 
 const providers = [
   {
@@ -24,9 +32,10 @@ const providers = [
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     }),
-    // Anthropic requires a POST request with a body
+    // Anthropic requires a POST request with a body. The model comes from the
+    // catalog so a retired ID cannot make a working key report as broken.
     testBody: JSON.stringify({
-      model: 'claude-sonnet-5',
+      model: anthropicProbeModelId,
       max_tokens: 1,
       messages: [{ role: 'user', content: 'Hi' }],
     }),
