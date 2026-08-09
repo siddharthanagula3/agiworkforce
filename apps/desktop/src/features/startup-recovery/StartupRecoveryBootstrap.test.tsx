@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StartupRecoveryBootstrap, type StartupRecoveryInvoke } from './StartupRecoveryBootstrap';
 
@@ -35,7 +35,14 @@ describe('StartupRecoveryBootstrap', () => {
     expect(
       await screen.findByRole('heading', { name: 'AGI could not unlock local data' }),
     ).toBeInTheDocument();
-    expect(document.title).toBe('AGI — Local data recovery');
+    // waitFor, not a bare expect: the heading commits to the DOM in render,
+    // but the title is set in a useEffect that has not necessarily flushed
+    // when findByRole resolves. Asserting immediately depends on effect
+    // ordering, which holds locally and loses on a loaded CI runner —
+    // "expected '' to be 'AGI — Local data recovery'" with 256 other files
+    // passing. Wait for the state the effect produces instead of assuming
+    // when it ran.
+    await waitFor(() => expect(document.title).toBe('AGI — Local data recovery'));
     expect(screen.queryByText('Normal application')).not.toBeInTheDocument();
     expect(normalAppMounted).not.toHaveBeenCalled();
     expect(invokeCommand).toHaveBeenCalledWith('startup_get_recovery_state');
