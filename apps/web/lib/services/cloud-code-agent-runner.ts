@@ -20,7 +20,6 @@ import type { CloudCodeToolOutcome, CloudCodeToolRunner } from './cloud-code-age
  */
 
 const MAX_READ_BYTES = 200_000;
-const COMMAND_TIMEOUT_MS = 120_000;
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
@@ -103,10 +102,14 @@ export function createCloudCodeToolRunner(
       }
     },
 
-    async runCommand(command: string): Promise<CloudCodeToolOutcome> {
+    async runCommand(command: string, timeoutMs: number): Promise<CloudCodeToolOutcome> {
       // NOTE: no risk check here on purpose. `classifyCommandRisk` is the single
       // owner of that decision and the loop applies it before calling this. A
       // second check here would invite the two to disagree.
+      //
+      // `timeoutMs` likewise comes from the loop: it is the per-command cap
+      // already clamped to the turn's remaining budget. Substituting a constant
+      // here would let a command outlive the turn that started it.
       if (!executor.runCommand) {
         return { output: 'This sandbox cannot run commands.', isError: true };
       }
@@ -114,7 +117,7 @@ export function createCloudCodeToolRunner(
         const result = await executor.runCommand({
           command,
           cwd: workspacePath,
-          timeoutMs: COMMAND_TIMEOUT_MS,
+          timeoutMs,
         });
         const parts: string[] = [];
         if (result.stdout) parts.push(result.stdout);

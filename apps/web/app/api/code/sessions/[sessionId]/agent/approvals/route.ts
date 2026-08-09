@@ -1,0 +1,135 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { effectivePlanTier } from '@agiworkforce/types';
+import { requireCsrfToken } from '@/lib/csrf';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError } from '@/lib/errors';
+import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { withRateLimit } from '@/lib/rate-limit';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  CloudCodeConflictError,
+  CloudCodeNotFoundError,
+  CloudCodeUnavailableError,
+  CloudCodeValidationError,
+  isCloudCodeSchemaUnavailable,
+} from '@/lib/services/cloud-code-session-service';
+import {
+  CloudCodeApprovalExpiredError,
+  decideCloudCodeAgentApproval,
+  listCloudCodeAgentApprovals,
+} from '@/lib/services/cloud-code-agent-approval-service';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+
+/**
+ * Cloud Code agent approvals.
+ *
+ *   GET  — the approvals in this session still waiting on the user.
+ *   POST — decide one and resume the turn it suspended.
+ *
+ * A turn that stops at the approval boundary cannot be continued by retrying
+ * `POST ../agent`: that starts a NEW turn against a new idempotency key. This is
+ * the only path back into a suspended turn, which is why it exists.
+ *
+ * No `Idempotency-Key` header is required here, and none would help: the
+ * reservation key is derived from the turn and step being decided, and the
+ * decision itself is single-winner in the database.
+ */
+
+export const runtime = 'nodejs';
+
+type RouteContext = { params: Promise<{ sessionId: string }> };
+
+function rethrowCloudCodeError(error: unknown): never {
+  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
+  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
+  if (error instanceof CloudCodeApprovalExpiredError) throw createError.conflict(error.message);
+  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
+  if (error instanceof CloudCodeUnavailableError) {
+    throw createError.serviceUnavailable(error.message);
+  }
+  if (error instanceof ManagedUsageRequestError) {
+    throw createError.validation(error.message);
+  }
+  if (isCloudCodeSchemaUnavailable(error)) {
+    throw createError.serviceUnavailable(
+      'Managed Code is coming soon. Cloud sessions are not available yet.',
+    );
+  }
+  throw error;
+}
+
+async function handleListApprovals(request: NextRequest, context: RouteContext) {
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { sessionId } = await context.params;
+  try {
+    const approvals = await listCloudCodeAgentApprovals(db, { userId, organizationId }, sessionId);
+    return NextResponse.json({ approvals });
+  } catch (error) {
+    rethrowCloudCodeError(error);
+  }
+}
+
+async function handleDecideApproval(request: NextRequest, context: RouteContext) {
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+
+  const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (limited) return limited;
+
+  const csrfError = await requireCsrfToken(request, userId);
+  if (csrfError) return csrfError as NextResponse;
+
+  if (!e2bProvisioningReady()) {
+    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON request body');
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw createError.validation('Request body must be an object');
+  }
+  const record = body as Record<string, unknown>;
+
+  const turnId = typeof record['turnId'] === 'string' ? record['turnId'] : '';
+  if (!turnId) throw createError.validation('"turnId" is required');
+
+  const stepIndex = record['stepIndex'];
+  if (typeof stepIndex !== 'number' || !Number.isInteger(stepIndex) || stepIndex < 0) {
+    throw createError.validation('"stepIndex" must be a non-negative integer');
+  }
+
+  const decision = record['decision'];
+  if (decision !== 'approve' && decision !== 'reject') {
+    throw createError.validation('"decision" must be "approve" or "reject"');
+  }
+
+  const { sessionId } = await context.params;
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+
+  try {
+    const result = await decideCloudCodeAgentApproval({
+      db,
+      owner: { userId, organizationId },
+      sessionId,
+      turnId,
+      stepIndex,
+      decision,
+      planTier,
+      // Client disconnect cancels the resumed turn; usage is settled either way.
+      signal: request.signal,
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    rethrowCloudCodeError(error);
+  }
+}
+
+export const GET = withErrorHandler(handleListApprovals);
+export const POST = withErrorHandler(handleDecideApproval);

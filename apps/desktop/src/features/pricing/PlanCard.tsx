@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils';
 import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
-  getPlanPriceUsd,
+  getPublishedPlanPriceUsd,
   isFreePlan,
   type UIPlanTier,
 } from '@agiworkforce/types';
@@ -59,7 +59,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   // Basic ($7/mo, ₹399) is cross-surface (PLAN_SURFACE_VISIBILITY.basic =
   // ['web','desktop','mobile']) — it renders in the desktop plan list.
   basic: {
-    price: `$${getPlanPriceUsd('basic', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('basic', 'monthly')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -70,8 +70,8 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPlanPriceUsd('pro', 'monthly')} / mo`,
-    priceNote: `$${getPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
+    price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
+    priceNote: `$${getPublishedPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
     bullets: [
       'Higher token quota',
       'AGI Work and developer surfaces',
@@ -82,7 +82,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPlanPriceUsd('max', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
     bullets: [
       '5x managed usage capacity',
       'Every flagship model included',
@@ -93,7 +93,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPlanPriceUsd('max_15x', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('max_15x', 'monthly')} / mo`,
     bullets: [
       '15x managed usage capacity',
       'Highest individual usage limits',

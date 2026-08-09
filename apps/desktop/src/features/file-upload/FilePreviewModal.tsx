@@ -7,7 +7,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import type { DownloadableFile } from './FileDownloadButton';
 import { PDFViewer } from './PDFViewer';
 

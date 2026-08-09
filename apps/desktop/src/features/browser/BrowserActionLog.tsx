@@ -2,10 +2,10 @@ import { useState, useMemo, type ComponentType } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useBrowserStore, type BrowserAction, type ActionType } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Badge } from '@/ui/Badge';
 import {
   Navigation,
   MousePointer,

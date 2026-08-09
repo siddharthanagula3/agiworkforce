@@ -22,8 +22,8 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 import { cn } from '@/lib/utils';
 import { openUrl } from '@/lib/tauri-mock';
 import type { ResearchResponse } from '@/stores/researchStore';

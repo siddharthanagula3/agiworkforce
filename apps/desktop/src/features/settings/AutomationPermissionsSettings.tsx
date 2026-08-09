@@ -2,7 +2,7 @@ import { automation } from '@agiworkforce/desktop-command-client';
 import { Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface AutomationPermissions {
   accessibility: boolean;

@@ -1,7 +1,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
-import { ResizeHandle } from '@/components/ui/ResizeHandle';
+import { ResizeHandle } from '@/ui/ResizeHandle';
 import { ExecutionSidecarHeader } from './ExecutionSidecarHeader';
 import { ExecutionSidecarTimeline } from './ExecutionSidecarTimeline';
 import { ExecutionSidecarScreenView } from './ExecutionSidecarScreenView';

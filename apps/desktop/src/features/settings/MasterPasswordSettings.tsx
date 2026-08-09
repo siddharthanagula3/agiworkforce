@@ -3,9 +3,9 @@ import { Eye, EyeOff, KeyRound, Lock, LockOpen, RefreshCw, Shield } from 'lucide
 import { toast } from 'sonner';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
 
 interface MasterPasswordStatus {
   is_configured: boolean;

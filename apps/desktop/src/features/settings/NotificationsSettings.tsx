@@ -6,8 +6,8 @@
  */
 import { Loader2 } from 'lucide-react';
 import { isCloudWeb } from '@/lib/tauri-mock';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
 import type { NotificationSettings, NotificationType } from '../../hooks/useNotifications';
 
 interface NotificationsSettingsProps {

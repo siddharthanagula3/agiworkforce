@@ -19,8 +19,8 @@ import { toast } from 'sonner';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/ui/Button';
+import { Switch } from '@/ui/Switch';
 
 type PolicyValue = 'always_allow' | 'always_deny' | 'ask';
 // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): 'plan' was

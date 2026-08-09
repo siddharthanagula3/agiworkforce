@@ -2,15 +2,15 @@ import { McpClient } from '../../api/mcp';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+} from '@/ui/Dialog';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 interface MCPLogsViewerProps {
   serverName: string;

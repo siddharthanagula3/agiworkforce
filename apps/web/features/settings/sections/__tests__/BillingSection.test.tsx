@@ -109,6 +109,48 @@ describe('BillingSection', () => {
     ).toBeTruthy();
   });
 
+  // BIZ-020: the Price row reads `subscription.tier` at runtime, so a negotiated
+  // Enterprise entitlement lands here. The catalog holds no amount for it, and
+  // the previous `monthlyPriceUsd > 0` guard silently dropped the row rather
+  // than saying why — leaving a paying contract customer with no price state at
+  // all. It must name the contract, and it must never print a dollar figure the
+  // catalog does not have.
+  it('states contract pricing for an Enterprise plan instead of an amount', () => {
+    mockSubscription = {
+      tier: 'enterprise',
+      display_name: 'Enterprise',
+      status: 'active',
+      current_period_end: 1_800_000_000,
+      subscription_source: 'manual',
+    };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Price')).toBeTruthy();
+    expect(screen.getByText('Custom — set by your contract')).toBeTruthy();
+    expect(screen.queryByText('$0/mo')).toBeNull();
+    expect(screen.queryByText('Free')).toBeNull();
+  });
+
+  it('prints the published amount for a plan that has one, per seat when it is per seat', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    const { unmount } = render(<BillingSection />);
+    expect(screen.getByText('$20/mo')).toBeTruthy();
+    unmount();
+
+    mockSubscription = {
+      tier: 'team',
+      display_name: 'Team',
+      status: 'active',
+      current_period_end: 1_800_000_000,
+      subscription_source: 'stripe',
+    };
+    render(<BillingSection />);
+    expect(screen.getByText('$25/mo per seat')).toBeTruthy();
+  });
+
   it('labels an operator-provisioned plan without removing the portal', () => {
     mockSubscription.subscription_source = 'manual';
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);

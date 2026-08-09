@@ -22,9 +22,9 @@ import { useAuthStore } from '../../stores/auth';
 import { useWorkflows, type WorkflowExecutionState } from '../../hooks/useWorkflows';
 import type { WorkflowDefinition, WorkflowStatus, WorkflowTrigger } from '../../types/workflow';
 import { cn } from '../../lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import {
   Dialog,
   DialogContent,
@@ -32,17 +32,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/DropdownMenu';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Textarea } from '@/ui/Textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +52,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
+} from '@/ui/AlertDialog';
 
 interface WorkflowPanelProps {
   className?: string;

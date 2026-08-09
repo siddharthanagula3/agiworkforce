@@ -21,6 +21,7 @@ import { useProjectConversations } from '@/lib/hooks/useConversations';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 
 /**
@@ -82,6 +83,7 @@ const MAX_CONVERSATIONS_WARN = 80;
 
 export default function ProjectDetailPage() {
   const router = useRouter();
+  const { openSettings } = useSettingsModal();
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
   const {
@@ -361,7 +363,10 @@ export default function ProjectDetailPage() {
             {/* Right side: model selector + "..." menu */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ModelSelector
-                onSettingsClick={() => router.push('/settings/general')}
+                // CRIT-008: open the modal in place. `/settings/general`
+                // renders a SettingsModalRedirect that lands the user on
+                // /chat, so navigating there dropped them out of the project.
+                onSettingsClick={() => openSettings('general')}
                 onProviderSwitchUpgradeRequired={() => {
                   /* waitlist-gated in v1 */
                 }}

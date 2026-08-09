@@ -1,12 +1,11 @@
 /**
  * Live entry point for the in-page panel, imported directly by content.ts.
- * `./launcher` and `./panel` in this directory are re-export shims onto
- * `features/content/in-page-panel/{launcher,panel}.ts`, which hold the real
- * implementations.
+ * The launcher/panel implementations live under
+ * `features/content/in-page-panel/` and are imported from there directly.
  */
 
-import { createLauncher, loadPosition, applyPosition, attachScrollBehaviour } from './launcher';
-import { createPanel } from './panel';
+import { createLauncher, loadPosition, applyPosition, attachScrollBehaviour } from '../features/content/in-page-panel/launcher';
+import { createPanel } from '../features/content/in-page-panel/panel';
 
 /** Storage key that enables / disables the in-page panel. */
 export const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
 import { toast } from 'sonner';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle, Code } from 'lucide-react';
 

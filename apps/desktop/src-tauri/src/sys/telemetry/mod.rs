@@ -12,7 +12,7 @@ pub use correlation::{
     current_correlation_id, generate_correlation_id, with_correlation_id, with_new_correlation_id,
     CorrelationGuard, RequestContext,
 };
-pub use logging::{get_current_log_path, LogConfig};
+pub use logging::{active_log_dir, get_current_log_path, LogConfig, LOG_FILE_PREFIX};
 pub use metrics::{MetricsCollector, OperationMetrics, Timer};
 pub use tracing::{capture_error, init_tracing};
 

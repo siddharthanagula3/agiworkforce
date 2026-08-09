@@ -78,6 +78,7 @@ import {
   createMultimodalUserContent,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
+  MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
 } from '../src/features/cloud-bridge/freeTrialClient';
 import '../src/side_panel';
 
@@ -161,11 +162,21 @@ async function clearPending(): Promise<void> {
   await vi.waitFor(() => {
     expect(attachmentBar().querySelector('.sp-attachment-thumb')).not.toBeNull();
   });
-  let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
-  while (removeBtn) {
-    removeBtn.click();
-    removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
-  }
+  // A FileReader started by the previous test can still be in flight and will
+  // append a chip after the first drain pass, so drain until the bar stays
+  // empty across a whole macrotask. Without this the next test starts on
+  // someone else's attachments.
+  await vi.waitFor(async () => {
+    let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
+    while (removeBtn) {
+      removeBtn.click();
+      removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(attachmentBar().querySelector('.sp-attachment-thumb')).toBeNull();
+  });
 }
 
 beforeEach(async () => {
@@ -228,6 +239,29 @@ describe('side panel composer attachment caps', () => {
       expect(noticeText()).toContain(String(MANAGED_CHAT_MAX_ATTACHMENTS));
     });
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
+  });
+
+  // HARD-006: the intake pre-filter used to carry its own `10 * 1024 * 1024`
+  // literal, so a 10–12 MiB image the web composer, the mobile composer and the
+  // `/api/uploads/presign` route all accept was turned away here with "Each
+  // image must be under 10 MB". The pre-filter now reads the same
+  // MAX_CHAT_ATTACHMENT_BYTES those clients read.
+  it('accepts a file between the retired 10 MB literal and the canonical per-file cap', async () => {
+    expect(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES).toBeGreaterThan(10 * 1024 * 1024);
+
+    dropFiles([imageFile(10 * 1024 * 1024 + 1, 'image/png', 'just-over-ten.png')]);
+
+    await expectPendingCount(1);
+    expect(noticeText()).toBe('');
+  });
+
+  it('still refuses a file above the canonical per-file cap', async () => {
+    dropFiles([imageFile(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES + 1, 'image/png', 'over-cap.png')]);
+
+    await vi.waitFor(() => {
+      expect(noticeText()).toContain('Each image must be under');
+    });
+    expect(pendingDataUrls()).toHaveLength(0);
   });
 
   it('rejects image types the transport cannot encode', async () => {

@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { AppError, createError } from './errors';
 import { logger } from './logger';
+import { redactAttributes } from './observability/redact';
+import {
+  formatTraceparent,
+  newSpanId,
+  newTraceId,
+  parseTraceparent,
+  runWithTraceContext,
+  type TraceContext,
+} from './observability/trace-context';
 
 /**
  * WEB-10 (audit 2026-05-03): generic user-facing fallbacks per
@@ -151,20 +160,105 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
   );
 }
 
+type HeaderBearing = { headers?: { get?: (key: string) => string | null } };
+
+/** Read a header off the first handler argument without assuming it is a Request. */
+function readHeader(source: unknown, name: string): string | null {
+  const get = (source as HeaderBearing | undefined)?.headers?.get;
+  if (typeof get !== 'function') return null;
+  try {
+    return get.call((source as HeaderBearing).headers, name);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Wrapper for API route handlers with error handling
+ * Wrapper for API route handlers with error handling and request tracing.
+ *
+ * This is the ingress for SCALE-VER-006 correlation: it establishes the trace
+ * context for the request, so every `logger.*` line and every `withSpan` call
+ * anywhere below the handler shares one `trace_id` (see
+ * `lib/observability/trace-context.ts`). An inbound W3C `traceparent` is joined
+ * when it is well-formed; anything else starts a fresh trace.
+ *
+ * The resolved `traceparent` and `x-request-id` are echoed on the response so a
+ * user reporting a failure carries the id that finds their logs. Header writes
+ * are best-effort: a `Response` with an immutable header guard (redirects,
+ * `Response.error()`) keeps its headers and still gets its span.
  */
 export function withErrorHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse | Response>,
 ) {
   return async (...args: T): Promise<NextResponse | Response> => {
-    try {
-      return await handler(...args);
-    } catch (error) {
-      // Extract request ID from headers if available
-      const request = args[0] as { headers?: { get?: (key: string) => string | null } } | undefined;
-      const requestId = request?.headers?.get?.('x-request-id') || undefined;
-      return handleError(error, requestId);
-    }
+    const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
+    const context: TraceContext = {
+      traceId: inbound?.traceId ?? newTraceId(),
+      spanId: newSpanId(),
+      sampled: inbound?.sampled ?? true,
+    };
+    // An inbound x-request-id is honoured so a caller's own id survives, but it
+    // is echoed on the response and written into log fields, so only a bounded
+    // token-safe value is accepted — anything else falls back to the trace id.
+    const inboundRequestId = readHeader(args[0], 'x-request-id');
+    const requestId =
+      inboundRequestId && /^[A-Za-z0-9._~-]{1,128}$/u.test(inboundRequestId)
+        ? inboundRequestId
+        : context.traceId;
+    const method = (args[0] as { method?: string } | undefined)?.method;
+    const url = (args[0] as { url?: string } | undefined)?.url;
+
+    return runWithTraceContext(context, async () => {
+      const startedAt = Date.now();
+      let response: NextResponse | Response;
+      let status: 'ok' | 'error' = 'ok';
+      let thrown: unknown;
+      try {
+        response = await handler(...args);
+      } catch (error) {
+        thrown = error;
+        status = 'error';
+        response = handleError(error, requestId);
+      }
+
+      logger.info(
+        {
+          event: 'span',
+          span_name: 'http.server',
+          span_kind: 'server',
+          span_domain: 'http',
+          trace_id: context.traceId,
+          span_id: context.spanId,
+          parent_span_id: inbound?.spanId,
+          duration_ms: Date.now() - startedAt,
+          status,
+          ...redactAttributes({
+            'http.request.method': method,
+            // Path only — the query string routinely carries search terms and ids.
+            'url.path': url ? safeUrlPath(url) : undefined,
+            'http.response.status_code': response.status,
+            'error.type': thrown instanceof Error ? thrown.name : undefined,
+          }),
+        },
+        'span http.server',
+      );
+
+      try {
+        response.headers.set('x-request-id', requestId);
+        response.headers.set('traceparent', formatTraceparent(context));
+      } catch {
+        // Immutable header guard — correlation still exists in the log stream.
+      }
+      return response;
+    });
   };
+}
+
+/** Path component of `raw`, or `undefined` when it does not parse. */
+function safeUrlPath(raw: string): string | undefined {
+  try {
+    return new URL(raw).pathname;
+  } catch {
+    return undefined;
+  }
 }

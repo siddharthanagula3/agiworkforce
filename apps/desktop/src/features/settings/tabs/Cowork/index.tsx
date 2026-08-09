@@ -1,8 +1,8 @@
 import { Laptop, Radio, ShieldCheck, Smartphone } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/ui/Button';
+import { Switch } from '@/ui/Switch';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useCoworkDispatchStore } from '@/stores/coworkDispatchStore';
 import { useSettingsDialogStore } from '@/stores/settingsDialogStore';

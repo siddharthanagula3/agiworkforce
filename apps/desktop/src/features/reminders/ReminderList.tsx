@@ -15,10 +15,10 @@ import {
   useSchedulerStore,
 } from '@/stores/schedulerStore';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Skeleton } from '@/ui/Skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { ReminderCard } from './ReminderCard';
 import { ReminderDialog } from './ReminderDialog';
 

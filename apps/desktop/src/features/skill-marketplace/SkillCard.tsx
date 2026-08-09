@@ -20,8 +20,8 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import { Switch } from '@/components/ui/Switch';
+import { Badge } from '@/ui/Badge';
+import { Switch } from '@/ui/Switch';
 import {
   useSkillMarketplaceStore,
   type MarketplaceSkill,

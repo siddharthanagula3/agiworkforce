@@ -1,13 +1,13 @@
 import { useShallow } from 'zustand/react/shallow';
 import { Bot, Clock, DollarSign, Target, TrendingUp, User } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/ui/Card';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
+} from '@/ui/Select';
 import type {
   BenchmarkComparisonData,
   ComparisonData,

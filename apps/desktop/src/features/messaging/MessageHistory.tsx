@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { invoke } from '@/lib/tauri-mock';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Card } from '@/components/ui/Card';
+import { Button } from '@/ui/Button';
+import { Select } from '@/ui/Select';
+import { Card } from '@/ui/Card';
 
 interface UnifiedMessage {
   id: string;

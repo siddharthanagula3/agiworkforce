@@ -29,7 +29,7 @@ import {
 } from '../../constants/shortcuts';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useShortcutStore } from '../../stores/shortcutStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { KeyboardShortcutsOverlay } from '@/features/chat/KeyboardShortcutsOverlay';
 
 // ---------------------------------------------------------------------------

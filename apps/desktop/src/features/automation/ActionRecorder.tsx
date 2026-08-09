@@ -24,9 +24,9 @@ import type {
 } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Alert, AlertDescription, AlertTitle } from '@/ui/Alert';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -34,10 +34,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
+import { ScrollArea } from '@/ui/ScrollArea';
 import { cn } from '@/lib/utils';
 import { closeRecorderHudWindow, openRecorderHudWindow } from '@/services/recorderHudWindow';
 import { useChatStore as useSharedChatStore } from '@agiworkforce/unified-chat';

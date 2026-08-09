@@ -29,7 +29,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { auth } from '@agiworkforce/desktop-command-client';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useTeamStore } from '../../stores/teamStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { toast } from 'sonner';

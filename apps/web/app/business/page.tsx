@@ -139,7 +139,7 @@ export default function BusinessPage() {
             {
               meta: 'Governance',
               title: 'Enterprise',
-              body: 'Security review, BYOK enforcement, and contract-scoped controls.',
+              body: 'Security review, per-seat BYOK, and contract-scoped controls.',
               href: '/enterprise',
             },
           ]}

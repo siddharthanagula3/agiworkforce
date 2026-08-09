@@ -1580,7 +1580,13 @@ async fn dispatch_job_action(
                 return Err("AGI task prompt is empty".to_string());
             }
 
-            tracing::info!("[Scheduler] Dispatching AGI task: {}", prompt);
+            // Never log the prompt itself: log files are copied into support
+            // bundles (see `crate::sys::support_bundle`), and the prompt is
+            // conversation content.
+            tracing::info!(
+                prompt_chars = prompt.chars().count(),
+                "[Scheduler] Dispatching AGI task"
+            );
 
             // Get the orchestrator from the global static
             let orchestrator_arc = {

@@ -10,6 +10,7 @@ import { useTTS } from '@/lib/hooks/useTTS';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { useSettingsStore, type ChatTextSize } from '@shared/stores/web-settings-store';
+import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import {
@@ -72,21 +73,20 @@ const PREF_NAMESPACE = 'general';
  * deliberately device-local: installed voices differ per OS and browser, so a
  * synced choice resolves to nothing on the next machine.
  *
- * Any `voice` key still stored on an account is simply ignored.
+ * `chatFont` was removed on the same grounds. It defaulted to 'serif', was
+ * loaded into component state on every mount and written back to the server on
+ * every save, and no control set it and no stylesheet consumed it — so the
+ * account carried a typography preference the product could not honour. The
+ * text controls that DO exist are `ChatTextSizeRow` and `CodeBlockWrapRow`,
+ * both backed by real `html[data-*]` rules in `globals.css`.
+ *
+ * Any `voice` or `chatFont` key still stored on an account is simply ignored.
  */
-interface PreferenceSettings {
-  chatFont: string;
-}
-
-interface GeneralSettings extends PreferenceSettings {
+interface GeneralSettings {
   preferredName: string;
   workDescription: WorkDescription;
   instructions: string;
 }
-
-const DEFAULT_PREFS: PreferenceSettings = {
-  chatFont: 'serif',
-};
 
 /** Trimmed value, or undefined when the stored value carries no information. */
 function storedText(value: unknown): string | undefined {
@@ -126,7 +126,6 @@ export function GeneralSection() {
   const [saving, setSaving] = useState(false);
 
   // --- Preferences state ---------------------------------------------------
-  const [prefs, setPrefs] = useState<PreferenceSettings>(DEFAULT_PREFS);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // PER-10: the autosave must fire only after a REAL user edit. It used to fire
   // as soon as the load effect populated state, so a first-time user's mount
@@ -179,12 +178,9 @@ export function GeneralSection() {
             (serverProfile?.work_description as WorkDescription | null) ??
             '',
         );
-        // Instructions and the two preference values are free-form: an empty
-        // stored value IS the user's answer, so no derived fallback applies.
+        // Instructions are free-form: an empty stored value IS the user's
+        // answer, so no derived fallback applies.
         setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
-        setPrefs({
-          chatFont: storedText(stored.chatFont) ?? DEFAULT_PREFS.chatFont,
-        });
         setLoadError(null);
       })
       .catch((error) => {
@@ -220,7 +216,6 @@ export function GeneralSection() {
         preferredName: preferredName.trim(),
         workDescription,
         instructions,
-        ...prefs,
       };
       void savePreferenceNamespace(PREF_NAMESPACE, next)
         .then(() => {
@@ -236,7 +231,7 @@ export function GeneralSection() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [instructions, loadError, mounted, preferencesLoaded, preferredName, prefs, workDescription]);
+  }, [instructions, loadError, mounted, preferencesLoaded, preferredName, workDescription]);
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
@@ -268,7 +263,6 @@ export function GeneralSection() {
         preferredName: trimmedPreferred,
         workDescription,
         instructions,
-        ...prefs,
       });
       setPreferredName(trimmedPreferred);
 
@@ -468,6 +462,16 @@ export function GeneralSection() {
           {/* Keyboard shortcuts */}
           <KeyboardShortcutsRow />
         </div>
+      </div>
+
+      {/* Custom slash commands */}
+      <div>
+        <h2 className="mb-1 text-base font-semibold text-foreground">Custom commands</h2>
+        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+          Commands you define here appear in the composer&apos;s slash menu alongside the built-in
+          ones.
+        </p>
+        <CustomCommandsSettings />
       </div>
     </div>
   );

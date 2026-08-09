@@ -39,3 +39,30 @@ export type Provider =
   | 'sambanova'
   | 'azure'
   | 'bedrock';
+
+/**
+ * Provider IDs whose inference runs entirely on the user's device.
+ *
+ * Adding a local runtime here is the ONLY place the desktop UI should learn
+ * about it. Callers must not re-derive the set with `provider === 'ollama'`
+ * style comparisons: the tier gate exempts local models precisely because they
+ * cost the user nothing and never leave the machine, and a runtime missing from
+ * that exemption gets its selection replaced with a `managed_cloud` model —
+ * a silent Local-to-Managed-Cloud boundary cross.
+ *
+ * `'local'` is not a member of `Provider`. It is the generic id the Rust
+ * discovery layer emits for an on-device runtime it could not attribute to a
+ * named product, so it is accepted here as an alias.
+ */
+export const LOCAL_PROVIDER_IDS = ['ollama', 'lmstudio', 'llamacpp', 'vllm', 'local'] as const;
+
+const LOCAL_PROVIDER_SET: ReadonlySet<string> = new Set<string>(LOCAL_PROVIDER_IDS);
+
+/**
+ * True when `provider` names an on-device runtime. Case-insensitive; `null`,
+ * `undefined` and the empty string are not local.
+ */
+export function isLocalProvider(provider: string | null | undefined): boolean {
+  if (!provider) return false;
+  return LOCAL_PROVIDER_SET.has(provider.toLowerCase());
+}

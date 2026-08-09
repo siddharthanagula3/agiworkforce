@@ -1,5 +1,9 @@
 import countryToCurrency, { type Countries } from 'country-to-currency';
-import { getPlanPriceCents, type BillingInterval, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  getPublishedPlanPriceCents,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 export type PublicCheckoutPlan = Extract<
   BillingPlanTier,
@@ -69,7 +73,9 @@ export function resolveLocalizedPlanPrice(
   }
 
   return {
-    amountMinor: getPlanPriceCents(plan, interval),
+    // `PublicCheckoutPlan` excludes contract-priced tiers, so this accessor
+    // returns a real published amount with no `?? 0` fallback to fake one.
+    amountMinor: getPublishedPlanPriceCents(plan, interval),
     currency: 'usd',
     localized: false,
   };

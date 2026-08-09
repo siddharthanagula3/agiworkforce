@@ -7,6 +7,7 @@ import {
   LifeBuoy,
   LockKeyhole,
   ShieldCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   DEFAULT_ENTERPRISE_ADMIN_POLICY,
@@ -27,17 +28,41 @@ function managedComputeStatusLabel(open: boolean): string {
   return open ? 'Public alpha' : 'Temporarily disabled (incident kill-switch)';
 }
 
-function buildReadinessRows(managedComputeOpen: boolean) {
+/**
+ * Badge tone. Every readiness status used to render in the same emerald
+ * success badge regardless of what it said, so with the incident kill-switch
+ * engaged this table showed "Temporarily disabled (incident kill-switch)" in a
+ * green success badge while the header two sections above it correctly turned
+ * amber. A status surface that cannot render "not ok" is decoration.
+ */
+type ReadinessTone = 'ok' | 'warn';
+
+const READINESS_TONE_CLASS: Record<ReadinessTone, string> = {
+  ok: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100',
+  warn: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
+};
+
+interface ReadinessRow {
+  area: string;
+  status: string;
+  tone: ReadinessTone;
+  owner: string;
+  evidence: string;
+}
+
+function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
   return [
     {
       area: 'Privacy modes',
       status: 'Fail-closed',
+      tone: 'ok',
       owner: 'Platform',
       evidence: `${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')} allowed by default`,
     },
     {
       area: 'Managed compute',
       status: managedComputeStatusLabel(managedComputeOpen),
+      tone: managedComputeOpen ? 'ok' : 'warn',
       owner: 'Billing',
       evidence: managedComputeOpen
         ? `Open by default since 2026-06-27. Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share.`
@@ -46,6 +71,7 @@ function buildReadinessRows(managedComputeOpen: boolean) {
     {
       area: 'Identity',
       status: 'Implemented — entitlement-gated',
+      tone: 'ok',
       owner: 'Enterprise',
       evidence:
         'Migration 0076 owns SSO and directory-sync configuration with RLS. First-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts, /api/admin/sso) and SCIM provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls capability by lib/server/sso/sso-route-guard.ts, which is a capability check rather than a tier comparison',
@@ -53,17 +79,71 @@ function buildReadinessRows(managedComputeOpen: boolean) {
     {
       area: 'Audit logs',
       status: 'Append-only',
+      tone: 'ok',
       owner: 'Security',
       evidence: 'Enterprise audit events and export requests are separated from support logs',
     },
     {
       area: 'Support loop',
       status: 'Routed',
+      tone: 'ok',
       owner: 'Support',
       evidence: 'Support cases, feedback cases, and release fix links have shared tables',
     },
   ];
 }
+
+/**
+ * Inventory of every admin control and the service that actually owns it
+ * (CRIT-014, bullet 1). This is navigation, not decoration: each entry links to
+ * the surface that operates the control.
+ *
+ * It exists because `/admin/directory-sync` — a fully wired SCIM control plane
+ * with create/revoke/token endpoints — had ZERO inbound links anywhere in the
+ * repository. It was reachable only by typing the URL, which is the same
+ * failure as not shipping it. `grep -rn "admin/directory-sync" apps/web` found
+ * nothing but the route file itself before this section.
+ */
+const ADMIN_CONTROLS: ReadonlyArray<{
+  name: string;
+  href: string;
+  service: string;
+  detail: string;
+  external: boolean;
+}> = [
+  {
+    name: 'Security operations',
+    href: '#security-operations-title',
+    service: 'GET /api/admin/security',
+    detail:
+      'Event metrics, alert thresholds, recent events, and top source IPs for the last 24 hours.',
+    external: false,
+  },
+  {
+    name: 'Account controls',
+    href: '#security-operations-title',
+    service: 'POST /api/admin/security',
+    detail:
+      'Suspend, ban, and reactivate accounts. Admin-authenticated, CSRF-protected, and written to the security audit log.',
+    external: false,
+  },
+  {
+    name: 'Directory sync (SCIM 2.0)',
+    href: '/admin/directory-sync',
+    service: '/api/admin/directory-sync',
+    detail:
+      'Register directory connections, mint and revoke SCIM bearer tokens, and read the provisioning event log.',
+    external: true,
+  },
+  {
+    name: 'Enterprise SSO',
+    href: '/settings/team',
+    service: '/api/admin/sso',
+    detail:
+      'SAML and OIDC connections, DNS domain verification, and activation. Owner-only writes, gated on enterprise_controls.',
+    external: true,
+  },
+];
 
 function buildPolicyTiles(managedComputeOpen: boolean) {
   return [
@@ -152,6 +232,38 @@ export default function AdminConsolePage() {
           })}
         </section>
 
+        <section
+          className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]"
+          aria-labelledby="admin-controls-title"
+        >
+          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+            <SlidersHorizontal className="h-4 w-4 text-sky-300" aria-hidden="true" />
+            <h2 id="admin-controls-title" className="text-sm font-medium text-white">
+              Admin controls
+            </h2>
+          </div>
+          <ul className="divide-y divide-white/10">
+            {ADMIN_CONTROLS.map((control) => (
+              <li
+                key={control.name}
+                className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white">{control.name}</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">{control.detail}</p>
+                  <p className="mt-1 font-mono text-xs text-zinc-600">{control.service}</p>
+                </div>
+                <a
+                  href={control.href}
+                  className="shrink-0 self-start rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] md:self-center"
+                >
+                  {control.external ? 'Open' : 'Jump to'}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <SecurityOperationsPanel />
 
         <section className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]">
@@ -174,7 +286,10 @@ export default function AdminConsolePage() {
                   <tr key={row.area} className="border-t border-white/10">
                     <td className="px-4 py-3 text-white">{row.area}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-md border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-xs text-emerald-100">
+                      <span
+                        data-tone={row.tone}
+                        className={`rounded-md border px-2 py-1 text-xs ${READINESS_TONE_CLASS[row.tone]}`}
+                      >
                         {row.status}
                       </span>
                     </td>

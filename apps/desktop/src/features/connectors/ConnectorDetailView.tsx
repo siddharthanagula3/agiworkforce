@@ -20,7 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
+} from '@/ui/Select';
 import {
   type ConnectorPermissionLevel,
   CONNECTOR_PERMISSION_LABEL,

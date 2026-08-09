@@ -11,6 +11,7 @@ pub mod power;
 pub mod prompt_enhancement;
 pub mod security;
 pub mod startup_recovery;
+pub mod support_bundle;
 pub mod telemetry;
 pub mod test_utils;
 pub mod utils;

@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { McpClient } from '@/api/mcp';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 import {
   Dialog,
   DialogContent,
@@ -17,11 +17,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
+import { Textarea } from '@/ui/Textarea';
 import type { DesktopMcpServerConfig } from '@/types/mcp';
 
 interface CustomRemoteMcpConnectorDialogProps {

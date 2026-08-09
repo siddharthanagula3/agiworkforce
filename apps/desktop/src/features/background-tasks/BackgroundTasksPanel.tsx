@@ -9,10 +9,10 @@ import { Clock, X, AlertCircle, CheckCircle2, Pause, Loader2, XCircle } from 'lu
 import { cn, formatDuration } from '../../lib/utils';
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks';
 import type { BackgroundTask, BackgroundTaskStatus } from '../../stores/chat/agentStore';
-import { Button } from '@/components/ui/Button';
-import { Progress } from '@/components/ui/Progress';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Progress } from '@/ui/Progress';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Badge } from '@/ui/Badge';
 
 interface BackgroundTasksPanelProps {
   className?: string;

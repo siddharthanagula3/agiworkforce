@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
-import { Button } from '@/components/ui/Button';
-import { Alert, AlertDescription } from '@/components/ui/Alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Switch } from '@/components/ui/Switch';
-import { Label } from '@/components/ui/Label';
+import { Button } from '@/ui/Button';
+import { Alert, AlertDescription } from '@/ui/Alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Switch } from '@/ui/Switch';
+import { Label } from '@/ui/Label';
 import { Save, AlertCircle, FileJson, RotateCcw } from 'lucide-react';
 import type { McpServersConfig } from '../../types/mcp';
 

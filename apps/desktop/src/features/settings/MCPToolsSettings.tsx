@@ -7,12 +7,12 @@ import MCPCredentialManager from '@/features/mcp/MCPCredentialManager';
 import MCPConnectionStatus from '@/features/mcp/MCPConnectionStatus';
 import MCPServerCard from '@/features/mcp/MCPServerCard';
 import MCPToolBrowser from '@/features/mcp/MCPToolBrowser';
-import { Alert, AlertDescription } from '@/components/ui/Alert';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Alert, AlertDescription } from '@/ui/Alert';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
+import { Input } from '@/ui/Input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 

@@ -1,7 +1,31 @@
 use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::RwLock;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+
+/// File-name prefix the rolling appender writes under. With a rotation other
+/// than `NEVER`, `tracing-appender` appends the rotation date, so the files on
+/// disk are `agiworkforce.log.<date>` and their extension is the date. Readers
+/// must match this prefix, not a `.log` extension.
+pub const LOG_FILE_PREFIX: &str = "agiworkforce.log";
+
+static ACTIVE_LOG_DIR: RwLock<Option<PathBuf>> = RwLock::new(None);
+
+/// The directory the file appender actually opened, or `None` if telemetry
+/// never initialized.
+///
+/// Recomputing `LogConfig::default()` later does not answer this: telemetry
+/// initializes before Tauri `setup()` publishes the app data dir, so the
+/// default resolves through the fallback branch of `sys::utils::app_data_dir()`
+/// at startup and through the published directory afterwards. Readers that need
+/// the files on disk must use the path that was opened.
+pub fn active_log_dir() -> Option<PathBuf> {
+    ACTIVE_LOG_DIR
+        .read()
+        .ok()
+        .and_then(|guard| guard.as_ref().cloned())
+}
 
 #[derive(Clone)]
 pub struct LogConfig {
@@ -27,6 +51,10 @@ impl Default for LogConfig {
 pub fn create_file_appender(config: &LogConfig) -> Result<RollingFileAppender> {
     fs::create_dir_all(&config.log_dir)?;
 
+    if let Ok(mut active) = ACTIVE_LOG_DIR.write() {
+        *active = Some(config.log_dir.clone());
+    }
+
     cleanup_old_logs(&config.log_dir, config.max_files)?;
 
     let rotation = if matches!(config.rotation, Rotation::DAILY) {
@@ -44,7 +72,7 @@ pub fn create_file_appender(config: &LogConfig) -> Result<RollingFileAppender> {
     let file_appender = tracing_appender::rolling::RollingFileAppender::new(
         rotation,
         &config.log_dir,
-        "agiworkforce.log",
+        LOG_FILE_PREFIX,
     );
 
     Ok(file_appender)

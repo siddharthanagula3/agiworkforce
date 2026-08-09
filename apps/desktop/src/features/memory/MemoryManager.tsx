@@ -16,16 +16,16 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { ArrowUpDown, Brain, Clock, Download, Import, Plus, RefreshCw, Star } from 'lucide-react';
 
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+} from '@/ui/Select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';

@@ -14,24 +14,24 @@ import type { ScheduledJob } from '@/stores/schedulerStore';
 type ReminderActionType = 'reminder' | 'briefing' | 'agent_task' | 'custom';
 /** Schedule type for preview display */
 type ScheduleType = 'cron' | 'interval' | 'once';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Select';
+import { Textarea } from '@/ui/Textarea';
 
 interface ReminderDialogProps {
   open: boolean;

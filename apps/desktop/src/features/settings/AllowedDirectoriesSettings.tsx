@@ -15,11 +15,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+} from '@/ui/AlertDialog';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 export function AllowedDirectoriesSettings() {
   // Heading and the add/cancel/remove actions are the only strings here that

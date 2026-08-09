@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert, AlertDescription } from '@/components/ui/Alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Alert, AlertDescription } from '@/ui/Alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { Key, Package, RefreshCw, Search, Server, Settings, Wrench } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
 import MCPServerCard from './MCPServerCard';

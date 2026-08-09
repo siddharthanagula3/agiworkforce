@@ -2,11 +2,10 @@
  * UI Component Library
  *
  * Primitive React components (shadcn/radix-based design system).
- * Moved here from src/components/ui/ in Phase 5 reorg.
- *
- * Callers at src/components/** still use '../ui/Button' etc. — those
- * resolve via the legacy barrel at src/components/ui/index.ts.
- * New code should import directly from src/ui/*.
+ * Moved here from src/components/ui/ in the Phase 5 reorg. The forwarding
+ * layer that reorg left at src/components/ui/ is deleted — every caller
+ * imports '@/ui/X' directly, and check-structure-conventions.mjs fails the
+ * build if that path comes back.
  */
 
 // Core Components

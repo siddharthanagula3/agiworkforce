@@ -18,8 +18,8 @@ import {
   Globe,
   X,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Progress } from '@/components/ui/Progress';
+import { Button } from '@/ui/Button';
+import { Progress } from '@/ui/Progress';
 import { cn } from '@/lib/utils';
 import {
   type ResearchProgress as ResearchProgressData,

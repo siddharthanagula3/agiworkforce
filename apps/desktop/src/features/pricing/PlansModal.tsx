@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import { PlanCard } from './PlanCard';
 import {
   isFreePlan,

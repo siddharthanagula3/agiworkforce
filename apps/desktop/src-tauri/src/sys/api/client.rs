@@ -267,46 +267,6 @@ impl ApiClient {
         })
     }
 
-    pub async fn get(&self, url: &str) -> Result<ApiResponse> {
-        let request = ApiRequest {
-            method: HttpMethod::Get,
-            url: url.to_string(),
-            ..Default::default()
-        };
-        self.execute(request).await
-    }
-
-    pub async fn post_json(&self, url: &str, body: &str) -> Result<ApiResponse> {
-        let request = ApiRequest {
-            method: HttpMethod::Post,
-            url: url.to_string(),
-            body: Some(body.to_string()),
-            headers: HashMap::from([("Content-Type".to_string(), "application/json".to_string())]),
-            ..Default::default()
-        };
-        self.execute(request).await
-    }
-
-    pub async fn put_json(&self, url: &str, body: &str) -> Result<ApiResponse> {
-        let request = ApiRequest {
-            method: HttpMethod::Put,
-            url: url.to_string(),
-            body: Some(body.to_string()),
-            headers: HashMap::from([("Content-Type".to_string(), "application/json".to_string())]),
-            ..Default::default()
-        };
-        self.execute(request).await
-    }
-
-    pub async fn delete(&self, url: &str) -> Result<ApiResponse> {
-        let request = ApiRequest {
-            method: HttpMethod::Delete,
-            url: url.to_string(),
-            ..Default::default()
-        };
-        self.execute(request).await
-    }
-
     pub async fn upload_file(
         &self,
         url: &str,
@@ -672,29 +632,5 @@ mod tests {
         assert!(normalized_request.contains("\r\ncontent-type: application/json\r\n"));
         assert!(normalized_request.contains("\r\nx-requested-with: xmlhttprequest\r\n"));
         assert!(raw_request.ends_with(r#"{"surface":"desktop"}"#));
-    }
-
-    #[tokio::test]
-    async fn test_get_request() {
-        let client = ApiClient::new().expect("Failed to create ApiClient for test");
-
-        // Use httpbin.org for reliable API testing
-        let result = client.get("https://httpbin.org/get");
-
-        match result.await {
-            Ok(response) => {
-                if !response.success {
-                    tracing::warn!(
-                        "GET request returned status {} (expected in some envs)",
-                        response.status
-                    );
-                } else {
-                    assert_eq!(response.status, 200);
-                }
-            }
-            Err(e) => {
-                tracing::warn!("GET request failed (expected in offline tests): {}", e);
-            }
-        }
     }
 }

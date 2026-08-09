@@ -11,23 +11,23 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Separator } from '@/components/ui/Separator';
+} from '@/ui/Select';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Separator } from '@/ui/Separator';
 import { useCloudStore } from '../../stores/cloudStore';
 import type { CloudProvider } from '../../types/cloud';
 import { formatBytes } from '../../lib/utils';
 import { cn } from '../../lib/utils';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { usePrompt } from '@/components/ui/PromptDialog';
+import { useConfirm } from '@/ui/ConfirmDialog';
+import { usePrompt } from '@/ui/PromptDialog';
 import { toast } from 'sonner';
 
 const PROVIDER_LABELS: Record<CloudProvider, string> = {

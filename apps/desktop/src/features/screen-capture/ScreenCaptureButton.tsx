@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Camera, Monitor, CropIcon, Image } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-} from '@/components/ui/DropdownMenu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+} from '@/ui/DropdownMenu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 import { RegionSelector } from './RegionSelector';
 import { WindowSelector } from './WindowSelector';
 import { useScreenCapture } from '../../hooks/useScreenCapture';

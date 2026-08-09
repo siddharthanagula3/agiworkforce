@@ -111,7 +111,9 @@ export default function DownloadPage() {
                 'Scheduled work with AGI Work',
               ],
               platforms: 'Linux x64 release channel · macOS and Windows not published',
-              status: 'Check Linux release',
+              // Surface state comes from the registry; the per-PLATFORM detail
+              // above is resolved live below by DesktopDownloadAvailability.
+              status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
             },
@@ -135,14 +137,16 @@ export default function DownloadPage() {
               index: '04',
               name: 'AGI CLI',
               tagline: 'An agent in your terminal.',
-              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. It ships with the public release.',
+              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. Released as v1.0.0.',
               capabilities: [
                 'Sessions, resume & fork',
                 'Sandboxed execution',
                 'Hooks, skills & MCP',
                 'Offline with local models',
               ],
-              platforms: 'macOS · Linux',
+              // The v1.0.0 release carries darwin arm64/x64, linux x64, and
+              // win32 arm64/x64 archives.
+              platforms: 'macOS · Linux · Windows',
               status: SURFACE_STATUS.cli,
               href: '/cli',
               frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
@@ -205,8 +209,8 @@ export default function DownloadPage() {
 
         <DevBand
           eyebrow="For developers"
-          title="Two developer surfaces, both coming soon."
-          body="The AGI CLI ships as the agi binary and AGI in VS Code adds @agi chat, diff review, and slash commands to your editor. Both are in developer preview ahead of public launch."
+          title="Two developer surfaces."
+          body="The AGI CLI ships as the agi binary, released as v1.0.0. AGI in VS Code adds @agi chat, diff review, and slash commands to your editor, and has no published listing yet."
           ctas={[
             { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'See the VS Code Extension' },

@@ -25,8 +25,8 @@ import {
   selectMcpHealth,
   selectMcpIsLoading,
 } from '../../stores/mcpStore';
-import { Button } from '@/components/ui/Button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+import { Button } from '@/ui/Button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 import { cn } from '../../lib/utils';
 import type { McpServerHealth } from '../../types/mcp';
 

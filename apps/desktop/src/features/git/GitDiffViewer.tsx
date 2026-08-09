@@ -12,8 +12,8 @@ import { AlertCircle, FileCode, Loader2, Minus, Plus, RefreshCw } from 'lucide-r
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { GitDiff } from '../../hooks/useGit';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 interface GitDiffViewerProps {
   /** Repository path */

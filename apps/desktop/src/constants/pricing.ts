@@ -1,4 +1,8 @@
-import { getPlanPriceUsd, getPlanPriceInr, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  getPublishedPlanPriceUsd,
+  getPlanPriceInr,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 // 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
 // shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
@@ -38,8 +42,13 @@ export interface PricingPlan {
   id: PlanId;
   name: string;
   description: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
+  /**
+   * Published USD price, or `null` when the plan publishes none (Enterprise is
+   * priced per contract). `0` here used to stand in for "no published price",
+   * which is indistinguishable from a genuinely free plan.
+   */
+  monthlyPrice: number | null;
+  yearlyPrice: number | null;
   /** India-specific monthly price in INR, when this plan has one (currently only 'basic'). */
   monthlyPriceInr?: number | null;
   stripePriceId: {
@@ -129,7 +138,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'basic',
     name: 'Basic',
     description: 'Managed Cloud entry tier with increased monthly usage.',
-    monthlyPrice: getPlanPriceUsd('basic', 'monthly'),
+    monthlyPrice: getPublishedPlanPriceUsd('basic', 'monthly'),
     yearlyPrice: 0,
     monthlyPriceInr: getPlanPriceInr('basic'),
     stripePriceId: {
@@ -163,8 +172,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Pro',
     description:
       'Managed cloud, balanced models — full computer use, image generation, and web search.',
-    monthlyPrice: getPlanPriceUsd('pro', 'monthly'),
-    yearlyPrice: getPlanPriceUsd('pro', 'yearly'),
+    monthlyPrice: getPublishedPlanPriceUsd('pro', 'monthly'),
+    yearlyPrice: getPublishedPlanPriceUsd('pro', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
@@ -189,8 +198,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'max',
     name: 'Max 5x',
     description: 'Managed Cloud flagship models with 5x Pro usage capacity.',
-    monthlyPrice: getPlanPriceUsd('max', 'monthly'),
-    yearlyPrice: getPlanPriceUsd('max', 'yearly'),
+    monthlyPrice: getPublishedPlanPriceUsd('max', 'monthly'),
+    yearlyPrice: getPublishedPlanPriceUsd('max', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.max_monthly,
       yearly: STRIPE_PRICE_IDS.max_yearly,
@@ -213,8 +222,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'max_15x',
     name: 'Max 15x',
     description: 'The highest individual managed usage tier, including video generation.',
-    monthlyPrice: getPlanPriceUsd('max_15x', 'monthly'),
-    yearlyPrice: getPlanPriceUsd('max_15x', 'yearly'),
+    monthlyPrice: getPublishedPlanPriceUsd('max_15x', 'monthly'),
+    yearlyPrice: getPublishedPlanPriceUsd('max_15x', 'yearly'),
     stripePriceId: {
       // Checkout is server-owned; Desktop never embeds Stripe price ids for this tier.
       monthly: null,
@@ -238,8 +247,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'team',
     name: 'Team',
     description: 'Contracted managed capacity with shared team administration.',
-    monthlyPrice: getPlanPriceUsd('team', 'monthly'),
-    yearlyPrice: getPlanPriceUsd('team', 'yearly'),
+    monthlyPrice: getPublishedPlanPriceUsd('team', 'monthly'),
+    yearlyPrice: getPublishedPlanPriceUsd('team', 'yearly'),
     stripePriceId: {
       // Team provisioning is sales-assisted until organization-linked seats are complete.
       monthly: null,
@@ -262,8 +271,10 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Custom solutions for large organizations',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
+    // Priced per signed contract — there is no published amount. Never render a
+    // number here; `null` is what keeps it from printing as "Free"/"$0".
+    monthlyPrice: null,
+    yearlyPrice: null,
     stripePriceId: {
       monthly: null,
       yearly: null,
@@ -298,25 +309,9 @@ export function getStripePriceId(planId: string, interval: 'monthly' | 'yearly')
   return plan?.stripePriceId[interval] ?? null;
 }
 
-export function calculateYearlySavings(plan: PricingPlan): number {
-  const monthlyTotal = plan.monthlyPrice * 12;
-  const savings = monthlyTotal - plan.yearlyPrice;
-  return Math.max(0, savings);
-}
-
-export function calculateYearlySavingsPercentage(plan: PricingPlan): number {
-  if (plan.monthlyPrice === 0) return 0;
-  const monthlyTotal = plan.monthlyPrice * 12;
-  const savings = calculateYearlySavings(plan);
-  return Math.round((savings / monthlyTotal) * 100);
-}
-
-export function formatPrice(amount: number): string {
-  if (amount === 0) return 'Free';
-  return `$${amount}`;
-}
-
-export function formatPricePerMonth(amount: number): string {
-  if (amount === 0) return 'Free';
-  return `$${amount}/month`;
-}
+// Removed with BIZ-020: calculateYearlySavings/calculateYearlySavingsPercentage/
+// formatPrice/formatPricePerMonth had no call site anywhere in the repo and all
+// four treated `0` as a real amount — `formatPrice(0)` printed "Free", which is
+// exactly how a contract-priced plan would have been advertised as free. Desktop
+// renders plan prices in features/pricing/PlanCard.tsx from the shared catalog;
+// there is no second formatter to keep in step.

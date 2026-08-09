@@ -27,7 +27,7 @@ import {
   normalizeSubscriptionTier,
 } from '../constants/llm';
 
-import type { Provider } from '../types/provider';
+import { isLocalProvider, type Provider } from '../types/provider';
 import type { CustomModelConfig } from '@agiworkforce/types';
 import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
@@ -459,7 +459,9 @@ export function isTaskRoutingModelAllowedForTier(
   }
 
   const metadata = getModelMetadata(modelId);
-  if (metadata?.provider === 'ollama') {
+  // On-device runtimes are outside the paid catalog entirely, so no plan tier
+  // can withhold one.
+  if (isLocalProvider(metadata?.provider)) {
     return true;
   }
 

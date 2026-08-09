@@ -1,7 +1,7 @@
 import { invoke } from '@/lib/tauri-mock';
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
+import { Button } from '@/ui/Button';
+import { Select } from '@/ui/Select';
 
 interface MessageComposerProps {
   connections: Array<{

@@ -35,7 +35,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
+} from '@/ui/AlertDialog';
 import { ArtifactPreview } from './ArtifactPreview';
 import { CodeEditor } from './CodeEditor';
 

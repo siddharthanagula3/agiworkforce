@@ -139,7 +139,7 @@ echo "[9/9] Audit remediation ledger"
 if audit_progress=$(node scripts/check-audit-progress.mjs 2>&1); then
   pass "$audit_progress"
 else
-  fail "audit remediation ledger has open tasks — see AuditRemediationLedger.md"
+  fail "audit remediation ledger is not release-clean — see AuditRemediationLedger.md"
   echo "$audit_progress" | head -8 | sed 's/^/      /'
 fi
 

@@ -5,10 +5,10 @@ import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { defaultEditorOptions, getMonacoTheme } from '../../lib/monaco-config';
 import { useThemeContext } from '../../providers/ThemeProvider';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { Check, X, ChevronDown, ChevronRight, ArrowLeftRight, Eye, Code } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/Badge';
+import { Badge } from '@/ui/Badge';
 
 interface EnhancedDiffViewerProps {
   filePath: string;

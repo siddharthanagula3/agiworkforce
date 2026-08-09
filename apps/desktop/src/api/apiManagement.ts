@@ -20,6 +20,15 @@
  *   api_render_template          - render a request template with variables
  *   api_extract_template_variables - extract variable names from a template string
  *   api_validate_template        - validate template syntax
+ *
+ * Destination policy: these commands run in Rust, where the WebView's CSP
+ * `connect-src` allowlist does not apply, so the host is judged there instead
+ * (sys/security/egress_policy.rs). Loopback, private, link-local (cloud
+ * metadata), CGNAT, multicast and reserved destinations are rejected before a
+ * connection is opened, and the call rejects with the policy message. This
+ * covers api_request/api_get/api_post_json/api_put_json/api_delete and the
+ * authUrl/tokenUrl of api_oauth_create_client; redirectUri is exempt because
+ * the browser returns to it rather than the app connecting to it.
  */
 
 import { invoke } from '../lib/tauri-mock';

@@ -54,49 +54,12 @@ function rendered(source: string): string {
 }
 
 /**
- * Context around each occurrence of `term`, so a mention can be judged against
- * the copy surrounding it rather than the line it happens to sit on. A ledger
- * row puts the term in `item:` and the disclaimer in the adjacent field, and
- * both belong to the same claim.
- */
-const CONTEXT_RADIUS = 420;
-
-function occurrencesInContext(source: string, term: string): string[] {
-  const haystack = source.toLowerCase();
-  const needle = term.toLowerCase();
-  const windows: string[] = [];
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    windows.push(
-      source.slice(Math.max(0, index - CONTEXT_RADIUS), index + needle.length + CONTEXT_RADIUS),
-    );
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return windows;
-}
-
-/** Words that turn a certification mention into an explicit disclaimer. */
-const NEGATION =
-  /\b(no|not|none|never|without|lacks?|absent|unless|neither|nor|would prove|does not exist|deliberately|implying|imply|implies)\b/iu;
-
-/** Certification and assurance terms that must never be claimed affirmatively. */
-const CERTIFICATION_TERMS = [
-  'SOC 2',
-  'SOC2',
-  'ISO 27001',
-  'ISO27001',
-  'HIPAA',
-  'FedRAMP',
-  'PCI DSS',
-  'penetration test',
-  'pen test',
-  'pentest',
-  'bug bounty',
-] as const;
-
-/**
  * Hedges that describe an intention rather than a deployed control. Each of
  * these appeared verbatim on the pre-2026-08 trust surface.
+ *
+ * This list stays scoped to the four trust pages on purpose. "Are designed to"
+ * is a defect in a security control and ordinary English on a feature page, so
+ * it cannot be lifted to a site-wide rule the way the certification checks were.
  */
 const UNFALSIFIABLE_HEDGES = [
   'is designed to',
@@ -110,43 +73,16 @@ const UNFALSIFIABLE_HEDGES = [
   'are expected to',
 ] as const;
 
-/** Absolute claims about certifications we could not make truthfully. */
-const FORBIDDEN_PHRASES = [
-  'soc 2 certified',
-  'soc 2 compliant',
-  'iso 27001 certified',
-  'iso 27001 compliant',
-  'hipaa compliant',
-  'hipaa-compliant',
-  'penetration tested',
-  'independently audited',
-  'third-party audited',
-  'bank-grade',
-  'military-grade',
-  'enterprise-grade security',
-] as const;
-
-describe('trust surface — certification honesty', () => {
-  for (const page of Object.keys(PAGES) as PageName[]) {
-    it(`/${page} never claims a certification it does not hold`, () => {
-      const source = rendered(read(page));
-      const offenders: string[] = [];
-      for (const term of CERTIFICATION_TERMS) {
-        for (const context of occurrencesInContext(source, term)) {
-          // A mention is allowed only inside copy that disclaims it.
-          if (!NEGATION.test(context)) offenders.push(`${term}: ${context.trim()}`);
-        }
-      }
-      expect(offenders).toEqual([]);
-    });
-
-    it(`/${page} contains no marketing-grade security superlatives`, () => {
-      const lower = rendered(read(page)).toLowerCase();
-      const hits = FORBIDDEN_PHRASES.filter((phrase) => lower.includes(phrase));
-      expect(hits).toEqual([]);
-    });
-  }
-});
+/*
+ * The certification-honesty and security-superlative checks that used to live
+ * here now run over EVERY route page, in
+ * `app/__tests__/compliance-claim-honesty.test.ts` (ledger DOC-024). They were
+ * moved rather than duplicated: a four-page copy sitting beside a site-wide
+ * copy is how two lists drift apart. That file also carries the rule these four
+ * checks could not express — a ban on asserting an audit or certification
+ * PROGRAMME, which is what /enterprise was still doing after /trust dropped the
+ * same claim.
+ */
 
 describe('trust surface — falsifiable statements', () => {
   for (const page of Object.keys(PAGES) as PageName[]) {

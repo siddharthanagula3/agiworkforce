@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { CloudCodeSession, ProviderMessage } from '@agiworkforce/types';
 import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
@@ -41,11 +42,14 @@ import {
  *  - **Idempotency.** The caller's `Idempotency-Key` is the reservation key and
  *    the turn's unique key (0082), so a retried request resumes the same turn
  *    instead of starting a second billable one.
- *  - **Session state.** The turn borrows the same `ready → running → ready`
- *    transition the terminal path uses, so an agent turn and a typed command
- *    cannot run concurrently in one sandbox.
+ *  - **Session state.** A turn refuses to start unless the session reads
+ *    `ready`. That is a precondition check, not a lock: this path does not
+ *    claim the session the way `runCloudCodeCommand` does, so it does not by
+ *    itself prevent a typed command from starting alongside an agent turn.
  *  - **Durable approvals.** A suspended turn is persisted as
  *    `awaiting_approval` with its pending row, so the gate survives a reload.
+ *    The decision and resume side lives in `cloud-code-agent-approval-service`,
+ *    which re-enters this file through `executePersistedAgentTurn`.
  */
 
 /**
@@ -173,45 +177,77 @@ function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
   }
 }
 
-export async function startCloudCodeAgentTurn(
-  input: StartCloudCodeAgentTurnInput,
+/**
+ * One execution of a persisted turn — the shared body of "start a new turn" and
+ * "resume a suspended one".
+ *
+ * Resume exists because a turn that stops at the approval boundary has to be
+ * continued by a SECOND request, made after the user decides. That request has
+ * no goal, no reservation, and no transcript of its own: it carries a turn id,
+ * and everything else is read back from the rows this function wrote. So the
+ * two entries differ only in what they hand in here.
+ */
+export interface PersistedAgentTurnExecution {
+  db: DatabaseAdapter;
+  owner: CloudCodeOwner;
+  session: CloudCodeSession;
+  sessionId: string;
+  /** The `cloud_code_agent_turns` row this execution writes into. */
+  turnId: string;
+  goal: string;
+  model: string;
+  provider: string;
+  planTier: string;
+  /** Reservation key. Resume derives its own so it cannot reuse the start key. */
+  idempotencyKey: string;
+  signal: AbortSignal;
+  /** Resume only: transcript rebuilt from this turn's persisted steps. */
+  priorMessages?: ProviderMessage[];
+  /** Resume only: the decision recorded for the command that suspended it. */
+  preApproved?: { toolUseId: string; command: string; approved: boolean };
+  /**
+   * Resume only: the highest `step_index` already stored for this turn. New
+   * steps continue above it — without this the resumed steps would collide with
+   * the originals and be swallowed by `on conflict do nothing`.
+   */
+  initialStepIndex?: number;
+}
+
+export async function executePersistedAgentTurn(
+  input: PersistedAgentTurnExecution,
 ): Promise<CloudCodeAgentTurnRecord> {
-  const { db, owner, sessionId, goal, model, planTier, idempotencyKey } = input;
-
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  if (session.state === 'closed') {
-    throw new CloudCodeConflictError('Closed Code sessions cannot run agent turns');
-  }
-  if (session.state !== 'ready') {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-
-  const provider = resolveProviderFromModel(model);
+  const { db, owner, session, sessionId, turnId, goal, model, provider, planTier, idempotencyKey } =
+    input;
   const isFlagship = isFlagshipModel(model);
+  const initialStepIndex = input.initialStepIndex ?? 0;
 
   // Reserve BEFORE any provider work. A failure here must prevent the turn.
-  const reservation: ManagedUsageRequestReservation = await reserveManagedUsageRequest({
-    db,
-    userId: owner.userId,
-    idempotencyKey,
-    requestHash: fingerprintManagedUsageRequest({ sessionId, goal, model }),
-    provider,
-    model,
-    estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
-    planTier,
-    isFlagship,
-  });
-
-  const turnRows = await db.query<{ id: string }>(
-    `insert into cloud_code_agent_turns
-       (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state)
-     values ($1, $2, $3, $4, $5, $6, $7, 'running')
-     on conflict (user_id, idempotency_key) do update set updated_at = now()
-     returning id`,
-    [sessionId, owner.userId, owner.organizationId, goal, idempotencyKey, model, provider],
-  );
-  const turnId = turnRows[0]?.id;
-  if (!turnId) throw new CloudCodeUnavailableError('Could not open an agent turn');
+  //
+  // The turn row already exists at this point (start inserted it; resume claimed
+  // it), so a denial here would otherwise strand it in a non-terminal state
+  // forever — `running` for a new turn, and for a resume a turn whose approval
+  // is already spent and can never be decided again.
+  let reservation: ManagedUsageRequestReservation;
+  try {
+    reservation = await reserveManagedUsageRequest({
+      db,
+      userId: owner.userId,
+      idempotencyKey,
+      requestHash: fingerprintManagedUsageRequest({ sessionId, goal, model, turnId }),
+      provider,
+      model,
+      estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
+      planTier,
+      isFlagship,
+    });
+  } catch (error) {
+    await db.query(
+      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
+        where id = $1`,
+      [turnId, error instanceof Error ? error.message.slice(0, 2000) : 'Usage reservation failed'],
+    );
+    throw error;
+  }
 
   const scope = managedCloudCodeSessionScope(
     owner.userId,
@@ -231,7 +267,9 @@ export async function startCloudCodeAgentTurn(
   }
 
   let result: CloudCodeAgentResult | undefined;
-  let stepIndex = 0;
+  // Seeded from what is already stored, so a resumed turn's steps land ABOVE the
+  // originals instead of colliding with them.
+  let stepIndex = initialStepIndex;
 
   try {
     result = await runCloudCodeAgentTurn({
@@ -242,6 +280,8 @@ export async function startCloudCodeAgentTurn(
       signal: input.signal,
       repositoryUrl: session.repositoryUrl,
       workspacePath: session.workspacePath,
+      ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
+      ...(input.preApproved ? { preApproved: input.preApproved } : {}),
       onStepCommitted: async (step: number) => {
         // Extend the lease before every provider call, mirroring the metered
         // chat path's per-step reservation. The operation key is 1-based and
@@ -288,35 +328,58 @@ export async function startCloudCodeAgentTurn(
   }
 
   const state = turnStateFor(result.stopReason);
+  const cumulativeSteps = initialStepIndex + result.stepsUsed;
 
   await db.query(
     `update cloud_code_agent_turns
-        set state = $2, steps_used = $3, stop_reason = $4,
+        set state = $2, steps_used = greatest(steps_used, $3), stop_reason = $4,
             final_message = $5, error_message = $6, updated_at = now()
       where id = $1`,
     [
       turnId,
       state,
-      result.stepsUsed,
+      cumulativeSteps,
       result.stopReason === 'awaiting_approval' ? null : result.stopReason,
       result.finalMessage.slice(0, 100_000) || null,
       result.errorMessage?.slice(0, 2000) ?? null,
     ],
   );
 
-  if (result.pendingApproval) {
-    await db.query(
+  let pendingApproval = result.pendingApproval;
+  if (pendingApproval) {
+    // The step index is allocated by the DATABASE, not by the loop's per-run
+    // counter. A resumed turn restarts that counter at zero, so a second
+    // suspension would otherwise reuse the index of the approval that was just
+    // decided; `on conflict do nothing` would drop the new row and leave the
+    // turn parked in `awaiting_approval` with nothing left to decide.
+    const approvalRows = await db.query<{ step_index: number }>(
       `insert into cloud_code_agent_approvals
          (turn_id, step_index, command, reason, expires_at)
-       values ($1, $2, $3, $4, now() + interval '30 minutes')
-       on conflict (turn_id, step_index) do nothing`,
-      [
-        turnId,
-        result.pendingApproval.stepIndex,
-        result.pendingApproval.command,
-        result.pendingApproval.reason,
-      ],
+       select $1, coalesce(max(step_index), -1) + 1, $2, $3, now() + interval '30 minutes'
+         from cloud_code_agent_approvals
+        where turn_id = $1
+       returning step_index`,
+      [turnId, pendingApproval.command, pendingApproval.reason],
     );
+    const allocated = approvalRows[0]?.step_index;
+    if (allocated === undefined) {
+      // No pending row means no way to decide, so the turn is not really
+      // suspended — it is stuck. Fail it rather than advertise a gate that
+      // cannot be answered.
+      await db.query(
+        `update cloud_code_agent_turns
+            set state = 'failed', stop_reason = 'error', error_message = $2, updated_at = now()
+          where id = $1`,
+        [turnId, 'Approval request could not be recorded'],
+      );
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+      });
+      throw new CloudCodeUnavailableError('Approval request could not be recorded');
+    }
+    pendingApproval = { ...pendingApproval, stepIndex: allocated };
   }
 
   // Settle on every non-throwing exit, including early stops. A turn that ran
@@ -326,20 +389,61 @@ export async function startCloudCodeAgentTurn(
     outcome: result.stopReason === 'error' ? 'failed' : 'completed',
     actualCostCents:
       result.stopReason === 'error' ? 0 : settledTurnCostCents(provider, model, result.usage),
-    usage: { steps: result.stepsUsed, stopReason: result.stopReason },
+    usage: { steps: cumulativeSteps, stopReason: result.stopReason },
   });
 
   logger.info(
-    { turnId, sessionId, stopReason: result.stopReason, steps: result.stepsUsed },
+    { turnId, sessionId, stopReason: result.stopReason, steps: cumulativeSteps },
     'Cloud Code agent turn finished',
   );
 
   return {
     turnId,
     stopReason: result.stopReason,
-    stepsUsed: result.stepsUsed,
+    stepsUsed: cumulativeSteps,
     finalMessage: result.finalMessage,
-    ...(result.pendingApproval ? { pendingApproval: result.pendingApproval } : {}),
+    ...(pendingApproval ? { pendingApproval } : {}),
     ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
   };
+}
+
+export async function startCloudCodeAgentTurn(
+  input: StartCloudCodeAgentTurnInput,
+): Promise<CloudCodeAgentTurnRecord> {
+  const { db, owner, sessionId, goal, model, planTier, idempotencyKey } = input;
+
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot run agent turns');
+  }
+  if (session.state !== 'ready') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+
+  const provider = resolveProviderFromModel(model);
+
+  const turnRows = await db.query<{ id: string }>(
+    `insert into cloud_code_agent_turns
+       (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state)
+     values ($1, $2, $3, $4, $5, $6, $7, 'running')
+     on conflict (user_id, idempotency_key) do update set updated_at = now()
+     returning id`,
+    [sessionId, owner.userId, owner.organizationId, goal, idempotencyKey, model, provider],
+  );
+  const turnId = turnRows[0]?.id;
+  if (!turnId) throw new CloudCodeUnavailableError('Could not open an agent turn');
+
+  return executePersistedAgentTurn({
+    db,
+    owner,
+    session,
+    sessionId,
+    turnId,
+    goal,
+    model,
+    provider,
+    planTier,
+    idempotencyKey,
+    signal: input.signal,
+  });
 }

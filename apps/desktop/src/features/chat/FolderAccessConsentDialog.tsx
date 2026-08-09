@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, Eye, FolderKey, Pencil, Terminal, X } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
+import { Button } from '@/ui/Button';
+import { Checkbox } from '@/ui/Checkbox';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ApprovalRequest } from '@/stores/chat/toolStore';

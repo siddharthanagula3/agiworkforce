@@ -357,11 +357,20 @@ impl TeamsClient {
 
     pub fn handle_activity(&self, activity: TeamsActivity) -> Result<(), TeamsError> {
         match activity.activity_type.as_str() {
+            // `activity.text` is the message a user typed. It is conversation
+            // content and log files are copied into support bundles (see
+            // `crate::sys::support_bundle`), so only its length is recorded.
             "message" => {
-                tracing::info!("Received message: {:?}", activity.text);
+                tracing::info!(
+                    text_chars = activity.text.as_ref().map_or(0, |text| text.chars().count()),
+                    "Received Teams message"
+                );
             }
             "mention" => {
-                tracing::info!("Bot was mentioned: {:?}", activity.text);
+                tracing::info!(
+                    text_chars = activity.text.as_ref().map_or(0, |text| text.chars().count()),
+                    "Bot was mentioned in Teams"
+                );
             }
             _ => {
                 tracing::warn!("Unknown activity type: {}", activity.activity_type);

@@ -29,25 +29,25 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
-import { Button } from '@/components/ui/Button';
+} from '@/ui/AlertDialog';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
+} from '@/ui/Select';
+import { Switch } from '@/ui/Switch';
 
 const PROVIDER_PRESETS: Record<string, string> = {
   Ollama: 'http://localhost:11434/v1',

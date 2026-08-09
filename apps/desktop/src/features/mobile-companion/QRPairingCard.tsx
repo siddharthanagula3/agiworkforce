@@ -3,14 +3,14 @@ import { useShallow } from 'zustand/react/shallow';
 import { toDataURL } from 'qrcode';
 import { Check, Copy, Maximize2, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import { copyToClipboard } from '@/utils/clipboard';
 import { useConnectionStore } from '../../stores/connectionStore';
 

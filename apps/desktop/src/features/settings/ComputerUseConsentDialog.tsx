@@ -11,8 +11,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
+} from '@/ui/Dialog';
+import { Button } from '@/ui/Button';
 
 interface ComputerUseConsentDialogProps {
   open: boolean;
