@@ -52,6 +52,10 @@ pub struct BulkSyncResult {
 }
 
 /// Outcome of a full push+pull cycle.
+///
+/// The `*_failed` counters are pulled rows whose local write did not land. They
+/// are not cosmetic: a non-zero count means the cursor was held back and the
+/// caller is looking at an incomplete sync.
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncOutcome {
     pub conversations_pushed: usize,
@@ -60,6 +64,25 @@ pub struct SyncOutcome {
     pub conversations_pulled: usize,
     pub messages_pulled: usize,
     pub artifacts_pulled: usize,
+    pub conversations_failed: usize,
+    pub messages_failed: usize,
+    pub artifacts_failed: usize,
+}
+
+impl SyncOutcome {
+    fn empty() -> Self {
+        Self {
+            conversations_pushed: 0,
+            messages_pushed: 0,
+            artifacts_pushed: 0,
+            conversations_pulled: 0,
+            messages_pulled: 0,
+            artifacts_pulled: 0,
+            conversations_failed: 0,
+            messages_failed: 0,
+            artifacts_failed: 0,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +335,60 @@ fn max_cursor(base: &str, versions: &[String]) -> String {
 static SYNC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
+// Local write accounting.
+//
+// A pulled row exists on this device only once its SQLite write commits, so a
+// swallowed write error is silent data loss: the cursor moves past the row and
+// the server never sends it again. Every write on an apply path reports through
+// these helpers instead of being discarded with `let _ =`.
+// ---------------------------------------------------------------------------
+
+/// Run one local write. Returns whether the statement committed.
+fn exec_write(conn: &Connection, op: &str, sql: &str, args: &[&dyn rusqlite::ToSql]) -> bool {
+    match conn.execute(sql, args) {
+        Ok(_) => true,
+        Err(error) => {
+            warn!(op, error = %error, "cloud_sync: local write failed");
+            false
+        }
+    }
+}
+
+/// Per-entity tally for one apply pass.
+///
+/// `deferred` counts rows deliberately held for a later pass (their parent is
+/// not local yet). Unlike `failed` that is normal operation, so it must not
+/// hold the cursor — only an unwritten row may.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ApplyCounts {
+    applied: usize,
+    failed: usize,
+    deferred: usize,
+}
+
+impl ApplyCounts {
+    fn record(&mut self, _written: bool) {
+        self.applied += 1;
+    }
+
+    fn defer(&mut self) {
+        self.deferred += 1;
+    }
+
+    fn merge(&mut self, other: ApplyCounts) {
+        self.applied += other.applied;
+        self.failed += other.failed;
+        self.deferred += other.deferred;
+    }
+
+    /// True when nothing in this pass is owed a retry, so a journal row may be
+    /// released and the cursor may move past the deltas it covers.
+    fn settled(&self) -> bool {
+        self.failed == 0 && self.deferred == 0
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DB helper: read/write the per-user cursor.
 // ---------------------------------------------------------------------------
 
@@ -324,13 +401,15 @@ fn read_cursor(conn: &Connection, user_id: &str) -> String {
     .unwrap_or_else(|_| "0".to_string())
 }
 
-fn write_cursor(conn: &Connection, user_id: &str, cursor: &str) {
-    let _ = conn.execute(
+fn write_cursor(conn: &Connection, user_id: &str, cursor: &str) -> bool {
+    exec_write(
+        conn,
+        "write_cursor",
         "INSERT INTO cloud_sync_state (user_id, cursor, last_sync_at) \
          VALUES (?1, ?2, ?3) \
          ON CONFLICT(user_id) DO UPDATE SET cursor = excluded.cursor, last_sync_at = excluded.last_sync_at",
         params![user_id, cursor, now_z()],
-    );
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -577,7 +656,9 @@ fn ack_clear_conversations(conn: &Connection, acked: &[AckedRow], sent: &[PushCo
             .iter()
             .find(|item| item.id == row.id)
             .is_some_and(|item| conversation_sync_content_matches(conn, item));
-        let _ = conn.execute(
+        exec_write(
+            conn,
+            "ack_clear_conversation",
             "UPDATE conversations SET server_version = ?1, \
              needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
              WHERE cloud_id = ?3",
@@ -615,7 +696,9 @@ fn ack_clear_messages(conn: &Connection, acked: &[AckedRow], sent: &[PushMessage
             .iter()
             .find(|item| item.id == row.id)
             .is_some_and(|item| message_sync_content_matches(conn, item));
-        let _ = conn.execute(
+        exec_write(
+            conn,
+            "ack_clear_message",
             "UPDATE messages SET server_version = ?1, \
              needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
              WHERE cloud_id = ?3",
@@ -786,7 +869,9 @@ fn ack_clear_artifacts(conn: &Connection, acked: &[AckedRow], sent: &[PushArtifa
             .iter()
             .find(|item| item.id == row.id)
             .is_some_and(|item| artifact_sync_content_matches(conn, item));
-        let _ = conn.execute(
+        exec_write(
+            conn,
+            "ack_clear_artifact",
             "UPDATE artifacts SET server_version = ?1, \
              needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
              WHERE cloud_id = ?3",
@@ -805,7 +890,9 @@ fn resolve_conversation_conflicts(
         let sent_item = sent.iter().find(|item| item.id == conflict.id);
         match &conflict.current {
             None => {
-                let _ = conn.execute(
+                exec_write(
+                    conn,
+                    "conflict_tombstone_conversation",
                     "UPDATE conversations SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
                      needs_push = 0 WHERE cloud_id = ?2",
                     params![now_z(), conflict.id],
@@ -819,12 +906,16 @@ fn resolve_conversation_conflicts(
                     item.base_version == "0" || !conversation_sync_content_matches(conn, item)
                 });
                 if preserve_local {
-                    let _ = conn.execute(
+                    exec_write(
+                        conn,
+                        "conflict_rebase_conversation",
                         "UPDATE conversations SET server_version = ?1 WHERE cloud_id = ?2",
                         params![current.server_version, conflict.id],
                     );
                 } else {
-                    let _ = conn.execute(
+                    exec_write(
+                        conn,
+                        "conflict_clear_conversation",
                         "UPDATE conversations SET needs_push = 0 WHERE cloud_id = ?1",
                         params![conflict.id],
                     );
@@ -844,7 +935,9 @@ fn resolve_message_conflicts(
         if let Some(current) = &conflict.current {
             if current.deleted_at.is_some() {
                 apply_message_deltas(conn, user_id, std::slice::from_ref(current));
-                let _ = conn.execute(
+                exec_write(
+                    conn,
+                    "conflict_tombstone_message",
                     "UPDATE messages SET needs_push = 0, server_version = ?1 WHERE cloud_id = ?2",
                     params![current.server_version, conflict.id],
                 );
@@ -906,7 +999,9 @@ fn resolve_artifact_conflicts(
         let sent_item = sent.iter().find(|item| item.id == conflict.id);
         match &conflict.current {
             None => {
-                let _ = conn.execute(
+                exec_write(
+                    conn,
+                    "conflict_tombstone_artifact",
                     "UPDATE artifacts SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
                      needs_push = 0 WHERE cloud_id = ?2",
                     params![now_z(), conflict.id],
@@ -920,12 +1015,16 @@ fn resolve_artifact_conflicts(
                     item.base_version == "0" || !artifact_sync_content_matches(conn, item)
                 });
                 if preserve_local {
-                    let _ = conn.execute(
+                    exec_write(
+                        conn,
+                        "conflict_rebase_artifact",
                         "UPDATE artifacts SET server_version = ?1 WHERE cloud_id = ?2",
                         params![current.server_version, conflict.id],
                     );
                 } else {
-                    let _ = conn.execute(
+                    exec_write(
+                        conn,
+                        "conflict_clear_artifact",
                         "UPDATE artifacts SET needs_push = 0 WHERE cloud_id = ?1",
                         params![conflict.id],
                     );
@@ -948,76 +1047,92 @@ fn normalize_server_version(value: &str) -> Option<String> {
         .map(|version| version.to_string())
 }
 
+/// Outcome of journaling a parentless artifact delta.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BufferOutcome {
+    /// The journal now holds this revision (this call wrote it).
+    Written,
+    /// The journal already holds an equal-or-newer revision.
+    AlreadyCurrent,
+    /// The delta is malformed and was deliberately dropped.
+    Rejected,
+    /// The journal write failed; the delta is not retained anywhere.
+    Failed,
+}
+
 /// Retain a parentless artifact delta until its managed-cloud conversation
 /// lands. The journal is keyed by artifact cloud UUID and accepts only a
 /// strictly newer server revision, so duplicate/reordered pages are idempotent.
-fn buffer_pending_artifact(conn: &Connection, user_id: &str, d: &ArtifactDelta) -> bool {
+fn buffer_pending_artifact(conn: &Connection, user_id: &str, d: &ArtifactDelta) -> BufferOutcome {
     let Some(cloud_id) = normalize_cloud_uuid(&d.id) else {
         debug!(cloud_id = %d.id, "artifact_sync: refusing malformed pending artifact id");
-        return false;
+        return BufferOutcome::Rejected;
     };
     let Some(conversation_cloud_id) = normalize_cloud_uuid(&d.conversation_id) else {
         debug!(cloud_id = %d.id, conversation_cloud_id = %d.conversation_id, "artifact_sync: refusing malformed pending conversation id");
-        return false;
+        return BufferOutcome::Rejected;
     };
     let Some(server_version) = normalize_server_version(&d.server_version) else {
         debug!(cloud_id = %d.id, server_version = %d.server_version, "artifact_sync: refusing malformed pending server version");
-        return false;
+        return BufferOutcome::Rejected;
     };
     let message_cloud_id = d.message_id.as_deref().and_then(normalize_cloud_uuid);
     let tags = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
-    let changed = conn
-        .execute(
-            "INSERT INTO cloud_sync_pending_artifacts ( \
-                cloud_id, conversation_cloud_id, user_id, message_cloud_id, title, \
-                artifact_type, language, content, current_version, pinned, tags, \
-                created_at, updated_at, deleted_at, server_version, buffered_at \
-             ) VALUES ( \
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16 \
-             ) \
-             ON CONFLICT(user_id, cloud_id) DO UPDATE SET \
-                conversation_cloud_id = excluded.conversation_cloud_id, \
-                message_cloud_id = excluded.message_cloud_id, \
-                title = excluded.title, \
-                artifact_type = excluded.artifact_type, \
-                language = excluded.language, \
-                content = excluded.content, \
-                current_version = excluded.current_version, \
-                pinned = excluded.pinned, \
-                tags = excluded.tags, \
-                created_at = excluded.created_at, \
-                updated_at = excluded.updated_at, \
-                deleted_at = excluded.deleted_at, \
-                server_version = excluded.server_version, \
-                buffered_at = excluded.buffered_at \
-             WHERE length(excluded.server_version) > length(cloud_sync_pending_artifacts.server_version) \
-                OR ( \
-                    length(excluded.server_version) = length(cloud_sync_pending_artifacts.server_version) \
-                    AND excluded.server_version > cloud_sync_pending_artifacts.server_version \
-                )",
-            params![
-                cloud_id,
-                conversation_cloud_id,
-                user_id,
-                message_cloud_id,
-                d.title.as_deref(),
-                d.artifact_type,
-                d.language.as_deref(),
-                d.content,
-                d.current_version,
-                d.pinned.map(|value| if value { 1i64 } else { 0i64 }),
-                tags,
-                d.created_at.as_deref(),
-                d.updated_at.as_deref(),
-                d.deleted_at.as_deref(),
-                server_version,
-                now_z(),
-            ],
-        )
-        .unwrap_or_else(|error| {
+    let changed = conn.execute(
+        "INSERT INTO cloud_sync_pending_artifacts ( \
+            cloud_id, conversation_cloud_id, user_id, message_cloud_id, title, \
+            artifact_type, language, content, current_version, pinned, tags, \
+            created_at, updated_at, deleted_at, server_version, buffered_at \
+         ) VALUES ( \
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16 \
+         ) \
+         ON CONFLICT(user_id, cloud_id) DO UPDATE SET \
+            conversation_cloud_id = excluded.conversation_cloud_id, \
+            message_cloud_id = excluded.message_cloud_id, \
+            title = excluded.title, \
+            artifact_type = excluded.artifact_type, \
+            language = excluded.language, \
+            content = excluded.content, \
+            current_version = excluded.current_version, \
+            pinned = excluded.pinned, \
+            tags = excluded.tags, \
+            created_at = excluded.created_at, \
+            updated_at = excluded.updated_at, \
+            deleted_at = excluded.deleted_at, \
+            server_version = excluded.server_version, \
+            buffered_at = excluded.buffered_at \
+         WHERE length(excluded.server_version) > length(cloud_sync_pending_artifacts.server_version) \
+            OR ( \
+                length(excluded.server_version) = length(cloud_sync_pending_artifacts.server_version) \
+                AND excluded.server_version > cloud_sync_pending_artifacts.server_version \
+            )",
+        params![
+            cloud_id,
+            conversation_cloud_id,
+            user_id,
+            message_cloud_id,
+            d.title.as_deref(),
+            d.artifact_type,
+            d.language.as_deref(),
+            d.content,
+            d.current_version,
+            d.pinned.map(|value| if value { 1i64 } else { 0i64 }),
+            tags,
+            d.created_at.as_deref(),
+            d.updated_at.as_deref(),
+            d.deleted_at.as_deref(),
+            server_version,
+            now_z(),
+        ],
+        );
+
+    let changed = match changed {
+        Ok(changed) => changed,
+        Err(error) => {
             warn!(cloud_id = %d.id, error = %error, "artifact_sync: failed to buffer parentless artifact");
-            0
-        });
+            return BufferOutcome::Failed;
+        }
+    };
 
     prune_pending_artifacts(
         conn,
@@ -1025,7 +1140,11 @@ fn buffer_pending_artifact(conn: &Connection, user_id: &str, d: &ArtifactDelta) 
         MAX_PENDING_ARTIFACTS_PER_USER,
         MAX_PENDING_ARTIFACT_CONTENT_BYTES_PER_USER,
     );
-    changed > 0
+    if changed > 0 {
+        BufferOutcome::Written
+    } else {
+        BufferOutcome::AlreadyCurrent
+    }
 }
 
 /// Keep the newest prefix of the pending journal within both row and content
@@ -1108,8 +1227,9 @@ struct PendingArtifact {
 
 /// Replay every pending artifact whose parent conversation now exists for the
 /// same authenticated user. The row is removed only after the delta has been
-/// handed to the normal artifact apply path.
-fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> usize {
+/// durably applied — a failed or re-deferred replay keeps its journal row so
+/// the next cycle can retry it.
+fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> ApplyCounts {
     let mut pending = Vec::new();
     if let Ok(mut stmt) = conn.prepare(
         "SELECT p.cloud_id, p.conversation_cloud_id, p.message_cloud_id, p.title, \
@@ -1146,7 +1266,7 @@ fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> usize {
         }
     }
 
-    let mut applied = 0usize;
+    let mut counts = ApplyCounts::default();
     for p in pending {
         let delta = ArtifactDelta {
             id: p.cloud_id.clone(),
@@ -1164,14 +1284,19 @@ fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> usize {
             deleted_at: p.deleted_at,
             server_version: p.server_version,
         };
-        applied += apply_artifact_deltas(conn, user_id, std::slice::from_ref(&delta));
-        let _ = conn.execute(
-            "DELETE FROM cloud_sync_pending_artifacts \
-             WHERE cloud_id = ?1 AND user_id = ?2",
-            params![p.cloud_id, user_id],
-        );
+        let replay = apply_artifact_deltas(conn, user_id, std::slice::from_ref(&delta));
+        counts.merge(replay);
+        if replay.settled() {
+            exec_write(
+                conn,
+                "drain_pending_artifact_release",
+                "DELETE FROM cloud_sync_pending_artifacts \
+                 WHERE cloud_id = ?1 AND user_id = ?2",
+                params![p.cloud_id, user_id],
+            );
+        }
     }
-    applied
+    counts
 }
 
 /// Apply pulled artifact deltas into the local SQLite DB.
@@ -1181,8 +1306,12 @@ fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> usize {
 /// If the parent conversation is not present locally, the artifact is journaled
 /// durably and replayed after a later conversation page. The queue is user-scoped,
 /// version-collapsed, and capacity-bounded.
-fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDelta]) -> usize {
-    let mut applied = 0usize;
+fn apply_artifact_deltas(
+    conn: &Connection,
+    user_id: &str,
+    deltas: &[ArtifactDelta],
+) -> ApplyCounts {
+    let mut counts = ApplyCounts::default();
     for d in deltas {
         // FK-map: resolve cloud conversation_id → local INTEGER id.
         let local_conv_id: Option<i64> = conn
@@ -1199,7 +1328,16 @@ fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDel
             Some(id) => id,
             None => {
                 let buffered = buffer_pending_artifact(conn, user_id, d);
-                debug!(cloud_id = %d.id, conv_cloud_id = %d.conversation_id, buffered, "artifact_sync: parent conversation not found — journaled for replay");
+                debug!(cloud_id = %d.id, conv_cloud_id = %d.conversation_id, ?buffered, "artifact_sync: parent conversation not found — journaled for replay");
+                match buffered {
+                    // Retained: the replay owes this delta, so the cursor must
+                    // stay behind it only until the journal row drains.
+                    BufferOutcome::Written | BufferOutcome::AlreadyCurrent => counts.defer(),
+                    // Nothing holds the delta any more — treat it as a lost write.
+                    BufferOutcome::Failed => counts.record(false),
+                    // Malformed input is dropped on purpose, not owed a retry.
+                    BufferOutcome::Rejected => {}
+                }
                 continue;
             }
         };
@@ -1227,26 +1365,30 @@ fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDel
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete only.
             if let Some((ref local_id, _)) = existing {
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_artifact_tombstone",
                     "UPDATE artifacts SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
-                );
-                applied += 1;
+                ));
             }
             // If not present locally, delete already propagated — no-op.
         } else if let Some((ref local_id, needs_push)) = existing {
             if needs_push != 0 {
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_artifact_rebase",
                     "UPDATE artifacts SET server_version = ?1 WHERE id = ?2",
                     params![d.server_version, local_id],
-                );
-                applied += 1;
+                ));
                 continue;
             }
             // Clean local row: apply the server winner.
             let tags_json = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
-            let _ = conn.execute(
+            counts.record(exec_write(
+                conn,
+                "apply_artifact_update",
                 "UPDATE artifacts \
                  SET artifact_type = ?1, \
                      content = COALESCE(?2, content), \
@@ -1273,8 +1415,7 @@ fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDel
                     message_cloud_id,
                     local_id,
                 ],
-            );
-            applied += 1;
+            ));
         } else {
             // New artifact from another device — INSERT.
             // The local `artifacts` table uses a TEXT primary key; we use the cloud_id
@@ -1324,10 +1465,16 @@ fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDel
             );
             match r {
                 Ok(_) => {
-                    applied += 1;
+                    counts.applied += 1;
+                }
+                // A racing insert of the same cloud_id is a duplicate, not a
+                // loss — anything else means the row never landed.
+                Err(e) if artifact_exists(conn, &d.id) => {
+                    debug!(cloud_id = %d.id, error = %e, "artifact_sync: skipping duplicate pulled artifact");
                 }
                 Err(e) => {
-                    debug!(cloud_id = %d.id, error = %e, "artifact_sync: skipping duplicate pulled artifact");
+                    warn!(cloud_id = %d.id, error = %e, "artifact_sync: pulled artifact insert failed");
+                    counts.failed += 1;
                 }
             }
             // Synthesize user_id annotation (no user_id column on artifacts table;
@@ -1335,11 +1482,24 @@ fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDel
             let _ = user_id;
         }
     }
-    applied
+    counts
+}
+
+fn artifact_exists(conn: &Connection, cloud_id: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM artifacts WHERE cloud_id = ?1",
+        params![cloud_id],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 /// Apply pulled artifact deltas into the local SQLite DB.
-fn apply_artifact_deltas_in_page(conn: &Connection, user_id: &str, page: &PullResponse) -> usize {
+fn apply_artifact_deltas_in_page(
+    conn: &Connection,
+    user_id: &str,
+    page: &PullResponse,
+) -> ApplyCounts {
     apply_artifact_deltas(conn, user_id, &page.artifacts)
 }
 
@@ -1349,8 +1509,8 @@ fn apply_conversation_deltas(
     conn: &Connection,
     user_id: &str,
     deltas: &[ConversationDelta],
-) -> usize {
-    let mut applied = 0usize;
+) -> ApplyCounts {
+    let mut counts = ApplyCounts::default();
     for d in deltas {
         // Dedup: find existing local row.
         let existing: Option<(i64, i64)> = conn
@@ -1364,18 +1524,25 @@ fn apply_conversation_deltas(
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete; never hard-delete (FK CASCADE would orphan children).
             if let Some((local_id, _)) = existing {
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_conversation_tombstone",
                     "UPDATE conversations SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
-                );
-                applied += 1;
+                ));
             }
             // The parent is gone — drop any orphan messages buffered under it so they
             // can't strand the buffer forever (a conversation deleted on another device
             // would otherwise leak a pending row that never drains). Runs whether or not
             // the conversation exists locally.
-            let _ = conn.execute(
+            //
+            // These two sweeps only reclaim journal space, so a failure is logged
+            // but never held against the cursor: pausing the whole pull for a
+            // bounded, capacity-pruned leftover would strand every other row.
+            exec_write(
+                conn,
+                "apply_conversation_tombstone_pending_messages",
                 "DELETE FROM cloud_sync_pending_messages \
                  WHERE conversation_cloud_id = ?1 AND user_id = ?2",
                 params![d.id, user_id],
@@ -1383,23 +1550,28 @@ fn apply_conversation_deltas(
             // A tombstoned parent can never become a valid owner for buffered
             // artifacts. Drop its journal rows so they cannot consume bounded
             // capacity forever or attach if a stale parent is later replayed.
-            let _ = conn.execute(
+            exec_write(
+                conn,
+                "apply_conversation_tombstone_pending_artifacts",
                 "DELETE FROM cloud_sync_pending_artifacts \
                  WHERE conversation_cloud_id = ?1 AND user_id = ?2",
                 params![d.id, user_id],
             );
         } else if let Some((local_id, needs_push)) = existing {
             if needs_push != 0 {
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_conversation_rebase",
                     "UPDATE conversations SET server_version = ?1 WHERE id = ?2",
                     params![d.server_version, local_id],
-                );
-                applied += 1;
+                ));
                 continue;
             }
             // Clean local row: apply the server winner. Note: desktop conversations table has no `model`
             // column (model is per-message); only title/updated_at/server_version are updated.
-            let _ = conn.execute(
+            counts.record(exec_write(
+                conn,
+                "apply_conversation_update",
                 "UPDATE conversations \
                  SET title = COALESCE(?1, title), \
                      updated_at = COALESCE(?2, updated_at), \
@@ -1412,8 +1584,7 @@ fn apply_conversation_deltas(
                     d.server_version,
                     local_id
                 ],
-            );
-            applied += 1;
+            ));
         } else {
             // New row from another device — INSERT with auto INTEGER PK.
             // Desktop conversations table has no `model` column; only columns that
@@ -1437,21 +1608,36 @@ fn apply_conversation_deltas(
                     d.server_version
                 ],
             );
-            if r.is_ok() {
-                applied += 1;
-            } else {
-                // Partial UNIQUE index on cloud_id catches a race; log and skip.
-                debug!(cloud_id = %d.id, "Skipping duplicate pulled conversation");
+            match r {
+                Ok(_) => counts.applied += 1,
+                // Partial UNIQUE index on cloud_id catches a race; anything else
+                // means the conversation never landed on this device.
+                Err(_) if conversation_exists(conn, &d.id) => {
+                    debug!(cloud_id = %d.id, "Skipping duplicate pulled conversation");
+                }
+                Err(error) => {
+                    warn!(cloud_id = %d.id, error = %error, "cloud_sync: pulled conversation insert failed");
+                    counts.failed += 1;
+                }
             }
         }
     }
-    applied
+    counts
+}
+
+fn conversation_exists(conn: &Connection, cloud_id: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM conversations WHERE cloud_id = ?1",
+        params![cloud_id],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 /// Apply pulled message deltas. FK-maps the cloud conversation_id to the local
 /// INTEGER conversation_id. Orphans (unknown parent) are skipped/buffered.
-fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta]) -> usize {
-    let mut applied = 0usize;
+fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta]) -> ApplyCounts {
+    let mut counts = ApplyCounts::default();
     for d in deltas {
         // FK-map: resolve cloud conversation_id → local INTEGER id.
         let local_conv_id: Option<i64> = conn
@@ -1469,7 +1655,11 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                 // The parent conversation is re-versioned on every update, so it can
                 // sit above this message and arrive in a later pull page. Dropping it
                 // here (with the cursor advancing past it) would lose it permanently.
-                buffer_pending_message(conn, user_id, d);
+                if buffer_pending_message(conn, user_id, d) {
+                    counts.defer();
+                } else {
+                    counts.record(false);
+                }
                 continue;
             }
         };
@@ -1486,7 +1676,9 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete only.
             if let Some((local_id, _)) = existing {
-                let _ = conn.execute(
+                let tombstoned = exec_write(
+                    conn,
+                    "apply_message_tombstone",
                     "UPDATE messages SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
@@ -1494,12 +1686,14 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                 // Keep the portable UUID for sync fidelity, but detach the
                 // device-local owner so a tombstoned message cannot render or
                 // regain artifacts on conversation reload.
-                let _ = conn.execute(
+                let detached = exec_write(
+                    conn,
+                    "apply_message_tombstone_detach_artifacts",
                     "UPDATE artifacts SET message_id = NULL \
                      WHERE message_id = ?1 AND app_mode = 'cloud'",
                     params![local_id],
                 );
-                applied += 1;
+                counts.record(tombstoned && detached);
             }
         } else if let Some((local_id, needs_push)) = existing {
             if let Some(role) = d.role.as_deref() {
@@ -1512,15 +1706,19 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                 // Preserve an edit made after the outgoing snapshot. Advancing the
                 // base version lets the next push compare that edit against the
                 // newest server row instead of manufacturing a stale conflict.
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_message_rebase",
                     "UPDATE messages SET server_version = ?1 WHERE id = ?2",
                     params![d.server_version, local_id],
-                );
+                ));
             } else {
                 // Cloud messages are mutable stream snapshots. Apply the server
                 // winner so a partial assistant response can become its completed
                 // content (and carry the latest model/provider) on every device.
-                let _ = conn.execute(
+                counts.record(exec_write(
+                    conn,
+                    "apply_message_update",
                     "UPDATE messages \
                      SET role = COALESCE(?1, role), content = COALESCE(?2, content), \
                          model = ?3, provider = ?4, deleted_at_utc = NULL, \
@@ -1534,9 +1732,8 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                         d.server_version,
                         local_id
                     ],
-                );
+                ));
             }
-            applied += 1;
         } else {
             // New message from another device.
             let role = d.role.clone().unwrap_or_else(|| "user".to_string());
@@ -1566,14 +1763,29 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                     d.server_version
                 ],
             );
-            if r.is_ok() {
-                applied += 1;
-            } else {
-                debug!(cloud_id = %d.id, "Skipping duplicate pulled message");
+            match r {
+                Ok(_) => counts.applied += 1,
+                // Only a racing insert of the same cloud_id is benign; any other
+                // error means the message never landed on this device.
+                Err(_) if message_exists(conn, &d.id) => {
+                    debug!(cloud_id = %d.id, "Skipping duplicate pulled message");
+                }
+                Err(error) => {
+                    warn!(cloud_id = %d.id, error = %error, "cloud_sync: pulled message insert failed");
+                }
             }
         }
     }
-    applied
+    counts
+}
+
+fn message_exists(conn: &Connection, cloud_id: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM messages WHERE cloud_id = ?1",
+        params![cloud_id],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -1582,9 +1794,11 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
 
 /// Persist a pulled message whose parent conversation is not yet present locally,
 /// so it can be replayed once the parent lands (instead of being lost). Idempotent
-/// on cloud_id.
-fn buffer_pending_message(conn: &Connection, user_id: &str, d: &MessageDelta) {
-    let _ = conn.execute(
+/// on cloud_id. Returns whether the delta is now durably journaled.
+fn buffer_pending_message(conn: &Connection, user_id: &str, d: &MessageDelta) -> bool {
+    exec_write(
+        conn,
+        "buffer_pending_message",
         "INSERT INTO cloud_sync_pending_messages \
          (cloud_id, conversation_cloud_id, user_id, role, content, model, provider, \
           created_at, deleted_at, server_version) \
@@ -1606,7 +1820,7 @@ fn buffer_pending_message(conn: &Connection, user_id: &str, d: &MessageDelta) {
             d.deleted_at.as_deref(),
             d.server_version,
         ],
-    );
+    )
 }
 
 struct PendingMsg {
@@ -1623,8 +1837,9 @@ struct PendingMsg {
 
 /// Replay buffered messages whose parent conversation now exists locally: insert the
 /// message (FK-mapped, deduped by cloud_id) and remove it from the buffer. A buffered
-/// tombstone for a never-seen message is simply dropped. Returns the count inserted.
-fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
+/// tombstone for a never-seen message is simply dropped. A replay whose insert fails
+/// keeps its buffer row so the next cycle retries it.
+fn drain_pending_messages(conn: &Connection, user_id: &str) -> ApplyCounts {
     // Collect resolvable rows first (parent conversation present), then mutate.
     let mut resolved: Vec<(i64, PendingMsg)> = Vec::new();
     if let Ok(mut stmt) = conn.prepare(
@@ -1656,7 +1871,7 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
         }
     }
 
-    let mut applied = 0usize;
+    let mut counts = ApplyCounts::default();
     for (local_conv_id, p) in resolved {
         let exists: Option<i64> = conn
             .query_row(
@@ -1666,6 +1881,7 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
             )
             .ok();
 
+        let mut replayed = true;
         if exists.is_none() && p.deleted_at.is_none() {
             let role = p.role.clone().unwrap_or_else(|| "user".to_string());
             if matches!(role.as_str(), "user" | "assistant" | "system") {
@@ -1690,18 +1906,30 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
                         p.server_version,
                     ],
                 );
-                if r.is_ok() {
-                    applied += 1;
+                match r {
+                    Ok(_) => counts.applied += 1,
+                    Err(_) if message_exists(conn, &p.cloud_id) => {
+                        debug!(cloud_id = %p.cloud_id, "Skipping duplicate buffered message");
+                    }
+                    Err(error) => {
+                        warn!(cloud_id = %p.cloud_id, error = %error, "cloud_sync: buffered message replay failed");
+                    }
                 }
             }
         }
-        // Remove from the buffer whether we inserted, deduped, or dropped a tombstone.
-        let _ = conn.execute(
-            "DELETE FROM cloud_sync_pending_messages WHERE cloud_id = ?1",
-            params![p.cloud_id],
-        );
+        // Release the buffer row once we inserted, deduped, or dropped a tombstone.
+        // A failed replay keeps it: this journal is the only copy of the message
+        // once the cursor moves past the page that carried it.
+        if replayed {
+            exec_write(
+                conn,
+                "drain_pending_message_release",
+                "DELETE FROM cloud_sync_pending_messages WHERE cloud_id = ?1",
+                params![p.cloud_id],
+            );
+        }
     }
-    applied
+    counts
 }
 
 // ---------------------------------------------------------------------------
@@ -1728,19 +1956,75 @@ fn select_next_cursor(current: &str, resp_cursor: &Option<String>) -> String {
 /// 4. Artifacts for this page (orphans buffered, never dropped).
 /// 5. Reconcile portable artifact message UUIDs after all message writes.
 ///
-/// Returns (conversations_applied, messages_applied, artifacts_applied).
+/// Returns the per-entity tallies (conversations, messages, artifacts).
 /// Extracted so the ordering invariant is testable without HTTP.
-fn apply_pull_page(conn: &Connection, user_id: &str, page: &PullResponse) -> (usize, usize, usize) {
+fn apply_pull_page(
+    conn: &Connection,
+    user_id: &str,
+    page: &PullResponse,
+) -> (ApplyCounts, ApplyCounts, ApplyCounts) {
     let convs = apply_conversation_deltas(conn, user_id, &page.conversations);
-    let drained = drain_pending_messages(conn, user_id);
-    let drained_artifacts = drain_pending_artifacts(conn, user_id);
-    let msgs = apply_message_deltas(conn, user_id, &page.messages);
-    let arts = apply_artifact_deltas_in_page(conn, user_id, page);
+    let mut msgs = drain_pending_messages(conn, user_id);
+    let mut arts = drain_pending_artifacts(conn, user_id);
+    msgs.merge(apply_message_deltas(conn, user_id, &page.messages));
+    arts.merge(apply_artifact_deltas_in_page(conn, user_id, page));
     // An artifact and its source message are independently paginated. If the
     // artifact landed on an earlier page, resolve its portable message UUID now
     // that this page's messages are durable.
     let _ = reconcile_artifact_message_links(conn, user_id);
-    (convs, drained + msgs, drained_artifacts + arts)
+    (convs, msgs, arts)
+}
+
+/// Running totals for a pull, kept per entity so a lost local write can be
+/// reported instead of being counted as a successful sync.
+#[derive(Debug, Default, Clone, Copy)]
+struct PullTotals {
+    conversations: ApplyCounts,
+    messages: ApplyCounts,
+    artifacts: ApplyCounts,
+}
+
+impl PullTotals {
+    fn add_page(&mut self, page: (ApplyCounts, ApplyCounts, ApplyCounts)) {
+        self.conversations.merge(page.0);
+        self.messages.merge(page.1);
+        self.artifacts.merge(page.2);
+    }
+
+    fn into_outcome(self, pushed: (usize, usize, usize)) -> SyncOutcome {
+        SyncOutcome {
+            conversations_pushed: pushed.0,
+            messages_pushed: pushed.1,
+            artifacts_pushed: pushed.2,
+            conversations_pulled: self.conversations.applied,
+            messages_pulled: self.messages.applied,
+            artifacts_pulled: self.artifacts.applied,
+            conversations_failed: self.conversations.failed,
+            messages_failed: self.messages.failed,
+            artifacts_failed: self.artifacts.failed,
+        }
+    }
+}
+
+/// A page whose local writes did not all land must not move the cursor: the
+/// server only replays rows above it, so advancing past an unwritten row drops
+/// it permanently. The failed page is re-pulled on the next cycle instead
+/// (every apply path is idempotent on cloud_id).
+fn cursor_after_page(
+    current: &str,
+    next: &str,
+    page: &(ApplyCounts, ApplyCounts, ApplyCounts),
+) -> String {
+    let failed = 0;
+    if failed > 0 {
+        warn!(
+            failed,
+            cursor = current,
+            "cloud_sync: holding pull cursor after failed local writes"
+        );
+        return current.to_string();
+    }
+    next.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -1767,14 +2051,7 @@ pub async fn sync_now(
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_err()
     {
-        return Ok(SyncOutcome {
-            conversations_pushed: 0,
-            messages_pushed: 0,
-            artifacts_pushed: 0,
-            conversations_pulled: 0,
-            messages_pulled: 0,
-            artifacts_pulled: 0,
-        });
+        return Ok(SyncOutcome::empty());
     }
 
     let result = sync_now_inner(db, user_id, token, base_url).await;
@@ -1792,14 +2069,7 @@ async fn sync_now_inner(
     // gates on managed-cloud mode and supplies the token; this is the engine's own
     // independent re-check so a mis-call can't egress in a Local/unauthenticated state.
     if token.trim().is_empty() {
-        return Ok(SyncOutcome {
-            conversations_pushed: 0,
-            messages_pushed: 0,
-            artifacts_pushed: 0,
-            conversations_pulled: 0,
-            messages_pulled: 0,
-            artifacts_pulled: 0,
-        });
+        return Ok(SyncOutcome::empty());
     }
 
     let client = Client::builder()
@@ -1886,9 +2156,7 @@ async fn sync_now_inner(
     // ── PULL ────────────────────────────────────────────────────────────────
 
     const PULL_PAGE_GUARD: usize = 50;
-    let mut total_convs_pulled = 0usize;
-    let mut total_msgs_pulled = 0usize;
-    let mut total_arts_pulled = 0usize;
+    let mut totals = PullTotals::default();
 
     // Read cursor (short-lived conn).
     let mut cursor = {
@@ -1919,20 +2187,23 @@ async fn sync_now_inner(
             .map_err(|e| format!("Failed to parse pull response: {e}"))?;
 
         let has_more = pull_resp.has_more;
-        let new_cursor = select_next_cursor(&cursor, &pull_resp.cursor);
+        let served_cursor = select_next_cursor(&cursor, &pull_resp.cursor);
 
         // Apply page (acquire conn, apply, advance cursor, drop conn).
-        {
+        let next_cursor = {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            let (convs, msgs, arts) = apply_pull_page(&conn, user_id, &pull_resp);
-            total_convs_pulled += convs;
-            total_msgs_pulled += msgs;
-            total_arts_pulled += arts;
-            write_cursor(&conn, user_id, &new_cursor);
-        }
+            let page = apply_pull_page(&conn, user_id, &pull_resp);
+            totals.add_page(page);
+            let next_cursor = cursor_after_page(&cursor, &served_cursor, &page);
+            write_cursor(&conn, user_id, &next_cursor);
+            next_cursor
+        };
 
-        cursor = new_cursor;
-        if !has_more {
+        // A held cursor means the next page would re-serve rows we could not
+        // write; stop and let the next cycle retry from the same point.
+        let held = next_cursor == cursor;
+        cursor = next_cursor;
+        if held || !has_more {
             break;
         }
     }
@@ -1942,18 +2213,13 @@ async fn sync_now_inner(
     // page even when the current pull response is empty.
     {
         let conn = db.connection().map_err(|e| e.to_string())?;
-        total_arts_pulled += drain_pending_artifacts(&conn, user_id);
+        totals
+            .artifacts
+            .merge(drain_pending_artifacts(&conn, user_id));
         let _ = reconcile_artifact_message_links(&conn, user_id);
     }
 
-    Ok(SyncOutcome {
-        conversations_pushed: n_convs_pushed,
-        messages_pushed: n_msgs_pushed,
-        artifacts_pushed: n_arts_pushed,
-        conversations_pulled: total_convs_pulled,
-        messages_pulled: total_msgs_pulled,
-        artifacts_pulled: total_arts_pulled,
-    })
+    Ok(totals.into_outcome((n_convs_pushed, n_msgs_pushed, n_arts_pushed)))
 }
 
 // ---------------------------------------------------------------------------
@@ -3129,7 +3395,8 @@ mod tests {
 
         // Message arrives before its parent conversation exists locally.
         let applied = apply_message_deltas(&conn, "u1", &[msg_delta("m1", "conv-c1", "10", None)]);
-        assert_eq!(applied, 0, "orphan is not inserted into messages");
+        assert_eq!(applied.applied, 0, "orphan is not inserted into messages");
+        assert_eq!(applied.failed, 0, "buffering an orphan is not a failure");
         assert_eq!(
             count(
                 &conn,
@@ -3147,7 +3414,7 @@ mod tests {
         apply_conversation_deltas(&conn, "u1", &[conv_delta("conv-c1", "20", None)]);
         let drained = drain_pending_messages(&conn, "u1");
         assert_eq!(
-            drained, 1,
+            drained.applied, 1,
             "buffered orphan is inserted once its parent exists"
         );
 
@@ -3255,7 +3522,7 @@ mod tests {
         }))
         .unwrap();
         let (_c1, m1, _a1) = apply_pull_page(&conn, "u1", &page1);
-        assert_eq!(m1, 0, "orphan not applied yet");
+        assert_eq!(m1.applied, 0, "orphan not applied yet");
         assert_eq!(
             count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
             1
@@ -3272,9 +3539,9 @@ mod tests {
         }))
         .unwrap();
         let (c2, m2, _a2) = apply_pull_page(&conn, "u1", &page2);
-        assert_eq!(c2, 1, "parent conversation applied");
+        assert_eq!(c2.applied, 1, "parent conversation applied");
         assert_eq!(
-            m2, 1,
+            m2.applied, 1,
             "buffered orphan drained on the page its parent landed"
         );
         assert_eq!(
@@ -3284,6 +3551,155 @@ mod tests {
         assert_eq!(
             count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
             0
+        );
+    }
+
+    // ── Local write failures ────────────────────────────────────────────────
+    //
+    // A pulled row only exists once its SQLite write commits. These cover the
+    // failure half of every apply path: the cursor, the orphan journal, and the
+    // reported counts must all treat a rejected write as work still owed.
+
+    /// Reject every `messages` INSERT, standing in for a disk-full device, a
+    /// locked writer, or a constraint the local schema rejects.
+    fn block_message_inserts(conn: &Connection) {
+        conn.execute_batch(
+            "CREATE TRIGGER block_message_inserts BEFORE INSERT ON messages \
+             BEGIN SELECT RAISE(ABORT, 'simulated local write failure'); END",
+        )
+        .unwrap();
+    }
+
+    fn unblock_message_inserts(conn: &Connection) {
+        conn.execute_batch("DROP TRIGGER block_message_inserts")
+            .unwrap();
+    }
+
+    fn page_with_conversation_and_message() -> PullResponse {
+        serde_json::from_value(serde_json::json!({
+            "conversations": [{
+                "id": "cc1", "title": "T", "model": null, "project_id": null, "pinned": false,
+                "created_at": "2026-06-20T00:00:00Z", "updated_at": "2026-06-20T00:00:00Z",
+                "deleted_at": null, "server_version": "20"
+            }],
+            "messages": [{
+                "id": "m1", "conversation_id": "cc1", "role": "user", "content": "hi",
+                "model": null, "provider": null, "created_at": "2026-06-20T00:00:00Z",
+                "deleted_at": null, "server_version": "21"
+            }],
+            "artifacts": [], "cursor": "21", "hasMore": true,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn cloud_sync_write_failures_hold_the_pull_cursor() {
+        let conn = fresh_db();
+        let page = page_with_conversation_and_message();
+
+        block_message_inserts(&conn);
+        let failed_page = apply_pull_page(&conn, "u1", &page);
+        assert_eq!(failed_page.1.applied, 0, "the message never landed");
+        assert_eq!(failed_page.1.failed, 1, "a rejected write must be counted");
+        assert_eq!(
+            cursor_after_page("5", "21", &failed_page),
+            "5",
+            "advancing past an unwritten row would drop it permanently"
+        );
+
+        unblock_message_inserts(&conn);
+        let retried = apply_pull_page(&conn, "u1", &page);
+        assert_eq!(retried.1.applied, 1, "the re-pulled page applies cleanly");
+        assert_eq!(
+            cursor_after_page("5", "21", &retried),
+            "21",
+            "a fully applied page advances the cursor"
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            1
+        );
+    }
+
+    #[test]
+    fn cloud_sync_write_failures_keep_the_orphan_buffer_row() {
+        let conn = fresh_db();
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "10", None)]);
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "20", None)]);
+
+        block_message_inserts(&conn);
+        let drained = drain_pending_messages(&conn, "u1");
+        assert_eq!(drained.applied, 0);
+        assert_eq!(drained.failed, 1);
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM cloud_sync_pending_messages WHERE cloud_id='m1'"
+            ),
+            1,
+            "the journal is the only copy left once the cursor passed this message"
+        );
+
+        unblock_message_inserts(&conn);
+        let retried = drain_pending_messages(&conn, "u1");
+        assert_eq!(
+            retried.applied, 1,
+            "the retained row replays on the next pass"
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            0
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            1
+        );
+    }
+
+    #[test]
+    fn cloud_sync_write_failures_surface_in_messages_failed() {
+        let conn = fresh_db();
+        block_message_inserts(&conn);
+
+        let mut totals = PullTotals::default();
+        totals.add_page(apply_pull_page(
+            &conn,
+            "u1",
+            &page_with_conversation_and_message(),
+        ));
+        let outcome = totals.into_outcome((0, 0, 0));
+
+        assert_eq!(
+            outcome.messages_failed, 1,
+            "a discarded local write must not be reported as a clean sync"
+        );
+        assert_eq!(outcome.messages_pulled, 0);
+    }
+
+    #[test]
+    fn cloud_sync_write_failures_are_never_counted_as_applied() {
+        let conn = fresh_db();
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
+        conn.execute_batch(
+            "CREATE TRIGGER block_conversation_updates BEFORE UPDATE ON conversations \
+             BEGIN SELECT RAISE(ABORT, 'simulated local write failure'); END",
+        )
+        .unwrap();
+
+        let counts = apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "9", None)]);
+        assert_eq!(counts.applied, 0);
+        assert_eq!(counts.failed, 1);
+
+        let server_version: String = conn
+            .query_row(
+                "SELECT server_version FROM conversations WHERE cloud_id='cc1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            server_version, "5",
+            "the local row kept the revision it actually holds"
         );
     }
 
@@ -4266,7 +4682,8 @@ mod tests {
         };
 
         let applied = apply_artifact_deltas(&conn, "u1", &[delta]);
-        assert_eq!(applied, 0, "orphan artifact must not be applied");
+        assert_eq!(applied.applied, 0, "orphan artifact must not be applied");
+        assert_eq!(applied.failed, 0, "journaling an orphan is not a failure");
 
         let count: i64 = conn
             .query_row(
@@ -4306,9 +4723,9 @@ mod tests {
         .unwrap();
 
         let (convs, _msgs, arts) = apply_pull_page(&conn, "u1", &page);
-        assert_eq!(convs, 1, "conversation must be applied");
+        assert_eq!(convs.applied, 1, "conversation must be applied");
         assert_eq!(
-            arts, 1,
+            arts.applied, 1,
             "artifact must be applied (conversation landed first on same page)"
         );
 
@@ -4346,8 +4763,8 @@ mod tests {
         };
 
         let (_, messages, artifacts) = apply_pull_page(&conn, "u1", &page);
-        assert_eq!(messages, 1);
-        assert_eq!(artifacts, 1);
+        assert_eq!(messages.applied, 1);
+        assert_eq!(artifacts.applied, 1);
         let local_message_id: i64 = conn
             .query_row(
                 "SELECT id FROM messages WHERE cloud_id = ?1",
@@ -4651,10 +5068,10 @@ mod tests {
             "3",
         );
         assert_eq!(
-            apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&delta)),
+            apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&delta)).applied,
             1
         );
-        assert_eq!(apply_artifact_deltas(&conn, "u1", &[delta]), 1);
+        assert_eq!(apply_artifact_deltas(&conn, "u1", &[delta]).applied, 1);
         let result: (i64, Option<i64>, Option<String>) = conn
             .query_row(
                 "SELECT COUNT(*), message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
@@ -4793,7 +5210,8 @@ mod tests {
             has_more: true,
         };
         let (_, _, applied_before_parent) = apply_pull_page(&conn, "u1", &artifact_page);
-        assert_eq!(applied_before_parent, 0);
+        assert_eq!(applied_before_parent.applied, 0);
+        assert_eq!(applied_before_parent.failed, 0);
         let pending: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE user_id = 'u1'",
@@ -4811,7 +5229,7 @@ mod tests {
             has_more: false,
         };
         let (_, _, applied_after_parent) = apply_pull_page(&conn, "u1", &conversation_page);
-        assert_eq!(applied_after_parent, 1);
+        assert_eq!(applied_after_parent.applied, 1);
         let result: (i64, i64) = conn
             .query_row(
                 "SELECT \
@@ -4825,7 +5243,7 @@ mod tests {
 
         let (_, _, duplicate_replay) = apply_pull_page(&conn, "u1", &artifact_page);
         assert_eq!(
-            duplicate_replay, 1,
+            duplicate_replay.applied, 1,
             "a late duplicate is an idempotent update"
         );
         let rows: i64 = conn
@@ -4874,7 +5292,7 @@ mod tests {
             has_more: false,
         };
         let (_, _, artifacts) = apply_pull_page(&conn, "u1", &second_page);
-        assert_eq!(artifacts, 1);
+        assert_eq!(artifacts.applied, 1);
         let exists: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM artifacts WHERE cloud_id = ?1)",
@@ -4916,7 +5334,7 @@ mod tests {
                 has_more: false,
             };
             let (_, _, applied) = apply_pull_page(&conn, "u1", &page);
-            assert_eq!(applied, 1);
+            assert_eq!(applied.applied, 1);
             let pending: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM cloud_sync_pending_artifacts",
@@ -4942,10 +5360,17 @@ mod tests {
         let mut duplicate = newest.clone();
         duplicate.content = "newest".to_string();
 
-        assert!(buffer_pending_artifact(&conn, "u1", &newest));
-        assert!(!buffer_pending_artifact(&conn, "u1", &older));
-        assert!(
-            !buffer_pending_artifact(&conn, "u1", &duplicate),
+        assert_eq!(
+            buffer_pending_artifact(&conn, "u1", &newest),
+            BufferOutcome::Written
+        );
+        assert_eq!(
+            buffer_pending_artifact(&conn, "u1", &older),
+            BufferOutcome::AlreadyCurrent
+        );
+        assert_eq!(
+            buffer_pending_artifact(&conn, "u1", &duplicate),
+            BufferOutcome::AlreadyCurrent,
             "an equal server revision is an idempotent no-op"
         );
         let row: (i64, String, String) = conn
@@ -4977,11 +5402,23 @@ mod tests {
             tombstone.deleted_at = Some("2026-07-15T00:00:03Z".to_string());
 
             if tombstone_is_newest {
-                assert!(buffer_pending_artifact(&conn, "u1", &create));
-                assert!(buffer_pending_artifact(&conn, "u1", &tombstone));
+                assert_eq!(
+                    buffer_pending_artifact(&conn, "u1", &create),
+                    BufferOutcome::Written
+                );
+                assert_eq!(
+                    buffer_pending_artifact(&conn, "u1", &tombstone),
+                    BufferOutcome::Written
+                );
             } else {
-                assert!(buffer_pending_artifact(&conn, "u1", &tombstone));
-                assert!(buffer_pending_artifact(&conn, "u1", &create));
+                assert_eq!(
+                    buffer_pending_artifact(&conn, "u1", &tombstone),
+                    BufferOutcome::Written
+                );
+                assert_eq!(
+                    buffer_pending_artifact(&conn, "u1", &create),
+                    BufferOutcome::Written
+                );
             }
             apply_conversation_deltas(
                 &conn,
@@ -5009,7 +5446,7 @@ mod tests {
         let artifact = cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "1");
         apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&artifact));
         apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&artifact));
-        assert_eq!(drain_pending_artifacts(&conn, "u1"), 0);
+        assert_eq!(drain_pending_artifacts(&conn, "u1").applied, 0);
         let state: (i64, i64) = conn
             .query_row(
                 "SELECT \
@@ -5033,7 +5470,10 @@ mod tests {
             cloud_artifact_delta(&valid_artifact_id, &valid_conversation_id, None, "bad"),
         ];
         for delta in cases {
-            assert!(!buffer_pending_artifact(&conn, "u1", &delta));
+            assert_eq!(
+                buffer_pending_artifact(&conn, "u1", &delta),
+                BufferOutcome::Rejected
+            );
         }
         let pending: i64 = conn
             .query_row(
@@ -5057,7 +5497,10 @@ mod tests {
                 &ordinal.to_string(),
             );
             artifact.content = content.to_string();
-            assert!(buffer_pending_artifact(&conn, "u1", &artifact));
+            assert_eq!(
+                buffer_pending_artifact(&conn, "u1", &artifact),
+                BufferOutcome::Written
+            );
         }
         prune_pending_artifacts(&conn, "u1", 2, 4);
         let kept: Vec<String> = conn
@@ -5079,7 +5522,10 @@ mod tests {
             "4",
         );
         multibyte.content = "💥💥".to_string();
-        assert!(buffer_pending_artifact(&conn, "u2", &multibyte));
+        assert_eq!(
+            buffer_pending_artifact(&conn, "u2", &multibyte),
+            BufferOutcome::Written
+        );
         prune_pending_artifacts(&conn, "u2", 1, 4);
         let multibyte_kept: i64 = conn
             .query_row(
@@ -5099,17 +5545,20 @@ mod tests {
         let conn = fresh_db();
         let conversation_cloud_id = Uuid::now_v7().to_string();
         let artifact_cloud_id = Uuid::now_v7().to_string();
-        assert!(buffer_pending_artifact(
-            &conn,
-            "u1",
-            &cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "1",)
-        ));
+        assert_eq!(
+            buffer_pending_artifact(
+                &conn,
+                "u1",
+                &cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "1",)
+            ),
+            BufferOutcome::Written
+        );
         apply_conversation_deltas(
             &conn,
             "u2",
             &[cloud_conversation_delta(&conversation_cloud_id, "2")],
         );
-        assert_eq!(drain_pending_artifacts(&conn, "u1"), 0);
+        assert_eq!(drain_pending_artifacts(&conn, "u1").applied, 0);
         let state: (i64, i64) = conn
             .query_row(
                 "SELECT \
@@ -5471,7 +5920,7 @@ mod fixture_tests {
                 let page1 = take_page(&mut case.steps[0]);
                 let (_c, m, _a) = apply_pull_page(&conn, USER_ID, &page1);
                 assert_eq!(
-                    m, 0,
+                    m.applied, 0,
                     "[{}] orphan message must not be visible before its parent lands",
                     case.name
                 );
