@@ -110,7 +110,24 @@ mime_guess = "2.0"
 bytes = "1.5"
 
 
-oauth2 = "4.4"
+# oauth2 4.x is the sole path to reqwest 0.11 -> rustls 0.21 -> rustls-webpki
+# 0.101.7, whose 0.101 line is dead: RUSTSEC-2026-0098/0099 (name constraints
+# accepted for URI and wildcard names) and RUSTSEC-2026-0104 (panic while
+# parsing a CRL, reached before the CRL signature is checked) are only patched
+# on 0.103.12+. The default `rustls-tls` feature is therefore off; the OAuth
+# token exchanges verify with the platform trust store instead.
+#
+# Read that as the trade it is, not as consistency. This binary's OWN reqwest
+# (below) is deliberately rustls-only, so OAuth token exchange is now the one
+# first-party HTTP path on a different trust model — it follows the OS trust
+# store, including any enterprise root an administrator has installed, while
+# every other first-party call pins to webpki-roots. lettre and async-stripe
+# already use native-tls, so the backend is present either way and no new crate
+# class enters the tree; the divergence is in policy, not in dependencies.
+# Removing it is the point of the oauth2 5.x port below.
+# Dropping this backend swap for oauth2 5.x needs the call sites in
+# core/mcp/oauth.rs and sys/security/oauth.rs ported off `async_http_client`.
+oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "native-tls"] }
 
 
 enigo = { version = "0.6", features = ["serde"] }
