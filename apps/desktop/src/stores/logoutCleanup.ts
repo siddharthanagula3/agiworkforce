@@ -193,22 +193,40 @@ export function clearPersistedUserData(): void {
   if (typeof window === 'undefined') return;
 
   const keysToRemove = [
-    'unified-chat-storage',
     'chat-storage',
-    'agi-web-chat',
     'unified-auth-storage',
     'agiworkforce-agent-tasks',
     'billing-usage-store',
     'connectors-store',
     STORAGE_KEYS.ID_MAPPINGS,
-    // Legacy store keys (now consolidated)
+    // Persisted user content whose stores this module never touches — they are
+    // not imported above, so neither a reset() nor a rehydrate ever rewrote
+    // their payload and it survived sign-out intact on a shared machine.
+    'agiworkforce-memory', // remembered facts about the user
+    'agiworkforce-custom-instructions',
+    'research-store', // research reports
+    'artifact-store', // generated artifact bodies
+    'trigger-store',
+    'agiworkforce-scheduler',
+    'agiworkforce-cache', // codebase stats scanned from the user's projects
+    'image-gallery-store', // generated images
+    'execution-sidecar-storage',
+    'tool-storage', // includes the user's trusted-workflow decisions
+    // Legacy store keys (now consolidated or removed). Nothing writes these
+    // any more; they stay so an install upgrading from an older build still
+    // gets its old payload dropped on the next sign-out.
+    'unified-chat-storage',
+    'agi-web-chat',
     'billing-storage', // Legacy - now in unified-auth-storage
     'auth-storage', // Legacy - now in unified-auth-storage
     'account-storage', // Legacy - now in unified-auth-storage
     'cost-store',
     'agiworkforce-token-budget',
-    // Note: Keep these as they're app preferences, not user data:
-    // 'settings-storage', 'model-storage', 'onboarding-storage'
+    // Note: keep these as they are device/app preferences, not user data:
+    // 'agiworkforce-settings', 'agiworkforce-models', 'agiworkforce-ui',
+    // 'agiworkforce-updater', 'app-mode-store', 'chat-view-storage',
+    // 'agiworkforce-voice-mode', 'agiworkforce-voice-input',
+    // 'agiworkforce-cowork-dispatch'
   ];
 
   for (const key of keysToRemove) {
