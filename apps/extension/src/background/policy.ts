@@ -33,10 +33,14 @@ import { redactSecrets } from '@agiworkforce/utils/logger';
 // this matrix below for backwards-compatible exports.
 //
 // Adding a new message type? Add an entry here with the appropriate fields.
-// Forgetting to add the entry results in the *default* policy below, which
-// is fail-safe: the message goes through the allowlist gate but has no
-// cross-tab or extension-page restriction. If the new type mutates DOM or
-// persists state, you MUST add an explicit entry.
+// Forgetting to add the entry results in the *default* policy below: the
+// message goes through the allowlist gate but has no cross-tab or extension-
+// page restriction, so any allowlisted page reaches the handler. That default
+// is only safe for read-only, own-tab handlers, and the memory, quick-mode,
+// and tab-group handlers all inherited it by accident.
+// `__tests__/message-policy-coverage.test.ts` now fails the build when a
+// `handleMessageAsync` case has no entry here, so the choice must be written
+// down rather than defaulted into.
 //
 // senderClass
 //   - 'extension-page-only': only popup / side panel / options can send
@@ -133,6 +137,61 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+
+  // ── Memories, quick mode, tab groups — side panel only. ─────────────────
+  // These handlers landed after the C-02/C-03 sweep and silently inherited
+  // DEFAULT_POLICY, so any content script on an allowlisted origin could read,
+  // rewrite, or wipe the user's memories. That is the same capability C-02/C-03
+  // gated for shortcuts: `chrome.storage.local` state that outlives both the
+  // page and its place on the allowlist — plus, on the read side, a straight
+  // disclosure of the user's own notes to the page. Quick mode flips a stored
+  // routing preference, and the tab-group commands fall back to the *active*
+  // tab, so a background tab could regroup whatever the user is looking at.
+  // The only senders are `side_panel.ts` (memory drawer, quick-mode toggle,
+  // tab-group buttons), so gating breaks nothing.
+  LIST_MEMORIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  ADD_MEMORY: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UPDATE_MEMORY: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  DELETE_MEMORY: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  GET_QUICK_MODE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SET_QUICK_MODE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  ADD_TAB_TO_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  REMOVE_TAB_FROM_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
+
+  // ── Native-bridge control — side panel only. ────────────────────────────
+  // Same argument as the tab/cookie block above: both cross into the desktop
+  // (Local) trust boundary and neither has a content-script sender.
+  // QUEUE_MESSAGE hands arbitrary page-supplied text to the desktop's queue;
+  // RECONNECT_NATIVE is reached only from the side panel's pairing UI.
+  QUEUE_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  RECONNECT_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+
+  // ── Allowlisted-tab types, stated rather than inherited. ────────────────
+  // These match DEFAULT_POLICY exactly and are listed only so
+  // `message-policy-coverage.test.ts` can require an entry for every type
+  // `handleMessageAsync` dispatches — the check the memory handlers slipped
+  // past. Most are sent by `content.ts` or the in-page panel and would break if
+  // gated; the rest either stay inside the sender's own tab
+  // (GET_ACCESSIBILITY_TREE), only validate and log (BRIDGE_URL_CHANGED), or
+  // ride on the standing web-allowlisted-replay decision noted above
+  // (LIST_SHORTCUTS, REPLAY_SHORTCUT, LIST_SCHEDULED_TASKS).
+  TAB_READY: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  SYNC_PAGE_CONTEXT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  GET_CONNECTION_STATUS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  CAPTURE_SCREENSHOT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  GET_ACCESSIBILITY_TREE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  OPEN_SIDE_PANEL: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  NLWEB_PROBE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  NLWEB_DETECTED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  WEBMCP_TOOLS_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  REPLAY_SHORTCUT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  BRIDGE_URL_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
 };
 
 /**

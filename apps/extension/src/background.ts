@@ -3427,6 +3427,10 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    // SECURITY: the tab-group cases fall back to the active tab when no tabId
+    // is supplied, so they are in EXTENSION_PAGE_ONLY_MESSAGE_TYPES — otherwise
+    // a content script in a background tab could regroup the tab the user is
+    // actually looking at.
     case 'ADD_TAB_TO_GROUP': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -3719,6 +3723,11 @@ async function handleMessageAsync(
       }
     }
 
+    // SECURITY: every memory case is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES.
+    // Memories are user-authored notes in chrome.storage.local that outlive the
+    // origin's place on the allowlist (same C-02/C-03 argument as shortcuts),
+    // and reading them hands the page the user's own notes. The side panel's
+    // memory drawer is the only sender.
     case 'LIST_MEMORIES' as ExtensionMessage['type']: {
       const memories = await memoryList();
       return { success: true, memories } as ExtensionResponse;
