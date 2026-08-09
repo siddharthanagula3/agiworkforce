@@ -11,6 +11,26 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 use crate::sys::error::{Error, Result};
+use crate::sys::security::egress_policy::public_destination_redirect_policy;
+
+/// Render an error together with everything it was caused by.
+///
+/// `reqwest` reports a refused redirect as the bare string "error following
+/// redirect" and hangs the reason off `source()`, so without this the egress
+/// policy's own explanation never reaches the caller — or the log.
+fn describe_error(error: &dyn std::error::Error) -> String {
+    let mut description = error.to_string();
+    let mut cause = error.source();
+    while let Some(current) = cause {
+        let text = current.to_string();
+        if !description.contains(&text) {
+            description.push_str(": ");
+            description.push_str(&text);
+        }
+        cause = current.source();
+    }
+    description
+}
 
 /// Default HTTP client with retry middleware, lazily initialized.
 /// This is shared across all `ApiClient::default()` instances.
@@ -22,6 +42,7 @@ static DEFAULT_CLIENT: Lazy<Arc<ClientWithMiddleware>> = Lazy::new(|| {
     // Use default reqwest client configuration which should never fail
     let reqwest_client = Client::builder()
         .timeout(Duration::from_secs(30))
+        .redirect(public_destination_redirect_policy())
         .build()
         .expect("Failed to create default HTTP client with standard configuration");
 
@@ -151,6 +172,7 @@ impl ApiClient {
         let reqwest_client = Client::builder()
             .timeout(Duration::from_secs(30))
             .retry(reqwest::retry::never())
+            .redirect(public_destination_redirect_policy())
             .build()
             .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -170,6 +192,7 @@ impl ApiClient {
 
         let reqwest_client = Client::builder()
             .timeout(Duration::from_secs(30))
+            .redirect(public_destination_redirect_policy())
             .build()
             .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -238,7 +261,7 @@ impl ApiClient {
         let response = req_builder
             .send()
             .await
-            .map_err(|e| Error::Other(format!("Failed to send request: {}", e)))?;
+            .map_err(|e| Error::Other(format!("Failed to send request: {}", describe_error(&e))))?;
 
         let duration_ms = start.elapsed().as_millis();
 
@@ -302,6 +325,7 @@ impl ApiClient {
 
         let raw_client = Client::builder()
             .timeout(Duration::from_secs(300))
+            .redirect(public_destination_redirect_policy())
             .build()
             .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
 
@@ -320,7 +344,7 @@ impl ApiClient {
         let response = req_builder
             .send()
             .await
-            .map_err(|e| Error::Other(format!("Failed to upload file: {}", e)))?;
+            .map_err(|e| Error::Other(format!("Failed to upload file: {}", describe_error(&e))))?;
 
         let duration_ms = start.elapsed().as_millis();
 
@@ -366,6 +390,7 @@ impl ApiClient {
         loop {
             let raw_client = Client::builder()
                 .timeout(Duration::from_secs(300))
+                .redirect(public_destination_redirect_policy())
                 .build()
                 .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
 
@@ -448,7 +473,7 @@ impl ApiClient {
                     }
                 }
                 Err(e) => {
-                    last_error = format!("Request failed: {}", e);
+                    last_error = format!("Request failed: {}", describe_error(&e));
                 }
             }
 
@@ -546,6 +571,134 @@ mod tests {
         }
 
         request
+    }
+
+    /// Bind a loopback HTTP server that answers every connection with whatever
+    /// `handler` returns for the requested path, counting connections.
+    async fn spawn_http_server<F>(
+        handler: F,
+        connections: Arc<AtomicUsize>,
+    ) -> std::net::SocketAddr
+    where
+        F: Fn(&str) -> String + Send + Sync + 'static,
+    {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local HTTP server");
+        let address = listener.local_addr().expect("read local server address");
+
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                connections.fetch_add(1, Ordering::SeqCst);
+                let request = read_http_request(&mut stream).await;
+                let text = String::from_utf8_lossy(&request).to_string();
+                let path = text.split_whitespace().nth(1).unwrap_or("/").to_string();
+                let _ = stream.write_all(handler(&path).as_bytes()).await;
+                let _ = stream.flush().await;
+            }
+        });
+
+        address
+    }
+
+    fn ok_response(body: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    fn redirect_response(location: &str) -> String {
+        format!(
+            "HTTP/1.1 302 Found\r\nLocation: {location}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+        )
+    }
+
+    /// The redirect bypass: judging only the URL a caller supplies is no guard
+    /// while the client then follows `Location:` unchecked. A front server that
+    /// answers `302 Location: http://127.0.0.1:PORT/latest/meta-data/` must not
+    /// produce a single connection to that port.
+    #[tokio::test]
+    async fn redirect_to_an_internal_destination_is_refused() {
+        let metadata_connections = Arc::new(AtomicUsize::new(0));
+        let metadata = spawn_http_server(
+            |_| ok_response("SECRET_METADATA"),
+            Arc::clone(&metadata_connections),
+        )
+        .await;
+
+        let front_connections = Arc::new(AtomicUsize::new(0));
+        let location = format!("http://{metadata}/latest/meta-data/");
+        let front = spawn_http_server(
+            move |_| redirect_response(&location),
+            Arc::clone(&front_connections),
+        )
+        .await;
+
+        let client = ApiClient::new().expect("create API client for test");
+        let error = client
+            .execute(ApiRequest {
+                method: HttpMethod::Get,
+                url: format!("http://{front}/"),
+                timeout_ms: Some(3_000),
+                ..Default::default()
+            })
+            .await
+            .expect_err("a redirect into loopback must not be followed");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("egress policy"),
+            "refusal should name the policy, got: {message}"
+        );
+
+        // Give a hop that did escape time to land before counting.
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        assert_eq!(
+            front_connections.load(Ordering::SeqCst),
+            1,
+            "the first hop should have been made exactly once"
+        );
+        assert_eq!(
+            metadata_connections.load(Ordering::SeqCst),
+            0,
+            "the client followed a redirect into loopback"
+        );
+    }
+
+    /// A hop that stays inside the origin it came from reaches nothing the first
+    /// check did not already allow, so it is still followed — this is what keeps
+    /// a development API server on `localhost` (which redirects for trailing
+    /// slashes) usable.
+    #[tokio::test]
+    async fn same_origin_redirects_are_still_followed() {
+        let connections = Arc::new(AtomicUsize::new(0));
+        let address = spawn_http_server(
+            |path| {
+                if path == "/redirected" {
+                    ok_response("FOLLOWED")
+                } else {
+                    redirect_response("/redirected")
+                }
+            },
+            Arc::clone(&connections),
+        )
+        .await;
+
+        let client = ApiClient::new().expect("create API client for test");
+        let response = client
+            .execute(ApiRequest {
+                method: HttpMethod::Get,
+                url: format!("http://{address}/"),
+                timeout_ms: Some(3_000),
+                ..Default::default()
+            })
+            .await
+            .expect("a same-origin redirect must be followed");
+
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body, "FOLLOWED");
+        assert_eq!(connections.load(Ordering::SeqCst), 2);
     }
 
     #[test]

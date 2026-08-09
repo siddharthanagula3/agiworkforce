@@ -52,14 +52,14 @@ describe('price tier mapping', () => {
     // entitlement never granted, Stripe retrying forever.
     process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'] = 'price_team_usd';
     process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'] = 'price_team_inr';
-    const { getPlanTierFromPriceId, isPriceIdRegistered, getBillingDetailsFromPriceId } =
+    const { getPlanTierFromPriceId, isPriceIdRegistered, getTierMapping } =
       await import('../price-tier-mapping');
 
     expect(isPriceIdRegistered('price_team_usd')).toBe(true);
     expect(isPriceIdRegistered('price_team_inr')).toBe(true);
     expect(getPlanTierFromPriceId('price_team_usd')).toBe('team');
     expect(getPlanTierFromPriceId('price_team_inr')).toBe('team');
-    expect(getBillingDetailsFromPriceId('price_team_usd')).toMatchObject({
+    expect(getTierMapping()['price_team_usd']).toEqual({
       tier: 'team',
       interval: 'monthly',
     });
@@ -76,12 +76,12 @@ describe('price tier mapping', () => {
     // the card and then fails to provision on the unregistered-Price guard.
     process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'] = 'price_team_usd';
     process.env['STRIPE_PRICE_TEAM_YEARLY_USD'] = 'price_team_yearly_usd';
-    const { getPlanTierFromPriceId, isPriceIdRegistered, getBillingDetailsFromPriceId } =
+    const { getPlanTierFromPriceId, isPriceIdRegistered, getTierMapping } =
       await import('../price-tier-mapping');
 
     expect(isPriceIdRegistered('price_team_yearly_usd')).toBe(true);
     expect(getPlanTierFromPriceId('price_team_yearly_usd')).toBe('team');
-    expect(getBillingDetailsFromPriceId('price_team_yearly_usd')).toMatchObject({
+    expect(getTierMapping()['price_team_yearly_usd']).toEqual({
       tier: 'team',
       interval: 'yearly',
     });

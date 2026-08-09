@@ -87,4 +87,44 @@ describe('UpgradeConfirmDialog', () => {
     });
     expect(paymentMocks.upgradePlanMidCycle).not.toHaveBeenCalled();
   });
+
+  it('renews a per-seat plan at unit price x seats', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValueOnce({
+      amountDueNowCents: 1_234,
+      currency: 'usd',
+      previewToken: 'tok_seat',
+    });
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'team', billingInterval: 'monthly', seats: 3 }}
+        onCancel={vi.fn()}
+        onConfirmed={vi.fn()}
+      />,
+    );
+
+    // Team publishes $25/seat/month, so 3 seats renew at $75 — quoting the $25
+    // unit price would understate the org's bill by the seat count.
+    expect(await screen.findByText(/renews at \$75\/month/i)).toBeTruthy();
+  });
+
+  it('quotes the published catalog amount for the requested interval', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValueOnce({
+      amountDueNowCents: 500,
+      currency: 'usd',
+      previewToken: 'tok_pro_yearly',
+    });
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'pro', billingInterval: 'yearly' }}
+        onCancel={vi.fn()}
+        onConfirmed={vi.fn()}
+      />,
+    );
+
+    // Pro yearly is $200 in the catalog. Quoting the monthly $20 as the annual
+    // renewal is the misstatement this pins.
+    expect(await screen.findByText(/renews at \$200\/year/i)).toBeTruthy();
+  });
 });

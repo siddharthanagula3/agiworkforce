@@ -315,7 +315,15 @@ export function ChatInput({
       addAttachments: (items: Attachment[]) => {
         // Validate up front so an unsupported/oversized file is rejected with a
         // specific reason instead of silently becoming an empty stub at send time.
-        const { accepted, rejected } = validateAttachments(items);
+        //
+        // The size ceiling depends on where the send will put the file, and
+        // `appMode` decides that exactly: `guardedFetch` refuses every
+        // our-cloud host in Local mode (lib/egressGuard.ts:170-176), so the
+        // 12 MiB presign contract binds if and only if we are in Cloud. Apply
+        // it here, at attach time, so the composer cannot stage a file the
+        // upload will deterministically refuse — that refusal used to be
+        // retried three times and then reported as a connection problem.
+        const { accepted, rejected } = validateAttachments(items, appMode);
         if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
         if (rejected.length > 0) {
           Alert.alert(
@@ -325,7 +333,11 @@ export function ChatInput({
         }
       },
     }),
-    [],
+    // The handle must be rebuilt when the boundary changes, or a composer
+    // mounted in Local would keep capping cloud attachments at the 25 MB
+    // device ceiling after the user flips to Cloud. Hosts read `ref.current`
+    // at call time, so the rebuilt handle is the one the pickers use.
+    [appMode],
   );
 
   // Persist the in-progress draft so it survives unmount / backgrounding.

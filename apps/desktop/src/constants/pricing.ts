@@ -1,8 +1,4 @@
-import {
-  getPublishedPlanPriceUsd,
-  getPlanPriceInr,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
+import type { BillingPlanTier } from '@agiworkforce/types';
 
 // 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
 // shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
@@ -38,19 +34,19 @@ export const STRIPE_PRICE_IDS = {
  */
 export type PlanId = BillingPlanTier;
 
+// 2026-08-09 (BIZ-020 repair): `monthlyPrice`, `yearlyPrice` and
+// `monthlyPriceInr` were removed from this shape. Nothing in the desktop app
+// ever read them — `getPlanById` has exactly one consumer,
+// `apps/desktop/src/utils/featureGates.ts` (imported at line 1, called at 91 and
+// 216), and it reads only `plan.limits`. Desktop renders plan prices in
+// `apps/desktop/src/features/pricing/PlanCard.tsx`, which pulls them straight
+// from the shared catalog. Carrying a second, unread copy of the price here is
+// what let a `0` placeholder for Enterprise sit unnoticed; the fix for unread
+// price data is to delete it, not to re-type it.
 export interface PricingPlan {
   id: PlanId;
   name: string;
   description: string;
-  /**
-   * Published USD price, or `null` when the plan publishes none (Enterprise is
-   * priced per contract). `0` here used to stand in for "no published price",
-   * which is indistinguishable from a genuinely free plan.
-   */
-  monthlyPrice: number | null;
-  yearlyPrice: number | null;
-  /** India-specific monthly price in INR, when this plan has one (currently only 'basic'). */
-  monthlyPriceInr?: number | null;
   stripePriceId: {
     monthly: string | null;
     yearly: string | null;
@@ -73,8 +69,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'local-only',
     name: 'Local Mode',
     description: 'Run Ollama or LM Studio on your machine. No account required.',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
     stripePriceId: {
       monthly: null,
       yearly: null,
@@ -96,8 +90,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'byok',
     name: 'Local Mode + BYOK',
     description: 'Keep the desktop app local while using your own provider API keys.',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
     stripePriceId: {
       monthly: null,
       yearly: null,
@@ -119,8 +111,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'free',
     name: 'Free',
     description: 'Managed Cloud starter usage with cross-device chat sync.',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
     stripePriceId: {
       monthly: null,
       yearly: null,
@@ -138,9 +128,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'basic',
     name: 'Basic',
     description: 'Managed Cloud entry tier with increased monthly usage.',
-    monthlyPrice: getPublishedPlanPriceUsd('basic', 'monthly'),
-    yearlyPrice: 0,
-    monthlyPriceInr: getPlanPriceInr('basic'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.basic_monthly_usd,
       yearly: null,
@@ -172,8 +159,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Pro',
     description:
       'Managed cloud, balanced models — full computer use, image generation, and web search.',
-    monthlyPrice: getPublishedPlanPriceUsd('pro', 'monthly'),
-    yearlyPrice: getPublishedPlanPriceUsd('pro', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
@@ -198,8 +183,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'max',
     name: 'Max 5x',
     description: 'Managed Cloud flagship models with 5x Pro usage capacity.',
-    monthlyPrice: getPublishedPlanPriceUsd('max', 'monthly'),
-    yearlyPrice: getPublishedPlanPriceUsd('max', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.max_monthly,
       yearly: STRIPE_PRICE_IDS.max_yearly,
@@ -222,8 +205,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'max_15x',
     name: 'Max 15x',
     description: 'The highest individual managed usage tier, including video generation.',
-    monthlyPrice: getPublishedPlanPriceUsd('max_15x', 'monthly'),
-    yearlyPrice: getPublishedPlanPriceUsd('max_15x', 'yearly'),
     stripePriceId: {
       // Checkout is server-owned; Desktop never embeds Stripe price ids for this tier.
       monthly: null,
@@ -247,8 +228,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'team',
     name: 'Team',
     description: 'Contracted managed capacity with shared team administration.',
-    monthlyPrice: getPublishedPlanPriceUsd('team', 'monthly'),
-    yearlyPrice: getPublishedPlanPriceUsd('team', 'yearly'),
     stripePriceId: {
       // Team provisioning is sales-assisted until organization-linked seats are complete.
       monthly: null,
@@ -271,10 +250,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Custom solutions for large organizations',
-    // Priced per signed contract — there is no published amount. Never render a
-    // number here; `null` is what keeps it from printing as "Free"/"$0".
-    monthlyPrice: null,
-    yearlyPrice: null,
+    // Priced per signed contract — there is no published amount, and this file
+    // no longer carries one for any tier (see the PricingPlan note above).
     stripePriceId: {
       monthly: null,
       yearly: null,
