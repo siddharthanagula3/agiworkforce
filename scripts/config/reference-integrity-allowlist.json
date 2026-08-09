@@ -72,7 +72,6 @@
     "md-path::docs/agent-context/bug-finding-guide.md::docs/archive/2026-06-05-doc-reset/reports/root-scratch-archive/",
     "md-path::docs/agent-context/known-flaws.md::apps/cli/src/routing/strategy.rs",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src-tauri/src/sys/commands/ai_native.rs",
-    "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/chat/InlinePanels/InlinePanelRenderer.tsx",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/chat/Sidebar.tsx",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/editor/MonacoEditor.tsx",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/v3/ActiveChat.tsx",

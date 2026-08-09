@@ -105,6 +105,20 @@ uses one: benchmark coverage in the registry is partial, and the floor is
 fail-closed, so a benchmark floor would exclude every model with no recorded
 score - including the models most Auto slots point at.
 
+Nothing here ranks candidates by benchmark score or by model freshness, and no
+product surface may describe Auto as benchmark-aware, benchmark-learning, or
+freshness-aware routing. `auto.tasks.<task>.benchmarkWeights` in
+`packages/ai/model-registry/catalog/routing-policies.json` is inert metadata:
+the schema requires the key, the compiler copies it into the shared registry and
+its two generated Rust mirrors, but the `AutoTaskPolicy` interface in
+`src/auto.ts` does not declare the field and no TypeScript or Rust reader ever
+dereferences it. Slot order comes from `preferredSlots` plus the cost-ranked
+task-family stage, nothing else. The catalog's per-model `knowledgeCutoff` and
+`released` values are display/curation metadata that this package never reads,
+so recency of a model's training data is not a routing input. The one recency
+signal that does route is a property of the _prompt_, not the model:
+`src/classify.ts` sends research-shaped requests to search-capable models.
+
 ## CODEOWNERS
 
 Primary: Platform lead. Secondary: provider/platform and security/privacy for provider-mode behavior.

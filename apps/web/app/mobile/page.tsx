@@ -10,7 +10,7 @@ import {
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { Reveal } from '@/features/marketing/components/Reveal';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
@@ -89,7 +89,24 @@ export default function MobilePage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI Mobile · iPhone &amp; Android</p>
+              {/*
+                Every other unreleased surface page states its availability in
+                the hero eyebrow (`/cli`, `/chrome-extension`,
+                `/vscode-extension` all read "· coming soon"). This one did not:
+                it opened with "AGI Mobile · iPhone & Android" and a "Get
+                notified" CTA, so the only place the page admitted the app is
+                unpublished was the header nav dropdown — while the hero named
+                two platforms you cannot install on. Mobile has ZERO `v-mobile-*`
+                release tags.
+
+                The status is read from `SURFACE_STATUS.mobile` rather than
+                typed, so the day mobile ships this line changes with the
+                registry instead of becoming the stale claim CRIT-007 was
+                opened for.
+              */}
+              <p className="agi-fl-eyebrow">
+                AGI Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
+              </p>
               <h1 id="agi-mobile-hero-title" className="agi-fl-h1">
                 <span className="agi-fl-h1-line">Private AI,</span>
                 <span className="agi-fl-h1-line">

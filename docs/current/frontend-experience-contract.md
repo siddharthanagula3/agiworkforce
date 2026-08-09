@@ -2,7 +2,7 @@
 
 Status: Current target; implementation incomplete
 Owner: Product + frontend platform
-Last updated: 2026-07-16
+Last updated: 2026-08-09
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
@@ -564,28 +564,62 @@ Cross-scope search respects data boundaries. A global UI must not imply a global
 - Browser-internal/restricted pages keep Managed Cloud chat available while showing an accessible notice and disabling only page context and browser automation.
 - The monolithic side panel must be split by domain before major feature growth.
 
-## 13. Current implementation reality — 2026-07-16
+## 13. Current implementation reality — 2026-07-16 snapshot, cells corrected 2026-08-09
 
-| Capability          | Web            | Desktop                       | Mobile                   | CLI                    | VS Code                | Chrome                                   |
-| ------------------- | -------------- | ----------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
-| Primary shell       | Live           | Live                          | Live                     | Live                   | Live                   | Live                                     |
-| Consumer cloud chat | Live           | Partial                       | Live                     | N/A                    | N/A                    | Separate browser chat                    |
-| Local consumer chat | N/A            | Live                          | Live                     | N/A                    | N/A                    | N/A                                      |
-| Work/Cowork run     | Missing        | Missing                       | Missing                  | N/A                    | N/A                    | Workflow UI is not Cloud Work            |
-| Developer sessions  | N/A            | Missing from current shell    | Static/unwired remote UI | Live                   | Live with split stack  | Not developer-session remote control     |
-| Artifacts/files     | Partial        | Live/partial                  | Partial                  | Developer files only   | Developer files/diffs  | Image/screenshot only                    |
-| Tools/approvals     | Live/partial   | Live/partial                  | Live/partial             | Live                   | Live                   | Live/partial                             |
-| Search/research     | Live/partial   | Live/partial                  | Partial                  | Tool-driven            | Workspace search       | Page operations only                     |
-| Voice               | Dictation only | Dictation broken system-wide  | Live conversation        | Absent                 | Absent                 | Speech input only                        |
-| Remote control      | Absent         | Host/companion UI not mounted | Static/feature-off       | Host transport missing | Host transport missing | Native bridge is not Code remote control |
+| Capability                        | Web            | Desktop                                                  | Mobile                   | CLI                    | VS Code                | Chrome                                   |
+| --------------------------------- | -------------- | -------------------------------------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
+| Primary shell                     | Live           | Live                                                     | Live                     | Live                   | Live                   | Live                                     |
+| Consumer cloud chat               | Live           | Partial                                                  | Live                     | N/A                    | N/A                    | Separate browser chat                    |
+| Local consumer chat               | N/A            | Live                                                     | Live                     | N/A                    | N/A                    | N/A                                      |
+| AGI Work run (composer mode)      | Live           | Live                                                     | Live                     | N/A                    | N/A                    | Workflow UI is not Cloud Work            |
+| Standalone Cowork session surface | Missing        | Missing                                                  | Missing                  | N/A                    | N/A                    | N/A                                      |
+| Developer sessions                | N/A            | Local-only `CodeWorkspace` mounted; no remote projection | Static/unwired remote UI | Live                   | Live with split stack  | Not developer-session remote control     |
+| Artifacts/files                   | Partial        | Live/partial                                             | Partial                  | Developer files only   | Developer files/diffs  | Image/screenshot only                    |
+| Tools/approvals                   | Live/partial   | Live/partial                                             | Live/partial             | Live                   | Live                   | Live/partial                             |
+| Search/research                   | Live/partial   | Live/partial                                             | Partial                  | Tool-driven            | Workspace search       | Page operations only                     |
+| Voice                             | Dictation only | In-window dictation; system-wide gated off               | Live conversation        | Live (REPL voice)      | Absent                 | Speech input only                        |
+| Remote control                    | Absent         | Host/companion UI not mounted                            | Static/feature-off       | Host transport missing | Host transport missing | Native bridge is not Code remote control |
 
 This table is not a release claim. `packages/ai/model-registry/catalog/harnesses.json` remains authoritative for runtime wiring status.
+
+CORRECTED 2026-08-09 (four cells the 2026-07-16 snapshot got wrong or that later
+work superseded; mirrors the same corrections in
+`docs/current/parity-implementation-matrix.md`):
+
+- The single "Work/Cowork run: Missing/Missing/Missing" row conflated two
+  capabilities and is split, matching the parity matrix's 2026-08-06 split.
+  **AGI Work** — composer-mode dispatch — is mounted and wired end to end on all
+  three consumer surfaces (`apps/web/lib/workflows/start-cloud-agent-workflow.ts`,
+  `apps/web/app/tasks/page.tsx`, `apps/mobile/app/(app)/agents/index.tsx`,
+  `AgiWorkProjects`/`AgiWorkArtifacts`/`AgiWorkScheduled` rendered from
+  `apps/desktop/src/features/v3/DesktopShellV3.tsx`). Only the **standalone
+  Cowork session surface** — a dedicated resumable async workspace rather than a
+  mode inside chat — is still Missing.
+- Desktop developer sessions are no longer "missing from current shell":
+  `CodeWorkspace` is lazy-mounted in `DesktopShellV3.tsx` (Local-only, since
+  2026-08-04). What is still missing is the remote projection, which the
+  "Remote control" row already records.
+- Desktop voice no longer carries a broken system-wide claim. The settings
+  control is gated on the `systemDictationAvailable` probe
+  (`apps/desktop/src/api/voice.ts`, consumed in
+  `apps/desktop/src/features/settings/VoiceSettings.tsx`) and reads "Not
+  available in this build" while the probe is false, pinned by
+  `VoiceSettings.test.tsx`. The underlying capability is still unbuilt —
+  `DESKTOP-SYSTEM-DICTATION-UNWIRED-01` in `docs/agent-context/known-flaws.md`
+  stays open — but the UI does not advertise it.
+- CLI voice is present, not absent: `apps/cli/src/voice.rs` (`cpal` capture,
+  Whisper API/local binary, Local-mode egress gate) is reached from both
+  `apps/cli/src/repl/mod.rs` and `apps/cli/src/tui/tui_app.rs` via `/voice`.
 
 ## 14. Immediate remediation order
 
 ### P0 — remove deception and complete foundations
 
-1. Complete Desktop system-wide dictation end to end or remove the availability claim.
+1. Complete Desktop system-wide dictation end to end. **The availability-claim
+   branch of this item is done (2026-07-17, `dcb14ca97`)** — the settings control
+   is gated on the `systemDictationAvailable` probe and says "Not available in
+   this build" while it is false. Building the feature is still open
+   (`DESKTOP-SYSTEM-DICTATION-UNWIRED-01`).
 2. Define and implement one developer-session remote protocol from CLI/Desktop host through signaling to Mobile/Web projection.
 3. Replace Mobile's static Code shell with that protocol or keep the routes unavailable.
 4. **Completed 2026-07-16:** Chrome Quick now travels with both side-panel send paths and routes the turn through the admitted `auto-economy` profile without mutating the saved model selection.

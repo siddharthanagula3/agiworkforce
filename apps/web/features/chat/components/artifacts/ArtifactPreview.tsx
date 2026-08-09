@@ -19,7 +19,6 @@ import {
   RefreshCw,
   Maximize2,
   ExternalLink,
-  History,
   Shield,
   X,
   ChevronLeft,
@@ -93,13 +92,6 @@ const SECURITY_NOTICE_TEXT: Record<'sanitized' | 'escaped', string> = {
     'This artifact contained potentially unsafe patterns. They were rendered as text and never executed.',
 };
 
-export interface ArtifactVersion {
-  id: string;
-  content: string;
-  timestamp: Date;
-  description?: string;
-}
-
 export interface ArtifactData {
   id: string;
   type:
@@ -123,13 +115,10 @@ export interface ArtifactData {
   computeSession?: ComputeSession;
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
-  versions?: ArtifactVersion[];
-  currentVersion?: number;
 }
 
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
-  onVersionChange?: (versionIndex: number) => void;
   onShare?: () => void;
   className?: string;
   /** 'card' (default) = inline card with fixed heights + TabsList row.
@@ -142,8 +131,9 @@ interface ArtifactPreviewProps {
    * (oldest → newest). When length > 1 the panel header shows a version chip
    * (`v{n}/{total}`) with prev/next navigation. Navigation is view-only: it
    * changes which version the viewer renders/copies/downloads without mutating
-   * the store, so no data is lost. Omit or pass a single-entry array to hide
-   * the chip.
+   * the store, so no data is lost; the separate Restore button is the only
+   * writer. A single-entry array still shows `v1/1` with both arrows disabled —
+   * omit the prop entirely (inline cards do) to hide the chip.
    */
   versionHistory?: SharedArtifact[];
   /**
@@ -192,19 +182,15 @@ function resolveArtifactImageSource(raw: string): string | null {
  * Features:
  * - Live rendering of HTML/React/SVG code
  * - Preview/Code toggle (split view)
- * - Version control with history
- * - Instant sharing
+ * - Version navigation + restore, panel variant only, and only when the caller
+ *   passes `versionHistory` (the shared store's real edit history). The card
+ *   variant has no version UI at all.
+ * - Publish to a public URL when the caller injects `publishArtifact`
  * - Multiple export formats
  * - Responsive iframe sandbox
- *
- * Dominates ChatGPT Canvas by:
- * - Live interactive preview (Canvas only shows static editor)
- * - Real-time rendering of web apps
- * - Instant version switching
  */
 export function ArtifactPreview({
   artifact,
-  onVersionChange,
   onShare,
   className,
   variant = 'card',
@@ -432,23 +418,17 @@ export function ArtifactPreview({
 </html>`;
   }, [docxHtml]);
 
-  // Side-map (explicit-snapshot) content: the card variant's version model.
-  const sideMapContent =
-    artifact.versions && artifact.currentVersion !== undefined
-      ? (artifact.versions[artifact.currentVersion]?.content ?? artifact.content)
-      : artifact.content;
-
   // Which version index the viewer is currently showing (defaults to latest).
   const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
 
   // The content the viewer renders / copies / downloads. When the user has
   // navigated the version chip, this is the viewed version's content; otherwise
-  // it falls back to the side-map/current content (byte-identical to the prior
-  // behavior for the card variant, which never passes versionHistory).
+  // it is the artifact's current content (the card variant never passes
+  // versionHistory, so it always lands on the latter).
   const activeContent =
     versionHistory && versionHistory[shownVersionIndex]
       ? versionHistory[shownVersionIndex]!.content
-      : sideMapContent;
+      : artifact.content;
   const imageSrc = useMemo(
     () => (isImage ? resolveArtifactImageSource(activeContent) : null),
     [isImage, activeContent],
@@ -1571,34 +1551,15 @@ if (__AgiApp) {
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Version History */}
-          {artifact.versions && artifact.versions.length > 1 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 px-2">
-                  <History className="h-3.5 w-3.5" />
-                  <span className="ml-1 text-xs">v{(artifact.currentVersion || 0) + 1}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {artifact.versions.map((version, index) => (
-                  <DropdownMenuItem
-                    key={version.id}
-                    onClick={() => onVersionChange?.(index)}
-                    className={cn(artifact.currentVersion === index && 'bg-accent')}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium">Version {index + 1}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {version.timestamp.toLocaleString()}
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
+          {/*
+            There is no second version control here. The card variant used to
+            render a `History` dropdown over an `artifact.versions[]` side-map,
+            but its only producers synthesised a one-entry list ("Initial
+            version", currentVersion 0) for every artifact, so the `length > 1`
+            guard could never pass and the label could only ever have said v1.
+            Real edit history is the shared store's content-keyed `versionsById`,
+            surfaced by the panel version chip above.
+          */}
           {!isImage && (
             <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
               {copied ? (
