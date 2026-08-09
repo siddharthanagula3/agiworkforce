@@ -40,6 +40,32 @@ const textEncoder = new TextEncoder();
 const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
   // Order matters — more specific patterns first.
   {
+    // Ported from the Rust reference at apps/cli/src/secret_redaction.rs:93.
+    // FIRST in the table on purpose: a PEM block spans newlines and contains
+    // base64 that later, narrower rules would otherwise chew into pieces,
+    // leaving recognisable key material behind. `[\s\S]` rather than `.` with
+    // the s flag, to keep this readable next to the other patterns.
+    id: 'private-key',
+    label: 'Private key block',
+    severity: 'critical',
+    pattern:
+      /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g,
+    replacement: '[REDACTED_PRIVATE_KEY]',
+  },
+  {
+    // AWS secrets are not self-identifying the way AKIA/ASIA ids are — the
+    // value is plain base64 — so they are only findable by their assignment.
+    // The Rust side catches these (secret_redaction.rs:124); this port did
+    // not, which is exactly the asymmetry that makes a Local -> BYOK handoff
+    // preview look clean while carrying a live credential.
+    id: 'aws-secret-assignment',
+    label: 'AWS secret or session token assignment',
+    severity: 'critical',
+    pattern:
+      /\b(aws_(?:secret_access_key|session_token))\s*[=:]\s*["']?[A-Za-z0-9/+=_-]{20,}["']?/gi,
+    replacement: '$1=[REDACTED_AWS_SECRET]',
+  },
+  {
     id: 'anthropic-api-key',
     label: 'Anthropic API key',
     severity: 'critical',
@@ -57,7 +83,7 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'google-api-key',
     label: 'Google API key',
     severity: 'critical',
-    pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g,
+    pattern: /AIza[a-zA-Z0-9_-]{35}/g,
     replacement: '[REDACTED_GOOGLE_KEY]',
   },
   {
@@ -78,14 +104,14 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'aws-access-key',
     label: 'AWS access key',
     severity: 'critical',
-    pattern: /AKIA[A-Z0-9]{16}/g,
+    pattern: /A(?:KIA|SIA)[A-Z0-9]{16}/g,
     replacement: '[REDACTED_AWS_KEY]',
   },
   {
     id: 'github-token',
     label: 'GitHub token',
     severity: 'critical',
-    pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g,
+    pattern: /gh[psour]_[a-zA-Z0-9]{36,}/g,
     replacement: '[REDACTED_GITHUB_TOKEN]',
   },
   {
@@ -146,7 +172,13 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'payment-card-number',
     label: 'Payment card number',
     severity: 'critical',
-    pattern: /\b(?:\d[ \t-]?){13,19}\b/g,
+    // Narrowed to the shapes cards actually take, matching the Rust reference
+    // at apps/desktop/src-tauri/src/sys/security/log_redaction.rs:104. The old
+    // generic 13-19 digit run matched epoch-millisecond timestamps, so
+    // `ts=1721469876543` and every `{"startedAt":...}` in a log line came back
+    // as [REDACTED]. A redactor that eats ordinary telemetry gets narrowed by
+    // whoever is debugging at 2am, which is how the real patterns get lost.
+    pattern: /\b(?:\d{4}[ \t-]){3}\d{4}\b|\b\d{4}[ \t-]\d{6}[ \t-]\d{5}\b|\b[3-6]\d{12,18}\b/g,
     replacement: '[REDACTED]',
   },
   // Lines containing the word "password" or "passwd" (case-insensitive,
