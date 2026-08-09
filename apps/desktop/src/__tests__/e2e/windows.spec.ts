@@ -130,6 +130,7 @@ test.describe('Windows: App Launch', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: Title Bar', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -185,6 +186,7 @@ test.describe('Windows: Title Bar', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: System Tray', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -222,6 +224,7 @@ test.describe('Windows: System Tray', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: File Dialogs', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -402,6 +405,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
   });
 
   test('Ctrl+C copies selected text to clipboard', async ({ page, context }) => {
+    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     // Grant clipboard permissions
@@ -430,6 +434,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
   });
 
   test('Ctrl+V pastes clipboard content into chat input', async ({ page, context }) => {
+    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -458,6 +463,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: Window Resize Constraints', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -588,6 +594,7 @@ test.describe('Windows: Auto-Updater', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: Terminal Component', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -699,6 +706,7 @@ test.describe('Windows: Toast Notifications', () => {
   });
 
   test('Tauri native notification command is reachable on Windows', async ({ page }) => {
+    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     const result = await page.evaluate(async () => {
@@ -733,6 +741,7 @@ test.describe('Windows: Toast Notifications', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Windows: Deep Links', () => {
+  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -924,6 +933,7 @@ test.describe('Windows: Theme Rendering', () => {
   });
 
   test('app survives a rapid light/dark toggle without crashing', async ({ page }) => {
+    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     const errors: string[] = [];
@@ -984,9 +994,11 @@ test.describe('Web: Download Page — Windows Detection', () => {
       .catch(() => null);
 
     if (!response || response.status() >= 400) {
-      // Web server not running — skip gracefully
-      test.skip(true, 'Web server not available');
-      return;
+      // Not a skip: a suite that needs the web server and cannot reach it has
+      // failed. Skipping here reported green for the exact condition under test.
+      throw new Error(
+        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+      );
     }
 
     await page.waitForLoadState('networkidle', { timeout: 15000 });
@@ -1020,8 +1032,11 @@ test.describe('Web: Download Page — Windows Detection', () => {
       .catch(() => null);
 
     if (!response || response.status() >= 400) {
-      test.skip(true, 'Web server not available');
-      return;
+      // Not a skip: a suite that needs the web server and cannot reach it has
+      // failed. Skipping here reported green for the exact condition under test.
+      throw new Error(
+        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+      );
     }
 
     await page.waitForLoadState('networkidle', { timeout: 15000 });
@@ -1060,8 +1075,11 @@ test.describe('Web: Download Page — Windows Detection', () => {
       .catch(() => null);
 
     if (!response || response.status() >= 400) {
-      test.skip(true, 'Web server not available');
-      return;
+      // Not a skip: a suite that needs the web server and cannot reach it has
+      // failed. Skipping here reported green for the exact condition under test.
+      throw new Error(
+        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+      );
     }
 
     await page.waitForLoadState('networkidle', { timeout: 15000 });
