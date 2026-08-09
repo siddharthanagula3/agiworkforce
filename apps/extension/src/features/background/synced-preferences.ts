@@ -10,7 +10,9 @@ export const SYNCED_PREFERENCE_KEYS = [
   'agi_thinking_enabled',
   'agi_quick_mode',
   'agi_cu_ask_before_acting',
-  'agi_in_page_panel_enabled',
+  // Written by side_panel.ts and read by inPagePanel/setup.ts. The `agi_`
+  // prefix the other entries carry is not part of this one's real key.
+  'in_page_panel_enabled',
 ] as const;
 
 type SyncedPreferenceKey = (typeof SYNCED_PREFERENCE_KEYS)[number];

@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   canUseBillingPlanCapability,
   effectivePlanTier,
+  isOrganizationAdminRole,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
@@ -111,14 +112,25 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
 
   // The issuer must still be an owner/admin of the organization this token
   // provisions into.
+  //
+  // The role predicate is `isOrganizationAdminRole`, not a `role in (...)`
+  // literal inside this statement. Which roles administer an organization is a
+  // contract shared with the API gateway and the RLS helpers; a copy of the
+  // pair spelled out here would keep passing its own tests while the contract
+  // moved underneath it. Selecting the membership and judging it in one place
+  // also means the authorization decision survives an edit to the query —
+  // `(organization_id, user_id)` is the primary key, so at most one row can
+  // come back either way.
   const memberships = await db.query<Pick<OrganizationMemberRow, 'role'>>(
     `select role from organization_members
-      where organization_id = $1 and user_id = $2 and role in ('owner', 'admin')
+      where organization_id = $1 and user_id = $2
       limit 1`,
     [verified.organizationId, verified.createdByUserId],
   );
 
-  if (memberships.length === 0) {
+  const issuerRole = memberships[0]?.role;
+
+  if (!issuerRole || !isOrganizationAdminRole(issuerRole)) {
     await recordSyncEvent(db, ctx, {
       eventType: 'sync.denied',
       error:
