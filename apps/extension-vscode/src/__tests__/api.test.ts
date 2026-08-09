@@ -7,17 +7,20 @@
  */
 
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
+import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
   getAccountAuthState,
   getAccountToken,
   getApiKey,
+  getCloudGatewayOrigin,
   parseAccountIdentityResponse,
   parseTierInfoResponse,
   setAccountToken,
   setApiKey,
   clearApiKey,
+  validateGatewayUrl,
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
@@ -498,5 +501,79 @@ describe('managed chat Idempotency-Key wiring', () => {
 
     // Exactly one mint site overall, so no per-attempt regeneration crept back.
     expect(source.match(/randomUUID\(\)/g)?.length).toBe(1);
+  });
+});
+
+/**
+ * The gateway origin carries the AGI Cloud account token as a Bearer on every
+ * provider stream and on token revocation, so it must never resolve to a
+ * plaintext or off-allowlist host. It used to share `validateEndpointUrl` with
+ * the LLM endpoint, whose deliberate localhost escape (for a local `agi`
+ * app-server) let `http://localhost:3000` become the token-bearing origin.
+ */
+describe('validateGatewayUrl', () => {
+  it('rejects plaintext localhost — the token would go out unencrypted', () => {
+    expect(validateGatewayUrl('http://localhost:3000')).toBeUndefined();
+    expect(validateGatewayUrl('http://127.0.0.1:8787')).toBeUndefined();
+    expect(validateGatewayUrl('http://[::1]:8787')).toBeUndefined();
+  });
+
+  it('rejects plaintext even for an allowlisted host', () => {
+    expect(validateGatewayUrl('http://api.agiworkforce.com')).toBeUndefined();
+  });
+
+  it('accepts the allowlisted gateway origins and strips any path', () => {
+    expect(validateGatewayUrl('https://api.agiworkforce.com')).toBe('https://api.agiworkforce.com');
+    expect(validateGatewayUrl('https://gateway.agiworkforce.com/')).toBe(
+      'https://gateway.agiworkforce.com',
+    );
+    expect(validateGatewayUrl('https://staging-api.agiworkforce.com/v1/providers')).toBe(
+      'https://staging-api.agiworkforce.com',
+    );
+    expect(validateGatewayUrl('https://agiworkforce.com')).toBe('https://agiworkforce.com');
+  });
+
+  it('rejects off-allowlist hosts, lookalike subdomains and non-http schemes', () => {
+    expect(validateGatewayUrl('https://evil.attacker.com')).toBeUndefined();
+    expect(validateGatewayUrl('https://api.agiworkforce.com.evil.com')).toBeUndefined();
+    expect(validateGatewayUrl('https://evil.agiworkforce.com')).toBeUndefined();
+    expect(validateGatewayUrl('javascript:alert(1)')).toBeUndefined();
+    expect(validateGatewayUrl('not-a-url')).toBeUndefined();
+    expect(validateGatewayUrl('')).toBeUndefined();
+  });
+
+  it('keeps the same host list as the Chrome surface', () => {
+    // Both surfaces send the same account token to the same gateway; a host
+    // trusted by one and not the other is a bug in whichever drifted.
+    const policySource = readFileSync(
+      new URL('../../../extension/src/background/policy.ts', import.meta.url),
+      'utf8',
+    );
+    const block = policySource.match(
+      /GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>\(\[([\s\S]*?)\]\)/,
+    )?.[1];
+    expect(block).toBeDefined();
+    const chromeHosts = [...block!.matchAll(/'(https?:\/\/[^']+)'/g)].map((m) => m[1]).sort();
+
+    const apiSource = readFileSync(new URL('../utils/api.ts', import.meta.url), 'utf8');
+    const vscodeBlock = apiSource.match(/GATEWAY_ALLOWED_ORIGINS = new Set\(\[([\s\S]*?)\]\)/)?.[1];
+    expect(vscodeBlock).toBeDefined();
+    const vscodeHosts = [...vscodeBlock!.matchAll(/'(https?:\/\/[^']+)'/g)].map((m) => m[1]).sort();
+
+    expect(vscodeHosts).toEqual(chromeHosts);
+    expect(vscodeHosts).toContain('https://staging-api.agiworkforce.com');
+  });
+});
+
+describe('getCloudGatewayOrigin', () => {
+  it('falls back to the default when the user config names a plaintext origin', () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(),
+      update: vi.fn().mockResolvedValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      inspect: vi.fn().mockReturnValue({ globalValue: 'http://localhost:3000' }),
+    } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
+
+    expect(getCloudGatewayOrigin()).toBe('https://api.agiworkforce.com');
   });
 });
