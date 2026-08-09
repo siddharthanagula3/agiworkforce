@@ -26,10 +26,14 @@ use tracing::{debug, info, warn};
 /// subsequent invocation across restarts, persisted in
 /// `remembered_tool_choices`. Migration v63 wipes any historical rows for
 /// these tools at startup; the runtime check in
-/// [`ToolConfirmationState::remember_choice`] rejects new writes.
+/// [`ToolConfirmationState::remember_choice`] rejects new writes, and
+/// [`ToolConfirmationState::get_remembered_choice`] ignores any row that
+/// survives — entries added after migration v63 shipped are only covered by
+/// that read-side filter, so it is the load-bearing one.
 ///
-/// **Keep in lockstep with `data::db::migrations::apply_migration_v63`** —
-/// a unit test in `fix_f6_never_rememberable_alignment_tests` pins this.
+/// Migration v63's purge list covers the original (2026-05-19) entries; the
+/// `fix_f6_never_rememberable_alignment_tests` module records which entries
+/// are additionally covered read-side only.
 pub const NEVER_REMEMBERABLE: &[&str] = &[
     // Privileged-mode transitions — flipping these silently is the
     // canonical LITL bypass.
@@ -51,6 +55,14 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     // exfil primitive). Removed from default registry per F8 but listed
     // here so any re-introduction still cannot be remembered.
     "playwright_evaluate",
+    // Irreversible egress and destructive data primitives (audit
+    // 2026-08-08): each one publishes or destroys data outside the app's
+    // own store, so a single remembered click would hand an injected
+    // prompt a standing exfiltration or deletion channel.
+    "email_send",
+    "git_push",
+    "cloud_upload",
+    "db_execute",
 ];
 
 pub const FOLDER_ACCESS_TOOL_NAME: &str = "folder_access";
@@ -61,9 +73,15 @@ struct PendingConfirmation {
 }
 
 /// Returns `true` when `tool_name` is eligible to have a remembered choice
-/// persisted. Currently the inverse of [`NEVER_REMEMBERABLE`] membership.
+/// persisted: not on [`NEVER_REMEMBERABLE`] and not an MCP tool.
+///
+/// MCP tools are excluded wholesale (audit 2026-08-08) because their blast
+/// radius is decided by a third-party server, not by this catalog — a
+/// remembered approval would follow the tool name even after the server
+/// redefines what it does. Standing MCP consent belongs in
+/// Settings → Connectors, which `enforce_mcp_connector_permission` reads.
 pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
-    !NEVER_REMEMBERABLE.contains(&tool_name)
+    !tool_name.starts_with("mcp__") && !NEVER_REMEMBERABLE.contains(&tool_name)
 }
 
 /// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]
@@ -545,8 +563,18 @@ impl ToolConfirmationState {
         self.session_allowed_paths.lock().iter().cloned().collect()
     }
 
-    /// Check if user has a remembered choice for this tool
+    /// Check if user has a remembered choice for this tool.
+    ///
+    /// Returns `None` for tools that are not remember-eligible even when a
+    /// row exists: migration v63 only purged the tools named in the original
+    /// FIX-F6 list, so a build that predates a later addition to
+    /// [`NEVER_REMEMBERABLE`] can still carry a persisted "always allow" for
+    /// it. Filtering on read makes the list authoritative for existing rows,
+    /// not just for new writes.
     pub fn get_remembered_choice(&self, tool_name: &str) -> Option<bool> {
+        if !is_tool_remember_eligible(tool_name) {
+            return None;
+        }
         self.remembered_choices.lock().get(tool_name).copied()
     }
 
@@ -1534,10 +1562,58 @@ pub struct ToolSafetyTierInfo {
 // Helper Functions for Tool Executor Integration
 // ============================================================================
 
+/// Refuse `tool_name` when the active agent mode does not permit it, emitting
+/// `tool:blocked_by_mode` so the UI can explain the refusal.
+///
+/// FIX (audit 2026-08-08): this used to live inline in
+/// [`request_tool_confirmation`], which the agent loop only reaches for tools
+/// whose safety tier requires user action. Every Safe/RequiresNotification
+/// tier tool (`memory_forget`, `api_download`, `skill`, …) and every tool
+/// carrying a stored "always allow" policy therefore ran in Safe and Plan
+/// mode without the mode ever being consulted. Exposed as a standalone gate
+/// so the tool executor can enforce it ahead of both checks; keeping it here
+/// as well means no caller of `request_tool_confirmation` loses the gate.
+pub fn enforce_agent_mode_gate<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    state: &ToolConfirmationState,
+    tool_name: &str,
+) -> Result<(), String> {
+    let current_mode = state.get_agent_mode();
+    if ToolConfirmationState::is_tool_permitted_for_mode(tool_name, current_mode) {
+        return Ok(());
+    }
+
+    let mode_label = format!("{:?}", current_mode).to_lowercase();
+    warn!(
+        "[ToolConfirmation] Tool '{}' blocked by agent mode {}",
+        tool_name, mode_label
+    );
+    let hint = if current_mode == AgentMode::Plan {
+        "Switch to build mode to execute write operations."
+    } else {
+        "Change agent mode to allow this tool."
+    };
+    let _ = app_handle.emit(
+        "tool:blocked_by_mode",
+        serde_json::json!({
+            "tool_name": tool_name,
+            "mode": mode_label,
+            "hint": hint,
+        }),
+    );
+    Err(format!(
+        "Tool '{}' is not permitted in {} mode. {}",
+        tool_name, mode_label, hint
+    ))
+}
+
 /// Request confirmation from user for a tool execution.
 /// Emits a `tool:confirmation_required` event and waits for response.
-pub async fn request_tool_confirmation(
-    app_handle: &tauri::AppHandle,
+///
+/// Generic over the Tauri runtime so the gates it enforces can be driven by
+/// `tauri::test::mock_app()` in unit tests.
+pub async fn request_tool_confirmation<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
     state: &ToolConfirmationState,
     request: ToolConfirmationRequest,
     timeout_secs: u64,
@@ -1546,31 +1622,7 @@ pub async fn request_tool_confirmation(
     let tool_name = request.tool_name.clone();
 
     // Agent mode gate — block tools not permitted in the current mode
-    let current_mode = state.get_agent_mode();
-    if !ToolConfirmationState::is_tool_permitted_for_mode(&tool_name, current_mode) {
-        let mode_label = format!("{:?}", current_mode).to_lowercase();
-        warn!(
-            "[ToolConfirmation] Tool '{}' blocked by agent mode {}",
-            tool_name, mode_label
-        );
-        let hint = if current_mode == AgentMode::Plan {
-            "Switch to build mode to execute write operations."
-        } else {
-            "Change agent mode to allow this tool."
-        };
-        let _ = app_handle.emit(
-            "tool:blocked_by_mode",
-            serde_json::json!({
-                "tool_name": tool_name,
-                "mode": mode_label,
-                "hint": hint,
-            }),
-        );
-        return Err(format!(
-            "Tool '{}' is not permitted in {} mode. {}",
-            tool_name, mode_label, hint
-        ));
-    }
+    enforce_agent_mode_gate(app_handle, state, &tool_name)?;
 
     // Global auto-approve bypass — skip all dialogs when trust-all is enabled
     if state.is_auto_approve_all() {
@@ -2553,20 +2605,45 @@ mod agent_mode_persistence_tests {
 mod fix_f6_never_rememberable_alignment_tests {
     //! FIX-F6 (audit 2026-05-19): pin the never-rememberable enforcement.
     //!
-    //! Two layers:
-    //! 1. `is_tool_remember_eligible` correctly inverts NEVER_REMEMBERABLE.
+    //! Three layers:
+    //! 1. `is_tool_remember_eligible` correctly inverts NEVER_REMEMBERABLE
+    //!    (and rejects MCP tools wholesale).
     //! 2. `ToolConfirmationState::remember_choice` silently no-ops for
     //!    non-eligible tools regardless of the `approved` value.
+    //! 3. `ToolConfirmationState::get_remembered_choice` ignores rows that
+    //!    a pre-hardening build already persisted.
     //!
-    //! Keep in lockstep with `data::db::migrations::apply_migration_v63`'s
-    //! PURGE_TOOL_NAMES — this test list MUST match that list 1:1.
+    //! `MIGRATION_V63_PURGED` below must stay in lockstep with
+    //! `data::db::migrations::apply_migration_v63`'s PURGE_TOOL_NAMES; the
+    //! remaining entries are enforced read-side by `get_remembered_choice`.
     use super::{is_tool_remember_eligible, ToolConfirmationState, NEVER_REMEMBERABLE};
 
     /// Every entry expected on NEVER_REMEMBERABLE. Diverging from this would
-    /// either (a) hide a regression where a high-blast tool became remember-
-    /// able again, or (b) silently break the dispatcher contract with
-    /// migration v63.
+    /// hide a regression where a high-blast tool became remember-able again.
     const EXPECTED_NEVER_REMEMBERABLE: &[&str] = &[
+        "set_auto_approve_all",
+        "set_agent_mode:autopilot",
+        "set_tool_approval_policy",
+        "execute_code",
+        "code_execute",
+        "file_write",
+        "file_write_text",
+        "file_write_binary",
+        "file_open_with_default_app",
+        "terminal_execute",
+        "playwright_evaluate",
+        "folder_access",
+        "email_send",
+        "git_push",
+        "cloud_upload",
+        "db_execute",
+    ];
+
+    /// The subset that migration v63 deletes from `remembered_tool_choices`
+    /// on upgrade. Entries outside this subset were added later, so an
+    /// already-migrated database can still hold a row for them — they rely
+    /// on the read-side filter in `get_remembered_choice`.
+    const MIGRATION_V63_PURGED: &[&str] = &[
         "set_auto_approve_all",
         "set_agent_mode:autopilot",
         "set_tool_approval_policy",
@@ -2590,9 +2667,21 @@ mod fix_f6_never_rememberable_alignment_tests {
         assert_eq!(
             actual, expected,
             "NEVER_REMEMBERABLE drifted from EXPECTED_NEVER_REMEMBERABLE. \
-             If this is intentional, also update apply_migration_v63's \
-             PURGE_TOOL_NAMES in data/db/migrations.rs in the same commit."
+             New entries are enforced read-side by get_remembered_choice; \
+             adding one to apply_migration_v63's PURGE_TOOL_NAMES requires a \
+             new migration, not an edit to v63."
         );
+    }
+
+    #[test]
+    fn migration_v63_purge_subset_is_still_never_rememberable() {
+        for &name in MIGRATION_V63_PURGED {
+            assert!(
+                NEVER_REMEMBERABLE.contains(&name),
+                "{} is purged by migration v63 but no longer on NEVER_REMEMBERABLE",
+                name
+            );
+        }
     }
 
     #[test]
@@ -2641,6 +2730,43 @@ mod fix_f6_never_rememberable_alignment_tests {
         assert_eq!(state.get_remembered_choice("file_read"), Some(true));
         state.remember_choice("git_status", false);
         assert_eq!(state.get_remembered_choice("git_status"), Some(false));
+    }
+
+    #[test]
+    fn stale_row_from_a_pre_hardening_build_is_ignored_on_read() {
+        // Migration v63 only purges its own list, so a row written for an
+        // entry added later survives the upgrade. Loading it must not
+        // resurrect the standing approval.
+        use rusqlite::Connection;
+        use std::sync::{Arc, Mutex as StdMutexAlias};
+
+        let conn = Connection::open_in_memory().expect("open in-memory sqlite db");
+        crate::data::db::migrations::run_migrations(&conn).expect("run migrations");
+        conn.execute(
+            "INSERT INTO remembered_tool_choices (tool_name, approved, updated_at) \
+             VALUES ('email_send', 1, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .expect("seed stale row");
+
+        let state = ToolConfirmationState::new_with_db(Arc::new(StdMutexAlias::new(conn)));
+        assert_eq!(state.get_remembered_choice("email_send"), None);
+    }
+
+    #[test]
+    fn mcp_tools_are_never_remember_eligible() {
+        // A remembered approval keyed on an MCP tool name outlives whatever
+        // the server meant by that name; standing consent lives in the
+        // connector permission store instead.
+        let state = ToolConfirmationState::new();
+        for name in [
+            "mcp__filesystem__write_file",
+            "mcp__github__create_pull_request",
+        ] {
+            assert!(!is_tool_remember_eligible(name));
+            state.remember_choice(name, true);
+            assert_eq!(state.get_remembered_choice(name), None);
+        }
     }
 }
 
