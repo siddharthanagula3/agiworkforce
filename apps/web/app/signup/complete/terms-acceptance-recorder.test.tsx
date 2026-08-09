@@ -1,0 +1,119 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const mocks = vi.hoisted(() => ({
+  useAuth: vi.fn(),
+  replace: vi.fn(),
+}));
+
+vi.mock('@clerk/nextjs', () => ({ useAuth: () => mocks.useAuth() }));
+vi.mock('server-only', () => ({}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace }) }));
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => ({
+    ...headers,
+    'x-csrf-token': 'csrf-test-token',
+  })),
+}));
+
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { RecordTermsAcceptance } from './RecordTermsAcceptance';
+import SignupCompletePage from './page';
+
+describe('signup terms recorder', () => {
+  beforeEach(() => {
+    mocks.replace.mockReset();
+    mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
+  });
+
+  it('records the acceptance before handing the new account on to the app', async () => {
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+
+    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe('/api/terms/accept');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({ 'x-csrf-token': 'csrf-test-token' });
+    expect(init.body).toBe(JSON.stringify({ surface: 'web-signup' }));
+  });
+
+  it('surfaces a failed record instead of continuing as if it had been written', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 500 })),
+    );
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    expect(await screen.findByTestId('terms-record-failed')).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call the recorder when there is no account to attribute it to', async () => {
+    mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+// Arriving at /signup/complete is not proof the terms were on screen: Clerk
+// transfers an unknown OAuth identity from the /login SignIn card straight into
+// a sign-up, and the URL can simply be typed by an account that already exists.
+// The page therefore gates the recorder on the assent marker, not on how it was
+// reached.
+describe('/signup/complete terms gate', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    mocks.replace.mockReset();
+    mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
+  });
+
+  async function renderComplete() {
+    render(await SignupCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+  }
+
+  it('does not manufacture an acceptance for someone who never saw the terms', async () => {
+    await renderComplete();
+
+    expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
+    await waitFor(() => expect(globalThis.fetch).not.toHaveBeenCalled());
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('records and continues once that arrival agrees to the terms', async () => {
+    await renderComplete();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/terms/accept', expect.anything());
+  });
+
+  it('does not re-prompt the /signup flow, which already ticked the box', async () => {
+    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+
+    await renderComplete();
+
+    expect(screen.queryByTestId('terms-gate-blocked')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+  });
+});

@@ -116,6 +116,7 @@ import {
   enforceManagedContentSafetyPreference,
   ManagedContentSafetyPolicyError,
 } from '@/lib/services/managed-content-safety-service';
+import { moderateManagedPrompt } from '@/lib/moderation';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z
@@ -1464,6 +1465,14 @@ export async function processRequest(
     [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
   );
 
+  // Everything in this turn that the caller wrote. Read here, next to
+  // `latestUserPrompt` and for the same reason: before hydration rewrites the
+  // parts, so the platform floor sees the caller's own words.
+  const clientAuthoredPromptSegments = chatRequest.messages
+    .filter((message) => message.role === 'user' || message.role === 'system')
+    .map((message) => extractTextContent(message.content))
+    .filter((text) => text.length > 0);
+
   const ownershipLeg: Promise<{ ok: true; isTemporary: boolean } | ProcessFailure> =
     chatRequest.conversation_id
       ? (async () => {
@@ -1597,6 +1606,39 @@ export async function processRequest(
       : Promise.resolve({ ok: true, isTemporary: false });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
+    // Platform floor first, and outside the try/catch below on purpose: it
+    // takes no database, so it cannot be skipped by the preference read
+    // failing, and it takes no preference, so it cannot be turned off by the
+    // account. The account preference underneath is a comfort setting layered
+    // on top of this, not a substitute for it.
+    //
+    // It sees every client-authored message, not just `latestUserPrompt`. The
+    // request schema accepts `system` messages from the caller and forwards
+    // them to the provider verbatim, so moderating only the final user turn
+    // would be bypassed by sending the request as a system message and
+    // "continue" as the user message. Assistant and tool messages are excluded
+    // deliberately: they are the model's own prior output, and refusing a
+    // follow-up because of what the model already said is a bad refusal.
+    const platform = moderateManagedPrompt({
+      userId,
+      segments: clientAuthoredPromptSegments,
+    });
+    if (!platform.allowed) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: platform.refusal,
+              type: 'invalid_request_error',
+              code: 'content_policy_violation',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+
     try {
       const scoped = await scopedDbPromise;
       if (scoped.userId !== userId) {

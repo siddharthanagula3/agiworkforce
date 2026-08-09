@@ -3,7 +3,7 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "API for managing AI agents, subscriptions, and device authorization in AGI Workforce",
+    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nBase URL is `https://agiworkforce.com/api`. `api.agiworkforce.com` is not yet a working base URL — requests to it are redirected to the apex and do not reach a route.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/api/rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
       "email": "support@agiworkforce.com",
@@ -24,7 +24,13 @@
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "API key authentication using Bearer token"
+        "bearerFormat": "JWT",
+        "description": "Session bearer token — a Clerk session JWT or a first-party device token. Browser requests may present the session cookie instead. AGI API keys are rejected wherever this is the only accepted scheme."
+      },
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "AGI API key (`sk_live_…` / `sk_test_…`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       }
     },
     "schemas": {
@@ -136,6 +142,257 @@
             }
           }
         }
+      },
+      "ApiError": {
+        "type": "object",
+        "description": "OpenAI-shaped error envelope returned by the inference endpoints.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["invalid_request_error", "insufficient_quota", "api_error", "server_error"]
+              },
+              "code": { "type": "string", "nullable": true }
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "type": "object",
+        "description": "Body of a 429. `retry_after_seconds` mirrors the `Retry-After` header; see docs/api/rate-limits.md for the per-endpoint ceilings.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "enum": ["RATE_LIMIT_EXCEEDED"] },
+              "message": { "type": "string" },
+              "retry_after_seconds": { "type": "integer" },
+              "reset_at": { "type": "string", "format": "date-time" }
+            }
+          },
+          "rateLimit": {
+            "type": "object",
+            "properties": {
+              "limit": { "type": "integer" },
+              "remaining": { "type": "integer" },
+              "reset": { "type": "string", "format": "date-time" },
+              "reset_at": { "type": "string", "format": "date-time" },
+              "retry_after_seconds": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "Model": {
+        "type": "object",
+        "description": "OpenAI-compatible model record, extended with the catalog fields a router needs.",
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string", "enum": ["model"] },
+          "created": { "type": "integer" },
+          "owned_by": { "type": "string", "description": "Provider that serves the model." },
+          "permission": { "type": "array", "items": {} },
+          "root": { "type": "string" },
+          "parent": { "type": "string", "nullable": true },
+          "tier": {
+            "type": "string",
+            "enum": ["basic", "pro", "max"],
+            "description": "Lowest paid tier that may select this model."
+          },
+          "context_window": { "type": "integer" },
+          "max_output": { "type": "integer" }
+        }
+      },
+      "ModelList": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "enum": ["list"] },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } },
+          "x_agi_workforce": {
+            "type": "object",
+            "properties": {
+              "user_tier": { "type": "string" },
+              "total_available": { "type": "integer" },
+              "allowed_auto_modes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "ChatCompletionRequest": {
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "A model id from GET /llm/v1/models, or an auto mode from `x_agi_workforce.allowed_auto_modes`."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["system", "user", "assistant", "tool", "function"]
+                },
+                "content": {
+                  "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`).",
+                  "oneOf": [
+                    { "type": "string" },
+                    { "type": "array", "items": { "type": "object" } }
+                  ]
+                },
+                "name": { "type": "string" },
+                "tool_calls": { "type": "array", "maxItems": 32, "items": { "type": "object" } },
+                "tool_call_id": { "type": "string", "maxLength": 256 }
+              }
+            }
+          },
+          "stream": { "type": "boolean", "default": false },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+          "n": { "type": "integer", "minimum": 1 },
+          "stop": {
+            "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          },
+          "max_tokens": { "type": "integer", "minimum": 1, "maximum": 64000 },
+          "max_completion_tokens": { "type": "integer", "minimum": 1, "maximum": 64000 },
+          "presence_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
+          "frequency_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
+          "logit_bias": {
+            "type": "object",
+            "additionalProperties": { "type": "number", "minimum": -100, "maximum": 100 }
+          },
+          "user": { "type": "string" },
+          "tools": { "type": "array", "maxItems": 64, "items": { "type": "object" } },
+          "tool_choice": { "description": "`none`, `auto`, `required`, or a named function." },
+          "response_format": {
+            "type": "object",
+            "description": "`text` and `json_object` are honoured. `json_schema` is refused rather than ignored.",
+            "properties": {
+              "type": { "type": "string", "enum": ["text", "json_object"] }
+            }
+          }
+        }
+      },
+      "ChatCompletionResponse": {
+        "type": "object",
+        "description": "OpenAI-compatible completion. When `stream` is true the response is `text/event-stream` of `chat.completion.chunk` events terminated by `data: [DONE]` instead.",
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string", "enum": ["chat.completion"] },
+          "created": { "type": "integer" },
+          "model": { "type": "string" },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": { "type": "integer" },
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "role": { "type": "string", "enum": ["assistant"] },
+                    "content": { "type": "string", "nullable": true },
+                    "tool_calls": { "type": "array", "items": { "type": "object" } }
+                  }
+                },
+                "finish_reason": { "type": "string" }
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": { "type": "integer" },
+              "completion_tokens": { "type": "integer" },
+              "total_tokens": { "type": "integer" },
+              "cache_creation_input_tokens": { "type": "integer", "nullable": true },
+              "cache_read_input_tokens": { "type": "integer", "nullable": true }
+            }
+          },
+          "x_agi_workforce": {
+            "type": "object",
+            "description": "Gateway metadata: the provider that served the turn and the routing decision behind it."
+          }
+        }
+      },
+      "EmbeddingsRequest": {
+        "type": "object",
+        "required": ["input"],
+        "properties": {
+          "input": {
+            "description": "One string, or a batch of at most 100, each at most 32000 characters.",
+            "oneOf": [
+              { "type": "string", "minLength": 1, "maxLength": 32000 },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": { "type": "string", "minLength": 1, "maxLength": 32000 }
+              }
+            ]
+          },
+          "model": { "type": "string", "maxLength": 200 },
+          "encoding_format": {
+            "type": "string",
+            "enum": ["float"],
+            "description": "`base64` is rejected, not ignored — a caller expecting base64 must not receive floats."
+          },
+          "user": { "type": "string", "maxLength": 200 }
+        }
+      },
+      "EmbeddingsResponse": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "enum": ["list"] },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "object": { "type": "string", "enum": ["embedding"] },
+                "index": { "type": "integer" },
+                "embedding": { "type": "array", "items": { "type": "number" } }
+              }
+            }
+          },
+          "model": { "type": "string" },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": { "type": "integer" },
+              "total_tokens": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "CreditBalance": {
+        "type": "object",
+        "description": "Percentage-only managed-usage status. Ledger units and allocations never cross this boundary.",
+        "properties": {
+          "object": { "type": "string", "enum": ["credit_balance"] },
+          "subscription": {
+            "type": "object",
+            "properties": {
+              "plan_tier": { "type": "string" },
+              "status": { "type": "string" },
+              "current_period_end": { "type": "string", "format": "date-time", "nullable": true }
+            }
+          },
+          "credits": {
+            "type": "object",
+            "properties": {
+              "usage_percentage": { "type": "number" },
+              "reset_at": { "type": "string", "format": "date-time", "nullable": true },
+              "seconds_until_reset": { "type": "integer" },
+              "has_usage_remaining": { "type": "boolean" }
+            }
+          }
+        }
       }
     }
   },
@@ -145,6 +402,216 @@
     }
   ],
   "paths": {
+    "/llm/v1/models": {
+      "get": {
+        "summary": "List available models",
+        "description": "Models the caller may select, in OpenAI `/v1/models` shape. Callers with no `Authorization` header get the free catalog; a credential that fails to verify is rejected rather than downgraded to it, so a revoked key never looks like a lost entitlement.",
+        "tags": ["Inference"],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }, {}],
+        "x-agi-api-key-scope": "models:read",
+        "responses": {
+          "200": {
+            "description": "Model list for the caller's tier",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ModelList" } }
+            }
+          },
+          "401": {
+            "description": "Presented credential did not verify",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `models:read` scope",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions": {
+      "post": {
+        "summary": "Create a chat completion",
+        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes a session bearer token only. An AGI API key passes the auth gate and then fails the request: the managed path binds a database subject from a signed JWT, which an API key does not carry.",
+        "tags": ["Inference"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatCompletionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completion, or an SSE stream when `stream` is true",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatCompletionResponse" }
+              },
+              "text/event-stream": { "schema": { "type": "string" } }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "422": {
+            "description": "Refused by content policy",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/embeddings": {
+      "post": {
+        "summary": "Create embeddings",
+        "description": "OpenAI-compatible embeddings. Takes a session bearer token only, for the same reason as chat completions. `Idempotency-Key` is required so a retry settles the reservation once.",
+        "tags": ["Inference"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/EmbeddingsRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Embedding vectors, indexed to the input batch",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmbeddingsResponse" }
+              }
+            }
+          },
+          "400": { "description": "Invalid embeddings request" },
+          "401": { "description": "Not authenticated" },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/audio/transcriptions": {
+      "post": {
+        "summary": "Transcribe audio",
+        "description": "OpenAI-compatible transcription. The upload is capped at 25 MB and its first bytes are sniffed, so a declared audio MIME type on non-audio content is rejected.",
+        "tags": ["Inference"],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "model": {
+                    "type": "string",
+                    "description": "A live OpenAI speech-to-text model id. Anything else falls back to the default transcription model."
+                  },
+                  "language": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Transcription" },
+          "400": {
+            "description": "Missing file or unparseable form data",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "403": { "description": "API key lacks the `inference:write` scope" },
+          "413": { "description": "Audio file exceeds 25 MB" },
+          "415": { "description": "Unsupported audio type, or content that is not audio" },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/credits/balance": {
+      "get": {
+        "summary": "Get managed-usage balance",
+        "description": "Percentage-only managed-usage status for the calling account, plus when it resets.",
+        "tags": ["Inference"],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "x-agi-api-key-scope": "usage:read",
+        "responses": {
+          "200": {
+            "description": "Usage status",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CreditBalance" } }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "403": {
+            "description": "No subscription record, or the API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
     "/checkout": {
       "post": {
         "summary": "Create a checkout session",

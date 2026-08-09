@@ -14,6 +14,7 @@ import {
   publicUrlForKey,
 } from '@/lib/server/object-storage';
 import { scanUploadBytes } from '@/lib/security/upload-scan';
+import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
 import { logger } from '@/lib/logger';
 import { getMediaAssetByStoragePathname, insertMediaAsset } from '@/lib/server/media-assets';
 import {
@@ -30,6 +31,25 @@ const CompleteChatAttachmentSchema = z.object({
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
 });
+
+/**
+ * A rejected upload is DELETED, not merely left unregistered: R2 is a public
+ * bucket, so the bytes are already reachable at their storage URL and leaving
+ * them there would keep them served forever. Deleting shrinks the exposure to
+ * the seconds between the client's PUT and this handler. Closing it entirely is
+ * the private-bucket decision recorded in known-flaws.md.
+ */
+async function purgeRejectedUpload(userId: string, storageKey: string): Promise<void> {
+  try {
+    await deleteObject(storageKey);
+  } catch (deleteError) {
+    // Loud: the file stays publicly reachable until it is removed by hand.
+    logger.error(
+      { err: deleteError, userId, storageKey },
+      '[uploads] CRITICAL: could not delete a rejected upload from public storage',
+    );
+  }
+}
 
 async function handleComplete(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
@@ -94,31 +114,40 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Uploaded file type does not match the selected file.');
   }
 
+  // Hash first. The structural scan below asks whether the file can *do*
+  // something dangerous when served; the denylist asks what it *depicts*, which
+  // no amount of structure inspection answers. An exact SHA-256 hit against a
+  // confirmed-illegal-media list is also the only verdict here that is a fact
+  // rather than a heuristic, so it outranks everything and is reported.
+  const hashMatch = matchDenylistedUpload(object.data);
+  if (hashMatch.matched) {
+    await purgeRejectedUpload(userId, storageKey);
+    recordModerationEvent({
+      surface: 'upload',
+      action: 'block',
+      categories: ['known_illegal_media'],
+      ruleIds: ['upload.hash-denylist'],
+      userId,
+      contentSha256: hashMatch.sha256,
+      ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
+      storageKey,
+    });
+    throw createError.validation(
+      'This file could not be attached because its contents failed a safety check.',
+    );
+  }
+
   // Inspect the actual BYTES. Every check before this point trusts the client's
   // claims about the file; this is the first one that opens it. Catches
   // type-confusion polyglots, disguised executables, script-bearing SVGs, and
   // auto-executing PDFs.
-  //
-  // On a finding the object is DELETED, not merely unregistered: R2 is a public
-  // bucket, so the bytes are already reachable at their storage URL and leaving
-  // them there would keep them served forever. Deleting shrinks the exposure to
-  // the seconds between the client's PUT and this handler. Closing it entirely
-  // is the private-bucket decision recorded in known-flaws.md.
   const scan = await scanUploadBytes(object.data, mimeType);
   if (!scan.ok) {
     logger.warn(
       { userId, storageKey, fileName, findings: scan.findings },
       '[uploads] rejected an attachment that failed content inspection',
     );
-    try {
-      await deleteObject(storageKey);
-    } catch (deleteError) {
-      // Loud: the file stays publicly reachable until it is removed by hand.
-      logger.error(
-        { err: deleteError, userId, storageKey },
-        '[uploads] CRITICAL: could not delete a rejected upload from public storage',
-      );
-    }
+    await purgeRejectedUpload(userId, storageKey);
     // Deliberately generic for the uploader: the specific detector that fired
     // is an oracle for tuning an evasion against, and it is already logged.
     throw createError.validation(

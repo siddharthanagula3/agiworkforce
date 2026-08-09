@@ -2,7 +2,10 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
+import {
+  loadPluginCatalog,
+  type PluginCatalogResult,
+} from '@/features/plugins/server/registry-source';
 import { isPluginEntryInstallable, type PluginRegistryEntry } from '@agiworkforce/types';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
@@ -17,8 +20,8 @@ import { WaitlistForm } from '../byok/WaitlistForm';
  * The copy tracks the DATA rather than a hardcoded launch claim: entries carry
  * a status, and only a `published` entry with a real artifact is installable.
  * Today every row is `preview`, so the page says installation is not open — but
- * it says it because `installableCount === 0`, not because a sentence was
- * pasted in.
+ * it says it because the read came back with rows and none of them were
+ * installable, not because a sentence was pasted in. See `availabilityClaim`.
  */
 
 export const metadata = buildMetadata({
@@ -44,6 +47,35 @@ function statusLabel(entry: PluginRegistryEntry): string {
   return 'Declared — not installable yet';
 }
 
+/**
+ * The bolded availability claim under the lede, derived from the catalogue read
+ * rather than from a row count.
+ *
+ * An unreachable registry (the table is missing, the database is down) yields no
+ * rows, which is not evidence that nothing is installable — so the outage gets
+ * its own sentence instead of borrowing the "every entry is declared" claim.
+ *
+ * This branches on `status !== 'ok'`, and so does the catalogue section below,
+ * deliberately: both sites treat any non-`ok` read as "we could not look", so a
+ * third union member added to `PluginCatalogResult` later cannot make the hero
+ * report an outage while the section falls through to its empty-registry copy.
+ * That contradiction is the bug this function exists to prevent, and matching
+ * on `=== 'unavailable'` in one place and `!== 'ok'` in the other would let it
+ * back in the moment the union grows.
+ */
+function availabilityClaim(catalog: PluginCatalogResult, installableCount: number): string {
+  if (catalog.status !== 'ok') {
+    return 'The registry is unreachable right now, so this page cannot say which packs are installable.';
+  }
+  if (catalog.entries.length === 0) {
+    return 'The registry holds no packs yet.';
+  }
+  if (installableCount === 0) {
+    return 'No pack is installable yet — every entry is a declared pack with no published artifact.';
+  }
+  return `${installableCount} of ${catalog.entries.length} packs are installable today; the rest are declared and not yet published.`;
+}
+
 export default async function PluginsPage() {
   const catalog = await loadPluginCatalog();
   const entries = catalog.status === 'ok' ? catalog.entries : [];
@@ -60,18 +92,7 @@ export default async function PluginsPage() {
           </h1>
           <p className="agi-page-lede">
             Plugins bundle skills and connectors into a single install. The catalogue below is the
-            live hosted registry.{' '}
-            {installableCount === 0 ? (
-              <strong>
-                No pack is installable yet — every entry is a declared pack with no published
-                artifact.
-              </strong>
-            ) : (
-              <strong>
-                {installableCount} of {entries.length} packs are installable today; the rest are
-                declared and not yet published.
-              </strong>
-            )}
+            live hosted registry. <strong>{availabilityClaim(catalog, installableCount)}</strong>
           </p>
         </section>
 
@@ -112,7 +133,8 @@ export default async function PluginsPage() {
             The first packs.
           </h2>
 
-          {catalog.status === 'unavailable' ? (
+          {/* Same discriminator as `availabilityClaim` — see the note there. */}
+          {catalog.status !== 'ok' ? (
             <p className="agi-reason-p" style={{ margin: 0 }} role="status">
               The plugin registry is temporarily unreachable, so the catalogue cannot be shown right
               now. Nothing is wrong with your account — reload in a moment.
