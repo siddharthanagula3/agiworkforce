@@ -3,6 +3,12 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import {
+  deleteObject,
+  isObjectStorageConfigured,
+  objectKeyFromPublicUrl,
+  objectKeyFromStorageUri,
+} from '@/lib/server/object-storage';
 
 /**
  * PER-24 — the erasure that account deletion always claimed to perform.
@@ -22,19 +28,31 @@ import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
  */
 
 /**
- * User-scoped tables, in FK-safe order. Children that declare
- * `on delete cascade` (web_messages, web_artifact_versions,
- * scheduled_task_runs) are deliberately absent: deleting the parent removes
- * them, and listing them separately would be a second source of truth.
+ * The three constants below partition EVERY table in `apps/web/db/neon/*.sql`
+ * that carries a user-scoping column. `account-erasure.test.ts` derives that
+ * set from the migrations and fails when a table is missing from all three, so
+ * a new user-scoped table cannot be added without a deliberate decision about
+ * what erasure does with it. Before that guard existed this list was
+ * hand-written and had silently fallen 26 tables behind the schema — every
+ * legacy conversation, cloud run, terminal entry, OAuth grant, usage event and
+ * refresh token survived an erasure that reported `complete: true`.
+ */
+
+/**
+ * User-scoped tables deleted outright, in FK-safe order: a row must be gone
+ * before anything it is referenced by without `on delete cascade`.
  *
- * Every entry was verified against `apps/web/db/neon/*.sql`; a table that does
- * not exist on a given deployment is reported as skipped rather than failing
- * the erasure.
+ * A table that does not exist on a given deployment is reported as skipped
+ * rather than failing the erasure.
  */
 export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
   // Chat + generated content
   { table: 'web_conversations', column: 'user_id' },
   { table: 'web_artifacts', column: 'user_id' },
+  { table: 'research_reports', column: 'user_id' },
+  { table: 'published_artifacts', column: 'user_id' },
+  { table: 'conversations', column: 'user_id' },
+  { table: 'chat_messages', column: 'user_id' },
   { table: 'chat_folders', column: 'user_id' },
   { table: 'conversation_tags', column: 'user_id' },
   { table: 'conversation_branches', column: 'user_id' },
@@ -42,6 +60,9 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'message_reactions', column: 'user_id' },
   { table: 'shared_conversations', column: 'user_id' },
   { table: 'shared_sessions', column: 'owner_id' },
+  // Cloud execution
+  { table: 'cloud_agent_runs', column: 'user_id' },
+  { table: 'cloud_code_sessions', column: 'user_id' },
   // Personalization + memory
   { table: 'user_memories', column: 'user_id' },
   { table: 'user_settings', column: 'user_id' },
@@ -53,25 +74,121 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'user_connectors', column: 'user_id' },
   { table: 'user_custom_connectors', column: 'user_id' },
   { table: 'connector_tool_permissions', column: 'user_id' },
+  { table: 'connector_oauth_grants', column: 'user_id' },
+  { table: 'connector_oauth_authorizations', column: 'user_id' },
+  { table: 'messaging_connections', column: 'user_id' },
+  { table: 'github_installations', column: 'user_id' },
+  // Executions before their tools: a run of a GLOBAL tool has no parent to
+  // cascade from, so it would otherwise outlive the account that made it.
+  { table: 'agent_tool_executions', column: 'user_id' },
+  { table: 'agent_tools', column: 'user_id' },
+  { table: 'agent_approval_requests', column: 'user_id' },
   // Account surface
   { table: 'notifications', column: 'user_id' },
   { table: 'feedback', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'user_two_factor', column: 'user_id' },
   { table: 'account_sessions', column: 'user_id' },
-  { table: 'credit_transactions', column: 'user_id' },
-  { table: 'token_credits', column: 'user_id' },
-  { table: 'beta_redemptions', column: 'user_id' },
-  { table: 'email_preferences', column: 'user_id' },
+  { table: 'account_lockout_attempts', column: 'user_id' },
   { table: 'device_authorization_codes', column: 'user_id' },
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
+  { table: 'device_pairings', column: 'user_id' },
+  { table: 'device_refresh_tokens', column: 'user_id' },
+  { table: 'revoked_jwts', column: 'user_id' },
   { table: 'sync_data', column: 'user_id' },
-  { table: 'organization_members', column: 'user_id' },
+  // Replies before tickets: a reply this user left on someone else's ticket
+  // does not cascade from a ticket we delete.
+  { table: 'support_ticket_replies', column: 'user_id' },
+  { table: 'support_tickets', column: 'user_id' },
+  { table: 'support_action_proposals', column: 'user_id' },
+  // Handoff messages cascade from the session.
+  { table: 'support_handoff_sessions', column: 'owner_user_id' },
+  { table: 'email_preferences', column: 'user_id' },
+  { table: 'waitlist', column: 'user_id' },
+  { table: 'cloud_managed_waitlist', column: 'user_id' },
+  { table: 'beta_redemptions', column: 'user_id' },
+  { table: 'feature_flags', column: 'user_id' },
+  // Usage + billing
+  { table: 'usage_events', column: 'user_id' },
+  { table: 'managed_usage_requests', column: 'user_id' },
+  { table: 'credit_transactions', column: 'user_id' },
+  { table: 'token_credits', column: 'user_id' },
   { table: 'subscriptions', column: 'user_id' },
-  // Parent row last.
+  { table: 'organization_members', column: 'user_id' },
+  // Parent row last, and only once everything above succeeded — see
+  // eraseUserAccountData.
   { table: 'profiles', column: 'id' },
 ];
+
+/** The parent row whose deletion doubles as the erasure's retry pointer. */
+const PROFILE_TABLE = 'profiles';
+
+/**
+ * Rows we must keep but that name the erased user. The column is set to NULL,
+ * which every one of them allows; deleting the row would destroy a record that
+ * belongs to an organization or to another user.
+ */
+export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
+  table: string;
+  column: string;
+  reason: string;
+}> = [
+  {
+    table: 'content_reports',
+    column: 'user_id',
+    reason: 'Abuse reports are moderation evidence about OTHER users content.',
+  },
+  {
+    table: 'organization_usage_ledger',
+    column: 'user_id',
+    reason: 'Organization billing history; the row survives, the reporter does not.',
+  },
+  {
+    table: 'project_knowledge_files',
+    column: 'added_by_user_id',
+    reason: 'Files this user added to an organization-shared project owned by someone else.',
+  },
+];
+
+/**
+ * User-scoped tables this module deliberately does NOT delete, each with the
+ * reason. Anything not covered here and not deleted above is a gap, and the
+ * schema-derived test says so.
+ */
+export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
+  media_assets: 'Erased by eraseUserMedia(): bytes first, then rows.',
+  // Cascade children of a row we delete. Listing them as deletes would be a
+  // second source of truth for the same FK.
+  cloud_agent_events: 'Cascades from cloud_agent_runs.',
+  cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',
+  cloud_agent_execution_operations: 'Cascades from cloud_agent_runs.',
+  cloud_code_terminal_entries: 'Cascades from cloud_code_sessions.',
+  cloud_code_agent_turns: 'Cascades from cloud_code_sessions.',
+  managed_usage_request_extensions: 'Cascades from managed_usage_requests.',
+  free_daily_usage_reservations: 'Cascades from profiles.',
+  website_auto_economy_trial_usage: 'Cascades from profiles.',
+  organization_project_access:
+    'Cascades from organization_members. Grants this user issued to other members keep granted_by_user_id, which is not nullable.',
+  // Retained on purpose.
+  // The two audit trails are declared append-only integrity controls
+  // (0043, 0087). Erasure does not write to them from here even though this
+  // adapter connects as the owner: purging an audit trail is the job of the
+  // SECURITY DEFINER path built for it (delete_user_data()). GAP, recorded
+  // rather than papered over: `security_audit_logs.user_id` and
+  // `enterprise_audit_events.actor_user_id` survive this erasure.
+  security_audit_logs:
+    'Append-only for the app role (0043_audit_log_immutability); only the SECURITY DEFINER delete_user_data() purges it.',
+  enterprise_audit_events:
+    'Append-only organization compliance trail (0087_enterprise_audit_event_writes).',
+  credit_idempotency_keys: 'Double-charge protection outlives the account it protected.',
+  credit_settlement_jobs: 'In-flight money movement; dropping a pending job loses a settlement.',
+  beta_invites: 'created_by is invite provenance for invitees who still hold the code.',
+  sso_connections: 'created_by is organization configuration, not personal content.',
+  organizations:
+    'Deleting an organization because its creator left would erase every other member. Ownership transfer is a separate flow.',
+  support_agent_presence: 'Support-staff roster, not customer data.',
+};
 
 export interface AccountErasureReport {
   userId: string;
@@ -81,10 +198,36 @@ export interface AccountErasureReport {
   mediaObjectsFailed: number;
   /** `media_assets` rows removed. */
   mediaRowsDeleted: number;
-  /** Per-table outcome. `skipped` means the table does not exist here. */
-  tables: Record<string, { deleted: boolean; skipped?: boolean; error?: string }>;
+  /** Project-knowledge objects removed / left behind in the bucket. */
+  knowledgeObjectsDeleted: number;
+  knowledgeObjectsFailed: number;
+  /** Avatar objects removed / left behind in the (world-readable) bucket. */
+  avatarObjectsDeleted: number;
+  avatarObjectsFailed: number;
+  /**
+   * Per-table outcome. `skipped` means the table does not exist here;
+   * `retainedForRetry` means the row was deliberately kept so a later run can
+   * resume — only ever `profiles`.
+   */
+  tables: Record<
+    string,
+    { deleted: boolean; skipped?: boolean; retainedForRetry?: boolean; error?: string }
+  >;
+  /** Per-table outcome of the NULL-out pass over ANONYMIZED_USER_COLUMNS. */
+  anonymized: Record<string, { updated: boolean; skipped?: boolean; error?: string }>;
   /** True when every table AND every stored object was disposed of. */
   complete: boolean;
+  /** True when the `profiles` row is still present (retry pointer or caller opt-in). */
+  profileRetained: boolean;
+}
+
+export interface EraseUserAccountOptions {
+  /**
+   * Keep the `profiles` row after a successful erasure. The purge cron uses
+   * this so the row — the only thing that puts the account back in the queue —
+   * outlives the identity-provider delete that follows.
+   */
+  retainProfile?: boolean;
 }
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -150,18 +293,141 @@ export async function eraseUserMedia(
   };
 }
 
+/** Delete stored bytes by object key, reporting rather than throwing. */
+async function deleteObjectKeys(
+  keys: ReadonlyArray<string>,
+  kind: string,
+): Promise<{ deleted: number; failed: number }> {
+  if (keys.length === 0) return { deleted: 0, failed: 0 };
+  if (!isObjectStorageConfigured()) {
+    // The bytes exist but this deployment cannot reach them. Reporting them as
+    // failed keeps the rows that point at them; claiming success would strand
+    // world-readable objects with nothing left to find them by.
+    logger.warn({ kind, count: keys.length }, 'Object storage is not configured; objects retained');
+    return { deleted: 0, failed: keys.length };
+  }
+
+  let deleted = 0;
+  let failed = 0;
+  for (const key of keys) {
+    try {
+      await deleteObject(key);
+      deleted++;
+    } catch (error) {
+      failed++;
+      logger.warn({ kind, key, error }, 'Failed to delete stored object');
+    }
+  }
+  return { deleted, failed };
+}
+
+/**
+ * Delete the BYTES of the user's project-knowledge files.
+ *
+ * The rows themselves cascade from `user_projects`, so this must run before
+ * that delete: `storage_uri` is the only pointer to the object, and the bucket
+ * is public.
+ */
+async function eraseUserKnowledgeObjects(
+  userId: string,
+): Promise<{ deleted: number; failed: number }> {
+  const db = getNeonDb();
+  let rows: Array<{ storage_uri: string | null }> = [];
+  try {
+    rows = await db.query<{ storage_uri: string | null }>(
+      `select k.storage_uri
+         from public.project_knowledge_files k
+         join public.user_projects p on p.id = k.project_id
+        where p.user_id = $1
+          and k.storage_uri is not null`,
+      [userId],
+    );
+  } catch (error) {
+    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
+    throw error;
+  }
+
+  const keys = rows
+    .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
+    .filter((key): key is string => Boolean(key));
+  return deleteObjectKeys(keys, 'knowledge-file');
+}
+
+/**
+ * Delete the user's avatar object. `profiles.avatar_url` also holds
+ * identity-provider URLs we do not own; only keys inside our own public bucket
+ * resolve, and the rest are nothing of ours to erase.
+ */
+async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
+  const db = getNeonDb();
+  let rows: Array<{ avatar_url: string | null }> = [];
+  try {
+    rows = await db.query<{ avatar_url: string | null }>(
+      `select avatar_url from public.profiles where id = $1`,
+      [userId],
+    );
+  } catch (error) {
+    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
+    throw error;
+  }
+
+  const url = rows[0]?.avatar_url;
+  const key = url ? objectKeyFromPublicUrl(url) : null;
+  return deleteObjectKeys(key ? [key] : [], 'avatar');
+}
+
 /**
  * Erase every user-scoped record we own for `userId`, including the stored
- * media bytes. Per-table failures are recorded rather than thrown so one
- * missing table cannot leave the rest of the account behind; the caller
- * inspects `complete` to decide whether to report success.
+ * bytes. Per-table failures are recorded rather than thrown so one missing
+ * table cannot leave the rest of the account behind; the caller inspects
+ * `complete` to decide whether to report success.
+ *
+ * The `profiles` row is deleted LAST and ONLY when everything else succeeded.
+ * It is the erasure's retry pointer — `deletion_scheduled_for` lives on it and
+ * is what puts the account back in the purge queue — so removing it after a
+ * partial failure would strand the surviving rows with no owner and nothing
+ * left to retry from.
  */
-export async function eraseUserAccountData(userId: string): Promise<AccountErasureReport> {
+export async function eraseUserAccountData(
+  userId: string,
+  options: EraseUserAccountOptions = {},
+): Promise<AccountErasureReport> {
   const db = getNeonDb();
   const media = await eraseUserMedia(userId);
+  const knowledge = await eraseUserKnowledgeObjects(userId);
+  const avatar = await eraseUserAvatarObject(userId);
   const tables: AccountErasureReport['tables'] = {};
+  const anonymized: AccountErasureReport['anonymized'] = {};
+
+  for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
+    try {
+      // Identifiers come from the hardcoded ANONYMIZED_USER_COLUMNS constant
+      // above; the only user-controlled value is bound as $1.
+      await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [
+        userId,
+      ]);
+      anonymized[table] = { updated: true };
+    } catch (error) {
+      if (isSchemaAbsent(error)) {
+        anonymized[table] = { updated: false, skipped: true };
+        continue;
+      }
+      anonymized[table] = {
+        updated: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      logger.error({ userId, table, error }, 'Account erasure failed to anonymize table');
+    }
+  }
 
   for (const { table, column } of USER_SCOPED_TABLES) {
+    if (table === PROFILE_TABLE) continue;
+    // A knowledge object we could not delete keeps its row: `storage_uri` is
+    // the only pointer to it, and the rows cascade from user_projects.
+    if (table === 'user_projects' && knowledge.failed > 0) {
+      tables[table] = { deleted: false, retainedForRetry: true };
+      continue;
+    }
     try {
       // Identifiers come from the hardcoded USER_SCOPED_TABLES constant above;
       // the only user-controlled value is bound as $1.
@@ -180,9 +446,57 @@ export async function eraseUserAccountData(userId: string): Promise<AccountErasu
     }
   }
 
-  const complete =
+  const dataDisposed =
     media.mediaObjectsFailed === 0 &&
-    Object.values(tables).every((result) => result.deleted || result.skipped === true);
+    knowledge.failed === 0 &&
+    avatar.failed === 0 &&
+    Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
+    Object.values(anonymized).every((result) => result.updated || result.skipped === true);
 
-  return { userId, ...media, tables, complete };
+  let complete = dataDisposed;
+  let profileRetained = true;
+  if (dataDisposed && !options.retainProfile) {
+    try {
+      await eraseProfileRow(userId);
+      tables[PROFILE_TABLE] = { deleted: true };
+      profileRetained = false;
+    } catch (error) {
+      if (isSchemaAbsent(error)) {
+        tables[PROFILE_TABLE] = { deleted: false, skipped: true };
+        profileRetained = false;
+      } else {
+        complete = false;
+        tables[PROFILE_TABLE] = {
+          deleted: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        logger.error({ userId, error }, 'Account erasure failed to delete the profile row');
+      }
+    }
+  } else {
+    tables[PROFILE_TABLE] = { deleted: false, retainedForRetry: true };
+  }
+
+  return {
+    userId,
+    ...media,
+    knowledgeObjectsDeleted: knowledge.deleted,
+    knowledgeObjectsFailed: knowledge.failed,
+    avatarObjectsDeleted: avatar.deleted,
+    avatarObjectsFailed: avatar.failed,
+    tables,
+    anonymized,
+    complete,
+    profileRetained,
+  };
+}
+
+/**
+ * Delete the `profiles` row — the last thing that ties the account to us, and
+ * the retry pointer for the purge queue. Callers that pass `retainProfile`
+ * invoke this only once the identity-provider account is gone too.
+ */
+export async function eraseProfileRow(userId: string): Promise<void> {
+  const db = getNeonDb();
+  await db.execute(`delete from public.${PROFILE_TABLE} where id = $1`, [userId]);
 }

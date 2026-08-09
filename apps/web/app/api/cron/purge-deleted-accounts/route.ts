@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { eraseUserAccountData } from '@/lib/server/account-erasure';
+import { eraseProfileRow, eraseUserAccountData } from '@/lib/server/account-erasure';
 
 /**
  * PER-24 — the background job `DELETE /api/user/delete-account` promised.
@@ -80,7 +80,11 @@ export async function GET(request: NextRequest) {
 
   for (const { id: userId } of due) {
     try {
-      const report = await eraseUserAccountData(userId);
+      // `retainProfile` keeps the row this loop selects on. It is the only
+      // thing that puts the account back in the queue, so it must outlive both
+      // a partial erasure and a failed Clerk delete — otherwise a failure here
+      // left a signed-in-able identity with no profile and no way to retry.
+      const report = await eraseUserAccountData(userId, { retainProfile: true });
       if (!report.complete) {
         failed++;
         logger.error(
@@ -91,8 +95,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Data is gone; now remove the identity-provider account so the user can
-      // no longer sign in. A failure here is retried on the next run because
-      // the profile row is already deleted only on success below.
+      // no longer sign in.
       const { clerkClient } = await import('@clerk/nextjs/server');
       const client = await clerkClient();
       try {
@@ -107,6 +110,8 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Retry pointer last: nothing above can be resumed once it is gone.
+      await eraseProfileRow(userId);
       purged++;
       logger.info({ userId }, 'Scheduled account deletion completed');
     } catch (error) {
