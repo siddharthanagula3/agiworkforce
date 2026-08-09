@@ -1,9 +1,27 @@
 /**
  * Keyboard shortcut definitions for AGI Workforce desktop app.
  *
- * Each definition carries a stable ID, the default key binding, a human-readable
- * description, the settings category it belongs to, and an action string that is
- * dispatched by useShortcutActions.
+ * Two kinds of shortcut live here, and every entry must be one of them:
+ *
+ * - Renderer shortcuts carry an `action` that the App shell keydown router
+ *   (`App.tsx`) dispatches. The router types its handler map as
+ *   `Record<RendererShortcutAction, ...>`, so a renderer entry cannot be added
+ *   without a handler — the build fails first.
+ * - Global shortcuts carry a `backendId`: the id of the OS-level hotkey the
+ *   Rust registry owns (`src-tauri/src/sys/commands/shortcuts.rs`). Rebinding
+ *   one goes through `shortcuts_update` under that id.
+ *
+ * Nothing else belongs in the list. A row with neither is a control that
+ * rebinds a key nothing listens for, which is what this list used to be.
+ *
+ * There is a third owner of keys that this list deliberately does NOT cover:
+ * the native window menu (`src-tauri/src/ui/window_menu.rs`). Menu key
+ * equivalents are consumed by the OS before the webview ever sees a keydown,
+ * so a row defaulting to CmdOrCtrl+N / +W / +F / +R / +Plus / +Minus / +0 /
+ * +`,` or the predefined Fullscreen/Hide equivalents can never reach the
+ * router, and rebinding it would leave the menu key working anyway. Those
+ * actions are displayed and (only) rebindable in the native menu; do not add
+ * rows for them here.
  */
 
 export interface ShortcutModifiers {
@@ -13,106 +31,55 @@ export interface ShortcutModifiers {
   meta?: boolean;
 }
 
-export interface ShortcutDefinition {
+/**
+ * Actions dispatched by the App shell keydown router. Adding a member here
+ * without adding a handler in `App.tsx` is a type error.
+ */
+export type RendererShortcutAction =
+  | 'app.search'
+  | 'app.commandPalette'
+  | 'model.select'
+  | 'window.toggleSidebar'
+  | 'window.minimize';
+
+interface ShortcutBase {
   id: string;
   key: string;
   modifiers: ShortcutModifiers;
   description: string;
-  category: 'chat' | 'navigation' | 'model' | 'agent' | 'tools' | 'window';
-  action: string;
+  category: 'navigation' | 'model' | 'window';
 }
 
-export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
-  // Chat
-  {
-    id: 'new-chat',
-    key: 'n',
-    modifiers: { meta: true },
-    description: 'New chat',
-    category: 'chat',
-    action: 'chat.new',
-  },
-  {
-    id: 'clear',
-    key: 'l',
-    modifiers: { meta: true },
-    description: 'Clear chat',
-    category: 'chat',
-    action: 'chat.clear',
-  },
-  {
-    id: 'copy-last',
-    key: 'c',
-    modifiers: { meta: true, shift: true },
-    description: 'Copy last response',
-    category: 'chat',
-    action: 'chat.copyLast',
-  },
-  {
-    id: 'voice-input',
-    key: 'v',
-    modifiers: { meta: true, shift: true },
-    description: 'Voice input',
-    category: 'chat',
-    action: 'chat.voiceInput',
-  },
+export interface RendererShortcutDefinition extends ShortcutBase {
+  action: RendererShortcutAction;
+  backendId?: never;
+}
 
+export interface GlobalShortcutDefinition extends ShortcutBase {
+  action?: never;
+  /** Must match a `ShortcutsState::with_defaults()` id in `shortcuts.rs`. */
+  backendId: string;
+}
+
+export type ShortcutDefinition = RendererShortcutDefinition | GlobalShortcutDefinition;
+
+export const RENDERER_SHORTCUTS: RendererShortcutDefinition[] = [
   // Navigation
   {
-    id: 'settings',
-    key: ',',
-    modifiers: { meta: true },
-    description: 'Open settings',
-    category: 'navigation',
-    action: 'app.settings',
-  },
-  {
     id: 'search',
-    key: 'f',
-    modifiers: { meta: true, shift: true },
-    description: 'Focus search',
+    key: 'k',
+    modifiers: { meta: true },
+    description: 'Search',
     category: 'navigation',
     action: 'app.search',
   },
   {
-    id: 'navigate-images',
-    key: 'i',
-    modifiers: { meta: true, shift: true },
-    description: 'Images',
-    category: 'navigation',
-    action: 'app.navigateImages',
-  },
-  {
-    id: 'navigate-skills',
+    id: 'command-palette',
     key: 'k',
     modifiers: { meta: true, shift: true },
-    description: 'Skills',
+    description: 'Command palette',
     category: 'navigation',
-    action: 'app.navigateSkills',
-  },
-  {
-    id: 'navigate-schedules',
-    key: 's',
-    modifiers: { meta: true, shift: true },
-    description: 'Schedules',
-    category: 'navigation',
-    action: 'app.navigateSchedules',
-  },
-  {
-    id: 'navigate-research',
-    key: 'r',
-    modifiers: { meta: true, shift: true },
-    description: 'Research',
-    category: 'navigation',
-    action: 'app.navigateResearch',
-  },
-  {
-    id: 'navigate-artifacts',
-    key: 'a',
-    modifiers: { meta: true, shift: true },
-    description: 'Artifacts Gallery',
-    category: 'navigation',
-    action: 'app.navigateArtifacts',
+    action: 'app.commandPalette',
   },
 
   // Model
@@ -123,67 +90,6 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     description: 'Model selector',
     category: 'model',
     action: 'model.select',
-  },
-  {
-    id: 'cycle-model',
-    key: 'd',
-    modifiers: { meta: true, shift: true },
-    description: 'Cycle model',
-    category: 'model',
-    action: 'model.cycle',
-  },
-  {
-    id: 'toggle-think',
-    key: 'e',
-    modifiers: { meta: true },
-    description: 'Toggle thinking',
-    category: 'model',
-    action: 'model.toggleThinking',
-  },
-
-  // Agent
-  {
-    id: 'cycle-agent',
-    key: 'g',
-    modifiers: { meta: true, shift: true },
-    description: 'Cycle agent mode',
-    category: 'agent',
-    action: 'agent.cycle',
-  },
-  {
-    id: 'plan-mode',
-    key: 'p',
-    modifiers: { meta: true, shift: true },
-    description: 'Plan mode',
-    category: 'agent',
-    action: 'agent.planMode',
-  },
-  {
-    id: 'build-mode',
-    key: 'b',
-    modifiers: { meta: true, shift: true },
-    description: 'Build mode',
-    category: 'agent',
-    action: 'agent.buildMode',
-  },
-
-  {
-    id: 'cycle-variant',
-    key: 'j',
-    modifiers: { meta: true, shift: true },
-    description: 'Toggle thinking/reasoning model variant',
-    category: 'model',
-    action: 'model.cycleVariant',
-  },
-
-  // Tools
-  {
-    id: 'tool-timeline',
-    key: 't',
-    modifiers: { meta: true, shift: true },
-    description: 'Toggle tool timeline',
-    category: 'tools',
-    action: 'tools.timeline',
   },
 
   // Window
@@ -196,53 +102,70 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     action: 'window.toggleSidebar',
   },
   {
+    // Not Cmd+H: on macOS the app menu's predefined Hide item owns that
+    // equivalent, so the keydown never reaches the renderer.
     id: 'minimize',
-    key: 'h',
+    key: 'm',
     modifiers: { meta: true },
     description: 'Minimize window',
     category: 'window',
     action: 'window.minimize',
   },
+];
+
+function isWindowsPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().startsWith('WIN');
+}
+
+function quickSummonDefault(): { key: string; modifiers: ShortcutModifiers } {
+  return isWindowsPlatform()
+    ? { key: 'space', modifiers: { ctrl: true, alt: true } }
+    : { key: 'space', modifiers: { alt: true } };
+}
+
+/**
+ * OS-level hotkeys. These fire while the app is in the background, so the Rust
+ * registry — not the renderer — owns them.
+ *
+ * Quick Query (`toggle_window`) is deliberately absent: it already has its own
+ * enable/combo control in the settings panel (`globalHotkeyPreferences`), and a
+ * second editor for the same hotkey would let the two disagree.
+ */
+export const GLOBAL_SHORTCUTS: GlobalShortcutDefinition[] = [
   {
-    id: 'fullscreen',
+    id: 'quick-summon',
+    // Mirrors `platform_default_quick_summon_combo()` in shortcuts.rs, which
+    // ships Control+Alt+Space on Windows (Alt+Space is the Windows system
+    // menu) and Alt+Space elsewhere. If this row disagrees, the page shows a
+    // key the registry never held and "reset to default" pushes it back in.
+    ...quickSummonDefault(),
+    description: 'Show or hide the app from anywhere',
+    category: 'window',
+    backendId: 'quick_summon',
+  },
+  {
+    id: 'quick-capture',
+    key: 's',
+    modifiers: { meta: true, shift: true },
+    description: 'Quick screen capture',
+    category: 'window',
+    backendId: 'quick_capture',
+  },
+  {
+    id: 'floating-window',
     key: 'f',
-    modifiers: { meta: true, ctrl: true },
-    description: 'Toggle fullscreen',
+    modifiers: { meta: true, shift: true },
+    description: 'Toggle floating window',
     category: 'window',
-    action: 'window.fullscreen',
-  },
-  {
-    id: 'zoom-in',
-    key: '=',
-    modifiers: { meta: true },
-    description: 'Zoom in',
-    category: 'window',
-    action: 'window.zoomIn',
-  },
-  {
-    id: 'zoom-out',
-    key: '-',
-    modifiers: { meta: true },
-    description: 'Zoom out',
-    category: 'window',
-    action: 'window.zoomOut',
-  },
-  {
-    id: 'zoom-reset',
-    key: '0',
-    modifiers: { meta: true },
-    description: 'Reset zoom',
-    category: 'window',
-    action: 'window.zoomReset',
+    backendId: 'floating_window',
   },
 ];
 
+export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [...RENDERER_SHORTCUTS, ...GLOBAL_SHORTCUTS];
+
 export const SHORTCUT_CATEGORY_LABELS: Record<ShortcutDefinition['category'], string> = {
-  chat: 'Chat',
   navigation: 'Navigation',
   model: 'Model',
-  agent: 'Agent',
-  tools: 'Tools',
   window: 'Window',
 };
 
@@ -285,19 +208,93 @@ export function parseCombo(combo: string): { key: string; modifiers: ShortcutMod
 }
 
 /**
+ * The binding actually in force for a shortcut: the user's override when it
+ * parses, the shipped default otherwise.
+ */
+export function resolveBinding(
+  shortcut: ShortcutDefinition,
+  customKeybindings: Record<string, string>,
+): { key: string; modifiers: ShortcutModifiers } {
+  const custom = customKeybindings[shortcut.id];
+  if (custom) {
+    const parsed = parseCombo(custom);
+    if (parsed) return parsed;
+  }
+  return { key: shortcut.key, modifiers: shortcut.modifiers };
+}
+
+const isMacPlatform = (): boolean =>
+  typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
+interface ModifierEvent {
+  key: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+}
+
+/**
+ * True when a keydown event is exactly this binding.
+ *
+ * `meta` means "the platform's primary modifier": Command on macOS, Control
+ * elsewhere. Every other modifier has to match exactly, so Cmd+Shift+K can no
+ * longer fire Cmd+K's action on the way past.
+ */
+export function matchesBinding(
+  event: ModifierEvent,
+  binding: { key: string; modifiers: ShortcutModifiers },
+): boolean {
+  if (!event.key) return false;
+  if (event.key.toLowerCase() !== binding.key.toLowerCase()) return false;
+
+  const onMac = isMacPlatform();
+  // Off macOS there is no separate Command key, so `meta` and `ctrl` both land
+  // on Control and the Windows/Super key is never part of a binding.
+  const wantsPrimary = onMac
+    ? Boolean(binding.modifiers.meta)
+    : Boolean(binding.modifiers.meta || binding.modifiers.ctrl);
+  const primaryHeld = onMac ? event.metaKey : event.ctrlKey;
+
+  if (wantsPrimary !== primaryHeld) return false;
+  if (onMac && Boolean(binding.modifiers.ctrl) !== event.ctrlKey) return false;
+  if (!onMac && event.metaKey) return false;
+  if (Boolean(binding.modifiers.alt) !== event.altKey) return false;
+  if (Boolean(binding.modifiers.shift) !== event.shiftKey) return false;
+
+  return true;
+}
+
+/**
+ * Rewrites a stored combo into a Tauri accelerator for the Rust registry.
+ *
+ * `meta` is this app's primary modifier, which Rust spells `CommandOrControl`;
+ * sending the literal "meta" would register the Windows/Super key instead of
+ * Control on Windows and Linux.
+ */
+export function toBackendAccelerator(combo: string): string {
+  return combo
+    .split('+')
+    .map((part) => (part === 'meta' ? 'CommandOrControl' : part))
+    .join('+');
+}
+
+/**
  * Formats a combo for human-readable display (e.g., "Cmd+Shift+M").
  */
 export function formatComboDisplay(key: string, modifiers: ShortcutModifiers): string {
-  const isMac =
-    typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const isMac = isMacPlatform();
   const parts: string[] = [];
 
   if (modifiers.ctrl) parts.push('Ctrl');
   if (modifiers.alt) parts.push(isMac ? 'Opt' : 'Alt');
   if (modifiers.shift) parts.push('Shift');
-  if (modifiers.meta) parts.push(isMac ? 'Cmd' : 'Win');
+  // Off macOS `meta` is the same physical key as Control (see matchesBinding),
+  // so a combo carrying both must still print one "Ctrl", not "Ctrl+Ctrl".
+  if (modifiers.meta && (isMac || !modifiers.ctrl)) parts.push(isMac ? 'Cmd' : 'Ctrl');
 
-  const keyDisplay = key.length === 1 ? key.toUpperCase() : key;
+  const keyDisplay =
+    key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1);
   parts.push(keyDisplay);
 
   return parts.join('+');
