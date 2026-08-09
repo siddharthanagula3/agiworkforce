@@ -1,7 +1,7 @@
 // H19 -- Vision automation tests.
 //
 // `VisionAutomation` interacts with the screen (screen capture, OCR, image I/O)
-// so all methods that require a running display are marked `#[ignore]`.
+// so all methods that require a running display are marked `#[ignore = "captures the real screen; needs a desktop session with screen-recording permission"]`.
 //
 // What CAN be tested without a display:
 //  * `VisionAutomation::new()` -- creates the screenshot temp dir, no display needed
@@ -479,11 +479,11 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // Tests that require a real display -- marked #[ignore]
+    // Tests that require a real display -- marked #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"]
     // ------------------------------------------------------------------
 
     #[tokio::test]
-    #[ignore] // Requires a running display / screen capture
+    #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"] // Requires a running display / screen capture
     async fn test_capture_screenshot_primary_screen() {
         let vision = VisionAutomation::new().unwrap();
         let result = vision.capture_screenshot(None).await;
@@ -500,7 +500,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires a running display
+    #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"] // Requires a running display
     async fn test_capture_screenshot_with_region() {
         let vision = VisionAutomation::new().unwrap();
         let region = ScreenRegion {
@@ -514,7 +514,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires display + OCR feature
+    #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"] // Requires display + OCR feature
     async fn test_find_text_with_ocr_feature() {
         let vision = VisionAutomation::new().unwrap();
         // This would only find text if there is text on screen
@@ -523,7 +523,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires display + OCR feature
+    #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"] // Requires display + OCR feature
     async fn test_find_text_uses_real_screen_dimensions() {
         // Validates bug #47 fix: coordinates must come from actual screen capture,
         // not hardcoded (960, 540).
@@ -543,7 +543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires a running display
+    #[ignore = "captures the real screen; needs a desktop session with screen-recording permission"] // Requires a running display
     async fn test_wait_for_element_times_out_quickly() {
         let vision = VisionAutomation::new().unwrap();
         let target = ClickTarget::TextMatch {

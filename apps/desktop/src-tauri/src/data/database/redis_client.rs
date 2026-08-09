@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Redis on REDIS_URL; run with --ignored after starting one"]
     async fn test_disconnect() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(0));
@@ -666,7 +666,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Redis on REDIS_URL; run with --ignored after starting one"]
     async fn test_string_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15));
@@ -693,7 +693,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Redis on REDIS_URL; run with --ignored after starting one"]
     async fn test_list_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15));
@@ -717,7 +717,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Redis on REDIS_URL; run with --ignored after starting one"]
     async fn test_hash_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15));

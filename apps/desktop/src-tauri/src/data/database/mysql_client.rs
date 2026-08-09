@@ -758,7 +758,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live MySQL on MYSQL_URL; run with --ignored after starting one"]
     async fn test_create_pool() {
         let client = MySqlClient::new();
         let config = ConnectionConfig::mysql("localhost", 3306, "mysql", "root", "password");
@@ -771,7 +771,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live MySQL on MYSQL_URL; run with --ignored after starting one"]
     async fn test_execute_query() {
         let client = MySqlClient::new();
         let config = ConnectionConfig::mysql("localhost", 3306, "mysql", "root", "password");

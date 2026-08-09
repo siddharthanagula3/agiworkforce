@@ -11,7 +11,7 @@
 //    — the router itself compiles fine; we never call send_message in these tests).
 //  • Call `parse_plan_response()` with realistic JSON strings and assert that
 //    the resulting `TaskStep` / `Action` fields are correct.
-//  • Mark tests that would need a live LLM with `#[ignore]`.
+//  • Mark tests that would need a live LLM with `#[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"]`.
 #[cfg(test)]
 mod tests {
     use crate::core::agent::planner::TaskPlanner;
@@ -623,11 +623,11 @@ I need to take a screenshot first.
     }
 
     // ------------------------------------------------------------------
-    // Live LLM tests — marked #[ignore]
+    // Live LLM tests — marked #[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"]
     // ------------------------------------------------------------------
 
     #[tokio::test]
-    #[ignore] // Requires a configured LLM provider
+    #[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"] // Requires a configured LLM provider
     async fn test_plan_task_requires_llm_provider() {
         let router = Arc::new(RwLock::new(LLMRouter::new()));
         let planner = TaskPlanner::new(router).unwrap();

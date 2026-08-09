@@ -272,7 +272,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Postgres on DATABASE_URL; run with --ignored after starting one"]
     async fn test_postgres_pool_creation() {
         let config =
             ConnectionConfig::postgres("localhost", 5432, "test_db", "postgres", "postgres");
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires a live Postgres on DATABASE_URL; run with --ignored after starting one"]
     async fn test_postgres_health_check() {
         let config =
             ConnectionConfig::postgres("localhost", 5432, "test_db", "postgres", "postgres");
