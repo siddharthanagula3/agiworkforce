@@ -15,6 +15,13 @@ use tracing::{debug, info, warn};
 /// `skills_offered` reflects whether this turn advertised the skill catalog. When
 /// it is false the `skill` tool is withheld too, so the model is never offered a
 /// capability whose catalog it was not shown (DESKTOP-SKILLS-EAGER-INJECTION-01).
+///
+/// TRUST-BOUNDARY: an absent `model_capabilities` payload used to skip capability
+/// filtering entirely, and the desktop renderer never sends one — so every model,
+/// including a Local one, was offered `image_generate` / `video_generate`. Those
+/// two execute against AGI Managed Cloud (`sys/commands/media.rs`), which means
+/// the prompt leaves the device the moment the model calls one. Unknown
+/// capabilities now close that gate; see `capabilities_assumed_when_unknown`.
 pub(super) fn build_tool_definitions(
     enable_tools: Option<bool>,
     mcp_state: &McpState,
@@ -49,16 +56,18 @@ pub(super) fn build_tool_definitions(
         tool_defs.retain(|tool| tool.name != crate::core::agi::tools::SKILL_TOOL_ID);
     }
 
-    if let Some(capabilities) = model_capabilities {
-        let before_count = tool_defs.len();
-        tool_defs = tools::filter_tools_by_capabilities(tool_defs, capabilities);
-        if tool_defs.len() < before_count {
-            info!(
-                "[Chat] Filtered tools by model capabilities: {} -> {} tools",
-                before_count,
-                tool_defs.len()
-            );
-        }
+    let capabilities = match model_capabilities {
+        Some(capabilities) => capabilities.clone(),
+        None => capabilities_assumed_when_unknown(),
+    };
+    let before_count = tool_defs.len();
+    tool_defs = tools::filter_tools_by_capabilities(tool_defs, &capabilities);
+    if tool_defs.len() < before_count {
+        info!(
+            "[Chat] Filtered tools by model capabilities: {} -> {} tools",
+            before_count,
+            tool_defs.len()
+        );
     }
 
     if is_web_focus {
@@ -100,6 +109,28 @@ pub(super) fn build_tool_definitions(
     }
 }
 
+/// Capabilities assumed for a model the caller described no capabilities for —
+/// a local Ollama build is the common case, since only catalog models carry
+/// capability metadata in the renderer.
+///
+/// Every gate an unknown model could plausibly satisfy on-device stays open:
+/// withholding a tool the model can actually run is a worse failure than offering
+/// one it cannot, and that fake-unavailability regression is why `search_web` is
+/// deliberately ungated in `tools::required_model_capability`. `image_gen` is the
+/// exception because it is the one capability whose tools cross the managed-cloud
+/// trust boundary, where guessing wrong leaks the prompt instead of wasting a turn.
+fn capabilities_assumed_when_unknown() -> ModelCapabilitiesDto {
+    ModelCapabilitiesDto {
+        tools: true,
+        vision: true,
+        computer_use: true,
+        search: true,
+        code_execution: true,
+        image_gen: false,
+        agentic: true,
+    }
+}
+
 /// Normalize tool call IDs to prevent blank or missing IDs from causing
 /// artifact/status update collisions.
 pub(super) fn normalize_tool_calls(
@@ -131,8 +162,44 @@ pub(super) fn normalize_tool_calls(
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_tool_calls;
+    use super::{build_tool_definitions, normalize_tool_calls};
     use crate::core::llm::ToolCall;
+    use crate::sys::commands::mcp::McpState;
+
+    #[test]
+    fn unknown_model_capabilities_withhold_the_managed_cloud_media_tools() {
+        let mcp_state = McpState::new();
+        let (tool_defs, _, _) = build_tool_definitions(
+            Some(true),
+            &mcp_state,
+            // The desktop renderer sends no capabilities for an off-catalog local model.
+            None,
+            false,
+            "llama3.3:70b",
+            true,
+        );
+
+        let names: Vec<String> = tool_defs
+            .expect("a tool-capable turn must still be offered tools")
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+
+        for managed_cloud_tool in ["image_generate", "video_generate"] {
+            assert!(
+                !names.iter().any(|name| name == managed_cloud_tool),
+                "'{managed_cloud_tool}' posts the prompt to managed cloud and must not be \
+                 offered to a model of unknown capability; offered: {names:?}"
+            );
+        }
+
+        // The on-device tools survive, so this is a boundary gate and not a
+        // blanket withholding that would strip the local agent of its tools.
+        assert!(
+            names.iter().any(|name| name == "terminal_execute"),
+            "locally executed tools must stay available; offered: {names:?}"
+        );
+    }
 
     #[test]
     fn normalize_tool_calls_fills_missing_ids_and_names() {
