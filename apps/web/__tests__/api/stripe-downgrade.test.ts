@@ -3,10 +3,21 @@
  *
  * Tests for tier downgrade handling mid-cycle:
  * - customer.subscription.updated event with plan change
- * - Credit adjustment for downgrades (excess credits revoked)
- * - Immediate vs scheduled (at period end) downgrades
  * - Plan tier resolution from price IDs
+ * - Reset (new period) vs allocate (same period) credit branching
  * - Edge cases and error handling
+ *
+ * NOT covered here, because the webhook does not do it: a mid-cycle DOWNGRADE
+ * does not shrink the billing-period allowance. `updateSubscriptionInDb`
+ * (app/api/stripe-webhook/lib/db.ts) only distinguishes `isPaidPlanUpgrade`
+ * (carry usage) from `isNewPeriod` (reset) and otherwise calls
+ * `allocateCreditsForPeriod`, whose SQL `get_or_create_credit_account`
+ * (db/neon/0020_functions.sql) returns the existing row untouched when the
+ * period is unchanged. Enforcement reads `credits_allocated_cents` off that
+ * row, so a portal downgrade lowers `plan_tier` (and its capability gates)
+ * while leaving the higher plan's spend allowance in place until the period
+ * ends. Ledger BIZ-010 owns defining and implementing that policy; do not add
+ * an assertion here that presents the current behaviour as intended.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

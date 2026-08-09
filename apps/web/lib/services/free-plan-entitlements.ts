@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { getBillingPlanProductLimits, toEnforceableBillingPlanLimit } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  getBillingPlanProductLimits,
+  toEnforceableBillingPlanLimit,
+} from '@agiworkforce/types';
 
 export function getProjectLimit(planTier: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(planTier)?.projects);
@@ -41,14 +45,25 @@ export function getKnowledgeStorageLimitErrorMessage(
   return `${label} accounts include ${formatBytes(limitBytes)} of project knowledge storage. Remove a file or upgrade to add another.`;
 }
 
+/**
+ * Managed tiers whose name may appear in a user-facing limit message, keyed by
+ * the stable plan id and RESOLVED from the shared catalog rather than retyped.
+ *
+ * The set is deliberately narrower than `BILLING_PLAN_PRICING`: `local-only`
+ * and `byok` store nothing on the platform, so a tier absent from this map
+ * falls through to the generic "your subscription does not include…" wording
+ * instead of naming a plan that has no such allowance. Sourcing the strings
+ * from the catalog is what makes a plan RENAME propagate here — the ids below
+ * are the identity and never change with the label.
+ */
 const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  free: 'Free',
-  basic: 'Basic',
-  pro: 'Pro',
-  max: 'Max 5x',
-  max_15x: 'Max 15x',
-  team: 'Team',
-  enterprise: 'Enterprise',
+  free: BILLING_PLAN_PRICING.free.label,
+  basic: BILLING_PLAN_PRICING.basic.label,
+  pro: BILLING_PLAN_PRICING.pro.label,
+  max: BILLING_PLAN_PRICING.max.label,
+  max_15x: BILLING_PLAN_PRICING.max_15x.label,
+  team: BILLING_PLAN_PRICING.team.label,
+  enterprise: BILLING_PLAN_PRICING.enterprise.label,
 });
 
 export function getProjectLimitErrorMessage(planTier: string | null | undefined): string {

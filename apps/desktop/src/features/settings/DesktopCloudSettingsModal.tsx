@@ -298,8 +298,13 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-base font-semibold text-foreground">Billing</h2>
+        {/* Top-ups are deliberately not named here: credit top-up fulfillment
+            exists in the Stripe webhook, but no surface can start that purchase
+            yet (no checkout route stamps `type: 'credit_topup'`), so promising
+            them in this pane sends a capped user looking for a button that does
+            not exist. Add them back with the purchase flow (ledger BIZ-022). */}
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your subscription, payment method, and top-ups.
+          Manage your subscription and payment method.
         </p>
       </div>
       <div className="rounded-lg border border-border bg-card/40 p-5">

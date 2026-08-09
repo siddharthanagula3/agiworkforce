@@ -340,11 +340,11 @@ export class SubscriptionService {
 
   /**
    * Ensure a profile exists for the user (required for subscriptions FK constraint).
-   * SERVICE-CONTEXT: called only from syncWithStripe which has no user JWT.
+   * SERVICE-CONTEXT: called only from syncWithStripe, which has no user JWT.
    */
   private static async ensureProfileExists(userId: string, email: string): Promise<void> {
-    // SERVICE-CONTEXT: service-level db (no user JWT) since this is called inside
-    // syncWithStripe which is called from the Stripe webhook handler.
+    // SERVICE-CONTEXT: service-level db (no user JWT) because the only caller,
+    // syncWithStripe, runs outside any request that carries one.
     const db = getNeonDb();
 
     // Check if profile exists
@@ -372,8 +372,17 @@ export class SubscriptionService {
 
   /**
    * Sync subscription from Stripe using customer ID (BEST PRACTICE).
-   * SERVICE-CONTEXT: called from Stripe webhook handler and admin diagnose page;
-   * no user JWT available.
+   *
+   * UNCALLED TODAY. Its only caller, `/api/sync-subscription`, was deleted in
+   * 17b2036c9 ("close unmounted surface sweep", 2026-07-29). Nothing in the repo
+   * invokes it now, so no code path repairs a missed or out-of-order Stripe
+   * webhook: the webhook handler is the sole writer of subscription state.
+   * Ledger BIZ-013 tracks wiring this into a periodic reconciliation job; keep
+   * this notice accurate until a real caller exists.
+   *
+   * SERVICE-CONTEXT: uses a service-level db. Any future caller must be a
+   * trusted server context (cron/webhook/admin) — it takes `userId` on faith
+   * and writes that user's subscription row without an ownership check.
    *
    * This is a critical function that ensures local subscription data matches Stripe.
    * It handles:
@@ -399,8 +408,8 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
-      // SERVICE-CONTEXT: service-level db (no user JWT) since this is called from the
-      // Stripe webhook handler and admin diagnose page (no user JWT in either context).
+      // SERVICE-CONTEXT: service-level db (no user JWT). See the notice on this
+      // method: it is reserved for trusted server contexts, and has no caller yet.
       const db = getNeonDb();
 
       const profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(

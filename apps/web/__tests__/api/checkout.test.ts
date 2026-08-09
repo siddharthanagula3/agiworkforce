@@ -57,6 +57,11 @@ vi.mock('stripe', () => {
     customers = {
       list: vi.fn(() => ({ data: [] })),
     };
+    // The route asks Stripe directly whether this customer is already being
+    // billed before it starts another subscription checkout.
+    subscriptions = {
+      list: vi.fn(() => ({ data: [] })),
+    };
   }
   return {
     default: MockStripe,

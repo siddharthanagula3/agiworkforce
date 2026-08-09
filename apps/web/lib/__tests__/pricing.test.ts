@@ -174,8 +174,7 @@ describe('PRICING_CONFIG.plans', () => {
     expect(team).toBeDefined();
     // Marked per-seat so no price renderer can mistake the unit amount for the
     // whole organization's monthly bill. $25/seat per founder decision
-    // 2026-08-05 (Decision #22); yearly ($240) stays unexposed until
-    // STRIPE_PRICE_TEAM_YEARLY_* wiring lands.
+    // 2026-08-05 (Decision #22).
     expect(team).toHaveProperty('perSeat', true);
     expect(team?.price.monthly).toBe(25);
     // Yearly is now published from the canonical catalog at $240/seat/yr

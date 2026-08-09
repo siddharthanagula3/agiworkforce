@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const stripeMocks = vi.hoisted(() => ({
   createCheckoutSession: vi.fn(),
   createCustomer: vi.fn(),
+  listSubscriptions: vi.fn(),
 }));
 
 const dbMocks = vi.hoisted(() => ({
@@ -47,6 +48,9 @@ vi.mock('stripe', () => ({
     customers = {
       create: stripeMocks.createCustomer,
     };
+    subscriptions = {
+      list: stripeMocks.listSubscriptions,
+    };
     checkout = {
       sessions: {
         create: stripeMocks.createCheckoutSession,
@@ -79,6 +83,7 @@ describe('POST /api/checkout', () => {
     });
     dbMocks.execute.mockResolvedValue(1);
     stripeMocks.createCustomer.mockResolvedValue({ id: 'cus_123' });
+    stripeMocks.listSubscriptions.mockResolvedValue({ data: [] });
     stripeMocks.createCheckoutSession.mockResolvedValue({
       id: 'cs_test_123',
       url: 'https://checkout.stripe.test/cs_test_123',
@@ -175,6 +180,100 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(409);
     expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses to replace a negotiated enterprise entitlement with a self-serve plan', async () => {
+    // An Enterprise contract is provisioned by hand, so the row is paid and
+    // active with no Stripe subscription id. The webhook upsert overwrites
+    // plan_tier on user_id, so letting this checkout through would downgrade a
+    // contract customer to Pro and strip enterprise_controls.
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'active',
+            plan_tier: 'enterprise',
+            stripe_customer_id: 'cus_123',
+            stripe_subscription_id: null,
+          },
+        ];
+      }
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+      return [];
+    });
+
+    const response = await POST(makeRequest('pro'));
+
+    expect(response.status).toBe(409);
+    expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  describe('duplicate purchase against a delayed webhook', () => {
+    function returningCustomerWithNoRecordedSubscription() {
+      // The buyer already has a Stripe customer, but the subscription their
+      // first click paid for has not been written yet because the webhook is
+      // still in flight - exactly the window a second click lands in.
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) return [];
+        if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+        return [];
+      });
+    }
+
+    it('refuses a second checkout while Stripe is already billing the customer', async () => {
+      returningCustomerWithNoRecordedSubscription();
+      stripeMocks.listSubscriptions.mockImplementation(async ({ status }: { status: string }) =>
+        status === 'active' ? { data: [{ id: 'sub_live_1', status: 'active' }] } : { data: [] },
+      );
+
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(409);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('refuses on a trialing or past_due subscription too', async () => {
+      for (const liveStatus of ['trialing', 'past_due']) {
+        vi.clearAllMocks();
+        returningCustomerWithNoRecordedSubscription();
+        stripeMocks.listSubscriptions.mockImplementation(async ({ status }: { status: string }) =>
+          status === liveStatus
+            ? { data: [{ id: 'sub_live_1', status: liveStatus }] }
+            : { data: [] },
+        );
+
+        const response = await POST(makeRequest());
+
+        expect(response.status, liveStatus).toBe(409);
+        expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+      }
+    });
+
+    it('lets a returning customer with no live Stripe subscription buy', async () => {
+      returningCustomerWithNoRecordedSubscription();
+
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.createCheckoutSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not create checkout when Stripe subscription state cannot be read', async () => {
+      returningCustomerWithNoRecordedSubscription();
+      stripeMocks.listSubscriptions.mockRejectedValue(new Error('stripe unavailable'));
+
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(503);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('does not spend a Stripe call on a first-time buyer', async () => {
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    });
   });
 
   it('does not create a customer or checkout when billing state cannot be verified', async () => {
