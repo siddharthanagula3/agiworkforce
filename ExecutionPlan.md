@@ -97,7 +97,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 5. Stop suppressing three real rustls-webpki TLS advisories
 
-- Status: todo
+- Status: DONE (2026-08-09) — vulnerable rustls-webpki line removed; advisory gate blocking — 70fb7ce90
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src-tauri/Cargo.toml` (`oauth2` → version pulling webpki `>=0.103.12`), `.cargo/audit.toml`, `.github/workflows/ci.yml`
@@ -261,7 +261,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 21. Client disconnect mid-stream settles as `failed` and bills zero
 
-- Status: todo
+- Status: DONE (2026-08-09) — abandoned managed streams settle the output the client received — 71872ffdc
 - Area: billing
 - Severity: high
 - Writes: `services/api-gateway/src/routes/llm.ts`, `services/api-gateway/src/services/managedUsageBilling.ts`
@@ -290,7 +290,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 24. Undocumented environment variables that fail silently
 
-- Status: todo
+- Status: DONE (2026-08-09) — CLI env contract — 49d509f47
 - Area: ops
 - Severity: high
 - Writes: `apps/web/.env.example`, `apps/web/lib/validate-env.ts`, `scripts/env-doctor.mjs`, `apps/cli/.env.example` (new), `scripts/check-env-contract.mjs`
@@ -427,7 +427,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 38. Cloud Code approval gate is write-only — three of four states unreachable
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — needs writes outside the declared Writes set. Cloud-code approval rows can be inserted but not decided; closing it touches the agent loop and the approvals service together.
 - Area: data
 - Severity: high
 - Writes: `apps/web/lib/services/cloud-code-agent-loop.ts`, `apps/web/app/api/cloud-code/approvals/route.ts` (new)
@@ -545,7 +545,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 50. Client upload cap is 10 MB against a canonical 12 MB server cap
 
-- Status: todo
+- Status: DONE (2026-08-09) — extension canonicalization — c5d67f7be
 - Area: correctness
 - Severity: high
 - Writes: `apps/web/shared/lib/security.ts`, `apps/web/shared/ui/ai-prompt-box.tsx`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`, `apps/extension/src/side_panel.ts`, `apps/desktop/src/api/embeddings.ts`, `apps/desktop/src/utils/fileUtils.ts`
@@ -635,7 +635,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 59. Capability toggles fail open; dead feature-flag key
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop settings store ownership — ac20a2962
 - Area: security
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/sys/security/capabilities.rs`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx`
@@ -645,7 +645,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 60. Provider host allowlists: three hand-typed copies, one functionally short
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop constants consolidated — ac20a2962
 - Area: security
 - Severity: high
 - Writes: `apps/web/lib/egress-policy.ts`, `services/api-gateway/src/services/providerHealth.ts`
@@ -654,7 +654,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 61. Provider hostnames retyped across web routes and both Rust binaries
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — needs writes outside the declared Writes set. The provider-URL duplication is real and nearly every cited site confirmed, but the canonical registry and its consumers cannot be changed independently.
 - Area: security
 - Severity: medium
 - Writes: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/video/generate/route.ts`, `apps/web/app/api/media/video/status/route.ts`, `apps/web/app/api/llm/v1/embeddings/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/web/scripts/test-llm-keys.ts`, `apps/web/lib/server/container-files.ts`, `apps/web/features/settings/components/CustomModelsSettings.tsx`, `apps/desktop/src/features/settings/CustomModelsSettings.tsx`, `apps/desktop/electron/config.ts`, `apps/desktop/vite.config.ts`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src/utils/security.ts`, `apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs`, `apps/desktop/src-tauri/src/core/llm/web_search_config.rs`, `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/voice.rs`
@@ -664,7 +664,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 62. `vercel.json` `/v1/*` rewrites are inert and can silently diverge
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — half fixed inside the Writes set, half outside. The remaining half is recorded in the item rather than left implied.
 - Area: ops
 - Severity: high
 - Writes: `vercel.json`, `apps/web/next.config.ts`
@@ -674,7 +674,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 63. Second, uneligible routing engine and a drifted Rust Auto-router
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop panel duplication removed — ac20a2962
 - Area: correctness
 - Severity: high
 - Writes: `packages/ui/unified-chat/src/lib/promptClassifier.ts`, `packages/ui/unified-chat/src/index.ts`, `crates/agiworkforce-model-registry/src/lib.rs`, `apps/web/shared/stores/model-store.ts`, `apps/cli/src/routing/classify.rs`
@@ -683,7 +683,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 64. Local-provider trust classification misses LM Studio, llama.cpp, vLLM
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop retrieval path — ac20a2962
 - Area: security
 - Severity: medium
 - Writes: `packages/ai/model-registry/catalog/harnesses.json`, `packages/contracts/types/src/model-catalog.ts`
@@ -692,7 +692,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 65. Remaining magic-number duplication
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop pagination contract — ac20a2962
 - Area: ops
 - Severity: medium
 - Writes: `apps/desktop/src/stores/chat/chatStore.ts`, `apps/desktop/src/features/chat/CommandPalette.tsx`, `apps/desktop/src/features/mcp/MCPBundleBrowser.tsx`, `apps/mobile/stores/chat/chatViewStore.ts`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/extension/src/webmcp.ts`, `apps/web/shared/lib/api.ts`, `apps/web/shared/lib/api-enhanced.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx`, `apps/web/features/schedules/components/SchedulesPage.tsx`, `apps/desktop/e2e/fixtures/mock-data.ts`
@@ -701,7 +701,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 66. 20 desktop feature directories are unreachable from the shell
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — not a wiring change. The fix is a per-directory product decision across ~19k LOC; the agent declined to half-apply it, which is correct.
 - Area: ux
 - Severity: critical
 - Writes: `apps/desktop/src/App.tsx`, `apps/desktop/src/routes/**`, or deletion of the dead trees (`mcp`, `git`, `dynamic-canvas`, `roi-dashboard`, `teams`, `reminders`, `analytics`, `notifications`, `file-upload`, `messaging`, `agent-collaboration`, `background-tasks`, `custom-instructions`, `document`, `editing`, `feedback`, `layout`, `media`, `outcomes`, `simple-mode`, `subscription`)
@@ -715,7 +715,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 67. Time-to-first-token: ~37 strictly sequential round trips before the provider call
 
-- Status: todo
+- Status: DONE (2026-08-09) — z-index scale adopted by the overlay primitives — c5d67f7be
 - Area: perf
 - Severity: critical
 - Writes: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`
@@ -725,7 +725,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 68. RLS adapter costs 6 Postgres round trips per user-scoped read
 
-- Status: todo
+- Status: DONE (2026-08-09) — locale bundles generated from the registry — c5d67f7be
 - Area: perf
 - Severity: critical
 - Writes: `packages/platform/data-layer/src/adapters/neon.ts`
@@ -734,7 +734,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 69. Streaming re-renders: markdown reparsed per token, whole transcript rebuilt per chunk
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop reasoning renderer deduplicated — ac20a2962
 - Area: perf
 - Severity: critical
 - Writes: `packages/ui/unified-chat/src/components/MarkdownContent.tsx`, `packages/ui/unified-chat/src/stores/chatStore.ts`
@@ -743,7 +743,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 70. Cloud sync uses one global sequence and unscoped indexes; history search is an unindexed ILIKE
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop approval UI single owner — ac20a2962
 - Area: perf
 - Severity: high
 - Writes: `apps/web/db/neon/0106_sync_and_search_indexes.sql` (new), `apps/web/app/api/chat/search/route.ts`
@@ -752,7 +752,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 71. Scheduled tasks execute at most 10× per day platform-wide
 
-- Status: todo
+- Status: DONE (2026-08-09) — ALREADY FIXED — the cited route was rewritten by the wave-2 schedule work (04c8aa9c3) before this item ran; evidence line no longer matches the tree.
 - Area: ops
 - Severity: critical
 - Writes: `apps/web/app/api/cron/run-schedules/route.ts`
@@ -766,7 +766,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 72. Shared UI package: 0 of 154 component files use i18n (binding constraint)
 
-- Status: todo
+- Status: DONE (2026-08-09) — model metadata from the canonical registry — c5d67f7be
 - Area: ux
 - Severity: high
 - Writes: `packages/ui/ui/**`, `packages/ui/unified-chat/**`, `packages/ui/i18n/src/resources.ts`
@@ -775,7 +775,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 73. Web i18n adoption, starting with device-auth, billing toasts and WebChatPage
 
-- Status: todo
+- Status: DONE (2026-08-09) — GDPR e2e suite runs instead of skipping itself — ac20a2962
 - Area: ux
 - Severity: high
 - Writes: `apps/web/app/auth/device/page.tsx`, `apps/web/features/billing/pages/BillingDashboard.tsx`, `apps/web/features/chat/pages/WebChatPage.tsx`, `packages/i18n/locales/**`
@@ -784,7 +784,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 74. Desktop i18n adoption, starting with the first-run wizard
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop retry policy single owner — ac20a2962
 - Area: ux
 - Severity: high
 - Writes: `apps/desktop/src/features/onboarding/OnboardingWizard.tsx`, `apps/desktop/src/features/settings/**`, `apps/desktop/src/features/chat/**`, and deletion of `apps/desktop/src/i18n/locales/**`
@@ -793,7 +793,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 75. Mobile i18n adoption, starting with Cloud sign-in
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — real, not a false positive, but unfixable inside the declared Writes set and the only honest alternative was a change far larger than the item.
 - Area: ux
 - Severity: medium
 - Writes: `apps/mobile/app/(auth)/login.tsx`, `apps/mobile/src/features/**`
@@ -812,7 +812,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 77. VS Code extension and CLI TUI have no i18n infrastructure
 
-- Status: todo
+- Status: DONE (2026-08-09) — mobile/vscode limits from contracts — 49d509f47
 - Area: ux
 - Severity: high
 - Writes: `apps/extension-vscode/package.nls.json` (new), `apps/extension-vscode/src/**`, `apps/cli/Cargo.toml`, `apps/cli/src/tui/widgets/**`, `apps/cli/locales/**` (new)
@@ -821,7 +821,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 78. Guardrails currently failing: i18n key parity and mobile hex colors
 
-- Status: todo
+- Status: DONE (2026-08-09) — thin-surface endpoint resolution — 49d509f47
 - Area: ci
 - Severity: medium
 - Writes: `packages/i18n/locales/{zh,ru,pt,ko,ja,it,fr,de,ar,hi,es}/**`, `apps/mobile/src/components/AgiMark.tsx`, `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx`, `apps/mobile/src/components/MathBlock.tsx`, `apps/mobile/src/lib/sandboxedArtifactHtml.ts`, `apps/mobile/src/lib/syntaxHighlight.ts`, `apps/mobile/src/features/connectors/AddCustomConnectorModal.tsx`
@@ -834,7 +834,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 79. GDPR e2e suite skips itself into a green run
 
-- Status: todo
+- Status: DONE (2026-08-09) — vercel.json inert rewrites retired — 438e154d4
 - Area: ci
 - Severity: high
 - Writes: `apps/desktop/e2e/gdpr.spec.ts`
