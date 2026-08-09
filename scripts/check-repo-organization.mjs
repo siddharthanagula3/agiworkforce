@@ -28,8 +28,20 @@ const allowedRootFiles = new Set([
   'CHANGELOG.md',
   'CLAUDE.md',
   'CONTRIBUTING.md',
-  // Active remediation queue built from the five audit artifacts; the working
-  // loop reads it every session. Root-level by the same rationale as PLAN.md.
+  // Two files, two roles, deliberately not merged.
+  //
+  // AuditRemediationLedger.md is the REQUIREMENTS ledger: every finding from
+  // the five audit artifacts, with its task ID, resolution mode and acceptance
+  // criteria. It says what must become true and is the stop gate.
+  //
+  // ExecutionPlan.md is the WORK QUEUE: the subset verified against the current
+  // tree, carrying the `Writes:`/`Verify:` metadata a scheduler needs to run
+  // items in parallel without two agents clobbering the same file. It says what
+  // to do next.
+  //
+  // Merging them would lose one or the other — a ledger entry has no collision
+  // key, and a queue item has no acceptance criteria.
+  'AuditRemediationLedger.md',
   'ExecutionPlan.md',
   'Cargo.lock',
   'Cargo.toml',
