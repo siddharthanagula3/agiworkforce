@@ -732,6 +732,44 @@ export async function upsertSubscriptionFromSession(
   }
 }
 
+/**
+ * Tier already recorded for a subscription whose Stripe Price is no longer
+ * registered.
+ *
+ * A deployment only ever registers the Prices it currently sells, so every
+ * price change, currency split or retired experiment strands the customers
+ * still billed on the old Price. Throwing on those renewals 500s the webhook
+ * until Stripe exhausts its retries, after which the period never advances and
+ * credits are never reset — an existing subscriber silently loses the plan they
+ * are still paying for, against the price-protection promise in /terms.
+ *
+ * The recorded tier is the honest answer because it can only have been written
+ * from a Price that WAS registered at purchase. It cannot invent entitlement: a
+ * subscription that was never provisioned as paid has no paid tier to return,
+ * and those still fail loudly at the call site.
+ */
+async function resolveGrandfatheredPlanTier(
+  db: DatabaseAdapter,
+  stripeSubId: string | null,
+  stripeCustomerId: string | null,
+): Promise<string | null> {
+  const rows = stripeSubId
+    ? await db.query<{ plan_tier: string | null }>(
+        'select plan_tier from subscriptions where stripe_subscription_id = $1 limit 1',
+        [stripeSubId],
+      )
+    : stripeCustomerId
+      ? await db.query<{ plan_tier: string | null }>(
+          'select plan_tier from subscriptions where stripe_customer_id = $1 limit 1',
+          [stripeCustomerId],
+        )
+      : [];
+
+  const recorded = rows[0]?.plan_tier?.toLowerCase() ?? null;
+  if (!recorded || recorded === 'free') return null;
+  return recorded;
+}
+
 export async function updateSubscriptionFromStripeSubscription(
   db: DatabaseAdapter,
   stripe: Stripe,
@@ -756,22 +794,11 @@ export async function updateSubscriptionFromStripeSubscription(
     stripePriceId = firstSubItem.price.id;
   }
 
-  if (stripePriceId && !isPriceIdRegistered(stripePriceId)) {
-    logger.error(
-      {
-        subscriptionId: subscription.id,
-        priceId: stripePriceId,
-        registeredPriceIds: Object.keys(getTierMapping()),
-      },
-      'Webhook contained an unregistered Price; refusing entitlement provisioning',
-    );
-    throw new Error('Cannot provision subscription from an unregistered Stripe Price');
-  }
+  const priceIsRegistered = !stripePriceId || isPriceIdRegistered(stripePriceId);
 
-  const resolvedTier = resolvePlanTier(
-    subscription.metadata as Record<string, string> | null,
-    stripePriceId,
-  );
+  const resolvedTier = priceIsRegistered
+    ? resolvePlanTier(subscription.metadata as Record<string, string> | null, stripePriceId)
+    : await resolveGrandfatheredPlanTier(db, stripeSubId, stripeCustomerId);
   const planTier = resolvedTier && isValidPlanTier(resolvedTier) ? resolvedTier : null;
 
   if (!planTier) {
@@ -779,6 +806,7 @@ export async function updateSubscriptionFromStripeSubscription(
       {
         subscriptionId: subscription.id,
         priceId: stripePriceId,
+        priceIsRegistered,
         hasMetadata: !!subscription.metadata?.['plan_tier'],
         registeredPriceIds: Object.keys(getTierMapping()),
         envVarHint:
@@ -790,7 +818,18 @@ export async function updateSubscriptionFromStripeSubscription(
       { subscriptionId: subscription.id },
       'Subscription update cannot proceed until its Stripe Price is registered.',
     );
-    throw new Error('Cannot determine subscription tier from its registered Stripe Price');
+    throw new Error(
+      priceIsRegistered
+        ? 'Cannot determine subscription tier from its registered Stripe Price'
+        : 'Cannot provision subscription from an unregistered Stripe Price',
+    );
+  }
+
+  if (!priceIsRegistered) {
+    logger.warn(
+      { subscriptionId: subscription.id, priceId: stripePriceId, grandfatheredTier: planTier },
+      'Renewing an unregistered Stripe Price at the tier already recorded for this subscription',
+    );
   }
 
   if (!subscription.metadata?.['plan_tier']) {
