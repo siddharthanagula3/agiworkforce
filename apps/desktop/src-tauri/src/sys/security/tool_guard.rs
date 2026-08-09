@@ -2,6 +2,7 @@ use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -2376,97 +2377,36 @@ impl ToolExecutionGuard {
                 }
             }
 
-            // Block private/reserved IPv4 ranges (RFC 1918 + link-local + loopback)
-            if host.starts_with("192.168.")
-                || host.starts_with("10.")
-                || host.starts_with("172.16.")
-                || host.starts_with("172.17.")
-                || host.starts_with("172.18.")
-                || host.starts_with("172.19.")
-                || host.starts_with("172.20.")
-                || host.starts_with("172.21.")
-                || host.starts_with("172.22.")
-                || host.starts_with("172.23.")
-                || host.starts_with("172.24.")
-                || host.starts_with("172.25.")
-                || host.starts_with("172.26.")
-                || host.starts_with("172.27.")
-                || host.starts_with("172.28.")
-                || host.starts_with("172.29.")
-                || host.starts_with("172.30.")
-                || host.starts_with("172.31.")
-            {
-                warn!("Private IP address detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // Block 127.0.0.0/8 loopback range
-            if host.starts_with("127.") {
-                warn!("Loopback IP address detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // Block 169.254.0.0/16 link-local / cloud metadata (IMDS)
-            if host.starts_with("169.254.") {
-                warn!("Link-local/cloud metadata IP detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // Block IPv6 loopback (::1) and IPv6 link-local (fe80::)
-            if host == "::1"
-                || host == "[::1]"
-                || host.starts_with("fe80:")
-                || host.starts_with("[fe80:")
-            {
-                warn!("IPv6 loopback/link-local address detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // Block IPv6 ULA addresses (fc00::/7 — fc and fd prefixes)
-            if host.starts_with("fc")
-                || host.starts_with("fd")
-                || host.starts_with("[fc")
-                || host.starts_with("[fd")
-            {
-                warn!("Private IPv6 address (ULA) detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // Block 0.0.0.0
-            if host == "0.0.0.0" {
-                warn!("Null-route IP address detected: {}", host);
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // FIX R-23: Block IPv6-mapped IPv4 addresses (e.g. ::ffff:127.0.0.1)
-            // These bypass naive string-based IPv4 checks while resolving to the same address.
-            if host.starts_with("::ffff:")
-                || host.starts_with("[::ffff:")
-                || host.contains("::ffff:")
-            {
-                warn!(
-                    "IPv6-mapped IPv4 address detected (potential SSRF bypass): {}",
-                    host
-                );
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-
-            // FIX R-23: Block decimal IP notation (e.g. 2130706433 = 127.0.0.1)
-            // and octal/hex IP notation (e.g. 0x7f000001 = 127.0.0.1).
-            // Some URL parsers resolve these to the actual IP, bypassing string checks.
-            if host.chars().all(|c| c.is_ascii_digit()) && !host.is_empty() {
-                warn!(
-                    "Decimal IP notation detected (potential SSRF bypass): {}",
-                    host
-                );
-                return Err(SecurityError::BlockedDomain(host.to_string()));
-            }
-            if host.starts_with("0x") || host.starts_with("0X") {
-                warn!(
-                    "Hexadecimal IP notation detected (potential SSRF bypass): {}",
-                    host
-                );
-                return Err(SecurityError::BlockedDomain(host.to_string()));
+            // Judge IP literals numerically, never by string prefix: prefixes missed
+            // whole ranges (CGNAT, 0.0.0.0/8, multicast) and over-blocked legitimate
+            // names like `fcc.gov`. `url::Url` has already canonicalized the decimal,
+            // octal, hex and IPv6-mapped spellings (`http://2130706433/`,
+            // `http://0x7f000001/`, `::ffff:127.0.0.1`) into these variants, so one
+            // numeric check covers every encoding of the same address.
+            match parsed.host() {
+                Some(url::Host::Ipv4(ip)) => {
+                    if is_internal_ipv4(ip) {
+                        warn!("Private/reserved IPv4 address detected: {}", host);
+                        return Err(SecurityError::BlockedDomain(host.to_string()));
+                    }
+                }
+                Some(url::Host::Ipv6(ip)) => {
+                    if is_internal_ipv6(ip) {
+                        warn!("Private/reserved IPv6 address detected: {}", host);
+                        return Err(SecurityError::BlockedDomain(host.to_string()));
+                    }
+                }
+                Some(url::Host::Domain(domain)) => {
+                    // A name whose leading labels spell a dotted quad (`10.0.0.1.nip.io`)
+                    // is a rebinding shortcut to that address; judge it by the address.
+                    if let Some(ip) = leading_ipv4_literal(domain) {
+                        if is_internal_ipv4(ip) {
+                            warn!("Hostname encodes a private IPv4 address: {}", host);
+                            return Err(SecurityError::BlockedDomain(host.to_string()));
+                        }
+                    }
+                }
+                None => {}
             }
 
             // SECURITY NOTE: DNS rebinding attacks (where a domain resolves to a private IP
@@ -2836,6 +2776,58 @@ impl Default for ToolExecutionGuard {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// True when an IPv4 address is not routable on the public internet.
+/// Kept in lockstep with the web egress policy (`apps/web/lib/egress-policy.ts`),
+/// which is the reference list for what counts as internal.
+fn is_internal_ipv4(ip: Ipv4Addr) -> bool {
+    let [a, b, _, _] = ip.octets();
+    ip.is_loopback() // 127.0.0.0/8
+        || ip.is_private() // 10/8, 172.16/12, 192.168/16
+        || ip.is_link_local() // 169.254/16 — cloud metadata (IMDS)
+        || ip.is_broadcast()
+        || ip.is_documentation()
+        || a == 0 // 0.0.0.0/8 — "this network"; most stacks route it to the local host
+        || (a == 100 && (64..=127).contains(&b)) // 100.64/10 CGNAT — carrier and mesh-VPN peers
+        || a >= 224 // 224/4 multicast + 240/4 reserved
+}
+
+/// True when an IPv6 address is not routable on the public internet. IPv4 riding
+/// inside IPv6 (mapped, compatible, or NAT64) is judged as the IPv4 address it carries,
+/// so `::ffff:169.254.169.254` cannot smuggle a metadata request past the guard.
+fn is_internal_ipv6(ip: Ipv6Addr) -> bool {
+    if let Some(v4) = ip.to_ipv4() {
+        return is_internal_ipv4(v4);
+    }
+    let seg = ip.segments();
+    if seg[0] == 0x0064 && seg[1] == 0xff9b {
+        let v4 = Ipv4Addr::new(
+            (seg[6] >> 8) as u8,
+            (seg[6] & 0xff) as u8,
+            (seg[7] >> 8) as u8,
+            (seg[7] & 0xff) as u8,
+        );
+        return is_internal_ipv4(v4);
+    }
+    ip.is_loopback()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || (seg[0] & 0xfe00) == 0xfc00 // fc00::/7 unique local
+        || (seg[0] & 0xffc0) == 0xfe80 // fe80::/10 link-local
+}
+
+/// Reads a dotted quad off the front of a hostname (`10.0.0.1.nip.io`), if present.
+fn leading_ipv4_literal(domain: &str) -> Option<Ipv4Addr> {
+    let mut labels = domain.split('.');
+    let quad = [
+        labels.next()?,
+        labels.next()?,
+        labels.next()?,
+        labels.next()?,
+    ]
+    .join(".");
+    quad.parse().ok()
 }
 
 #[cfg(test)]
@@ -3642,5 +3634,76 @@ mod tests {
             guard.get_allowed_paths().is_empty(),
             "removing the final Allowed Directory must clear the live guard"
         );
+    }
+
+    #[test]
+    fn validate_url_rejects_every_internal_ipv4_range() {
+        let guard = ToolExecutionGuard::new();
+        for url in [
+            "http://127.0.0.1/",
+            "http://10.0.0.5/",
+            "http://172.20.1.1/",
+            "http://192.168.1.1/",
+            "http://169.254.169.254/latest/meta-data/",
+            // Ranges the previous string-prefix guard let through.
+            "http://100.100.100.200/",
+            "http://100.64.0.1/",
+            "http://0.1.2.3/",
+            "http://224.0.0.1/",
+            "http://240.0.0.1/",
+            "http://255.255.255.255/",
+        ] {
+            assert!(
+                matches!(
+                    guard.validate_url(url),
+                    Err(SecurityError::BlockedDomain(_))
+                ),
+                "{url} must be rejected as an internal address"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_url_rejects_alternate_encodings_of_internal_addresses() {
+        let guard = ToolExecutionGuard::new();
+        for url in [
+            "http://2130706433/",
+            "http://0x7f000001/",
+            "http://[::1]/",
+            "http://[::]/",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
+            "http://[fd12:3456::1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[64:ff9b::a9fe:a9fe]/",
+            "http://10.0.0.1.nip.io/",
+        ] {
+            assert!(
+                matches!(
+                    guard.validate_url(url),
+                    Err(SecurityError::BlockedDomain(_))
+                ),
+                "{url} must be rejected as an internal address"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_url_allows_public_hosts() {
+        let guard = ToolExecutionGuard::new();
+        for url in [
+            "https://api.agiworkforce.com/v1/models",
+            "https://8.8.8.8/",
+            "https://99.99.99.99/",
+            // `fcc.gov`/`fdic.gov` were collateral damage of the `fc`/`fd` ULA prefix test.
+            "https://fcc.gov/",
+            "https://fdic.gov/",
+            "https://[2606:4700::1111]/",
+        ] {
+            assert!(
+                guard.validate_url(url).is_ok(),
+                "{url} must reach the public internet"
+            );
+        }
     }
 }
