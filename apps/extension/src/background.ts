@@ -14,13 +14,7 @@
 //   • Bridge calls execute a turn but do not transfer ownership or persistence;
 //     Chrome remains the sole owner of its browser-scoped conversation records.
 
-import type {
-  ExtensionMessage,
-  ExtensionResponse,
-  ConnectionStatus,
-  RunPageAction,
-  ScheduledTask,
-} from './types';
+import type { ExtensionMessage, ExtensionResponse, ConnectionStatus, ScheduledTask } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
@@ -77,17 +71,6 @@ import {
 } from './features/background/scheduled-task-cancellation';
 import { publishAuthorizedScheduledTaskNotification } from './features/background/scheduled-task-notifications';
 import { getPlatformPrompt } from './platform-prompts';
-// Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
-// extension's existing `RunPageAction` machinery. The package's runtime
-// (Playwright-based) is NOT bundled — only types travel through this
-// import. See `browserTool.ts` for action-coverage notes (16 Computer Use
-// actions; 15 implementable in content-script context, `zoom` is N/A).
-import {
-  computerUseToPageActions,
-  browserActionToPageActions,
-  type ComputerUseAction,
-  type BrowserAction,
-} from './browserTool';
 import { migrateAutofillProfile } from './features/content/autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
@@ -102,6 +85,7 @@ import {
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   ORIGIN_EXTENSION_PAGE,
+  SITE_ALLOWLIST_STORAGE_KEY,
   isTrustedExtensionPageSender,
   normalizeWebMCPToolsUpdate,
   resolveMessageTargetTabId,
@@ -2555,17 +2539,17 @@ async function executeScheduledTask(
 // DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
-  .get('agi_site_allowlist')
+  .get(SITE_ALLOWLIST_STORAGE_KEY)
   .then((res) => {
-    const list = res['agi_site_allowlist'];
+    const list = res[SITE_ALLOWLIST_STORAGE_KEY];
     if (Array.isArray(list)) {
       siteAllowlistCache = new Set(list as string[]);
     }
   })
   .catch(() => {});
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes['agi_site_allowlist']) return;
-  const next = changes['agi_site_allowlist'].newValue;
+  if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
+  const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
   const lease = computerUseRuns.getActive();
   if (!lease) return;
@@ -5521,60 +5505,17 @@ chrome.runtime.onSuspend.addListener(() => {
   }
 });
 
-/**
- * Public bridge: translate an array of `@agiworkforce/browser-tool`
- * `BrowserAction`s OR Anthropic Computer Use actions into the extension's
- * native `RunPageAction[]` plan. Exposed for the side panel and external
- * MCP-style entrypoints. Returns the planned step list; the caller is
- * responsible for sending `RUN_PAGE_ACTIONS` to the active tab.
- */
-export function planActionsFromBrowserTool(
-  actions: ReadonlyArray<BrowserAction | ComputerUseAction>,
-): RunPageAction[] {
-  const plan: RunPageAction[] = [];
-  for (const action of actions) {
-    const steps = isComputerUseKind(action.kind)
-      ? computerUseToPageActions(action as ComputerUseAction)
-      : browserActionToPageActions(action as BrowserAction);
-    for (const step of steps) {
-      plan.push({
-        id: step.id,
-        type: step.type,
-        selector: step.selector ?? null,
-        value: step.value ?? null,
-        delay: step.delay ?? null,
-      });
-    }
-  }
-  return plan;
-}
-
-const COMPUTER_USE_KINDS = new Set<string>([
-  'screenshot',
-  'left_click',
-  'right_click',
-  'middle_click',
-  'double_click',
-  'triple_click',
-  'mouse_move',
-  'key',
-  'type',
-  'scroll',
-  'hold_key',
-  'wait',
-  'left_mouse_down',
-  'left_mouse_up',
-  'cursor_position',
-  'zoom',
-]);
-
-function isComputerUseKind(kind: string): boolean {
-  // 'type' / 'wait' / 'screenshot' overlap between the two action sets;
-  // we treat them as Computer Use because that's the broader vocabulary
-  // (Computer Use's 'type' takes the same shape as the package's 'type'
-  // when no `coordinate` is supplied).
-  return COMPUTER_USE_KINDS.has(kind);
-}
+// Removed 2026-08-09 (ExecutionPlan #9): `planActionsFromBrowserTool` and the
+// `browserTool` action bridge it wrapped. The bridge had no caller anywhere in
+// the extension — the computer-use agent drives the page through `cdpDriver`,
+// not through `RUN_PAGE_ACTIONS` — and most of the step types it emitted
+// (screenshot, right_click, double_click, triple_click, execute_script,
+// snapshot, wait) were never implemented by the content script's
+// `executePlannedAction` switch. Narrowing `ALLOWED_SHORTCUT_ACTION_TYPES` to
+// the switch made every plan it could produce fail the save/replay gate, so
+// keeping it exported would only have advertised a bridge guaranteed to be
+// rejected. Recover from git history if the bridge is ever needed; it must land
+// with matching `executePlannedAction` cases and allowlist entries.
 
 // Export for testing
 export { state, handleMessage, checkDesktopConnection };
