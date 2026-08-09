@@ -311,7 +311,7 @@ mod mcp_integration_tests {
         // in this file touches HOME today, but this keeps future additions
         // safe (mirrors core::mcp::config::tests::DOTFILE_ENV_LOCK).
         static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap();
+        let env_guard = ENV_LOCK.lock().unwrap();
 
         let temp_home = tempfile::tempdir().expect("failed to create tempdir");
         let dotfile_dir = temp_home.path().join(".agiworkforce");
@@ -336,6 +336,13 @@ mod mcp_integration_tests {
             Some(val) => std::env::set_var("HOME", val),
             None => std::env::remove_var("HOME"),
         }
+
+        // Release before the first await. The lock exists only to serialise the
+        // HOME mutation above, which is now undone — holding a std MutexGuard
+        // across an await is what `clippy::await_holding_lock` refuses, and it
+        // would also block any future HOME-touching test in this binary for the
+        // whole duration of a real MCP server connect.
+        drop(env_guard);
 
         let server_config = config
             .mcp_servers
