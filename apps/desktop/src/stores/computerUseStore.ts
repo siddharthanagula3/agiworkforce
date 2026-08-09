@@ -797,13 +797,14 @@ export function subscribeToComputerUseEvents(): () => void {
     ),
   );
 
+  // Screen captures reach the frontend as `agi:screenshot` from the AGI UI
+  // executor (ui/events/frontend_events.rs); nothing has ever emitted a
+  // `computer_use:`-prefixed screenshot. The payload carries only the image,
+  // so the screen dimensions stay as `captureScreen` last measured them.
   unlisteners.push(
-    listen<ScreenCapture>('computer_use:screenshot', (event) => {
-      const capture = event.payload;
+    listen<{ screenshot: { imageBase64: string } }>('agi:screenshot', (event) => {
       useComputerUseStore.setState({
-        currentScreenshot: capture.image_data,
-        screenWidth: capture.width,
-        screenHeight: capture.height,
+        currentScreenshot: event.payload.screenshot.imageBase64,
       });
     }),
   );
