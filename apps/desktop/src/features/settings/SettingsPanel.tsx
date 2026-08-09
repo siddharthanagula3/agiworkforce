@@ -12,6 +12,7 @@ import {
   type SettingsNavKey,
 } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2 } from 'lucide-react';
 
@@ -153,6 +154,11 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
+  // Dialog chrome (title, search placeholder, footer buttons) reads the shared
+  // corpus. The nav labels it filters do not: they are hardcoded English in
+  // `SETTINGS_NAV` (packages/ui/ui/src/settings-nav.ts), so the search box
+  // matches English text whatever the locale says on the placeholder.
+  const { t } = useTranslation();
   const hasInitializedOpenStateRef = useRef(false);
   const connectedConnectorCount = useConnectorsStore((state) => state.connectedIds.length);
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
@@ -812,7 +818,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               aria-label="Settings sections"
             >
               <DialogHeader className="px-1 pb-4">
-                <DialogTitle className="text-lg font-semibold">Settings</DialogTitle>
+                <DialogTitle className="text-lg font-semibold">{t('settings:title')}</DialogTitle>
                 <DialogDescription className="sr-only">
                   Search and configure AGI Workforce preferences
                 </DialogDescription>
@@ -831,7 +837,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                     setNavQuery(event.target.value);
                     setActiveSearchResult(null);
                   }}
-                  placeholder="Search"
+                  placeholder={t('search')}
                   className="h-10 w-full rounded-lg border border-transparent bg-background/70 py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:border-border focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                 />
               </label>
@@ -998,14 +1004,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       </div>
                     )}
                     <Button variant="outline" onClick={() => void requestClose()} disabled={isBusy}>
-                      Cancel
+                      {t('cancel')}
                     </Button>
                     <Button
                       onClick={() => void handleSaveSettings()}
                       disabled={isBusy || !hasUnsavedChanges}
                       isLoading={isSaving}
                     >
-                      {isSaving ? 'Saving…' : 'Save Changes'}
+                      {isSaving ? t('settings:saving') : t('settings:saveChanges')}
                     </Button>
                   </>
                 ) : (
@@ -1014,7 +1020,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       Changes in this section apply immediately.
                     </p>
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-                      Close
+                      {t('close')}
                     </Button>
                   </>
                 )}

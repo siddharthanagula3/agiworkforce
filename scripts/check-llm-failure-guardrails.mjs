@@ -190,6 +190,26 @@ function isAllowedByAnnotation(lines, lineNo) {
   return false;
 }
 
+/**
+ * True when a line is entirely a comment.
+ *
+ * Deliberately line-level and conservative: it recognises `//`, a `/* … *​/` that
+ * opens and closes on the line, and the ` * ` continuation of a block comment.
+ * It does NOT track whether an earlier line opened a block, so `foo(); // note`
+ * is code (correct) and a bare block-comment body line is a comment (correct).
+ * Anything ambiguous stays a violation, because a checker that guesses wrong in
+ * the permissive direction is how a real skipped test gets through.
+ */
+function isCommentLine(line) {
+  const trimmed = line.trim();
+  return (
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('*') ||
+    trimmed.startsWith('/*') ||
+    trimmed.startsWith('#')
+  );
+}
+
 function collectPatternViolations(files, patterns, { productionOnly = false } = {}) {
   const violations = [];
   for (const file of files) {
@@ -206,6 +226,12 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
       while ((match = regex.exec(text)) !== null) {
         const lineNo = lineForOffset(text, match.index);
         if (isAllowedByAnnotation(lines, lineNo)) continue;
+        // A match inside a comment is prose, not code. This fired on a docstring
+        // that explained a suite had PREVIOUSLY guarded all 15 of its tests with
+        // `test.skip(...)` — a file whose whole point was removing them. Blaming
+        // the fix for describing the bug it removed teaches people to delete the
+        // explanation instead, which is the opposite of what this check wants.
+        if (isCommentLine(lines[lineNo - 1] ?? '')) continue;
         violations.push(`${relativePath}:${lineNo} ${label}`);
       }
     }

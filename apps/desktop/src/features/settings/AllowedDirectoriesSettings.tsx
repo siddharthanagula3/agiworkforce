@@ -2,6 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { exists } from '@tauri-apps/plugin-fs';
 import { AlertCircle, FolderPlus, FolderX } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { isTauri } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -21,6 +22,12 @@ import { Label } from '@/components/ui/Label';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 
 export function AllowedDirectoriesSettings() {
+  // Heading and the add/cancel/remove actions are the only strings here that
+  // exist in the shared corpus. The security explainer, "Browse", "Allowed
+  // Paths (N)" and the empty state have no keys in
+  // packages/ui/i18n/locales, so this panel still reads part English in a
+  // non-English locale until those keys are added there.
+  const { t } = useTranslation();
   // Use individual selectors to prevent re-renders on unrelated state changes
   const allowedDirectories = useSettingsStore((state) => state.allowedDirectories);
   const addAllowedDirectory = useSettingsStore((state) => state.addAllowedDirectory);
@@ -98,7 +105,7 @@ export function AllowedDirectoriesSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">Allowed Directories</h3>
+        <h3 className="text-lg font-semibold mb-2">{t('settings:allowedDirectories')}</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Specify which directories the agent is allowed to access. This restricts file operations
           (read/write/delete) to these paths for security.
@@ -120,7 +127,7 @@ export function AllowedDirectoriesSettings() {
             />
           </div>
           <Button onClick={handleAddManualPath} disabled={!manualPath.trim()}>
-            Add
+            {t('add')}
           </Button>
           <Button variant="outline" onClick={handleBrowse}>
             <FolderPlus className="mr-2 h-4 w-4" />
@@ -188,7 +195,7 @@ export function AllowedDirectoriesSettings() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() => {
@@ -198,7 +205,7 @@ export function AllowedDirectoriesSettings() {
                 }
               }}
             >
-              Remove
+              {t('remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

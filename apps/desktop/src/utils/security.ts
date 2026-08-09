@@ -482,53 +482,13 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
   return { safe: true };
 }
 
-export const CSP_CONFIG = {
-  'default-src': ["'self'"],
-  // 'wasm-unsafe-eval' allows WebAssembly without full 'unsafe-eval'.
-  'script-src': ["'self'", "'wasm-unsafe-eval'"],
-  'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-  'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
-  'img-src': [
-    "'self'",
-    'data:',
-    'blob:',
-    'https://agiworkforce.com',
-    'https://www.agiworkforce.com',
-    'https://avatars.githubusercontent.com',
-    'https://lh3.googleusercontent.com',
-  ],
-  'connect-src': [
-    "'self'",
-    'https://agiworkforce.com',
-    'https://www.agiworkforce.com',
-    'https://api.agiworkforce.com',
-    'https://api.stripe.com',
-    'https://agiworkforce-signaling.fly.dev',
-    'wss://agiworkforce-signaling.fly.dev',
-    'http://localhost:11434',
-    'http://127.0.0.1:11434',
-  ],
-  'media-src': ["'self'", 'blob:'],
-  'object-src': ["'none'"],
-  'base-uri': ["'self'"],
-  'form-action': ["'self'"],
-  'frame-ancestors': ["'none'"],
-  'frame-src': ["'self'"],
-  'worker-src': ["'self'", 'blob:'],
-  'upgrade-insecure-requests': [],
-  'block-all-mixed-content': [],
-};
-
-export function generateCspHeader(): string {
-  return Object.entries(CSP_CONFIG)
-    .map(([directive, sources]) => {
-      if (sources.length === 0) {
-        return directive;
-      }
-      return `${directive} ${sources.join(' ')}`;
-    })
-    .join('; ');
-}
+// The renderer's Content-Security-Policy is not defined here. The three copies
+// that actually reach a browser are `src-tauri/tauri.conf.json` (packaged app),
+// `electron/config.ts` (Electron shell) and `vite.config.ts` (dev server); this
+// module used to carry a fourth, unreferenced copy that had already drifted
+// away from all three (no `https://js.stripe.com`, no `artifact:`, plus hosts
+// the live policies do not grant). Adopting it would have silently broken
+// Stripe and artifact rendering, so it was removed rather than resynced.
 
 // AUDIT-NEW-001 fix: Sanitize SVG content to prevent XSS attacks
 // SVG elements can contain malicious scripts via event handlers, javascript: URLs, etc.
