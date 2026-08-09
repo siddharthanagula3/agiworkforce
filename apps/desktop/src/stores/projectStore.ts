@@ -116,6 +116,12 @@ interface ProjectState {
 
   // Folder scope (like Claude Code's project folder)
   currentFolder: string | null;
+  /**
+   * MRU list that is no longer written to disk. No folder picker renders it
+   * yet, so persisting it implied a "recent folders" menu that does not exist.
+   * A legacy payload still merges its old value in once on hydration; nothing
+   * reads it. Persist it again alongside the UI that shows it.
+   */
   recentFolders: string[];
 
   // Actions - CRUD
@@ -861,7 +867,6 @@ export const useProjectStore = create<ProjectState>()(
               ),
             ),
             currentFolder: state.currentFolder,
-            recentFolders: state.recentFolders,
           };
         },
         migrate: (state) => state as ProjectState,

@@ -218,7 +218,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
       }),
       {
         name: 'connectors-store',
-        version: 4,
+        version: 5,
         migrate: (persistedState, version) => {
           if (version < 3)
             return {
@@ -230,16 +230,25 @@ export const useConnectorsStore = create<ConnectorsState>()(
               oauthStartedAt: {},
               _oauthTimers: {},
             };
-          if (version < 4)
-            return { ...(persistedState as ConnectorsState), oauthStartedAt: {}, _oauthTimers: {} };
+          if (version < 5)
+            return {
+              ...(persistedState as ConnectorsState),
+              pendingOAuth: {},
+              oauthStartedAt: {},
+              _oauthTimers: {},
+            };
           return persistedState as ConnectorsState;
         },
+        // `pendingOAuth`/`oauthStartedAt` track a browser round-trip that cannot
+        // outlive the process — the timeout timer that would resolve them lives
+        // only in `_oauthTimers` — so rehydrating them left a connector stuck
+        // mid-flow with nothing left to time it out. No view selects either
+        // field. Unlike the `connectorsStore.ts` twin this chain clears them in
+        // every arm (`< 3` and `< 5`), so no stored version can skip the reset.
         partialize: (state) => ({
           connectedIds: state.connectedIds,
           loading: state.loading,
           error: state.error,
-          pendingOAuth: state.pendingOAuth,
-          oauthStartedAt: state.oauthStartedAt,
         }),
       },
     ),

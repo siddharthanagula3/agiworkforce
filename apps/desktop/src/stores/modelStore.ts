@@ -827,14 +827,18 @@ export const useModelStore = create<ModelState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        // The selection and `favorites` survive a restart; the composer
+        // settings below do not. The composer's thinking switch
+        // is owned by the shared unified-chat model store (`thinkingEnabled`,
+        // read by ThinkingControl and forwarded as `thinkingMode` in
+        // TauriRuntime); this store's `thinkingModeEnabled`/`thinkingBudget`
+        // pair and its `speedQualityMode` have no control and no reader, and
+        // `recentModels` has no picker to appear in. Persisting them promised
+        // remembered composer settings that nothing restores.
         partialize: (state) => ({
           selectedModel: state.selectedModel,
           selectedProvider: state.selectedProvider,
           favorites: state.favorites,
-          recentModels: state.recentModels,
-          thinkingModeEnabled: state.thinkingModeEnabled,
-          thinkingBudget: state.thinkingBudget,
-          speedQualityMode: state.speedQualityMode,
         }),
         migrate: (persistedState: unknown, _version: number) => {
           const state = persistedState as Partial<ModelState> | null;

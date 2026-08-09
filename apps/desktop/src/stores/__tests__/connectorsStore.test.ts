@@ -24,6 +24,9 @@ async function getMcpClientMock(): Promise<McpClientMocks> {
   return McpClient as unknown as McpClientMocks;
 }
 
+// Mirrors the private `CONNECTORS_PERSIST_KEY` in the store under test.
+const CONNECTORS_PERSIST_KEY = 'agiworkforce-connectors-store';
+
 function resetConnectorsStore() {
   Object.values(useConnectorsStore.getState()._oauthTimers).forEach((timerId) => {
     if (timerId !== undefined) {
@@ -40,6 +43,7 @@ function resetConnectorsStore() {
     _oauthTimers: {},
   });
   window.localStorage.removeItem('connectors-store');
+  window.localStorage.removeItem(CONNECTORS_PERSIST_KEY);
 }
 
 describe('connectorsStore', () => {
@@ -106,5 +110,74 @@ describe('connectorsStore', () => {
     const state = useConnectorsStore.getState();
     expect(state.connectedIds).not.toContain('gmail');
     expect(state.error['gmail']).toMatch(/not active/i);
+  });
+
+  describe('in-flight OAuth state is not carried across restarts', () => {
+    it('keeps the pending flags out of the persisted payload', async () => {
+      await useConnectorsStore.getState().connect('gmail');
+      expect(useConnectorsStore.getState().pendingOAuth['gmail']).toBe(true);
+
+      const written = window.localStorage.getItem(CONNECTORS_PERSIST_KEY);
+      expect(written).not.toBeNull();
+      const persisted = JSON.parse(written as string) as { state: Record<string, unknown> };
+      expect(persisted.state).not.toHaveProperty('pendingOAuth');
+      expect(persisted.state).not.toHaveProperty('oauthStartedAt');
+    });
+
+    // `migrate` is a chain of early returns, so every storage version that can
+    // still be on disk has to be exercised: a payload at v3 leaves through the
+    // `< 4` arm, v4/v5 through `< 6` and v6 through `< 7`, and none of them ever
+    // reaches the tail. The timeout timer that would have resolved these flows
+    // died with the process that wrote them, so rehydrating any of these
+    // verbatim left gmail waiting for a callback forever.
+    it.each([3, 4, 5, 6, 7])(
+      'clears a stuck pending flow left behind by storage version %i',
+      async (version) => {
+        window.localStorage.setItem(
+          CONNECTORS_PERSIST_KEY,
+          JSON.stringify({
+            version,
+            state: {
+              connectedIds: [],
+              loading: {},
+              error: {},
+              pendingOAuth: { gmail: true },
+              oauthStartedAt: { gmail: 1 },
+              supportedConnectorIds: ['gmail'],
+            },
+          }),
+        );
+
+        await useConnectorsStore.persist.rehydrate();
+
+        const state = useConnectorsStore.getState();
+        expect(state.pendingOAuth).toEqual({});
+        expect(state.oauthStartedAt).toEqual({});
+      },
+    );
+
+    it('keeps the rest of a v7 payload intact while clearing the pending flow', async () => {
+      window.localStorage.setItem(
+        CONNECTORS_PERSIST_KEY,
+        JSON.stringify({
+          version: 7,
+          state: {
+            connectedIds: ['gmail'],
+            loading: {},
+            error: {},
+            pendingOAuth: { gmail: true },
+            oauthStartedAt: { gmail: 1 },
+            supportedConnectorIds: ['gmail'],
+          },
+        }),
+      );
+
+      await useConnectorsStore.persist.rehydrate();
+
+      const state = useConnectorsStore.getState();
+      expect(state.pendingOAuth).toEqual({});
+      expect(state.connectedIds).toContain('gmail');
+      expect(state.supportedConnectorIds).toContain('gmail');
+    });
   });
 });

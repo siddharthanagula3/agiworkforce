@@ -88,4 +88,40 @@ describe('toolStore approval audit trail', () => {
     expect(state.pendingApprovals[0]?.status).toBe('pending');
     expect(state.approvalTimeoutTimers.has(baseApproval.id)).toBe(false);
   });
+
+  describe('standing auto-approvals never come off disk', () => {
+    it('keeps trusted workflows out of the persisted payload', () => {
+      useToolStore.getState().setTrustedWorkflow({
+        hash: 'wf-hash-1',
+        createdAt: new Date(),
+        actionSignatures: ['delete_file'],
+      });
+      expect(useToolStore.getState().isActionTrusted('wf-hash-1', 'delete_file')).toBe(true);
+
+      const written = window.localStorage.getItem('tool-storage');
+      expect(written).not.toBeNull();
+      const persisted = JSON.parse(written as string) as { state: Record<string, unknown> };
+      expect(persisted.state).not.toHaveProperty('trustedWorkflows');
+    });
+
+    it('drops a trust grant left behind by an older storage version', async () => {
+      window.localStorage.setItem(
+        'tool-storage',
+        JSON.stringify({
+          version: 1,
+          state: {
+            trustedWorkflows: {
+              'wf-hash-1': { hash: 'wf-hash-1', actionSignatures: ['delete_file'] },
+            },
+            filters: { fileOperations: [], terminalStatus: [], toolNames: [] },
+          },
+        }),
+      );
+
+      await useToolStore.persist.rehydrate();
+
+      expect(useToolStore.getState().trustedWorkflows).toEqual({});
+      expect(useToolStore.getState().isActionTrusted('wf-hash-1', 'delete_file')).toBe(false);
+    });
+  });
 });

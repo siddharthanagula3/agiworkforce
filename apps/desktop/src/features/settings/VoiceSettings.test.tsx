@@ -92,6 +92,8 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     mocks.voiceMode.capabilities = null;
     mocks.voiceMode.globalPttActive = false;
     mocks.voiceInput.voiceProvider = 'local_whisper';
+    mocks.voiceInput.inputDeviceId = null;
+    mocks.voiceInput.inputDeviceLabel = null;
     mocks.api.voiceCheckLocalWhisper.mockResolvedValue(false);
   });
 
@@ -179,5 +181,24 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     expect(screen.getByText('Microphone')).toBeInTheDocument();
     expect(screen.getByText('System default')).toBeInTheDocument();
     expect(screen.getByText(/falls back to the system default/i)).toBeInTheDocument();
+  });
+
+  it('names the saved microphone when device enumeration cannot see it', () => {
+    // No `navigator.mediaDevices` here, which is exactly the shipped state
+    // before mic permission is granted: the saved id matches no enumerated
+    // device, so without an entry of its own the picker showed a blank value.
+    mocks.voiceMode.capabilities = capabilitiesWith(false);
+    mocks.voiceInput.inputDeviceId = 'mic-42';
+    mocks.voiceInput.inputDeviceLabel = 'Blue Yeti';
+    render(<VoiceSettings />);
+    expect(screen.getByText('Blue Yeti (unavailable)')).toBeInTheDocument();
+  });
+
+  it('still offers the saved microphone when its label was never captured', () => {
+    mocks.voiceMode.capabilities = capabilitiesWith(false);
+    mocks.voiceInput.inputDeviceId = 'mic-42';
+    mocks.voiceInput.inputDeviceLabel = null;
+    render(<VoiceSettings />);
+    expect(screen.getByText('Saved microphone (unavailable)')).toBeInTheDocument();
   });
 });

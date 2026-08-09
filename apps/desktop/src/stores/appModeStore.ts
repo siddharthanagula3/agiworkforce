@@ -4,8 +4,9 @@
  * Foundation store for the Dual-Mode Architecture (Local vs Cloud).
  * All mode-gated features read from this store.
  *
- * Persists: mode, hasOnboarded, hasSelectedMode
- * Not persisted: isOnline (always derived from navigator.onLine at startup)
+ * Persists: mode, hasSelectedMode
+ * Not persisted: isOnline (always derived from navigator.onLine at startup),
+ * hasOnboarded (no consumer — see the partialize note below)
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
@@ -116,9 +117,13 @@ export const useAppModeStore = create<AppModeState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        // `hasOnboarded` is deliberately absent: the first-run gate reads
+        // `hasSelectedMode` (App.tsx) and the wizard marks completion on the UI
+        // store's `onboardingCompleted`, so nothing consumes this flag. It is
+        // still accepted from legacy payloads by the sanitizer above so an
+        // existing install hydrates unchanged.
         partialize: (state) => ({
           mode: state.mode,
-          hasOnboarded: state.hasOnboarded,
           hasSelectedMode: state.hasSelectedMode,
         }),
         migrate: (persistedState: unknown, _version: number) =>

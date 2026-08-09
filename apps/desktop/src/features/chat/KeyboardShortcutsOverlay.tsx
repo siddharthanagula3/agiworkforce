@@ -1,8 +1,9 @@
 /**
- * KeyboardShortcutsOverlay — full-screen cheatsheet accessible via Cmd+/ or Ctrl+/.
+ * KeyboardShortcutsOverlay — full-screen cheatsheet.
  *
- * Shows all keyboard shortcuts grouped by category. Triggered by a global
- * keydown listener registered in AppLayout. Closes on Escape or backdrop click.
+ * Shows all keyboard shortcuts grouped by category. Its only mount site is the
+ * "View all shortcuts" button on the Keybindings settings page; no key opens it
+ * (there is no Cmd+/ listener anywhere). Closes on Escape or backdrop click.
  *
  * Replaces KeyboardShortcutsDialog with a more comprehensive view that reads
  * live from DEFAULT_SHORTCUTS and respects custom keybindings.
@@ -203,9 +204,10 @@ export function KeyboardShortcutsOverlay({
     };
   }, [open, handleKeyDown]);
 
-  // Determine which dynamic categories to show (skip 'chat' — covered inline)
-  const dynamicCategories = Array.from(new Set(DEFAULT_SHORTCUTS.map((s) => s.category))).filter(
-    (cat) => cat !== 'chat',
+  // Chat keys are listed by INLINE_SECTIONS above: DEFAULT_SHORTCUTS no longer
+  // carries a 'chat' category, so every category it does carry is rendered.
+  const dynamicCategories = Array.from(
+    new Set(DEFAULT_SHORTCUTS.map((s) => s.category)),
   ) as ShortcutDefinition['category'][];
 
   return (
