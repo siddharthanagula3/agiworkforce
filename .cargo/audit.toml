@@ -45,12 +45,6 @@ ignore = [
     # The unsoundness only affects IterMut which we don't use directly
     "RUSTSEC-2026-0002", # lru - unsound IterMut (mysql_async dependency, not used in our code)
 
-    # rustls-webpki v0.101.7 - CRL distribution point matching bug
-    # Transitive from Tauri's older rustls dependency chain, pinned to 0.101.x
-    # v0.103.x updated to 0.103.10 (patched), but 0.101.x has no patch available
-    # Low impact: requires compromised CA to exploit
-    "RUSTSEC-2026-0049", # rustls-webpki CRL matching (Tauri transitive, low impact)
-
     # FIX-018 (Sprint 3) — transitive deps from optional `remote-databases`
     # feature (mongodb, mysql_async). The feature is off by default and
     # gated behind a build flag; users who enable it accept these
@@ -61,14 +55,30 @@ ignore = [
     "RUSTSEC-2023-0071", # rsa Marvin Attack (mongodb / mysql_async transitive, optional feature)
     "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained (mysql_async → mysql-common-derive transitive, optional feature)
 
-    # rustls-webpki — both 0.101.x and the older 0.103.x branches still in
-    # the dep tree have name-constraint and CRL-panic advisories without
-    # patched releases. We're already on the latest 0.103.13 for the
-    # primary branch; the older 0.101.x is pinned by Tauri's transitive
-    # deps. Tracked separately above (RUSTSEC-2026-0049 covers CRL).
-    "RUSTSEC-2026-0098", # rustls-webpki URI name constraints accepted incorrectly
-    "RUSTSEC-2026-0099", # rustls-webpki name constraints accepted for wildcard certs
-    "RUSTSEC-2026-0104", # rustls-webpki reachable panic in CRL parsing
+    # COVERAGE BOUNDARY — read this before trusting the CI advisory gate.
+    #
+    # The three entries above are VULNERABILITY class, not maintenance warnings,
+    # and they are suppressed on provenance ("optional feature, off by default")
+    # — the same shape of reasoning that hid the rustls-webpki line for months
+    # under a claim about Tauri that turned out to be false. The difference is
+    # that this one is true and checkable: `remote-databases` is not in the
+    # default feature set, so a stock build cannot reach mongodb or mysql_async.
+    #
+    # The part that is NOT covered, stated plainly: `deny.toml` sets
+    # `[graph] all-features = false`, so the blocking CI step never walks the
+    # remote-databases, ocr, local-llm, webrtc-support or local-whisper edges at
+    # all. Anyone who ships with one of those features enabled is building
+    # against an unaudited graph, and these ignores are not what protects them —
+    # nothing does. Turning `all-features` on is the fix and is tracked
+    # separately, because it surfaces a backlog that has to be triaged rather
+    # than bulk-ignored, and bulk-ignoring it here is precisely how this file
+    # got into the state the rustls entry describes.
+
+    # No rustls-webpki entry: the 0.101.x line (RUSTSEC-2026-0049/0098/0099/0104)
+    # was never pinned by Tauri as this list used to claim — it came in through
+    # first-party `oauth2`, which now builds against the platform TLS stack, so
+    # the only rustls-webpki left is the patched 0.103.13. Re-adding an ignore
+    # here would hide a vulnerable TLS verifier, not a maintenance warning.
 
     # New transitive advisories surfaced after Sprint 3 (May 2026).
     # All five are unmaintained-status or narrow-impact unsoundness in

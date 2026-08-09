@@ -312,12 +312,22 @@ jobs:
         env:
           CARGO_HOME: ~/.cargo
 
+      - name: Dependency vulnerabilities (Rust) — blocking
+        if: steps.scope.outputs.native == 'true'
+        # Three real rustls-webpki TLS advisories rode into main because the
+        # only advisories step was continue-on-error and the audit ignore list
+        # blamed them on Tauri. RUSTSEC vulnerabilities now fail the job; the
+        # maintenance classes stay allowed here and are reported by the step
+        # below — bundling the two is what made a vulnerability invisible.
+        run: cargo deny check advisories --allow unmaintained --allow unsound --allow notice
+        env:
+          CARGO_HOME: ~/.cargo
+
       - name: Dependency advisories (Rust) — non-blocking warning-policy debt
         if: steps.scope.outputs.native == 'true'
-        # Final-lock cargo audit reports zero vulnerabilities. cargo-deny
-        # advisories remains nonblocking only because the current policy rejects
-        # pre-existing unmaintained/yanked warnings tracked as
-        # RUST-DEPENDENCY-ADVISORIES-01 in docs/agent-context/known-flaws.md.
+        # Unmaintained/unsound/yanked warnings on transitive deps we cannot move
+        # past upstream, tracked as RUST-DEPENDENCY-ADVISORIES-01 in
+        # docs/agent-context/known-flaws.md. Reported, never blocking.
         run: cargo deny check advisories
         continue-on-error: true
         env:
