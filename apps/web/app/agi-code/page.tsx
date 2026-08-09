@@ -9,7 +9,7 @@ import {
   FlagshipHero,
   SurfaceIndex,
 } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Code | CLI + VS Code developer stack',
@@ -54,8 +54,8 @@ export default function AgiCodePage() {
                 'Privacy modes',
                 'Offline with local models',
               ],
-              platforms: 'macOS · Linux',
-              status: 'Developer preview',
+              platforms: 'macOS · Linux · Windows',
+              status: SURFACE_STATUS.cli,
               href: '/cli',
               frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
             },
@@ -72,7 +72,7 @@ export default function AgiCodePage() {
                 'Explicit handoffs',
               ],
               platforms: 'VS Code',
-              status: 'Developer preview',
+              status: SURFACE_STATUS.vscode,
               href: '/vscode-extension',
               frame: { variant: 'editor', title: 'AGI · VS Code', badge: '@agi' },
             },
@@ -154,9 +154,9 @@ export default function AgiCodePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring the agent to your repo."
-          body="The CLI and VS Code extension are coming soon. Get notified, request the VS Code preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
+          body="The CLI is released as v1.0.0. AGI in VS Code is coming soon — request the preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'See the CLI' },
             { href: '/get-started', label: 'Get Started' },
           ]}

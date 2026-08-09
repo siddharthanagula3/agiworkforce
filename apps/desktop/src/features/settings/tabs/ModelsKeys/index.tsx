@@ -5,16 +5,16 @@ import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
 import { invoke } from '@/lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
+import { Button } from '@/ui/Button';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
+} from '@/ui/Select';
+import { Switch } from '@/ui/Switch';
 
 const LazyCustomModelsSettings = lazy(() =>
   import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),

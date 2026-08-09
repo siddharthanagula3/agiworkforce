@@ -17,8 +17,8 @@
 
 import { useEffect, useRef } from 'react';
 import { Loader2, X } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
 import type { ArtifactDraft } from '@/stores/artifactStore';
 
 interface ArtifactDraftViewProps {

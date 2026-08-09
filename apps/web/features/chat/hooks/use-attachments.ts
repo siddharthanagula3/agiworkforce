@@ -73,9 +73,15 @@ export interface AttachmentPreview {
 }
 
 export interface UseAttachmentsOptions {
-  /** Maximum number of files allowed (default: 20) */
+  /** Maximum number of files allowed (default: `MAX_CHAT_ATTACHMENT_COUNT`, 10). */
   maxFiles?: number;
-  /** Maximum file size in bytes (default: 25 MiB · canonical, see `@agiworkforce/types` MAX_ATTACHMENT_BYTES). */
+  /**
+   * Maximum size of one file in bytes. Defaults to `MAX_CHAT_ATTACHMENT_BYTES`
+   * (12 MiB) — the same value `/api/uploads/presign` enforces, so an accepted
+   * file is one the server will actually take. `MAX_ATTACHMENT_BYTES` (25 MiB)
+   * in `@agiworkforce/types` is a different, larger bound and is not what this
+   * hook uses.
+   */
   maxFileSize?: number;
   /** Callback fired when a validation error occurs */
   onError?: (message: string) => void;

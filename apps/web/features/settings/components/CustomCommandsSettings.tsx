@@ -23,6 +23,17 @@ import { cn } from '@shared/lib/utils';
 
 const NAME_RE = /^[a-z0-9-]{2,32}$/;
 
+/**
+ * The placeholder `ChatComposerNew.resolveSlashCommand` actually substitutes.
+ *
+ * This UI used to document `{input}`. The composer only ever replaced
+ * `{{input}}`, so a template written from these instructions shipped the
+ * literal text `{input}` to the model. The token is declared once here and
+ * asserted against the composer by
+ * `__tests__/settings-store-fields-are-consumed.test.ts`.
+ */
+const INPUT_TOKEN = '{{input}}';
+
 interface FormErrors {
   name?: string;
   description?: string;
@@ -122,8 +133,9 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
           <DialogDescription>
             Custom commands appear in the slash menu when you type{' '}
             <code className="rounded bg-muted px-1 text-xs">/</code> in the chat composer. Use{' '}
-            <code className="rounded bg-muted px-1 text-xs">{'{input}'}</code> in your template to
-            insert what you type after the command.
+            <code className="rounded bg-muted px-1 text-xs">{INPUT_TOKEN}</code> in your template to
+            insert what you type after the command; without it, whatever you type is appended to the
+            end.
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +205,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
             <Label htmlFor="cmd-template" className="text-sm">
               Template{' '}
               <span className="text-muted-foreground text-xs">
-                (use <code className="rounded bg-muted px-1">{'{input}'}</code> for user text)
+                (use <code className="rounded bg-muted px-1">{INPUT_TOKEN}</code> for user text)
               </span>
             </Label>
             <Textarea
@@ -203,7 +215,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
                 setTemplate(e.target.value);
                 revalidate(name, description, e.target.value);
               }}
-              placeholder={`Summarize the following in 3 bullet points:\n\n{input}`}
+              placeholder={`Summarize the following in 3 bullet points:\n\n${INPUT_TOKEN}`}
               rows={5}
               hasError={!!errors.template}
               errorMessageId={errors.template ? 'cmd-template-error' : undefined}

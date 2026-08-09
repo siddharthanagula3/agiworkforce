@@ -189,7 +189,13 @@ export function isValidPlanTier(tier: string | null | undefined): tier is string
 export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
   tier: BillingPlanTier;
   interval: BillingInterval;
-  priceCents: number;
+  /**
+   * Published list price in cents, or `null` when the tier publishes none.
+   * Enterprise Prices can be registered here (STRIPE_PRICE_ENTERPRISE_*) but the
+   * catalog holds no amount for them — the contract does — so this is null
+   * rather than the `0` that used to read as a free subscription.
+   */
+  priceCents: number | null;
   usageBudgetCents: number;
 } | null {
   if (!priceId) {

@@ -31,6 +31,81 @@ const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+/**
+ * ENT-004 — audit export.
+ *
+ * `windowEnd` pins the upper bound of the export so OFFSET paging is stable:
+ * `enterprise_audit_events` is append-only, so without a pinned end a row
+ * inserted between page 1 and page 2 shifts every later offset by one and the
+ * export silently drops a row. The first page echoes the bound it used in
+ * `X-Audit-Export-Window-End`; a client paging further MUST send it back as
+ * `to`. `X-Audit-Export-Next-Offset` is present only when more rows remain.
+ */
+const auditExportQuerySchema = z.object({
+  format: z.enum(['jsonl', 'csv']).default('jsonl'),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  limit: z.coerce.number().int().min(1).max(5000).default(1000),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const AUDIT_EXPORT_COLUMNS = [
+  'id',
+  'organization_id',
+  'actor_user_id',
+  'surface',
+  'action',
+  'resource_type',
+  'resource_id',
+  'outcome',
+  'severity',
+  'metadata',
+  'created_at',
+] as const;
+
+interface AuditEventRow {
+  id: string;
+  organization_id: string;
+  actor_user_id: string | null;
+  surface: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  outcome: string;
+  severity: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/**
+ * Render one CSV cell.
+ *
+ * Neutralises spreadsheet formula injection: `actor_user_id`, `action` and
+ * `metadata` are attacker-influenced strings, and a cell beginning `=`, `+`,
+ * `-`, `@` or a control character is executed as a formula when the exported
+ * file is opened in Excel/Sheets. A leading apostrophe forces the cell to text.
+ */
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const raw = typeof value === 'string' ? value : JSON.stringify(value);
+  const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return `"${guarded.replace(/"/g, '""')}"`;
+}
+
+function toCsv(rows: AuditEventRow[], includeHeader: boolean): string {
+  const lines: string[] = [];
+  if (includeHeader) lines.push(AUDIT_EXPORT_COLUMNS.join(','));
+  for (const row of rows) {
+    lines.push(AUDIT_EXPORT_COLUMNS.map((column) => csvCell(row[column])).join(','));
+  }
+  // Trailing newline so concatenated pages stay valid CSV.
+  return lines.length > 0 ? `${lines.join('\n')}\n` : '';
+}
+
+function toJsonl(rows: AuditEventRow[]): string {
+  return rows.map((row) => JSON.stringify(row)).join('\n') + (rows.length > 0 ? '\n' : '');
+}
+
 const supportCaseSchema = z.object({
   subject: z.string().trim().min(1).max(160),
   description: z.string().trim().min(1).max(5000),
@@ -103,6 +178,45 @@ function mapPolicy(row: EnterprisePolicyRow | null, organizationId: string) {
     metadata: row.metadata ?? {},
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Read the org's admin policy row, or `null` when the org has never had one
+ * written. Shared by GET /policy and the audit export so the export enforces
+ * exactly the flag the policy endpoint reports.
+ */
+async function fetchPolicyRow(
+  db: CloudDbClient,
+  organizationId: string,
+): Promise<EnterprisePolicyRow | null> {
+  const { data, error } = await db
+    .from('organization_admin_policies')
+    .select(
+      `
+        organization_id,
+        default_privacy_mode,
+        allowed_privacy_modes,
+        allow_managed_compute,
+        require_local_to_byok_preview,
+        chat_sync_surfaces,
+        allow_cli_cloud_sync,
+        allow_vscode_cloud_sync,
+        allow_chrome_cloud_sync,
+        audit_export_enabled,
+        retention_days,
+        metadata,
+        updated_at
+      `,
+    )
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, orgId: organizationId }, 'Failed to fetch enterprise policy');
+    throw new AppError('Failed to fetch policy', 500);
+  }
+
+  return (data as EnterprisePolicyRow | null) ?? null;
 }
 
 async function getMembershipRole(
@@ -228,34 +342,9 @@ router.get(
 
     await requireMembershipRole(db, orgId, user.userId, 'member');
 
-    const { data, error } = await db
-      .from('organization_admin_policies')
-      .select(
-        `
-        organization_id,
-        default_privacy_mode,
-        allowed_privacy_modes,
-        allow_managed_compute,
-        require_local_to_byok_preview,
-        chat_sync_surfaces,
-        allow_cli_cloud_sync,
-        allow_vscode_cloud_sync,
-        allow_chrome_cloud_sync,
-        audit_export_enabled,
-        retention_days,
-        metadata,
-        updated_at
-      `,
-      )
-      .eq('organization_id', orgId)
-      .maybeSingle();
+    const row = await fetchPolicyRow(db, orgId);
 
-    if (error) {
-      logger.error({ error, orgId, userId: user.userId }, 'Failed to fetch enterprise policy');
-      throw new AppError('Failed to fetch policy', 500);
-    }
-
-    res.json({ policy: mapPolicy((data as EnterprisePolicyRow | null) ?? null, orgId) });
+    res.json({ policy: mapPolicy(row, orgId) });
   },
 );
 
@@ -297,6 +386,126 @@ router.get(
     }
 
     res.json({ events: data ?? [], limit });
+  },
+);
+
+/**
+ * GET /organizations/:orgId/audit-events/export
+ *
+ * ENT-004 — the export half of the enterprise audit trail. Before this route
+ * existed, `organization_admin_policies.audit_export_enabled` (surfaced as
+ * `policy.auditExportEnabled`, default `true`) was a flag nothing in the
+ * repository read and nothing implemented: the product advertised an audit
+ * export capability that had no code behind it. `mapPolicy` reported the flag;
+ * this handler is the only place it is ENFORCED — turning it off here actually
+ * refuses the export.
+ *
+ * Returns the org's `enterprise_audit_events` as NDJSON (default) or CSV, as a
+ * file download, admin-only, over an inclusive `[from, to]` `created_at` window
+ * (both bounds optional). Paging is by `offset` against the pinned `to` bound
+ * (see auditExportQuerySchema).
+ *
+ * NOT covered here, and deliberately not claimed anywhere in this file:
+ *  - SIEM push delivery (Splunk/Sentinel/S3 drops) — the org supplies transport
+ *    and credentials, which is a product decision, not a defect.
+ *  - trace correlation — the platform emits no spans yet (SCALE-VER-006), so
+ *    there is no trace id to put in a column.
+ */
+router.get(
+  '/organizations/:orgId/audit-events/export',
+  // Shares the audit-events bucket on purpose: this is the heavier of the two
+  // reads, so it must not get a more generous ceiling than the list endpoint.
+  createRateLimiter('enterprise-audit-events'),
+  async (req: Request, res: Response) => {
+    const user = requireUser(req);
+    const { orgId } = uuidParamSchema.parse(req.params);
+    const query = auditExportQuerySchema.parse(req.query);
+    const db = getUserScopedClient(user);
+
+    await requireMembershipRole(db, orgId, user.userId, 'admin');
+
+    const policy = mapPolicy(await fetchPolicyRow(db, orgId), orgId);
+    if (!policy.auditExportEnabled) {
+      res.status(403).json({
+        error: 'Audit export is disabled for this organization',
+        code: 'AUDIT_EXPORT_DISABLED',
+      });
+      return;
+    }
+
+    // Pin the upper bound on the first page and echo it, so subsequent offsets
+    // address the same immutable set of rows.
+    const windowEnd = query.to ?? new Date().toISOString();
+
+    let builder = db
+      .from('enterprise_audit_events')
+      .select(AUDIT_EXPORT_COLUMNS.join(', '))
+      .eq('organization_id', orgId)
+      .lte('created_at', windowEnd);
+
+    if (query.from) {
+      builder = builder.gte('created_at', query.from);
+    }
+
+    // Fetch one extra row to learn whether another page exists without a
+    // second COUNT query.
+    const { data, error } = await builder
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(query.offset, query.offset + query.limit);
+
+    if (error) {
+      logger.error({ error, orgId, userId: user.userId }, 'Failed to export audit events');
+      throw new AppError('Failed to export audit events', 500);
+    }
+
+    const fetched = (data ?? []) as AuditEventRow[];
+    const hasMore = fetched.length > query.limit;
+    const rows = hasMore ? fetched.slice(0, query.limit) : fetched;
+
+    const extension = query.format === 'csv' ? 'csv' : 'jsonl';
+    const filename = `audit-events-${orgId}-${windowEnd.replace(/[:.]/g, '-')}.${extension}`;
+
+    res.setHeader(
+      'Content-Type',
+      query.format === 'csv' ? 'text/csv; charset=utf-8' : 'application/x-ndjson; charset=utf-8',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Audit-Export-Window-End', windowEnd);
+    res.setHeader('X-Audit-Export-Row-Count', String(rows.length));
+    if (hasMore) {
+      res.setHeader('X-Audit-Export-Next-Offset', String(query.offset + rows.length));
+    }
+
+    // Exporting the audit trail is itself an auditable administrative action.
+    // Swallowed on failure so a broken audit write cannot deny an admin their
+    // export — the failure is logged instead.
+    try {
+      const { error: auditError } = await db.rpc('record_enterprise_audit_event', {
+        p_organization_id: orgId,
+        p_actor_user_id: user.userId,
+        p_surface: 'gateway',
+        p_action: 'data_exported',
+        p_resource_type: 'enterprise_audit_events',
+        p_resource_id: null,
+        p_outcome: 'success',
+        p_severity: 'info',
+        p_metadata: JSON.stringify({
+          format: query.format,
+          from: query.from ?? null,
+          to: windowEnd,
+          offset: query.offset,
+          count: rows.length,
+        }),
+      });
+      if (auditError) {
+        logger.error({ error: auditError, orgId }, 'Failed to record audit export event');
+      }
+    } catch (auditError) {
+      logger.error({ error: auditError, orgId }, 'Failed to record audit export event');
+    }
+
+    res.send(query.format === 'csv' ? toCsv(rows, query.offset === 0) : toJsonl(rows));
   },
 );
 

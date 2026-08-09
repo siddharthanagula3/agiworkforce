@@ -1,5 +1,5 @@
 /**
- * Tests for the desktop pairing state machine (src/pairing.ts).
+ * Tests for the desktop pairing state machine (src/features/native-bridge/pairing.ts).
  *
  * Chrome extension APIs are shimmed via the global chrome mock set up in
  * vitest.setup.ts / the existing test helpers. Fetch is mocked per-test.
@@ -13,7 +13,7 @@ import {
   unpair,
   confirmPairing,
   _resetStateForTesting,
-} from '../src/pairing';
+} from '../src/features/native-bridge/pairing';
 
 // ── Minimal chrome storage shim ───────────────────────────────────────────────
 

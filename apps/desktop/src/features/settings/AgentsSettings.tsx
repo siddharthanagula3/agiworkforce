@@ -8,9 +8,9 @@
 import { useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
-import { Slider } from '@/components/ui/Slider';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
+import { Slider } from '@/ui/Slider';
 import { CustomAgentsList } from './CustomAgentsList';
 
 export function AgentsSettings() {

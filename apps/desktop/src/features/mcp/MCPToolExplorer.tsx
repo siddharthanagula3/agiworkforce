@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Dialog } from '@/components/ui/Dialog';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { Alert } from '@/components/ui/Alert';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { Input } from '@/ui/Input';
+import { Textarea } from '@/ui/Textarea';
+import { Dialog } from '@/ui/Dialog';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/ui/Tabs';
+import { Alert } from '@/ui/Alert';
 import {
   Search,
   Wrench,

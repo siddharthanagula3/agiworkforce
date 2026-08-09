@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import { createCloudCodeToolRunner } from '../cloud-code-agent-runner';
+import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 
 function executorStub(overrides: Partial<E2BExecutor> = {}): E2BExecutor {
   return {
@@ -93,7 +94,7 @@ describe('createCloudCodeToolRunner command execution', () => {
     // is given; `classifyCommandRisk` gates the call site.
     const executor = executorStub();
     const runner = createCloudCodeToolRunner(executor, '/workspace');
-    await runner.runCommand('rm -rf build');
+    await runner.runCommand('rm -rf build', CLOUD_CODE_COMMAND_DEADLINE_MS);
     expect(executor.runCommand).toHaveBeenCalled();
   });
 
@@ -108,7 +109,7 @@ describe('createCloudCodeToolRunner command execution', () => {
       })),
     });
     const runner = createCloudCodeToolRunner(executor, '/workspace');
-    const result = await runner.runCommand('make');
+    const result = await runner.runCommand('make', CLOUD_CODE_COMMAND_DEADLINE_MS);
     expect(result.isError).toBe(true);
     expect(result.output).toContain('[stderr]');
     expect(result.output).toContain('boom');
@@ -118,7 +119,7 @@ describe('createCloudCodeToolRunner command execution', () => {
   it('runs in the session workspace, not the sandbox default cwd', async () => {
     const executor = executorStub();
     const runner = createCloudCodeToolRunner(executor, '/workspace/repo');
-    await runner.runCommand('ls');
+    await runner.runCommand('ls', CLOUD_CODE_COMMAND_DEADLINE_MS);
     const call = vi.mocked(executor.runCommand!).mock.calls[0]?.[0];
     expect(call?.cwd).toBe('/workspace/repo');
   });
@@ -130,7 +131,7 @@ describe('createCloudCodeToolRunner command execution', () => {
       }),
     });
     const runner = createCloudCodeToolRunner(executor, '/workspace');
-    const result = await runner.runCommand('ls');
+    const result = await runner.runCommand('ls', CLOUD_CODE_COMMAND_DEADLINE_MS);
     expect(result.isError).toBe(true);
     expect(result.output).toContain('sandbox died');
   });
@@ -138,8 +139,20 @@ describe('createCloudCodeToolRunner command execution', () => {
   it('reports honestly when the sandbox cannot run commands at all', async () => {
     const executor = executorStub({ runCommand: undefined });
     const runner = createCloudCodeToolRunner(executor, '/workspace');
-    const result = await runner.runCommand('ls');
+    const result = await runner.runCommand('ls', CLOUD_CODE_COMMAND_DEADLINE_MS);
     expect(result.isError).toBe(true);
     expect(result.output).toContain('cannot run commands');
+  });
+});
+
+describe('HARD-008 — the runner applies the deadline it is given', () => {
+  it('passes the loop-computed timeout to the sandbox instead of a constant', async () => {
+    // The runner used to hold its own 120 s constant, which meant a command
+    // could outlive the turn that started it however little budget was left.
+    const executor = executorStub();
+    const runner = createCloudCodeToolRunner(executor, '/workspace');
+    await runner.runCommand('pnpm test', 7_500);
+    const call = vi.mocked(executor.runCommand!).mock.calls[0]?.[0];
+    expect(call?.timeoutMs).toBe(7_500);
   });
 });

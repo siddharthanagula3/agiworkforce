@@ -5,16 +5,16 @@ import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
+import { Button } from '@/ui/Button';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
+} from '@/ui/Select';
+import { Switch } from '@/ui/Switch';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../../../stores/appModeStore';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 import { useSimpleModeStore } from '../../../../stores/ui';

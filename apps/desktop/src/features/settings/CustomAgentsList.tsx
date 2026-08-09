@@ -9,8 +9,8 @@ import { Bot, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { type CustomAgentConfig, useCustomAgentsStore } from '../../stores/customAgentsStore';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
+} from '@/ui/AlertDialog';
 import { CustomAgentEditor } from './CustomAgentEditor';
 
 // ---- Sub-components ----------------------------------------------------------

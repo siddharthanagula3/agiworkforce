@@ -4,7 +4,7 @@ import { useTeamStore } from '../../stores/teamStore';
 import { useAuthStore } from '../../stores/auth';
 import type { TeamMember, Team, TeamRole } from '../../types/teams';
 import { hasPermission, Permission, canModifyRole, canRemoveRole } from '../../types/teams';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { UserMinus, Shield, Edit2 } from 'lucide-react';
 
 interface TeamMemberListProps {

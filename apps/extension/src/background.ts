@@ -71,7 +71,7 @@ import {
   selectScheduledTaskCancellationCredential,
 } from './features/background/scheduled-task-cancellation';
 import { publishAuthorizedScheduledTaskNotification } from './features/background/scheduled-task-notifications';
-import { getPlatformPrompt } from './platform-prompts';
+import { getPlatformPrompt } from './features/content/platform-prompts';
 import { migrateAutofillProfile } from './features/content/autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
@@ -1962,15 +1962,32 @@ function isRetryableScheduledResult(result: unknown): boolean {
   );
 }
 
-async function notifyScheduledTaskCompleted(
-  taskName: string,
-  answer = '',
-  conversationId?: string,
-  conversationOwner?: ManagedCloudOwner,
-  signal?: AbortSignal,
-): Promise<void> {
+interface ScheduledTaskCompletionNotice {
+  taskName: string;
+  answer?: string;
+  conversationId?: string;
+  /** Owner of the conversation the notification links to, when there is one. */
+  conversationOwner?: ManagedCloudOwner;
+  /**
+   * Account incarnation the finished run was authorized under. Kept separate
+   * from `conversationOwner` because a run can complete without producing a
+   * linkable conversation, and the fence must still hold in that case.
+   */
+  runOwner?: ManagedCloudOwner;
+  /** Set when the schedule is bound to a Managed Cloud account. */
+  boundAccountId?: string;
+  signal?: AbortSignal;
+}
+
+async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotice): Promise<void> {
+  const { taskName, answer = '', conversationId, conversationOwner } = notice;
+  const fenceOwner = notice.runOwner ?? conversationOwner;
   await publishAuthorizedScheduledTaskNotification(
-    { ...(conversationOwner ? { owner: conversationOwner } : {}), ...(signal ? { signal } : {}) },
+    {
+      ...(fenceOwner ? { owner: fenceOwner } : {}),
+      ...(notice.boundAccountId !== undefined ? { boundAccountId: notice.boundAccountId } : {}),
+      ...(notice.signal ? { signal: notice.signal } : {}),
+    },
     {
       isEnabled: taskNotificationsEnabled,
       isOwnerRetired: isRetiredManagedCloudOwner,
@@ -1993,9 +2010,14 @@ async function notifyScheduledTaskFailed(
   detail: string,
   owner?: ManagedCloudOwner,
   signal?: AbortSignal,
+  boundAccountId?: string,
 ): Promise<void> {
   await publishAuthorizedScheduledTaskNotification(
-    { ...(owner ? { owner } : {}), ...(signal ? { signal } : {}) },
+    {
+      ...(owner ? { owner } : {}),
+      ...(boundAccountId !== undefined ? { boundAccountId } : {}),
+      ...(signal ? { signal } : {}),
+    },
     {
       isEnabled: taskNotificationsEnabled,
       isOwnerRetired: isRetiredManagedCloudOwner,
@@ -2025,13 +2047,15 @@ async function completeScheduledTaskRun(
   if (lostAuthority() || latest?.cancellationPending) return;
   await removeScheduledTaskRunJournal(taskId, outcome.journal.requestId);
   if (lostAuthority()) return;
-  await notifyScheduledTaskCompleted(
+  await notifyScheduledTaskCompleted({
     taskName,
-    outcome.answer,
-    outcome.conversationId,
-    outcome.conversationOwner,
-    signal,
-  );
+    answer: outcome.answer,
+    ...(outcome.conversationId !== undefined ? { conversationId: outcome.conversationId } : {}),
+    ...(outcome.conversationOwner ? { conversationOwner: outcome.conversationOwner } : {}),
+    runOwner: outcome.journal.owner,
+    boundAccountId: outcome.journal.owner.accountId,
+    ...(signal ? { signal } : {}),
+  });
 }
 
 function abandonScheduledTaskRun(
@@ -2194,6 +2218,7 @@ async function recoverScheduledTaskRun(
       `could not be recovered: ${detail}`,
       journal.owner,
       lease.controller.signal,
+      journal.owner.accountId,
     );
   } finally {
     endHeartbeat();
@@ -2455,13 +2480,13 @@ async function executeScheduledTask(
       scheduledTaskExecutions.isCurrent(lease),
     );
     if (!recorded) throw new ScheduledTaskCancelledError();
-    await notifyScheduledTaskCompleted(
-      task.name,
-      '',
-      undefined,
-      undefined,
-      lease.controller.signal,
-    );
+    await notifyScheduledTaskCompleted({
+      taskName: task.name,
+      ...(task.managedCloudAccountId !== undefined
+        ? { boundAccountId: task.managedCloudAccountId }
+        : {}),
+      signal: lease.controller.signal,
+    });
   } catch (error) {
     if (error instanceof ScheduledTaskCancelledError || lease.controller.signal.aborted) {
       logger.info('Scheduled task execution lost authority', { taskId: task.id });
@@ -2474,6 +2499,9 @@ async function executeScheduledTask(
           {
             signal: lease.controller.signal,
             ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
+            ...(task.managedCloudAccountId !== undefined
+              ? { boundAccountId: task.managedCloudAccountId }
+              : {}),
           },
           {
             isEnabled: taskNotificationsEnabled,
@@ -2494,6 +2522,9 @@ async function executeScheduledTask(
         {
           signal: lease.controller.signal,
           ...(managedExecutionOwner ? { owner: managedExecutionOwner } : {}),
+          ...(task.managedCloudAccountId !== undefined
+            ? { boundAccountId: task.managedCloudAccountId }
+            : {}),
         },
         {
           isEnabled: taskNotificationsEnabled,
@@ -2513,6 +2544,7 @@ async function executeScheduledTask(
       detail,
       managedExecutionOwner,
       lease.controller.signal,
+      task.managedCloudAccountId,
     );
     throw error;
   } finally {

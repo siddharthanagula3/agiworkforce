@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import {
   applyPlanUpgrade,
   openCheckout,

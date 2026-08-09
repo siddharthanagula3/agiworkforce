@@ -13,7 +13,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata = buildMetadata({
   title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
   description:
-    'Team workspace controls for AGI: shared projects, admin policy, connector governance, separated Local/BYOK/Cloud spend, BYOK enforcement, and public-alpha managed cloud.',
+    'Team workspace controls for AGI: shared projects, admin policy, connector governance, separated Local/BYOK/Cloud spend, and public-alpha managed cloud. Org-wide BYOK policy is contract-scoped, not shipped.',
   path: '/teams',
 });
 
@@ -48,7 +48,7 @@ export default function TeamsPage() {
             {
               meta: 'Provider policy',
               title: 'Keep provider routes explicit',
-              body: 'Local, BYOK, and Cloud stay separate, labeled routes for every member. Org-wide provider policy and BYOK enforcement are scoped on enterprise contracts.',
+              body: 'Local, BYOK, and Cloud stay separate, labeled routes for every member. There is no org-wide provider policy and no BYOK enforcement today: the signed org-policy schema exists but no surface reads it, so both remain contract-scoped commitments.',
             },
             {
               meta: 'Connectors',

@@ -38,8 +38,9 @@ export default function ContactSalesPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Your security review</h3>
               <p className="agi-reason-p">
-                Which controls matter first, such as SSO, SCIM, audit logs, BYOK enforcement, or
-                retention windows?
+                Which controls matter first, such as SSO, SCIM, audit logs, BYOK policy, or
+                retention windows? None of those are self-serve today — naming them tells us what to
+                scope.
               </p>
             </li>
             <li className="agi-reason">

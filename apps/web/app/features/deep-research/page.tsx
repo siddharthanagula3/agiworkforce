@@ -152,10 +152,10 @@ export default function DeepResearchPage() {
         <FinalCta
           eyebrow="Start now"
           title="Ask something worth citing."
-          body="Try AGI Web in the browser today. Get notified when Desktop and CLI open for Local and BYOK work."
+          body="Try AGI Web in the browser today. Desktop and the CLI are released for Local and BYOK work."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Check availability' },
           ]}
         />
 

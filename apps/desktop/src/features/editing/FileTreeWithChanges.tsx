@@ -1,7 +1,7 @@
 import { FileTree } from '@/features/code/FileTree';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
-import { Badge } from '@/components/ui/Badge';
+import { Badge } from '@/ui/Badge';
 import { cn } from '../../lib/utils';
 
 interface FileTreeWithChangesProps {

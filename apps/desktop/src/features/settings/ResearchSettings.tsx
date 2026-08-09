@@ -11,16 +11,16 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
-import { Label } from '@/components/ui/Label';
-import { Switch } from '@/components/ui/Switch';
+import { Label } from '@/ui/Label';
+import { Switch } from '@/ui/Switch';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Slider } from '@/components/ui/Slider';
+} from '@/ui/Select';
+import { Slider } from '@/ui/Slider';
 import { invoke } from '@/lib/tauri-mock';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 

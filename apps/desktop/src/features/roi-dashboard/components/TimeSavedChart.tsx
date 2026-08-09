@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { NameType, Payload, ValueType } from 'recharts/types/component/DefaultTooltipContent';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import type { ChartDataPoint } from '../../../types/roi';
 
 interface TimeSavedChartProps {

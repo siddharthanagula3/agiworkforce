@@ -13,7 +13,7 @@ import { useCallback, useRef, useState } from 'react';
 import { AlertCircle, Check, ChevronDown, FileJson, Import, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import {
   Dialog,
@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';

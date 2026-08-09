@@ -25,8 +25,8 @@ import {
   YAxis,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Card, CardContent } from '@/ui/Card';
 import { sanitizeSvg } from '@/utils/security';
 import type {
   ChartRenderData,

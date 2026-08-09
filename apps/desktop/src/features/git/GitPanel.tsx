@@ -18,8 +18,8 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useGit } from '../../hooks/useGit';
-import { Button } from '@/components/ui/Button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Button } from '@/ui/Button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { GitCommitDialog } from './GitCommitDialog';
 import { GitDiffViewer } from './GitDiffViewer';
 import { GitStatusPanel } from './GitStatusPanel';

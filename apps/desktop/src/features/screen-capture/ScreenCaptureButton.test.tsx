@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CaptureResult } from '../../types/capture';
-import { TooltipProvider } from '@/components/ui/Tooltip';
+import { TooltipProvider } from '@/ui/Tooltip';
 
 const captureRegionMock = vi.fn();
 const captureWindowMock = vi.fn();

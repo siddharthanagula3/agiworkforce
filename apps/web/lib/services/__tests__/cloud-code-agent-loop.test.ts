@@ -7,6 +7,7 @@ import {
   truncateToolOutput,
   type CloudCodeToolRunner,
 } from '../cloud-code-agent-loop';
+import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 
 /** Build a fake adapter that replays one scripted stream per turn. */
 function adapterFor(turns: StreamChunk[][]): ProviderAdapter {
@@ -135,7 +136,7 @@ describe('runCloudCodeAgentTurn', () => {
       ]),
       runner,
     });
-    expect(runner.runCommand).toHaveBeenCalledWith('ls -la');
+    expect(runner.runCommand).toHaveBeenCalledWith('ls -la', expect.any(Number));
     expect(result.stopReason).toBe('done');
     // The tool result must be in the transcript, or the model answered blind.
     const blocks = result.messages.flatMap((m) =>
@@ -196,7 +197,7 @@ describe('runCloudCodeAgentTurn', () => {
       priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
       preApproved: { toolUseId: 't1', command: 'rm -rf build', approved: true },
     });
-    expect(runner.runCommand).toHaveBeenCalledWith('rm -rf build');
+    expect(runner.runCommand).toHaveBeenCalledWith('rm -rf build', expect.any(Number));
     expect(result.stopReason).toBe('done');
   });
 
@@ -408,5 +409,69 @@ describe('cloud code turn usage accounting', () => {
     });
 
     expect(result.usage.inputTokens).toBe(700);
+  });
+});
+
+describe('HARD-008 — the command deadline is clamped to the turn budget', () => {
+  /**
+   * The turn budget is checked only at the TOP of a step. Before this fix the
+   * runner applied its own fixed 120 s cap, so a command admitted with seconds
+   * of budget left ran for a further two minutes and the turn overran the
+   * budget by the command's full timeout. The loop now computes the cap and
+   * passes it down; the runner has none of its own.
+   */
+  it('gives a command only the turn budget that is left', async () => {
+    const runner = runnerStub();
+    // 590 s into a 600 s budget when the command starts.
+    const base = 5_000_000;
+    let reads = 0;
+    const now = (): number => (reads++ === 0 ? base : base + 590_000);
+
+    await runCloudCodeAgentTurn({
+      ...baseInput,
+      now,
+      adapter: adapterFor([
+        toolTurn('t1', 'run_command', { command: 'ls -la' }),
+        textTurn('Listed the workspace.'),
+      ]),
+      runner,
+    });
+
+    expect(runner.runCommand).toHaveBeenCalledWith('ls -la', 10_000);
+  });
+
+  it('clamps a pre-approved command on the resume path too', async () => {
+    const runner = runnerStub();
+    const base = 6_000_000;
+    let reads = 0;
+    const now = (): number => (reads++ === 0 ? base : base + 595_000);
+
+    await runCloudCodeAgentTurn({
+      ...baseInput,
+      now,
+      adapter: adapterFor([textTurn('Removed the build directory.')]),
+      runner,
+      priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
+      preApproved: { toolUseId: 't1', command: 'rm -rf build', approved: true },
+    });
+
+    expect(runner.runCommand).toHaveBeenCalledWith('rm -rf build', 5_000);
+  });
+
+  it('leaves the full per-command cap intact on a fresh turn', async () => {
+    const runner = runnerStub();
+    const base = 7_000_000;
+
+    await runCloudCodeAgentTurn({
+      ...baseInput,
+      now: () => base,
+      adapter: adapterFor([
+        toolTurn('t1', 'run_command', { command: 'ls -la' }),
+        textTurn('Listed the workspace.'),
+      ]),
+      runner,
+    });
+
+    expect(runner.runCommand).toHaveBeenCalledWith('ls -la', CLOUD_CODE_COMMAND_DEADLINE_MS);
   });
 });

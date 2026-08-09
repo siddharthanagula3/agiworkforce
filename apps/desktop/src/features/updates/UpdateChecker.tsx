@@ -3,7 +3,7 @@ import { isTauri } from '../../lib/tauri-mock';
 import { useToast } from '../../hooks/useToast';
 import { useUpdater } from './useUpdater';
 import { useUpdaterStore, waitForUpdaterHydration } from '../../stores/updaterStore';
-import { ToastAction } from '@/components/ui/Toast';
+import { ToastAction } from '@/ui/Toast';
 import { UpdateDialog } from './UpdateDialog';
 
 interface UpdateCheckerProps {

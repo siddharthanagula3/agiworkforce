@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Loader2, KeyRound } from 'lucide-react';
 import { McpClient } from '@/api/mcp';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Label } from '@/ui/Label';
+import { Badge } from '@/ui/Badge';
 
 // Extended provider set for OAuth credentials configuration.
 // These go beyond the three providers in McpOAuthProvider since

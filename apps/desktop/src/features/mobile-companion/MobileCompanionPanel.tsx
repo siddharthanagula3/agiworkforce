@@ -5,8 +5,8 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { useToolStore } from '../../stores/chat/toolStore';
 import { QRPairingCard } from './QRPairingCard';
 import { RemoteApprovalCard } from './RemoteApprovalCard';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
 
 export function MobileCompanionPanel() {
   const { status, peerConnected, stopSession } = useConnectionStore(

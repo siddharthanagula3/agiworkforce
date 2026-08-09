@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Monitor, RefreshCw, Search } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { ScrollArea } from '@/ui/ScrollArea';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { WindowInfo } from '../../types/capture';
 import { cn } from '../../lib/utils';

@@ -9,7 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { ReactElement } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TooltipProvider } from '../../../components/ui/Tooltip';
+import { TooltipProvider } from '../../../ui/Tooltip';
 import { useAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useSettingsStore } from '../../../stores/settingsStore';

@@ -11,6 +11,11 @@ import type {
 } from '@agiworkforce/types';
 
 import {
+  CLOUD_CODE_COMMAND_DEADLINE_MS,
+  CLOUD_CODE_TURN_BUDGET_MS,
+  nestedDeadlineMs,
+} from '@/lib/deadline-policy';
+import {
   CLOUD_CODE_LIST_FILES_TOOL,
   CLOUD_CODE_READ_FILE_TOOL,
   CLOUD_CODE_RUN_COMMAND_TOOL,
@@ -47,7 +52,11 @@ import {
 
 /** Bounds. A loop without these is an unbounded spend on someone's card. */
 export const CLOUD_CODE_AGENT_MAX_STEPS = 24;
-export const CLOUD_CODE_AGENT_MAX_DURATION_MS = 10 * 60_000;
+/**
+ * The turn's wall-clock budget. Named in `lib/deadline-policy.ts` alongside the
+ * per-command deadline it contains, so the two cannot be changed independently.
+ */
+export const CLOUD_CODE_AGENT_MAX_DURATION_MS = CLOUD_CODE_TURN_BUDGET_MS;
 /** Tool output beyond this is truncated before it re-enters the context. */
 export const CLOUD_CODE_AGENT_MAX_TOOL_OUTPUT = 30_000;
 
@@ -77,11 +86,16 @@ export interface CloudCodeToolOutcome {
  *
  * `runCommand` is only ever called for a command the loop has already cleared
  * through the approval boundary.
+ *
+ * `timeoutMs` is REQUIRED and is computed by the loop, not by the runner: it is
+ * the per-command cap clamped to what remains of the turn's budget. A runner
+ * that substituted its own fixed cap would let a command started near the end
+ * of a turn outlive the turn.
  */
 export interface CloudCodeToolRunner {
   readFile(path: string): Promise<CloudCodeToolOutcome>;
   listFiles(path: string | undefined): Promise<CloudCodeToolOutcome>;
-  runCommand(command: string): Promise<CloudCodeToolOutcome>;
+  runCommand(command: string, timeoutMs: number): Promise<CloudCodeToolOutcome>;
   /** write_file / create_folder / execute_code, owned by lib/e2b/execution-tools. */
   runSharedExecutionTool(
     name: string,
@@ -300,6 +314,14 @@ export async function runCloudCodeAgentTurn(
   const maxSteps = input.maxSteps ?? CLOUD_CODE_AGENT_MAX_STEPS;
   const maxDurationMs = input.maxDurationMs ?? CLOUD_CODE_AGENT_MAX_DURATION_MS;
 
+  /**
+   * Per-command cap, clamped to what is LEFT of the turn's budget. The budget
+   * is only checked at the top of a step, so an unclamped 120 s command
+   * admitted with seconds to spare would run the turn past `maxDurationMs`.
+   */
+  const commandDeadlineMs = (): number =>
+    nestedDeadlineMs(CLOUD_CODE_COMMAND_DEADLINE_MS, maxDurationMs, now() - startedAt);
+
   const messages: ProviderMessage[] = input.priorMessages
     ? [...input.priorMessages]
     : [{ role: 'user', content: input.goal }];
@@ -315,7 +337,7 @@ export async function runCloudCodeAgentTurn(
   if (input.preApproved) {
     const { toolUseId, command, approved } = input.preApproved;
     const outcome: CloudCodeToolOutcome = approved
-      ? await input.runner.runCommand(command)
+      ? await input.runner.runCommand(command, commandDeadlineMs())
       : { output: `The user declined to run: ${command}`, isError: true };
     messages.push({ role: 'user', content: [toolResultBlock(toolUseId, outcome)] });
     await input.onEvent?.({
@@ -433,7 +455,7 @@ export async function runCloudCodeAgentTurn(
             },
           };
         } else {
-          outcome = await input.runner.runCommand(command);
+          outcome = await input.runner.runCommand(command, commandDeadlineMs());
         }
       } else if (call.name === CLOUD_CODE_READ_FILE_TOOL) {
         const path = typeof call.input['path'] === 'string' ? call.input['path'] : '';

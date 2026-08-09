@@ -23,8 +23,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
 import { WEB_APP_URL } from '../../api/config';
 import { openExternalUrl } from '../../utils/navigation';
 import { useAppModeStore } from '../../stores/appModeStore';

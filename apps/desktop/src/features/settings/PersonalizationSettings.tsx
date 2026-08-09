@@ -15,7 +15,7 @@ import {
   type EmojiUsage,
   type PersonalizationPreferences,
 } from '../../stores/settingsStore';
-import { Label } from '@/components/ui/Label';
+import { Label } from '@/ui/Label';
 
 // ── Slider meta ───────────────────────────────────────────────────────────────
 

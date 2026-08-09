@@ -1,13 +1,13 @@
 import { ArrowRight, Sparkles, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import {
   SubscriptionGateResult,
   checkSubscriptionGate,

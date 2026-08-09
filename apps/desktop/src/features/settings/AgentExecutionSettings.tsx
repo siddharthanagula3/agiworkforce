@@ -18,18 +18,18 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
+} from '@/ui/AlertDialog';
+import { Input } from '@/ui/Input';
+import { Label } from '@/ui/Label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Slider } from '@/components/ui/Slider';
-import { Switch } from '@/components/ui/Switch';
+} from '@/ui/Select';
+import { Slider } from '@/ui/Slider';
+import { Switch } from '@/ui/Switch';
 import {
   useSettingsStore,
   type ApprovalTimeoutPolicy,

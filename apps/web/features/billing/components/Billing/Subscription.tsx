@@ -512,7 +512,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                         <CardTitle>{getBillingPlanPricing('team').label}</CardTitle>
                       </div>
                       <div className="text-2xl font-bold">
-                        {formatCatalogPrice(getBillingPlanPricing('team').monthlyPriceUsd)}
+                        {formatCatalogPrice(BILLING_PLAN_PRICING.team.monthlyPriceUsd)}
                         <span className="text-sm text-muted-foreground"> per seat / month</span>
                       </div>
                     </CardHeader>

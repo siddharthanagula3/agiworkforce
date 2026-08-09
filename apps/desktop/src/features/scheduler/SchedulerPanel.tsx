@@ -36,18 +36,18 @@ import type {
   JobHistoryEntry,
 } from '@/hooks/useScheduler';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Badge } from '@/components/ui/Badge';
+} from '@/ui/DropdownMenu';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Skeleton } from '@/ui/Skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
+import { Badge } from '@/ui/Badge';
 import { JobCreationDialog } from './JobCreationDialog';
 
 // ============================================================================

@@ -8,6 +8,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getMediaAssetById } from '@/lib/server/media-assets';
 import { isMediaStorageConfigured, readStoredMedia } from '@/lib/server/media-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
   aiGeneratedHeaders,
   hasAiGeneratedProvenance,
@@ -31,8 +32,10 @@ import {
  *   GET /api/files/{mediaAssetId}
  *   Auth: Clerk session cookie (browser) or `Authorization: Bearer <jwt>`
  *         (mobile/desktop/CLI) — same dual path as every other API route.
- *   200: raw bytes; Content-Type from the asset row; Content-Disposition
- *        inline with the original filename; Cache-Control private; plus
+ *   200: raw bytes; Content-Type from the asset row and an inline
+ *        Content-Disposition carrying the original filename — EXCEPT for types
+ *        a browser executes as a document (html/svg/xml), which are demoted to
+ *        `application/octet-stream` + `attachment`; Cache-Control private; plus
  *        `x-agi-ai-generated`/`x-agi-ai-provenance` when the row carries an
  *        Article 50(2) claim.
  *   401: unauthenticated · 403: asset belongs to another user ·
@@ -118,13 +121,22 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     ? aiGeneratedHeaders(claim as AiGeneratedProvenance)
     : {};
 
+  // A generated file is model- or sandbox-authored, so `text/html`/`.svg`
+  // bytes served `inline` under their own type would execute as a document on
+  // this origin on a top-level navigation. `servedByteHeaders` demotes exactly
+  // those to an opaque download; images, PDFs, CSV and text are unchanged.
+  const served = servedByteHeaders({
+    contentType: asset.mimeType || object.contentType || 'application/octet-stream',
+    filename,
+  });
+
   const body = new Uint8Array(object.data);
   return new NextResponse(body, {
     status: 200,
     headers: {
-      'Content-Type': asset.mimeType || object.contentType || 'application/octet-stream',
+      'Content-Type': served.contentType,
       'Content-Length': String(object.data.byteLength),
-      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Disposition': served.contentDisposition,
       ...provenanceHeaders,
       // Private: bytes are owner-scoped; never let a shared cache hold them.
       'Cache-Control': 'private, max-age=3600',

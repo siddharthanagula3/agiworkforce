@@ -13,9 +13,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useIsMounted } from '@/hooks/useIsMounted';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
 import { useShallow } from 'zustand/react/shallow';
 import { useArtifactStore, type ArtifactVersion, type VersionDiff } from '@/stores/artifactStore';
 

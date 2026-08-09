@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 import { AlertTriangle, ChevronDown, ChevronRight, Code, GitMerge, Users } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/Tooltip';
+import { ScrollArea } from '@/ui/ScrollArea';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/ui/Tooltip';
 
 interface ConflictResolverProps {
   filePath: string;

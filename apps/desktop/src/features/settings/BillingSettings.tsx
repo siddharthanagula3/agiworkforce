@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Region } from '../../types/capture';
 import { X, Check } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface RegionSelectorProps {
   onConfirm: (region: Region) => void;

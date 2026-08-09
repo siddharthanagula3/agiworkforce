@@ -12,9 +12,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { Telescope, Search, X, Zap, BarChart2, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Button } from '@/ui/Button';
+import { Textarea } from '@/ui/Textarea';
+import { ScrollArea } from '@/ui/ScrollArea';
 import { cn } from '@/lib/utils';
 import {
   useResearchStore,

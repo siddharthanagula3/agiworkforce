@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import App from './App';
-import { Toaster } from './components/ui/Toaster';
-import { TooltipProvider } from './components/ui/Tooltip';
+import { Toaster } from './ui/Toaster';
+import { TooltipProvider } from './ui/Tooltip';
 import { I18nProvider } from './providers/I18nProvider';
 import { ThemeProvider, useThemeContext } from './providers/ThemeProvider';
 import { errorTracking, setupGlobalErrorHandler } from './services/errorTracking';

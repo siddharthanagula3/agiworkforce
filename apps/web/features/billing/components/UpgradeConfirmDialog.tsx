@@ -123,10 +123,13 @@ export function UpgradeConfirmDialog({
   const planLabel = display.pricing.label;
   // Per-seat plans renew at unit price x seats; showing the unit price as the
   // renewal would understate a Team org's bill by the seat count.
+  //
+  // BIZ-020: a plan with no published amount for this interval yields null, and
+  // the renewal clause is dropped rather than rendered as "$0/month".
+  const unitPriceUsd =
+    request.billingInterval === 'yearly' ? display.yearlyPriceUsd : display.monthlyPriceUsd;
   const recurringUsd =
-    (request.billingInterval === 'yearly'
-      ? display.pricing.yearlyPriceUsd
-      : display.pricing.monthlyPriceUsd) * (request.seats ?? 1);
+    unitPriceUsd !== null && unitPriceUsd > 0 ? unitPriceUsd * (request.seats ?? 1) : null;
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
 
   async function handleConfirm() {
@@ -172,7 +175,7 @@ export function UpgradeConfirmDialog({
               : checkoutRequired
                 ? `Your current plan has no paid Stripe charge to credit, so this is not a prorated upgrade. Starting ${planLabel} costs ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)} today. Your existing AGI usage will carry over after checkout completes.`
                 : amountDue
-                  ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                  ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period.${recurringUsd === null ? '' : ` Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`}`
                   : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>

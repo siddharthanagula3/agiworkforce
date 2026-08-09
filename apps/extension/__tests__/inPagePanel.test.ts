@@ -50,7 +50,7 @@ import {
   truncatePageText,
   redactSensitiveText,
 } from '../src/features/content/in-page-panel/pageActions';
-import { loadPosition, savePosition, applyPosition } from '../src/inPagePanel/launcher';
+import { loadPosition, savePosition, applyPosition } from '../src/features/content/in-page-panel/launcher';
 import { isPanelEnabled, IN_PAGE_PANEL_ENABLED_KEY } from '../src/inPagePanel/setup';
 
 // ─── getPageActions ───────────────────────────────────────────────────────────

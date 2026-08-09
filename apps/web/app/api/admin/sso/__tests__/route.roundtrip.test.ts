@@ -242,8 +242,11 @@ describe('SSO configuration round trip', () => {
     expect(body.connection.domain).toBe('example.com');
     expect(body.nextStep).toBe('verify_domain');
     expect(body.domainVerification.recordName).toBe('_agiworkforce-sso.example.com');
+    // Bounded by sso_connections_domain_verification_token_shape (migration
+    // 0083). The exact length is not pinned: the token carries its own expiry,
+    // so its width is an implementation detail of that encoding.
     expect(body.domainVerification.recordValue).toMatch(
-      /^agiworkforce-sso-verification=[a-f0-9]{48}$/,
+      /^agiworkforce-sso-verification=[a-f0-9]{32,64}$/,
     );
 
     // Nothing reached the identity provider: an unverified domain must never be

@@ -41,6 +41,11 @@ export async function recordMessageFeedback(
   });
 }
 
+/**
+ * Warning/error log records redacted for a support bundle by the desktop
+ * `sys::support_bundle` module: structured fields are allowlisted, credentials
+ * are scrubbed, and account/billing records are dropped.
+ */
 export async function getFilteredLogs(): Promise<string[]> {
   return command<string[]>('get_filtered_logs');
 }

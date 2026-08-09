@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
 import { isTextAttachmentMeta } from '@agiworkforce/types';
+import { matchDenylistedUpload } from '@/lib/moderation';
+import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
 import { getObject, objectKeyFromStorageUri } from './object-storage';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
@@ -13,18 +14,43 @@ type ExtractionErrorCode =
   | 'byte_count_mismatch'
   | 'checksum_mismatch'
   | 'content_type_mismatch'
+  | 'content_rejected'
+  | 'known_illegal_media'
   | 'document_too_complex'
   | 'document_unreadable';
+
+/**
+ * Detail a rejection carries back to the route so it can purge the object and
+ * file a moderation record. Deliberately NOT part of the user-facing message:
+ * naming the detector that fired is an oracle to tune an evasion against.
+ */
+export interface ExtractionRejectionDetail {
+  /** Digest of the inspected bytes, for the moderation record. */
+  sha256?: string;
+  /** Provenance of the denylist that matched, when one did. */
+  listLabel?: string;
+  /** Structural scanner findings, operator-facing only. */
+  findings?: readonly UploadScanFinding[];
+}
 
 export class ProjectKnowledgeExtractionError extends Error {
   constructor(
     readonly code: ExtractionErrorCode,
     message: string,
+    readonly detail: ExtractionRejectionDetail = {},
   ) {
     super(message);
     this.name = 'ProjectKnowledgeExtractionError';
   }
 }
+
+/**
+ * The single message every content rejection returns to the uploader. Uniform
+ * on purpose: a distinct message per detector tells an attacker which check
+ * fired, and the specific finding is already in the server log.
+ */
+const KNOWLEDGE_FILE_REJECTION_MESSAGE =
+  'This file could not be added because its contents failed a safety check.';
 
 interface ExtractProjectKnowledgeFileInput {
   projectId: string;
@@ -205,11 +231,26 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  const actualChecksum = createHash('sha256').update(object.data).digest('hex');
-  if (actualChecksum !== input.checksumSha256.toLowerCase()) {
+  // One pass over the bytes answers two questions: integrity (does the digest
+  // match what the browser computed?) and moderation (is that digest on the
+  // configured known-illegal-media list?).
+  const hashMatch = matchDenylistedUpload(object.data);
+  if (hashMatch.sha256 !== input.checksumSha256.toLowerCase()) {
     throw new ProjectKnowledgeExtractionError(
       'checksum_mismatch',
       'The uploaded file did not pass its integrity check. Upload it again.',
+    );
+  }
+  // An exact digest hit is a fact rather than a heuristic, so it outranks the
+  // structural scan below and is reported.
+  if (hashMatch.matched) {
+    throw new ProjectKnowledgeExtractionError(
+      'known_illegal_media',
+      KNOWLEDGE_FILE_REJECTION_MESSAGE,
+      {
+        sha256: hashMatch.sha256,
+        ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
+      },
     );
   }
 
@@ -219,6 +260,21 @@ export async function extractProjectKnowledgeFile(
     throw new ProjectKnowledgeExtractionError(
       'content_type_mismatch',
       'The uploaded file type did not match the selected file. Upload it again.',
+    );
+  }
+
+  // Inspect the actual BYTES before anything else touches them. Everything
+  // above this line — byte count, checksum, stored content type — verifies the
+  // client's own claims against each other; none of it opens the file. A
+  // knowledge file is then parsed by pdfjs, stuffed into every project turn's
+  // model context, and served back from this origin, so it gets the same
+  // structural inspection a chat attachment gets.
+  const scan = await scanUploadBytes(object.data, declaredMimeType);
+  if (!scan.ok) {
+    throw new ProjectKnowledgeExtractionError(
+      'content_rejected',
+      KNOWLEDGE_FILE_REJECTION_MESSAGE,
+      { sha256: hashMatch.sha256, findings: scan.findings },
     );
   }
 

@@ -1,16 +1,16 @@
 import { FileText, Loader2, Send } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
+import { Button } from '@/ui/Button';
+import { Checkbox } from '@/ui/Checkbox';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Dialog';
+import { Input } from '@/ui/Input';
+import { Textarea } from '@/ui/Textarea';
 import { feedback } from '@agiworkforce/desktop-command-client';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 
@@ -177,7 +177,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                 </label>
               </div>
               <p className="text-xs text-muted-foreground pl-6">
-                Only warnings and errors are included. No personal or billing data.
+                Only warning and error records, with account and billing entries removed. Your
+                conversations, prompts, and file contents are not included.
               </p>
               {attachLogs && logCount !== null && !loadingLogs && (
                 <p className="text-xs text-muted-foreground pl-6">

@@ -6,8 +6,8 @@ import {
   type MemoryFact,
 } from '@agiworkforce/unified-chat';
 
-import { Button } from '../../../components/ui/Button';
-import { Switch } from '../../../components/ui/Switch';
+import { Button } from '../../../ui/Button';
+import { Switch } from '../../../ui/Switch';
 import { useMemoryStore as useDesktopMemoryStore } from '../../../stores/memoryStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import {

@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 
 export function AutomationPermissionsModal() {
   const [open, setOpen] = useState(false);

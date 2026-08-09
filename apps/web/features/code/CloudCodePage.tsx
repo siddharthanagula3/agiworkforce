@@ -25,6 +25,7 @@ import type {
   CloudCodeSession,
   CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { WebSidebar } from '@/features/chat/v3/WebSidebar';
 import { resolveWebViewRoute } from '@/features/chat/v3/WebShellV3';
 import { cloudCodeApi, type CloudCodeApi, CloudCodeApiError } from './services/cloud-code-api';
@@ -83,6 +84,7 @@ export interface CloudCodePageProps {
 
 export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const router = useRouter();
+  const { openSettings } = useSettingsModal();
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
   const [sessions, setSessions] = useState<CloudCodeSession[]>([]);
@@ -276,7 +278,10 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
           onModeChange={handleSidebarMode}
           onNewChat={openCreate}
           onNavigateView={handleSidebarView}
-          onOpenAccountMenu={() => router.push('/settings/account')}
+          // CRIT-008: open the modal in place. `/settings/account` renders a
+          // SettingsModalRedirect that lands the user on /chat, so navigating
+          // there threw away the code session they were looking at.
+          onOpenAccountMenu={() => openSettings('account')}
         />
       </div>
 

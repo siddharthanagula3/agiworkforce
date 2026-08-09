@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ElementType } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Card } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { ScrollArea } from '@/ui/ScrollArea';
 import { useExecutionStore } from '../../stores/executionStore';
 import {
   Activity,

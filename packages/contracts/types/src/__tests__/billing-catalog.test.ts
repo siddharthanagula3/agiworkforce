@@ -11,6 +11,8 @@ import {
   MIN_PURCHASABLE_SEATS,
   getPlanPriceCents,
   getPlanPriceInr,
+  getPlanPriceUsd,
+  isContractPricedPlan,
   getBillingPlanProductLimits,
   getPlanMaxConcurrentTurns,
   getPlanMaxConnectorTools,
@@ -100,6 +102,45 @@ describe('billing catalog', () => {
       expect(plan).not.toHaveProperty('weeklyUsageBudgetUsd');
       expect(plan).not.toHaveProperty('dailyUsageBudgetUsd');
     }
+  });
+
+  // BIZ-020. Enterprise used to carry `monthlyPriceUsd: 0 / yearlyPriceUsd: 0`.
+  // Zero is a real amount to every renderer and every calculation: it formats as
+  // "$0", the `amount === 0` branches in the plan formatters print "Free", and
+  // `getPlanPriceCents('enterprise')` handed callers 0 cents for a contract that
+  // is worth whatever the contract says. Contract-priced plans now publish no
+  // amount at all, and the accessors say so with null rather than a number.
+  describe('contract-priced plans publish no amount', () => {
+    it('reports Enterprise as contract-priced with no USD or cents figure', () => {
+      expect(isContractPricedPlan('enterprise')).toBe(true);
+      expect(getPlanPriceUsd('enterprise')).toBeNull();
+      expect(getPlanPriceUsd('enterprise', 'yearly')).toBeNull();
+      expect(getPlanPriceCents('enterprise')).toBeNull();
+      expect(getPlanPriceCents('enterprise', 'yearly')).toBeNull();
+      expect(BILLING_PLAN_PRICING.enterprise).not.toHaveProperty('monthlyPriceUsd');
+      expect(BILLING_PLAN_PRICING.enterprise).not.toHaveProperty('yearlyPriceUsd');
+    });
+
+    it('keeps published and contract pricing mutually exclusive for every plan', () => {
+      for (const [tier, plan] of Object.entries(BILLING_PLAN_PRICING)) {
+        const publishes =
+          typeof (plan as { monthlyPriceUsd?: number }).monthlyPriceUsd === 'number' ||
+          typeof (plan as { yearlyPriceUsd?: number }).yearlyPriceUsd === 'number';
+        const contract = (plan as { contractPriced?: true }).contractPriced === true;
+        expect(publishes && contract, `${tier} claims both a list price and a contract`).toBe(
+          false,
+        );
+        expect(publishes || contract, `${tier} declares no pricing state at all`).toBe(true);
+        expect(isContractPricedPlan(tier)).toBe(contract);
+      }
+    });
+
+    it('does not treat a genuinely free plan as contract-priced', () => {
+      for (const tier of ['free', 'local-only', 'byok'] as const) {
+        expect(isContractPricedPlan(tier)).toBe(false);
+        expect(getPlanPriceUsd(tier)).toBe(0);
+      }
+    });
   });
 
   it('exposes founder-set India monthly pricing for individual paid tiers', () => {

@@ -1,7 +1,11 @@
 import 'server-only';
 
 import type { SSOConnectionRow } from '@/lib/server/neon-types';
-import { domainVerificationInstructions } from './domain-verification';
+import {
+  domainChallengeExpiresAt,
+  domainVerificationInstructions,
+  isDomainChallengeExpired,
+} from './domain-verification';
 
 /**
  * The columns every SSO read selects. Deliberately excludes `metadata_xml`
@@ -57,12 +61,18 @@ export interface SSOConnectionView {
     entityId: string | null;
     metadataUrl: string | null;
   };
-  /** Present only while the domain is unverified. */
+  /** Present only while an unexpired challenge is outstanding. */
   domainVerification: {
     recordType: 'TXT';
     recordName: string;
     recordValue: string;
   } | null;
+  /**
+   * When the outstanding challenge stops being accepted. Null whenever
+   * `domainVerification` is null, so a client can tell "no live challenge"
+   * from "challenge with a deadline" without inspecting the token.
+   */
+  domainChallengeExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,6 +93,13 @@ export function connectionStatus(row: SSOConnectionRow): SSOConnectionStatus {
 export function toConnectionView(row: SSOConnectionRow): SSOConnectionView {
   const verified = row.domain_verified_at !== null;
 
+  // An expired challenge is not published as instructions. Handing an admin a
+  // TXT record that verification will refuse sends them to their DNS provider
+  // to fix a problem that is not there; the honest answer is that the challenge
+  // lapsed and has to be reissued.
+  const token = row.domain_verification_token;
+  const liveToken = !verified && token !== null && !isDomainChallengeExpired(token) ? token : null;
+
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -101,10 +118,10 @@ export function toConnectionView(row: SSOConnectionRow): SSOConnectionView {
       entityId: row.sp_entity_id,
       metadataUrl: row.sp_metadata_url,
     },
-    domainVerification:
-      verified || !row.domain_verification_token
-        ? null
-        : domainVerificationInstructions(row.domain, row.domain_verification_token),
+    domainVerification: liveToken ? domainVerificationInstructions(row.domain, liveToken) : null,
+    domainChallengeExpiresAt: liveToken
+      ? (domainChallengeExpiresAt(liveToken)?.toISOString() ?? null)
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

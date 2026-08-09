@@ -129,6 +129,11 @@ import {
   reserveManagedUsageProviderStep,
   ManagedUsageRequestError,
 } from '@/lib/services/managed-usage-request-service';
+import {
+  CHAT_TOOL_LOOP_BUDGET_MS,
+  TOOL_CALL_DEADLINE_MS,
+  nestedDeadlineMs,
+} from '@/lib/deadline-policy';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -136,23 +141,18 @@ import {
 const DEFAULT_CHAT_MAX_STEPS = 10;
 /** Paid AGI Work is the deep agent surface and must not inherit chat's cap. */
 const DEFAULT_AGI_WORK_MAX_STEPS = 100;
-/**
- * Leave one minute of the Hobby plan's five-minute function window for file
- * harvest, durable usage settlement, and response teardown. This remains a
- * safety boundary after durable workflow execution lands; it is not presented
- * as restart-safe background execution.
- */
-const DEFAULT_AGI_WORK_MAX_DURATION_MS = 4 * 60_000;
-/**
- * AUDIT-FIX SYS-26: ordinary chat used to get NO wall-clock budget at all
- * (`maxDurationMs: undefined`). Ten steps at the 120 s per-tool cap plus ten
- * provider calls comfortably exceeds `export const maxDuration = 300`, so the
- * platform SIGKILLed the function -- skipping the generator `finally` that
- * disposes/pauses the E2B sandbox (which keeps billing) and settles managed
- * usage. Chat now gets a budget that fits INSIDE the platform limit, with the
- * same one-minute teardown headroom AGI Work reserves.
- */
-const DEFAULT_CHAT_MAX_DURATION_MS = 4 * 60_000;
+// Both product modes share ONE wall-clock budget, `CHAT_TOOL_LOOP_BUDGET_MS`,
+// derived in `lib/deadline-policy.ts` from this route's `maxDuration` minus the
+// teardown reserve. They used to be two separately-declared constants that
+// happened to hold the same number — the shape this finding is about.
+//
+// AUDIT-FIX SYS-26: ordinary chat used to get NO wall-clock budget at all
+// (`maxDurationMs: undefined`). Ten steps at the 120 s per-tool cap plus ten
+// provider calls comfortably exceeds `export const maxDuration = 300`, so the
+// platform SIGKILLed the function -- skipping the generator `finally` that
+// disposes/pauses the E2B sandbox (which keeps billing) and settles managed
+// usage. The reserve buys file harvest, durable usage settlement, and response
+// teardown; it is a safety boundary, not restart-safe background execution.
 
 /**
  * Bound accumulation from the (untrusted) provider stream within one step:
@@ -162,14 +162,6 @@ const DEFAULT_CHAT_MAX_DURATION_MS = 4 * 60_000;
  */
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
-
-/**
- * Per-tool-call wall-clock cap. A hung tool (stuck MCP/connector call, wedged
- * sandbox exec) would otherwise block the turn until the platform SIGKILLs the
- * function — which skips the generator `finally`, leaking the E2B sandbox
- * (still billing). Bounding each call lets the loop settle and the finally run.
- */
-const TOOL_CALL_TIMEOUT_MS = 120_000;
 
 /** Max read-only tool calls run concurrently in one step (bounds outbound fan-out). */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -423,9 +415,9 @@ export function resolveToolLoopPolicy(
   const isAgiWork = processed.chatRequest?.work_mode === 'agiwork';
   return {
     maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
-    maxDurationMs:
-      options.maxDurationMs ??
-      (isAgiWork ? DEFAULT_AGI_WORK_MAX_DURATION_MS : DEFAULT_CHAT_MAX_DURATION_MS),
+    // Step DEPTH differs by product mode; the wall clock does not — both modes
+    // run in the same function under the same `maxDuration`.
+    maxDurationMs: options.maxDurationMs ?? CHAT_TOOL_LOOP_BUDGET_MS,
   };
 }
 
@@ -843,7 +835,9 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
 export const TOOL_LOOP_STREAM_LIMITS = {
   maxToolArgsJsonChars: MAX_TOOL_ARGS_JSON_CHARS,
   maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
-  toolCallTimeoutMs: TOOL_CALL_TIMEOUT_MS,
+  /** The PREFERRED per-call cap; the effective one is clamped to the loop's
+   *  remaining budget by `nestedDeadlineMs` at the call site. */
+  toolCallTimeoutMs: TOOL_CALL_DEADLINE_MS,
   maxParallelToolCalls: MAX_PARALLEL_TOOL_CALLS,
   maxToolResultHistoryChars: MAX_TOOL_RESULT_HISTORY_CHARS,
   keepRecentToolResults: KEEP_RECENT_TOOL_RESULTS,
@@ -1809,11 +1803,14 @@ export async function* runToolLoop(
 
     // Emit "running" status for all tools. Include tc.args so the client can
     // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
-    const startedAt = new Map<string, number>();
+    // Named apart from the loop-level `startedAt` it used to shadow: the tool
+    // timeout below is clamped against the LOOP's elapsed time, so the two
+    // clocks must stay distinguishable inside this scope.
+    const toolStartedAt = new Map<string, number>();
     for (const tc of calls) {
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
-      startedAt.set(tc.id, Date.now());
+      toolStartedAt.set(tc.id, Date.now());
       yield encoder.encode(
         eventStream.emit({
           type: 'tool-execution-start',
@@ -1858,7 +1855,17 @@ export async function* runToolLoop(
         : execute();
       // Bound the call: a hung tool resolves to an error result instead of
       // wedging the turn (which would SIGKILL the fn and skip sandbox cleanup).
-      return withToolTimeout(run, tc.qualifiedName, TOOL_CALL_TIMEOUT_MS);
+      //
+      // The cap is clamped to what is LEFT of the loop's own budget. The loop
+      // only checks `maxDurationMs` at the top of a step, so a tool admitted
+      // with seconds to spare used to run a further 120 s and push the
+      // invocation past `export const maxDuration = 300` — the SIGKILL this
+      // timeout exists to prevent.
+      return withToolTimeout(
+        run,
+        tc.qualifiedName,
+        nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
+      );
     };
 
     // Execute read-only tools concurrently, but bounded — a model emitting many
@@ -1924,7 +1931,7 @@ export async function* runToolLoop(
           name: tc.qualifiedName,
           output: toAgentEventJson(content),
           isError,
-          elapsedMs: Math.max(0, Date.now() - (startedAt.get(tc.id) ?? Date.now())),
+          elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
         }),
       );
 

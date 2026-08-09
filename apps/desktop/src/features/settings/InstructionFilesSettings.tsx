@@ -9,15 +9,15 @@ import { AlertCircle, Check, Circle, Edit2, FileText, Loader2, Plus, Save, X } f
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
-import { Textarea } from '@/components/ui/Textarea';
+} from '@/ui/Dialog';
+import { Textarea } from '@/ui/Textarea';
 
 interface InstructionFilePattern {
   pattern: string;

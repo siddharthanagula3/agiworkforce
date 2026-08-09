@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import { getMediaAssetById } from '@/lib/server/media-assets';
+import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -301,7 +302,7 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 
 /**
  * Generate images using the catalog-selected OpenAI image slot.
- * Endpoint: POST https://api.openai.com/v1/images/generations
+ * Endpoint: POST {OPENAI_BASE_URL or the vendor default}/images/generations
  */
 
 /**
@@ -388,7 +389,7 @@ async function generateWithOpenAIImage(
       );
     }
 
-    const editResponse = await fetch('https://api.openai.com/v1/images/edits', {
+    const editResponse = await fetch(providerApiUrl('openai', 'images/edits'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
@@ -415,7 +416,7 @@ async function generateWithOpenAIImage(
     };
   }
 
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
+  const response = await fetch(providerApiUrl('openai', 'images/generations'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

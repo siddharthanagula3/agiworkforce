@@ -7,8 +7,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
 
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
+import { Input } from '@/ui/Input';
+import { Button } from '@/ui/Button';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import type { MemoryEntry } from '@/stores/memoryStore';

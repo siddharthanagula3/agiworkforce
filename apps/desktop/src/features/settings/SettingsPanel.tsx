@@ -27,16 +27,16 @@ import {
 } from '../../stores/settingsStore';
 import { LEGACY_TAB_MAP, type SettingsTab } from '../../stores/settingsDialogStore';
 import type { NotificationSettings } from '../../hooks/useNotifications';
-import { Button } from '@/components/ui/Button';
-import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/ui/Button';
+import { SectionErrorBoundary } from '@/ui/SectionErrorBoundary';
+import { useConfirm } from '@/ui/ConfirmDialog';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/ui/Dialog';
 import { useConnectorsStore } from '../../stores/connectorsStore';
 
 import { GeneralTab } from './tabs/General';

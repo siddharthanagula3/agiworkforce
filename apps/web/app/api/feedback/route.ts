@@ -23,8 +23,8 @@
  * attributes feedback to an account.
  *
  * REDACTION IS SERVER-SIDE. The desktop client filters its own log lines
- * (`filter_sensitive_data` in apps/desktop/src-tauri/src/sys/commands/
- * feedback.rs), but this is a public HTTP route: the web composer posts to it
+ * (`redact_log_record` in apps/desktop/src-tauri/src/sys/support_bundle.rs),
+ * but this is a public HTTP route: the web composer posts to it
  * too, older desktop builds keep posting to it, and any client can post to it
  * directly. So the same `redactSecrets` the support handoff uses runs here
  * BEFORE the insert, on the free-text fields and the attached log blob. A

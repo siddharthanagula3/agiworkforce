@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 
 interface DiffViewerProps {
   originalValue: string;

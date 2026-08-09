@@ -37,6 +37,7 @@ import {
 
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { logger } from '@/lib/logger';
+import { withSpan } from '@/lib/observability/span';
 
 // ─── Config schema (same shape as the gateway's mcpConfig.ts) ─────────────────
 
@@ -189,26 +190,47 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 /**
  * Call a single MCP tool by (serverId, toolName, args).
  * Lazily connects if the handle isn't cached yet.
+ *
+ * Wrapped in a `tool` span (SCALE-VER-006) sharing the request's `trace_id`, so
+ * a slow or failing tool call is attributable to the chat turn that issued it.
+ * `args` is never recorded — tool arguments are user content.
  */
 export async function executeWebMcpTool(
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<McpCallToolResult> {
-  let handle = _state.handles.get(serverId);
-  if (!handle) {
-    const entry = loadWebMcpConfig().find((s) => s.id === serverId);
-    if (!entry) {
-      throw new Error(`[web-mcp] server "${serverId}" is not in the config`);
-    }
-    await assertResolvedPublicHostname(entry.transport.url);
-    handle = await connectMcpServer({
-      serverName: serverId,
-      config: entryToConfig(entry),
-    });
-    _state.handles.set(serverId, handle);
-  }
-  return handle.callTool(toolName, args);
+  return withSpan(
+    'mcp.call_tool',
+    {
+      kind: 'client',
+      domain: 'tool',
+      attributes: {
+        'gen_ai.tool.name': toolName,
+        'mcp.server.id': serverId,
+        'mcp.tool.argument_count': Object.keys(args).length,
+      },
+    },
+    async (span) => {
+      let handle = _state.handles.get(serverId);
+      if (!handle) {
+        const entry = loadWebMcpConfig().find((s) => s.id === serverId);
+        if (!entry) {
+          throw new Error(`[web-mcp] server "${serverId}" is not in the config`);
+        }
+        await assertResolvedPublicHostname(entry.transport.url);
+        handle = await connectMcpServer({
+          serverName: serverId,
+          config: entryToConfig(entry),
+        });
+        _state.handles.set(serverId, handle);
+        span.setAttributes({ 'mcp.connection.cold_start': true });
+      }
+      const result = await handle.callTool(toolName, args);
+      span.setAttributes({ 'mcp.tool.is_error': result.isError === true });
+      return result;
+    },
+  );
 }
 
 /**

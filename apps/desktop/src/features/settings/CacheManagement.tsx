@@ -18,7 +18,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/AlertDialog';
+} from '@/ui/AlertDialog';
 
 export const CacheManagement: React.FC = () => {
   const [stats, setStats] = useState<CacheStats | null>(null);

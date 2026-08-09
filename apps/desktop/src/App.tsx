@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
+import { isLocalProvider } from './types/provider';
 import { getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { clearSessionToolApprovals } from './api/toolConfirmation';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
@@ -76,7 +77,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { ErrorBoundary } from './features/error-handling';
-import { TooltipProvider } from './components/ui/Tooltip';
+import { TooltipProvider } from './ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeCoworkDispatchRuntime } from './services/coworkDispatch';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
@@ -948,25 +949,20 @@ const DesktopShell = () => {
         }
         const visibleModels = rustModels.filter((model) => {
           const provider = model.provider.toLowerCase();
-          const isLocalProvider =
-            provider === 'ollama' ||
-            provider === 'local' ||
-            provider === 'lmstudio' ||
-            provider === 'llamacpp' ||
-            provider === 'vllm';
+          const isLocal = isLocalProvider(provider);
           const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
           const isReachable = model.available === true;
-          const isConfiguredByok = isReachable && !isLocalProvider && !isManagedProvider;
+          const isConfiguredByok = isReachable && !isLocal && !isManagedProvider;
 
           if (currentMode === 'local') {
-            return (isLocalProvider && isReachable) || isConfiguredByok;
+            return (isLocal && isReachable) || isConfiguredByok;
           }
 
           return isManagedProvider || model.id.startsWith('auto');
         });
         const chatModels = visibleModels.map((model) => {
           const provider = model.provider.toLowerCase();
-          const isLocal = ['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm'].includes(provider);
+          const isLocal = isLocalProvider(provider);
           const isByok =
             currentMode === 'local' &&
             model.available === true &&

@@ -17,6 +17,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { deleteObject, getObject, objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { servedByteHeaders } from '@/lib/security/served-bytes';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -75,14 +76,22 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
   if (!objectKey) throw createError.notFound('Knowledge file not found');
   const object = await getObject(objectKey);
   if (!object) throw createError.notFound('Knowledge file not found');
-  const disposition =
-    request.nextUrl.searchParams.get('download') === 'true'
-      ? `attachment; filename="${file.fileName.replace(/["\r\n]/g, '_')}"`
-      : 'inline';
+  // `.html`, `.xml` and `.svg` are all accepted knowledge-file types, and this
+  // response is served from the app's own origin — echoing the stored type
+  // with `inline` made an uploaded document execute as script against the
+  // uploader's session on a top-level navigation. `servedByteHeaders` demotes
+  // markup to an opaque download. It also covers rows registered BEFORE ingest
+  // scanning existed, which cannot be rescanned.
+  const wantsDownload = request.nextUrl.searchParams.get('download') === 'true';
+  const served = servedByteHeaders({
+    contentType: object.contentType || file.mimeType,
+    ...(wantsDownload ? { filename: file.fileName.replace(/["\r\n]/g, '_') } : {}),
+    forceAttachment: wantsDownload,
+  });
   return new NextResponse(Uint8Array.from(object.data), {
     headers: {
-      'Content-Type': object.contentType || file.mimeType,
-      'Content-Disposition': disposition,
+      'Content-Type': served.contentType,
+      'Content-Disposition': served.contentDisposition,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     },

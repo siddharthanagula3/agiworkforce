@@ -17,10 +17,10 @@ import type {
   McpServerHealth,
   McpToolExecutionStats,
 } from '../../types/mcp';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Badge } from '@/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
+import { ScrollArea } from '@/ui/ScrollArea';
 
 const DEFAULT_HISTORY_LIMIT = 10;
 

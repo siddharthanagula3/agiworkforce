@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { openBillingPortal } from '@/features/billing/services/stripe-payments';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  getPlanPriceUsd,
+  isBillingPlanTier,
+  isContractPricedPlan,
+  isPerSeatBillingPlan,
+} from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 
 // Real Stripe-backed shapes returned by the web billing routes.
@@ -191,7 +197,18 @@ export function BillingSection() {
   }
 
   const tier: string = String(subscription?.tier ?? 'free').toLowerCase();
-  const planPricing = BILLING_PLAN_PRICING[tier as keyof typeof BILLING_PLAN_PRICING];
+  // BIZ-020: `tier` is whatever the subscription row says, so a contract-priced
+  // Enterprise account reaches this render. It has no published amount, so the
+  // Price row states the contract instead of printing a number.
+  // Unknown/legacy tier keys stay undefined so the row falls back to the
+  // subscription's own display_name rather than silently reading as "Free".
+  const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : undefined;
+  const listPriceUsd = getPlanPriceUsd(tier, 'monthly');
+  const planPriceLabel = isContractPricedPlan(tier)
+    ? 'Custom — set by your contract'
+    : listPriceUsd !== null && listPriceUsd > 0
+      ? `$${listPriceUsd}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
+      : null;
 
   const isFreeTier = tier === 'free';
 
@@ -302,9 +319,7 @@ export function BillingSection() {
                 {/* The catalog label first: `display_name` carries the raw tier
                     key from the subscription row, which rendered as
                     "Max_15x plan" instead of "Max 15x". */}
-                {isFreeTier
-                  ? 'Free plan'
-                  : `${planPricing?.label ?? subscription?.display_name ?? ''} plan`}
+                {isFreeTier ? 'Free plan' : `${planLabel ?? subscription?.display_name ?? ''} plan`}
               </div>
               {isFreeTier && (
                 <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>Try AGI</div>
@@ -379,11 +394,9 @@ export function BillingSection() {
                   </span>
                 </Row>
               )}
-              {planPricing && planPricing.monthlyPriceUsd > 0 && (
+              {planPriceLabel !== null && (
                 <Row label="Price">
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                    ${planPricing.monthlyPriceUsd}/mo
-                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{planPriceLabel}</span>
                 </Row>
               )}
             </div>

@@ -99,8 +99,8 @@ export default function EnterprisePage() {
               v: 'There is no per-organization retention setting today — retention follows the published platform schedule in the privacy policy. Organization-configurable windows are a contract-scoped commitment, not a shipped control.',
             },
             {
-              k: 'BYOK enforcement',
-              v: 'The strongest control available today, and it needs no feature work from us: run the org on your own provider keys, or fully local, and no conversation content reaches AGI infrastructure at all.',
+              k: 'BYOK posture',
+              v: 'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop and CLI, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration — there is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
             },
             {
               k: 'Service levels',
@@ -113,21 +113,47 @@ export default function EnterprisePage() {
           ]}
         />
 
+        {/*
+          These rows must agree with /trust, which is the dated ledger and the
+          page a reviewer is sent to. Two of them did not:
+
+            - SOC 2 read "Evidence collection is part of the Cloud release
+              path." Nothing in this repository collects, stores or tracks audit
+              evidence, and /trust says in terms "no auditor is engaged, and no
+              audit is in progress. We are not going to describe internal work
+              as an audit programme." That sentence was written when the same
+              claim was cut from /trust; it survived here. It is now cut here
+              too, and `compliance-claim-honesty.test.ts` fails the build if
+              audit-programme language returns on any page.
+            - GDPR and CCPA read "In progress", and CCPA added that export and
+              deletion "are being verified". Both understate what shipped:
+              /api/user/export returns account data as a download,
+              /api/user/delete-account starts an enumerated erasure, and
+              /api/cron/purge-deleted-accounts runs it on a schedule. A page
+              that is more pessimistic than the ledger is still a page that
+              disagrees with it, and a reviewer reading both gets two answers.
+        */}
         <LedgerSection
           eyebrow={`Compliance posture as of ${STATUS_AS_OF}`}
           title="We claim only what is complete."
           rows={[
             {
               k: 'SOC 2 Type II',
-              v: 'Planned. No audit report claimed. Evidence collection is part of the Cloud release path.',
+              v: 'Not held. No report exists, no auditor is engaged, and no audit is in progress. We are not going to describe internal work as an audit programme — /trust carries the dated status.',
             },
-            { k: 'GDPR', v: 'In progress. Standard DPA available on request.' },
             {
-              k: 'CCPA',
-              v: 'In progress. Export and deletion paths are being verified before broad Cloud launch.',
+              k: 'GDPR — data subject rights',
+              v: 'Implemented. Self-service export returns your account data as a download, and account deletion runs an enumerated erasure on a scheduled job. Our standard DPA is published at /dpa; we also negotiate against yours.',
+            },
+            {
+              k: 'CCPA / CPRA',
+              v: 'Implemented, through the same export and erasure paths. We do not sell personal information — the privacy policy carries that disclosure.',
             },
             { k: 'HIPAA', v: 'Not available. AGI does not offer HIPAA-covered workflows today.' },
-            { k: 'ISO 27001', v: 'On the roadmap. No date claimed.' },
+            {
+              k: 'ISO 27001',
+              v: 'Not held. No certification body is engaged and no date is claimed.',
+            },
             {
               k: 'Everything else',
               v: 'On the roadmap with no date until there is a date.',

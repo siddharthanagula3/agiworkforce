@@ -1,7 +1,8 @@
 import {
-  BILLING_PLAN_PRICING,
   canUseBillingPlanCapability,
+  getBillingPlanPricing,
   getBillingPlanProductLimits,
+  getPlanPriceUsd,
   type BillingPlanLimit,
   type BillingPlanPricing,
   type BillingPlanTier,
@@ -26,6 +27,10 @@ function limitLabel(limit: BillingPlanLimit, singular: string, plural: string): 
 
 export interface BillingPlanDisplay {
   pricing: BillingPlanPricing;
+  /** Published monthly list price in USD, or `null` when the plan publishes none. */
+  monthlyPriceUsd: number | null;
+  /** Published yearly list price in USD, or `null` when the plan publishes none. */
+  yearlyPriceUsd: number | null;
   annualAvailable: boolean;
   features: string[];
 }
@@ -35,7 +40,9 @@ export interface BillingPlanDisplay {
  * keeps every Web plan picker aligned with the API's project/MCP/media gates.
  */
 export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay {
-  const pricing = BILLING_PLAN_PRICING[plan];
+  const pricing = getBillingPlanPricing(plan);
+  const monthlyPriceUsd = getPlanPriceUsd(plan, 'monthly');
+  const yearlyPriceUsd = getPlanPriceUsd(plan, 'yearly');
   const limits = getBillingPlanProductLimits(plan);
   const features: string[] = [];
 
@@ -60,7 +67,9 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
 
   return {
     pricing,
-    annualAvailable: pricing.yearlyPriceUsd > 0,
+    monthlyPriceUsd,
+    yearlyPriceUsd,
+    annualAvailable: yearlyPriceUsd !== null && yearlyPriceUsd > 0,
     features,
   };
 }

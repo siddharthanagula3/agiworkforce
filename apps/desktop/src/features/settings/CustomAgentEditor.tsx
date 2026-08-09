@@ -11,17 +11,17 @@ import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { getAllModels } from '../../constants/llm';
 import { type CustomAgentConfig, useCustomAgentsStore } from '../../stores/customAgentsStore';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+import { Button } from '@/ui/Button';
+import { Label } from '@/ui/Label';
+import { Input } from '@/ui/Input';
+import { Textarea } from '@/ui/Textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
+} from '@/ui/Select';
 
 // ---- Constants ---------------------------------------------------------------
 

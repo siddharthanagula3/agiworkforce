@@ -56,8 +56,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+} from '@/ui/Select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 
 interface BrandIconData {
   path: string;

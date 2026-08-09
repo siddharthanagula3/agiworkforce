@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 import { exportCloudAccountData } from '../../../api/cloudAccountData';
 import { openDesktopCloudAccountWindow } from '../../../services/desktopCloudAccountWindow';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
 
 export function CloudDataSection() {

@@ -141,6 +141,47 @@ describe('GET /api/files/[id]', () => {
     expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
   });
 
+  // CRIT-005 — a generated file is sandbox- or model-authored. Served `inline`
+  // under its own markup type, a top-level navigation to this route executes it
+  // as a document on the app origin with the signed-in session.
+  it.each([
+    ['text/html', 'dashboard.html'],
+    ['image/svg+xml', 'chart.svg'],
+    ['application/xhtml+xml', 'page.xhtml'],
+    ['text/xml', 'data.xml'],
+  ])('serves %s as an opaque download, never as a document', async (mimeType, filename) => {
+    const stored = Buffer.from('<svg onload="alert(document.cookie)"></svg>', 'utf8');
+    mockGetMediaAssetById.mockResolvedValue(
+      makeAsset({ mimeType, byteSize: stored.byteLength, metadata: { filename } }),
+    );
+    mockGetObject.mockResolvedValue({ data: stored, contentType: mimeType });
+
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/octet-stream');
+    expect(res.headers.get('content-disposition')).toBe(`attachment; filename="${filename}"`);
+    // Bytes are still served intact — `fetch().text()` renderers are unaffected.
+    expect(Buffer.from(await res.arrayBuffer()).equals(stored)).toBe(true);
+  });
+
+  it('leaves inert types inline so images and the PDF viewer keep working', async () => {
+    const stored = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    mockGetMediaAssetById.mockResolvedValue(
+      makeAsset({
+        mimeType: 'image/png',
+        byteSize: stored.byteLength,
+        metadata: { filename: 'chart.png' },
+      }),
+    );
+    mockGetObject.mockResolvedValue({ data: stored, contentType: 'image/png' });
+
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('content-disposition')).toBe('inline; filename="chart.png"');
+  });
+
   it('allows the authenticated PDF preview to frame only PDF bytes from the same origin', async () => {
     const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
     mockGetMediaAssetById.mockResolvedValue(makeAsset({ byteSize: stored.byteLength }));

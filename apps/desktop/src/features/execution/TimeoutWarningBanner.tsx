@@ -8,8 +8,8 @@ import { useMemo, type FC } from 'react';
 import { AlertTriangle, Clock, Zap, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
 
 export interface TimeoutWarningBannerProps {
   taskName: string;

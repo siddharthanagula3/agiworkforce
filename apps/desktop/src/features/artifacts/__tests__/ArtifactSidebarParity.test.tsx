@@ -68,7 +68,7 @@ vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
   oneDark: {},
 }));
 
-import { TooltipProvider } from '@/components/ui/Tooltip';
+import { TooltipProvider } from '@/ui/Tooltip';
 import { ArtifactPanel } from '../ArtifactPanel';
 
 function Wrapper({ children }: { children: React.ReactNode }) {

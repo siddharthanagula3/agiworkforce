@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Loader2, Lock, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { checkSubscriptionGate, getUpgradeMessage } from '../../utils/subscriptionGate';
 import { useAccountStore, useUnifiedAuthStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';

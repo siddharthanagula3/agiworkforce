@@ -14,7 +14,7 @@
  * the Plan row only links to the same Stripe portal.
  */
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';

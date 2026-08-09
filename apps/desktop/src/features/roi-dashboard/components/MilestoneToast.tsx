@@ -2,7 +2,7 @@ import { Share2, Trophy, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/ui/Button';
 import type { Milestone } from '../../../types/roi';
 import { useROIStore } from '../roiStore';
 
