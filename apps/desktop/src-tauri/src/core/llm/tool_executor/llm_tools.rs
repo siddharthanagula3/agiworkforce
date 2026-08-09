@@ -34,7 +34,14 @@ impl ToolExecutor {
 
             let llm_state = app.state::<LLMState>();
 
-            let model_str = model.unwrap_or("gpt-5.6-luna");
+            // Callers that omit "model" get the catalog's OpenAI fast-completion
+            // default rather than a literal that outlives its catalog entry.
+            let model_str = model.unwrap_or_else(|| {
+                crate::core::llm::models_config::get_task_model(
+                    &crate::core::llm::Provider::OpenAI,
+                    "fast_completion",
+                )
+            });
             let preferences = Some(RouterPreferences {
                 provider: None,
                 model: Some(model_str.to_string()),

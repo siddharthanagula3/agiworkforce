@@ -1,7 +1,9 @@
 use tauri::State;
 use tracing::info;
 
-use crate::core::agent::context_compactor::{CompactionConfig, ContextCompactor};
+use crate::core::agent::context_compactor::{
+    resolve_context_window, CompactionConfig, ContextCompactor,
+};
 use crate::data::db::repository;
 
 use super::AppDatabase;
@@ -103,9 +105,14 @@ pub(super) async fn compact_context(
         });
     }
 
+    // The command carries no model, so budget the pass against the model the
+    // conversation last ran on — the automatic pass in `context_monitor` reads
+    // the same catalog window.
+    let conversation_model = messages
+        .iter()
+        .rev()
+        .find_map(|message| message.model.as_deref());
     let config = CompactionConfig {
-        max_tokens: 100_000,
-        target_tokens: 50_000,
         keep_recent: match focus.as_deref() {
             Some("errors") | Some("debug") => 15,
             Some("decisions") | Some("todo") => 5,
@@ -113,7 +120,7 @@ pub(super) async fn compact_context(
         },
         min_messages: 10,
         summary_focus: focus.clone(),
-        ..CompactionConfig::default()
+        ..CompactionConfig::for_context_window(resolve_context_window(conversation_model))
     };
 
     let compactor = ContextCompactor::new(config);
@@ -348,6 +355,89 @@ mod tests {
                 "message-10",
                 "message-11",
             ]
+        );
+    }
+
+    /// A million-token model must keep its recent turns. Under the old flat
+    /// 100k/50k budget the shared reducer dropped recent turns until the
+    /// conversation fit ~52k tokens, discarding history the window could hold.
+    #[tokio::test]
+    async fn compact_context_budgets_against_the_conversation_model_window() {
+        let db = test_db();
+        let user_id = "test-user";
+        let conversation_id = {
+            let conn = db.connection().expect("db connection");
+            crate::data::db::repository::create_conversation(
+                &conn,
+                "Wide Window Test".to_string(),
+                user_id.to_string(),
+            )
+            .expect("conversation")
+        };
+
+        // 40_000 code points ≈ 10_000 estimated tokens per message, so the ten
+        // preserved messages alone are ~100k — well past the old flat target.
+        let body = "x".repeat(40_000);
+        {
+            let conn = db.connection().expect("db connection");
+            for index in 0..16 {
+                let message = Message::new(
+                    conversation_id,
+                    user_id.to_string(),
+                    if index % 2 == 0 {
+                        MessageRole::User
+                    } else {
+                        MessageRole::Assistant
+                    },
+                    format!("message-{index} {body}"),
+                )
+                .with_metrics(10_000, 0.01)
+                .with_source(
+                    Some("anthropic".to_string()),
+                    Some("claude-opus-5".to_string()),
+                );
+                crate::data::db::repository::create_message(&conn, &message)
+                    .expect("create message");
+            }
+        }
+
+        let response = compact_context(&db, conversation_id, None, user_id)
+            .await
+            .expect("compact context");
+        assert!(response.summary_created);
+
+        let messages = {
+            let conn = db.connection().expect("db connection");
+            crate::data::db::repository::list_messages(&conn, conversation_id)
+                .expect("list messages")
+        };
+
+        // The property under test is the budget, not the `keep_recent` value:
+        // the newest turn survives and the retained tail is allowed to stay far
+        // above the old flat 50k target because the conversation's model states
+        // a much wider window. Under that flat target the shared reducer kept
+        // four turns (~40k); it now keeps the whole tail (~100k).
+        assert!(messages[0]
+            .content
+            .starts_with(agiworkforce_agent_core::context::UNTRUSTED_SUMMARY_MARKER));
+        let retained: Vec<&str> = messages
+            .iter()
+            .skip(1)
+            .map(|message| message.content.as_str())
+            .collect();
+        assert!(
+            retained
+                .last()
+                .is_some_and(|last| last.starts_with("message-15")),
+            "the newest turn must survive compaction"
+        );
+        let retained_tokens: usize = retained
+            .iter()
+            .map(|content| content.chars().count() / 4)
+            .sum();
+        assert!(
+            retained_tokens > 50_000,
+            "a wide window must not be squeezed to the old flat 50k target, kept ~{retained_tokens}"
         );
     }
 }

@@ -254,6 +254,24 @@ fn subscription_spec(
     }
 }
 
+/// Temperature to actually put in the request body for `model`.
+///
+/// `stream_completion` forwards `config.default.temperature` (set by
+/// `--temperature` or `[default] temperature` in the config file) untouched, and
+/// `agiworkforce-llm` serializes it verbatim for the Anthropic, OpenAI, Gemini
+/// and Ollama dialects (`crates/agiworkforce-llm/src/stream.rs:342,725,988,1397`).
+/// Models whose provider rejects sampling parameters therefore 400 on any
+/// configured temperature. The set is declared once, in models.json
+/// (`reasoning.rejectsSamplingParameters`) — never as an ID list at a call
+/// site. This is the CLI's copy of the boundary the desktop request builder
+/// already applies in `core/llm/provider_adapter.rs`.
+fn effective_temperature(model: &str, requested: Option<f32>) -> Option<f32> {
+    if crate::model_catalog::model_rejects_sampling_parameters(model) {
+        return None;
+    }
+    requested
+}
+
 /// Run one spec through the shared engine, adapting `StreamEvent::TextDelta`
 /// onto the CLI's `StreamCallback` and the crate outcome/error onto
 /// `CompletionResult` / `CliError`.
@@ -280,7 +298,7 @@ async fn run_spec(
         model: &wire_model,
         messages,
         max_tokens,
-        temperature,
+        temperature: effective_temperature(model, temperature),
         tools,
         thinking_budget,
         tool_choice: None,
@@ -546,6 +564,25 @@ mod tests {
         },
         time::Duration,
     };
+
+    /// A configured temperature must not reach a model whose provider rejects
+    /// sampling parameters. Before this guard, `agiworkforce --temperature 0.3
+    /// -m claude-opus-5` put `temperature` in the Anthropic body and 400'd.
+    #[test]
+    fn effective_temperature_drops_sampling_for_models_the_catalog_flags() {
+        assert!(
+            crate::model_catalog::model_rejects_sampling_parameters("claude-opus-5"),
+            "models.json must still mark claude-opus-5 rejectsSamplingParameters"
+        );
+        assert_eq!(effective_temperature("claude-opus-5", Some(0.3)), None);
+
+        // Everything else keeps the caller's value — the guard is a per-model
+        // exclusion read from the catalog, not a blanket strip.
+        assert_eq!(effective_temperature("claude-sonnet-5", Some(0.3)), Some(0.3));
+        assert_eq!(effective_temperature("gemini-3.6-flash", Some(0.3)), Some(0.3));
+        assert_eq!(effective_temperature("ollama-local-thing", Some(0.9)), Some(0.9));
+        assert_eq!(effective_temperature("claude-opus-5", None), None);
+    }
 
     #[tokio::test]
     async fn lmstudio_probe_and_stream_use_the_configured_loopback_endpoint() {
