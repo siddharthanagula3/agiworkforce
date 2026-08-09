@@ -538,9 +538,11 @@ pub async fn shortcuts_update(
     let shortcuts_state = state.lock().await;
     let mut shortcuts = shortcuts_state.shortcuts.lock().await;
 
+    // Named, because the caller shows this string to the user and "Shortcut
+    // not found" gave no way to tell which id the renderer had drifted onto.
     let shortcut = shortcuts
         .get_mut(&shortcut_id)
-        .ok_or("Shortcut not found")?;
+        .ok_or_else(|| format!("Shortcut '{}' is not registered", shortcut_id))?;
 
     let old_key = shortcut.key.clone();
     let was_enabled = shortcut.enabled;
@@ -570,7 +572,26 @@ pub async fn shortcuts_update(
 
     // Re-register if now enabled and is global
     if shortcut.is_global && shortcut.enabled && (!was_enabled || shortcut.key != old_key) {
-        register_global_shortcut(&app, &shortcut.key, shortcut.action.clone())?;
+        if let Err(error) = register_global_shortcut(&app, &shortcut.key, shortcut.action.clone()) {
+            // The OS refuses a combo another app already owns. Without putting
+            // the previous binding back, a rejected edit left the user with no
+            // hotkey at all: the old one is already unregistered above.
+            let rejected_key = std::mem::replace(&mut shortcut.key, old_key.clone());
+            shortcut.enabled = was_enabled;
+
+            let mut registered = shortcuts_state.registered_keys.lock().await;
+            registered.retain(|k| k != &rejected_key);
+
+            // `is_global` is already true here — this arm only runs inside the
+            // `shortcut.is_global` branch above.
+            if was_enabled {
+                if register_global_shortcut(&app, &old_key, shortcut.action.clone()).is_ok() {
+                    registered.push(old_key);
+                }
+            }
+
+            return Err(error);
+        }
     }
 
     // Unregister if disabled

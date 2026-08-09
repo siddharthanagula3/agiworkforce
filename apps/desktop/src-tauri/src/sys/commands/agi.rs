@@ -65,6 +65,10 @@ pub struct SubmitGoalRequest {
     pub priority: Option<String>,
     pub deadline: Option<u64>,
     pub success_criteria: Option<Vec<String>>,
+    /// Caller-chosen iteration ceiling for the sequential loop, surfaced as the
+    /// `max_steps` constraint `goal_iteration_limit()` reads. Absent leaves the
+    /// engine default in place.
+    pub max_steps: Option<u64>,
     /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
     /// execution boundary, threaded into the submitted `Goal` and from there
     /// into every LLM call made while planning/executing it. Absent (or
@@ -105,6 +109,33 @@ pub struct SubmitParallelGoalRequest {
 pub struct SubmitParallelGoalResponse {
     pub goal_id: String,
     pub best_result: ScoredResult,
+}
+
+/// Every parallel agent costs one planning round-trip plus its own sandbox, and
+/// `Planner::create_parallel_plans` only has eight distinct strategy hints —
+/// past that the extra agents replan the same "balanced approach" at full cost.
+const MAX_PARALLEL_AGENTS: usize = 8;
+const DEFAULT_PARALLEL_AGENTS: usize = 4;
+
+/// Zero agents would hand the comparator an empty result set, so the floor is 1.
+fn clamp_num_agents(requested: Option<usize>) -> usize {
+    requested
+        .unwrap_or(DEFAULT_PARALLEL_AGENTS)
+        .clamp(1, MAX_PARALLEL_AGENTS)
+}
+
+fn max_steps_constraints(max_steps: Option<u64>) -> Vec<Constraint> {
+    max_steps
+        .map(|max_steps| {
+            vec![Constraint {
+                name: "max_steps".to_string(),
+                value: ConstraintValue::Custom {
+                    key: "max_steps".to_string(),
+                    value: max_steps.to_string(),
+                },
+            }]
+        })
+        .unwrap_or_default()
 }
 
 static AGI_CORE: Mutex<Option<Arc<TokioMutex<AGICore>>>> = Mutex::new(None);
@@ -224,7 +255,7 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: vec![],
+        constraints: max_steps_constraints(request.max_steps),
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
@@ -271,7 +302,7 @@ pub async fn agi_submit_goal_parallel(
     };
 
     let goal_id = goal.id.clone();
-    let num_agents = request.num_agents.unwrap_or(8);
+    let num_agents = clamp_num_agents(request.num_agents);
 
     let agi = agi_arc.lock().await;
     let best_result = match agi.submit_goal_parallel(goal, num_agents).await {
@@ -472,18 +503,7 @@ pub async fn orchestrator_spawn_agent(
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: request
-            .max_steps
-            .map(|max_steps| {
-                vec![Constraint {
-                    name: "max_steps".to_string(),
-                    value: ConstraintValue::Custom {
-                        key: "max_steps".to_string(),
-                        value: max_steps.to_string(),
-                    },
-                }]
-            })
-            .unwrap_or_default(),
+        constraints: max_steps_constraints(request.max_steps),
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: None,
     };
@@ -524,18 +544,7 @@ pub async fn orchestrator_spawn_parallel(
             description: req.description,
             priority,
             deadline: req.deadline,
-            constraints: req
-                .max_steps
-                .map(|max_steps| {
-                    vec![Constraint {
-                        name: "max_steps".to_string(),
-                        value: ConstraintValue::Custom {
-                            key: "max_steps".to_string(),
-                            value: max_steps.to_string(),
-                        },
-                    }]
-                })
-                .unwrap_or_default(),
+            constraints: max_steps_constraints(req.max_steps),
             success_criteria: req.success_criteria.unwrap_or_default(),
             trust_mode: None,
         };
@@ -1602,7 +1611,11 @@ pub async fn agi_submit_goal_auto(
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: vec![],
+        // `SubmitGoalRequest::max_steps` is part of this command's wire contract
+        // too: auto's non-swarm branch runs the same execute/reflect loop as
+        // `agi_submit_goal`, so accepting the field here and dropping it would
+        // silently ignore a caller-chosen bound.
+        constraints: max_steps_constraints(request.max_steps),
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
@@ -1686,5 +1699,52 @@ mod tests {
             let result = parse(&format!(r#"{{"description":"d","trustMode":"{invalid}"}}"#));
             assert!(result.is_err(), "wire value {invalid:?} must be rejected");
         }
+    }
+
+    #[test]
+    fn num_agents_clamp_holds_the_parallel_fan_out_inside_the_planner_budget() {
+        assert_eq!(clamp_num_agents(Some(20)), MAX_PARALLEL_AGENTS);
+        assert_eq!(clamp_num_agents(Some(usize::MAX)), MAX_PARALLEL_AGENTS);
+        assert_eq!(clamp_num_agents(Some(0)), 1);
+        assert_eq!(clamp_num_agents(Some(3)), 3);
+        assert_eq!(clamp_num_agents(None), DEFAULT_PARALLEL_AGENTS);
+    }
+
+    #[test]
+    fn num_agents_clamp_reads_the_wire_field_the_launcher_sends() {
+        // `agentTaskStore.submitGoal` posts `numAgents` on this struct; the
+        // clamp is only worth anything if it sees that field. Absent stays
+        // absent so the command applies its own default rather than 8.
+        let oversized: SubmitParallelGoalRequest =
+            serde_json::from_str(r#"{"description":"d","numAgents":20}"#)
+                .expect("numAgents is part of the wire");
+        assert_eq!(clamp_num_agents(oversized.num_agents), MAX_PARALLEL_AGENTS);
+
+        let absent: SubmitParallelGoalRequest = serde_json::from_str(r#"{"description":"d"}"#)
+            .expect("numAgents is optional on the wire");
+        assert_eq!(absent.num_agents, None);
+        assert_eq!(clamp_num_agents(absent.num_agents), DEFAULT_PARALLEL_AGENTS);
+    }
+
+    #[test]
+    fn sequential_max_steps_reaches_the_goal_as_a_constraint() {
+        let request =
+            parse(r#"{"description":"d","maxSteps":12}"#).expect("maxSteps is part of the wire");
+        assert_eq!(request.max_steps, Some(12));
+
+        let constraints = max_steps_constraints(request.max_steps);
+        match constraints.as_slice() {
+            [Constraint {
+                name,
+                value: ConstraintValue::Custom { key, value },
+            }] => {
+                assert_eq!(name, "max_steps");
+                assert_eq!(key, "max_steps");
+                assert_eq!(value, "12");
+            }
+            other => panic!("expected one max_steps constraint, got {other:?}"),
+        }
+
+        assert!(max_steps_constraints(None).is_empty());
     }
 }
