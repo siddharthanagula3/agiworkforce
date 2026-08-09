@@ -102,6 +102,8 @@ import {
   getBillingPlanProductLimits,
   type BillingPlanLimit,
 } from '@agiworkforce/types';
+// Type-only use (`keyof typeof ...shape`); erased at build time.
+import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
 
 type CustomConnectorInput = Parameters<NonNullable<SettingsDataAdapter['addCustomConnector']>>[0];
 
@@ -488,12 +490,31 @@ function formatPlanLimit(limit: BillingPlanLimit | undefined): string {
   return typeof limit === 'number' ? new Intl.NumberFormat().format(limit) : 'Unavailable';
 }
 
+/**
+ * The managed feature flags `/api/me` emits, derived from `MeFeatureFlagsSchema`
+ * rather than retyped, so this cannot drift from the contract. The auth store
+ * widens the payload to `Record<string, boolean>`, which silently answers
+ * `undefined` for a key the server never sends, so read flags through this
+ * union: a name that is not a declared flag is a type error instead of a status
+ * that never changes. The schema's `.catchall` means the server may ship a flag
+ * before it is declared here; that flag simply is not readable until it is added
+ * to the schema, which is the intended direction.
+ */
+type ManagedFeatureFlag = keyof typeof MeFeatureFlagsSchema.shape;
+
+function isManagedFlagEnabled(
+  featureFlags: Record<string, boolean>,
+  flag: ManagedFeatureFlag,
+): boolean {
+  return featureFlags[flag] === true;
+}
+
 /** Managed capability status. Native Local agent controls stay in Local settings. */
 function DesktopCapabilitiesSection() {
   const featureFlags = useAuthStore((state) => state.featureFlags);
   const plan = useAuthStore(selectPlan);
   const limits = getBillingPlanProductLimits(plan);
-  const codeExecutionConfigured = featureFlags['code_execution'] === true;
+  const codeExecutionConfigured = isManagedFlagEnabled(featureFlags, 'code_execution');
   const codeExecutionAvailable = canUseDesktopCloudCodeExecution(plan, codeExecutionConfigured);
   const capabilities = [
     {
@@ -511,10 +532,9 @@ function DesktopCapabilitiesSection() {
     {
       label: 'Managed web search',
       description: 'Search and fetch current web sources when the selected model supports it.',
-      status:
-        featureFlags['generic_web_search'] === true || featureFlags['native_web_search'] === true
-          ? 'Available'
-          : 'Model-dependent',
+      status: isManagedFlagEnabled(featureFlags, 'generic_web_search')
+        ? 'Available'
+        : 'Model-dependent',
     },
     {
       label: 'AGI Work',

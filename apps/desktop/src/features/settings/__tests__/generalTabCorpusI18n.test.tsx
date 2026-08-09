@@ -1,0 +1,101 @@
+/**
+ * The shared `settings` bundle is translated into all twelve supported
+ * locales, but Desktop rendered English literals over it, so the language
+ * switcher on the General tab stayed in English after a switch.
+ *
+ * Scope: these assertions cover only the strings that were wired to the
+ * corpus — the theme/language labels and the allowed-directories heading and
+ * add action. The rest of both screens is still English literals with no
+ * corpus keys, so passing here does not mean either screen is localized.
+ * They run against the real `@agiworkforce/i18n` corpus rather than a stub
+ * `t`, so a component that goes back to a literal fails here.
+ */
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/tauri-mock', () => ({
+  isTauri: true,
+  isCloudWeb: false,
+  isDesktopUiDevLocal: false,
+  invoke: vi.fn(async () => undefined),
+}));
+
+vi.mock('@agiworkforce/desktop-command-client', () => ({
+  window: {
+    windowGetState: vi.fn(async () => ({ keepInMenuBar: true })),
+    windowSetMenuBarMode: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('@/features/resource-monitor', () => ({ ResourceMonitor: () => <div /> }));
+vi.mock('../../AutomationPermissionsSettings', () => ({
+  AutomationPermissionsSettings: () => <div />,
+}));
+vi.mock('../../UpdateSettings', () => ({ UpdateSettings: () => <div /> }));
+vi.mock('../../KeybindingsSettings', () => ({ KeybindingsSettings: () => <div /> }));
+vi.mock('../../NetworkProxySettings', () => ({ NetworkProxySettings: () => <div /> }));
+
+import i18n from '../../../i18n';
+import { GeneralTab } from '../tabs/General';
+import { AllowedDirectoriesSettings } from '../AllowedDirectoriesSettings';
+
+function renderGeneralTab() {
+  return render(
+    <GeneralTab
+      resolvedWindowPreferences={{ theme: 'system', language: 'es' }}
+      resolvedGlobalHotkeyPreferences={{ enabled: false, combo: 'CommandOrControl+Shift+A' }}
+      defaultGlobalHotkeyCombo="CommandOrControl+Shift+A"
+      onThemeChange={vi.fn()}
+      onLanguageChange={vi.fn()}
+      onGlobalHotkeyEnabledChange={vi.fn()}
+      onGlobalHotkeyComboChange={vi.fn()}
+    />,
+  );
+}
+
+describe('General settings tab renders the shared translation corpus', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage('en');
+  });
+
+  it('labels the theme and language controls in the active locale', async () => {
+    await i18n.changeLanguage('es');
+    renderGeneralTab();
+
+    expect(screen.getByText('Tema')).toBeInTheDocument();
+    expect(screen.getByText('Idioma')).toBeInTheDocument();
+    expect(screen.queryByText('Theme')).not.toBeInTheDocument();
+    expect(screen.queryByText('Language')).not.toBeInTheDocument();
+  });
+
+  // Note: this passes with the t() calls reverted to literals — it does not
+  // guard the wiring. What it catches is a mistyped key, which resolves to the
+  // raw key text ("settings:theme") instead of the shipped English wording.
+  it('resolves the English wording rather than a raw key name', () => {
+    renderGeneralTab();
+
+    expect(screen.getByText('Theme')).toBeInTheDocument();
+    expect(screen.getByText('Language')).toBeInTheDocument();
+  });
+});
+
+describe('Allowed directories settings renders the shared translation corpus', () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage('en');
+  });
+
+  it('translates the section heading and its add/remove actions', async () => {
+    await i18n.changeLanguage('es');
+    render(<AllowedDirectoriesSettings />);
+
+    expect(screen.getByText('Directorios Permitidos')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Agregar' })).toBeInTheDocument();
+    expect(screen.queryByText('Allowed Directories')).not.toBeInTheDocument();
+  });
+});

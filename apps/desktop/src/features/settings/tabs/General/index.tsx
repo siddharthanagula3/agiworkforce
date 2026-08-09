@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Cloud, Loader2, Shield } from 'lucide-react';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
@@ -255,6 +256,15 @@ export function GeneralTab({
   onGlobalHotkeyEnabledChange,
   onGlobalHotkeyComboChange,
 }: GeneralTabProps) {
+  // Only the theme and language controls below read the shared corpus, because
+  // the language switcher itself lives on this tab and used to stay English
+  // after you switched locale. The rest of this tab ("Window Preferences",
+  // "Global Hotkey", "Network", "System Resources", "Agent Permissions",
+  // "Keybindings" and their descriptions) is still English literals: those
+  // strings have no counterpart in packages/ui/i18n/locales, so translating
+  // them needs new corpus keys in all twelve locales, not a t() call here.
+  const { t } = useTranslation();
+
   return (
     <>
       {isCloudWeb ? (
@@ -313,7 +323,7 @@ export function GeneralTab({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="theme">Theme</Label>
+              <Label htmlFor="theme">{t('settings:theme')}</Label>
               <Select
                 value={resolvedWindowPreferences.theme}
                 onValueChange={(value) => onThemeChange(value as 'light' | 'dark' | 'system')}
@@ -322,15 +332,15 @@ export function GeneralTab({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="light">{t('settings:light')}</SelectItem>
+                  <SelectItem value="dark">{t('settings:dark')}</SelectItem>
+                  <SelectItem value="system">{t('settings:system')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="language">Language</Label>
+              <Label htmlFor="language">{t('settings:language')}</Label>
               <Select
                 value={resolvedWindowPreferences.language}
                 onValueChange={(value) => onLanguageChange(value as Language)}
