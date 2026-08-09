@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { BILLING_PLAN_CAPABILITY_TIERS } from '@agiworkforce/types';
+
 import {
   calculateManagedUsageCostCents,
   estimateManagedUsageCostCents,
@@ -377,6 +379,7 @@ describe('managed usage durable lifecycle client', () => {
       idempotencyKey: 'turn_12345678',
       provider: 'anthropic',
       request: requestBody,
+      planTier: 'pro',
       leaseToken: 'lease-1',
     });
 
@@ -386,15 +389,147 @@ describe('managed usage durable lifecycle client', () => {
       estimatedCostCents: 2,
       requestStatus: 'reserved',
     });
+    // `_with_limits`, with the ceilings actually present. The legacy
+    // eight-argument function does no rolling accounting at all, so asserting
+    // it passed for as long as this path enforced no five-hour, weekly or
+    // flagship window on desktop, CLI and VS Code traffic.
     expect(rpc).toHaveBeenCalledWith(
-      'reserve_managed_usage_request',
+      'reserve_managed_usage_request_with_limits',
       expect.objectContaining({
         p_user_id: 'user-1',
         p_idempotency_key: 'turn_12345678',
         p_provider: 'anthropic',
         p_model: 'claude-opus-5',
         p_lease_token: 'lease-1',
+        // Pro: 100 five-hour units and 500 weekly units at two units per cent,
+        // flagship weekly at 30% of the weekly ceiling.
+        p_session_cap_cents: 50,
+        p_weekly_cap_cents: 250,
+        p_flagship_weekly_cap_cents: 75,
+        p_is_flagship: true,
       }),
+    );
+  });
+
+  /**
+   * Every tier the billing catalog admits to managed compute, with the
+   * ceilings `apps/web/lib/server/managed-usage-policy.ts` resolves for it.
+   * The gateway mirrors that table by hand because the canonical module is
+   * `server-only` and lives in the Next app, so the pin below — every admitted
+   * tier must appear here — is what turns a tenth tier added to
+   * `billing-catalog.ts` into a red gateway suite instead of a silent cap of 0,
+   * i.e. an unconditional 429 for a paying customer on desktop, CLI and VS Code.
+   */
+  const EXPECTED_TIER_CAP_CENTS: Record<
+    string,
+    [session: number | null, weekly: number | null, flagshipWeekly: number | null]
+  > = {
+    // Free is metered in the micro-USD trial ledger, so its PAID ceiling is 0.
+    free: [0, 0, 0],
+    basic: [10, 50, 15],
+    pro: [50, 250, 75],
+    max: [250, 1_250, 375],
+    max_15x: [750, 3_750, 1_125],
+    team: [50, 250, 75],
+    // A tier that declares no ceiling passes null, which migration 0070 reads
+    // as uncapped; every other tier passes a number, and 0 denies.
+    enterprise: [null, null, null],
+  };
+
+  it('prices every plan tier admitted to managed compute', () => {
+    const admitted = new Set([
+      ...BILLING_PLAN_CAPABILITY_TIERS.managed_chat,
+      ...BILLING_PLAN_CAPABILITY_TIERS.developer_surfaces,
+    ]);
+    expect([...admitted].sort()).toEqual(Object.keys(EXPECTED_TIER_CAP_CENTS).sort());
+  });
+
+  it.each([
+    ...Object.entries(EXPECTED_TIER_CAP_CENTS).map(
+      ([tier, [session, weekly, flagship]]) => [tier, session, weekly, flagship] as const,
+    ),
+    // An unrecognised tier must fail closed rather than reserve uncapped.
+    ['not-a-plan', 0, 0, 0] as const,
+  ])(
+    'resolves the %s rolling ceilings from the plan, not from the request',
+    async (planTier, session, weekly, flagship) => {
+      const { client, rpc } = rpcClient([
+        {
+          data: [
+            {
+              reservation_decision: 'acquired',
+              request_status: 'reserved',
+              lease_token: 'lease-1',
+              estimated_cost_cents: 2,
+              settlement_status: 'succeeded',
+              error_code: null,
+            },
+          ],
+          error: null,
+        },
+      ]);
+
+      await reserveManagedUsage({
+        client,
+        userId: 'user-1',
+        idempotencyKey: 'turn_12345678',
+        provider: 'anthropic',
+        request: requestBody,
+        planTier: planTier as string,
+        leaseToken: 'lease-1',
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'reserve_managed_usage_request_with_limits',
+        expect.objectContaining({
+          p_session_cap_cents: session,
+          p_weekly_cap_cents: weekly,
+          p_flagship_weekly_cap_cents: flagship,
+        }),
+      );
+    },
+  );
+
+  it('tags only flagship-slot models against the flagship weekly window', async () => {
+    const results = [0, 1].map(() => ({
+      data: [
+        {
+          reservation_decision: 'acquired',
+          request_status: 'reserved',
+          lease_token: 'lease-1',
+          estimated_cost_cents: 2,
+          settlement_status: 'succeeded',
+          error_code: null,
+        },
+      ],
+      error: null,
+    }));
+    const { client, rpc } = rpcClient(results);
+
+    for (const model of ['claude-opus-5', 'claude-sonnet-5']) {
+      await reserveManagedUsage({
+        client,
+        userId: 'user-1',
+        idempotencyKey: 'turn_12345678',
+        provider: 'anthropic',
+        request: { ...requestBody, model },
+        planTier: 'pro',
+        leaseToken: 'lease-1',
+      });
+    }
+
+    // The registry lists `claude-opus-5` under `flagship_coding` before
+    // `flagship_coding_pro_plus`, so a first-slot lookup would tag nothing and
+    // the flagship ceiling would never bind.
+    expect(rpc).toHaveBeenNthCalledWith(
+      1,
+      'reserve_managed_usage_request_with_limits',
+      expect.objectContaining({ p_is_flagship: true }),
+    );
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      'reserve_managed_usage_request_with_limits',
+      expect.objectContaining({ p_is_flagship: false }),
     );
   });
 
@@ -405,6 +540,9 @@ describe('managed usage durable lifecycle client', () => {
     ['outcome_unknown', 'IDEMPOTENCY_REPLAY', 409],
     ['conflict', 'IDEMPOTENCY_CONFLICT', 409],
     ['declined', 'INSUFFICIENT_CREDITS', 402],
+    ['session_limit', 'ROLLING_FIVE_HOUR_LIMIT_REACHED', 429],
+    ['weekly_limit', 'ROLLING_WEEKLY_LIMIT_REACHED', 429],
+    ['flagship_weekly_limit', 'FLAGSHIP_WEEKLY_LIMIT_REACHED', 429],
     ['unavailable', 'BILLING_UNAVAILABLE', 503],
   ])(
     'maps %s reservation decisions to a non-disclosing route error',
@@ -432,6 +570,7 @@ describe('managed usage durable lifecycle client', () => {
           idempotencyKey: 'turn_12345678',
           provider: 'anthropic',
           request: requestBody,
+          planTier: 'pro',
           leaseToken: 'lease-1',
         }),
       ).rejects.toMatchObject({ code, statusCode: status });
@@ -450,6 +589,7 @@ describe('managed usage durable lifecycle client', () => {
         idempotencyKey: 'turn_12345678',
         provider: 'anthropic',
         request: requestBody,
+        planTier: 'pro',
         leaseToken: 'lease-1',
       }),
     ).rejects.toMatchObject({ code: 'BILLING_UNAVAILABLE', statusCode: 503 });
