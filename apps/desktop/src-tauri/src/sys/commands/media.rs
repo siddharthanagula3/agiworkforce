@@ -1,4 +1,4 @@
-use crate::sys::account::{get_access_token, get_api_base_url};
+use crate::sys::account::{current_managed_auth_boundary, get_access_token, get_api_base_url};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -102,6 +102,40 @@ pub struct MediaHistoryItem {
 #[tauri::command]
 pub async fn media_get_history(app: tauri::AppHandle) -> Result<Vec<MediaHistoryItem>, String> {
     load_history(&app).map_err(|e| format!("Failed to load history: {}", e))
+}
+
+const MANAGED_MEDIA_LOCAL_DENIAL: &str =
+    "Image and video generation run on AGI Managed Cloud. This session is Local/BYOK, so the prompt was not sent. Switch to the Cloud workspace to generate media.";
+
+/// TRUST-BOUNDARY decision for managed-media egress, split from the ambient read
+/// below so both branches stay testable without mutating the process-wide
+/// credential state other suites depend on.
+fn managed_media_denial_reason(managed_boundary_active: bool) -> Option<&'static str> {
+    if managed_boundary_active {
+        None
+    } else {
+        Some(MANAGED_MEDIA_LOCAL_DENIAL)
+    }
+}
+
+/// TRUST-BOUNDARY: the two commands below post the user's prompt — plus whatever
+/// local context the model folded into it — to AGI Managed Cloud over their own
+/// `reqwest` client, so they sit outside the renderer's `guardedFetch` chokepoint
+/// (`apps/desktop/src/lib/egressGuard.ts`) and the boundary has to hold here or
+/// nowhere.
+///
+/// A stored access token proves only that the user signed in at some point, never
+/// that THIS execution is a Managed Cloud one: `cloudAccountAuth` persists the
+/// token natively for any live session, including one that has since returned to
+/// the Local workspace. The single native signal that a caller explicitly declared
+/// Managed Cloud is the auth boundary a `TrustMode::ManagedCloud` goal scopes
+/// around its work (`core/agi/core.rs`). Local and BYOK never scope one, so an
+/// absent boundary fails closed.
+fn ensure_managed_media_boundary() -> Result<(), String> {
+    match managed_media_denial_reason(current_managed_auth_boundary().is_some()) {
+        Some(reason) => Err(reason.to_string()),
+        None => Ok(()),
+    }
 }
 
 // Compatibility normalization lives only at this privileged HTTP boundary.
@@ -210,6 +244,8 @@ pub async fn media_generate_image(
     app: tauri::AppHandle,
     request: MediaImageRequest,
 ) -> Result<MediaImageResponse, String> {
+    ensure_managed_media_boundary()?;
+
     let token = get_access_token().map_err(|e| format!("Authentication required: {}", e))?;
     let base_url = get_api_base_url();
     let url = format!("{}/api/media/image/generate", base_url);
@@ -304,6 +340,8 @@ pub async fn media_generate_video(
     app: tauri::AppHandle,
     request: MediaVideoRequest,
 ) -> Result<MediaVideoResponse, String> {
+    ensure_managed_media_boundary()?;
+
     // Plan tier validation is performed server-side by the web API route
     // based on the authenticated user's subscription. The desktop client
     // does not have access to the plan tier and must not accept it as input.
@@ -492,6 +530,34 @@ fn save_history(app: &tauri::AppHandle, history: &[MediaHistoryItem]) -> anyhow:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sys::account::scope_managed_auth_boundary;
+
+    // TRUST-BOUNDARY regression: a Local/BYOK session used to reach the managed
+    // media routes with nothing but a stored access token, so the prompt left the
+    // device without a mode read anywhere on the path.
+    #[tokio::test]
+    async fn media_local_mode_blocked() {
+        let denial = ensure_managed_media_boundary()
+            .expect_err("an unscoped call is Local/BYOK and must be denied");
+        assert!(
+            denial.contains("Managed Cloud"),
+            "the denial must name the boundary it enforces: {denial}"
+        );
+
+        // A native goal that declared Local/BYOK scopes an explicit `None`, which
+        // must be denied exactly like the unscoped case.
+        scope_managed_auth_boundary(None, async {
+            assert!(
+                ensure_managed_media_boundary().is_err(),
+                "a goal running outside the Managed Cloud boundary must be denied"
+            );
+        })
+        .await;
+
+        // ...and the gate is a boundary check, not a kill switch: a caller inside a
+        // captured Managed Cloud boundary still generates media.
+        assert_eq!(managed_media_denial_reason(true), None);
+    }
 
     // Regression test for a confirmed request-shape bug: media_generate_image
     // previously forwarded the desktop UI's internal ImageProviderId straight
