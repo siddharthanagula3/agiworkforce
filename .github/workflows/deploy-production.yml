@@ -15,6 +15,9 @@ concurrency:
 
 permissions:
   contents: read
+  # Read-only, and only so the scope job can ask which commit each surface was
+  # last deployed from. It grants no ability to start, cancel, or alter runs.
+  actions: read
 
 jobs:
   scope:
@@ -34,18 +37,27 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          # Full history. The baseline below is the commit a surface was last
+          # deployed from, which can be many commits back, and a shallow
+          # checkout cannot diff against it.
+          fetch-depth: 0
 
+      - name: Self-test the deploy scope selector
+        run: node --test scripts/production-deploy-scope.test.mjs
+
+      # Measured from what each surface last actually SHIPPED, not from HEAD^.
+      # A commit that lands while CI is red never deploys, so a one-commit diff
+      # strands it permanently — that is what kept the argon2 outage fix
+      # unshipped after CI went green on a commit that touched only scripts/.
       - name: Select affected production surfaces
         id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            git diff --name-only HEAD^ HEAD | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
-          else
-            node scripts/production-deploy-scope.mjs --all >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/production-deploy-baseline.mjs >> "$GITHUB_OUTPUT"
 
   deploy-web:
     name: Deploy verified web artifact
