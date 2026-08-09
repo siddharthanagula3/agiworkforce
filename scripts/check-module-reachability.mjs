@@ -248,7 +248,10 @@ const tsTargets = [
       'apps/desktop/src/components/ui/Table.tsx',
       'apps/desktop/src/components/ui/index.ts',
       'apps/desktop/src/constants/index.ts',
-      'apps/desktop/src/constants/timeouts.ts',
+      // constants/timeouts.ts was here and is not any more: wave 4 pointed the
+      // four api modules that actually execute at these constants, so the file
+      // is reachable and the ratchet — which only shrinks — refused to keep the
+      // exemption. Removing it is what makes the improvement permanent.
       'apps/desktop/src/core/index.ts',
       'apps/desktop/src/data/index.ts',
       'apps/desktop/src/features/agent-collaboration/AgentCollaborationPanel.tsx',
