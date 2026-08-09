@@ -61,8 +61,13 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'aws-secret-assignment',
     label: 'AWS secret or session token assignment',
     severity: 'critical',
+    // Name spelling follows the Rust rule: the AWS CLI, the SDK env vars and
+    // most config files disagree on `_` vs `-`, and JSON puts a quote between
+    // the name and the colon. The value class is everything up to the next
+    // delimiter, since secrets carry `/` and `+`; the `(?!\[REDACTED)` keeps
+    // a placeholder another rule already substituted from being re-chewed.
     pattern:
-      /\b(aws_(?:secret_access_key|session_token))\s*[=:]\s*["']?[A-Za-z0-9/+=_-]{20,}["']?/gi,
+      /\b(aws[_-]?(?:secret[_-]?access[_-]?key|session[_-]?token))\b["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
     replacement: '$1=[REDACTED_AWS_SECRET]',
   },
   {
@@ -83,7 +88,11 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'google-api-key',
     label: 'Google API key',
     severity: 'critical',
-    pattern: /AIza[a-zA-Z0-9_-]{35}/g,
+    // Open-ended, not `{35}`. Google publishes no length contract; the exact
+    // count only describes the keys minted today. A fixed quantifier misses
+    // anything shorter outright and, on anything longer, redacts a 39-char
+    // prefix while leaving the tail in the preview.
+    pattern: /AIza[a-zA-Z0-9_-]{30,}/g,
     replacement: '[REDACTED_GOOGLE_KEY]',
   },
   {
@@ -111,7 +120,10 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'github-token',
     label: 'GitHub token',
     severity: 'critical',
-    pattern: /gh[psour]_[a-zA-Z0-9]{36,}/g,
+    // 30, matching the Rust rule: 36 is the length of a user-to-server token
+    // body, and the shorter server-to-server and refresh variants share the
+    // prefix table without sharing that length.
+    pattern: /gh[psour]_[a-zA-Z0-9]{30,}/g,
     replacement: '[REDACTED_GITHUB_TOKEN]',
   },
   {
@@ -147,22 +159,42 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'bearer-token',
     label: 'Bearer token',
     severity: 'high',
-    pattern: /bearer\s+[a-zA-Z0-9._\-/+=]{20,}/gi,
+    pattern: /bearer\s+[a-zA-Z0-9._\-/+=]{8,}/gi,
     replacement: 'Bearer [REDACTED_TOKEN]',
   },
   {
     id: 'named-secret',
     label: 'Named secret',
     severity: 'high',
+    // Three widenings over the first port, each a live miss the Rust rule
+    // caught: bare `secret`/`token` names (word-bounded, so the compound
+    // spellings above still win); the quote a JSON key puts before its colon;
+    // and a value class of "anything up to the delimiter" rather than an
+    // alphanumeric guess, since passwords and tokens carry punctuation.
+    // The value class keeps Rust's brackets (a bracketed value such as
+    // `token=[abcdefghij12345]` is a secret like any other); the leading
+    // `(?!\[REDACTED)` is what stops an earlier rule's `[REDACTED_*]`
+    // placeholder being matched as a value and flattened a second time,
+    // which would throw away the vendor attribution.
     pattern:
-      /(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?/gi,
+      /(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token|\bsecret\b|\btoken\b)["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
     replacement: '$1=[REDACTED]',
   },
   {
     id: 'database-url-credentials',
     label: 'Database URL credentials',
     severity: 'critical',
-    pattern: /(postgres|mysql|mongodb|redis):\/\/[^:]+:[^@]+@/gi,
+    // `postgresql://` and `mongodb+srv://` are the spellings ORMs and Atlas
+    // actually emit, and the earlier scheme list matched neither — a
+    // DATABASE_URL pasted into a handoff preview crossed with its password.
+    // The password class is the Rust one (`[^\s]+`, secret_redaction.rs) and
+    // must stay that wide: generated passwords are base64, so `/` and `+` are
+    // routine, and an earlier revision of this rule that excluded `/` silently
+    // stopped redacting `postgres://user:npg_x9Kq/L2mZ@host/db`. Being greedy
+    // to the last `@` in a whitespace-free token can over-redact a following
+    // `user@host` in the same JSON blob; that is the fail-safe direction and
+    // matches the Rust reference.
+    pattern: /(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s/:@]+:[^\s]+@/gi,
     replacement: '$1://[CREDENTIALS_REDACTED]@',
   },
   // Page-context redactor patterns ported from
@@ -183,6 +215,10 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
   },
   // Lines containing the word "password" or "passwd" (case-insensitive,
   // multi-line) — used to mask form labels that drag the value with them.
+  // This also covers the `--password=` half of the Rust password-flag rule.
+  // The `-p <value>` half is deliberately not ported: unanchored `-p` matches
+  // the middle of ordinary hyphenated words, and a redactor that mangles prose
+  // is one somebody turns off.
   {
     id: 'password-line',
     label: 'Password-bearing line',

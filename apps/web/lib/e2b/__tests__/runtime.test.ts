@@ -27,8 +27,13 @@ vi.mock('../gate', () => ({ e2bExecutionEnabled: vi.fn(() => true) }));
 // GOV-5: metering is exercised by its own unit; here it must not reach the
 // credit ledger.
 const meterSandboxComputeInterval = vi.fn(async (_interval: unknown) => 0);
+// GOV-5: getE2BExecutor refuses to provision when compute cannot be priced;
+// priceable by default here so the lifecycle tests below exercise the normal path.
+const sandboxComputeIsPriceable = vi.fn(() => true);
 vi.mock('../compute-metering', () => ({
+  E2B_COMPUTE_RATE_ENV: 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
+  sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
 }));
 
 // GOV-4: the plan tier is supplied on the scope in these tests, so the
@@ -165,6 +170,31 @@ function liveSandboxesFor(
     metadata: { userId, conversationId: `conv-${userId}-${i}` },
   }));
 }
+
+describe('getE2BExecutor — unpriced compute (GOV-5)', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+  });
+
+  it('refuses to provision any sandbox when compute cannot be priced', async () => {
+    sandboxComputeIsPriceable.mockReturnValueOnce(false);
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(getE2BExecutor(scope('conv-unpriced', 'user-unpriced'))).resolves.toBeNull();
+    // The refusal is BEFORE the SDK import/create: no sandbox exists to bill for.
+    expect(create).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('refuses ephemeral (unscoped) sandboxes too', async () => {
+    sandboxComputeIsPriceable.mockReturnValueOnce(false);
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(getE2BExecutor()).resolves.toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+});
 
 describe('getE2BExecutor — ephemeral (no conversationId)', () => {
   beforeEach(() => {
