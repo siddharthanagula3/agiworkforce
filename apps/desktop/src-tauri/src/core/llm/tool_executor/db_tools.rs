@@ -36,20 +36,32 @@ fn sql_identifier_tokens(query_upper: &str) -> Vec<String> {
     let mut without_block = String::with_capacity(query_upper.len());
     let bytes: Vec<char> = query_upper.chars().collect();
     let mut i = 0;
-    let mut depth = 0usize;
+    // NOT a depth counter. SQLite does not nest block comments: it terminates
+    // at the FIRST `*/`. A counter diverges from the engine on
+    //
+    //     SELECT * FROM /* a /* b */ auth_sessions
+    //
+    // where the engine ends the comment at the single `*/` and runs against
+    // `auth_sessions`, while a nesting tokenizer stays inside the comment and
+    // swallows the table name. The scanner then sees `[SELECT, FROM]`, finds
+    // nothing after `FROM`, and performs NO allowlist check — the original bug
+    // class exactly: hide the name from the scanner, leave it live for the
+    // engine. Found by an independent review that executed the query against a
+    // real sqlite3 binary rather than reasoning about it.
+    let mut in_comment = false;
     while i < bytes.len() {
-        if i + 1 < bytes.len() && bytes[i] == '/' && bytes[i + 1] == '*' {
-            depth += 1;
+        if !in_comment && i + 1 < bytes.len() && bytes[i] == '/' && bytes[i + 1] == '*' {
+            in_comment = true;
             i += 2;
             continue;
         }
-        if depth > 0 && i + 1 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '/' {
-            depth -= 1;
+        if in_comment && i + 1 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '/' {
+            in_comment = false;
             i += 2;
             without_block.push(' ');
             continue;
         }
-        if depth == 0 {
+        if !in_comment {
             without_block.push(bytes[i]);
         }
         i += 1;
@@ -235,12 +247,24 @@ impl ToolExecutor {
             let mut i = 0;
             while i < tokens.len() {
                 if tokens[i] == "FROM" || tokens[i] == "JOIN" {
-                    if let Some(table_token) = tokens.get(i + 1) {
-                        // Strip any trailing comma or parenthesis
-                        let table_name =
-                            table_token.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
-                        if !table_name.is_empty()
-                            && !ALLOWED_QUERY_TABLES.contains(&table_name.to_lowercase().as_str())
+                    // FAIL CLOSED on an unresolvable target. Previously an
+                    // absent or empty identifier after FROM/JOIN skipped the
+                    // allowlist check entirely — so any divergence between this
+                    // tokenizer and the SQL engine became a BYPASS rather than a
+                    // denial. Rejecting instead caps the blast radius of the
+                    // whole class: a future tokenizer bug can at worst refuse a
+                    // legitimate query, never admit a forbidden table.
+                    let table_name = tokens
+                        .get(i + 1)
+                        .map(|t| {
+                            t.trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
+                                .to_string()
+                        })
+                        .unwrap_or_default();
+                    {
+                        let table_name = table_name.as_str();
+                        if table_name.is_empty()
+                            || !ALLOWED_QUERY_TABLES.contains(&table_name.to_lowercase().as_str())
                         {
                             return Ok(ToolResult {
                                 success: false,
@@ -574,12 +598,26 @@ impl ToolExecutor {
             let mut i = 0;
             while i < tokens.len() {
                 if tokens[i] == "FROM" || tokens[i] == "JOIN" {
-                    if let Some(table_token) = tokens.get(i + 1) {
-                        let table_name =
-                            table_token.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
-                        if !table_name.is_empty()
-                            && !ALLOWED_WRITE_TABLES.contains(&table_name.to_lowercase().as_str())
-                            && !ALLOWED_QUERY_TABLES.contains(&table_name.to_lowercase().as_str())
+                    // FAIL CLOSED on an unresolvable target. Previously an
+                    // absent or empty identifier after FROM/JOIN skipped the
+                    // allowlist check entirely — so any divergence between this
+                    // tokenizer and the SQL engine became a BYPASS rather than a
+                    // denial. Rejecting instead caps the blast radius of the
+                    // whole class: a future tokenizer bug can at worst refuse a
+                    // legitimate query, never admit a forbidden table.
+                    let table_name = tokens
+                        .get(i + 1)
+                        .map(|t| {
+                            t.trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
+                                .to_string()
+                        })
+                        .unwrap_or_default();
+                    {
+                        let table_name = table_name.as_str();
+                        if table_name.is_empty()
+                            || (!ALLOWED_WRITE_TABLES.contains(&table_name.to_lowercase().as_str())
+                                && !ALLOWED_QUERY_TABLES
+                                    .contains(&table_name.to_lowercase().as_str()))
                         {
                             return Ok(ToolResult {
                                 success: false,
@@ -878,6 +916,30 @@ mod sql_tokenizer_tests {
             table_after_keyword("SELECT * FROM main.auth_sessions", "FROM"),
             Some("MAIN".to_string())
         );
+    }
+
+    /// SQLite does NOT nest block comments — it ends at the first `*/`, so
+    /// `auth_sessions` here is live SQL. A nesting tokenizer stays inside the
+    /// comment, swallows the table name, and the scanner then finds nothing
+    /// after FROM. Combined with the old skip-on-absent behaviour that meant NO
+    /// allowlist check ran at all. Reported by an independent reviewer who
+    /// executed the query against a real sqlite3 binary rather than reasoning
+    /// about it; the seeded `auth_sessions` row came back.
+    #[test]
+    fn a_nested_block_comment_does_not_hide_the_table() {
+        assert_eq!(
+            table_after_keyword("SELECT * FROM /* a /* b */ auth_sessions", "FROM"),
+            Some("AUTH_SESSIONS".to_string())
+        );
+    }
+
+    /// The structural half of the fix: when the target cannot be resolved the
+    /// scanners now REJECT rather than skip, so any future divergence between
+    /// this tokenizer and the engine is a denial instead of a bypass.
+    #[test]
+    fn a_trailing_from_resolves_to_nothing_so_callers_must_reject() {
+        assert_eq!(table_after_keyword("SELECT * FROM", "FROM"), None);
+        assert_eq!(table_after_keyword("SELECT * FROM /* unterminated", "FROM"), None);
     }
 
     #[test]
