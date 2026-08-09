@@ -989,6 +989,9 @@ pub fn run() {
 
             let workflow_engine_state =
                 WorkflowEngineState::new_main_database(main_database_access.clone());
+            workflow_engine_state
+                .engine
+                .set_app_handle(app.handle().clone());
             app.manage(workflow_engine_state);
 
             let template_conn = main_database_access.open_connection().map_err(|e| {

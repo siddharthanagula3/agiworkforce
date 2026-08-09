@@ -5,11 +5,20 @@ use crate::features::canvas::{
     ElementStyle, Position, Size,
 };
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 pub struct CanvasStateManager {
     pub manager: Arc<CanvasManager>,
     pub a2ui: Arc<A2UIProtocol>,
+}
+
+/// Canvas state lives in memory behind commands, so the renderer only learns
+/// about mutations it did not make itself (A2UI writes driven by the agent,
+/// or a second window) from this event.
+fn emit_canvas_updated(app: &AppHandle, canvas_id: &str) {
+    if let Err(e) = app.emit("canvas:updated", serde_json::json!({ "canvasId": canvas_id })) {
+        tracing::error!("[Canvas] Failed to emit canvas:updated: {}", e);
+    }
 }
 
 impl Default for CanvasStateManager {
@@ -78,6 +87,7 @@ pub fn canvas_get_active(state: State<'_, CanvasStateManager>) -> Result<Option<
 /// Add element to canvas
 #[tauri::command]
 pub fn canvas_add_element(
+    app: AppHandle,
     state: State<'_, CanvasStateManager>,
     canvas_id: String,
     element: CanvasElement,
@@ -85,12 +95,15 @@ pub fn canvas_add_element(
     state
         .manager
         .add_element(&canvas_id, element)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    emit_canvas_updated(&app, &canvas_id);
+    Ok(())
 }
 
 /// Remove element from canvas
 #[tauri::command]
 pub fn canvas_remove_element(
+    app: AppHandle,
     state: State<'_, CanvasStateManager>,
     canvas_id: String,
     element_id: String,
@@ -98,13 +111,15 @@ pub fn canvas_remove_element(
     state
         .manager
         .remove_element(&canvas_id, &element_id)
-        .map(|_| true)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    emit_canvas_updated(&app, &canvas_id);
+    Ok(true)
 }
 
 /// Update element in canvas
 #[tauri::command]
 pub fn canvas_update_element(
+    app: AppHandle,
     state: State<'_, CanvasStateManager>,
     canvas_id: String,
     element_id: String,
@@ -147,17 +162,24 @@ pub fn canvas_update_element(
                 }
             }
         })
-        .map(|_| true)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    emit_canvas_updated(&app, &canvas_id);
+    Ok(true)
 }
 
 /// Clear all elements from canvas
 #[tauri::command]
-pub fn canvas_clear(state: State<'_, CanvasStateManager>, canvas_id: String) -> Result<(), String> {
+pub fn canvas_clear(
+    app: AppHandle,
+    state: State<'_, CanvasStateManager>,
+    canvas_id: String,
+) -> Result<(), String> {
     state
         .manager
         .clear_canvas(&canvas_id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    emit_canvas_updated(&app, &canvas_id);
+    Ok(())
 }
 
 /// Export canvas to JSON
@@ -177,15 +199,23 @@ pub fn canvas_export(
 /// Execute A2UI command from AGI
 #[tauri::command]
 pub fn canvas_a2ui_execute(
+    app: AppHandle,
     state: State<'_, CanvasStateManager>,
     command: A2UICommand,
 ) -> Result<A2UIResponse, String> {
-    Ok(state.a2ui.execute(command))
+    let response = state.a2ui.execute(command);
+    if response.success {
+        if let Some(canvas_id) = &response.canvas_id {
+            emit_canvas_updated(&app, canvas_id);
+        }
+    }
+    Ok(response)
 }
 
 /// Add text element (convenience)
 #[tauri::command]
 pub fn canvas_add_text(
+    app: AppHandle,
     state: State<'_, CanvasStateManager>,
     canvas_id: String,
     text: String,
@@ -211,6 +241,7 @@ pub fn canvas_add_text(
     state
         .manager
         .add_element(&canvas_id, element)
-        .map(|()| element_id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    emit_canvas_updated(&app, &canvas_id);
+    Ok(element_id)
 }

@@ -671,12 +671,19 @@ impl SchedulerState {
                     let success = result.is_ok();
                     let duration_ms = (completed_at - started_at).num_milliseconds();
 
-                    if let Err(ref e) = result {
+                    let error_message = result.err();
+
+                    if let Some(ref e) = error_message {
                         tracing::error!(
                             "[Scheduler] Job '{}' (id={}) failed: {}",
                             job_name,
                             job_id,
                             e
+                        );
+                        emit_scheduler_event(
+                            &app_handle,
+                            "scheduler:error",
+                            serde_json::json!({ "jobId": job_id, "error": e }),
                         );
                     }
 
@@ -695,7 +702,7 @@ impl SchedulerState {
                             } else {
                                 ExecutionStatus::Failed
                             },
-                            error: result.err(),
+                            error: error_message,
                             duration_ms: Some(duration_ms),
                         });
                         // Cap history at 500 entries
@@ -707,6 +714,12 @@ impl SchedulerState {
 
                     // Update job state (last_run, next_run, counters)
                     scheduler.mark_job_run(&job_id, success).ok();
+
+                    // The store has no other way to learn a background firing
+                    // happened; polling was never wired up on the frontend.
+                    if let Ok(Some(job)) = scheduler.get_job(&job_id) {
+                        emit_scheduler_event(&app_handle, "scheduler:job_executed", job);
+                    }
                 }
             }
         });
@@ -716,6 +729,24 @@ impl SchedulerState {
 impl Default for SchedulerState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Broadcast a scheduler lifecycle change to every window.
+///
+/// `schedulerStore` treats these events as the only source of job mutations it
+/// did not itself initiate — background firings, the agent's scheduler tools,
+/// and a second window all reach the UI through here. A failed emit is logged
+/// rather than propagated so a missing webview never fails the mutation that
+/// already succeeded.
+fn emit_scheduler_event<P: serde::Serialize + Clone>(
+    app_handle: &tauri::AppHandle,
+    event: &str,
+    payload: P,
+) {
+    use tauri::Emitter;
+    if let Err(e) = app_handle.emit(event, payload) {
+        tracing::warn!("[Scheduler] Failed to emit {}: {}", event, e);
     }
 }
 
@@ -738,6 +769,7 @@ pub async fn scheduler_add_job(
     action_data: Option<serde_json::Value>,
     prompt: Option<String>,
     state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<String> {
     // Extract cron expression from schedule (can be a plain string or a JSON object)
     let cron_expr = match &schedule {
@@ -800,9 +832,16 @@ pub async fn scheduler_add_job(
         _ => {}
     }
 
-    state
-        .scheduler
-        .add_job(name, cron_expr, resolved_action_type, resolved_action_data)
+    let job_id =
+        state
+            .scheduler
+            .add_job(name, cron_expr, resolved_action_type, resolved_action_data)?;
+
+    if let Ok(Some(job)) = state.scheduler.get_job(&job_id) {
+        emit_scheduler_event(&app_handle, "scheduler:job_added", job);
+    }
+
+    Ok(job_id)
 }
 
 /// Remove a scheduled job by ID
@@ -813,8 +852,19 @@ pub async fn scheduler_add_job(
 pub async fn scheduler_remove_job(
     job_id: String,
     state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<bool> {
-    state.scheduler.remove_job(&job_id)
+    let removed = state.scheduler.remove_job(&job_id)?;
+
+    if removed {
+        emit_scheduler_event(
+            &app_handle,
+            "scheduler:job_removed",
+            serde_json::json!({ "jobId": job_id }),
+        );
+    }
+
+    Ok(removed)
 }
 
 /// List all scheduled jobs
@@ -831,8 +881,14 @@ pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec
 /// # Returns
 /// `true` if the job was found and paused, `false` if not found or already paused
 #[tauri::command]
-pub async fn scheduler_pause_job(job_id: String, state: State<'_, SchedulerState>) -> Result<bool> {
-    state.scheduler.pause_job(&job_id)
+pub async fn scheduler_pause_job(
+    job_id: String,
+    state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
+) -> Result<bool> {
+    let paused = state.scheduler.pause_job(&job_id)?;
+    emit_job_updated(&app_handle, &state, &job_id, paused);
+    Ok(paused)
 }
 
 /// Resume a paused scheduled job
@@ -843,8 +899,29 @@ pub async fn scheduler_pause_job(job_id: String, state: State<'_, SchedulerState
 pub async fn scheduler_resume_job(
     job_id: String,
     state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<bool> {
-    state.scheduler.resume_job(&job_id)
+    let resumed = state.scheduler.resume_job(&job_id)?;
+    emit_job_updated(&app_handle, &state, &job_id, resumed);
+    Ok(resumed)
+}
+
+/// Re-read a job and broadcast it as `scheduler:job_updated`.
+///
+/// `changed` is the mutating call's own "did anything happen" answer — a no-op
+/// pause on an already-paused job must not look like a state change to the UI.
+fn emit_job_updated(
+    app_handle: &tauri::AppHandle,
+    state: &State<'_, SchedulerState>,
+    job_id: &str,
+    changed: bool,
+) {
+    if !changed {
+        return;
+    }
+    if let Ok(Some(job)) = state.scheduler.get_job(job_id) {
+        emit_scheduler_event(app_handle, "scheduler:job_updated", job);
+    }
 }
 
 /// Get a specific scheduled job by ID
@@ -897,7 +974,11 @@ pub async fn scheduler_get_next_runs(
 /// # Returns
 /// `true` if the job was found and toggled, `false` otherwise
 #[tauri::command]
-pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) -> Result<bool> {
+pub async fn scheduler_toggle_job(
+    id: String,
+    state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
+) -> Result<bool> {
     // Check current status and toggle accordingly
     let current_status = {
         let job = state.scheduler.get_job(&id)?;
@@ -907,14 +988,17 @@ pub async fn scheduler_toggle_job(id: String, state: State<'_, SchedulerState>) 
         }
     };
 
-    match current_status {
+    let toggled = match current_status {
         JobStatus::Active => state.scheduler.pause_job(&id),
         JobStatus::Paused => state.scheduler.resume_job(&id),
         other => Err(Error::Generic(format!(
             "Cannot toggle job in {:?} state. Only active or paused jobs can be toggled.",
             other
         ))),
-    }
+    }?;
+
+    emit_job_updated(&app_handle, &state, &id, toggled);
+    Ok(toggled)
 }
 
 /// Immediately trigger a scheduled job to run
@@ -962,6 +1046,11 @@ pub async fn scheduler_run_job_now(
             duration_ms,
             e
         );
+        emit_scheduler_event(
+            &app_handle,
+            "scheduler:error",
+            serde_json::json!({ "jobId": id, "error": e.to_string() }),
+        );
     } else {
         tracing::info!(
             "[Scheduler] Job '{}' (id={}) action dispatched successfully in {}ms",
@@ -998,7 +1087,13 @@ pub async fn scheduler_run_job_now(
     }
 
     // Mark the job run in the scheduler (updates last_run, next_run, counters)
-    state.scheduler.mark_job_run(&id, success)
+    let marked = state.scheduler.mark_job_run(&id, success)?;
+
+    if let Ok(Some(job)) = state.scheduler.get_job(&id) {
+        emit_scheduler_event(&app_handle, "scheduler:job_executed", job);
+    }
+
+    Ok(marked)
 }
 
 /// SECURITY: Validates a shell command/script against dangerous patterns.
@@ -1874,6 +1969,7 @@ pub async fn scheduler_update_job(
     id: String,
     updates: ScheduledJobUpdate,
     state: State<'_, SchedulerState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<bool> {
     let mut jobs = state
         .scheduler
@@ -1939,6 +2035,12 @@ pub async fn scheduler_update_job(
             *job = before;
             return Err(e);
         }
+
+        let updated = job.clone();
+        // Release the write lock before emitting: a listener that calls back
+        // into a scheduler command would otherwise deadlock on the same RwLock.
+        drop(jobs);
+        emit_scheduler_event(&app_handle, "scheduler:job_updated", updated);
 
         Ok(true)
     } else {
