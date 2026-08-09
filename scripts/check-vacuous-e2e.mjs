@@ -40,13 +40,14 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'target', 'dist', '.next', 'b
  * repaired yet. This list may only SHRINK — an entry that no longer reproduces
  * fails the check, so repairing a suite is what removes it, and nothing else.
  */
-const KNOWN = {
-  'apps/desktop/e2e/chat.spec.ts':
-    'BASE-008. 13 tests, 16 conditional skips, none unguarded. Repair needs the ' +
-    'same treatment gdpr.spec.ts got: seed a session via injectMockCloudAuth + ' +
-    'mockCloudApi, then assert the controls exist rather than skipping when they ' +
-    'do not. Runs in CI today under the `chat` project.',
-};
+const KNOWN = {};
+
+// chat.spec.ts was the only entry and has been repaired, so it is gone — which
+// is the only way an entry may leave this list. It had 13 tests behind 16
+// conditional skips because it never seeded a session: the project runs the
+// plain-browser bundle, the app boots to <AuthPage />, and every control the
+// suite looked for was behind a login screen. It now seeds via
+// injectMockCloudAuth + mockCloudApi and asserts instead of skipping.
 
 // Two suites were listed here on a first pass and removed by this file's own
 // staleness check, which is worth recording because it is the check earning its
