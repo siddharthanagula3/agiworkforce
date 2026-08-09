@@ -380,7 +380,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 33. Cache-pricing divergence between desktop and web, and triplicated surcharges
 
-- Status: todo
+- Status: DONE (2026-08-09) — cache token pricing converged across surfaces — 4023f46f9
 - Area: billing
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/llm/cost_calculator.rs`, `apps/web/lib/cost-tracker.ts`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/lib/services/llm-cost-calculator.ts`, `services/api-gateway/src/services/managedUsageBilling.ts`
@@ -616,7 +616,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 57. Desktop timeout constants: a complete canonical file with zero importers
 
-- Status: todo
+- Status: DONE (2026-08-09) — desktop timeouts wired to the four modules that execute them — c6dc19e52
 - Area: ops
 - Severity: high
 - Writes: `apps/desktop/src/api/automation.ts`, `apps/desktop/src/api/mcp.ts`, `apps/desktop/src/api/embeddings.ts`, `apps/desktop/src/api/privacy.ts`, `apps/desktop/src/api/automationEnhanced.ts`, `apps/desktop/src/api/ollama.ts`, `apps/desktop/src/stores/chat/agentWorkflowEvents.ts`, `apps/desktop/src/utils/ipc.ts`
@@ -802,7 +802,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 76. Chrome extension has no i18n infrastructure at all
 
-- Status: todo
+- Status: DONE (2026-08-09) — extension canonicalization — 664df8b69
 - Area: ux
 - Severity: high
 - Writes: `apps/extension/_locales/en/messages.json` (new), `apps/extension/manifest.json`, `apps/extension/src/side_panel.ts`, `apps/extension/src/background.ts`
@@ -843,7 +843,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 80. Signup → checkout → entitlement has zero end-to-end coverage
 
-- Status: todo
+- Status: DONE (2026-08-09) — web contract gaps — 7aa633875
 - Area: billing
 - Severity: critical
 - Writes: `apps/web/e2e/checkout.spec.ts` (new), `apps/web/app/api/stripe-webhook/lib/__tests__/route.test.ts` (new)
@@ -852,7 +852,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 81. No load, stress or soak testing exists
 
-- Status: todo
+- Status: REVERTED (2026-08-09) — REVERTED. The load-testing tooling was removed entirely rather than landed half-built: tools/load and .github/workflows/load.yml are gone, verified absent from disk, index and HEAD tree. A load suite that does not run is worse than none, because its presence reads as coverage. SCALE-VER-001 still wants a real one.
 - Area: ci
 - Severity: critical
 - Writes: `tools/load/` (new), `.github/workflows/load.yml` (new)
@@ -861,7 +861,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 82. Nothing can page a human
 
-- Status: todo
+- Status: DONE (2026-08-09) — health-probe cron + incident runbook — 7aa633875
 - Area: ops
 - Severity: critical
 - Writes: `apps/web/app/api/cron/health-probe/route.ts` (new), `vercel.json`, `docs/runbooks/incident-response.md` (new)
@@ -871,7 +871,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 83. No AI output quality evals
 
-- Status: todo
+- Status: DONE (2026-08-09) — evals harness — c6dc19e52
 - Area: security
 - Severity: critical
 - Writes: `tools/evals/` (new), `.github/workflows/evals.yml` (new)
@@ -880,7 +880,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 84. Zero funnel instrumentation and no value-first path
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — real, all four evidence claims confirmed, but it bundles two builds that cannot move independently inside one Writes set.
 - Area: data
 - Severity: critical
 - Writes: `apps/web/app/layout.tsx`, `apps/web/lib/analytics/events.ts` (new), `apps/web/app/(marketing)/**`, `apps/web/app/api/chat/guest/route.ts` (new)
@@ -889,7 +889,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 85. EU AI Act Article 50 disclosure is wired on one surface of six
 
-- Status: todo
+- Status: DONE (2026-08-09) — AI-Act provenance on generated media — 7aa633875
 - Area: legal
 - Severity: critical
 - Writes: `packages/compliance/ai-act/**`, `apps/web/**` (chat + media generation), `apps/desktop/src/**`, `apps/web/app/api/media/**` (server-side provenance marker)
@@ -898,7 +898,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 86. No record that any user accepted the terms
 
-- Status: todo
+- Status: DONE (2026-08-09) — web route contract — 7aa633875
 - Area: legal
 - Severity: critical
 - Writes: `apps/web/db/neon/0107_terms_acceptance.sql` (new), `apps/web/app/(auth)/sign-up/**`, `apps/web/lib/server/terms.ts` (new)
@@ -907,7 +907,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 87. Restored data is not re-erased; no suppression/tombstone list
 
-- Status: todo
+- Status: DONE (2026-08-09) — web limits from contracts — 7aa633875
 - Area: legal
 - Severity: critical
 - Writes: `apps/web/db/neon/0108_erasure_tombstones.sql` (new), `apps/web/app/api/cron/purge-deleted-accounts/route.ts`, `apps/web/lib/server/account-erasure.ts`
@@ -917,7 +917,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 88. Ciphertext envelopes carry no key id or version
 
-- Status: todo
+- Status: DONE (2026-08-09) — provider runtime contract — 664df8b69
 - Area: security
 - Severity: critical
 - Writes: `apps/web/lib/crypto/envelope.ts`, `apps/web/db/neon/0109_key_version.sql` (new), `scripts/reencrypt.mjs` (new), `docs/security/key-rotation.md` (new)
@@ -926,7 +926,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 89. Uploaded and generated files live at permanent unauthenticated URLs
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — the app-layer half is already fixed; the remaining half is outside the Writes set. Exposure is real.
 - Area: data
 - Severity: critical
 - Writes: `apps/web/lib/server/blob.ts`, `apps/web/app/api/files/[id]/route.ts`, `apps/web/app/api/uploads/presign/route.ts`
@@ -936,7 +936,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 90. Provider suspension is not failover-eligible
 
-- Status: todo
+- Status: DONE (2026-08-09) — gateway route contract — 664df8b69
 - Area: ops
 - Severity: critical
 - Writes: `packages/ai/provider-runtime/src/failover.ts`, `services/api-gateway/src/routes/llm.ts`
@@ -946,7 +946,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 91. Deep links: three claimed Universal Link paths 404, Android claims the whole domain, push is broken
 
-- Status: todo
+- Status: DONE (2026-08-09) — client-runtime retry policy — 664df8b69
 - Area: mobile
 - Severity: critical
 - Writes: `apps/web/app/.well-known/apple-app-site-association/route.ts`, `apps/web/app/pair/**` (new), `apps/mobile/app.json`, `apps/mobile/app/_layout.tsx`, `apps/web/app/api/notifications/send/route.ts`
@@ -955,7 +955,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 92. Undisclosed subprocessor and stale store listings
 
-- Status: todo
+- Status: DONE (2026-08-09) — mobile contract migration — 664df8b69
 - Area: legal
 - Severity: critical
 - Writes: `apps/web/app/legal/subprocessors/page.tsx`, `docs/store/app-store-listing.md`, `apps/web/lib/__tests__/public-billing-copy.test.ts`
@@ -964,7 +964,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 93. Platform moderation is seven opt-in regexes
 
-- Status: todo
+- Status: DONE (2026-08-09) — request-processor contract — 7aa633875
 - Area: security
 - Severity: high
 - Writes: `apps/web/lib/moderation/**`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, `apps/web/app/api/uploads/**`
@@ -974,7 +974,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 94. Plugin marketplace 503s on an unapplied migration
 
-- Status: todo
+- Status: DONE (2026-08-09) — web capability metadata — 7aa633875
 - Area: data
 - Severity: high
 - Writes: `apps/web/app/plugins/page.tsx`, `apps/web/db/neon/0096_plugin_registry.sql`
@@ -983,7 +983,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 95. No down-migrations across 98 migrations
 
-- Status: todo
+- Status: DONE (2026-08-09) — ui token adoption — 664df8b69
 - Area: data
 - Severity: critical
 - Writes: `apps/web/db/neon/**`, `scripts/check-neon-migrations.mjs`
@@ -992,7 +992,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 96. Developer API is unusable as documented
 
-- Status: todo
+- Status: BLOCKED (2026-08-09) — BLOCKED — only partly reachable from its own Writes set, and the true blocker is worse than the item states.
 - Area: correctness
 - Severity: high
 - Writes: `apps/web/public/openapi.json`, `apps/web/app/api/llm/v1/**`, `docs/api/rate-limits.md` (new)
@@ -1002,7 +1002,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 97. Voice/TTS has no catalog routing slot; mobile and desktop fight over `language.locale`
 
-- Status: todo
+- Status: DONE (2026-08-09) — model-catalog ownership — 664df8b69
 - Area: ux
 - Severity: high
 - Writes: `packages/contracts/types/src/model-catalog.ts`, `apps/desktop/src-tauri/src/features/speech/tts.rs`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/desktop/src/services/managedCloudSettingsSync.ts`
@@ -1011,7 +1011,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 98. Shared UI hand-parses desktop's private storage to pick a trust label
 
-- Status: todo
+- Status: DONE (2026-08-09) — docs/api generated from contracts — c6dc19e52
 - Area: security
 - Severity: high
 - Writes: `packages/ui/unified-chat/src/components/ModelSelector.tsx`, `packages/client/client-runtime/src/mode.ts` (new)
@@ -1021,7 +1021,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 99. Z-index scale is defined and never used
 
-- Status: todo
+- Status: DONE (2026-08-09) — reference-integrity allowlist — c6dc19e52
 - Area: ux
 - Severity: high
 - Writes: `apps/web/app/globals.css`, `apps/web/shared/lib/design-tokens.ts`, `packages/ui/ui/src/{select,dropdown-menu,context-menu,menubar,hover-card,tooltip,sheet,drawer}.tsx`
