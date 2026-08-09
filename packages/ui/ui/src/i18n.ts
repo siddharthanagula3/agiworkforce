@@ -1,3 +1,29 @@
+'use client';
+
+/**
+ * WHY THE DIRECTIVE. `react-i18next` calls `createContext` at module scope, and
+ * `createContext` does not exist in React's `react-server` condition. This
+ * module is reachable from a SERVER component: `@agiworkforce/ui` resolves to
+ * the barrel `src/index.ts`, the barrel re-exports `useUiTranslation` from
+ * here, and `apps/web/features/marketing/components/MarketingFooter.tsx` — a
+ * server component — imports `AgiMark` through that same barrel. Importing one
+ * pure SVG therefore evaluated react-i18next in the server graph:
+ *
+ *     Failed to collect configuration for /about
+ *       [cause]: TypeError: (0 , o.createContext) is not a function
+ *
+ * That failed EVERY marketing page — each one renders MarketingFooter — and the
+ * build only ever named whichever it reached first, which is why the reported
+ * route moved between /about, /acceptable-use, /accessibility and
+ * /agent-permissions across runs while the cause stayed the same.
+ *
+ * A module whose entire public surface is a React hook over context is
+ * client-side by nature, so the boundary belongs here rather than on every
+ * consumer. The barrel's sidebar components already carry it; this one was
+ * missed when `c5d67f7be` added `useUiTranslation` to the barrel. The directive
+ * is inert in the non-Next hosts (desktop, mobile) that also import this file.
+ */
+
 /**
  * i18n.ts — how shared components read translated copy.
  *
