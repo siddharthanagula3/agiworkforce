@@ -1712,9 +1712,14 @@ mod tests {
         assert!(maybe_decrypt_at_rest("<from_api_key:vercel>").is_none());
     }
 
+    // BASE-008: this was `#[ignore]`d with the note "pre-existing reasoned skip",
+    // which states that it was skipped, not why. There is no why: the body
+    // constructs a default struct in memory and asserts four fields — no
+    // network, no filesystem, no external binary, nothing that could make it
+    // opt-in. The six genuinely-ignored tests in tests/mcp_integration_test.rs
+    // need a network-installable MCP server binary; this one needs nothing.
+    // Un-ignored and running.
     #[test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip predating this change and unrelated
-              // to DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 — not touched or introduced here.
     fn test_default_config() {
         let config = McpServersConfig::default();
         assert!(config.mcp_servers.contains_key("filesystem"));
