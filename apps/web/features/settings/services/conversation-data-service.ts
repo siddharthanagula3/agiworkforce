@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudUpdateConversationResponseSchema,
@@ -7,6 +8,13 @@ import {
   normalizeManagedCloudConversation,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+
+/**
+ * Page size comes from the conversations wire contract, which is also the
+ * fallback `GET /api/chat/conversations` applies when `limit` is absent, so the
+ * archived and deleted lists here page exactly like Desktop and Mobile.
+ */
+const ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
 const BulkConversationResponseSchema = z.object({
   success: z.literal(true),
@@ -63,7 +71,7 @@ export async function listArchivedConversations(
   signal?: AbortSignal,
 ): Promise<ArchivedConversationPage> {
   const response = await fetch(
-    `/api/chat/conversations?archived=only&limit=50&offset=${Math.max(0, offset)}`,
+    `/api/chat/conversations?archived=only&limit=${ARCHIVED_PAGE_SIZE}&offset=${Math.max(0, offset)}`,
     { credentials: 'include', signal },
   );
   if (!response.ok) {
@@ -97,7 +105,7 @@ export async function listDeletedConversations(
   signal?: AbortSignal,
 ): Promise<ArchivedConversationPage> {
   const response = await fetch(
-    `/api/chat/conversations?deleted=only&limit=50&offset=${Math.max(0, offset)}`,
+    `/api/chat/conversations?deleted=only&limit=${ARCHIVED_PAGE_SIZE}&offset=${Math.max(0, offset)}`,
     { credentials: 'include', signal },
   );
   if (!response.ok) {

@@ -1381,7 +1381,39 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 - [ ] **BIZ-029 — Register and map real App Store/Play product IDs before enabling purchase UI.** Environment-specific IDs must be validated.
 - [ ] **BIZ-030 — Validate signed store transactions server-side.** Bind account, product, environment, storefront, and original transaction.
-- [ ] **BIZ-031 — Handle restore, renewal, grace, refund, revoke, transfer, and replay.** Reconcile out-of-order store notifications.
+- [ ] **BIZ-031 — Handle restore, renewal, grace, refund, revoke, transfer, and replay.** Reconcile out-of-order store notifications. OPEN — FEATURE, externally gated.
+
+      Triaged 2026-08-09. There is nothing to remediate: Mobile sells no subscription at
+      all, so there is no store lifecycle to reconcile. The whole purchase/restore/receipt
+      slice was deliberately removed in `77169d3f1` under
+      `docs/decisions/2026-07-30-mobile-store-billing-boundary.md` (Accepted) because every
+      product identifier was a placeholder. Current source confirms it: `apps/mobile/package.json`
+      has no StoreKit/Play Billing/react-native-iap/RevenueCat dependency, `apps/web/app/api/mobile/`
+      holds only `content-report`, `feedback`, and `push-token`, and a repo-wide grep for
+      `androidpublisher|rtdn|App Store Server Notification` returns no handler. Mobile's only
+      store-aware code is read-only routing:
+      `apps/mobile/src/features/billing/subscriptionSource.ts:47-70` fails closed on an
+      entitled plan and sends the user to the store that owns it.
+
+      Renewal/grace is partly covered for HISTORICAL store rows only, not by store signals:
+      `apps/web/lib/services/subscription-service.ts:113-137` derives expiry in the single
+      shared entitlement reader — a row with `apple_original_transaction_id`/`google_purchase_token`
+      and no `stripe_subscription_id` flips to `expired` once `current_period_end` passes the
+      3-day `STORE_RENEWAL_GRACE_MS` window (`:59`), with a null period end deliberately never
+      expiring. Pinned by `apps/web/lib/services/subscription-service.store-expiry.test.ts`
+      (7 tests, passing). Cross-channel double billing is blocked at
+      `apps/web/app/api/checkout/route.ts:213-214`.
+
+      What actually closing BIZ-031 takes (product scope, not a patch): real App Store Connect
+      and Play products (MS-5 external gate, per `docs/current/parity-implementation-matrix.md:88`),
+      a StoreKit 2 / Play Billing client and restore flow on Mobile, a signed-transaction
+      verification endpoint (BIZ-030), an Apple ASSN V2 webhook plus a Play RTDN Pub/Sub
+      subscriber with signature verification and an event-id/dedupe ledger so DID_RENEW,
+      GRACE_PERIOD, REFUND, REVOKE and transfer notifications reconcile out of order, a
+      periodic reverification job, and a web-vs-store ownership policy (BIZ-032). Per
+      `docs/agent-context/known-flaws.md:178`, shipping IAP is a founder product/legal
+      decision and must not be done as an audit fix.
+
 - [ ] **BIZ-032 — Resolve web-vs-store subscription conflicts.** One effective entitlement with documented ownership/migration policy.
 
 ## 6F. Cost accounting and gross margin
@@ -1397,7 +1429,56 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 - [ ] **BIZ-039 — Wire or remove `referral_code`.** Define attribution, eligibility, anti-self-referral, reward settlement, expiration, reversal, and privacy.
 - [ ] **BIZ-040 — Implement gift/promo codes only with ledger-backed issuance and redemption.** Prevent brute force, replay, stacking, and negative balances.
-- [ ] **BIZ-041 — Add payment and usage abuse controls.** Velocity limits, duplicate accounts, stolen cards, refund abuse, automation abuse, and manual review.
+- [ ] **BIZ-041 — Add payment and usage abuse controls.** Velocity limits, duplicate accounts, stolen cards, refund abuse, automation abuse, and manual review. OPEN — the usage half is largely built; the payment-fraud half is a FEATURE.
+
+      Triaged 2026-08-09 against current source. The finding is split, and the two halves
+      are not the same size.
+
+      USAGE abuse is substantially implemented and reached. Per-endpoint velocity is
+      Redis-backed and refuses to boot in production without Redis
+      (`apps/web/lib/rate-limit.ts:43-53`), with billing-path buckets at
+      `:66-70` (checkout 15/min), `:102-106` (claim-offer 3/h, fail-closed),
+      `:127-131` (upgrade 5/min) and `:176-179` (auth-signup 3/h per IP — today's only
+      mass-account-creation brake). Ceilings scale with the purchased tier rather than
+      being flat (`:711-716`), per-plan concurrency is enforced as a TTL-bounded Redis
+      sorted set (`:1216-1281`), and every 429 is attributed to a signature-verified
+      principal and written to the audit store (`:1127-1131`). Spend is bounded
+      independently of request rate: Free carries rolling 5-hour/weekly/monthly
+      provider-cost budgets (`apps/web/lib/services/free-trial-service.ts:24-31`) and paid
+      managed traffic reserves against DB-side limits before any provider call
+      (`apps/web/lib/services/managed-usage-request-service.ts:175-223`, called from
+      `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2633`).
+
+      PAYMENT abuse has the money-movement guards but none of the fraud controls.
+      Present: a provider-authoritative duplicate-subscription refusal that reads Stripe
+      rather than the possibly-stale local table (`apps/web/app/api/checkout/route.ts:331-361`),
+      a store-billed conflict guard (`:211-219`), plan-and-quantity-scoped idempotency
+      keys (`:424-431`), full-refund entitlement revocation with double-clawback
+      protection (`apps/web/app/api/stripe-webhook/lib/handlers.ts:191-332`) and dispute
+      handling (`:334`). Absent, confirmed by grep: no `radar.early_fraud_warning.created`
+      case in the webhook switch (`handlers.ts:29-334`; note
+      `apps/web/__tests__/trust-boundary.test.ts:201` also asserts it is unhandled, but
+      against its own literal event set rather than the route, so the grep is the proof), no
+      captcha/bot check anywhere (`turnstile|hcaptcha|recaptcha` → 0 hits outside
+      `node_modules`), no fraud/risk/abuse table in `apps/web/db/neon/` (0001–0104), no
+      duplicate-account or shared-payment-instrument detection, no refund-abuse policy
+      beyond the per-charge clawback, and no review console — `apps/web/app/api/admin/`
+      holds only `directory-sync`, `security` and `sso`, and the security route
+      (`apps/web/app/api/admin/security/route.ts:29-35`) is a read-only event/metric
+      dashboard with no case queue and no action to hold or block a buyer.
+
+      What shipping it would take (product scope, not a patch): a decision on risk
+      appetite and Stripe Radar tier; enabling Radar rules on the Stripe account and
+      handling `radar.early_fraud_warning.created` plus `review.opened`/`review.closed`
+      in the webhook; a durable risk-signal store keyed by user, payment fingerprint, IP
+      and device so velocity can be evaluated ACROSS accounts rather than per endpoint;
+      duplicate-account linkage (email normalisation, shared card fingerprint, device
+      id); a refund/chargeback history model with a per-customer threshold; bot
+      mitigation on signup and free-tier consumption; and an admin case queue with
+      explicit hold/block/release actions. Every one of those is coupled to BIZ-042 —
+      each block needs an auditable reason code and an appeal path, or the controls
+      become silent authorization policy. This must not be closed as an audit fix.
+
 - [ ] **BIZ-042 — Ensure fraud controls do not become silent authorization policy.** Provide appeal/support paths and auditable reason codes.
 
 ## 6H. Business observability and support

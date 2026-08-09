@@ -12,11 +12,12 @@ detection gaps that are still open.
 
 ## What detects an outage
 
-| Detector                 | Where                                         | Cadence          | Reaches a human?           |
-| ------------------------ | --------------------------------------------- | ---------------- | -------------------------- |
-| `/api/cron/health-probe` | `apps/web/app/api/cron/health-probe/route.ts` | daily, 06:15 UTC | yes, by email (below)      |
-| `/api/health`            | `apps/web/app/api/health/route.ts`            | on request       | only if something polls it |
-| `/status` page           | `apps/web/app/status/page.tsx`                | on request       | only if a human opens it   |
+| Detector                      | Where                                              | Cadence          | Reaches a human?                            |
+| ----------------------------- | -------------------------------------------------- | ---------------- | ------------------------------------------- |
+| `/api/cron/health-probe`      | `apps/web/app/api/cron/health-probe/route.ts`      | daily, 06:15 UTC | yes, by email (below)                       |
+| `/api/cron/reconcile-credits` | `apps/web/app/api/cron/reconcile-credits/route.ts` | daily, 00:30 UTC | yes, by email, only on terminal settlements |
+| `/api/health`                 | `apps/web/app/api/health/route.ts`                 | on request       | only if something polls it                  |
+| `/status` page                | `apps/web/app/status/page.tsx`                     | on request       | only if a human opens it                    |
 
 The probe runs the same `runHealthChecks()` the public endpoint and the status
 page run. It calls it directly rather than fetching `/api/health` over HTTP:
@@ -90,6 +91,37 @@ is broken) or `timed out after 8000ms` (a dependency accepted the connection and
 never answered — the usual Neon or Stripe stall). Treat a timeout as an outage
 until `/status`, which races the same checks, says otherwise. The probe pages on
 this path whether or not the mail is delivered, and always returns HTTP 500.
+
+### `credit settlement drift`
+
+Subject `[AGI WARNING] <env> credit settlement drift · N terminal`. This is not
+an outage: it comes from `/api/cron/reconcile-credits`, and it means `N` durable
+credit settlements were abandoned permanently in that run — the provider call
+was served, and the reservation delta will never be debited. Balances for those
+accounts are now higher than the usage behind them.
+
+It is edge-triggered: `process_credit_settlement_queue()` scans `pending` rows
+only, so each job is reported in the single run that flips it to `terminal` and
+never again. One mail per invocation at most, so a repeat next day means new
+drift, not the same jobs.
+
+```sql
+select id, user_id, amount_cents, last_error_code, last_error, completed_at
+  from credit_settlement_jobs
+ where status = 'terminal'
+ order by completed_at desc limit 50;
+```
+
+`last_error_code` says which failure it was: `RETRY_EXHAUSTED` (12 attempts of a
+retryable fault — look for a Neon incident in that window), `SQLSTATE_*` (a
+non-retryable database error, usually a schema or constraint change), or a
+`deduct_credits()` rejection code (the ledger refused the debit; the account
+state is the thing to inspect, not the queue). The mail carries counts only —
+user ids and amounts stay in the database.
+
+Like the health probe, an undelivered alert returns **HTTP 500** so the failed
+invocation is visible in the Vercel cron log. The settlement work itself has
+already committed and is idempotent, so that 500 never double-charges anyone.
 
 ## Verifying the alert path (drill)
 

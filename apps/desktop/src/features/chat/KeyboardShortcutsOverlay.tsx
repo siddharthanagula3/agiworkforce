@@ -23,6 +23,7 @@ import {
 import {
   useSettingsStore,
   useVoiceInputStore,
+  type ChatPreferences,
   type VoiceInputHotkey,
 } from '../../stores/settingsStore';
 import { Button } from '@/components/ui/Button';
@@ -45,16 +46,6 @@ interface InlineSection {
 
 const INLINE_SECTIONS: InlineSection[] = [
   {
-    category: 'chat-inline',
-    label: 'Chat',
-    shortcuts: [
-      { description: 'Send message', keys: ['Enter'] },
-      { description: 'New line', keys: ['Shift', 'Enter'] },
-      { description: 'Stop generation', keys: ['Escape'] },
-      { description: 'Edit last message', keys: ['↑'] },
-    ],
-  },
-  {
     category: 'editing-inline',
     label: 'Editing',
     shortcuts: [{ description: 'Copy code block', keys: ['Click copy'] }],
@@ -68,6 +59,38 @@ const INLINE_SECTIONS: InlineSection[] = [
     ],
   },
 ];
+
+export type ComposerSendShortcut = NonNullable<ChatPreferences['sendShortcut']>;
+
+/**
+ * Which key sends and which key breaks a line is a user setting, so this
+ * section is derived from it rather than stated.
+ *
+ * The composer's `handleKeyDown` (`unified-chat/src/components/ChatInput.tsx`)
+ * sends on plain Enter under `enter`, and on Cmd/Ctrl+Enter under `mod-enter`
+ * — under `mod-enter` a bare Enter falls through to the textarea and breaks the
+ * line. Hard-coding "Send: Enter" told half the users the wrong key.
+ *
+ * Stopping a generation and editing an earlier message are deliberately absent:
+ * nothing binds Escape to stop (`onStop` is only reachable from the send
+ * button, which is why it is listed as a click) and there is no ArrowUp
+ * recall handler at all — ChatInput's ArrowUp only moves the slash menu
+ * selection.
+ */
+export function chatInlineSection(sendShortcut: ComposerSendShortcut): InlineSection {
+  const shortcuts: InlineShortcut[] =
+    sendShortcut === 'mod-enter'
+      ? [
+          { description: 'Send message', keys: ['Ctrl/Cmd', 'Enter'] },
+          { description: 'New line', keys: ['Enter'] },
+        ]
+      : [
+          { description: 'Send message', keys: ['Enter'] },
+          { description: 'New line', keys: ['Shift', 'Enter'] },
+        ];
+  shortcuts.push({ description: 'Stop generation', keys: ['Click stop'] });
+  return { category: 'chat-inline', label: 'Chat', shortcuts };
+}
 
 /**
  * The dictation hotkey is a user setting, not a fixed key, and it is the ONLY
@@ -183,6 +206,7 @@ export function KeyboardShortcutsOverlay({
   onOpenSettings,
 }: KeyboardShortcutsOverlayProps) {
   const customKeybindings = useSettingsStore((state) => state.customKeybindings);
+  const sendShortcut = useSettingsStore((state) => state.chatPreferences.sendShortcut ?? 'enter');
   const voiceHotkey = useVoiceInputStore((state) => state.hotkey);
 
   // Escape key closes the overlay — copies the ref to local var for cleanup safety
@@ -264,7 +288,11 @@ export function KeyboardShortcutsOverlay({
             <div className="overflow-y-auto flex-1 p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Inline sections */}
-                {[...INLINE_SECTIONS, voiceInlineSection(voiceHotkey)].map((section) => (
+                {[
+                  chatInlineSection(sendShortcut),
+                  ...INLINE_SECTIONS,
+                  voiceInlineSection(voiceHotkey),
+                ].map((section) => (
                   <SectionCard key={section.category} title={section.label}>
                     {section.shortcuts.map((s) => (
                       <ShortcutRow key={s.description} description={s.description} keys={s.keys} />

@@ -43,6 +43,20 @@ export const metadata = buildMetadata({
  *  - "Material changes are announced via email". There is no transactional email
  *    provider in this repository.
  *
+ * CLAIM ADDED: billing-record retention (BIZ-046). The retention schedule had a
+ * row for the account and none for the money. Erasure deletes `subscriptions`,
+ * `credit_transactions`, `token_credits` and `usage_events`
+ * (lib/server/account-erasure.ts USER_SCOPED_TABLES; the immediate
+ * `delete_user_data()` path in db/neon/0020_functions.sql deletes the first
+ * three), while `organization_usage_ledger.user_id` is nulled and the row kept
+ * (ANONYMIZED_USER_COLUMNS), and `credit_idempotency_keys` /
+ * `credit_settlement_jobs` are kept by BOTH paths (UNDELETED_USER_TABLES). None
+ * of that was disclosed. The row says so, and says the part that is still not
+ * true of any code: nothing ages billing rows out — `credit_idempotency_keys`
+ * carries a 24-hour `expires_at` and `cleanup_expired_idempotency_keys()`
+ * exists, but no cron route calls it, so do not describe a window here until
+ * one runs.
+ *
  * CLAIM ADDED: object storage. Uploaded and generated files are stored in
  * Cloudflare R2 and served from permanent public URLs (lib/server/object-storage.ts),
  * so anyone holding the link can open the file. That is a disclosure, not a
@@ -297,6 +311,25 @@ export default function PrivacyPage() {
                   The request records a deletion timestamp and schedules erasure 24 hours out; a
                   daily scheduled job then erases your user-scoped records and stored objects and
                   deletes your identity at our authentication provider.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ width: '22%', verticalAlign: 'top' }}>Billing records</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Kept while your account exists. Most of it is erased with the account; some of it
+                  deliberately is not.
+                </td>
+                <td>
+                  Your subscription, credit ledger and usage rows are erased with everything else.
+                  Three things survive on purpose, and you should know about them: an
+                  organisation&rsquo;s billing history keeps the ledger row with your user id
+                  removed, because the record belongs to that organisation rather than to you;
+                  double-charge protection keys and any payment still moving when you delete are
+                  kept, because deleting those can charge you twice or lose money we owe you; and
+                  Stripe holds its own record of your payments and invoices under its retention, not
+                  ours &mdash; card numbers go to Stripe directly and never reach us. No maximum age
+                  is enforced on billing rows today, and we will not publish one until a job deletes
+                  them.
                 </td>
               </tr>
               <tr>

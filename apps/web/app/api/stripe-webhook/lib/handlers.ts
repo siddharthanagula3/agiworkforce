@@ -383,6 +383,34 @@ export async function dispatchStripeEvent(
             );
           }
 
+          // A dispute revokes entitlement (status -> past_due, no renewal) and
+          // claws back every remaining credit. Until this call the only record
+          // of that was a server log the customer and support cannot read, so
+          // the account simply stopped working with no stated cause — the
+          // "fraud control as silent authorization policy" failure. The audit
+          // row carries a stable reason code and the Stripe dispute id, and the
+          // affected customer can read it back: both GET /api/settings/activity
+          // and GET /api/settings/audit-logs select from security_audit_logs
+          // filtered to the requester's own user_id and return `details`
+          // verbatim. `resourceId` is the dispute reference support quotes
+          // back; Stripe's own dispute reason ('fraudulent',
+          // 'product_not_received', …) is deliberately left in Stripe rather
+          // than mirrored into a customer-readable row.
+          await recordAuditEvent({
+            userId: profile.id,
+            eventType: 'plan_changed',
+            severity: 'warning',
+            endpoint: '/api/stripe-webhook',
+            surface: 'stripe_webhook',
+            detail: {
+              resourceType: 'subscription',
+              resourceId: dispute.id,
+              source: 'stripe_webhook',
+              status: 'past_due',
+              reason: 'charge_dispute_created',
+            },
+          });
+
           logger.warn(
             {
               userId: profile.id,

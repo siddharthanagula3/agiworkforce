@@ -18,10 +18,28 @@ export interface RollingUsage {
  *
  * Derived entirely from `credit_transactions` (`transaction_type =
  * 'deduction'`, `amount_cents`, `created_at`) — no dedicated session/weekly
- * table exists or is needed; every credit deduction already inserts a row
- * there, so this rolling sum is real spend, not an estimate.
+ * table exists or is needed; every credit deduction already inserts a row there.
  *
- * Used by managed-usage-summary-service.ts for the user-visible rolling meter.
+ * VALUATION BASIS — this is a net projection, not a settled total. The managed
+ * lifecycle writes two rows per request: the reservation deducts the ESTIMATE
+ * (`reserve_managed_usage_request`, 0056_managed_usage_request_lifecycle.sql,
+ * metadata `type = 'managed_usage_reservation'`), and finalization deducts the
+ * signed delta to the settled cost (`type = 'managed_usage_finalization'`,
+ * carrying both `estimated_cost_cents` and `actual_cost_cents`). So the sum is
+ * settled cost for every request that has finalized inside the window, and the
+ * unsettled estimate for every request still in flight. Two known ways it
+ * diverges from settled spend, both deliberate and both tolerable for an
+ * admission meter but NOT for financial reporting:
+ *   - a request whose reservation aged out of the window while its negative
+ *     finalization delta is still inside understates the window;
+ *   - media generation and the no-provider-usage chat path settle a rate-card
+ *     estimate AS the actual cost (see managed-usage-accounting-service.ts's
+ *     `reservation_estimate_no_provider_usage` branch), so those rows never
+ *     converge on observed provider usage.
+ *
+ * Used by managed-usage-summary-service.ts for the user-visible rolling meter,
+ * which exposes only a percentage of cap — never a monetary figure — so no
+ * estimate reaches the user as an audited amount.
  */
 export async function getRollingUsage(
   userId: string,
