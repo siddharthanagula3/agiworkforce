@@ -53,7 +53,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change — requires a real, network-installable MCP server binary. Requires MCP server to be installed and available
+    #[ignore = "requires a real, network-installable MCP server binary; run with --ignored after installing one"] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change
     async fn test_server_connection() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -82,7 +82,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change — requires a real, network-installable MCP server binary. Requires MCP server to be installed and available
+    #[ignore = "requires a real, network-installable MCP server binary; run with --ignored after installing one"] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change
     async fn test_tool_listing() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -115,7 +115,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change — requires a real, network-installable MCP server binary. Requires MCP server to be installed and available
+    #[ignore = "requires a real, network-installable MCP server binary; run with --ignored after installing one"] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change
     async fn test_tool_execution() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -145,7 +145,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change — requires a real, network-installable MCP server binary. Requires MCP server to be installed and available
+    #[ignore = "requires a real, network-installable MCP server binary; run with --ignored after installing one"] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change
     async fn test_tool_search() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -177,7 +177,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change — requires a real, network-installable MCP server binary. Requires MCP server to be installed and available
+    #[ignore = "requires a real, network-installable MCP server binary; run with --ignored after installing one"] // llm-guardrail-allow: pre-existing reasoned skip, not introduced by this change
     async fn test_server_disconnection() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -298,10 +298,11 @@ mod mcp_integration_tests {
     // (a Cargo integration test, not a `--lib` unit test) so mutating the
     // `HOME` env var here cannot leak into other test binaries.
     #[tokio::test]
-    #[ignore] // llm-guardrail-allow: not CI-run-by-default because it spawns a real network-installed
-              // npx process (@modelcontextprotocol/server-everything) — this test was run manually and passed
-              // (see docs/agent-context/known-flaws.md DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01), matching
-              // the pre-existing ignored-test pattern already used by this file's other real-MCP-server tests.
+    #[ignore = "spawns a real npx @modelcontextprotocol/server-everything process; run with --ignored"]
+    // llm-guardrail-allow: not CI-run-by-default because it spawns a real network-installed
+    // npx process (@modelcontextprotocol/server-everything) — this test was run manually and passed
+    // (see docs/agent-context/known-flaws.md DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01), matching
+    // the pre-existing ignored-test pattern already used by this file's other real-MCP-server tests.
     async fn dotfile_mcp_server_actually_connects_and_exposes_real_tools() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServersConfig;
