@@ -708,6 +708,8 @@ here.
 
 ### MATCH-002 — Cloud Code approval state machine is write-only
 
+> **Triage 2026-08-09 — OPEN — verified still open.** Cloud-code approvals remain insert-only. `cloud_code_agent_loop.ts` has an `awaiting_approval` stop reason and writes a `cloud_code_agent_approvals` row, but grep for a decision path (`'approved'`/`'rejected'` transitions) in that module returns nothing, so a suspended turn has no way to resume. Previously recorded as closed by commit 94046227f — that was a mislabel on my part; see the correction in ExecutionPlan.md item 22. The commit is real and good, but it is flagship routing-slot billing, not approvals.
+
 **Source:** CM  
 **Reported evidence:** `cloud_code_agent_approvals` contains pending/approved/rejected/expired and decision fields, but production only inserts `pending`; no real select/update/decision/resume path exists; tests provide `preApproved` shortcuts.
 
@@ -852,6 +854,8 @@ here.
 
 ### HARD-005 — Repository-wide endpoint sweep
 
+> **Triage 2026-08-09 — OPEN_DEFECT — confirmed, with a measured count.** 36 first-party provider-host literals remain outside the registries and outside test fixtures (`grep -rn "https://api\.(openai|anthropic|groq|perplexity)\.com" apps packages services --include=*.ts --include=*.rs`, excluding tests/redaction/markdown). HARD-001..004 closed specific families; the repository-wide sweep this task asks for has not been run, and the guard it calls for (an allowlist of approved declaration files) does not exist — `scripts/` has `check-no-hardcoded-models.sh` but no endpoint equivalent.
+
 - [ ] Search all first-party source for provider hostnames, model API paths, internal cloud hosts, callback URLs, localhost ports, and public asset origins.
 - [ ] Classify each occurrence as canonical declaration, test fixture, documentation, or defect.
 - [ ] Migrate defects and add a guard allowing only approved declaration files/fixtures.
@@ -870,6 +874,8 @@ here.
 
 ### HARD-007 — Desktop modules duplicate 30-second timeouts despite shared constants
 
+> **Triage 2026-08-09 — OPEN_DEFECT — partially closed.** 6 timeout literals remain in `apps/desktop/src/api/*.ts`. Wave 4 pointed the four modules that actually execute at the canonical constants and reverted the four reachable only through a barrel with no importers; these are the residue. The task also asks for connect / first-byte / idle-stream / total / tool-step / shutdown to be distinguished rather than collapsed into one number, which has not been done.
+
 **Source:** HC
 
 - [ ] Replace private timeout constants with the canonical timeout policy.
@@ -877,6 +883,8 @@ here.
 - [ ] Test propagation and cancellation.
 
 ### HARD-008 — 120-second API/IPC timeouts are duplicated
+
+> **Triage 2026-08-09 — OPEN_DEFECT — confirmed.** 6 independent 120-second deadlines across desktop and web. The task’s real requirement is the harder half and is untouched: a timeout in one layer must not outlive or contradict its parent deadline, which needs the deadlines related to each other rather than merely named in one place.
 
 **Source:** HC
 
@@ -924,6 +932,8 @@ here.
 - [ ] Add startup/catalog validation so removed models cannot remain defaults.
 
 ### HARD-014 — Local provider IDs are hardcoded to `ollama`
+
+> **Triage 2026-08-09 — OPEN_DEFECT — confirmed.** 6 production `provider === 'ollama'` comparisons remain. The task asks for a local-provider capability interface covering LM Studio, llama.cpp and vLLM as well; today those runtimes cannot be classified at all, so a user running one is treated as having no local provider.
 
 **Source:** HC
 
@@ -1621,6 +1631,9 @@ The business-layer report shows that substantial billing, entitlement, and enter
 - [ ] **REL-002 — Desktop:** publish signed/notarized macOS, signed Windows, and signed Linux artifacts with updater, rollback, SBOM, and install tests.
 - [ ] **REL-003 — Mobile:** complete store metadata, privacy manifests/data-safety forms, signing, product IDs, device-matrix E2E, phased rollout, crash/ANR/battery/thermal telemetry, and support links.
 - [ ] **REL-004 — CLI:** publish verified packages/releases with signatures, checksums, install/uninstall/upgrade tests, and shell completion.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — .github/workflows/release-cli.yml contains no npm publish or cargo publish step, so the CLI has no published package while a release workflow exists. A workflow whose presence reads as a shipped channel is exactly what this ledger warns about. Signatures, checksums and install/upgrade tests are also absent.**
+
 - [ ] **REL-005 — VS Code:** marketplace CI, signing/publisher identity, Restricted Mode/Workspace Trust behavior, remote-host tests, update/rollback, and telemetry disclosure.
 - [ ] **REL-006 — Chrome:** MV3 store package, permission rationale, service-worker restart tests, update path, native-host installer, and restricted-page behavior.
 - [ ] **REL-007 — Cross-surface continuity:** test same account/workspace/conversation, explicit mode boundaries, conflict recovery, logout purge, and version skew.
@@ -1632,7 +1645,13 @@ The business-layer report shows that substantial billing, entitlement, and enter
 - [ ] **ENT-003 — Complete governance:** model/provider/tool/connector/skill/agent allowlists and read/write action controls.
 - [ ] **ENT-004 — Complete audit:** organization/admin/agent action logs, immutable retention, export API, SIEM delivery, and correlation to traces.
 - [ ] **ENT-005 — Complete data controls:** retention, deletion, legal hold, residency/processing region, DLP, eDiscovery, and support access policy according to committed scope.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — zero migrations mention legal hold; retention, residency, DLP and eDiscovery are likewise absent. A capability to build against a committed enterprise scope, not a defect. The ledger's own Phase 8 wording ('only if the enterprise scope commits to them; otherwise mark roadmap') is the right frame.**
+
 - [ ] **ENT-006 — Complete encryption/networking:** CMEK/BYOK-encryption if promised, key rotation, private endpoint/VPC/IP allowlist/egress policy if promised.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — zero migrations mention CMEK/BYOK-encryption or IP allowlists. Procurement-driven capabilities; the honest interim state is that no customer-facing surface claims them (DOC-024 covers the claim side).**
+
 - [ ] **ENT-007 — Complete capacity/commercial controls:** quotas, budgets, chargeback, priority/support tier, SLA/SLO reporting, and contract entitlements.
 - [ ] **ENT-008 — Procurement evidence:** security architecture, threat model, pen test/audit status, subprocessor list, incident process, backup/DR proof, and honest certification status.
 
