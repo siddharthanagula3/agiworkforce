@@ -12,6 +12,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -89,14 +90,26 @@ const SUPPORTED_PROVIDER_IDS = new Set(DEFAULT_PROVIDERS.map((provider) => provi
  * against a known-good host allowlist and emit a structured warning on
  * each rejection. Operator can spot the misconfig in logs immediately.
  */
-const PROVIDER_HEALTH_ALLOWED_HOSTS = new Set<string>([
-  'api.anthropic.com',
-  'api.openai.com',
-  'generativelanguage.googleapis.com',
-  'api.x.ai',
-  'api.minimax.io',
-  'api.deepseek.com',
-  'api.perplexity.ai',
+/**
+ * Canonical-list entries a health ping must never target: MuleRouter was
+ * dropped as a gateway on 2026-07-27, and `localhost` / `127.0.0.1` are the
+ * canonical list's local-dev carve-out for adapter base URLs — an override
+ * pointed at this container's own loopback reports nothing about a provider
+ * and is the shape an SSRF probe would take.
+ */
+const NON_PINGABLE_HOSTS: ReadonlySet<string> = new Set([
+  'api.mulerouter.ai',
+  'localhost',
+  '127.0.0.1',
+]);
+
+/**
+ * Derived from `ALLOWED_MANAGED_PROVIDER_HOSTS` rather than retyped, so a
+ * provider added to (or retired from) the canonical list cannot leave this
+ * override gate silently out of step with the rest of the platform.
+ */
+const PROVIDER_HEALTH_ALLOWED_HOSTS: ReadonlySet<string> = new Set<string>([
+  ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !NON_PINGABLE_HOSTS.has(host)),
   // Operator-controlled internal endpoints.
   'api.agiworkforce.com',
   'staging-api.agiworkforce.com',

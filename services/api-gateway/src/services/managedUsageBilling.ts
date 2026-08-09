@@ -12,6 +12,8 @@ import { isPromoExpired } from '@agiworkforce/routing';
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
 const MAX_ESTIMATED_INPUT_TOKENS = 1_000_000;
+/** Coarse tokenizer-free approximation, shared by every pre-measurement estimate. */
+const ESTIMATED_CHARS_PER_TOKEN = 3.5;
 const BILLING_RPC_ATTEMPTS = 3;
 
 /**
@@ -322,19 +324,51 @@ export function calculateManagedUsageCostCents(
   );
 }
 
+function estimateRequestInputTokens(body: ManagedUsageRequestBody): number {
+  const metadata = modelPricing(body.model);
+  return Math.min(
+    metadata.contextWindow || MAX_ESTIMATED_INPUT_TOKENS,
+    MAX_ESTIMATED_INPUT_TOKENS,
+    body.messages.reduce((total, message) => {
+      const serializedContent = JSON.stringify(canonicalize(message.content)) ?? '';
+      return total + Math.ceil(serializedContent.length / ESTIMATED_CHARS_PER_TOKEN) + 4;
+    }, 0),
+  );
+}
+
+/**
+ * Usage for a stream the client abandoned before the provider reported its own
+ * counts.
+ *
+ * Providers report token counts in a final usage event an abandoned stream
+ * never reaches, so tokens the provider was already paid to generate would
+ * otherwise settle at zero. The prompt is charged in full — the provider bills
+ * it the moment generation starts — and the generated side is derived from the
+ * output bytes the gateway actually forwarded, using the same approximation as
+ * the pre-flight estimate. Falling back to the reservation estimate instead
+ * would charge the requested `max_tokens` for a response cut off after a few
+ * words.
+ *
+ * Callers settle a zero-output abandonment as `failed` instead of calling this,
+ * so `servedOutputChars` is expected to be at least one character; passing zero
+ * yields zero output tokens and bills the prompt alone.
+ */
+export function estimateAbandonedStreamUsage(
+  body: ManagedUsageRequestBody,
+  servedOutputChars: number,
+): Omit<StreamChunkUsage, 'type'> {
+  return {
+    inputTokens: estimateRequestInputTokens(body),
+    outputTokens: Math.ceil(finiteNonNegative(servedOutputChars) / ESTIMATED_CHARS_PER_TOKEN),
+  };
+}
+
 export function estimateManagedUsageCostCents(
   body: ManagedUsageRequestBody,
   now: Date = new Date(),
 ): number {
   const metadata = modelPricing(body.model);
-  const estimatedInputTokens = Math.min(
-    metadata.contextWindow || MAX_ESTIMATED_INPUT_TOKENS,
-    MAX_ESTIMATED_INPUT_TOKENS,
-    body.messages.reduce((total, message) => {
-      const serializedContent = JSON.stringify(canonicalize(message.content)) ?? '';
-      return total + Math.ceil(serializedContent.length / 3.5) + 4;
-    }, 0),
-  );
+  const estimatedInputTokens = estimateRequestInputTokens(body);
   const requestedOutputTokens = finiteNonNegative(body.max_tokens, DEFAULT_MAX_OUTPUT_TOKENS);
   const outputLimit = metadata.maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS;
   const estimatedOutputTokens = Math.max(1, Math.min(requestedOutputTokens, outputLimit));
@@ -529,6 +563,10 @@ export async function finalizeManagedUsage(
   const hasUsage =
     input.usage !== undefined &&
     (input.usage.inputTokens !== undefined || input.usage.outputTokens !== undefined);
+  // `failed` is a full release: the reservation is refunded and the request
+  // leaves no trace in the rolling windows. A stream the client abandoned after
+  // the provider generated output is NOT that case — routes/llm.ts settles it
+  // as `completed` with `estimateAbandonedStreamUsage`.
   const actualCostCents =
     input.outcome === 'failed'
       ? 0

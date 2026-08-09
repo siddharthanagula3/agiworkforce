@@ -55,6 +55,7 @@ import {
 } from '../lib/providerStreamSafety';
 import { createStreamLifecycle, StreamClientAbortError } from '../lib/streamLifecycle';
 import {
+  estimateAbandonedStreamUsage,
   finalizeManagedUsage,
   ManagedUsageBillingError,
   markManagedUsageClientDelivered,
@@ -338,6 +339,34 @@ export function parseFallbackPlanHeader(
   return plan;
 }
 
+/**
+ * Characters of provider-generated output carried by one canonical chunk.
+ *
+ * Thinking and tool-call output count: providers bill them as output tokens
+ * exactly like visible text, so an abandoned reasoning or tool-calling stream
+ * costs real money even when the client saw no prose. `tool-use-start` carries
+ * the emitted tool name, which is why a disconnect between a tool call opening
+ * and its first argument delta is still charged rather than fully refunded.
+ *
+ * This undercounts providers that bill hidden reasoning the stream never
+ * carries (OpenAI o-series / GPT-5 reasoning tokens): those turns settle below
+ * their true provider cost. It is a floor on what the turn cost, not a
+ * reconstruction of the provider's own invoice.
+ */
+function generatedOutputChars(chunk: StreamChunk): number {
+  switch (chunk.type) {
+    case 'text-delta':
+    case 'thinking-delta':
+      return chunk.delta.length;
+    case 'tool-use-delta':
+      return chunk.deltaJson.length;
+    case 'tool-use-start':
+      return chunk.name.length;
+    default:
+      return 0;
+  }
+}
+
 // GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — upstream requests are built
 // exclusively inside `packages/ai/providers` adapters from server env keys.
 // NEVER thread `req.headers` (or the user's `Authorization: Bearer <jwt>`)
@@ -434,6 +463,10 @@ router.post(
     let billingFinalized = false;
     let providerSuccessObserved = false;
     let actualUsage: Omit<StreamChunkUsage, 'type'> = {};
+    // Output characters the current attempt got out of the provider. A client
+    // that hangs up or stalls mid-stream never reaches the provider's usage
+    // event, so this is the only measure left of what was already generated.
+    let servedOutputChars = 0;
 
     // The route currently serving the request. Starts at the primary and
     // advances only when managed failover rotates to a fallback attempt, so
@@ -484,6 +517,66 @@ router.post(
               error instanceof ManagedUsageBillingError ? error.code : 'BILLING_UNKNOWN_ERROR',
           },
           'Managed usage reservation release could not be persisted; lease recovery will retry',
+        );
+      }
+    };
+
+    // A client that abandons a stream mid-flight — hanging up, or stalling the
+    // socket until the gateway deadline fires — used to land in
+    // `releaseFailedReservation`, which refunds the whole reservation and leaves
+    // nothing in the rolling windows. The provider had already generated (and
+    // charged AGI for) the tokens streamed so far, so walking away one chunk
+    // before the end of every turn ran for free. Output the provider actually
+    // produced settles as completed instead; abandonment before the first output
+    // token still releases, matching `recover_stale_managed_usage_requests`.
+    //
+    // Scope: this covers CLIENT-caused abandonment only. A mid-stream provider
+    // error, a missing stop, or a deadline reached while waiting on the provider
+    // still refunds in full — charging a user for the gateway's own failure is a
+    // product decision, not this guard's call.
+    const settleAbandonedStream = async (): Promise<void> => {
+      if (billingFinalized || providerSuccessObserved) return;
+      const measured =
+        actualUsage.inputTokens !== undefined || actualUsage.outputTokens !== undefined;
+      if (!measured && servedOutputChars === 0) return;
+      // Claim the terminal transition before awaiting: the finally block below
+      // runs `releaseFailedReservation`, which must not refund this stream.
+      providerSuccessObserved = true;
+      logger.info(
+        {
+          userId: user.userId,
+          provider: served.provider,
+          model: served.model,
+          servedOutputChars,
+          measuredUsage: measured,
+        },
+        'Managed usage settling an abandoned stream on the output already generated',
+      );
+      try {
+        if (!measured) {
+          actualUsage = estimateAbandonedStreamUsage(
+            { ...(body as ManagedUsageRequestBody), model: served.model },
+            servedOutputChars,
+          );
+        }
+        await finalizeBilling('completed');
+      } catch (error) {
+        // No safety net behind this: `providerSuccessObserved` is already
+        // latched so the `finally` release is suppressed, and lease recovery
+        // does not retry a settlement — `recover_stale_managed_usage_requests`
+        // (0056) enqueues `-estimated_cost_cents` and marks the row
+        // `outcome_unknown`, i.e. exactly the full refund this settle exists to
+        // prevent. A failure here therefore loses the charge; it is logged at
+        // error level so it is visible rather than silently free.
+        logger.error(
+          {
+            userId: user.userId,
+            provider: served.provider,
+            model: served.model,
+            billingCode:
+              error instanceof ManagedUsageBillingError ? error.code : 'BILLING_UNKNOWN_ERROR',
+          },
+          'Managed usage abandoned-stream settlement failed; the turn will be refunded by lease recovery',
         );
       }
     };
@@ -637,6 +730,13 @@ router.post(
     if (body.stream) {
       let routeError: AppError | null = null;
       let wroteClientEvent = false;
+      // True only while a write is parked waiting for the client's socket to
+      // drain. A client that stops reading without closing never sets
+      // `req.aborted`/`res.destroyed`, so this flag is the only evidence that
+      // the gateway deadline expired because the CLIENT stalled rather than
+      // because the provider hung — see the stalled-reader settle in the catch
+      // below.
+      let awaitingClientDrain = false;
 
       const prepareSseHeaders = (): void => {
         if (res.hasHeader('Content-Type')) return;
@@ -656,7 +756,13 @@ router.post(
         prepareSseHeaders();
         const accepted = res.write(payload);
         wroteClientEvent = true;
-        if (!accepted) await lifecycle.waitForDrain(res);
+        if (!accepted) {
+          // Left latched when the drain never arrives, so the catch below can
+          // tell a stalled reader apart from a hung provider.
+          awaitingClientDrain = true;
+          await lifecycle.waitForDrain(res);
+          awaitingClientDrain = false;
+        }
       };
 
       const logFailure = (failure: SafeProviderFailure, phase: string): void => {
@@ -680,6 +786,7 @@ router.post(
         while (attempt) {
           served = { model: attempt.model, provider: attempt.provider };
           actualUsage = {};
+          servedOutputChars = 0;
           // Per-attempt assembler so the wire stream attributes the model
           // that is actually serving this attempt, never a failed primary.
           const assembler = new OpenAIWireAssembler({ model: attempt.model });
@@ -737,6 +844,7 @@ router.post(
                 break;
               }
 
+              servedOutputChars += generatedOutputChars(chunk);
               for (const wire of assembler.sseChunks(chunk)) {
                 await writeWireEvent(wire);
               }
@@ -787,11 +895,32 @@ router.post(
             } else {
               attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
             }
+
+            // The same abandonment as a hang-up, with the socket left open: the
+            // client stopped reading and never sent FIN, so the write parked in
+            // `waitForDrain` until the gateway deadline expired. `req.aborted`
+            // and `res.destroyed` both stay false, so the branches above cannot
+            // see it and the turn would otherwise reach
+            // `releaseFailedReservation` and be refunded in full after the
+            // provider had already generated (and charged for) the output.
+            // Only the settlement changes here — the failure terminal below is
+            // still composed and attempted, so the wire contract is unchanged.
+            if (!clientGone && awaitingClientDrain) {
+              logger.info(
+                { provider: served.provider, model: served.model },
+                'LLM stream client stopped reading; settling the stalled response as abandoned',
+              );
+              await settleAbandonedStream();
+            }
           } finally {
             if (iterator) lifecycle.release(iterator);
           }
 
-          if (succeeded || clientGone || routeError) break;
+          if (clientGone) {
+            await settleAbandonedStream();
+            break;
+          }
+          if (succeeded || routeError) break;
           if (!attemptFailure) break;
 
           logFailure(attemptFailure.failure, attemptFailure.phase);
@@ -866,6 +995,7 @@ router.post(
       while (attempt) {
         served = { model: attempt.model, provider: attempt.provider };
         actualUsage = {};
+        servedOutputChars = 0;
         const assembler = new OpenAIWireAssembler({ model: attempt.model });
 
         let iterator: AsyncIterator<StreamChunk> | null = null;
@@ -919,6 +1049,7 @@ router.post(
               break;
             }
 
+            servedOutputChars += generatedOutputChars(chunk);
             assembler.ingest(chunk);
           }
 
@@ -955,7 +1086,11 @@ router.post(
           if (iterator) lifecycle.release(iterator);
         }
 
-        if (succeeded || clientGone || routeError) break;
+        if (clientGone) {
+          await settleAbandonedStream();
+          break;
+        }
+        if (succeeded || routeError) break;
         if (!attemptFailure) break;
 
         logNonStreamFailure(attemptFailure.failure, attemptFailure.phase);
