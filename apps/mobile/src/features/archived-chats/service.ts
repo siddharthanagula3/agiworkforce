@@ -18,6 +18,7 @@
  */
 import { z } from 'zod';
 import {
+  MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudUpdateConversationResponseSchema,
@@ -27,8 +28,13 @@ import {
 
 import { api } from '@/services/api';
 
-/** Page size matches web so both surfaces paginate identically. */
-const PAGE_SIZE = 50;
+/**
+ * Page size comes from the conversations wire contract, which is also what
+ * `GET /api/chat/conversations` falls back to when `limit` is absent. Web,
+ * Desktop and Mobile all read the same constant, so the surfaces cannot drift
+ * apart the way three independently written `50`s could.
+ */
+const PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
 const BULK_CONVERSATION_ACTIONS = ['archive_all', 'delete_all', 'delete_archived'] as const;
 

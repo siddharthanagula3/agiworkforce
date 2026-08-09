@@ -160,6 +160,41 @@ describe('POST /api/checkout', () => {
     );
   });
 
+  it.each([
+    ['apple_original_transaction_id', 'apple-tx-1'],
+    ['google_purchase_token', 'play-token-1'],
+  ])(
+    'refuses to sell over a subscription the store still bills (%s)',
+    async (storeIdColumn, storeId) => {
+      // A store-billed row is paid, active and carries no Stripe subscription
+      // id, so it takes the "replaces unlinked entitlement" branch — which only
+      // rejects a downgrade. Buying an equal-or-higher tier on the web would
+      // leave the customer paying Apple/Google AND Stripe, because only the
+      // store can cancel the store subscription. Regression cover for this
+      // guard was deleted with the mobile IAP slice in 77169d3f1.
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) {
+          return [
+            {
+              status: 'active',
+              plan_tier: 'pro',
+              stripe_customer_id: null,
+              stripe_subscription_id: null,
+              [storeIdColumn]: storeId,
+            },
+          ];
+        }
+        if (sql.includes('from profiles')) return [];
+        return [];
+      });
+
+      const response = await POST(makeRequest('max_15x'));
+
+      expect(response.status).toBe(409);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not let an unlinked paid entitlement bypass downgrade controls', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {

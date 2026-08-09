@@ -47,7 +47,10 @@ export default function SolutionsPage() {
             {
               meta: 'Teams',
               title: 'AGI for Teams',
-              body: 'Shared projects, connector policy, usage visibility, and admin rollout.',
+              // Not "usage visibility": usage is user-scoped only
+              // (apps/web/app/api/usage/route.ts has no organization
+              // dimension) and no per-project/team budget or showback exists.
+              body: 'Shared projects, connector policy, separated Local/BYOK/Cloud spend, and admin rollout.',
               href: '/teams',
             },
             {

@@ -587,7 +587,10 @@ pub(crate) fn is_local_provider_base_url(url: &str) -> bool {
 /// Try subscription auth (Copilot, ChatGPT Plus) for the given provider.
 ///
 /// Returns `Some((token, url, subscription_name, account_id))` if subscription
-/// auth is available, `None` otherwise.
+/// auth is available, `None` otherwise. The URL is always the one
+/// [`crate::auth::resolve_auth`] returned with the token — this function never
+/// supplies an endpoint of its own, so a subscription credential cannot be sent
+/// to a provider endpoint that did not issue it.
 pub(crate) async fn try_subscription_auth(
     provider: &Provider,
 ) -> Option<(String, String, String, Option<String>)> {
@@ -604,7 +607,17 @@ pub(crate) async fn try_subscription_auth(
         if let Ok(Some((token, base_url_override))) =
             crate::auth::resolve_auth(&mut auth_store, sub_name).await
         {
-            let url = base_url_override.unwrap_or_else(|| default_subscription_url(sub_name));
+            // The endpoint is owned by the adapter that resolved the credential:
+            // `auth::resolve_auth` hands back Copilot's chat-completions URL and
+            // ChatGPT's Codex responses URL next to the token it minted. There is
+            // deliberately no default endpoint here — this used to fall back to a
+            // second copy of the OpenAI chat-completions URL, which would have
+            // posted any future subscription's token, and the prompt with it, to
+            // OpenAI. A subscription that names no endpoint is skipped so the
+            // caller falls through to API-key auth for the selected provider.
+            let Some(url) = base_url_override else {
+                continue;
+            };
             // Subscription auth tokens must only be sent over HTTPS
             if !url.starts_with("https://") {
                 // Redact URL to avoid leaking embedded credentials in logs
@@ -628,15 +641,6 @@ pub(crate) async fn try_subscription_auth(
     // Persist any token refreshes even if none matched
     let _ = crate::auth::save_auth(&auth_store);
     None
-}
-
-/// Default API URL for a subscription provider.
-pub(crate) fn default_subscription_url(name: &str) -> String {
-    match name {
-        "copilot" => "https://api.githubcopilot.com/chat/completions".to_string(),
-        "chatgpt" => "https://chatgpt.com/backend-api/codex/responses".to_string(),
-        _ => "https://api.openai.com/v1/chat/completions".to_string(),
-    }
 }
 
 #[cfg(test)]
@@ -1017,6 +1021,57 @@ mod tests {
                 assert_eq!(api_key_env.as_deref(), Some("OPENROUTER_API_KEY"));
             }
             _ => panic!("Expected Provider::Custom"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod subscription_endpoint_tests {
+    use crate::auth::{AuthEntry, AuthStore};
+
+    /// `try_subscription_auth` carries no endpoint of its own — the URL a
+    /// subscription request is posted to is only ever the one `resolve_auth`
+    /// returned beside the token. That is what keeps a Copilot or ChatGPT
+    /// credential from reaching a URL that did not issue it. The contract only
+    /// holds while every supported subscription names its own endpoint, so pin
+    /// it: a subscription that resolves a token with no URL is now skipped, and
+    /// the failure would otherwise be silent.
+    #[tokio::test]
+    async fn resolve_auth_names_an_endpoint_for_every_supported_subscription() {
+        let now = chrono::Utc::now();
+        let mut store = AuthStore::default();
+        store.entries.insert(
+            "copilot".to_string(),
+            AuthEntry::ApiKey {
+                key: "gho_test_token".to_string(),
+            },
+        );
+        // Seed the transient Copilot token cache so the arm answers from memory
+        // instead of exchanging a GitHub token over the network.
+        store.copilot_cache = Some(("copilot_api_token".to_string(), now.timestamp() + 3_600));
+        store.entries.insert(
+            "chatgpt".to_string(),
+            AuthEntry::OAuth {
+                refresh: "refresh".to_string(),
+                access: "access".to_string(),
+                expires: now.timestamp_millis() + 3_600_000,
+                account_id: Some("acct_test".to_string()),
+            },
+        );
+
+        // Every name `try_subscription_auth` can ask for.
+        for sub_name in ["chatgpt", "copilot"] {
+            let resolved = crate::auth::resolve_auth(&mut store, sub_name)
+                .await
+                .unwrap_or_else(|err| panic!("resolve_auth({sub_name}) failed: {err}"))
+                .unwrap_or_else(|| panic!("resolve_auth({sub_name}) found no credential"));
+            let endpoint = resolved
+                .1
+                .unwrap_or_else(|| panic!("{sub_name} resolved a token without an endpoint"));
+            assert!(
+                endpoint.starts_with("https://"),
+                "{sub_name} endpoint must be HTTPS, got {endpoint}"
+            );
         }
     }
 }

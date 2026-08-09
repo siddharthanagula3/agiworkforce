@@ -12,7 +12,7 @@
  */
 
 import { create } from 'zustand';
-import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import { parseMeResponse, type MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
 import { hasClerkSessionCookie, subscribeToClerkSessionChange } from '@/lib/clerk-session';
 
@@ -59,6 +59,15 @@ export interface SubscriptionPlan {
    * Mirrors `display_name`.
    */
   plan_name: string;
+  /**
+   * Who bills this subscription. `/api/me` has always emitted it and Mobile
+   * has always read it; the web store used to drop it, so Billing could not
+   * say who owns the plan and offered the Stripe portal to every paid
+   * account — including rows Stripe has no subscription for (App Store, Play,
+   * or an operator-provisioned Team/Enterprise row). Optional because the
+   * contract marks it optional for older servers.
+   */
+  subscription_source?: MeSubscriptionSource;
 }
 
 export interface FeatureFlags {
@@ -144,6 +153,9 @@ export const useBillingStore = create<AuthState>()((set) => ({
           status: data.plan.status,
           current_period_end: data.plan.current_period_end,
           plan_name: data.plan.display_name,
+          ...(data.plan.subscription_source
+            ? { subscription_source: data.plan.subscription_source }
+            : {}),
         };
 
         // PER-3: `user` used to be written ONLY by `_setUser`, which had zero
