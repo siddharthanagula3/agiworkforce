@@ -215,7 +215,8 @@ const FILE_OPS_LIMIT = 200; // fileOperations, terminalCommands, toolExecutions,
 const ACTION_LOG_LIMIT = 500; // actionLog entries (newest-first via unshift + slice)
 const PENDING_APPROVALS_LIMIT = 50; // pendingApprovals queue depth
 
-const STORAGE_VERSION = 1;
+// v2 drops the persisted `trustedWorkflows` map (see the partialize note).
+const STORAGE_VERSION = 2;
 
 function upsertApprovalAuditEntry(
   actionLog: ActionLogEntry[],
@@ -1126,12 +1127,23 @@ export const useToolStore = create<ToolState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
+        // `trustedWorkflows` is the standing auto-approval list for tool
+        // actions, and nothing in the approval UI populates it — `isActionTrusted`
+        // has no production caller. A blanket "skip the confirmation prompt"
+        // record has to be created by a deliberate user grant, so it stays in
+        // memory until an approval control writes it; carrying an unattributable
+        // one across restarts is the wrong default for a permission boundary.
         partialize: (state) => ({
-          trustedWorkflows: state.trustedWorkflows,
           filters: state.filters,
         }),
-        migrate: (persistedState: unknown, _version: number) => {
-          // Handle future migrations here
+        migrate: (persistedState: unknown, version: number) => {
+          if (version < 2) {
+            const { trustedWorkflows: _dropped, ...rest } = (persistedState ?? {}) as Partial<
+              ToolState & { trustedWorkflows?: unknown }
+            >;
+            void _dropped;
+            return rest as ToolState;
+          }
           return persistedState as ToolState;
         },
       },

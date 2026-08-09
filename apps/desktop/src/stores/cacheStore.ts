@@ -1,7 +1,6 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
-import { devtools, persist, createJSONStorage } from 'zustand/middleware';
-import { storageFallback } from '../lib/storageFallback';
+import { devtools } from 'zustand/middleware';
 import {
   codebaseCacheGetStats,
   codebaseCacheClearProject,
@@ -69,150 +68,143 @@ interface CacheStoreState {
   clearError: () => void;
 }
 
+// `codebaseStats` is a snapshot of backend cache counters, not a preference:
+// it is only ever produced by `getCodebaseCacheStats()` and is stale the moment
+// the process exits. It used to be written to localStorage, which promised a
+// remembered value that no consumer ever read back.
 export const useCacheStore = create<CacheStoreState>()(
   devtools(
-    persist(
-      (set) => ({
-        codebaseStats: null,
-        isLoading: false,
-        error: null,
+    (set) => ({
+      codebaseStats: null,
+      isLoading: false,
+      error: null,
 
-        getCodebaseCacheStats: async () => {
-          set({ isLoading: true, error: null });
-          try {
-            const stats = await codebaseCacheGetStats();
-            set({ codebaseStats: stats, isLoading: false });
-            return stats;
-          } catch (error) {
-            set({ isLoading: false, error: String(error) });
-            throw error;
-          }
-        },
-
-        clearProjectCache: async (projectPath: string) => {
-          set({ isLoading: true, error: null });
-          try {
-            const deleted = await codebaseCacheClearProject(projectPath);
-            set({ isLoading: false });
-            return deleted;
-          } catch (error) {
-            set({ isLoading: false, error: String(error) });
-            throw error;
-          }
-        },
-
-        clearFileCache: async (filePath: string) => {
-          set({ isLoading: true, error: null });
-          try {
-            const deleted = await codebaseCacheClearFile(filePath);
-            set({ isLoading: false });
-            return deleted;
-          } catch (error) {
-            set({ isLoading: false, error: String(error) });
-            throw error;
-          }
-        },
-
-        clearAllCodebaseCache: async () => {
-          set({ isLoading: true, error: null });
-          try {
-            const deleted = await codebaseCacheClearAll();
-            set({ codebaseStats: null, isLoading: false });
-            return deleted;
-          } catch (error) {
-            set({ isLoading: false, error: String(error) });
-            throw error;
-          }
-        },
-
-        clearExpiredCodebaseCache: async () => {
-          set({ isLoading: true, error: null });
-          try {
-            const deleted = await codebaseCacheClearExpired();
-            set({ isLoading: false });
-            return deleted;
-          } catch (error) {
-            set({ isLoading: false, error: String(error) });
-            throw error;
-          }
-        },
-
-        getFileTree: async (projectPath: string) => {
-          try {
-            return await codebaseCacheGetFileTree(projectPath);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to get file tree:', error);
-            return null;
-          }
-        },
-
-        setFileTree: async (projectPath: string, fileTree: FileTree) => {
-          try {
-            await codebaseCacheSetFileTree(projectPath, fileTree);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to set file tree:', error);
-            throw error;
-          }
-        },
-
-        getSymbols: async (filePath: string, fileHash?: string) => {
-          try {
-            return await codebaseCacheGetSymbols(filePath, fileHash);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to get symbols:', error);
-            return null;
-          }
-        },
-
-        setSymbols: async (filePath: string, symbols: SymbolTable, fileHash?: string) => {
-          try {
-            await codebaseCacheSetSymbols(filePath, symbols, fileHash);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to set symbols:', error);
-            throw error;
-          }
-        },
-
-        getDependencies: async (projectPath: string) => {
-          try {
-            return await codebaseCacheGetDependencies(projectPath);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to get dependencies:', error);
-            return null;
-          }
-        },
-
-        setDependencies: async (projectPath: string, dependencies: DependencyGraph) => {
-          try {
-            await codebaseCacheSetDependencies(projectPath, dependencies);
-          } catch (error) {
-            console.warn('[CacheStore] Failed to set dependencies:', error);
-            throw error;
-          }
-        },
-
-        calculateFileHash: async (content: number[]) => {
-          try {
-            return await codebaseCacheCalculateHash(content);
-          } catch (error) {
-            throw error;
-          }
-        },
-
-        clearError: () => {
-          set({ error: null });
-        },
-      }),
-      {
-        name: 'agiworkforce-cache',
-        storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? storageFallback : window.localStorage,
-        ),
-        partialize: (state) => ({
-          codebaseStats: state.codebaseStats,
-        }),
+      getCodebaseCacheStats: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const stats = await codebaseCacheGetStats();
+          set({ codebaseStats: stats, isLoading: false });
+          return stats;
+        } catch (error) {
+          set({ isLoading: false, error: String(error) });
+          throw error;
+        }
       },
-    ),
+
+      clearProjectCache: async (projectPath: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const deleted = await codebaseCacheClearProject(projectPath);
+          set({ isLoading: false });
+          return deleted;
+        } catch (error) {
+          set({ isLoading: false, error: String(error) });
+          throw error;
+        }
+      },
+
+      clearFileCache: async (filePath: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const deleted = await codebaseCacheClearFile(filePath);
+          set({ isLoading: false });
+          return deleted;
+        } catch (error) {
+          set({ isLoading: false, error: String(error) });
+          throw error;
+        }
+      },
+
+      clearAllCodebaseCache: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const deleted = await codebaseCacheClearAll();
+          set({ codebaseStats: null, isLoading: false });
+          return deleted;
+        } catch (error) {
+          set({ isLoading: false, error: String(error) });
+          throw error;
+        }
+      },
+
+      clearExpiredCodebaseCache: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const deleted = await codebaseCacheClearExpired();
+          set({ isLoading: false });
+          return deleted;
+        } catch (error) {
+          set({ isLoading: false, error: String(error) });
+          throw error;
+        }
+      },
+
+      getFileTree: async (projectPath: string) => {
+        try {
+          return await codebaseCacheGetFileTree(projectPath);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to get file tree:', error);
+          return null;
+        }
+      },
+
+      setFileTree: async (projectPath: string, fileTree: FileTree) => {
+        try {
+          await codebaseCacheSetFileTree(projectPath, fileTree);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to set file tree:', error);
+          throw error;
+        }
+      },
+
+      getSymbols: async (filePath: string, fileHash?: string) => {
+        try {
+          return await codebaseCacheGetSymbols(filePath, fileHash);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to get symbols:', error);
+          return null;
+        }
+      },
+
+      setSymbols: async (filePath: string, symbols: SymbolTable, fileHash?: string) => {
+        try {
+          await codebaseCacheSetSymbols(filePath, symbols, fileHash);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to set symbols:', error);
+          throw error;
+        }
+      },
+
+      getDependencies: async (projectPath: string) => {
+        try {
+          return await codebaseCacheGetDependencies(projectPath);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to get dependencies:', error);
+          return null;
+        }
+      },
+
+      setDependencies: async (projectPath: string, dependencies: DependencyGraph) => {
+        try {
+          await codebaseCacheSetDependencies(projectPath, dependencies);
+        } catch (error) {
+          console.warn('[CacheStore] Failed to set dependencies:', error);
+          throw error;
+        }
+      },
+
+      calculateFileHash: async (content: number[]) => {
+        try {
+          return await codebaseCacheCalculateHash(content);
+        } catch (error) {
+          throw error;
+        }
+      },
+
+      clearError: () => {
+        set({ error: null });
+      },
+    }),
     { name: 'CacheStore', enabled: import.meta.env.DEV },
   ),
 );

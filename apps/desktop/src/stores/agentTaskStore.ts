@@ -14,6 +14,31 @@ import type { PrivacyMode } from '@agiworkforce/types';
 const MAX_LIVE_TASK_ENTRIES = 100;
 
 /**
+ * Parallel agents are not iterations: each one is a separate planning call plus
+ * its own sandbox, and the Rust planner only has eight distinct strategies
+ * (`clamp_num_agents` in `sys/commands/agi.rs` enforces the same ceiling).
+ */
+export const MAX_PARALLEL_AGENTS = 8;
+export const DEFAULT_PARALLEL_AGENTS = 4;
+/** The engine caps `max_steps` at 1000; the launcher stays well inside that. */
+export const MAX_GOAL_ITERATIONS = 20;
+export const DEFAULT_GOAL_ITERATIONS = 10;
+
+const clampInteger = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, Math.floor(value)));
+
+const parallelAgentCount = (requested: number | undefined): number =>
+  requested === undefined || !Number.isFinite(requested)
+    ? DEFAULT_PARALLEL_AGENTS
+    : clampInteger(requested, 1, MAX_PARALLEL_AGENTS);
+
+/** `undefined` leaves the engine's own iteration limit in place. */
+const goalIterationLimit = (requested: number | undefined): number | undefined =>
+  requested === undefined || !Number.isFinite(requested)
+    ? undefined
+    : clampInteger(requested, 1, MAX_GOAL_ITERATIONS);
+
+/**
  * TRUST BOUNDARY (desktop-trust-boundary-01): every goal submission carries
  * the active workspace's execution boundary so the Rust AGI subsystem routes
  * LLM calls inside it. Mirrors `selectPrivacyMode` (`local`/`managed`);
@@ -105,7 +130,13 @@ interface AgentTaskStoreState {
   liveProgressByTask: Record<string, AgentTaskLiveProgress>;
   submitGoal: (
     goal: string,
-    options?: { maxIterations?: number; parallel?: boolean } & GoalSubmissionAuthority,
+    options?: {
+      /** Sequential only: iteration ceiling for the engine's execute/reflect loop. */
+      maxIterations?: number;
+      /** Parallel only: how many agents race the goal in their own sandboxes. */
+      numAgents?: number;
+      parallel?: boolean;
+    } & GoalSubmissionAuthority,
   ) => Promise<string>;
   submitGoalSwarm: (
     goal: string,
@@ -261,7 +292,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 request: {
                   description: goal,
                   priority: 'medium',
-                  numAgents: options.maxIterations ?? 4,
+                  numAgents: parallelAgentCount(options.numAgents),
                   trustMode: authority.trustMode,
                 },
               });
@@ -284,6 +315,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
               request: {
                 description: goal,
                 priority: 'medium',
+                maxSteps: goalIterationLimit(options.maxIterations),
                 trustMode: authority.trustMode,
               },
             });

@@ -94,7 +94,16 @@ import {
 } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
-import useErrorStore from './stores/ui';
+import useErrorStore, { useSidecarStore } from './stores/ui';
+import {
+  GLOBAL_SHORTCUTS,
+  RENDERER_SHORTCUTS,
+  matchesBinding,
+  resolveBinding,
+  toBackendAccelerator,
+  type RendererShortcutAction,
+} from './constants/shortcuts';
+import { useShortcutStore } from './stores/shortcutStore';
 import { useAppModeStore, selectPrivacyMode } from './stores/appModeStore';
 import {
   initializeTaskRoutingTierRestriction,
@@ -253,6 +262,19 @@ function resolveDesktopWindowMode(): DesktopWindowMode {
     // Invalid location state falls back to the main Desktop shell.
   }
   return 'default';
+}
+
+// Renderer zoom is document font scaling. The native View menu and the zoom
+// shortcuts turn the same dial, so both go through these.
+const ZOOM_STEP = 1.1;
+
+function zoomBy(factor: number) {
+  const current = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  document.documentElement.style.fontSize = `${current * factor}px`;
+}
+
+function resetZoom() {
+  document.documentElement.style.fontSize = '';
 }
 
 const DesktopShell = () => {
@@ -1044,28 +1066,6 @@ const DesktopShell = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const key = event.key?.toLowerCase();
-      if (!key) return; // Guard against undefined event.key
-      if ((event.metaKey || event.ctrlKey) && key === 'k') {
-        event.preventDefault();
-        // Cmd+K opens the unified Spotlight Search modal
-        useSearchModal.getState().toggle();
-      }
-      // Cmd+Shift+K retains the command palette for system commands
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === 'k') {
-        event.preventDefault();
-        setCommandPaletteOpen((open) => !open);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
   // Double-tap Alt to open Quick Query overlay
   const lastAltKeyupAtRef = useRef<number>(0);
   useEffect(() => {
@@ -1131,13 +1131,13 @@ const DesktopShell = () => {
               useSearchModal.getState().open();
               break;
             case 'zoom_in':
-              document.documentElement.style.fontSize = `${parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.1}px`;
+              zoomBy(ZOOM_STEP);
               break;
             case 'zoom_out':
-              document.documentElement.style.fontSize = `${parseFloat(getComputedStyle(document.documentElement).fontSize) / 1.1}px`;
+              zoomBy(1 / ZOOM_STEP);
               break;
             case 'actual_size':
-              document.documentElement.style.fontSize = '';
+              resetZoom();
               break;
             case 'restart_to_update':
               setUpdateDialogOpen(true);
@@ -1438,6 +1438,74 @@ const DesktopShell = () => {
   }, [handleCaptureRequest, handleVoiceInputRequest, startNewChat]);
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
+
+  // Every in-app shortcut is dispatched here. The map is keyed by
+  // RendererShortcutAction, so a row cannot be added to constants/shortcuts.ts
+  // without a handler on this side — the build fails first. Keys owned by the
+  // native window menu (New Conversation, Settings, Find, Reload, the View
+  // menu's zoom items, Fullscreen, Hide) are not routed here: the OS consumes
+  // a menu key equivalent before the webview sees the keydown, so they stay in
+  // `window_menu.rs` and reach the app through the `menu_action` listener.
+  const shortcutHandlers = useMemo<Record<RendererShortcutAction, () => void>>(
+    () => ({
+      'app.search': () => useSearchModal.getState().toggle(),
+      'app.commandPalette': () => setCommandPaletteOpen((open) => !open),
+      'model.select': () => openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys'),
+      'window.toggleSidebar': () => {
+        const ui = useSidecarStore.getState();
+        ui.setSidebarCollapsed(!ui.sidebarCollapsed);
+      },
+      'window.minimize': () => void actions.minimize(),
+    }),
+    [actions, isCloudMode, openSettingsDialog],
+  );
+
+  const customKeybindings = useSettingsStore((s) => s.customKeybindings);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      for (const shortcut of RENDERER_SHORTCUTS) {
+        if (!matchesBinding(event, resolveBinding(shortcut, customKeybindings))) continue;
+        event.preventDefault();
+        shortcutHandlers[shortcut.action]();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [customKeybindings, shortcutHandlers]);
+
+  // The Rust registry rebuilds itself from `with_defaults()` on every launch,
+  // so a rebound OS-level hotkey only reaches the OS again if the shell
+  // re-applies it once settings have hydrated.
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let cancelled = false;
+    void (async () => {
+      await waitForSettingsHydration();
+      if (cancelled) return;
+
+      const saved = useSettingsStore.getState().customKeybindings;
+      const { update } = useShortcutStore.getState();
+      for (const shortcut of GLOBAL_SHORTCUTS) {
+        const combo = saved[shortcut.id];
+        if (!combo) continue;
+        try {
+          await update(shortcut.backendId, toBackendAccelerator(combo));
+        } catch (error) {
+          console.error('[App] Failed to re-apply saved hotkey', shortcut.id, error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDismissTimeoutWarning = useCallback(() => {
     setIsTimeoutWarningOpen(false);

@@ -96,6 +96,7 @@ export function VoiceSettings() {
   const mode = useVoiceInputStore((s) => s.voiceMode);
   const postProcessingMode = useVoiceInputStore((s) => s.postProcessingMode);
   const inputDeviceId = useVoiceInputStore((s) => s.inputDeviceId);
+  const inputDeviceLabel = useVoiceInputStore((s) => s.inputDeviceLabel);
   const setHotkey = useVoiceInputStore((s) => s.setHotkey);
   const setProvider = useVoiceInputStore((s) => s.setProvider);
   const setInputDevice = useVoiceInputStore((s) => s.setInputDevice);
@@ -190,6 +191,15 @@ export function VoiceSettings() {
       navigator.mediaDevices?.removeEventListener?.('devicechange', listener);
     };
   }, []);
+
+  // `enumerateDevices` returns nothing until mic permission is granted, and an
+  // unplugged mic drops out of the list entirely. Without an entry matching the
+  // saved id the Select has no item for its value and renders a blank trigger,
+  // so the remembered choice looks lost. The persisted label is what lets us
+  // name it while the real device is out of reach.
+  const savedDeviceUnavailable = Boolean(
+    inputDeviceId && !inputDevices.some((device) => device.deviceId === inputDeviceId),
+  );
 
   const [testError, setTestError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -324,6 +334,11 @@ export function VoiceSettings() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="system-default">System default</SelectItem>
+                {savedDeviceUnavailable && inputDeviceId && (
+                  <SelectItem value={inputDeviceId}>
+                    {inputDeviceLabel ?? 'Saved microphone'} (unavailable)
+                  </SelectItem>
+                )}
                 {inputDevices.map((device) => (
                   <SelectItem key={device.deviceId} value={device.deviceId}>
                     {device.label}
