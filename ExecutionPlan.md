@@ -111,7 +111,12 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 6. `db_query` table allowlist is bypassed by whitespace tokenization
 
-- Status: todo
+- Status: DONE (2026-08-08) — `sql_identifier_tokens` strips block and line
+  comments and treats every non-identifier character as a separator, so
+  `SELECT*FROM`, `FROM"settings"` and `FROM/*c*/users` all resolve the table.
+  All three scanners share it. Qualified names resolve to the schema and are
+  rejected — fail closed, pinned by a test. 7 new tests; desktop 4,647 passing;
+  clippy -D warnings clean. Commit 9e40b17a8.
 - Area: security
 - Severity: critical
 - Writes: `apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs`
