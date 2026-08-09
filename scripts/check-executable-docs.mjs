@@ -23,10 +23,6 @@ const requiredInputs = [
     path: 'apps/cli/src/output_styles/learning.md',
     consumer: 'Rust include_str! in apps/cli/src/output_styles.rs',
   },
-  {
-    path: 'packages/tools/skills/README.md',
-    consumer: 'package ownership and skill-boundary checks',
-  },
 ];
 
 function requireNonemptyFile(relativePath, consumer) {

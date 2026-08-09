@@ -429,7 +429,6 @@ if (exists(oldCloudPath)) {
 
 for (const relativePath of [
   `${cloudPackagePath}/package.json`,
-  `${cloudPackagePath}/README.md`,
   `${cloudPackagePath}/tsconfig.json`,
   `${cloudPackagePath}/vitest.config.ts`,
   `${cloudPackagePath}/src/index.ts`,

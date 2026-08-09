@@ -6,7 +6,7 @@ Last updated: 2026-08-09
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
-It does not authorize cloning proprietary source, icons, copy, screenshots, or exact visual design. Current point-in-time evidence is recorded in `docs/research/claude-live-frontend-system-2026-07-16.md`.
+It does not authorize cloning proprietary source, icons, copy, screenshots, or exact visual design.
 
 If a visible control conflicts with the effective runtime capability, the control is the bug. If this document conflicts with `docs/current/source-of-truth.md` or `docs/current/trust-mode-surface-matrix.md`, those documents win and this file must be corrected.
 
@@ -689,7 +689,6 @@ A frontend capability is complete only when:
 
 ## 17. Evidence
 
-- `docs/research/claude-live-frontend-system-2026-07-16.md`
 - `docs/research/competitor-capability-session-architecture-2026-07-15.md`
 - `docs/current/parity-implementation-matrix.md`
 - `docs/current/trust-mode-surface-matrix.md`

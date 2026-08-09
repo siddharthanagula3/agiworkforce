@@ -21,6 +21,7 @@ describe('BudgetTrackerDisplay', () => {
       json: async () => ({
         credits: {
           usage_percentage: 50,
+          usage_visible: true,
           reset_at: '2026-08-01T00:00:00.000Z',
           seconds_until_reset: 86_400,
           has_usage_remaining: true,
@@ -47,5 +48,29 @@ describe('BudgetTrackerDisplay', () => {
     expect(screen.getByLabelText('Session budget: 25% used')).toBeTruthy();
     // The card wrapper must not be present in the composer's one-line row.
     expect(container.querySelector('.rounded-lg')).toBeNull();
+  });
+
+  it('shows an upgrade prompt instead of a meter when usage is internal (Free)', async () => {
+    // Free's allowance is a cost control, not a published quantity: the server
+    // sends usage_visible=false and no percentage, so there is nothing to render.
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        credits: {
+          usage_percentage: null,
+          usage_visible: false,
+          reset_at: '2026-08-01T00:00:00.000Z',
+          seconds_until_reset: 86_400,
+          has_usage_remaining: true,
+        },
+      }),
+    } as Response);
+
+    render(<BudgetTrackerDisplay showCreditBalance />);
+
+    expect(await screen.findByText('Upgrade')).toBeInTheDocument();
+    // The plan-allowance row is gone. The session budget meter is a separate,
+    // local cost tracker and is deliberately untouched by this change.
+    expect(screen.queryByText('Current period:')).toBeNull();
   });
 });

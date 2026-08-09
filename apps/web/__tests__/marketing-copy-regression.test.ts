@@ -174,7 +174,10 @@ describe('public marketing copy regressions', () => {
     // Managed Cloud is public alpha and open by default (founder decision
     // 2026-06-27, source-of-truth.md). The homepage must NOT claim it is
     // waitlist/invite-only — that is an overclaim against shipped scope.
-    const home = readWebFile('app/page.tsx');
+    // The landing body moved out of `app/page.tsx` on 2026-08-08, when the root
+    // became auth-aware: signed-in visitors get the product, everyone else gets
+    // this component. The copy assertions belong wherever the copy lives.
+    const home = readWebFile('features/marketing/components/MarketingLanding.tsx');
 
     expect(home).not.toContain('Join the Waitlist');
     expect(home).not.toContain('Private beta via waitlist');

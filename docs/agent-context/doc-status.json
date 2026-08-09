@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-08-02",
+  "lastUpdated": "2026-08-08",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "CLAUDE.md",
@@ -18,32 +18,9 @@
     "docs/current/agent-and-repo-operability.md",
     "docs/decisions/CURRENT_DECISIONS.md",
     "docs/agent-context/README.md",
-    "docs/agent-context/known-flaws.md",
-    "docs/00-foundation/README.md",
-    "docs/00-foundation/documentation-constitution.md",
-    "docs/00-foundation/architecture-manifest.md",
-    "docs/00-foundation/canonical-glossary.md",
-    "docs/00-foundation/requirement-id-system.md",
-    "docs/00-foundation/documentation-standards.md",
-    "docs/00-foundation/cross-reference-system.md",
-    "docs/00-foundation/documentation-compiler.md",
-    "docs/00-foundation/master-documentation-index.md",
-    "docs/00-foundation/adr-index.md",
-    "docs/00-foundation/documentation-status-inventory.md",
-    "docs/00-foundation/documentation-migration-plan.md",
-    "docs/00-foundation/platform-constitution.md",
-    "docs/00-foundation/architecture-constitution.md",
-    "docs/00-foundation/owner-decision-register.md",
-    "docs/00-foundation/master-documentation-roadmap.md",
-    "docs/00-foundation/engineering-constitution-authority-map.md",
-    "docs/03-runtimes/context-runtime/bk-11.01-deterministic-context-assembly.md"
+    "docs/agent-context/known-flaws.md"
   ],
-  "currentEvidence": [
-    "docs/reference/REFERENCE_INDEX.md",
-    "docs/reference/REFERENCE_STRUCTURE.md",
-    "docs/research/claude-live-frontend-system-2026-07-16.md",
-    "docs/plans/developer-surfaces-cloud-loop-closure-2026-08-02.md"
-  ],
+  "currentEvidence": [],
   "supportingRules": [
     "docs/agent-context/repo-map.json",
     "docs/agent-context/commands.json",
