@@ -271,7 +271,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 22. Cloud Code agent turns bill a flat 25¢ regardless of usage
 
-- Status: DONE (2026-08-09) — cloud-code approvals can leave pending — 94046227f
+- Status: DONE (2026-08-09) — cloud-code turns bill measured tokens, and `is_flagship` reflects the model actually called — 94046227f. CORRECTION: commit 94046227f's subject says "cloud-code approval state machine" and this line previously repeated it. Both were wrong — the diff is flagship routing-slot billing, which IS this item. Ledger task MATCH-002 (approvals decidable) is NOT closed by it and remains open.
 - Area: billing
 - Severity: high
 - Writes: `apps/web/lib/services/cloud-code-agent-service.ts`, `apps/web/lib/services/cloud-code-agent-loop.ts`
