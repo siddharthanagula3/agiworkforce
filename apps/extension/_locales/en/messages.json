@@ -1,0 +1,510 @@
+{
+  "commandOpenSidePanel": {
+    "message": "Open AGI side panel",
+    "description": "chrome://extensions/shortcuts label for the _execute_action command"
+  },
+  "commandCapturePage": {
+    "message": "Capture current page",
+    "description": "chrome://extensions/shortcuts label for the capture_page command"
+  },
+
+  "menuAskAgi": {
+    "message": "Ask AGI Workforce about \"%s\"",
+    "description": "Context menu on a text selection. %s is Chrome's own selection substitution and must survive translation."
+  },
+  "menuExplainSelection": {
+    "message": "Explain this",
+    "description": "Context menu on a text selection"
+  },
+  "menuTranslateSelection": {
+    "message": "Translate this",
+    "description": "Context menu on a text selection"
+  },
+  "menuSummarizePage": {
+    "message": "Summarize this page",
+    "description": "Context menu on the page background"
+  },
+  "menuCaptureElement": {
+    "message": "Capture Element",
+    "description": "Context menu that screenshots the right-clicked element"
+  },
+  "menuGetElementInfo": {
+    "message": "Get Element Info",
+    "description": "Context menu that reports the right-clicked element's attributes"
+  },
+  "menuDiscoverWebmcpTools": {
+    "message": "Discover AI Tools on Page",
+    "description": "Context menu that scans the page for WebMCP tool declarations"
+  },
+  "menuAddToTabGroup": {
+    "message": "Add Tab to AGI Workforce Group",
+    "description": "Context menu that moves the tab into the extension's tab group"
+  },
+
+  "spNext": {
+    "message": "Next",
+    "description": "First-run wizard primary button, used when a step declares no label of its own"
+  },
+  "spModelBadgeDefault": {
+    "message": "AI Assistant",
+    "description": "Model selector badge before a concrete model is resolved"
+  },
+  "spDrawerCapture": {
+    "message": " Capture",
+    "description": "Screenshot button at rest. The leading space separates the label from its icon."
+  },
+  "spDrawerCapturing": {
+    "message": " Capturing…",
+    "description": "Screenshot button while the capture is in flight. The leading space stands in for the icon the label replaces."
+  },
+  "spDrawerCaptured": {
+    "message": " Captured!",
+    "description": "Screenshot button after a successful capture"
+  },
+  "spDrawerCaptureFailed": {
+    "message": " Failed",
+    "description": "Screenshot button after a failed capture"
+  },
+  "spDrawerUngroupTab": {
+    "message": " Ungroup",
+    "description": "Tab-group button while the tab is already grouped"
+  },
+  "spDrawerGroupTab": {
+    "message": " Group",
+    "description": "Tab-group button while the tab is not grouped"
+  },
+
+  "spPairingIdle": {
+    "message": "Not paired",
+    "description": "Desktop pairing status before any pairing attempt"
+  },
+  "spPairingPair": {
+    "message": "Pair with Desktop",
+    "description": "Button that starts desktop pairing"
+  },
+  "spPairingInProgress": {
+    "message": "Pairing…",
+    "description": "Desktop pairing status and button label while the request is in flight"
+  },
+  "spPairingPaired": {
+    "message": "Paired",
+    "description": "Desktop pairing status once the fingerprint is confirmed"
+  },
+  "spPairingFailed": {
+    "message": "Pairing failed",
+    "description": "Desktop pairing status after a failed attempt"
+  },
+  "spPairingRetry": {
+    "message": "Retry Pairing",
+    "description": "Button that restarts desktop pairing after a failure"
+  },
+
+  "spAllowlistNoSite": {
+    "message": "No site to add on this page",
+    "description": "Automation allowlist row when the active tab has no addable origin"
+  },
+  "spAllowlistRemove": {
+    "message": "Remove",
+    "description": "Button that removes the active origin from the automation allowlist"
+  },
+  "spAllowlistAdd": {
+    "message": "Add",
+    "description": "Button that adds the active origin to the automation allowlist"
+  },
+
+  "spMemoryDeleteConfirm": {
+    "message": "Confirm?",
+    "description": "Memory row delete button waiting for the second click"
+  },
+  "spMemoryDelete": {
+    "message": "Delete",
+    "description": "Memory row delete button in its resting state"
+  },
+
+  "spBridgeUrlNotAllowed": {
+    "message": "Only local URLs ($HOSTS$) are allowed",
+    "description": "Error shown when the desktop bridge URL points outside the allowed local hosts",
+    "placeholders": {
+      "hosts": { "content": "$1", "example": "localhost, 127.0.0.1" }
+    }
+  },
+
+  "spCloudSignIn": {
+    "message": "Sign in to AGI Cloud",
+    "description": "Primary button of the signed-out cloud panel"
+  },
+  "spCloudSignInChecking": {
+    "message": "Checking…",
+    "description": "Sign-in button while the panel re-checks a session started in another tab"
+  },
+  "spCloudSignInOpening": {
+    "message": "Opening sign in…",
+    "description": "Sign-in button while the hosted sign-in tab opens"
+  },
+  "spCloudSignInReturnTab": {
+    "message": "Finish sign-in in the new tab, then return here and click Check sign-in.",
+    "description": "Shown right after the sign-in tab is opened from the panel"
+  },
+  "spCloudSignInOpenFailed": {
+    "message": "Unable to open AGI account sign-in.",
+    "description": "Fallback when opening the hosted sign-in tab throws without a message"
+  },
+  "spCloudCheckSignIn": {
+    "message": "Check sign-in",
+    "description": "Button that re-reads the session after the user signed in elsewhere"
+  },
+  "spCloudSignInFinishTab": {
+    "message": "Finish sign-in in the new tab, then click Check sign-in.",
+    "description": "Signed-out description while a sign-in tab is still open"
+  },
+  "spCloudSignInPrompt": {
+    "message": "Sign in to use AGI Managed Cloud chat.",
+    "description": "Signed-out description of the cloud panel"
+  },
+  "spCloudSignInUnconfigured": {
+    "message": "AGI account sign-in is not configured in this build.",
+    "description": "Signed-out description when the build ships without auth configuration"
+  },
+  "spCloudSessionExpired": {
+    "message": "Your session expired. Sign in again to continue.",
+    "description": "Signed-out description after the stored token was rejected"
+  },
+  "spCloudAccountFallbackName": {
+    "message": "AGI Account",
+    "description": "Account row label before, or in place of, a display name"
+  },
+  "spCloudAccountUnavailable": {
+    "message": "Account unavailable",
+    "description": "Account tier row when entitlements could not be read"
+  },
+  "spCloudFreeTier": {
+    "message": "Free tier",
+    "description": "Account tier row before entitlements are read"
+  },
+  "spCloudAvatarFallback": {
+    "message": "A",
+    "description": "Avatar initial when the profile carries none"
+  },
+
+  "spBillingPastDue": {
+    "message": "Payment is past due. Update billing to restore Chrome access.",
+    "description": "Quota row for a past_due subscription"
+  },
+  "spBillingCanceled": {
+    "message": "This subscription is canceled. Manage billing to restore Chrome access.",
+    "description": "Quota row for a canceled subscription"
+  },
+  "spBillingOtherStatus": {
+    "message": "This subscription is $STATUS$. Manage billing to restore Chrome access.",
+    "description": "Quota row for any other non-entitled subscription status",
+    "placeholders": {
+      "status": { "content": "$1", "example": "incomplete expired" }
+    }
+  },
+  "spBillingPaused": {
+    "message": "Paid Chrome access is paused.",
+    "description": "Quota sub-label while a paid subscription is not entitled"
+  },
+  "spBillingManage": {
+    "message": "Manage billing",
+    "description": "Quota button that opens the billing settings page"
+  },
+  "spBillingBadge": {
+    "message": "Billing",
+    "description": "Header badge while a paid subscription needs attention"
+  },
+
+  "spQuotaCloudUsage": {
+    "message": "Cloud: $USAGE$",
+    "description": "Quota row when no reset time is known",
+    "placeholders": {
+      "usage": { "content": "$1", "example": "42% left" }
+    }
+  },
+  "spQuotaCloudUsageWithReset": {
+    "message": "Cloud: $USAGE$ · $RESETS$",
+    "description": "Quota row with the remaining allowance and when it resets",
+    "placeholders": {
+      "usage": { "content": "$1", "example": "42% left" },
+      "resets": { "content": "$2", "example": "resets in 3 days" }
+    }
+  },
+  "spQuotaPaidPlanRequired": {
+    "message": "Chrome access requires a paid plan.",
+    "description": "Quota row before entitlements are read"
+  },
+  "spQuotaProRequired": {
+    "message": "AGI in Chrome requires Pro or higher.",
+    "description": "Quota row for a plan without the developer-surfaces capability"
+  },
+  "spQuotaFreeElsewhere": {
+    "message": "Free chat remains available on Web, Mobile, and Desktop.",
+    "description": "Quota sub-label pointing at the surfaces that stay free"
+  },
+  "spQuotaUpgrade": {
+    "message": "Upgrade",
+    "description": "Quota button and header badge that open the pricing page"
+  },
+
+  "spGateChecking": {
+    "message": "Checking your AGI Cloud account…",
+    "description": "Composer chat gate before the account has been read"
+  },
+  "spGateSignedOut": {
+    "message": "Sign in to use AGI Cloud chat.",
+    "description": "Composer chat gate default for the signed-out state"
+  },
+  "spGateUnavailable": {
+    "message": "AGI Cloud chat is unavailable.",
+    "description": "Composer chat gate default when no more specific reason is known"
+  },
+  "spGateSignInToChat": {
+    "message": "Sign in to start chatting in Chrome.",
+    "description": "Composer chat gate while signed out and sign-in is configured"
+  },
+  "spGateFinishSetup": {
+    "message": "Open AGI to finish account setup.",
+    "description": "Composer chat gate while signed out and this build ships no auth configuration"
+  },
+  "spGateSignIn": {
+    "message": "Sign in",
+    "description": "Composer chat gate button that opens hosted sign-in"
+  },
+  "spGateOpenAgi": {
+    "message": "Open AGI",
+    "description": "Composer chat gate button that opens agiworkforce.com"
+  },
+  "spGateVerifyFailed": {
+    "message": "We could not verify your AGI Cloud account.",
+    "description": "Composer chat gate after the entitlements read threw"
+  },
+  "spGateRetry": {
+    "message": "Retry",
+    "description": "Composer chat gate button that re-reads the account"
+  },
+  "spGateBillingPastDue": {
+    "message": "Update billing to restore AGI in Chrome.",
+    "description": "Composer chat gate for a past_due subscription"
+  },
+  "spGateSubscriptionStatus": {
+    "message": "Your paid subscription is $STATUS$.",
+    "description": "Composer chat gate for any other non-entitled subscription status",
+    "placeholders": {
+      "status": { "content": "$1", "example": "incomplete expired" }
+    }
+  },
+  "spGateViewPlans": {
+    "message": "View plans",
+    "description": "Composer chat gate button that opens the pricing page"
+  },
+  "spGateReturnAfterSignIn": {
+    "message": "Finish sign-in in the new tab, then return here.",
+    "description": "Composer chat gate right after the sign-in tab was opened from the gate button"
+  },
+  "spGateOpenFailed": {
+    "message": "Unable to open AGI Cloud.",
+    "description": "Composer chat gate when a gate button's navigation threw without a message"
+  },
+  "spComposerPlaceholder": {
+    "message": "Ask anything... (/ for commands)",
+    "description": "Composer input placeholder while chat is usable"
+  },
+  "spComposerPlaceholderNoPageContext": {
+    "message": "Ask anything (page context unavailable)",
+    "description": "Composer input placeholder while chat is usable but the tab cannot be read"
+  },
+  "spComposerPlaceholderSignedOut": {
+    "message": "Sign in to chat",
+    "description": "Composer input placeholder while signed out"
+  },
+  "spComposerPlaceholderNoAccess": {
+    "message": "AGI Cloud access required",
+    "description": "Composer input placeholder while the account cannot use Chrome chat"
+  },
+  "spShortcutActionsFailed": {
+    "message": "Failed to retrieve actions",
+    "description": "Save-shortcut name field placeholder after the recorded actions could not be read"
+  },
+  "spShortcutSaveFailed": {
+    "message": "Failed to save shortcut",
+    "description": "Save-shortcut name field placeholder after the save was rejected"
+  },
+
+  "spAboutBrowserPage": {
+    "message": "Browser page",
+    "description": "Drawer footer label for a browser-internal tab that has no meaningful hostname"
+  },
+  "spAboutUnknownPage": {
+    "message": "Unknown",
+    "description": "Drawer footer label when the active tab URL cannot be parsed"
+  },
+
+  "spShortcutSaving": {
+    "message": "Saving...",
+    "description": "Create-shortcut button while the shortcut is being stored"
+  },
+  "spShortcutCreate": {
+    "message": "Create shortcut",
+    "description": "Create-shortcut button in its resting state"
+  },
+  "spShortcutPlay": {
+    "message": " Play",
+    "description": "Shortcut row replay button. The leading space stands in for the icon beside it."
+  },
+
+  "spTaskCreate": {
+    "message": "Create Task",
+    "description": "Scheduled-task form submit button in its resting state"
+  },
+  "spTaskCreating": {
+    "message": "Creating…",
+    "description": "Scheduled-task form submit button while the task is being created"
+  },
+  "spTaskCreateFailed": {
+    "message": "The scheduled task could not be created.",
+    "description": "Scheduled-task form error when the background reports no reason"
+  },
+
+  "spGroupTabAdd": {
+    "message": "+ Group Tab",
+    "description": "Workflows button that moves the active tab into the AGI tab group"
+  },
+  "spGroupTabAdded": {
+    "message": "Grouped!",
+    "description": "Workflows group button immediately after a successful grouping"
+  },
+  "spGroupTabRemove": {
+    "message": "- Ungroup Tab",
+    "description": "Workflows button that removes the active tab from the AGI tab group"
+  },
+  "spGroupTabRemoved": {
+    "message": "Removed!",
+    "description": "Workflows ungroup button immediately after a successful removal"
+  },
+
+  "spContextChipFallback": {
+    "message": "page",
+    "description": "Composer page-context chip before a hostname is known"
+  },
+  "spContextChipCapturing": {
+    "message": "capturing…",
+    "description": "Composer page-context chip while page content is being read"
+  },
+
+  "spAutonomyAskFirst": {
+    "message": "Ask first",
+    "description": "Autonomy chip while every browser action is confirmed first"
+  },
+  "spAutonomyFullAccess": {
+    "message": "Full access",
+    "description": "Autonomy chip while the agent may act without asking"
+  },
+  "spAutonomyAskFirstTooltip": {
+    "message": "Every browser action is confirmed before it runs. Click to allow the agent to act without asking.",
+    "description": "Autonomy chip tooltip while every browser action is confirmed first"
+  },
+  "spAutonomyFullAccessTooltip": {
+    "message": "The agent can act in your browser without asking. Click to require confirmation for each action.",
+    "description": "Autonomy chip tooltip while the agent may act without asking"
+  },
+  "spAutonomyAskFirstAria": {
+    "message": "Permission mode: ask before acting",
+    "description": "Autonomy chip accessible name while every browser action is confirmed first"
+  },
+  "spAutonomyFullAccessAria": {
+    "message": "Permission mode: full access",
+    "description": "Autonomy chip accessible name while the agent may act without asking"
+  },
+
+  "spContextBtnAttached": {
+    "message": "Page context attached — click to detach",
+    "description": "Composer page-context button tooltip while the page is attached"
+  },
+  "spContextBtnAttach": {
+    "message": "Attach page content to next message",
+    "description": "Composer page-context button tooltip while the page is not attached"
+  },
+  "spContextBtnUnavailable": {
+    "message": "Page context is unavailable on this browser page",
+    "description": "Composer page-context button tooltip on a tab the extension cannot read"
+  },
+  "spSendStop": {
+    "message": "Stop generating",
+    "description": "Composer send button tooltip while a response is streaming"
+  },
+  "spSendSend": {
+    "message": "Send",
+    "description": "Composer send button tooltip at rest"
+  },
+  "spSendStopAria": {
+    "message": "Stop response",
+    "description": "Composer send button accessible name while a response is streaming"
+  },
+  "spSendSendAria": {
+    "message": "Send message",
+    "description": "Composer send button accessible name at rest"
+  },
+  "spWizardContinueAria": {
+    "message": "Continue",
+    "description": "First-run wizard primary button accessible name when the step declares none"
+  },
+  "spOnboardingUnderstand": {
+    "message": "I understand",
+    "description": "First-run onboarding primary button on the opening step"
+  },
+  "spOnboardingLetsGo": {
+    "message": "Let's go",
+    "description": "First-run onboarding primary button on the penultimate step"
+  },
+  "spOnboardingDone": {
+    "message": "Done",
+    "description": "First-run onboarding primary button on the final step"
+  },
+  "spOnboardingContinueAria": {
+    "message": "Continue — step $STEP$ of $TOTAL$",
+    "description": "First-run onboarding primary button accessible name on a non-final step",
+    "placeholders": {
+      "step": { "content": "$1", "example": "2" },
+      "total": { "content": "$2", "example": "5" }
+    }
+  },
+  "spOnboardingDismissAria": {
+    "message": "Dismiss onboarding",
+    "description": "First-run onboarding primary button accessible name on the final step"
+  },
+
+  "spEffortButton": {
+    "message": "Advanced · $EFFORT$",
+    "description": "Composer reasoning-effort button",
+    "placeholders": {
+      "effort": { "content": "$1", "example": "High" }
+    }
+  },
+  "spEffortAuto": {
+    "message": "Auto",
+    "description": "Composer reasoning-effort value while the route has not been chosen yet"
+  },
+  "spEffortUnavailable": {
+    "message": "N/A",
+    "description": "Composer reasoning-effort value while the selected model exposes none"
+  },
+  "spEffortAriaReady": {
+    "message": "Reasoning effort: $VALUE$",
+    "description": "Composer reasoning-effort button accessible name while an effort is selected",
+    "placeholders": {
+      "value": { "content": "$1", "example": "High" }
+    }
+  },
+  "spEffortAriaUnavailable": {
+    "message": "Reasoning effort unavailable. $REASON$",
+    "description": "Composer reasoning-effort button accessible name while no effort can be chosen",
+    "placeholders": {
+      "reason": { "content": "$1", "example": "This model has a fixed reasoning budget." }
+    }
+  },
+
+  "spQuickMode": {
+    "message": "Quick",
+    "description": "Composer toggle that trades reasoning depth for latency"
+  }
+}

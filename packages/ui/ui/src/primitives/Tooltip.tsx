@@ -5,12 +5,10 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../cn';
 
 // Identical across web/desktop (mechanical diffs only: 'use client' + import path).
-// Both copies hardcode z-50; the source audit flagged this as a latent stacking
-// risk given desktop's separate --z-modal token migration (see Dialog.tsx/
-// AlertDialog.tsx), but Select/DropdownMenu/ContextMenu/HoverCard in this package
-// still hardcode z-50 too. Normalizing overlay z-index is a cross-cutting pass
-// across all of those siblings together, not a one-file fix riding along with an
-// "identical" port — left as z-50 to match the audited source exactly.
+// Stacking: `--z-tooltip` (380) is the top transient layer below notifications —
+// above `--z-popover` (350) because a tooltip is routinely triggered from a
+// control inside a menu or popover, and above `--z-modal` (300) for the same
+// reason inside a dialog. The old hardcoded z-50 put it under all three.
 const TooltipProvider = TooltipPrimitive.Provider;
 
 const Tooltip = TooltipPrimitive.Root;
@@ -30,7 +28,7 @@ function TooltipContent({ className, sideOffset = 4, ref, ...props }: TooltipCon
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'z-[var(--z-tooltip,380)] overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         className,
       )}
       {...props}

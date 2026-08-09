@@ -113,7 +113,7 @@ describe('Chrome side-panel demo surface', () => {
   });
 
   it('lets users explicitly refresh the Sync Host session after web sign-in', () => {
-    expect(source).toContain("'Check sign-in'");
+    expect(source).toContain("t('spCloudCheckSignIn')");
     expect(source).toContain('refreshCloudAccountUI(true)');
     expect(source).not.toContain('Your account refreshes automatically.');
   });
@@ -129,7 +129,7 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain(
       "canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')",
     );
-    expect(source).toContain('AGI in Chrome requires Pro or higher.');
+    expect(source).toContain("t('spQuotaProRequired')");
   });
 
   it('shows canonical account usage and truthful Web handoffs for cloud connectors and teams', () => {
@@ -144,7 +144,7 @@ describe('Chrome side-panel demo surface', () => {
 
   it('routes inactive retained subscriptions to billing instead of enabling paid Chrome access', () => {
     expect(source).toContain('!isEntitledSubscriptionStatus(access.subscriptionStatus)');
-    expect(source).toContain('Manage billing');
+    expect(source).toContain("t('spBillingManage')");
     expect(source).toContain('https://agiworkforce.com/settings/billing?from=chrome-extension');
   });
 });

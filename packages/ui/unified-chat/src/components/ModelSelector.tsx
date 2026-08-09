@@ -37,6 +37,7 @@ import {
   type ModelQualityTier,
   type ModelReasoning,
 } from '@agiworkforce/types';
+import { resolveClientChatExecutionMode } from '@agiworkforce/client-runtime';
 import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
 import {
@@ -150,20 +151,6 @@ function getProviderLabel(providerKey: string): string {
     open_router: 'OpenRouter',
   };
   return fallback[providerKey] ?? providerKey.charAt(0).toUpperCase() + providerKey.slice(1);
-}
-
-function readPersistedDesktopMode(): 'local' | 'cloud' | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem('app-mode-store');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { state?: { mode?: unknown } };
-    return parsed.state?.mode === 'local' || parsed.state?.mode === 'cloud'
-      ? parsed.state.mode
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -498,10 +485,12 @@ export function ModelSelector({
   const activeConversation = useChatStore((state) =>
     state.conversations.find((conversation) => conversation.id === state.activeConversationId),
   );
-  const persistedDesktopMode = readPersistedDesktopMode();
+  // A conversation carries its own immutable boundary; before one exists the
+  // client runtime owns the answer. This package must not read the host's
+  // storage itself — guessing Cloud there labels a Local workspace with the
+  // managed catalog.
   const executionMode: ChatExecutionMode =
-    activeConversation?.executionMode ??
-    (persistedDesktopMode === 'local' ? 'local_only' : 'cloud_managed');
+    activeConversation?.executionMode ?? resolveClientChatExecutionMode();
 
   const usingFallback =
     allowFallbackModels && models.length === 0 && executionMode === 'cloud_managed';

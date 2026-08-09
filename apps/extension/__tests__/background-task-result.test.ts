@@ -420,11 +420,9 @@ describe('background dispatch is wired to the sink', () => {
 
   it('keeps the schedule form open and renders authorization failures', () => {
     expect(sidePanel).toContain("class: 'sp-wf-form-error'");
-    expect(sidePanel).toContain("ntSaveBtn.textContent = 'Creating…'");
+    expect(sidePanel).toContain("ntSaveBtn.textContent = t('spTaskCreating')");
     expect(sidePanel).toContain('response?.success !== true');
-    expect(sidePanel).toContain(
-      "runtimeError || response?.error || 'The scheduled task could not be created.'",
-    );
+    expect(sidePanel).toContain("runtimeError || response?.error || t('spTaskCreateFailed')");
   });
 });
 

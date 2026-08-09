@@ -15,6 +15,11 @@ interface HoverCardContentProps extends React.ComponentPropsWithoutRef<
   ref?: React.Ref<React.ElementRef<typeof HoverCardPrimitive.Content>>;
 }
 
+// Stacking: the portalled surface sits on `--z-popover` (350), above `--z-modal`
+// (300), so a menu opened from inside a Dialog is not painted behind it. Portalled
+// overlays are siblings on <body> and are compared against each other, so the
+// layer has to come from the shared scale rather than a per-file guess; the inline
+// fallback keeps the ordering in apps that have not defined the variable.
 function HoverCardContent({
   className,
   align = 'center',
@@ -28,7 +33,7 @@ function HoverCardContent({
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'z-[var(--z-popover,350)] w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         className,
       )}
       {...props}

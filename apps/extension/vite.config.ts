@@ -104,6 +104,9 @@ export default defineConfig(({ mode }) => {
       viteStaticCopy({
         targets: [
           { src: 'icons', dest: '.' },
+          // manifest.json declares default_locale, so Chrome refuses to load a
+          // package whose _locales catalog is missing.
+          { src: '_locales', dest: '.' },
           { src: 'src/side_panel.html', dest: 'src' },
           { src: 'src/side_panel.css', dest: 'src' },
           { src: 'src/options.html', dest: 'src' },

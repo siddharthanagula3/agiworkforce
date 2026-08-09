@@ -16,6 +16,42 @@
  *    rewrites it onto the agiworkforce://intent/share deep link.
  */
 
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * The Android App Link paths must stay in step with the Apple App Site
+ * Association document web serves. Both are hand-maintained lists of the same
+ * claim and there is no shared source to generate them from, so this reads the
+ * AASA source and derives what the Android filter has to say — rather than
+ * freezing a literal, which would stay green while the two drifted apart.
+ *
+ * AASA component patterns map onto Android <data> attributes as:
+ *   `/pair`   -> path='/pair'
+ *   `/pair/*` -> pathPrefix='/pair/'
+ */
+const AASA_SOURCE_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  'web',
+  'lib',
+  'server',
+  'mobile-app-association.ts',
+);
+
+function aasaClaimedPatterns(): string[] {
+  const source = fs.readFileSync(AASA_SOURCE_PATH, 'utf8');
+  const patterns = [...source.matchAll(/'\/':\s*'([^']+)'/gu)].map((match) => match[1] as string);
+  // A regex that stopped matching would make the comparison below vacuous.
+  expect(patterns.length).toBeGreaterThan(0);
+  return patterns;
+}
+
+function androidPathAttributeFor(pattern: string): string {
+  return pattern.endsWith('/*') ? pattern.slice(0, -1) : pattern;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const appConfig = require('../app.config.js') as {
   expo: {
@@ -24,7 +60,14 @@ const appConfig = require('../app.config.js') as {
         action: string;
         autoVerify?: boolean;
         category?: string[];
-        data?: Array<{ mimeType?: string; scheme?: string; host?: string }>;
+        data?: Array<{
+          mimeType?: string;
+          scheme?: string;
+          host?: string;
+          path?: string;
+          pathPrefix?: string;
+          pathPattern?: string;
+        }>;
       }>;
     };
   };
@@ -61,6 +104,26 @@ describe('app.config.js — Android intentFilters use Expo short names', () => {
     expect(view).toBeDefined();
     expect(view!.autoVerify).toBe(true);
     expect(view!.category).toEqual(expect.arrayContaining(['DEFAULT', 'BROWSABLE']));
-    expect(view!.data?.map((d) => d.host)).toEqual(['agiworkforce.com']);
+    expect(view!.data?.length).toBeGreaterThan(0);
+    for (const entry of view!.data ?? []) {
+      expect(entry.scheme).toBe('https');
+      expect(entry.host).toBe('agiworkforce.com');
+    }
+  });
+
+  // Without a path filter the intent-filter claims https://agiworkforce.com/*,
+  // so an installed app swallows every marketing/pricing/docs/blog tap and
+  // opens on a screen that has no handler for the URL. Android matches the
+  // union of the <data> path attributes, so every entry must carry one.
+  it('scopes the App Link to the paths the app actually routes', () => {
+    const view = filters.find((f) => f.action === 'VIEW');
+    for (const entry of view!.data ?? []) {
+      expect(entry.path ?? entry.pathPrefix ?? entry.pathPattern).toBeDefined();
+    }
+
+    const paths = (view!.data ?? []).map((d) => d.path ?? d.pathPrefix ?? d.pathPattern);
+    // Derived from the AASA source, so adding or removing a component there
+    // fails here until apps/mobile/app.config.js is updated to match.
+    expect([...paths].sort()).toEqual(aasaClaimedPatterns().map(androidPathAttributeFor).sort());
   });
 });

@@ -37,6 +37,7 @@ import {
   toProviderApiModelId,
   type OpenAIWireChatRequest,
 } from '@agiworkforce/provider-protocol';
+import { CredentialFailoverState } from '@agiworkforce/provider-runtime';
 import { authenticateToken } from '../middleware/auth';
 import type { CloudSurfaceClass } from '../authenticated-user';
 import { AppError } from '../middleware/errorHandler';
@@ -664,11 +665,19 @@ router.post(
     // admitted candidate remains. Only AppError-class rejections skip — an
     // infrastructure error (unexpected throw) still fails the request.
     const remainingFallbackModels = [...fallbackModels];
+    const credentialFailover = new CredentialFailoverState();
     const nextFallbackRoute = async (): Promise<AttemptRoute | null> => {
       while (remainingFallbackModels.length > 0) {
         const candidate = remainingFallbackModels.shift() as string;
         try {
           const candidateProvider = resolveProvider(candidate);
+          if (credentialFailover.blocksRoute(candidateProvider)) {
+            logger.warn(
+              { userId: user.userId, model: candidate, provider: candidateProvider },
+              'LLM managed failover candidate skipped: provider credentials already rejected',
+            );
+            continue;
+          }
           await enforcePlanTier(user.userId, user.token, candidate, user.surface);
           const candidateAdapter = buildProviderAdapter(candidateProvider);
           if (!candidateAdapter) {
@@ -696,7 +705,17 @@ router.post(
     const rotateAfterFailure = async (
       failure: SafeProviderFailure,
     ): Promise<AttemptRoute | null> => {
-      if (!isFailoverEligibleFailure(failure) || lifecycle.signal.aborted) return null;
+      if (lifecycle.signal.aborted) return null;
+      // A rejected key condemns the provider account, not the request: the
+      // remaining plan routes are distinct providers holding distinct keys, so
+      // a suspended, revoked or out-of-credit upstream rotates instead of
+      // stranding the turn. Recorded before the route lookup so the rejected
+      // provider's own remaining routes are skipped rather than replayed.
+      const credentialRotation = credentialFailover.recordFailure(
+        served.provider,
+        failure.category,
+      );
+      if (!credentialRotation && !isFailoverEligibleFailure(failure)) return null;
       const nextRoute = await nextFallbackRoute();
       if (nextRoute) {
         logger.warn(
@@ -708,6 +727,7 @@ router.post(
             toProvider: nextRoute.provider,
             category: failure.category,
             code: failure.chunk.code,
+            credentialRejectedProviders: credentialFailover.rejectedProviders(),
           },
           'LLM managed failover: rotating to fallback route',
         );
@@ -927,7 +947,9 @@ router.post(
 
           // Managed failover: only before the first byte reaches the client
           // (a half-streamed response from provider A continued by provider B
-          // would be corruption), and only for eligible availability failures.
+          // would be corruption), and only for failures `rotateAfterFailure`
+          // admits — availability, or a credential rejection that condemns one
+          // provider account.
           const nextRoute: AttemptRoute | null = wroteClientEvent
             ? null
             : await rotateAfterFailure(attemptFailure.failure);
