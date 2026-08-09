@@ -386,12 +386,18 @@ Rules:
     // In this app, cloud providers are typically accessed via ManagedCloud (Vercel-backed API),
     // so prefer ManagedCloud + model hint first, then direct Zhipu if available, while keeping
     // the normal router-generated fallbacks.
+    //
+    // Both candidates name Zhipu's fast-completion model: ManagedCloud proxies to
+    // the same upstream, so the model hint has to be the Zhipu-side ID either way.
+    let glm_completion_model =
+        crate::core::llm::models_config::get_task_model(&Provider::Zhipu, "fast_completion");
+
     if has_managed_cloud {
         candidates.insert(
             0,
             RouteCandidate {
                 provider: Provider::ManagedCloud,
-                model: "glm-5.2".to_string(),
+                model: glm_completion_model.to_string(),
                 reason: "prompt-completion-managed-cloud-glm-current",
                 strategy: None,
             },
@@ -403,7 +409,7 @@ Rules:
             usize::from(has_managed_cloud),
             RouteCandidate {
                 provider: Provider::Zhipu,
-                model: "glm-5.2".to_string(),
+                model: glm_completion_model.to_string(),
                 reason: "prompt-completion-zhipu-current",
                 strategy: None,
             },

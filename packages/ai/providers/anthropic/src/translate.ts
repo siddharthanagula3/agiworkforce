@@ -95,6 +95,20 @@ type AnthropicToolChoiceParam =
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
+/**
+ * Anthropic rejects a `max_tokens` above the model's own output ceiling, so a
+ * caller asking for more gets a 400 rather than a longer answer. Bound both the
+ * request and the fallback by whatever `models.json` records for the model;
+ * models it says nothing about keep the conservative default.
+ */
+function resolveMaxOutputTokens(
+  requested: number | undefined,
+  registryCeiling: number | undefined,
+): number {
+  const wanted = requested ?? DEFAULT_MAX_OUTPUT_TOKENS;
+  return registryCeiling === undefined ? wanted : Math.min(wanted, registryCeiling);
+}
+
 function translateContentBlock(block: ContentBlock): AnthropicContentBlock {
   switch (block.type) {
     case 'text':
@@ -231,7 +245,8 @@ function translateToolChoice(choice: ToolChoice | undefined): AnthropicToolChoic
 }
 
 export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
-  const reasoning = getModelMetadataById(req.model)?.reasoning;
+  const metadata = getModelMetadataById(req.model);
+  const reasoning = metadata?.reasoning;
   const effortOrder = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
   const maximumDisabledEffort = reasoning?.maxEffortWhenThinkingDisabled;
   if (
@@ -280,7 +295,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(system !== undefined ? { system } : {}),
     ...(tools && tools.length > 0 ? { tools } : {}),
     ...(toolChoice ? { tool_choice: toolChoice } : {}),
-    max_tokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    max_tokens: resolveMaxOutputTokens(req.maxOutputTokens, metadata?.maxOutputTokens),
     ...(!rejectsSamplingParameters && req.temperature !== undefined
       ? { temperature: req.temperature }
       : {}),

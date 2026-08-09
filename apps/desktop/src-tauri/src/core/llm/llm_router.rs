@@ -590,14 +590,14 @@ impl LLMRouter {
             // === Search intents - route to Perplexity ===
             "search" => (
                 Provider::Perplexity,
-                "sonar".to_string(),
-                "Search intent detected - routing to Perplexity Sonar for real-time web search."
+                perplexity_search_model("fast"),
+                "Search intent detected - routing using the Perplexity catalog quick-search default."
                     .to_string(),
             ),
             "deep-research" => (
                 Provider::Perplexity,
-                "sonar-deep-research".to_string(),
-                "Deep research intent detected - routing to Perplexity Sonar Deep Research."
+                perplexity_search_model("best"),
+                "Deep research intent detected - routing using the Perplexity catalog deep-research default."
                     .to_string(),
             ),
 
@@ -1831,6 +1831,26 @@ fn task_category_to_routing_key(task: TaskCategory) -> &'static str {
 
 fn provider_task_model(provider: Provider, task: &'static str) -> String {
     super::models_config::get_task_model(&provider, task).to_string()
+}
+
+/// Perplexity search model for a catalog `qualityTier`.
+///
+/// Perplexity's `taskRouting` points every chat-shaped task at the deep-research
+/// model, so quick search cannot read it without picking up deep research's
+/// latency and price. The search tiers come off the catalog's own `modelType`
+/// and `qualityTier` instead.
+///
+/// The tier is what carries the protection; the fallback does not. A catalog
+/// that stopped declaring a tier would land both intents on Perplexity's
+/// `defaultModel` (today `sonar-deep-research`), i.e. quick search would inherit
+/// deep-research cost. `models_config`'s
+/// `get_model_by_type_and_tier_resolves_non_chat_modalities` asserts both tiers
+/// resolve and differ, so that is a catalog regression the test suite catches
+/// rather than a state this function is expected to reach.
+fn perplexity_search_model(quality_tier: &'static str) -> String {
+    super::models_config::get_model_by_type_and_tier(&Provider::Perplexity, "search", quality_tier)
+        .unwrap_or_else(|| super::models_config::get_default_model(&Provider::Perplexity))
+        .to_string()
 }
 
 /// Checks if `text` contains `word` as a whole word using regex `\b` word boundaries.
