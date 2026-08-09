@@ -28,9 +28,21 @@ const nextConfig: NextConfig = {
       // agentContext.ts uses AsyncLocalStorage from node:async_hooks, which is
       // unavailable in the browser. Stub async_hooks so client components that
       // transitively import @agiworkforce/client-runtime don't pull in Node-only APIs.
+      //
+      // BROWSER ONLY — deliberately no `default:` condition. Turbopack applies
+      // `default:` to the server compilation as well, and until 2026-08-09 this
+      // entry carried one: the built server got the stub instead of the builtin
+      // (5 files under .next/server/chunks/ contained the stub body verbatim and
+      // .next/server held zero `require("node:async_hooks")` calls). The stub
+      // keeps its value in a single plain instance field, so on the server it
+      // (a) drops the value at the first `await` and (b) shares one slot across
+      // every request handled by the same instance — and Fluid Compute reuses an
+      // instance across concurrent invocations, so a request-scoped store could
+      // read another request's value. @clerk/nextjs server code and
+      // lib/observability/trace-context.ts both bind AsyncLocalStorage at module
+      // scope, so both were affected. Server and edge must get the real builtin.
       'node:async_hooks': {
         browser: './shared/lib/async-hooks-stub.ts',
-        default: './shared/lib/async-hooks-stub.ts',
       },
     },
   },

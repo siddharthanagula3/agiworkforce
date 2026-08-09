@@ -1,7 +1,20 @@
+'use client';
+
 /**
  * Drift resolution: classified 'identical' — web and desktop copies differed only
  * in the Next.js 'use client' directive and the local cn import path. Ported as-is
  * using the shared package's dependency-free `cn`.
+ *
+ * The directive is restored. Dropping it is what the drift note recorded as the
+ * only difference between the two copies, but it was not a cosmetic one: these
+ * components call `React.useState` and `React.useEffect`, and they reach a
+ * server graph through `primitives/index.ts` -> the `@agiworkforce/ui` barrel,
+ * which server components import (see the `'use client'` note on ../i18n.ts for
+ * how one pure-SVG import pulls the whole barrel in).
+ *
+ * This one is latent rather than fatal, which is why it survived: hooks throw
+ * only when a server component RENDERS them, whereas i18n.ts's `createContext`
+ * ran at import time and broke the build outright. Same defect, later fuse.
  */
 import * as React from 'react';
 import { cn } from '../cn';

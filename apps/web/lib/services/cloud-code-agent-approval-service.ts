@@ -44,6 +44,10 @@ import {
  *  - **Expiry is enforced, not decorative.** The decision UPDATE requires
  *    `expires_at > now()`, and a stale row is transitioned to 'expired' instead
  *    of being left pending forever.
+ *  - **The list cannot advertise what the decide path will refuse.** An
+ *    approval is decidable only while its turn is still `awaiting_approval`, so
+ *    both the sweep and the read carry that predicate. See
+ *    `retireUndecidableApprovals` for why a pending row can outlive its turn.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -104,14 +108,34 @@ function requireTurnId(turnId: unknown): string {
 }
 
 /**
- * Sweep stale pending rows for one session.
+ * Retire every pending row in one session that can no longer be decided.
  *
  * Runs on the read path because there is no scheduler for this table. A user who
  * opens the pending list is exactly the person who must not be shown an approval
  * that can no longer be granted, so the sweep happens before the read rather
  * than as a background job that may not exist.
+ *
+ * TWO WAYS A ROW BECOMES UNDECIDABLE, and both are swept here:
+ *
+ *  1. `expires_at` passed. The decision UPDATE requires `expires_at > now()`,
+ *     so the row is already dead to `decideCloudCodeAgentApproval`.
+ *
+ *  2. **The turn left `awaiting_approval` without the row being decided.** The
+ *     approval row and the turn row are written by separate statements, so
+ *     anything that moves the turn on its own strands the row: the reservation
+ *     and executor failure paths in `cloud-code-agent-service` clobber the turn
+ *     to 'failed' with no state guard, a cancelled turn is never decided, and
+ *     0082 anticipates a reaper for turns whose invocation died mid-flight.
+ *     `decideCloudCodeAgentApproval` refuses any turn that is not
+ *     `awaiting_approval`, so without this the row would sit 'pending' forever
+ *     — listed to the user on every load and rejected on every attempt to
+ *     answer it. That is a gate the product shows and cannot honour.
+ *
+ * 'expired' is the terminal state used for both. 0082 allows only
+ * 'pending' | 'approved' | 'rejected' | 'expired', and the row was never
+ * decided, so 'approved'/'rejected' would be a lie about what the user did.
  */
-async function expireStaleApprovals(
+async function retireUndecidableApprovals(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
@@ -125,7 +149,7 @@ async function expireStaleApprovals(
         and t.user_id = $2
         and t.organization_id is not distinct from $3
         and a.state = 'pending'
-        and a.expires_at <= now()`,
+        and (a.expires_at <= now() or t.state <> 'awaiting_approval')`,
     [sessionId, owner.userId, owner.organizationId],
   );
 }
@@ -140,8 +164,14 @@ export async function listCloudCodeAgentApprovals(
   // Throws not-found for a session this owner cannot see, so the approval list
   // cannot be used to probe other tenants' sessions.
   await getCloudCodeSession(db, owner, sessionId);
-  await expireStaleApprovals(db, owner, sessionId);
+  await retireUndecidableApprovals(db, owner, sessionId);
 
+  // `t.state = 'awaiting_approval'` is not redundant with the sweep above. The
+  // sweep and this read are separate statements, so a turn that fails between
+  // them would otherwise be listed once more; and a row the sweep somehow missed
+  // must still never be offered, because the decide path would refuse it. The
+  // list and the decide path have to agree on decidability or the user is shown
+  // a button that cannot work.
   const rows = await db.query<ApprovalRow>(
     `select a.turn_id, a.step_index, a.command, a.reason, a.expires_at, a.created_at, t.goal
        from cloud_code_agent_approvals a
@@ -150,6 +180,7 @@ export async function listCloudCodeAgentApprovals(
         and t.user_id = $2
         and t.organization_id is not distinct from $3
         and a.state = 'pending'
+        and t.state = 'awaiting_approval'
       order by a.created_at asc
       limit 50`,
     [sessionId, owner.userId, owner.organizationId],
@@ -252,6 +283,15 @@ export async function decideCloudCodeAgentApproval(
   const turn = turnRows[0];
   if (!turn) throw new CloudCodeNotFoundError();
   if (turn.state !== 'awaiting_approval') {
+    // Retire the row on the way out. A user who only ever POSTs a decision never
+    // runs the read-path sweep, and leaving the row 'pending' is what turns a
+    // failed turn into an approval that is listed forever and refused forever.
+    await db.query(
+      `update cloud_code_agent_approvals
+          set state = 'expired', decided_at = now()
+        where turn_id = $1 and step_index = $2 and state = 'pending'`,
+      [turnId, stepIndex],
+    );
     throw new CloudCodeConflictError('This turn is not waiting for an approval');
   }
   if (!turn.model) {

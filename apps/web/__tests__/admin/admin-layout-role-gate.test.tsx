@@ -7,6 +7,17 @@
  *
  * FAILS without the fix (layout.tsx only checks userId, not role).
  * PASSES with the fix (layout.tsx checks publicMetadata.role).
+ *
+ * SCOPE: this file pins the ROLE dimension only. CRIT-014 added a second gate
+ * to the same layout — `assertAccountActive`, which denies a suspended admin
+ * whose Clerk session is still alive — and that gate is stubbed out here so a
+ * role failure cannot be confused for a status failure. Its own behaviour
+ * (suspended → '/', lookup failure → '/', active → children) is covered by
+ * `apps/web/app/admin/__tests__/layout.account-status.test.tsx`.
+ *
+ * The stub is NOT a silent no-op: the "admin" case below asserts the layout
+ * still calls `assertAccountActive` with the signed-in id, so deleting the
+ * status gate from layout.tsx fails this file too.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -16,12 +27,13 @@ import React from 'react';
 // Hoist all controllable mocks so vi.mock() factories can close over them,
 // and mockReset: true resets only their recorded calls — not the hoisted refs.
 // ---------------------------------------------------------------------------
-const { mockGetUser, mockAuth, mockRedirect } = vi.hoisted(() => ({
+const { mockGetUser, mockAuth, mockRedirect, mockAssertAccountActive } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockAuth: vi.fn(),
   // redirect must be a vi.fn() so we can re-implement it in beforeEach after
   // mockReset: true clears the implementation that throws NEXT_REDIRECT.
   mockRedirect: vi.fn(),
+  mockAssertAccountActive: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -43,6 +55,18 @@ vi.mock('@clerk/nextjs/server', () => ({
 vi.mock('next/navigation', () => ({
   redirect: (url: string): never => mockRedirect(url) as never,
   notFound: vi.fn(),
+}));
+
+// ---------------------------------------------------------------------------
+// @/lib/api-auth — the account-status gate. The real `assertAccountActive`
+// queries `profiles.account_status` through `getNeonDb()`, which has no
+// connection string under vitest; it fails closed (503) and the layout would
+// then redirect an ACTIVE admin to '/'. Stub it so this file measures role and
+// nothing else. `server-only` is stubbed too because api-auth imports it.
+// ---------------------------------------------------------------------------
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -77,6 +101,8 @@ describe('AdminLayout — role gate', () => {
     mockGetUser.mockResolvedValue({ id: 'user-123', publicMetadata: {} });
     // redirect() must throw so the layout short-circuits; re-establish after reset.
     mockRedirect.mockImplementation(throwingRedirect);
+    // Default posture for this file: the account is active, so only role decides.
+    mockAssertAccountActive.mockResolvedValue(undefined);
   });
 
   // --- Unauthenticated ---
@@ -125,6 +151,10 @@ describe('AdminLayout — role gate', () => {
     const result = await callLayout();
     expect(result).toBeDefined();
     expect(mockRedirect).not.toHaveBeenCalledWith('/');
+    // The role gate is not the only gate: prove the layout still runs the
+    // CRIT-014 account-status read for the admin it just admitted. Without
+    // this the stub above would hide the gate's removal entirely.
+    expect(mockAssertAccountActive).toHaveBeenCalledWith('user-123');
   });
 
   it('allows access and returns children when publicMetadata.role is "owner"', async () => {

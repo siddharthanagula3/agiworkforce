@@ -131,6 +131,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import {
   CHAT_TOOL_LOOP_BUDGET_MS,
+  PROVIDER_STREAM_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
 } from '@/lib/deadline-policy';
@@ -939,6 +940,85 @@ export function withToolTimeout(
   });
 }
 
+/**
+ * The provider stream outlived what was left of the loop's wall-clock budget
+ * and was aborted. Distinguished from every other provider failure because the
+ * response is different: rotating to another provider or retrying cannot help
+ * when the budget itself is gone, and the turn must end while there is still
+ * teardown time (sandbox pause/dispose, managed-usage settlement, `[DONE]`).
+ */
+export class ProviderStreamDeadlineError extends Error {
+  readonly deadlineMs: number;
+
+  constructor(deadlineMs: number) {
+    super(
+      `The model stream ran past this turn's remaining time budget ` +
+        `(${Math.round(deadlineMs / 1000)}s) and was stopped.`,
+    );
+    this.name = 'ProviderStreamDeadlineError';
+    this.deadlineMs = deadlineMs;
+  }
+}
+
+/**
+ * Bound one provider stream to `deadlineMs` of wall clock, and abort the
+ * upstream request when it expires.
+ *
+ * Two things happen on expiry and BOTH are load-bearing. The returned promise
+ * rejects, so the loop stops waiting and reaches its teardown; and the signal
+ * handed to the adapter is aborted, so the upstream HTTP request is torn down
+ * instead of streaming (and billing) into a reader nobody is draining.
+ *
+ * `parentSignal` (the client's, when there is one) is forwarded onto the same
+ * derived controller, so a client disconnect still aborts the adapter exactly
+ * as it did when `options.signal` was passed straight through.
+ *
+ * Exported for `tool-loop.deadline.test.ts`, which drives the three paths a
+ * full-loop test cannot observe from the SSE bytes: the derived signal is
+ * aborted on expiry, a client cancel is forwarded onto it (including one that
+ * arrived before dispatch), and the deadline timer is cleared when the stream
+ * finishes in time rather than left pending for the rest of the budget.
+ */
+export function withProviderStreamDeadline<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  deadlineMs: number,
+  parentSignal?: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  const forwardParentAbort = (): void => controller.abort(parentSignal?.reason);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cleanup = (): void => {
+    if (timer !== undefined) clearTimeout(timer);
+    parentSignal?.removeEventListener('abort', forwardParentAbort);
+  };
+  if (parentSignal?.aborted) forwardParentAbort();
+  else parentSignal?.addEventListener('abort', forwardParentAbort, { once: true });
+
+  return new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      const expired = new ProviderStreamDeadlineError(deadlineMs);
+      // Abort BEFORE rejecting: the upstream connection must be released even
+      // though the loop is about to stop reading from it.
+      controller.abort(expired);
+      cleanup();
+      reject(expired);
+    }, deadlineMs);
+    // Settling twice is a no-op, so a late rejection from the aborted run
+    // cannot surface as an unhandled rejection — this handler is attached
+    // whether or not the deadline already fired.
+    run(controller.signal).then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (err: unknown) => {
+        cleanup();
+        reject(err);
+      },
+    );
+  });
+}
+
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
 export async function collectProviderStream(stream: ReadableStream): Promise<{
   lines: Array<{ line: SseLine; publicTextDelta?: string }>;
@@ -1552,18 +1632,31 @@ export async function* runToolLoop(
           text: '',
           usage: stepUsage,
         };
-        const providerStream = await buildToolLoopStream(
-          attemptProcessed.provider,
-          attemptProcessed,
-          attemptRequest,
-          responseModel,
-          stepSink,
-          // AUDIT-FIX BUG-1: the client's signal, so a cancel actually aborts
-          // the in-flight upstream request instead of billing a full generation
-          // nobody will see.
+        // HARD-008: the provider call is the OTHER child started right after
+        // the top-of-step budget check, and it used to have no wall-clock bound
+        // at all — only the optional client signal, which internal callers
+        // (durable workflow continuations) do not pass. Same clamp as the tool
+        // call below it: whatever is LEFT of this loop's budget, so a wedged
+        // upstream cannot push the invocation past `maxDuration` and skip the
+        // generator `finally` that pauses the sandbox and settles usage.
+        const collected = await withProviderStreamDeadline(
+          async (signal) => {
+            const providerStream = await buildToolLoopStream(
+              attemptProcessed.provider,
+              attemptProcessed,
+              attemptRequest,
+              responseModel,
+              stepSink,
+              signal,
+            );
+            return collectProviderStream(providerStream);
+          },
+          nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
+          // AUDIT-FIX BUG-1: the client's signal, forwarded onto the derived
+          // controller, so a cancel still aborts the in-flight upstream request
+          // instead of billing a full generation nobody will see.
           options.signal,
         );
-        const collected = await collectProviderStream(providerStream);
         return {
           ...collected,
           thinkingBlocks: stepSink.thinkingBlocks,
@@ -1584,6 +1677,10 @@ export async function* runToolLoop(
         // Durable-runtime lease/fatal errors are the caller's to handle and
         // must never be rotated away.
         if (options.shouldPropagateExecutionError?.(err)) throw err;
+        // Nor is a spent budget a provider problem: rotating would start a
+        // fresh upstream call with (at most) `MIN_CHILD_DEADLINE_MS` to run in,
+        // burning the teardown reserve on attempts that cannot finish.
+        if (err instanceof ProviderStreamDeadlineError) throw err;
         const nextAttempt = options.failover?.next(err);
         if (!nextAttempt) throw err;
         // The caller's plan already re-checked tier admission, provider
@@ -2379,7 +2476,15 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        const classified = classifyError(err);
+        // A budget stop is not a provider fault, so it does not go through
+        // `classifyError` (which would read it as an unknown, non-retryable
+        // upstream failure). It is retryable in the only sense that matters to
+        // the client: continue the conversation and the next invocation gets a
+        // fresh budget.
+        const classified: { message: string; retryable: boolean; status?: number } =
+          err instanceof ProviderStreamDeadlineError
+            ? { message: err.message, retryable: true }
+            : classifyError(err);
         logger.error(
           {
             // The SERVING provider/model: after a managed-failover rotation
@@ -2390,7 +2495,9 @@ export async function* runToolLoop(
             step,
             error: msg,
           },
-          '[tool-loop] provider call failed',
+          err instanceof ProviderStreamDeadlineError
+            ? '[tool-loop] provider stream exceeded the remaining invocation budget'
+            : '[tool-loop] provider call failed',
         );
         if (showWorkPhases) {
           yield encoder.encode(

@@ -2373,10 +2373,11 @@ impl ToolExecutionGuard {
     /// renderer-reachable `api_*` commands, so an LLM tool call and an
     /// `invoke()` cannot reach different sets of destinations.
     ///
-    /// DNS rebinding is out of scope here: a name that resolves to a public
-    /// address at this check and a private one at connect time still connects.
-    /// Closing that needs connect-time address pinning or a network-level
-    /// firewall rule.
+    /// A hostname is judged by the addresses it resolves to, so this call
+    /// performs a blocking `getaddrinfo` for domain hosts. What stays open is
+    /// the DNS rebinding RACE, not the static case: a resolver that answers
+    /// public here and private when the connection is made still wins. Closing
+    /// that needs connect-time address pinning or a network-level firewall rule.
     fn validate_url(&self, url: &str) -> std::result::Result<(), SecurityError> {
         debug!("Validating URL: {}", url);
 
@@ -2384,10 +2385,6 @@ impl ToolExecutionGuard {
             Ok(()) => Ok(()),
             Err(EgressDenial::InvalidUrl(raw)) => Err(SecurityError::InvalidParameter(format!(
                 "Invalid URL format: {}",
-                raw
-            ))),
-            Err(EgressDenial::MissingHost(raw)) => Err(SecurityError::InvalidParameter(format!(
-                "URL has no host: {}",
                 raw
             ))),
             Err(EgressDenial::UnsupportedScheme(scheme)) => {

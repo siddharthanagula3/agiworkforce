@@ -29,16 +29,8 @@ export {
   type Toast,
 } from './notification-store';
 
-// Layout Store - UI layout and theme management
-export {
-  useUIStore,
-  type UIStore,
-  type UIState,
-  type UIActions,
-  type ModalKey,
-  type ViewMode,
-  type SortOrder,
-} from './layout-store';
+// Layout Store - sidebar collapse state for the chat shell
+export { useUIStore, type UIStore, type UIState, type UIActions } from './layout-store';
 
 // User Profile Store
 export {
@@ -135,15 +127,10 @@ export {
   useNotificationUIState,
 } from './notification-store';
 
-// Layout Store Selectors
-export {
-  useSidebar,
-  useModals,
-  useTheme,
-  useChatInterface,
-  useDashboard,
-  useNotifications as useUINotifications,
-} from './layout-store';
+// Layout Store Selectors — removed with the members they selected (PP-24).
+// `useTheme`/`useNotifications` here shadowed the real ones (`useAppTheme` and
+// `notification-store`); re-exporting them from a barrel nothing imports was
+// the only thing keeping them alive.
 
 // ========================================
 // React Query Configuration

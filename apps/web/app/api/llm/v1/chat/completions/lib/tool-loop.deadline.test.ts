@@ -32,7 +32,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
 }));
 
-import { runToolLoop } from './tool-loop';
+import { runToolLoop, withProviderStreamDeadline } from './tool-loop';
 import { CHAT_TOOL_LOOP_BUDGET_MS, TOOL_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 import type { ProcessedRequest } from './request-processor';
 
@@ -179,5 +179,168 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
     );
 
     expect(output).toContain(`timed out after ${TOOL_CALL_DEADLINE_MS / 1000}s`);
+  });
+});
+
+/**
+ * The provider call is the OTHER child started right after the same top-of-step
+ * budget check, and it had no wall-clock bound at all: the only signal reaching
+ * the adapter was the OPTIONAL client `AbortSignal`, and `buildToolLoopStream`
+ * substitutes a never-triggered controller when the caller passes none (the
+ * durable workflow path does). A wedged upstream therefore ran until the
+ * platform killed the function — the same skipped-teardown outcome the tool
+ * clamp exists to prevent.
+ *
+ * Without the clamp these two cases do not fail with a wrong message, they
+ * never terminate: the loop awaits `collectProviderStream` on a stream that
+ * never closes, so the suite fails on its own timeout.
+ */
+describe('runToolLoop — the provider stream is clamped to the loop budget too', () => {
+  beforeEach(() => {
+    mockBuildToolLoopStream.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A provider stream that connects and then never emits or closes. */
+  function neverSettlingStream(): ReadableStream {
+    return new ReadableStream({ start() {} });
+  }
+
+  it('stops a wedged provider stream with the budget that is left, and still tears down', async () => {
+    mockBuildToolLoopStream.mockResolvedValue(neverSettlingStream());
+
+    // Same shape as the tool case above: 235 s into a 240 s budget, so the
+    // provider call may have 5 s, not the rest of the platform's 300 s.
+    const base = 3_000_000;
+    let reads = 0;
+    const now = (): number => (reads++ === 0 ? base : base + 235_000);
+
+    const output = await drainWithFakeTimers(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        maxDurationMs: CHAT_TOOL_LOOP_BUDGET_MS,
+        now,
+        // A rotation must NOT be attempted: the budget is gone, not the
+        // provider. If the loop consulted this, the assertion below on the
+        // single call would fail.
+        failover: {
+          next: () => {
+            throw new Error('failover consulted for a budget stop');
+          },
+        },
+      }),
+    );
+
+    expect(output).toContain("ran past this turn's remaining time budget (5s)");
+    // The teardown the budget exists to protect actually ran: the terminal
+    // flush reached the client instead of being skipped by a SIGKILL.
+    expect(output).toContain('[DONE]');
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a fresh turn use the whole remaining budget before cutting the stream', async () => {
+    mockBuildToolLoopStream.mockResolvedValue(neverSettlingStream());
+
+    // Nothing spent yet: the cap is the loop budget itself, NOT some second
+    // hand-picked per-call number.
+    const base = 4_000_000;
+    const now = (): number => base;
+
+    const output = await drainWithFakeTimers(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        maxDurationMs: CHAT_TOOL_LOOP_BUDGET_MS,
+        now,
+      }),
+    );
+
+    expect(output).toContain(
+      `ran past this turn's remaining time budget (${CHAT_TOOL_LOOP_BUDGET_MS / 1000}s)`,
+    );
+  });
+});
+
+/**
+ * Three properties of the clamp that the SSE bytes above cannot show, because
+ * they are about what happens to the UPSTREAM request rather than to the loop:
+ *
+ *  - on expiry the derived signal is aborted, so the provider connection is
+ *    released instead of streaming (and billing) into a reader nobody drains;
+ *  - a client cancel still reaches the adapter, which used to be true only
+ *    because `options.signal` was passed straight through — the derived
+ *    controller must not swallow it, including when the cancel landed before
+ *    dispatch;
+ *  - the deadline timer is cleared on the happy path, so a normal turn does
+ *    not leave a 240 s timer pending behind it.
+ */
+describe('withProviderStreamDeadline — the signal handed to the adapter', () => {
+  it('aborts the adapter signal on expiry, with the deadline error as the reason', async () => {
+    let adapterSignal: AbortSignal | undefined;
+    const pending = withProviderStreamDeadline((signal) => {
+      adapterSignal = signal;
+      // An upstream that ignores the clock entirely — only the clamp can
+      // end this.
+      return new Promise<never>(() => {});
+    }, 20);
+
+    await expect(pending).rejects.toThrow(/ran past this turn's remaining time budget/);
+    expect(adapterSignal?.aborted).toBe(true);
+    expect((adapterSignal?.reason as Error).name).toBe('ProviderStreamDeadlineError');
+  });
+
+  it('forwards a client cancel onto the adapter signal with the client reason', async () => {
+    const client = new AbortController();
+    let adapterSignal: AbortSignal | undefined;
+    const pending = withProviderStreamDeadline(
+      (signal) => {
+        adapterSignal = signal;
+        return new Promise<never>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason as Error), { once: true });
+        });
+      },
+      60_000,
+      client.signal,
+    );
+
+    client.abort(new Error('client disconnected'));
+
+    await expect(pending).rejects.toThrow('client disconnected');
+    expect(adapterSignal?.aborted).toBe(true);
+  });
+
+  it('hands the adapter an already-aborted signal when the cancel landed first', async () => {
+    const client = new AbortController();
+    client.abort(new Error('cancelled before dispatch'));
+    let abortedAtDispatch: boolean | undefined;
+
+    await expect(
+      withProviderStreamDeadline(
+        (signal) => {
+          abortedAtDispatch = signal.aborted;
+          return Promise.reject(signal.reason as Error);
+        },
+        60_000,
+        client.signal,
+      ),
+    ).rejects.toThrow('cancelled before dispatch');
+    expect(abortedAtDispatch).toBe(true);
+  });
+
+  it('clears the deadline timer when the stream finishes inside its budget', async () => {
+    vi.useFakeTimers();
+    try {
+      await expect(
+        withProviderStreamDeadline(() => Promise.resolve('drained'), CHAT_TOOL_LOOP_BUDGET_MS),
+      ).resolves.toBe('drained');
+      // A leaked timer here would hold the invocation open for the rest of the
+      // loop budget after the turn is already done.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

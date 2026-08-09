@@ -2,8 +2,8 @@
 /**
  * Database isolation gate.
  *
- * The repo runs TWO isolation regimes and it is not obvious from a route which
- * one applies:
+ * The repo runs THREE isolation regimes and it is not obvious from a route
+ * which one applies:
  *
  *   1. RLS-enforced — `getUserScopedDb(request)` binds the subject and runs as
  *      the non-BYPASSRLS `app_rls` role, so migrations 0037/0054/0073 police
@@ -12,6 +12,13 @@
  *   2. App-enforced — `getNeonDb()` / `getNeonChatDb()` use the Neon owner
  *      connection, which HAS BYPASSRLS. Every policy is inert on this path and
  *      isolation rests entirely on a hand-written `where user_id = $1`.
+ *
+ *   3. Unknown-at-the-file-level — a service that takes an injected
+ *      `DatabaseAdapter` cannot be classified by reading it: the same function
+ *      is handed `getUserScopedDb(request)` by one caller and `getNeonDb()` by
+ *      the next, and if its table carries no RLS policy then even the scoped
+ *      handle is not a boundary. These are scanned under the same rule as
+ *      regime 2, because that is the fail-closed direction.
  *
  * Regime 2 is the majority of the API surface, so a single forgotten predicate
  * on a user-owned table is a cross-tenant read with no backstop. That class of
@@ -30,7 +37,7 @@
  * meant this gate's coverage shrank every time the migration it exists to
  * protect made progress.
  *
- * The gate runs TWO passes:
+ * The gate runs THREE passes:
  *
  *   Pass 1 (statements) — the rule above, over the TypeScript sources.
  *
@@ -44,8 +51,34 @@
  *      or a written exemption in CROSS_TENANT_TABLES. A table with none of the
  *      three fails the build.
  *
+ *   Pass 3 (hollow decisions) — pass 2 accepts "it is in USER_OWNED_TABLES" as
+ *      a decision, which is only true if pass 1 can actually SEE the statements
+ *      over that table. It could not for two live tables: `shared_conversations`
+ *      writes its SQL in single-quoted strings (the extractor read backticks
+ *      only) and `cloud_code_agent_turns` lives in a service that receives its
+ *      db handle as a parameter (the file filter looked for `getNeonDb()` in
+ *      the source). Both were recorded as app-enforced while neither the
+ *      database nor this gate enforced anything. Pass 3 counts, per table, how
+ *      many statements pass 1 actually policed, and fails when a live
+ *      app-enforced table without RLS polices zero and has no written reason in
+ *      UNPOLICED_APP_ENFORCED_TABLES. It fails the other way too: a reason that
+ *      has stopped being true must be deleted.
+ *
+ * WHAT THIS GATE DOES NOT DO, so nobody reads more into a green run than is
+ * there:
+ *
+ *   - It is textual. It proves a scope COLUMN is named in the statement, not
+ *     that the value bound to it is the request's subject.
+ *   - A scope token anywhere in the statement counts, including a SELECT list —
+ *     see `mentionsScopeToken`. Only interpolated variables are position-checked.
+ *   - It reads `apps/web/app/api` and `apps/web/lib` only. SQL in `packages/`,
+ *     `services/`, or the desktop app is out of scope, and so is any statement
+ *     whose table name is a runtime value (the erasure loop is the live example).
+ *   - Views, functions and cache keys are not read at all.
+ *
  * Usage: node scripts/check-db-isolation.mjs
- * Exit:  0 = clean · 1 = an unscoped statement, or a table with no decision
+ * Exit:  0 = clean · 1 = an unscoped statement, a table with no decision, or an
+ *        app-enforced table whose coverage is zero and undeclared
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -155,14 +188,46 @@ const SCOPE_TOKENS = [
   'session_id',
 ];
 
+const SCOPE_TOKEN_RE = new RegExp(`\\b(?:${SCOPE_TOKENS.join('|')})\\b`);
+
+/**
+ * Does `lowercasedSql` name a scope column?
+ *
+ * Word-anchored, NOT a substring test. `p.agent_user_id = s.agent_user_id` in a
+ * display-name subselect used to satisfy `user_id`, so deleting the real
+ * `and s.owner_session_key = $2` from an owner-scoped read still left this gate
+ * green — the token was being supplied by an unrelated join.
+ *
+ * KNOWN LOOSENESS, deliberately kept: the token may appear anywhere in the
+ * statement, including a SELECT list, so `select user_id from t where id = $1`
+ * passes. Requiring predicate position instead is the right end state, but it
+ * would fire on correctly-scoped code that assembles its WHERE clause in a
+ * variable, and a gate that cries wolf gets switched off. Entries that lean on
+ * this looseness say so in their reason.
+ */
+function mentionsScopeToken(lowercasedSql) {
+  return SCOPE_TOKEN_RE.test(lowercasedSql);
+}
+
 /**
  * Statements that legitimately span users. Each entry must say WHY, because an
  * unexplained allowlist entry is how this gate quietly stops working.
  *
  * An entry with `tables` exempts that file ONLY for the named tables; every
- * other user-owned table in the same file is still policed. Prefer that form —
- * a bare `match` retires a whole file, including code written after the reason
- * was true.
+ * other user-owned table in the same file is still policed. A bare `match`
+ * retires a whole file, including code written after the reason was true.
+ *
+ * Adding `functions` narrows further: the exemption then applies ONLY to
+ * statements written inside the named functions, and the same table stays
+ * policed everywhere else in the file. Prefer that form. A file+table exemption
+ * on a module like `lib/support/handoff/store.ts`, which keeps ALL of one
+ * table's SQL in one place so the ownership predicate is auditable, silently
+ * retires the owner-scoped queries too — deleting `and owner_session_key = $2`
+ * from `getSessionForOwner` left this gate green, which is the exact regression
+ * the entry's own reason claimed was still policed.
+ *
+ * The enclosing-function lookup is textual and fail-closed: a statement whose
+ * enclosing declaration cannot be resolved is NOT exempt.
  */
 const ALLOWLIST = [
   {
@@ -234,12 +299,67 @@ const ALLOWLIST = [
   {
     match: /lib\/support\/handoff\/store\.ts$/,
     tables: ['support_handoff_sessions'],
+    functions: [
+      'listFreshOnlineAgents',
+      'getSessionById',
+      'claimExpiredWaitingSession',
+      'claimExpiredWaitingBatch',
+      'recordEmailOutcome',
+      'listWaitingQueue',
+      'claimSessionForAgent',
+      'appendHandoffMessage',
+      'closeIdleConnectedSessions',
+      'purgeOldHandoffSessions',
+    ],
     reason:
-      'the stale-session sweep and the retention delete are time-based and deliberately span ' +
-      'visitors; the email-outcome and last-activity writes are bookkeeping on a session id the ' +
-      'caller already holds — they set status and timestamps and return no rows, so neither can ' +
-      'leak one visitor’s session to another. Reads in this module ARE owner-scoped ' +
-      '(getSessionForOwner / cancelSessionForOwner take owner_session_key) and stay policed.',
+      'a handoff session is owned by an anonymous VISITOR, and the other side of the feature is ' +
+      'staff: listFreshOnlineAgents (per-agent load count), getSessionById and listWaitingQueue ' +
+      '(agent console), claimSessionForAgent (an agent taking any waiting visitor) all span ' +
+      'visitors by design — their `agent_user_id` is a staff id and must NOT be read as an owner ' +
+      'predicate. claimExpiredWaitingSession / claimExpiredWaitingBatch / ' +
+      'closeIdleConnectedSessions / purgeOldHandoffSessions are time-based sweeps. ' +
+      'recordEmailOutcome and appendHandoffMessage’s last-activity write are bookkeeping on a ' +
+      'session id the caller already holds — they set status and timestamps and return no rows. ' +
+      'FUNCTION-SCOPED ON PURPOSE: getSessionForOwner and cancelSessionForOwner are NOT listed, ' +
+      'so they stay policed and deleting `and owner_session_key = $2` from either one fails this ' +
+      'gate. That regression was green before this entry was narrowed.',
+  },
+  {
+    match: /api\/shared\/route\.ts$/,
+    tables: ['shared_conversations'],
+    functions: ['handleGet'],
+    reason:
+      'reading a shared conversation by its unguessable UUID v4 token is the feature — a public ' +
+      'share link has no viewer subject to constrain by. Scoped to handleGet so the POST insert, ' +
+      'which must carry user_id, stays policed.',
+  },
+  {
+    match: /lib\/services\/api-key-service\.ts$/,
+    tables: ['api_keys'],
+    functions: ['verifyKey'],
+    reason:
+      'verifyKey stamps last_used_at on the row id it just resolved from the presented key and ' +
+      'confirmed with Argon2; the credential IS the subject, and there is no request user to ' +
+      'constrain by. createApiKey/listApiKeys/revokeApiKey stay policed.',
+  },
+  {
+    match: /lib\/services\/cloud-code-agent-service\.ts$/,
+    tables: ['cloud_code_agent_turns'],
+    functions: ['executePersistedAgentTurn'],
+    reason:
+      'every write here targets `turnId`, which the caller obtained from an insert keyed on ' +
+      '(user_id, idempotency_key) with the authenticated owner (startCloudCodeAgentTurn) or from ' +
+      'a read carrying `and user_id = $3` (decideCloudCodeAgentApproval). The id IS the owner ' +
+      'constraint. startCloudCodeAgentTurn’s own insert stays policed.',
+  },
+  {
+    match: /lib\/services\/cloud-code-agent-approval-service\.ts$/,
+    tables: ['cloud_code_agent_turns'],
+    functions: ['decideCloudCodeAgentApproval'],
+    reason:
+      'the resume UPDATE re-states the turn id that the same function loaded earlier with a ' +
+      'select carrying `and user_id = $3`; the join in listCloudCodeAgentApprovals and the ' +
+      'expiry sweep both carry t.user_id and stay policed.',
   },
 ];
 
@@ -254,6 +374,65 @@ const CROSS_TENANT_TABLES = new Map([
     'support_agent_presence',
     'the support-agent roster. Its `agent_user_id` is staff, not a customer, and the console ' +
       'exists to list every online agent so a waiting visitor can be routed to one.',
+  ],
+]);
+
+/**
+ * Live app-enforced tables with NO RLS that pass 1 polices ZERO statements for,
+ * each with the reason it is nonetheless not an oversight. Pass 3 requires this
+ * list to be exactly right in both directions.
+ *
+ * Why this list has to exist: pass 2 accepts USER_OWNED_TABLES membership as an
+ * isolation decision, and that is only meaningful if pass 1 can see the SQL. It
+ * could not for `shared_conversations` (single-quoted statements, invisible to a
+ * backtick-only extractor) or `cloud_code_agent_turns` (a service handed its db
+ * handle as a parameter, skipped by the file filter) — both were recorded as
+ * app-enforced while nothing enforced them. Both are policed now. This list is
+ * what stops the next one from hiding.
+ */
+const UNPOLICED_APP_ENFORCED_TABLES = new Map([
+  // Their only query site is the erasure loop in lib/server/account-erasure.ts:
+  // `delete from public.${table} where ${column} = $1`, driven by
+  // USER_SCOPED_TABLES. The predicate IS owner-scoped, but the table name is a
+  // runtime value, so pass 1 cannot attribute the statement to any table.
+  ...[
+    'account_lockout_attempts',
+    'account_sessions',
+    'agent_tool_executions',
+    'agent_tools',
+    'chat_folders',
+    'message_bookmarks',
+    'message_reactions',
+    'search_history',
+    'support_ticket_replies',
+    'support_tickets',
+    'user_shortcuts',
+    'messaging_connections',
+  ].map((t) => [
+    t,
+    'only query site is the interpolated-table erasure loop in ' +
+      'lib/server/account-erasure.ts, which deletes `where ${column} = $1` from ' +
+      'USER_SCOPED_TABLES; owner-scoped, but not attributable to a table by a textual scan',
+  ]),
+  [
+    'waitlist',
+    'real SQL lives in app/api/waitlist/route.ts, retired wholesale by the bare `api/waitlist` ' +
+      'ALLOWLIST entry (waitlist rows are pre-account). The insert does carry user_id.',
+  ],
+  [
+    'cloud_managed_waitlist',
+    'real SQL lives in app/api/waitlist/public and /cloud-managed, retired wholesale by the same ' +
+      'bare `api/waitlist` ALLOWLIST entry.',
+  ],
+  [
+    'feature_flags',
+    'no SQL anywhere in the repo. The `feature_flags` in app/api/me/route.ts is a plain JS object ' +
+      'assembled from entitlements, not a read of this table.',
+  ],
+  [
+    'referrals',
+    'no query site at all — the table is provisioned by 0016_misc.sql and nothing reads or ' +
+      'writes it yet.',
   ],
 ]);
 
@@ -272,20 +451,194 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** Extract template-literal and quoted SQL bodies that read or write a table. */
+/**
+ * Extract SQL bodies that read or write a table, as `{ sql, index }`.
+ *
+ * All three JS string forms, not just backticks. Backtick-only matching had a
+ * live blind spot: `apps/web/app/api/shared/route.ts` writes both of its
+ * `shared_conversations` statements as single-quoted one-liners, so pass 1 saw
+ * ZERO statements over that table while pass 2 recorded it as app-enforced. A
+ * quoting style is not an isolation decision.
+ *
+ * Quoted forms cannot span a newline (an unescaped newline is a syntax error in
+ * a JS string literal), which is what keeps the `[^'\n]` bodies from running
+ * away across unrelated source.
+ */
 function extractStatements(source) {
   const statements = [];
-  const re = /`([^`]*?(?:from|into|update|join)\s+(?:public\.)?[a-z_]+[\s\S]*?)`/gi;
-  let m;
-  while ((m = re.exec(source))) {
-    // The span between two unrelated backticks is not a query. Eight such spans
-    // were being "scanned" — JS bodies containing the word `from` in a comment —
-    // and one of them is prose naming a user-owned table, which would otherwise
-    // have to be allowlisted as if it were a real cross-user statement. A query
-    // opens with a query verb; nothing else does.
-    if (/^\s*(?:with|select|insert|update|delete)\b/i.test(m[1])) statements.push(m[1]);
+  const patterns = [
+    /`([^`]*?(?:from|into|update|join)\s+(?:public\.)?[a-z_]+[\s\S]*?)`/gi,
+    /'([^'\n]*?(?:from|into|update|join)\s+(?:public\.)?[a-z_]+[^'\n]*?)'/gi,
+    /"([^"\n]*?(?:from|into|update|join)\s+(?:public\.)?[a-z_]+[^"\n]*?)"/gi,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(source))) {
+      // The span between two unrelated backticks is not a query. Eight such spans
+      // were being "scanned" — JS bodies containing the word `from` in a comment —
+      // and one of them is prose naming a user-owned table, which would otherwise
+      // have to be allowlisted as if it were a real cross-user statement. A query
+      // opens with a query verb; nothing else does.
+      if (/^\s*(?:with|select|insert|update|delete)\b/i.test(m[1]))
+        statements.push({ sql: m[1], index: m.index });
+    }
   }
   return statements;
+}
+
+/** Words that open a parenthesised clause but declare nothing. */
+const NOT_A_DECLARATION = new Set([
+  'if',
+  'for',
+  'while',
+  'switch',
+  'catch',
+  'return',
+  'throw',
+  'yield',
+  'await',
+  'typeof',
+  'void',
+  'delete',
+  'new',
+  'else',
+  'do',
+  'try',
+  'case',
+  'with',
+  'in',
+  'of',
+  'function',
+  'class',
+  'const',
+  'let',
+  'var',
+  'import',
+  'export',
+]);
+
+/**
+ * Blank out string, template and comment bodies, preserving length and newlines
+ * so every offset still lines up with the original source.
+ *
+ * Without this, SQL text is read as JavaScript: `VALUES (` and `AND (` inside a
+ * query both look exactly like a class-method declaration, and one of them sat
+ * between `verifyKey` and its UPDATE, so the enclosing-function lookup returned
+ * "AND".
+ */
+function maskLiterals(source) {
+  const out = source.split('');
+  const n = source.length;
+  let i = 0;
+  while (i < n) {
+    const c = source[i];
+    if (c === '/' && source[i + 1] === '/') {
+      while (i < n && source[i] !== '\n') out[i++] = ' ';
+    } else if (c === '/' && source[i + 1] === '*') {
+      out[i++] = ' ';
+      out[i++] = ' ';
+      while (i < n && !(source[i] === '*' && source[i + 1] === '/')) {
+        if (source[i] !== '\n') out[i] = ' ';
+        i += 1;
+      }
+      if (i < n) {
+        out[i++] = ' ';
+        out[i++] = ' ';
+      }
+    } else if (c === '`' || c === "'" || c === '"') {
+      i += 1;
+      while (i < n) {
+        if (source[i] === '\\') {
+          out[i] = ' ';
+          if (i + 1 < n && source[i + 1] !== '\n') out[i + 1] = ' ';
+          i += 2;
+          continue;
+        }
+        if (source[i] === c) {
+          i += 1;
+          break;
+        }
+        if (source[i] !== '\n') out[i] = ' ';
+        i += 1;
+      }
+    } else {
+      i += 1;
+    }
+  }
+  return out.join('');
+}
+
+/**
+ * Every function-ish declaration in `source`, as `{ name, index }` ordered by
+ * position. Covers `function f(`, class methods (`static async f(`) and arrow
+ * consts, which is every shape the scanned surface uses today.
+ *
+ * This is deliberately textual. It exists only to SCOPE an allowlist entry, and
+ * an unresolved name means "not exempt", so the worst a miss can do is make the
+ * gate fire on a statement someone wrote a reason for.
+ */
+function declarationIndex(source) {
+  const decls = [];
+  const callable =
+    /(?:^|\n)[ \t]*(?:export\s+)?(?:default\s+)?(?:static\s+)?(?:async\s+)?(?:function\s*\*?\s*)?([A-Za-z_$][\w$]*)\s*(?:<[^<>()]*>)?\s*(\()/g;
+  const arrow =
+    /(?:^|\n)[ \t]*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]*)?=\s*(?:async\s*)?(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*=>/g;
+  let m;
+  while ((m = callable.exec(source))) {
+    if (NOT_A_DECLARATION.has(m[1])) continue;
+    // `  validateCloudCodeSessionId(sessionId);` at the top of a function body
+    // is indistinguishable from a declaration by name alone, and it shadowed the
+    // real enclosing function for every statement below it. A declaration's
+    // parameter list is followed by a BODY.
+    if (!opensABody(source, m.index + m[0].length - 1)) continue;
+    decls.push({ name: m[1], index: m.index });
+  }
+  while ((m = arrow.exec(source))) {
+    if (NOT_A_DECLARATION.has(m[1])) continue;
+    decls.push({ name: m[1], index: m.index });
+  }
+  decls.sort((a, b) => a.index - b.index);
+  return decls;
+}
+
+/**
+ * Is the parenthesised group opening at `open` a parameter list followed by a
+ * function body? Accepts `(...) {` and `(...): SomeType {`, skipping over
+ * generics so `): Promise<{ ok: boolean }>` is a return type, not a body.
+ */
+function opensABody(source, open) {
+  let depth = 0;
+  let i = open;
+  for (; i < source.length; i += 1) {
+    if (source[i] === '(') depth += 1;
+    else if (source[i] === ')') {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+  }
+  if (depth !== 0) return false;
+  let angle = 0;
+  for (i += 1; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '<') angle += 1;
+    else if (c === '>') angle = Math.max(0, angle - 1);
+    else if (angle === 0) {
+      if (c === '{') return true;
+      if (c === ';' || c === ')' || c === ',' || c === '(') return false;
+      if (!/[\s:|&[\]?.\w$]/.test(c)) return false;
+    }
+  }
+  return false;
+}
+
+/** Name of the innermost declaration opened before `index`, or null. */
+function enclosingDeclaration(decls, index) {
+  let found = null;
+  for (const d of decls) {
+    if (d.index > index) break;
+    found = d.name;
+  }
+  return found;
 }
 
 function tablesIn(sql) {
@@ -327,6 +680,39 @@ function resolvesToScope(source, name, depth) {
   return false;
 }
 
+/**
+ * The interpolations in `sql` that could plausibly BE the owner constraint —
+ * ones inside the predicate region, plus an INSERT's column list.
+ *
+ * Position matters. `select ${SESSION_COLUMNS} from t where id = $1` resolved
+ * "scoped" because SESSION_COLUMNS lists `s.owner_session_key`: a column being
+ * SELECTED, not a row being constrained. That is how deleting the real
+ * `and s.owner_session_key = $2` from an owner-scoped read left the gate green.
+ * A RETURNING list is excluded for the same reason even though it sits after
+ * WHERE.
+ *
+ * An INSERT's column list is kept because it genuinely is the constraint there:
+ * `insert into user_projects (${cols.join(', ')})` with `user_id` among `cols`
+ * is how the row gets an owner in the first place.
+ */
+function scopingInterpolations(sql, lower) {
+  const names = [];
+  const start = lower.search(/\b(?:where|on\s+conflict)\b/);
+  if (start >= 0) {
+    const tail = lower.slice(start).search(/\b(?:returning|order\s+by|group\s+by|limit)\b/);
+    const end = tail < 0 ? lower.length : start + tail;
+    for (const m of sql.matchAll(/\$\{\s*([A-Za-z_$][\w$]*)/g)) {
+      if (m.index >= start && m.index < end) names.push(m[1]);
+    }
+  }
+  for (const m of sql.matchAll(
+    /insert\s+into\s+(?:public\.)?[a-z_]+\s*\(\s*\$\{\s*([A-Za-z_$][\w$]*)/gi,
+  )) {
+    names.push(m[1]);
+  }
+  return names;
+}
+
 const errors = [];
 const files = [
   ...walk(path.join(root, 'apps/web/app/api')),
@@ -334,28 +720,40 @@ const files = [
 ];
 let scanned = 0;
 let ownerConnectionFiles = 0;
+/** table -> how many statements pass 1 actually policed. Pass 3 reads this. */
+const policedByTable = new Map();
 
 for (const file of files) {
   const source = fs.readFileSync(file, 'utf8');
   const rel = path.relative(root, file);
-  if (!/getNeonDb\(\)|getNeonChatDb\(\)/.test(source)) continue;
+  // `DatabaseAdapter` catches regime 3 — a service handed its connection by the
+  // caller. Excluding those meant `cloud-code-agent-service.ts` (five writes to
+  // an RLS-less user-owned table) was never read at all.
+  if (!/getNeonDb\(\)|getNeonChatDb\(\)|DatabaseAdapter/.test(source)) continue;
   ownerConnectionFiles += 1;
   const exemptions = ALLOWLIST.filter((a) => a.match.test(rel));
   if (exemptions.some((a) => !a.tables)) continue;
-  const exemptTables = new Set(exemptions.flatMap((a) => a.tables));
+  const decls = declarationIndex(maskLiterals(source));
 
-  for (const sql of extractStatements(source)) {
+  for (const { sql, index } of extractStatements(source)) {
+    const where = enclosingDeclaration(decls, index);
+    const exemptTables = new Set(
+      exemptions
+        .filter((a) => !a.functions || (where !== null && a.functions.includes(where)))
+        .flatMap((a) => a.tables),
+    );
     const tables = tablesIn(sql).filter((t) => !exemptTables.has(t));
     if (tables.length === 0) continue;
     scanned += 1;
+    for (const t of tables) policedByTable.set(t, (policedByTable.get(t) ?? 0) + 1);
     const lower = sql.toLowerCase();
-    if (SCOPE_TOKENS.some((tok) => lower.includes(tok))) continue;
+    if (mentionsScopeToken(lower)) continue;
     // The predicate is often assembled in a variable (`where ${clauses.join(' and ')}`).
     // Resolve each interpolated identifier back to its declaration in the same
     // file and accept the statement when that declaration seeds a scope token.
     // Without this the gate fires on correct code, and a gate that cries wolf
     // gets switched off.
-    const interpolated = [...sql.matchAll(/\$\{\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+    const interpolated = scopingInterpolations(sql, lower);
     const resolvedByVariable = interpolated.some((name) => resolvesToScope(source, name, 2));
     if (resolvedByVariable) continue;
     errors.push(
@@ -489,9 +887,65 @@ if (undecided.length > 0) {
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// Pass 3 — hollow decisions. "It is in USER_OWNED_TABLES" is only a decision if
+// pass 1 can see the SQL. Measure the coverage instead of asserting it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Compare measured per-table coverage against the declared exceptions.
+ *
+ * Skipped entirely when nothing was scanned, so the sandbox fixtures used by
+ * the tests (a migration and no TypeScript at all) do not have to declare the
+ * whole production table list.
+ */
+function findHollowDecisions({ tables, rlsEnabled }, appEnforced, policed, declared) {
+  const hollow = [];
+  const stale = [];
+  for (const table of appEnforced) {
+    if (!tables.has(table) || rlsEnabled.has(table)) continue;
+    const count = policed.get(table) ?? 0;
+    if (count === 0 && !declared.has(table)) hollow.push(table);
+    if (count > 0 && declared.has(table)) stale.push({ table, count });
+  }
+  return { hollow, stale };
+}
+
+const { hollow, stale } =
+  ownerConnectionFiles > 0
+    ? findHollowDecisions(schema, USER_OWNED_TABLES, policedByTable, UNPOLICED_APP_ENFORCED_TABLES)
+    : { hollow: [], stale: [] };
+
+if (hollow.length > 0 || stale.length > 0) {
+  console.error('Database isolation check FAILED — app-enforcement that enforces nothing:\n');
+  for (const table of hollow) {
+    console.error(
+      `- ${table} is in USER_OWNED_TABLES and has no RLS policy, but pass 1 policed ZERO\n` +
+        `  statements over it. Nothing enforces its isolation: not the database, not this gate.\n`,
+    );
+  }
+  for (const { table, count } of stale) {
+    console.error(
+      `- ${table} is listed in UNPOLICED_APP_ENFORCED_TABLES but pass 1 now polices ${count}\n` +
+        `  statement(s) over it. The written reason has stopped being true.\n`,
+    );
+  }
+  console.error(
+    `Pass 2 accepts USER_OWNED_TABLES membership as an isolation decision, which is only\n` +
+      `honest while pass 1 can actually READ the statements. For a hollow table, either:\n` +
+      `  1. find why the SQL is invisible (quoting style, an injected db handle, an\n` +
+      `     interpolated table name) and fix the scan, or\n` +
+      `  2. enable row level security in the migration, or\n` +
+      `  3. add it to UNPOLICED_APP_ENFORCED_TABLES WITH the reason zero is correct.\n` +
+      `For a stale entry, delete it — the coverage it apologised for now exists.`,
+  );
+  process.exit(1);
+}
+
 console.log(
   `Database isolation check passed (${scanned} owner-connection statements over user-owned ` +
     `tables across ${ownerConnectionFiles} route and service modules, all owner-constrained; ` +
     `${tenantScoped} tenant-scoped tables across ${schema.tables.size} live tables, each with an ` +
-    `explicit isolation decision).`,
+    `explicit isolation decision; ${UNPOLICED_APP_ENFORCED_TABLES.size} app-enforced tables ` +
+    `declared as policing zero statements, with reasons).`,
 );

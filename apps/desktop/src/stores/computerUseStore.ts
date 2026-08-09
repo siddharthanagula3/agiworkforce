@@ -7,9 +7,18 @@ import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useAppModeStore, selectPrivacyMode } from './appModeStore';
 // Picking an on-device provider is not a boundary cross out of the Local
-// workspace. The classification itself lives in one place (types/provider) so
-// this store, the model picker, and the tier gate cannot disagree about which
-// runtimes count as local.
+// workspace. Shared with App.tsx's Local-mode model picker so the two cannot
+// disagree about which runtimes count as local; this store previously kept a
+// byte-identical copy of the same set.
+//
+// Today every provider that reaches the check below is catalog-derived
+// (COMPUTER_USE_MODEL_OPTIONS is built from getAllModels(), and
+// useCloudVoiceController resolves its provider through getModelMetadataById),
+// and packages/contracts/types/src/models.json carries no local-provider
+// model. So the guard's live job is the NEGATIVE one — stripping a cloud
+// provider inside a Local workspace — and `isLocalProvider` returning true
+// here is not currently reachable. It is kept because the strip must not fire
+// on an on-device provider if the options list ever gains one.
 import { isLocalProvider } from '../types/provider';
 
 /** Wire values of the Rust `ChatExecutionMode` enum (sys/commands/chat/types.rs,

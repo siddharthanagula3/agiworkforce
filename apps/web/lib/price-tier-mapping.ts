@@ -11,8 +11,7 @@
  * - It's unclear which prices are actually valid
  */
 
-import { getPlanPriceCents, type BillingInterval, type BillingPlanTier } from '@agiworkforce/types';
-import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
+import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
 
 interface PriceMappingEntry {
   tier: BillingPlanTier;
@@ -186,34 +185,15 @@ export function isValidPlanTier(tier: string | null | undefined): tier is string
   );
 }
 
-export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
-  tier: BillingPlanTier;
-  interval: BillingInterval;
-  /**
-   * Published list price in cents, or `null` when the tier publishes none.
-   * Enterprise Prices can be registered here (STRIPE_PRICE_ENTERPRISE_*) but the
-   * catalog holds no amount for them — the contract does — so this is null
-   * rather than the `0` that used to read as a free subscription.
-   */
-  priceCents: number | null;
-  usageBudgetCents: number;
-} | null {
-  if (!priceId) {
-    return null;
-  }
-
-  const entry = getTierMapping()[priceId.toLowerCase().trim()];
-  if (!entry) {
-    return null;
-  }
-
-  return {
-    tier: entry.tier,
-    interval: entry.interval,
-    priceCents: getPlanPriceCents(entry.tier, entry.interval),
-    usageBudgetCents: getPlanUsageBudgetCents(entry.tier, entry.interval),
-  };
-}
+// Removed 2026-08-09 (BIZ-020 repair): `getBillingDetailsFromPriceId` bundled
+// tier + interval + catalog price + usage budget for a registered Price, but it
+// had no production caller anywhere in the repo — only this module's own unit
+// test. The webhook path composes the two facts it needs directly
+// (`resolvePlanTier` in apps/web/app/api/stripe-webhook/lib/db.ts:525/824 and
+// `getPlanUsageBudgetCents` from @/lib/server/managed-usage-policy), and
+// `getTierMapping()` already exposes the tier/interval pair for anything that
+// needs both. Widening its `priceCents` to `number | null` was therefore a
+// change to code that never runs; deleting it is the honest form of that fix.
 
 /**
  * Get all registered price IDs

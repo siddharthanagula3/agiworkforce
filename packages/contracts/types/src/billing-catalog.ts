@@ -103,6 +103,21 @@ export interface BillingPlanPricing {
    * plans now carry no amount at all and set `contractPriced`, so a price
    * cannot be printed by accident; use `isContractPricedPlan` /
    * `getPlanPriceUsd() === null` to render the contract state instead.
+   *
+   * NOT YET CLOSED, and deliberately recorded here rather than claimed fixed:
+   * `yearlyPriceUsd: 0` on `basic`, `max` and `max_15x` still means "this plan
+   * sells no annual subscription", which is the same overloaded-zero modeling
+   * this field's absence was introduced to end. It is currently masked at every
+   * render path by a `> 0` test — `annualAvailable` in
+   * `apps/web/features/billing/lib/plan-display.ts`, the interval each
+   * UpgradeConfirmDialog caller picks, `PLAN_INTERVALS` in
+   * `apps/web/lib/server/localized-pricing-service.ts` (yearly only for `pro`
+   * and `team`), and the hand-written `yearly: undefined` in
+   * `apps/web/lib/pricing.ts` — so no surface prints "$0/yr" today. Dropping the
+   * key cannot be done here alone: `apps/web/features/chat/components/dialogs/
+   * UpgradePlanDialog.tsx:82` drops a plan card outright when either amount is
+   * null, so making these absent would silently remove Basic/Max/Max 15x from
+   * the in-chat upgrade dialog. Fix that call site first.
    */
   monthlyPriceUsd?: number;
   yearlyPriceUsd?: number;
