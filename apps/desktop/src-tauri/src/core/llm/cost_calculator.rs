@@ -5,6 +5,15 @@ use chrono::NaiveDate;
 use crate::core::llm::models_config::{ModelEntry, PricingWindowEntry};
 use crate::core::llm::Provider;
 
+/// Anthropic's published cache-WRITE surcharge, applied only when the catalog
+/// declares no write price for an Anthropic model. Mirrors
+/// `CACHE_WRITE_FALLBACK_MULTIPLIERS` in
+/// `apps/web/lib/services/llm-cost-calculator.ts`; desktop, web and the gateway
+/// must price the same cached token identically, and none of the three can
+/// import from the others, so they change together. (An unpriced cache READ
+/// needs no constant here: it is billed at the plain input rate.)
+const ANTHROPIC_CACHE_WRITE_FALLBACK_MULTIPLIER: f64 = 1.25;
+
 #[derive(Debug, Clone)]
 struct Pricing {
     input_per_million: f64,
@@ -365,17 +374,25 @@ impl CostCalculator {
         // cache reads were being costed at five times their real price. Falling
         // back to the full input rate when the catalog prices no cache read is
         // deliberate: over-costing a cached token is recoverable, inventing a
-        // discount the provider does not give is not.
+        // discount the provider does not give is not. This branch keys on the
+        // ABSENCE of a catalog cache-read price, not on any caching capability
+        // flag, so it covers every unpriced model — `minimax-m3` (caching
+        // declared, no read price) and `grok-4.5` (no read price, caching not
+        // declared) alike. The web tracker and the gateway now fall back the
+        // same way, so all three bill that request identically.
         let cache_read_rate = pricing
             .cache_read_per_million
             .map(|per_million| per_million / 1_000_000.0)
             .unwrap_or(input_rate);
         // Cache-WRITE rate, in preference order: the catalog's published
         // absolute price (`cached_write`), then a declared multiplier on the
-        // input rate, then the plain input rate. That last fallback is the
-        // "free cache write" case — the written token is billed once, as input,
-        // with no surcharge — which is what every pre-GPT-5.6 OpenAI model gets.
-        // The GPT-5.6 family DOES publish a write price (1.25x uncached input on
+        // input rate, then a provider-shaped fallback. Anthropic bills a written
+        // token ONLY as a write (its cache counters are disjoint from input), so
+        // an undeclared price there falls back to the published surcharge rather
+        // than to a free write. Everywhere else the written token stays inside
+        // the prompt and the input rate means "billed once, no surcharge" —
+        // the free-cache-write case every pre-GPT-5.6 OpenAI model is in. The
+        // GPT-5.6 family DOES publish a write price (1.25x uncached input on
         // both automatic and explicit breakpoints), so it is billed for writes.
         let cache_write_rate = pricing
             .cache_write_per_million
@@ -385,7 +402,10 @@ impl CostCalculator {
                     .cache_write_multiplier
                     .map(|multiplier| input_rate * multiplier)
             })
-            .unwrap_or(input_rate);
+            .unwrap_or_else(|| match provider {
+                Provider::Anthropic => input_rate * ANTHROPIC_CACHE_WRITE_FALLBACK_MULTIPLIER,
+                _ => input_rate,
+            });
 
         match provider {
             Provider::Anthropic => {
@@ -488,6 +508,38 @@ mod tests {
     /// shipped product price is reachable by editing a mechanism test. Window
     /// bounds are UTC calendar days, inclusive on both sides.
     const FIXTURE_MODEL: &str = "fixture-scheduled-model";
+
+    /// SYNTHETIC model that prices neither side of caching — the state
+    /// `grok-4.5` (tier-allowed, cached tokens reported) and `minimax-m3` are
+    /// both in today. Registered under two providers so
+    /// the same unpriced entry can be billed with disjoint (Anthropic) and
+    /// subset (managed cloud) token accounting.
+    const UNPRICED_CACHE_MODEL: &str = "fixture-unpriced-cache-model";
+
+    fn unpriced_cache_calculator() -> CostCalculator {
+        let pricing = Pricing {
+            input_per_million: 0.3,
+            output_per_million: 1.2,
+            cache_read_per_million: None,
+            cache_write_multiplier: None,
+            cache_write_per_million: None,
+            schedule: Vec::new(),
+        };
+        let mut map = HashMap::new();
+        map.insert(
+            (Provider::ManagedCloud, UNPRICED_CACHE_MODEL.to_string()),
+            pricing.clone(),
+        );
+        map.insert(
+            (Provider::Anthropic, UNPRICED_CACHE_MODEL.to_string()),
+            pricing,
+        );
+        CostCalculator {
+            pricing: map,
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        }
+    }
 
     fn scheduled_fixture_calculator() -> CostCalculator {
         let pricing = Pricing {
@@ -688,6 +740,57 @@ mod tests {
             cost,
             expected,
             0.1
+        );
+    }
+
+    #[test]
+    fn cache_read_falls_back_to_full_input_rate_when_the_catalog_prices_none() {
+        // Convergence pin against apps/web: a model that declares caching with
+        // no cached_input is billed at the FULL input rate on every surface.
+        // The web tracker used to take 90% off here, so the same managed-cloud
+        // request cost $0.03/M in the browser and $0.30/M on the desktop.
+        let calc = unpriced_cache_calculator();
+
+        // 1M cache-read tokens, nothing else, so the result IS the cache-read rate.
+        let cost = calc.calculate_with_cache(
+            Provider::ManagedCloud,
+            UNPRICED_CACHE_MODEL,
+            1_000_000, // prompt_tokens, all of which are cache reads
+            0,         // completion_tokens
+            1_000_000, // cache_read_tokens
+            0,         // cache_creation_tokens
+            standard_window_date(),
+        );
+
+        assert!(
+            (cost - 0.3).abs() < 1e-9,
+            "unpriced cache read must bill the full $0.30/M input rate, got {}",
+            cost
+        );
+    }
+
+    #[test]
+    fn anthropic_cache_write_falls_back_to_the_published_surcharge() {
+        // Anthropic reports cache writes disjoint from input, so a written
+        // token is billed ONLY here — falling back to the plain input rate
+        // would drop the published 25% surcharge that apps/web and the gateway
+        // both charge.
+        let calc = unpriced_cache_calculator();
+
+        let cost = calc.calculate_with_cache(
+            Provider::Anthropic,
+            UNPRICED_CACHE_MODEL,
+            1_000_000, // prompt_tokens, every one of them written to the cache
+            0,         // completion_tokens
+            0,         // cache_read_tokens
+            1_000_000, // cache_creation_tokens
+            standard_window_date(),
+        );
+
+        assert!(
+            (cost - 0.375).abs() < 1e-9,
+            "unpriced Anthropic cache write must bill 1.25x the $0.30/M input rate, got {}",
+            cost
         );
     }
 

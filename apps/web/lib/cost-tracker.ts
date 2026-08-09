@@ -14,11 +14,10 @@
  *
  * Pricing reads from models.json via @agiworkforce/types helpers, resolved for an
  * explicit date (models may carry dated `pricingSchedule` windows). Cache pricing
- * uses the catalog's own rates when declared; the fallbacks are:
- *  - cache_read: 10% of input cost (published 90% cache-read discount).
- *  - cache_creation: 125% / 200% of input cost for Anthropic-style disjoint
- *    accounting (5m / 1h TTL), and the plain input rate for inclusive-prompt
- *    providers, i.e. no surcharge for a model that declares no write price.
+ * uses the catalog's own rates when declared; anything it leaves unpriced falls
+ * back through `resolveCacheRates` in lib/services/llm-cost-calculator.ts, the
+ * one definition this app, the gateway and the desktop calculator follow (the
+ * CLI ledger still does not — see that module's header).
  *
  * Reasoning tokens (OpenAI o-series, Anthropic extended thinking) are billed
  * at the same per-token rate as regular output tokens, matching codex-cli's
@@ -34,6 +33,7 @@ import 'server-only';
 
 import { getModelMetadataById, resolveEffectiveModelPricing } from '@agiworkforce/types';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
+import { resolveCacheRates } from '@/lib/services/llm-cost-calculator';
 
 export interface ModelUsage {
   modelId: string;
@@ -101,39 +101,30 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
   const inputPerM = effective.inputCost ?? 0;
   const outputPerM = effective.outputCost ?? 0;
 
-  // Use catalog cached_input price when available; fall back to 10% of input rate.
-  // cached_input is defined on ModelMetadata as an optional sparse field sourced
-  // from packages/ai/model-registry/catalog/models.synced.json (upstream-derived)
-  // or models.curation.json overrides.
-  // Confirmed prices (June 2026): Anthropic = 0.10× input, OpenAI = 0.10× input,
-  // DeepSeek = per catalog, Gemini 3.5 Flash = $0.15/M.
-  const cacheReadPerM =
-    typeof effective.cached_input === 'number' ? effective.cached_input : inputPerM * 0.1;
-
-  // Cache creation:
-  //  - Anthropic 5m TTL: 1.25× input rate (published: write costs +25%).
-  //  - Anthropic 1h TTL: 2.0× input rate (published: write costs +100%).
-  //  - OpenAI: free cache writes UNTIL the GPT-5.6 family, which bills writes at
-  //    1.25× the uncached input rate on both automatic and explicit breakpoints.
-  //    That is expressed in the catalog as a `cached_write` price, so a declared
-  //    write price is billed and an undeclared one is not — pre-5.6 OpenAI models
-  //    declare none and their written tokens bill once, at the input rate.
+  // Cache rates come from the catalog when it declares them (cached_input /
+  // cached_write / cached_write_1h are optional sparse fields sourced from
+  // packages/ai/model-registry/catalog/models.synced.json or the curation
+  // overrides). Everything the catalog leaves unpriced is decided by
+  // `resolveCacheRates`, so this tracker, the billing calculator, the gateway
+  // and the desktop calculator all price an unpriced cached token the same way.
   // Anthropic's response only breaks cacheCreationInputTokens down into
   // cacheCreation1hInputTokens when a request mixes 5m/1h TTLs; the remainder
   // is billed at the 5m rate. See anthropic.ts's stable-prefix 1h upgrade.
   const isAnthropic = meta.provider === 'anthropic';
-  const cacheCreationPerM =
-    typeof effective.cached_write === 'number'
-      ? effective.cached_write
-      : isAnthropic
-        ? inputPerM * 1.25
-        : inputPerM;
-  const cacheCreation1hPerM =
-    typeof effective.cached_write_1h === 'number'
-      ? effective.cached_write_1h
-      : isAnthropic
-        ? inputPerM * 2.0
-        : inputPerM;
+  const {
+    read: cacheReadPerM,
+    write5m: cacheCreationPerM,
+    write1h: cacheCreation1hPerM,
+  } = resolveCacheRates({
+    inputCostPer1MTokens: inputPerM,
+    cachedInputCostPer1MTokens:
+      typeof effective.cached_input === 'number' ? effective.cached_input : undefined,
+    cachedWriteCostPer1MTokens:
+      typeof effective.cached_write === 'number' ? effective.cached_write : undefined,
+    cachedWrite1hCostPer1MTokens:
+      typeof effective.cached_write_1h === 'number' ? effective.cached_write_1h : undefined,
+    cacheTokensDisjointFromInput: isAnthropic,
+  });
 
   const rawInputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;

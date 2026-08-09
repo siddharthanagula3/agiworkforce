@@ -17,6 +17,24 @@ const ESTIMATED_CHARS_PER_TOKEN = 3.5;
 const BILLING_RPC_ATTEMPTS = 3;
 
 /**
+ * Multipliers on the input rate for a cache WRITE the catalog leaves unpriced.
+ * Mirrored from `CACHE_WRITE_FALLBACK_MULTIPLIERS` in
+ * `apps/web/lib/services/llm-cost-calculator.ts`; that module is `server-only`
+ * and lives inside the Next app, so this service cannot import it — the two
+ * tables must be changed together, same constraint as the cap table below.
+ * `__tests__/services/managedUsageBilling.test.ts` pins the resulting rates.
+ *
+ * There is no read entry: an unpriced cache READ is billed at the plain input
+ * rate, so there is no multiplier to name.
+ */
+const CACHE_WRITE_FALLBACK_MULTIPLIERS = {
+  /** Anthropic's published 5m-TTL cache-write surcharge. */
+  write5m: 1.25,
+  /** Anthropic's published 1h-TTL cache-write surcharge. */
+  write1h: 2,
+} as const;
+
+/**
  * Rolling spend ceilings in paid-ledger cents, mirrored from the canonical
  * table in `apps/web/lib/server/managed-usage-policy.ts`. That module is
  * `server-only` and lives inside the Next app, so this service cannot import
@@ -302,17 +320,33 @@ export function calculateManagedUsageCostCents(
   const ordinaryInputTokens = disjoint
     ? inputTokens
     : Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
-  const cacheReadRate = cachedInputRate ?? inputRate * 0.1;
+  // A cache read the catalog leaves unpriced is billed at the FULL input rate
+  // -- a discount the provider does not publish is not invented here, and the
+  // desktop calculator prices the same request the same way. This keys on the
+  // ABSENCE of a `cached_input` price, NOT on `capabilities.caching` (no
+  // billing path reads that flag), so it covers every model the catalog leaves
+  // unpriced. The live case in the paid ledger is `grok-4.5`: xai, $2/M input,
+  // no `cached_input`, `caching: false`, in `tierAllowedModels.flagship_additions`
+  // (see routes/llm.ts FLAGSHIP_ALLOWED_MODELS), and its OpenAI-shaped stream
+  // fills cacheReadTokens from `prompt_tokens_details.cached_tokens`. Its cache
+  // reads bill at $2/M here, not the $0.20/M a flat 0.1x used to invent.
+  // `minimax-m3` is in the same state but is in no tier list, so it cannot
+  // reach this line in production.
+  const cacheReadRate = cachedInputRate ?? inputRate;
   // Catalog-declared write rates win. The fallback is provider-shaped: with
   // disjoint accounting the written tokens are billed ONLY here, so an
-  // undeclared rate falls back to Anthropic's published 1.25x (5m) / 2x (1h)
-  // surcharges. With subset accounting the written tokens were just removed
-  // from ordinaryInputTokens, so an undeclared rate falls back to the plain
-  // input rate -- billed once, no surcharge. That is the free-cache-write case
-  // every pre-GPT-5.6 OpenAI model is in; the GPT-5.6 family declares
-  // cached_write (1.25x uncached input) and is charged for it.
-  const cacheWrite5mRate = cachedWriteRate ?? (disjoint ? inputRate * 1.25 : inputRate);
-  const cacheWrite1hRate = cachedWrite1hRate ?? (disjoint ? inputRate * 2 : inputRate);
+  // undeclared rate falls back to Anthropic's published surcharges. With subset
+  // accounting the written tokens were just removed from ordinaryInputTokens,
+  // so an undeclared rate falls back to the plain input rate -- billed once, no
+  // surcharge. That is the free-cache-write case every pre-GPT-5.6 OpenAI model
+  // is in; the GPT-5.6 family declares cached_write (1.25x uncached input) and
+  // is charged for it.
+  const cacheWrite5mRate =
+    cachedWriteRate ??
+    (disjoint ? inputRate * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m : inputRate);
+  const cacheWrite1hRate =
+    cachedWrite1hRate ??
+    (disjoint ? inputRate * CACHE_WRITE_FALLBACK_MULTIPLIERS.write1h : inputRate);
 
   return dollarsToLedgerCents(
     (ordinaryInputTokens * inputRate +
