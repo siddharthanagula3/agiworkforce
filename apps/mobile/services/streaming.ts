@@ -27,6 +27,7 @@ import {
   parseToolApprovalRequestDelta,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
+  TOOL_APPROVAL_RESUME_PATH,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
@@ -229,9 +230,12 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
   return false;
 }
 
-/** Chat-completions endpoint paths this client posts to. */
+/**
+ * Initial-turn endpoint. The durable resume path is not retyped here: it is
+ * `TOOL_APPROVAL_RESUME_PATH` from the cloud contract, so a server-side move
+ * cannot leave Mobile posting approvals at a stale URL.
+ */
 const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
-const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
 
 /**
  * Authenticated, trust-boundary-aware Mobile client for the durable managed

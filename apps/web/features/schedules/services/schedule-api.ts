@@ -137,7 +137,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
   return {
     async listSchedules({ limit, offset, signal }) {
       const body = await request(
-        `/api/schedules?limit=${limit}&offset=${offset}`,
+        `${MANAGED_CLOUD_SCHEDULES_PATH}?limit=${limit}&offset=${offset}`,
         { credentials: 'include', signal },
         ManagedCloudScheduleListResponseSchema,
         'Schedules returned an invalid response.',
