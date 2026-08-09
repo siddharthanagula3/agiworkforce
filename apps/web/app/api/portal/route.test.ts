@@ -95,4 +95,44 @@ describe('POST /api/portal', () => {
       return_url: 'https://agiworkforce.com/pricing',
     });
   });
+
+  describe('email fallback (BIZ-015: no cross-customer portal sessions)', () => {
+    function unlinkedAccount() {
+      // 1st query: no subscription row. 2nd query: profile with no customer id.
+      mocks.query.mockResolvedValueOnce([]);
+      mocks.query.mockResolvedValueOnce([{ stripe_customer_id: null }]);
+    }
+
+    it('refuses a customer matched only by email, and links nothing', async () => {
+      unlinkedAccount();
+      mocks.listCustomers.mockResolvedValueOnce({
+        data: [{ id: 'cus_stranger', metadata: {} }],
+      });
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(403);
+      expect(mocks.createPortalSession).not.toHaveBeenCalled();
+      // The unproven customer must not be persisted onto the profile either.
+      expect(mocks.execute).not.toHaveBeenCalled();
+    });
+
+    it('picks the customer whose metadata names the caller, not the email twin', async () => {
+      unlinkedAccount();
+      mocks.listCustomers.mockResolvedValueOnce({
+        data: [
+          { id: 'cus_stranger', metadata: {} },
+          { id: 'cus_owned', metadata: { user_id: 'user-1' } },
+        ],
+      });
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(200);
+      expect(mocks.createPortalSession).toHaveBeenCalledWith({
+        customer: 'cus_owned',
+        return_url: 'https://agiworkforce.com/pricing',
+      });
+    });
+  });
 });

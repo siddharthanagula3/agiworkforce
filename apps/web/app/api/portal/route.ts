@@ -195,57 +195,43 @@ async function handlePortal(request: NextRequest) {
           throw createError.notFound('No subscription or customer found in Stripe');
         }
 
-        // SECURITY: Check if multiple customers exist with this email
         if (customers.data.length > 1) {
           logger.warn(
             { userId: userId, email: userEmail, count: customers.data.length },
             'SECURITY WARNING: Multiple Stripe customers found with same email',
           );
-
-          // Try to find the customer with an active subscription
-          const customersWithSubscriptions = await Promise.all(
-            customers.data.map(async (cust) => {
-              const subs = await stripe.subscriptions.list({
-                customer: cust.id,
-                limit: 1,
-                status: 'active',
-              });
-              return { customer: cust, hasActiveSub: subs.data.length > 0 };
-            }),
-          );
-
-          const activeCustomer = customersWithSubscriptions.find((c) => c.hasActiveSub);
-
-          if (!activeCustomer) {
-            throw createError.validation(
-              'Multiple customers found with this email - cannot determine which to use',
-            );
-          }
-
-          customerId = activeCustomer.customer.id;
-          logger.warn(
-            { userId: userId, customerId, email: userEmail },
-            'Selected customer with active subscription from multiple matches',
-          );
-        } else {
-          customerId = customers.data[0]?.id ?? null;
         }
 
-        // Verify customer ownership via metadata if available
-        if (customerId) {
-          const matchedCustomer = customers.data.find((c) => c.id === customerId);
-          const recordedUserId = matchedCustomer?.metadata?.['user_id'];
-          if (recordedUserId && recordedUserId !== userId) {
-            logger.error(
-              { userId: userId, customerId: matchedCustomer.id },
-              'Stripe customer belongs to different user - email fallback blocked',
-            );
-            return NextResponse.json(
-              { error: 'Customer account mismatch. Please contact support.' },
-              { status: 403 },
-            );
-          }
+        // BIZ-015: ownership must be PROVEN, not merely "not contradicted".
+        // A customer matched by email alone is not evidence of ownership -
+        // an account whose email previously belonged to someone else, or a
+        // legacy customer carrying no `user_id` metadata, would otherwise
+        // hand this caller a portal session over a stranger's billing
+        // record: their invoices, their card, their cancel button. The only
+        // acceptable match is a customer whose metadata names this user,
+        // which every customer created by `/api/checkout` carries. This
+        // mirrors the tightened check in `SubscriptionService.syncWithStripe`
+        // and deliberately refuses metadata-less legacy customers until an
+        // operator backfills `metadata.user_id`.
+        const ownedCustomer =
+          customers.data.find((customer) => customer.metadata?.['user_id'] === userId) ?? null;
+
+        if (!ownedCustomer) {
+          logger.error(
+            {
+              userId,
+              email: userEmail,
+              candidateCount: customers.data.length,
+            },
+            'IDOR blocked: Stripe customer email matched but ownership could not be verified',
+          );
+          return NextResponse.json(
+            { error: 'Customer account mismatch. Please contact support.' },
+            { status: 403 },
+          );
         }
+
+        customerId = ownedCustomer.id;
 
         // CRITICAL: Store customer_id for future lookups
         try {

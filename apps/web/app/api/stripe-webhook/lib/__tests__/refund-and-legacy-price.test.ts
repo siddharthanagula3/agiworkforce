@@ -142,6 +142,73 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     expect(calls.some((call) => call.sql.includes('handle_refund'))).toBe(true);
   });
 
+  // Stripe stopped shipping the per-refund `refunds` list on the Charge in
+  // webhook payloads at API version 2022-11-15 (this deployment pins
+  // 2026-04-22.dahlia), so `amount_refunded` — a running CUMULATIVE total — is
+  // the only amount the event carries. The delta has to come from our ledger.
+  function refundLedgerDb(alreadyRevokedCents: number) {
+    return makeDb((sql) => {
+      if (sql.includes('from profiles')) return [{ id: 'user_123' }];
+      // sum() comes back from Postgres as a string.
+      if (sql.includes('from credit_transactions'))
+        return [{ revoked_cents: String(alreadyRevokedCents) }];
+      return [];
+    });
+  }
+
+  function handleRefundAmounts(calls: Call[]): unknown[] {
+    return calls.filter((call) => call.sql.includes('handle_refund')).map((call) => call.params[1]);
+  }
+
+  it('revokes only the new money on a second partial refund', async () => {
+    // $3 already clawed back for this charge; the event says $6 cumulative.
+    const { db, calls } = refundLedgerDb(300);
+
+    await dispatchStripeEvent(
+      db,
+      {} as Stripe,
+      refundEvent({ amount: 1200, amount_refunded: 600, refunded: false }),
+    );
+
+    expect(handleRefundAmounts(calls)).toEqual([300]);
+  });
+
+  it('revokes nothing when a stale or replayed event repeats money already clawed back', async () => {
+    // Out-of-order delivery: the older event (300 cumulative) lands after the
+    // newer one (600) was already applied. A cumulative target makes it a no-op.
+    const { db, calls } = refundLedgerDb(600);
+
+    await dispatchStripeEvent(
+      db,
+      {} as Stripe,
+      refundEvent({ amount: 1200, amount_refunded: 300, refunded: false }),
+    );
+
+    expect(handleRefundAmounts(calls)).toEqual([]);
+  });
+
+  it('still revokes the full amount for the first refund on a charge', async () => {
+    const { db, calls } = refundLedgerDb(0);
+
+    await dispatchStripeEvent(
+      db,
+      {} as Stripe,
+      refundEvent({ amount: 1200, amount_refunded: 500, refunded: false }),
+    );
+
+    expect(handleRefundAmounts(calls)).toEqual([500]);
+  });
+
+  it('scopes the already-revoked lookup to this user and this charge', async () => {
+    const { db, calls } = refundLedgerDb(0);
+
+    await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
+
+    const lookup = calls.find((call) => call.sql.includes('from credit_transactions'));
+    expect(lookup).toBeDefined();
+    expect(lookup!.params).toEqual(['user_123', 'Refund for charge ch_123']);
+  });
+
   it('leaves the plan alone when the refunded charge bought credits, not a plan', async () => {
     const { db, calls } = makeDb((sql) =>
       sql.includes('from profiles') ? [{ id: 'user_123' }] : [],
