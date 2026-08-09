@@ -226,6 +226,32 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl('https://api.moonshot.cn/v1/chat/completions')).not.toThrow();
   });
 
+  it.each([
+    // Every one of these is the provider's own documented endpoint and the
+    // value its `*_BASE_URL` override carries. While the allowlist was a
+    // retyped copy they were all missing, so a plain send to any of them 403'd
+    // with "Provider endpoint not in approved egress allowlist".
+    ['xAI', 'https://api.x.ai/v1/chat/completions'],
+    ['DeepSeek', 'https://api.deepseek.com/v1/chat/completions'],
+    ['Perplexity', 'https://api.perplexity.ai/chat/completions'],
+    ['OpenRouter', 'https://openrouter.ai/api/v1/chat/completions'],
+    ['DashScope (Qwen)', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'],
+    ['Zhipu', 'https://open.bigmodel.cn/api/paas/v4/chat/completions'],
+    ['MiniMax', 'https://api.minimax.io/v1/text/chatcompletion_v2'],
+  ])('allows %s, which the canonical managed-provider list carries', (_label, url) => {
+    expect(() => validateEgressUrl(url)).not.toThrow();
+  });
+
+  it.each(['https://localhost/v1/messages', 'https://127.0.0.1/v1/messages'])(
+    'still rejects the canonical list local-dev carve-out: %s',
+    (url) => {
+      // `localhost` and `127.0.0.1` are on ALLOWED_MANAGED_PROVIDER_HOSTS for
+      // adapter base URLs, so deriving from it puts them on this allowlist too.
+      // The internal-host check runs first and must keep them unreachable.
+      expect(() => validateEgressUrl(url)).toThrow(EgressPolicyError);
+    },
+  );
+
   it('no longer allows MuleRouter, dropped as a gateway 2026-07-27', () => {
     // An allowlisted host for a service we no longer use is standing SSRF
     // surface, so removal is asserted rather than left to inspection.

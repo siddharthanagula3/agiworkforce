@@ -15,25 +15,46 @@
  * service-allowlist semantics.
  */
 
+import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
+
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-const ALLOWED_HOSTNAMES = [
-  'api.anthropic.com',
-  'api.openai.com',
-  'generativelanguage.googleapis.com',
-  // Moonshot (Kimi): both the mainland (`.cn`) and international (`.ai`) hosts.
-  // We now route to the international endpoint via `MOONSHOT_BASE_URL=https://api.moonshot.ai/v1`,
-  // and a `*_BASE_URL` override is validated here (request-processor.ts:validateEgressUrl)
-  // before the adapter is built — without `.ai` on the allowlist a plain Moonshot send 403s
-  // with "Provider endpoint not in approved egress allowlist". The moonshot adapter's own
-  // SSRF allowlist already permits both hosts (packages/ai/providers/moonshot/src/index.ts).
-  'api.moonshot.cn',
-  'api.moonshot.ai',
+/**
+ * Provider hosts on the canonical list that this app must still refuse.
+ * MuleRouter was dropped as a gateway on 2026-07-27 and its entry was removed
+ * from this file and the Qwen adapter, but `ALLOWED_MANAGED_PROVIDER_HOSTS`
+ * still carries it — deriving from that set without subtracting it here would
+ * silently re-open a third party we have no relationship with.
+ */
+const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
+
+/**
+ * Non-provider services this app calls directly. Kept apart from the provider
+ * hosts so that half stays a pure view of the canonical list.
+ */
+const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
   'api.stripe.com',
   'api.upstash.io',
   // Neon: wildcard for project-specific subdomains
-] as const;
+];
+
+/**
+ * Provider hosts come from `ALLOWED_MANAGED_PROVIDER_HOSTS` rather than a
+ * retyped copy: this list gates every `*_BASE_URL` override at
+ * request-processor.ts, so a provider missing here 403s a plain send with
+ * "Provider endpoint not in approved egress allowlist" even when the override
+ * names the provider's own documented endpoint. The retyped copy had drifted
+ * five providers short (xAI, DeepSeek, Perplexity, OpenRouter, DashScope).
+ *
+ * The canonical list's `localhost` / `127.0.0.1` local-dev carve-out rides
+ * along, but `validateEgressUrl` runs `isInternalHostname` before consulting
+ * the allowlist, so neither is ever reachable through this module.
+ */
+const ALLOWED_HOSTNAMES: ReadonlySet<string> = new Set([
+  ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !RETIRED_PROVIDER_HOSTS.has(host)),
+  ...ALLOWED_SERVICE_HOSTNAMES,
+]);
 
 // Hostname strings that always identify the local machine.
 const LOCALHOST_NAMES = new Set(['localhost', 'localhost.localdomain']);
@@ -190,8 +211,7 @@ export function validateEgressUrl(urlString: string): void {
     throw new EgressPolicyError(urlString);
   }
 
-  const hostname = url.hostname;
-  if (ALLOWED_HOSTNAMES.includes(hostname as (typeof ALLOWED_HOSTNAMES)[number])) return;
+  if (ALLOWED_HOSTNAMES.has(url.hostname)) return;
 
   throw new EgressPolicyError(urlString);
 }

@@ -283,7 +283,6 @@
         "paths": [
           "apps/web/features/billing/components/Billing/Subscription.tsx",
           "apps/web/features/billing/components/Billing/Usage.tsx",
-          "apps/web/features/billing/components/Billing/types.ts",
           "apps/web/features/billing/hooks/index.ts",
           "apps/web/features/billing/pages/BillingDashboard.tsx",
           "apps/web/features/chat/components/ActionTrail.tsx",
@@ -428,7 +427,6 @@
           "apps/web/shared/lib/design-tokens.ts",
           "apps/web/shared/lib/empty-module.ts",
           "apps/web/shared/lib/error-utils.ts",
-          "apps/web/shared/lib/security.ts",
           "apps/web/shared/lib/stripe.ts",
           "apps/web/shared/stores/index.ts",
           "apps/web/shared/stores/unified-chat-types.ts",

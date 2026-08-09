@@ -3042,7 +3042,7 @@ export default function WebChatPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setMobileNavOpen(true)}
-                  aria-label="Open navigation"
+                  aria-label={t('chat:openNavigation')}
                   className="-ml-1 h-8 w-8 p-0"
                 >
                   <Menu className="h-5 w-5" aria-hidden="true" />
@@ -3055,10 +3055,10 @@ export default function WebChatPage() {
                   onClick={() => void share()}
                   disabled={isSharing}
                   className="gap-1.5"
-                  aria-label="Share conversation"
+                  aria-label={t('chat:shareConversation')}
                 >
                   <Share2 className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden text-xs sm:inline">Share</span>
+                  <span className="hidden text-xs sm:inline">{t('common:share')}</span>
                 </Button>
               )}
             </div>
