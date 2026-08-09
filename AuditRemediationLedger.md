@@ -3024,9 +3024,14 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 - [ ] **REL-007 — Cross-surface continuity:** test same account/workspace/conversation, explicit mode boundaries, conflict recovery, logout purge, and version skew.
 
+      > **Triage 2026-08-09 — OPEN_DEFECT — zero tests cover version skew or logout purge across surfaces. Logout purge itself was FIXED this session (commit 46e81e69f: credentials and the query cache are cleared on web and desktop), so the behaviour exists and only the cross-surface test does not. That is the cheapest item in this block and the one that would catch a regression in work already landed.**
+
 ## 8B. Enterprise control plane
 
 - [ ] **ENT-001 — Complete identity:** SSO/OIDC/SAML, SCIM, domain verification/capture, JIT, group mapping, deprovisioning, and recovery.
+
+      > **Triage 2026-08-09 — OPEN_DEFECT — 7 modules reference JIT provisioning or deprovisioning, and the SSO/SCIM schema exists (3 SSO migrations, 1 SCIM, per the ENT-004 triage). So this is further along than "absent": the identity surface is built and its lifecycle edges are not proven. The task's own list — group mapping, deprovisioning, recovery — is where the remaining work is, and CRIT-010..013 carry the detail.**
+
 - [ ] **ENT-002 — Complete authorization:** custom roles or clearly bounded fixed roles, groups, policy inheritance, delegated admin, service accounts, and break-glass.
 
       > **Triage 2026-08-09 — OPEN_FEATURE — zero role literals in the contracts package, because the four roles are fixed in SQL and TypeScript rather than modelled as data. Custom roles, groups, policy inheritance, delegated admin, service accounts and break-glass are all absent. The ledger's own framing applies: either build extensible RBAC/ABAC or explicitly limit the product to four fixed roles and say so.**
@@ -3053,12 +3058,25 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 - [ ] **ENT-008 — Procurement evidence:** security architecture, threat model, pen test/audit status, subprocessor list, incident process, backup/DR proof, and honest certification status.
 
+      > **Triage 2026-08-09 — OPEN_FEATURE — docs/security/ holds one document (key-rotation.md). Procurement evidence means a security architecture, threat model, pen-test status, subprocessor list, incident process, backup/DR proof and an HONEST certification status. The last item is the one that matters most and is free: DOC-024 already covers not claiming certifications the product does not hold. The rest is a documentation programme, not a code change.**
+
 ## 8C. Release evidence
 
 - [ ] **REL-008 — Test from clean machines/accounts.** No founder machine state, cached credentials, unpublished package, or local DB may be required.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — zero references to a clean-machine or fresh-install test in any workflow. Every current signal comes from a runner that has already built the project, so "works from a clean checkout" is asserted and never demonstrated. Needs a runner that installs the published artifact rather than the repo.**
+
 - [ ] **REL-009 — Test upgrades from the previous public version.** Include schema/config/model-cache migration and rollback.
+
+      > **Triage 2026-08-09 — OPEN_FEATURE — release-desktop.yml has no upgrade-from-previous-version path. Schema, config and model-cache migration on upgrade, and rollback, are therefore untested. This is the item most likely to bite real users, because it only fires for people who already have the product installed — the ones an install test never covers.**
+
 - [ ] **REL-010 — Produce a support bundle.** Redacted logs, version, runtime/provider status, correlation IDs, and diagnostics without conversation content by default.
+
+      > **Triage 2026-08-09 — PARTIALLY SATISFIED — 32 desktop modules reference diagnostics or a support bundle, so the machinery exists. What is unverified is the redaction requirement: the task asks for a bundle carrying version, runtime/provider status and correlation IDs WITHOUT conversation content by default, and nothing here proves the default excludes it. Worth a single test that asserts a generated bundle contains no message text.**
+
 - [ ] **REL-011 — Verify public URLs/listings through automated probes.** Store and marketplace existence must be measured, not inferred.
+
+      > **Triage 2026-08-09 — SATISFIED in mechanism — scripts/verify-deployment.mjs exists, self-tests in CI (8 passing) and probes the real serving path after promotion, landed this session in ef23cca2c. It covers the WEB surface only. Store and marketplace listings are still inferred rather than measured, which is the half of REL-011 that DOC-003's false store-availability claims came from.**
 
 ---
 
