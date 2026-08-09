@@ -11,7 +11,7 @@ export default async function LoginPage({
   searchParams: Promise<{ redirectTo?: string; next?: string; surface?: string }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
+  const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/');
   const isDesktopSurface = params.surface === 'desktop';
   const signUpUrl = isDesktopSurface
     ? `/signup?surface=desktop&redirectTo=${encodeURIComponent(redirectTo)}`

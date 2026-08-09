@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
+import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string } },
@@ -52,6 +53,27 @@ vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
 
 import PricingPage from './page';
 
+/**
+ * Team and Enterprise moved behind an audience tab on 2026-08-08 so the page
+ * shows four cards at a time instead of nine. The panel keeps `hidden` while
+ * inactive, which drops it out of the accessibility tree — text queries still
+ * match, but every `getByRole` for a Team control needs the tab activated
+ * first. This is that click.
+ */
+async function showTeamAndEnterprise() {
+  fireEvent.click(await screen.findByRole('button', { name: 'audienceBusiness' }));
+}
+
+/**
+ * Max 5x and Max 15x share one card behind a capacity selector, so only the
+ * selected variant's price and CTA are mounted at a time. Anything asserting on
+ * the 15x price ($200) or its CTA has to pick the variant first.
+ */
+async function showMax15x() {
+  const selector = await screen.findByRole('group', { name: 'maxVariantLabel' });
+  fireEvent.click(within(selector).getByRole('button', { name: 'Max 15x' }));
+}
+
 describe('PricingPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -69,7 +91,10 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('Max 15x').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Team').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$7').length).toBeGreaterThan(0);
+    // Max 5x and Max 15x share a card, so only the selected capacity's price is
+    // mounted: assert $100, switch, then assert $200.
     expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
+    await showMax15x();
     expect(screen.getAllByText('$200').length).toBeGreaterThan(0);
     expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
     // Team is a real per-seat plan: its $25/seat unit price renders in the Team
@@ -80,7 +105,10 @@ describe('PricingPage', () => {
   it('offers Team as a real per-seat checkout instead of a sales hand-off', async () => {
     render(<PricingPage />);
 
-    // The contact-sales dead end is gone for Team; Enterprise keeps it.
+    // The contact-sales dead end is gone for Team; Enterprise keeps it. Both
+    // cards live on the Team & Enterprise tab, so activate it before looking.
+    await showTeamAndEnterprise();
+
     const salesLinks = await screen.findAllByRole('link', { name: /Cta$/ });
     expect(
       salesLinks.some((link) => link.getAttribute('href') === '/contact-sales?plan=team'),
@@ -117,6 +145,7 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
+    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '14' } });
 
@@ -151,6 +180,7 @@ describe('PricingPage', () => {
 
     // The Team card exposes its own monthly/yearly cadence, separate from the
     // individual-plan annual toggle.
+    await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     fireEvent.click(within(teamCadence).getByRole('button', { name: /annual/i }));
 
@@ -160,7 +190,7 @@ describe('PricingPage', () => {
 
     await waitFor(() =>
       expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({
-        seats: 1,
+        seats: MIN_PURCHASABLE_SEATS,
         billingPeriod: 'yearly',
       }),
     );
@@ -194,6 +224,7 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
+    await showTeamAndEnterprise();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument(),
     );
@@ -203,12 +234,17 @@ describe('PricingPage', () => {
   it('clamps a seat count below the minimum instead of sending it to checkout', async () => {
     render(<PricingPage />);
 
+    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    // The floor is 2 since 2026-08-08; a one-person Team belongs on Pro.
     fireEvent.change(seatInput, { target: { value: '0' } });
-    expect(seatInput).toHaveValue(1);
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
 
     fireEvent.change(seatInput, { target: { value: '-5' } });
-    expect(seatInput).toHaveValue(1);
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
+
+    fireEvent.change(seatInput, { target: { value: '1' } });
+    expect(seatInput).toHaveValue(MIN_PURCHASABLE_SEATS);
   });
 
   it('shows the enforceable project, MCP, media, and developer-surface plan differences', async () => {
@@ -288,7 +324,10 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getAllByText('₹399').length).toBeGreaterThan(0));
     expect(screen.getAllByText('₹1,999').length).toBeGreaterThan(0);
+    // One Max capacity is mounted at a time, so the 15x rupee price is only
+    // assertable after switching the selector.
     expect(screen.getAllByText('₹9,999').length).toBeGreaterThan(0);
+    await showMax15x();
     expect(screen.getAllByText('₹24,999').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
   });
@@ -323,7 +362,7 @@ describe('PricingPage', () => {
     expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();
   });
 
-  it('prevents active subscribers from purchasing their current or a lower plan', () => {
+  it('prevents active subscribers from purchasing their current or a lower plan', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
 
@@ -336,25 +375,32 @@ describe('PricingPage', () => {
     );
     expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
     expect(screen.getByRole('button', { name: 'maxCta' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Get Max 15x' })).toBeEnabled();
+    await showMax15x();
+    expect(screen.getByRole('button', { name: 'max15xCta' })).toBeEnabled();
     // Team is a different product, not a rung on the individual ladder: a Pro
     // subscriber can still buy it (as a seat-carrying org plan).
+    await showTeamAndEnterprise();
     expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
   });
 
-  it('routes a Team subscriber to seat changes, not to an individual upgrade', () => {
+  it('routes a Team subscriber to seat changes, not to an individual upgrade', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'team', status: 'active' };
 
     render(<PricingPage />);
 
+    // Individual plans must NOT read as upgrades from an org plan — converting a
+    // Team subscription into a personal one would strand the other seats. These
+    // assertions belong on the individual tab, which is the default.
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: 'Manage billing' }).length).toBeGreaterThan(0),
+    );
+    expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
+
     // Not "Current plan": a growing org's actionable change is more seats.
+    await showTeamAndEnterprise();
     expect(screen.getByRole('button', { name: 'changeSeatsCta' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'teamCta' })).toBeNull();
-    // Individual plans must NOT read as upgrades from an org plan — converting a
-    // Team subscription into a personal one would strand the other seats.
-    expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
-    expect(screen.getAllByRole('link', { name: 'Manage billing' }).length).toBeGreaterThan(0);
   });
 
   it('keeps paid checkout disabled until trusted localized prices are ready', () => {

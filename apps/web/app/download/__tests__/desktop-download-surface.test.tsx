@@ -91,7 +91,7 @@ describe('public Desktop download surfaces', () => {
     expect(status).toHaveTextContent('No signed Linux installer is available right now.');
     expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
-      '/login?redirectTo=%2Fchat',
+      '/login?redirectTo=%2F',
     );
     expect(within(status).getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
       'href',
@@ -152,7 +152,7 @@ describe('public Desktop download surfaces', () => {
     expect(reset).toHaveBeenCalledOnce();
     expect(screen.getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
-      '/login?redirectTo=%2Fchat',
+      '/login?redirectTo=%2F',
     );
     expect(screen.getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
       'href',

@@ -106,7 +106,12 @@ async function handleGetBalance(request: NextRequest) {
           : (subscription.current_period_end ?? null),
     },
     credits: {
-      usage_percentage: freeUsage?.usagePercentage ?? toPublicUsagePercentage(used, allocated),
+      // Free's allowance is an internal cost control, not a published quantity
+      // (2026-08-08). It still meters and still refuses when exhausted; it just
+      // does not disclose how much is left. Withheld here rather than in the UI
+      // because this response is readable in devtools.
+      usage_percentage: isFreePlan ? null : toPublicUsagePercentage(used, allocated),
+      usage_visible: !isFreePlan,
       reset_at: resetAt,
       seconds_until_reset: freeUsage ? secondsUntilReset : secondsUntilMonthlyReset,
       has_usage_remaining: freeUsage?.hasUsageRemaining ?? (allocated > 0 && remaining > 0),

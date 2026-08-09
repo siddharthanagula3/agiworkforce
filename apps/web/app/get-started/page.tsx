@@ -29,8 +29,8 @@ export default function GetStartedPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">In the browser. Nothing to install.</h3>
               <p className="agi-reason-p">
-                <Link href="/login?redirectTo=%2Fchat">Try AGI Web</Link> for hosted chat, projects,
-                and artifacts today.
+                <Link href="/login?redirectTo=%2F">Try AGI Web</Link> for hosted chat, projects, and
+                artifacts today.
               </p>
             </li>
             <li className="agi-reason">
