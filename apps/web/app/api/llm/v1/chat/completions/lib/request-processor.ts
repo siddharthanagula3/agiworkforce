@@ -1416,189 +1416,276 @@ export async function processRequest(
     };
   }
 
-  let userScopedDb: Awaited<ReturnType<typeof getUserScopedDb>> | undefined;
-  let conversationIsTemporary = false;
+  // TTFT: everything below the validation gates used to be one strict chain of
+  // round trips — scoped-db handshake, ownership lookup, safety preference,
+  // attachment hydration, memory policy, credit balance — each paying its full
+  // latency before the provider saw the turn. The legs that do not read each
+  // other's result are started together here and consumed in the original
+  // order, so every early response keeps the precedence it had.
+  const scopedDbPromise = getUserScopedDb(request);
+  // Every leg awaits this and maps a rejection to the response it always
+  // returned; the sink only stops Node reporting the rejection as unhandled in
+  // the window before the first leg gets there.
+  scopedDbPromise.catch(() => {});
 
-  if (chatRequest.conversation_id) {
-    try {
-      userScopedDb = await getUserScopedDb(request);
-      if (userScopedDb.userId !== userId) {
-        return {
-          ok: false,
-          response: NextResponse.json(
-            {
-              error: {
-                message: 'Conversation not found',
-                type: 'invalid_request_error',
-                code: 'conversation_not_found',
-              },
-            },
-            { status: 404 },
-          ),
-        };
-      }
+  const requestedModel = chatRequest.model;
+  const freeTrialEnabled = isFreeTrialRequest({
+    requestedModel,
+    planTier: subscription.plan_tier,
+  });
 
-      const ownedRows = await userScopedDb.db.query<{
-        id: string;
-        project_id: string | null;
-        is_temporary: boolean;
-      }>(
-        `select id, project_id, is_temporary
-           from web_conversations
-          where id = $1 and user_id = $2 and deleted_at is null
-          limit 1`,
-        [chatRequest.conversation_id, userId],
-      );
-      if (!ownedRows[0]) {
-        return {
-          ok: false,
-          response: NextResponse.json(
-            {
-              error: {
-                message: 'Conversation not found',
-                type: 'invalid_request_error',
-                code: 'conversation_not_found',
-              },
-            },
-            { status: 404 },
-          ),
-        };
-      }
+  // Usage-aware routing and the credit gate further down read the same balance
+  // row and nothing in this request mutates the ledger between them, so it is
+  // read once, alongside the preflight, instead of twice after it. Free plans
+  // never touch the cents ledger, so they start nothing.
+  let creditBalancePromise: ReturnType<typeof CreditService.getBalance> | null =
+    freeTrialEnabled || isFreePlanTier(subscription.plan_tier)
+      ? null
+      : CreditService.getBalance(userId);
+  creditBalancePromise?.catch(() => {});
 
-      conversationIsTemporary = ownedRows[0].is_temporary;
+  // The standing "Instructions for AGI" are a settings read no other preflight
+  // leg depends on. Started here it is already resolved at the injection site
+  // below, where it used to be the last round trip in front of the provider
+  // call. Read failures drop the block (the documented degradation) rather
+  // than failing an otherwise valid turn.
+  const chatSurface = resolveCloudChatSurface(request);
+  const customInstructionsPromise =
+    chatSurface === 'api'
+      ? null
+      : buildCustomInstructionsPreamble(userId).catch((error: unknown) => {
+          logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+          return null;
+        });
 
-      // Project-scoped conversation ("AGI Work"): load the owned project's
-      // instructions + knowledge-file manifest and merge them into the system
-      // context. Without this, a persisted project_id scopes nothing and the
-      // composer's project picker would be cosmetic. This fails closed: a
-      // project-scoped turn must never silently run without its requested
-      // instructions, sources, and relevant conversation history.
-      if (ownedRows[0].project_id) {
-        try {
-          const projectContext = await loadProjectContext(userScopedDb.db, {
-            projectId: ownedRows[0].project_id,
-            userId,
-            currentConversationId: ownedRows[0].id,
-            currentUserQuery: extractTextContent(
-              [...chatRequest.messages].reverse().find((message) => message.role === 'user')
-                ?.content ?? '',
-            ),
-          });
-          if (!projectContext) {
+  // Read before hydration rewrites the parts, and shared by the ownership and
+  // safety legs so both keep seeing the caller's own words.
+  const latestUserPrompt = extractTextContent(
+    [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
+  );
+
+  const ownershipLeg: Promise<{ ok: true; isTemporary: boolean } | ProcessFailure> =
+    chatRequest.conversation_id
+      ? (async () => {
+          try {
+            const scoped = await scopedDbPromise;
+            if (scoped.userId !== userId) {
+              return {
+                ok: false,
+                response: NextResponse.json(
+                  {
+                    error: {
+                      message: 'Conversation not found',
+                      type: 'invalid_request_error',
+                      code: 'conversation_not_found',
+                    },
+                  },
+                  { status: 404 },
+                ),
+              };
+            }
+
+            const ownedRows = await scoped.db.query<{
+              id: string;
+              project_id: string | null;
+              is_temporary: boolean;
+            }>(
+              `select id, project_id, is_temporary
+                 from web_conversations
+                where id = $1 and user_id = $2 and deleted_at is null
+                limit 1`,
+              [chatRequest.conversation_id, userId],
+            );
+            if (!ownedRows[0]) {
+              return {
+                ok: false,
+                response: NextResponse.json(
+                  {
+                    error: {
+                      message: 'Conversation not found',
+                      type: 'invalid_request_error',
+                      code: 'conversation_not_found',
+                    },
+                  },
+                  { status: 404 },
+                ),
+              };
+            }
+
+            // Project-scoped conversation ("AGI Work"): load the owned project's
+            // instructions + knowledge-file manifest and merge them into the system
+            // context. Without this, a persisted project_id scopes nothing and the
+            // composer's project picker would be cosmetic. This fails closed: a
+            // project-scoped turn must never silently run without its requested
+            // instructions, sources, and relevant conversation history.
+            if (ownedRows[0].project_id) {
+              try {
+                const projectContext = await loadProjectContext(scoped.db, {
+                  projectId: ownedRows[0].project_id,
+                  userId,
+                  currentConversationId: ownedRows[0].id,
+                  currentUserQuery: latestUserPrompt,
+                });
+                if (!projectContext) {
+                  return {
+                    ok: false,
+                    response: NextResponse.json(
+                      {
+                        error: {
+                          message:
+                            'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
+                          type: 'invalid_request_error',
+                          code: 'project_context_unavailable',
+                        },
+                      },
+                      { status: 409 },
+                    ),
+                  };
+                }
+                const projectPrompt = formatProjectSystemPrompt(projectContext);
+                if (projectPrompt) {
+                  applyProjectContext(chatRequest, projectPrompt);
+                }
+              } catch (error) {
+                logger.error(
+                  {
+                    error,
+                    userId,
+                    conversationId: chatRequest.conversation_id,
+                    projectId: ownedRows[0].project_id,
+                  },
+                  'Project context load failed',
+                );
+                return {
+                  ok: false,
+                  response: NextResponse.json(
+                    {
+                      error: {
+                        message:
+                          'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+                        type: 'server_error',
+                        code: 'project_context_load_failed',
+                      },
+                    },
+                    { status: 503 },
+                  ),
+                };
+              }
+            }
+
+            return { ok: true, isTemporary: ownedRows[0].is_temporary };
+          } catch (error) {
+            logger.error(
+              { error, userId, conversationId: chatRequest.conversation_id },
+              'Managed conversation ownership lookup failed',
+            );
             return {
               ok: false,
               response: NextResponse.json(
                 {
                   error: {
-                    message:
-                      'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
-                    type: 'invalid_request_error',
-                    code: 'project_context_unavailable',
+                    message: 'Conversation ownership could not be verified',
+                    type: 'server_error',
+                    code: 'conversation_lookup_unavailable',
                   },
                 },
-                { status: 409 },
+                { status: 503 },
               ),
             };
           }
-          const projectPrompt = formatProjectSystemPrompt(projectContext);
-          if (projectPrompt) {
-            applyProjectContext(chatRequest, projectPrompt);
-          }
-        } catch (error) {
-          logger.error(
-            {
-              error,
-              userId,
-              conversationId: chatRequest.conversation_id,
-              projectId: ownedRows[0].project_id,
-            },
-            'Project context load failed',
-          );
-          return {
-            ok: false,
-            response: NextResponse.json(
-              {
-                error: {
-                  message:
-                    'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
-                  type: 'server_error',
-                  code: 'project_context_load_failed',
-                },
-              },
-              { status: 503 },
-            ),
-          };
-        }
+        })()
+      : Promise.resolve({ ok: true, isTemporary: false });
+
+  const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
+    try {
+      const scoped = await scopedDbPromise;
+      if (scoped.userId !== userId) {
+        throw new ManagedContentSafetyPolicyError('Managed content safety owner mismatch');
       }
+      const contentSafety = await enforceManagedContentSafetyPreference(scoped.db, {
+        userId,
+        prompt: latestUserPrompt,
+      });
+      if (!contentSafety.allowed) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: {
+                message: contentSafety.refusal,
+                type: 'invalid_request_error',
+                code: 'reduce_sensitive_content',
+              },
+            },
+            { status: 422 },
+          ),
+        };
+      }
+      return { ok: true };
     } catch (error) {
-      logger.error(
-        { error, userId, conversationId: chatRequest.conversation_id },
-        'Managed conversation ownership lookup failed',
-      );
+      logger.error({ error, userId }, 'Managed content safety preference could not be enforced');
       return {
         ok: false,
         response: NextResponse.json(
           {
             error: {
-              message: 'Conversation ownership could not be verified',
+              message:
+                'Your content safety preference could not be verified. No model request was sent.',
               type: 'server_error',
-              code: 'conversation_lookup_unavailable',
+              code: 'content_safety_preference_unavailable',
             },
           },
           { status: 503 },
         ),
       };
     }
-  }
+  })();
 
-  try {
-    userScopedDb ??= await getUserScopedDb(request);
-    if (userScopedDb.userId !== userId) {
-      throw new ManagedContentSafetyPolicyError('Managed content safety owner mismatch');
-    }
-    const latestUserPrompt = extractTextContent(
-      [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
-    );
-    const contentSafety = await enforceManagedContentSafetyPreference(userScopedDb.db, {
-      userId,
-      prompt: latestUserPrompt,
-    });
-    if (!contentSafety.allowed) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: {
-              message: contentSafety.refusal,
-              type: 'invalid_request_error',
-              code: 'reduce_sensitive_content',
-            },
-          },
-          { status: 422 },
-        ),
-      };
-    }
-  } catch (error) {
-    logger.error({ error, userId }, 'Managed content safety preference could not be enforced');
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message:
-              'Your content safety preference could not be verified. No model request was sent.',
-            type: 'server_error',
-            code: 'content_safety_preference_unavailable',
-          },
-        },
-        { status: 503 },
-      ),
-    };
-  }
+  const [ownership, safety] = await Promise.all([ownershipLeg, safetyLeg]);
+  if (!ownership.ok) return ownership;
+  if (!safety.ok) return safety;
 
-  try {
-    await hydrateChatAttachments(chatRequest.messages, userId);
-  } catch (error) {
+  const conversationIsTemporary = ownership.isTemporary;
+
+  // Managed account memory is server-owned context shared by every Cloud
+  // client. Temporary Chats deliberately opt out. Loading is best-effort so a
+  // memory-store outage cannot take down an otherwise valid chat turn, while
+  // owner mismatch always fails closed by skipping enrichment.
+  //
+  // The policy row and the attachment bytes come from different stores and
+  // neither reads the other, so they are fetched together. Enrichment still
+  // runs after hydration resolves: both rewrite the thread in place, so they
+  // must never interleave.
+  const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
+    ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
+    : (async () => {
+        const scoped = await scopedDbPromise;
+        if (scoped.userId !== userId) {
+          logger.error(
+            { userId, scopedUserId: scoped.userId },
+            'Managed memory owner mismatch; continuing without account memory',
+          );
+          return DISABLED_MANAGED_MEMORY_POLICY;
+        }
+        return loadManagedMemoryPolicy(scoped.db, { userId });
+      })().catch((error: unknown) => {
+        logger.error(
+          { error, userId, conversationId: chatRequest.conversation_id },
+          'Managed memory load failed; continuing without account memory',
+        );
+        return DISABLED_MANAGED_MEMORY_POLICY;
+      });
+
+  const [hydrationFailure, managedMemoryPolicy] = await Promise.all([
+    hydrateChatAttachments(chatRequest.messages, userId).then(
+      () => null,
+      (error: unknown) => ({ error }),
+    ),
+    memoryPolicyLeg,
+  ]);
+
+  if (hydrationFailure) {
+    const { error } = hydrationFailure;
     if (error instanceof ChatAttachmentHydrationError) {
       return {
         ok: false,
@@ -1630,32 +1717,15 @@ export async function processRequest(
     };
   }
 
-  // Managed account memory is server-owned context shared by every Cloud
-  // client. Temporary Chats deliberately opt out. Loading is best-effort so a
-  // memory-store outage cannot take down an otherwise valid chat turn, while
-  // owner mismatch always fails closed by skipping enrichment.
-  let managedMemoryPolicy = DISABLED_MANAGED_MEMORY_POLICY;
-  if (!conversationIsTemporary) {
+  if (managedMemoryPolicy.enabled) {
     try {
-      userScopedDb ??= await getUserScopedDb(request);
-      if (userScopedDb.userId !== userId) {
-        logger.error(
-          { userId, scopedUserId: userScopedDb.userId },
-          'Managed memory owner mismatch; continuing without account memory',
-        );
-      } else {
-        managedMemoryPolicy = await loadManagedMemoryPolicy(userScopedDb.db, {
-          userId,
-        });
-        if (managedMemoryPolicy.enabled) {
-          await enrichManagedMemoryContext({
-            db: userScopedDb.db,
-            userId,
-            chatRequest,
-            isTemporary: false,
-          });
-        }
-      }
+      const scoped = await scopedDbPromise;
+      await enrichManagedMemoryContext({
+        db: scoped.db,
+        userId,
+        chatRequest,
+        isTemporary: false,
+      });
     } catch (error) {
       logger.error(
         { error, userId, conversationId: chatRequest.conversation_id },
@@ -1663,12 +1733,6 @@ export async function processRequest(
       );
     }
   }
-
-  const requestedModel = chatRequest.model;
-  const freeTrialEnabled = isFreeTrialRequest({
-    requestedModel,
-    planTier: subscription.plan_tier,
-  });
 
   if (isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled) {
     return {
@@ -1807,7 +1871,7 @@ export async function processRequest(
   let autoMemoryFacts = prepareManagedAutoMemoryFacts({
     message: lastUserText,
     isTemporary: conversationIsTemporary,
-    surface: resolveCloudChatSurface(request),
+    surface: chatSurface,
     policy: managedMemoryPolicy,
   });
 
@@ -1887,11 +1951,14 @@ export async function processRequest(
   let routeBudgetRemainingCents: number | undefined;
   if (!freeTrialEnabled) {
     try {
-      const budgetBalance = await CreditService.getBalance(userId);
+      const budgetBalance = await (creditBalancePromise ?? CreditService.getBalance(userId));
       if ((budgetBalance?.credits_allocated_cents ?? 0) > 0) {
         routeBudgetRemainingCents = budgetBalance?.credits_remaining_cents;
       }
     } catch (error) {
+      // Drop the shared read so the credit gate below still gets a fresh
+      // attempt; only routing is fail-open on a balance error.
+      creditBalancePromise = null;
       logger.warn(
         { error, userId, requestId },
         'Usage-aware routing: balance read failed; routing without the affordability bias',
@@ -2405,7 +2472,7 @@ export async function processRequest(
     estimatedCostCents = 0;
   } else {
     // Credit allocation + availability check
-    let existingBalance = await CreditService.getBalance(userId);
+    let existingBalance = await (creditBalancePromise ?? CreditService.getBalance(userId));
 
     logger.debug(
       {
@@ -2513,7 +2580,7 @@ export async function processRequest(
     // The request claim and financial reserve are one RLS-bound database
     // transition. A concurrent/replayed key never reaches the provider twice.
     try {
-      const scoped = userScopedDb ?? (await getUserScopedDb(request));
+      const scoped = await scopedDbPromise;
       if (scoped.userId !== userId) {
         throw new ManagedUsageRequestError(
           'Managed usage tenant mismatch.',
@@ -2671,7 +2738,7 @@ export async function processRequest(
   // Skipped for surface 'api': that is the public OpenAI-compatible endpoint,
   // where a third-party integrator owns their own prompt and would not expect
   // us to prepend one.
-  if (resolveCloudChatSurface(request) !== 'api') {
+  if (chatSurface !== 'api') {
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       timeZone: chatRequest.client_timezone,
@@ -2686,11 +2753,11 @@ export async function processRequest(
     // so the model sees identity/date/tools first and the user's preferences
     // as a trailing block of the same system turn — and so a user who has
     // written no instructions produces byte-identical output to before.
-    // `buildCustomInstructionsPreamble` degrades to null on any read failure,
-    // so a settings outage drops the block instead of failing the turn.
-    // Skipped for surface 'api' along with the rest of the preamble: a
-    // third-party integrator owns their own prompt.
-    const customInstructionsPreamble = await buildCustomInstructionsPreamble(userId);
+    // The read degrades to null on failure, so a settings outage drops the
+    // block instead of failing the turn. Skipped for surface 'api' along with
+    // the rest of the preamble: a third-party integrator owns their own
+    // prompt — which is why the read is never started for that surface.
+    const customInstructionsPreamble = await customInstructionsPromise;
     const preamble = [capabilityPreamble, customInstructionsPreamble]
       .filter((block): block is string => Boolean(block))
       .join('\n\n');

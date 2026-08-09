@@ -253,47 +253,53 @@ async function handleGet(request: NextRequest) {
     [...fileParams, limit],
   );
 
-  // Get user's session IDs for message search
-  let sessionIdQuery = 'select id from web_conversations where user_id = $1';
-  const sidParams: unknown[] = [userId];
-  if (!includeArchived) sessionIdQuery += ' and deleted_at is null';
-  const sessionIdRows = await db.query<{ id: string }>(sessionIdQuery, sidParams);
-  const sessionIds = sessionIdRows.map((r) => r.id);
-
-  let messageRows: MessageRow[] = [];
-  if (sessionIds.length > 0) {
-    const msgParams: unknown[] = [sessionIds, `%${q}%`];
-    const msgClauses: string[] = ['conversation_id = any($1::uuid[])', 'content ilike $2'];
-    if (role) {
-      msgClauses.push(`role = $${msgParams.length + 1}`);
-      msgParams.push(role);
-    }
-    if (startDate) {
-      msgClauses.push(`created_at >= $${msgParams.length + 1}`);
-      msgParams.push(startDate);
-    }
-    if (endDate) {
-      msgClauses.push(`created_at <= $${msgParams.length + 1}`);
-      msgParams.push(endDate);
-    }
-
-    messageRows = await db.query<MessageRow>(
-      `select
-         m.id,
-         m.conversation_id,
-         m.role,
-         m.content,
-         m.created_at,
-         m.updated_at,
-         c.title as session_title
-       from web_messages m
-       join web_conversations c on c.id = m.conversation_id
-       where ${msgClauses.join(' and ')}
-       order by m.created_at desc
-       limit 100`,
-      msgParams,
-    );
+  // Message search. Ownership comes from the conversation join (web_messages
+  // has no user_id), so the owner filter belongs on the joined table. This used
+  // to select the caller's conversation ids in a separate unbounded query and
+  // bind them all back as a uuid[] — ~180 KB of parameters at 5,000
+  // conversations, for a restriction the join already applies.
+  const msgParams: unknown[] = [userId, `%${q}%`];
+  // Every clause is table-qualified: web_messages and web_conversations both
+  // have created_at, so an unqualified date filter is an ambiguous reference
+  // and Postgres rejects the whole query.
+  const msgClauses: string[] = ['c.user_id = $1', 'm.content ilike $2'];
+  // Both tombstones are honoured, on the same includeArchived switch as the
+  // session and project queries above: /api/chat/sync soft-deletes a message by
+  // setting m.deleted_at while preserving its content, so filtering only on the
+  // conversation would keep serving deleted message bodies through search.
+  if (!includeArchived) {
+    msgClauses.push('c.deleted_at is null');
+    msgClauses.push('m.deleted_at is null');
   }
+  if (role) {
+    msgClauses.push(`m.role = $${msgParams.length + 1}`);
+    msgParams.push(role);
+  }
+  if (startDate) {
+    msgClauses.push(`m.created_at >= $${msgParams.length + 1}`);
+    msgParams.push(startDate);
+  }
+  if (endDate) {
+    msgClauses.push(`m.created_at <= $${msgParams.length + 1}`);
+    msgParams.push(endDate);
+  }
+
+  const messageRows = await db.query<MessageRow>(
+    `select
+       m.id,
+       m.conversation_id,
+       m.role,
+       m.content,
+       m.created_at,
+       m.updated_at,
+       c.title as session_title
+     from web_messages m
+     join web_conversations c on c.id = m.conversation_id
+     where ${msgClauses.join(' and ')}
+     order by m.created_at desc
+     limit 100`,
+    msgParams,
+  );
 
   const sessionResults = sessionRows.map((s) => {
     const match = extractMatch(s.title ?? '', q);

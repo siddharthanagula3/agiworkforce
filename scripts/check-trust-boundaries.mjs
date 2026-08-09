@@ -56,6 +56,14 @@ const SURFACES = [
     cmd: ['pnpm', ['--filter', 'agi-workforce', 'run', 'test', 'trust-boundary.test']],
   },
   {
+    // Registry classification: every local runtime the web Local→BYOK handoff can
+    // name must resolve to the `local` surface, or that conversation has no Local
+    // mode and the fork consent ceremony stops firing silently.
+    name: 'local-runtime-classification',
+    proof: 'packages/contracts/types/src/__tests__/trust-boundary.test.ts',
+    cmd: ['pnpm', ['--filter', '@agiworkforce/types', 'run', 'test', 'trust-boundary.test']],
+  },
+  {
     // Desktop's P0 invariant: pure Local mode must never yield a ManagedCloud
     // routing candidate (apps/desktop/src-tauri/src/core/llm/tests/routing_logic_tests.rs).
     name: 'desktop-routing',

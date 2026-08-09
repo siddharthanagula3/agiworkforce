@@ -18,11 +18,12 @@ import {
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
 import { assertSessionInvariants } from '@agiworkforce/types';
+import {
+  MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+} from '@agiworkforce/cloud-contracts';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
 
 function parsePositiveInt(raw: string | null, fallback: number, max?: number): number {
   const parsed = Number.parseInt(raw ?? '', 10);
@@ -64,11 +65,18 @@ async function handleGetConversations(request: NextRequest) {
     throw createError.validation('Invalid deleted filter');
   }
 
-  // Offset-based pagination so the sidebar can page past the most-recent 50
-  // conversations instead of having anything older become unreachable.
+  // Offset-based pagination so the sidebar can page past the first page of
+  // conversations instead of having anything older become unreachable. The
+  // bounds come from the wire contract: `ManagedCloudConversationListResponse`
+  // caps `conversations` at MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE, so a locally
+  // re-declared ceiling would let this route emit a payload its own clients
+  // reject.
   const limit =
-    parsePositiveInt(url.searchParams.get('limit'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) ||
-    DEFAULT_PAGE_SIZE;
+    parsePositiveInt(
+      url.searchParams.get('limit'),
+      MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
+      MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+    ) || MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
 

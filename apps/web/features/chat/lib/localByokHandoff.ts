@@ -6,7 +6,6 @@ import {
   type LocalToByokHandoffPreview,
 } from '@agiworkforce/utils';
 import {
-  PROVIDER_DISPLAY,
   detectProviderFromModelId,
   formatPrivacyModeLabel,
   formatProviderModeLabel,
@@ -66,14 +65,24 @@ function inferProviderFromModelId(modelId: string | null | undefined): string | 
   return null;
 }
 
+/**
+ * Trust mode for a provider id, read from the model registry and nowhere else.
+ *
+ * There is deliberately no per-provider special case here: LM Studio used to be
+ * pinned to `Local` by a hardcoded `PROVIDER_DISPLAY.lmstudio.isLocal` check,
+ * which meant the registry's own classification for that provider was computed
+ * and then never consulted — so a registry that classified LM Studio wrong
+ * looked correct here and wrong everywhere else. The registry carries a
+ * `trustModes: ['local']` harness for every local runtime this path can name
+ * (`packages/ai/model-registry/catalog/harnesses.json`); if one is removed,
+ * `getProviderSurface` returns `hidden`, this returns null, and
+ * `shouldForkLocalToByok` stops firing — which is what the contract test in
+ * `packages/contracts/types/src/__tests__/trust-boundary.test.ts` guards.
+ */
 function providerModeFromProvider(provider: string | null): ProviderMode | null {
   if (!provider) return null;
   const normalizedProvider = normalizeProviderKey(provider);
   if (!normalizedProvider) return null;
-
-  if (normalizedProvider === 'lmstudio' && PROVIDER_DISPLAY.lmstudio.isLocal) {
-    return 'Local';
-  }
 
   const surface = getProviderSurface(normalizedProvider);
   return providerSurfaceToProviderMode(surface);

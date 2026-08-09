@@ -36,6 +36,22 @@ describe('localByokHandoff', () => {
     expect(getProviderModeForModel('open_router/deepseek-r1')).toBe('DirectByok');
   });
 
+  it('classifies LM Studio as Local from the registry, with no per-provider special case', () => {
+    // LM Studio used to be pinned Local by a hardcoded PROVIDER_DISPLAY check that
+    // short-circuited the registry lookup. The mode now comes from the provider's
+    // `trustModes: ['local']` harness; drop that harness and this goes null, which
+    // is exactly what would silently disable the fork ceremony below.
+    expect(getProviderModeForModel('lmstudio/qwen2.5-7b-instruct')).toBe('Local');
+    expect(getProviderModeForModel('lm-studio/qwen2.5-7b-instruct')).toBe('Local');
+    expect(
+      shouldForkLocalToByok({
+        conversation: { ...conversation, model: 'lmstudio/qwen2.5-7b-instruct' },
+        messages: [{ ...messages[0]!, model: 'lmstudio/qwen2.5-7b-instruct' }],
+        targetModelId: 'open_router/deepseek-r1',
+      }),
+    ).toBe(true);
+  });
+
   it('detects only Local to Direct BYOK as a required fork', () => {
     expect(
       shouldForkLocalToByok({
