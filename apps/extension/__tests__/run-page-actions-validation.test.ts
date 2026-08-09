@@ -56,14 +56,17 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
     ).toBe(false);
   });
 
-  it('accepts a desktop-bridge plan that uses browser-tool passthroughs', () => {
+  it('rejects a plan that uses browser-tool passthroughs the page cannot run', () => {
+    // These used to pass the gate and then answer "Unsupported page action" at
+    // replay: `executePlannedAction` has no case for them and never had one.
+    // See `shortcut-action-coverage.test.ts` for the mirror contract.
     expect(
       validateShortcutActions([
         { id: '1', type: 'screenshot' },
         { id: '2', type: 'wait', delay: 500 },
         { id: '3', type: 'click' },
       ] as never),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('rejects an empty-string action type', () => {

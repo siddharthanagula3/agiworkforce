@@ -300,6 +300,20 @@ export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES: ReadonlySet<string> = new Set(
     .map(([t]) => t),
 );
 
+// ─── Shared storage keys ────────────────────────────────────────────────────
+
+/**
+ * `chrome.storage.local` key holding the user-managed site allowlist — the
+ * origin set every trust decision in the extension is derived from.
+ *
+ * The literal was retyped in six modules (background, cdpDriver, side panel,
+ * options, in-page panel, plus the tests). A storage key spelled by hand never
+ * throws when it is wrong — the reader just gets `undefined` and treats the
+ * user's allowlist as empty, so a writer/reader typo silently revokes trust the
+ * options page still shows as granted. Import this instead of typing it.
+ */
+export const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
+
 // ─── Shared content / parsing caps ──────────────────────────────────────────
 
 /**
@@ -480,12 +494,26 @@ export function validateBridgeUrl(raw: string): string | null {
 /**
  * Allowlist of action `type` strings that may appear in a saved shortcut
  * or scheduled-task plan. Mirrors the content-script `executePlannedAction`
- * switch in `content.ts:executePlannedAction`.
+ * switch in `content.ts:executePlannedAction`, one for one — enforced by
+ * `__tests__/shortcut-action-coverage.test.ts`.
  *
  * Security note: the previous flow accepted arbitrary action types at save
  * time and only failed at replay (via the content-script switch's `default`
  * case). That gave the attacker an opportunity to plant payloads targeting
  * a future handler. Reject at save.
+ *
+ * That is also why the eight "computer-use bridge passthrough" entries
+ * (screenshot, right_click, double_click, triple_click, execute_script,
+ * snapshot, wait, unsupported) are gone: no executor ever ran them. Their only
+ * producer was `planActionsFromBrowserTool`, which had no caller — the
+ * computer-use agent drives the page through `cdpDriver`, not through
+ * `RUN_PAGE_ACTIONS` — so the entries bought no feature and did exactly the
+ * thing the note above says to prevent, holding eight type strings open for a
+ * handler that might land later. That producer and its `browserTool` bridge
+ * were deleted with this change (2026-08-09), so nothing emits them now.
+ *
+ * To add an action type here you must first add its `case` to
+ * `executePlannedAction`; the coverage test fails on either side alone.
  */
 export const ALLOWED_SHORTCUT_ACTION_TYPES = new Set<string>([
   'get_page_info',
@@ -506,15 +534,6 @@ export const ALLOWED_SHORTCUT_ACTION_TYPES = new Set<string>([
   'submit_job_application',
   'key',
   'hold_key',
-  // Computer-use bridge passthroughs accepted by the executor.
-  'screenshot',
-  'right_click',
-  'double_click',
-  'triple_click',
-  'execute_script',
-  'snapshot',
-  'wait',
-  'unsupported',
 ]);
 
 /**

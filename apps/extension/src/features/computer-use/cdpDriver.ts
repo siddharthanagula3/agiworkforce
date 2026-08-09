@@ -31,7 +31,7 @@
  *   waitForStable()   → polls DOM hash + readyState until quiet, capped by timeout
  */
 
-import { sanitizePageText } from '../../background/policy';
+import { SITE_ALLOWLIST_STORAGE_KEY, sanitizePageText } from '../../background/policy';
 
 /**
  * Placeholder returned for password/hidden field values — both in-page (the
@@ -719,9 +719,6 @@ export function scanForInjection(text: string): string | null {
 }
 
 // ─── Site allowlist helpers (P0 security fix) ────────────────────────────────
-
-/** Storage key for the user-managed site allowlist (mirrors background.ts). */
-const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
 
 /**
  * Read the site allowlist from chrome.storage.local.
