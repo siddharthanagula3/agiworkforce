@@ -8,6 +8,7 @@ vi.mock('@/lib/services/schedule-service', () => ({
   processDueScheduleRuns: vi.fn(),
 }));
 
+import { PLATFORM_SCHEDULE_RUNS_PER_SWEEP } from '@agiworkforce/types';
 import { processDueScheduleRuns } from '@/lib/services/schedule-service';
 import { GET } from './route';
 
@@ -45,6 +46,28 @@ describe('GET /api/cron/run-schedules', () => {
     expect(processDue).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 10, concurrency: 10, timeoutMs: 40_000 }),
     );
+  });
+
+  it('stops sweeping once a wave comes back short of a full batch', async () => {
+    await GET(request('cron-secret') as never);
+    expect(processDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps sweeping while every wave fills its batch', async () => {
+    processDue.mockResolvedValue({
+      claimed: 10,
+      succeeded: 10,
+      failed: 0,
+      timedOut: 0,
+      cancelled: 0,
+    });
+
+    const response = await GET(request('cron-secret') as never);
+
+    // Five waves of ten is the platform-wide ceiling the tier quotas are sized
+    // against; a single batch per day was an order of magnitude below it.
+    expect(processDue).toHaveBeenCalledTimes(Math.ceil(PLATFORM_SCHEDULE_RUNS_PER_SWEEP / 10));
+    await expect(response.json()).resolves.toMatchObject({ claimed: 50, drained: false });
   });
 
   it('returns 500 so Vercel observes an infrastructure failure and retries later', async () => {
