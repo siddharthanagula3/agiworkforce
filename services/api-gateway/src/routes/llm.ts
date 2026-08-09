@@ -408,6 +408,9 @@ router.post(
         idempotencyKey,
         provider,
         request: body as ManagedUsageRequestBody,
+        // The rolling five-hour, weekly and flagship ceilings are per-tier;
+        // without the tier the reservation cannot be capped at all.
+        planTier: tier,
       });
       await markManagedUsageProviderStarted({
         client: usageDb,
