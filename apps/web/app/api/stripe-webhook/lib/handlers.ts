@@ -199,27 +199,97 @@ export async function dispatchStripeEvent(
       const latestRefund = charge.refunds?.data?.[0];
       const refundedAmount = latestRefund?.amount ?? charge.amount_refunded;
 
+      // Returning the money has to return the entitlement it bought. Revoking
+      // only credits left a fully refunded customer on their paid plan: refunds
+      // are issued by hand in the Stripe dashboard (see /refund-policy) and a
+      // dashboard refund never fires a cancellation event of its own, so nothing
+      // downstream ever downgraded the row.
+      //
+      // Only a FULL refund revokes. A partial one is a goodwill adjustment on a
+      // period the customer still holds, and cutting them off for it would be
+      // worse than the bug. `charge.refunded` is Stripe's own fully-refunded
+      // flag; the amount comparison covers payloads that omit it.
+      //
+      // Credit top-ups are carved out because they buy credits, not a plan —
+      // handle_refund below is the entire remedy for those. Stripe removed
+      // `Charge.invoice` in API 2026-04-22, so a top-up checkout MUST stamp
+      // `payment_intent_data.metadata.type = 'credit_topup'`; that metadata is
+      // the only thing left that tells the two kinds of charge apart here.
+      const isCreditTopUpCharge = charge.metadata?.['type'] === 'credit_topup';
+      const fullyRefunded =
+        charge.refunded === true || (charge.amount > 0 && charge.amount_refunded >= charge.amount);
+      const revokesPlan = fullyRefunded && !isCreditTopUpCharge;
+
       logger.info(
-        { chargeId: charge.id, customerId: stripeCustomerId, refundedAmount },
+        { chargeId: charge.id, customerId: stripeCustomerId, refundedAmount, revokesPlan },
         'Processing charge refund',
       );
 
-      if (stripeCustomerId && refundedAmount > 0) {
+      if (stripeCustomerId && (refundedAmount > 0 || revokesPlan)) {
         const profiles = await db.query<{
           id: string;
         }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId]);
 
         const profile = profiles[0];
         if (profile?.id) {
-          await db.execute('select handle_refund($1, $2, $3)', [
-            profile.id,
-            refundedAmount,
-            `Refund for charge ${charge.id}`,
-          ]);
-          logger.info(
-            { userId: profile.id, refundedAmount, chargeId: charge.id },
-            'Credits revoked for refund successfully',
-          );
+          if (refundedAmount > 0) {
+            await db.execute('select handle_refund($1, $2, $3)', [
+              profile.id,
+              refundedAmount,
+              `Refund for charge ${charge.id}`,
+            ]);
+            logger.info(
+              { userId: profile.id, refundedAmount, chargeId: charge.id },
+              'Credits revoked for refund successfully',
+            );
+          }
+
+          if (revokesPlan) {
+            const [previous] = await db.query<{ plan_tier: string | null }>(
+              'select plan_tier from subscriptions where stripe_customer_id = $1 limit 1',
+              [stripeCustomerId],
+            );
+
+            // `past_due`, not `canceled`, deliberately. Entitlement gates on
+            // status and neither is entitled (lib/entitlement.ts), but
+            // `canceled` is treated as TERMINAL by the ordering guard in
+            // updateSubscriptionFromStripeSubscription: writing it here for a
+            // subscription Stripe is still billing would refuse every later
+            // renewal and lock the customer out permanently. `past_due` heals
+            // itself — if the subscription survives the refund, the next paid
+            // invoice re-derives the tier from the Price. This also matches how
+            // charge.dispute.created already records money going back out.
+            await db.execute(
+              `update subscriptions
+                  set status = 'past_due', plan_tier = 'free', cancel_at_period_end = true
+                where stripe_customer_id = $1`,
+              [stripeCustomerId],
+            );
+
+            await recordAuditEvent({
+              userId: profile.id,
+              eventType: 'plan_changed',
+              endpoint: '/api/stripe-webhook',
+              surface: 'stripe_webhook',
+              detail: {
+                resourceType: 'subscription',
+                previousPlanTier: previous?.plan_tier ?? 'unknown',
+                planTier: 'free',
+                source: 'stripe_webhook',
+                status: 'past_due',
+                reason: 'charge_refunded',
+              },
+            });
+
+            logger.warn(
+              {
+                userId: profile.id,
+                chargeId: charge.id,
+                previousPlanTier: previous?.plan_tier ?? 'unknown',
+              },
+              'Entitlement revoked for fully refunded charge; the Stripe subscription itself was left alone and must be canceled in Stripe if the refund was meant to end it',
+            );
+          }
         } else {
           logger.warn(
             { stripeCustomerId, chargeId: charge.id },
