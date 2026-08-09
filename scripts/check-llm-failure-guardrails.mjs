@@ -199,9 +199,19 @@ function isAllowedByAnnotation(lines, lineNo) {
  * is code (correct) and a bare block-comment body line is a comment (correct).
  * Anything ambiguous stays a violation, because a checker that guesses wrong in
  * the permissive direction is how a real skipped test gets through.
+ *
+ * A leading `#` is NOT a comment in any language this checker scans
+ * (SOURCE_EXTENSIONS is JS/TS/Rust only — none of them use `#` line comments).
+ * Treating it as one made the `ignored Rust test` pattern unfireable: every
+ * bare `#[ignore]` sits on a line starting with `#`, so the match was
+ * discarded as prose and `--strict` reported zero ignored Rust tests against a
+ * tree holding 33 of them. Rust attributes are code and must reach the
+ * violation list; only `llm-guardrail-allow:` or an `#[ignore = "reason"]`
+ * (which the pattern deliberately does not match) may excuse one.
  */
 function isCommentLine(line) {
   const trimmed = line.trim();
+  if (trimmed.startsWith('#[') || trimmed.startsWith('#![')) return false;
   return (
     trimmed.startsWith('//') ||
     trimmed.startsWith('*') ||
