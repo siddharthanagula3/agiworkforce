@@ -1,20 +1,23 @@
 /**
- * Visual Editing Components
+ * Editing Components
  *
- * This module provides a comprehensive visual editing interface for reviewing and applying
- * code changes with Cursor Composer-style diff preview.
+ * Presentational pieces for reviewing and applying code changes against the
+ * pending-change state in `@/stores/editingStore`.
  *
- * Components:
- * - VisualEditor: Main wrapper component that brings everything together
+ * Components exported here:
  * - EnhancedDiffViewer: Monaco-based diff viewer with per-hunk accept/reject
  * - FileTreeWithChanges: File tree with change indicators (M, +, -)
  * - ChangeSummary: Statistics and summary of pending changes
- * - LivePreview: Live preview for supported file types (Markdown, HTML, JSON, etc.)
  * - ConflictResolver: UI for resolving merge conflicts
+ *
+ * There is no `VisualEditor` shell and no `LivePreview` in this module; both
+ * were removed and nothing composes the four components above into a screen
+ * yet, so none of them currently render in the shipped app. Wire them into a
+ * route or panel before describing this module as a working surface.
  *
  * Usage:
  * ```tsx
- * import { VisualEditor } from './features/editing';
+ * import { EnhancedDiffViewer } from './features/editing';
  * import { useEditingStore } from './stores/editingStore';
  *
  * function MyComponent() {

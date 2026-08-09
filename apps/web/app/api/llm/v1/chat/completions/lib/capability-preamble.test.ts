@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
+
 import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
 
 describe('capability preamble', () => {
@@ -77,5 +79,31 @@ describe('capability preamble', () => {
 
     expect(preamble).toContain('Web search is already enabled.');
     expect(preamble).not.toContain('attached as downloads');
+  });
+
+  it('describes create_office_file with exactly the formats its schema accepts', () => {
+    const definition = createManagedOfficeFileToolDefinition();
+    const formats = (
+      definition.function.parameters.properties.format as { enum: readonly string[] }
+    ).enum;
+
+    const preamble = buildCapabilityPreamble({
+      tools: [{ type: 'function', function: { name: 'create_office_file' } }],
+    });
+    const officeLine = (preamble ?? '')
+      .split('\n')
+      .find((line) => line.startsWith('- create_office_file'));
+
+    expect(officeLine).toBeDefined();
+    for (const format of formats) {
+      expect(officeLine).toContain(`.${format}`);
+    }
+    // The tool rejects anything outside its enum, so the preamble must not
+    // advertise another Office format — the model would call it and get
+    // `invalid_office_file_request`.
+    for (const format of ['docx', 'xlsx', 'pptx']) {
+      if (formats.includes(format)) continue;
+      expect(officeLine).not.toContain(`.${format}`);
+    }
   });
 });

@@ -51,9 +51,9 @@ mod tests;
 
 pub use anthropic_agent::{AnthropicComputerUseAgent, AnthropicComputerUseConfig};
 pub use app_permissions::{
-    is_always_blocked_bundle, is_always_blocked_host, AppPermission, AppPermissionManager,
-    AppPermissionRequest, PermissionDecision, PermissionStatus, ALWAYS_BLOCKED_BUNDLE_IDS,
-    ALWAYS_BLOCKED_URL_HOSTS,
+    ensure_navigation_url_allowed, is_always_blocked_bundle, is_always_blocked_host, AppPermission,
+    AppPermissionManager, AppPermissionRequest, PermissionDecision, PermissionStatus,
+    ALWAYS_BLOCKED_BUNDLE_IDS, ALWAYS_BLOCKED_URL_HOSTS,
 };
 pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
 pub use observe_plan_act::{ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult};

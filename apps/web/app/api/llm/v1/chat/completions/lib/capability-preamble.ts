@@ -37,7 +37,13 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     'run code in a sandboxed Linux environment with a real file system and a network connection',
   write_file: 'write a file into that sandbox',
   create_folder: 'create a folder in that sandbox',
-  create_office_file: 'produce .docx, .xlsx and .pptx files',
+  // Must stay in step with the tool's own `format` enum in
+  // lib/services/managed-office-file-service.ts, which accepts docx and pptx
+  // only. Listing .xlsx here made the model offer spreadsheets it could not
+  // create: the call is rejected by the tool's schema as
+  // `invalid_office_file_request`. Spreadsheets come from the sandbox
+  // (`execute_code`), which is gated separately and may not be on this turn.
+  create_office_file: 'produce .docx and .pptx files',
   skill: 'load a skill: a packaged set of instructions for a specific kind of task',
 };
 

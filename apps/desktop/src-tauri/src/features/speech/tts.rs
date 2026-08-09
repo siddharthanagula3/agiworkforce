@@ -136,9 +136,16 @@ const ELEVENLABS_DEFAULT_MODEL: &str = "eleven_flash_v2_5";
 /// local Piper rather than wait. Verified 2026-07-28 against
 /// developers.openai.com/api/docs/models and .../guides/text-to-speech.
 ///
-/// Not read from the model catalog because TTS has no routing slot and the
-/// catalog carries no ElevenLabs provider at all, so only half this decision
-/// could come from there. Tracked as a follow-up in the verification log.
+/// Not *resolved* from the model catalog because speech synthesis has no
+/// routing slot — `routing-policies.json` defines `voice_transcription` and
+/// `voice_rewrite` and nothing for speech out — and the catalog carries no
+/// ElevenLabs provider at all, so only half this decision could come from
+/// there. Adding a speech slot is tracked as a follow-up.
+///
+/// It is still *checked* against the catalog: `openai_default_is_a_canonical_
+/// registry_model` below fails if this id stops being an OpenAI key in the
+/// generated registry, so the constant cannot drift into a model the rest of
+/// the product does not know about.
 const OPENAI_DEFAULT_TTS_MODEL: &str = "gpt-4o-mini-tts";
 
 /// ElevenLabs TTS implementation
@@ -716,6 +723,29 @@ mod tests {
                 "OpenAI TTS default is a retired model: {id}"
             );
         }
+    }
+
+    /// The retired-list check above only catches ids someone remembered to add
+    /// to it. This one catches the general case for the provider the catalog
+    /// actually covers: `OPENAI_DEFAULT_TTS_MODEL` must still be a canonical
+    /// OpenAI model key in the generated registry. If the id is renamed, or
+    /// dropped from `models.json` when OpenAI finally retires the family, this
+    /// fails instead of shipping a desktop default that no other surface —
+    /// pricing, capability checks, the licence page — has ever heard of.
+    ///
+    /// ElevenLabs is deliberately not asserted: the catalog carries no
+    /// ElevenLabs provider, so there is nothing to check against. See the
+    /// comment on `ELEVENLABS_DEFAULT_MODEL`.
+    #[test]
+    fn openai_default_is_a_canonical_registry_model() {
+        let keys = agiworkforce_model_registry::model_keys_for_provider("openai")
+            .expect("generated model registry must load")
+            .expect("the canonical registry must carry an openai provider");
+        assert!(
+            keys.iter().any(|key| key == OPENAI_DEFAULT_TTS_MODEL),
+            "OPENAI_DEFAULT_TTS_MODEL ({OPENAI_DEFAULT_TTS_MODEL}) is not an openai key in the \
+             canonical model registry; openai keys are {keys:?}"
+        );
     }
 
     /// The defaults have to survive the config plumbing, not just exist as

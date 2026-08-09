@@ -39,9 +39,17 @@
  * silent mismatch.
  *
  * Known gaps:
- *   - Versioning: `publishedArtifact.version` is always 1 in the current path.
- *   - Inline editor / edit-in-place is not wired; the panel accepts content
- *     as-is from the artifact store.
+ *   - Versioning: a publish result carries no version at all — neither
+ *     {@link LocalPublishResult} nor {@link CloudPublishResult} has the field,
+ *     and the web adapter's storage (apps/web/db/neon/0095_published_artifacts.sql)
+ *     has no version column: republishing UPSERTs on (user_id, artifact_id), so
+ *     the public page always shows the latest content and earlier published
+ *     revisions are not addressable. Edit history is a client-side concept
+ *     (`versionsById` in the artifact store) and does not reach a published page.
+ *   - Inline editor / edit-in-place is not wired on web; the panel accepts
+ *     content as-is from the artifact store. Desktop does have one
+ *     (features/artifacts/InlineArtifactEditor.tsx, saved through
+ *     `applyDiffToArtifact`), and it is not conflict-aware.
  *   - Web ships the first {@link CloudPublisher} (CAP-015): the ArtifactsPanel
  *     injects `createWebCloudPublisher()`, which POSTs to
  *     `/api/artifacts/publish` and returns a `/shared-artifact/<token>` URL.

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ⚠️ UNMOUNTED — do not mount without fixing the key contract first.
+ * ⚠️ CALLERS MUST GATE ON WIRE TOOL NAMES.
  *
  * This panel writes tool-permission decisions keyed by whatever strings
  * CONNECTOR_TOOLS (config/connector-logos.ts) contains for the connector. The
@@ -9,13 +9,18 @@
  * ToolTimeline's ToolPermissionQuickPicker — key by the WIRE tool name parsed
  * from `mcp__<serverId>__<toolName>`. Today only the github entry in
  * CONNECTOR_TOOLS holds wire names; every other connector's list is
- * display-label marketing copy with no backing implementation, so mounting
+ * display-label marketing copy with no backing implementation, so opening
  * this panel for those would save decisions under keys nothing ever reads
  * (silent no-op permissions). Operator-mapped and custom connectors advertise
  * their tool names at runtime from the remote catalog, which this static
- * config cannot know. The live per-tool permission UX is the quick picker on
- * the approval card in ToolTimeline; keep this unmounted until connector tool
- * lists are server-derived.
+ * config cannot know.
+ *
+ * ConnectorsPage is the only caller. It renders this dialog for a connected
+ * connector but only ever opens it behind `hasWireToolNames(connector.id)`
+ * (pages/ConnectorsPage.tsx), which is GitHub-only — that gate, not this
+ * component, is what keeps the keys honest. Widen it only once connector tool
+ * lists are server-derived. The live per-tool permission UX for everything
+ * else is the quick picker on the approval card in ToolTimeline.
  */
 import React from 'react';
 import { Check, Ban, HelpCircle, RotateCcw } from 'lucide-react';

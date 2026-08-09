@@ -1224,16 +1224,27 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
-    if (executionMode === 'local') {
-      const chatViewState = useChatViewStore.getState();
-      const viewSystemPrompt = buildChatViewSystemPrompt(
-        options?.mode ?? chatViewState.chatMode,
-        options?.style ?? chatViewState.chatStyle,
-        options?.taskInstruction,
-      );
-      if (viewSystemPrompt) {
-        historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
-      }
+    // Composer view preferences — mode chips, the "Choose Style" sheet and the
+    // task chips. These apply to EVERY execution mode.
+    //
+    // 9c71195b9 ("keep local and cloud data separate") wrapped this block in an
+    // `executionMode === 'local'` guard while splitting the project stores by
+    // trust boundary. Project instructions genuinely needed that split (they are
+    // user content owned by two different stores, resolved per boundary just
+    // above). `chatMode`/`chatStyle`/`taskInstruction` are not: they are closed
+    // unions of UI choices whose prompt text lives in this file, so there is no
+    // local data to leak into a cloud turn. The guard made the mobile style
+    // sheet, mode chips and task chips dead controls on the Cloud path — the
+    // shipping default — because nothing else in the cloud request carries them
+    // (`streamChat` sends no style/mode field and the server never infers one).
+    const chatViewState = useChatViewStore.getState();
+    const viewSystemPrompt = buildChatViewSystemPrompt(
+      options?.mode ?? chatViewState.chatMode,
+      options?.style ?? chatViewState.chatStyle,
+      options?.taskInstruction,
+    );
+    if (viewSystemPrompt) {
+      historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
     }
 
     // Resolve per-conversation reasoning effort for the remote API path.

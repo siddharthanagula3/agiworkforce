@@ -169,22 +169,29 @@ export interface MessageMetadata {
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
-  /** Provider that served the turn, from the terminal usage frame. */
+  /** Provider that served the turn, written into metadata by turn persistence. */
   provider?: string;
   /**
-   * Usage and cost for the turn, published by the server's terminal `x_usage`
-   * stream frame AFTER billing settles. These are the same numbers the
-   * settlement used, so the displayed cost and the charged cost cannot
-   * diverge. Absent on non-managed turns and on turns that errored.
+   * Per-turn usage, lifted from the PERSISTED `web_messages.input_tokens` /
+   * `output_tokens` columns by `toChatMessage` on conversation load. There is
+   * no terminal `x_usage` stream frame — one was built and reverted for
+   * breaking response-builder byte parity (docs/adr/wire-or-cut.md,
+   * "Per-message token/cost") — so these arrive with the persisted row, not
+   * mid-stream, and stay absent for temporary chats.
    */
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
+  /** No producer today: no wire field carries either count to the client. */
   reasoningTokens?: number;
   cachedInputTokens?: number;
-  /** Estimated cost of this turn, in cents. */
+  /**
+   * Estimated cost of this turn, in cents. No producer: managed cost stays
+   * server-side (`parseManagedUsageSummaryResponse` projects `/api/usage*` to
+   * percentages; the completion response omits `cost_cents`).
+   */
   cost?: number;
-  /** Wall-clock time from request start to stream completion, in ms. */
+  /** Wall-clock time from request start to stream completion, in ms. No producer yet. */
   totalDurationMs?: number;
   /** Local -> BYOK handoff evidence persisted on the fork system message. */
   handoffDraftId?: string;

@@ -108,8 +108,10 @@ export function ScheduleForm({
     >
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pr-3">
         <div className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          Scheduled runs use Managed Cloud and return text. Web search, tools, research, files,
-          media generation, and notifications are not available in this surface.
+          Scheduled runs use Managed Cloud and return text. Web search, tools, research, files, and
+          media generation are not available in this surface. Email and mobile-push alerts for a
+          finished run are account-wide, not per schedule — turn them on in Settings →
+          Notifications.
         </div>
 
         {submitError && (

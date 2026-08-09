@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
+import { useModelStore } from '../stores/modelStore';
 import { MessageBubble, StreamingThinkingStatus } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import {
@@ -8,7 +9,7 @@ import {
   hasStreamError,
   getStreamErrorMessage,
 } from '../lib/continue-generation';
-import type { Artifact, MessageArtifactProjection } from '../lib/types';
+import type { Artifact, MessageArtifactProjection, MessageRouting } from '../lib/types';
 
 interface MessageListProps {
   conversationId: string;
@@ -75,6 +76,7 @@ export function MessageList({
   const { t } = useUiTranslation('chat');
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const selectModel = useModelStore((s) => s.selectModel);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -145,6 +147,18 @@ export function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
+  // "Pin to <model>" in an auto-routed message's provenance footer: replace the
+  // `auto` alias with the concrete model the router landed on, so every later
+  // turn in this conversation goes to that model instead of being re-routed.
+  // `selectModel` also clears the stale routing badge in the model selector.
+  const handlePinModel = useCallback(
+    (routing: MessageRouting) => {
+      if (!routing.pinModel) return;
+      selectModel(routing.pinModel);
+    },
+    [selectModel],
+  );
+
   const handleJumpToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     setUnreadCount(0);
@@ -203,7 +217,7 @@ export function MessageList({
                   onResendApproval={onRegenerateMessage}
                 />
                 {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
-                  <ProvenanceFooter message={msg} />
+                  <ProvenanceFooter message={msg} onPinModel={handlePinModel} />
                 )}
               </div>
             </div>

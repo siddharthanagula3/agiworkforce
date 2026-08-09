@@ -142,20 +142,30 @@ export interface ThinkingSegment {
  * field may be absent for any given message.
  */
 export interface WebChatMessageMetadata {
-  // Usage and cost. Written by the terminal `x_usage` stream frame
-  // (app/api/llm/v1/chat/completions/lib/stream-transform.ts), which publishes
-  // exactly the numbers the billing settlement used — so what a user is shown
-  // and what they are charged cannot diverge. Absent for non-managed turns.
+  // Per-turn usage. `inputTokens`/`outputTokens`/`tokensUsed` are lifted from
+  // the PERSISTED `web_messages.input_tokens`/`output_tokens` columns by
+  // `toChatMessage` (features/chat/pages/WebChatPage.tsx) on conversation load.
+  // There is no terminal `x_usage` stream frame: one was built and reverted for
+  // breaking the response-builder byte-parity contract (docs/adr/wire-or-cut.md
+  // "Per-message token/cost"), so these values appear once the turn is
+  // persisted, not while it streams, and are absent for temporary chats.
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
+  /** No producer today: no wire field carries either count to the client. */
   reasoningTokens?: number;
   cachedInputTokens?: number;
   model?: string;
   provider?: string;
-  /** Estimated cost of this turn, in cents. */
+  /**
+   * Estimated cost of this turn, in cents. No producer: money never leaves the
+   * server for managed turns — `/api/usage*` is projected to percentages by
+   * `parseManagedUsageSummaryResponse` and the completion response omits
+   * `cost_cents` (response-builder.golden.test.ts). Reading it is a no-op until
+   * a founder decision changes that policy.
+   */
   cost?: number;
-  /** Wall-clock time from request start to stream completion. */
+  /** Wall-clock time from request start to stream completion. No producer yet. */
   totalDurationMs?: number;
   selectionReason?: string;
 
