@@ -104,9 +104,10 @@ export async function buildNonStreamResponse(
     );
   }
 
-  // Cache analytics. Both rates are resolved for THIS request's date so a model
-  // with dated pricing (or a declared cache-write price) is reported at the same
-  // rates it is billed at.
+  // Cache analytics. All three rates — input, cache write, and the cache read
+  // `calculateCacheSavings` resolves internally — are read for THIS request's
+  // instant, so a model with dated pricing is reported at the same rates it is
+  // billed at even across a UTC day boundary.
   const pricedAt = new Date();
   let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0, cacheWriteCostCents: 0 };
   try {
@@ -114,6 +115,7 @@ export async function buildNonStreamResponse(
       llmResponse,
       LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model, pricedAt),
       LLMCostCalculator.getCacheWriteCostPerMtok(provider, llmResponse.model, pricedAt),
+      pricedAt,
     );
 
     if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {

@@ -104,6 +104,17 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     purpose: 'Rate limiting and ephemeral request state.',
     region: 'Global edge',
   },
+  {
+    // Easy to miss because no AGI code runs at Expo, but two mobile paths
+    // terminate there. lib/services/push-notification-service.ts POSTs the
+    // notification title and body — which carry the names users give their
+    // scheduled tasks — to exp.host, and apps/mobile/app.config.js points
+    // `updates.url` at u.expo.dev, which every cold start requests.
+    name: 'Expo',
+    purpose:
+      'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies — including the names you give scheduled tasks — are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
+    region: 'United States',
+  },
 ];
 
 export default function SubprocessorsPage() {

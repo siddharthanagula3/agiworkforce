@@ -1,27 +1,38 @@
 import 'server-only';
-import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
+import { randomBytes } from 'crypto';
+
+import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 
 /**
  * AES-256-GCM encryption for user-supplied custom MCP connector bearer
- * tokens (`user_custom_connectors.auth_header_enc`).
+ * tokens (`user_custom_connectors.auth_header_enc`) and for the settled OAuth
+ * grants in `connector_oauth_grants` that lib/connectors/oauth-store.ts writes.
  *
  * Mirrors the encryptToken/decryptToken pattern in lib/github-app.ts, but
  * uses its own dedicated key so a compromise of one secret domain (GitHub
  * App installation tokens vs. user-supplied MCP bearer tokens) does not
  * expose the other.
+ *
+ * KEY ROTATION. Decryption goes through lib/crypto/envelope.ts against the
+ * whole key ring, not a single env value, so a value sealed under a key that
+ * now lives in `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_RETIRED` still opens
+ * while scripts/reencrypt.mjs walks the rows onto the active key. New values
+ * are sealed under the ACTIVE key in the historical `iv:ct:tag` hex layout, so
+ * an instance of the previous build can still read them mid-deploy; the sweep's
+ * `--format=versioned` is what moves the column to the self-describing form.
  */
 
 const CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY = process.env['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY'];
 
-// Cache the dev fallback key so encrypt/decrypt agree within a process.
-let _devFallbackKey: Buffer | null = null;
+// Cache the dev fallback ring so encrypt/decrypt agree within a process.
+let _devFallbackRing: KeyRing | null = null;
 
 const HEX_64_RE = /^[0-9a-fA-F]{64}$/;
 
-function getEncryptionKey(): Buffer {
+function getKeyRing(): KeyRing {
   const keyHex = CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY;
   if (keyHex && HEX_64_RE.test(keyHex)) {
-    return Buffer.from(keyHex, 'hex');
+    return loadKeyRing('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY');
   }
 
   // AUDIT-FIX CON-12: fail closed outside development. A per-process random key
@@ -42,29 +53,16 @@ function getEncryptionKey(): Buffer {
   }
 
   // Development-only fallback, cached so encrypt/decrypt agree within a process.
-  if (!_devFallbackKey) {
-    _devFallbackKey = randomBytes(32);
+  if (!_devFallbackRing) {
+    _devFallbackRing = { active: { id: '1', material: randomBytes(32) }, retired: [] };
   }
-  return _devFallbackKey;
+  return _devFallbackRing;
 }
 
 export function encryptConnectorToken(token: string): string {
-  const key = getEncryptionKey();
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${authTag.toString('hex')}`;
+  return sealEnvelope(getKeyRing(), token, 'hex-triple');
 }
 
 export function decryptConnectorToken(encryptedValue: string): string {
-  const key = getEncryptionKey();
-  const [ivHex, dataHex, tagHex] = encryptedValue.split(':');
-  if (!ivHex || !dataHex || !tagHex) throw new Error('Invalid encrypted token format');
-  const iv = Buffer.from(ivHex, 'hex');
-  const data = Buffer.from(dataHex, 'hex');
-  const tag = Buffer.from(tagHex, 'hex');
-  const decipher = createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+  return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple').plaintext;
 }

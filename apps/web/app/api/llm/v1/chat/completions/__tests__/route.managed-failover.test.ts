@@ -2,7 +2,8 @@
  * Route-level managed-failover pins (AUTO-ROUTER-MIGRATION-01 web twin) —
  * the REAL route.ts POST handler consuming the resolver's fallback plan,
  * mirroring the gateway's llm-managed-failover.test.ts semantics:
- * success-after-fallback, never-after-credential, never-mid-stream,
+ * success-after-fallback, rotate-after-credential (the rejected provider's
+ * own remaining routes skipped), never-mid-stream,
  * explicit-never-rotates, tier-recheck-per-attempt,
  * single-reservation-single-settlement, attribution-actual-server, and
  * failed-attempt-text-never-leaks.
@@ -235,6 +236,8 @@ import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
 const PRIMARY = 'fo-primary-model';
 const FALLBACK = 'fo-fallback-model';
+/** A second plan entry on the PRIMARY's provider — same managed key. */
+const SECOND_ANTHROPIC = 'fo-primary-sibling-model';
 
 function makeRequest(model: string, stream: boolean): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
@@ -349,11 +352,47 @@ describe('managed failover — non-streaming', () => {
     expect(managedUsageMocks.finalize.mock.calls[0]![0]).toMatchObject({ outcome: 'completed' });
   });
 
-  it('never-after-credential: a 401 primary fails the request without touching the fallback; the single settlement is the failed refund', async () => {
+  it('rotates after a credential rejection: a 401 condemns the anthropic account, not the turn; one reservation, one completed settlement', async () => {
     anthropicFailsWith('401', 'authentication error');
 
     const response = await POST(makeRequest('auto', false));
+    expect(response.status).toBe(200);
+    expect(providerControl.anthropicCalls).toBe(1);
+    expect(providerControl.openaiCalls).toBe(1);
+    expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+    expect(managedUsageMocks.finalize).toHaveBeenCalledTimes(1);
+    expect(managedUsageMocks.finalize.mock.calls[0]![0]).toMatchObject({ outcome: 'completed' });
+  });
+
+  it('skips the remaining plan routes on the provider whose credential was rejected', async () => {
+    anthropicFailsWith('401', 'authentication error');
+    // Plan: another anthropic model first, then the openai fallback. The
+    // anthropic entry would present the SAME rejected key, so it must be
+    // skipped rather than attempted.
+    routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
+      input.selection === 'auto'
+        ? selectedRoute(PRIMARY, [SECOND_ANTHROPIC, FALLBACK])
+        : selectedRoute(input.selection, []),
+    );
+
+    const response = await POST(makeRequest('auto', false));
+    expect(response.status).toBe(200);
+    // One anthropic attempt, not two: the second anthropic route was skipped.
+    expect(providerControl.anthropicCalls).toBe(1);
+    expect(providerControl.openaiCalls).toBe(1);
+  });
+
+  it('surfaces the credential failure when every remaining route is on the rejected provider', async () => {
+    anthropicFailsWith('401', 'authentication error');
+    routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
+      input.selection === 'auto'
+        ? selectedRoute(PRIMARY, [SECOND_ANTHROPIC])
+        : selectedRoute(input.selection, []),
+    );
+
+    const response = await POST(makeRequest('auto', false));
     expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(providerControl.anthropicCalls).toBe(1);
     expect(providerControl.openaiCalls).toBe(0);
     expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
     expect(managedUsageMocks.finalize).toHaveBeenCalledTimes(1);

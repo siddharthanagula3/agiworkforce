@@ -563,6 +563,22 @@
 /* Base layer styles */
 @layer base {
   :root {
+    /* Z-index layers that web actually renders. Radix portals every overlay to
+       <body>, so they are siblings in one stacking context and their z-index is
+       only meaningful relative to each other: --z-popover and --z-tooltip sit
+       ABOVE --z-modal because a Select or Tooltip opened from inside a Dialog
+       has to clear it (see GlobalSearchDialog, which puts a Select inside a
+       DialogContent). Each value equals the inline fallback the corresponding
+       primitive in packages/ui/ui/src/primitives ships, so declaring them here
+       changes nothing today — they exist so the layers can be retuned from one
+       place instead of editing every primitive. Only rungs referenced by CSS
+       this app renders are declared; do not add speculative ones.
+       apps/desktop/src/styles/globals.css declares its own set, and nothing
+       enforces the two agree — if you change a value here, check that file. */
+    --z-modal: 300;
+    --z-popover: 350;
+    --z-tooltip: 380;
+
     color-scheme: light;
 
     /* #faf9f7 ≈ hsl(40 23% 97%) - light background matches desktop */

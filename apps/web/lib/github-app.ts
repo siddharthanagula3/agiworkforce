@@ -1,13 +1,7 @@
 import 'server-only';
-import {
-  createHmac,
-  timingSafeEqual,
-  randomBytes,
-  createCipheriv,
-  createDecipheriv,
-  createSign,
-} from 'crypto';
+import { createHmac, timingSafeEqual, randomBytes, createSign } from 'crypto';
 import { z } from 'zod';
+import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { findInGitHubRestPages } from './github-rest-pagination';
 
@@ -284,15 +278,24 @@ export async function getGitHubAppJwt(): Promise<string> {
   return `${signingInput}.${signature}`;
 }
 
-// Cache the dev fallback key so encrypt/decrypt use the same key within a process
-let _devFallbackKey: Buffer | null = null;
+// Cache the dev fallback ring so encrypt/decrypt use the same key within a process
+let _devFallbackRing: KeyRing | null = null;
 
 const HEX_64_RE = /^[0-9a-fA-F]{64}$/;
 
-function getEncryptionKey(): Buffer {
+/**
+ * The ring behind `github_installations.access_token_enc`.
+ *
+ * Reads resolve across every key on the ring, so an installation token sealed
+ * under a key that has since moved to `GITHUB_TOKEN_ENCRYPTION_KEY_RETIRED`
+ * still opens while scripts/reencrypt.mjs walks the rows onto the active key.
+ * Writes stay in the historical `iv:ct:tag` hex layout so an instance of the
+ * previous build can still read them mid-deploy.
+ */
+function getKeyRing(): KeyRing {
   const keyHex = GITHUB_TOKEN_ENCRYPTION_KEY;
   if (keyHex && HEX_64_RE.test(keyHex)) {
-    return Buffer.from(keyHex, 'hex');
+    return loadKeyRing('GITHUB_TOKEN_ENCRYPTION_KEY');
   }
 
   // AUDIT-FIX STB-2: fail closed outside development. See the identical guard in
@@ -308,31 +311,18 @@ function getEncryptionKey(): Buffer {
     );
   }
 
-  if (!_devFallbackKey) {
-    _devFallbackKey = randomBytes(32);
+  if (!_devFallbackRing) {
+    _devFallbackRing = { active: { id: '1', material: randomBytes(32) }, retired: [] };
   }
-  return _devFallbackKey;
+  return _devFallbackRing;
 }
 
 function encryptToken(token: string): string {
-  const key = getEncryptionKey();
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${authTag.toString('hex')}`;
+  return sealEnvelope(getKeyRing(), token, 'hex-triple');
 }
 
 function decryptToken(encryptedValue: string): string {
-  const key = getEncryptionKey();
-  const [ivHex, dataHex, tagHex] = encryptedValue.split(':');
-  if (!ivHex || !dataHex || !tagHex) throw new Error('Invalid encrypted token format');
-  const iv = Buffer.from(ivHex, 'hex');
-  const data = Buffer.from(dataHex, 'hex');
-  const tag = Buffer.from(tagHex, 'hex');
-  const decipher = createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+  return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple').plaintext;
 }
 
 export async function getInstallationAccessToken(installationId: number): Promise<string> {

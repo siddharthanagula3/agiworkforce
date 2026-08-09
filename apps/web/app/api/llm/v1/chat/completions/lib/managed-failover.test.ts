@@ -2,7 +2,9 @@
  * Managed-failover plan semantics (AUTO-ROUTER-MIGRATION-01 web twin).
  * Mirrors the gateway's pinned semantics (services/api-gateway
  * __tests__/routes/llm-managed-failover.test.ts): rotation only on the five
- * availability categories and direct-provider rate limits, never on credential/abort classes,
+ * availability categories and direct-provider rate limits, plus credential
+ * rejections — which condemn the ONE rejected provider account and skip its
+ * remaining routes — never on abort/client-error classes,
  * per-attempt tier re-admission, structural rotation-freedom for explicit
  * selections (empty plan), and a derived attempt view that keeps ONE
  * reservation while attributing the serving model.
@@ -111,15 +113,47 @@ describe('rotation eligibility (gateway parity)', () => {
     ['server_overload (529)', httpError(529, '{"type":"overloaded_error"}')],
     ['rate limit (429)', httpError(429, 'rate limit exceeded')],
     ['api_timeout', Object.assign(new Error('request timeout'), {})],
+    // A rejected managed key condemns ONE provider account, not the request:
+    // the remaining plan routes hold distinct keys and must still be tried.
+    ['credential failure (401)', httpError(401, 'authentication error (401)')],
+    ['forbidden (403)', httpError(403, 'permission denied')],
+    ['revoked oauth token', new Error('This oauth token has been revoked')],
+    ['disabled organization', httpError(403, 'Your organization has been disabled')],
+    ['exhausted credit balance', new Error('Your credit balance is too low')],
   ])('rotates on %s', (_label, error) => {
     const attempt = makePlan(makeProcessed()).next(error);
     expect(attempt).not.toBeNull();
     expect(attempt!.model).toBe('candidate-a');
   });
 
+  it('skips the rejected provider’s own remaining routes rather than replaying the same key', () => {
+    // candidate-a is on the primary's provider (anthropic) — the same rejected
+    // key — so it must be skipped; candidate-b (google) serves.
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === 'candidate-a' ? 'anthropic' : 'google',
+    );
+
+    const attempt = makePlan(makeProcessed()).next(httpError(401, 'authentication error (401)'));
+
+    expect(attempt?.model).toBe('candidate-b');
+    expect(attempt?.provider).toBe('google');
+  });
+
+  it('does not rotate when every remaining route is on the rejected provider', () => {
+    mockResolveProviderFromModel.mockReturnValue('anthropic');
+    expect(makePlan(makeProcessed()).next(httpError(401, 'authentication error (401)'))).toBeNull();
+  });
+
+  it('condemns only the provider that was rejected, not one that merely 503d', () => {
+    // openai's 503 is an availability failure: its later plan routes stay
+    // admissible, unlike a rejected credential.
+    mockResolveProviderFromModel.mockReturnValue('openai');
+    const plan = makePlan(makeProcessed());
+    expect(plan.next(httpError(503))?.model).toBe('candidate-a');
+    expect(plan.next(httpError(503))?.model).toBe('candidate-b');
+  });
+
   it.each([
-    ['credential failure (401)', httpError(401, 'authentication error (401)')],
-    ['forbidden (403)', httpError(403, 'permission denied')],
     ['client error (400)', httpError(400, 'bad request')],
     ['context overflow', new Error('prompt is too long: 250000 tokens')],
     ['invalid model', new Error('model not found: nope')],
@@ -318,8 +352,10 @@ describe('OpenRouter route failover', () => {
     expect(attempt).toBeNull();
   });
 
-  it('does not fire on a credential failure, matching rotation', () => {
-    expect(makePlan(anthropicRequest()).next(httpError(401))).toBeNull();
+  it('fires on a credential failure: OpenRouter carries its own key for the same model', () => {
+    const attempt = makePlan(anthropicRequest()).next(httpError(401, 'authentication error'));
+    expect(attempt?.provider).toBe('openrouter');
+    expect(attempt?.model).toBe('claude-sonnet-5');
   });
 
   it('does not fire after a client abort', () => {

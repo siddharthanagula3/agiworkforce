@@ -177,6 +177,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   // SECURITY DEFINER path built for it (delete_user_data()). GAP, recorded
   // rather than papered over: `security_audit_logs.user_id` and
   // `enterprise_audit_events.actor_user_id` survive this erasure.
+  erasure_tombstones:
+    'The suppression list itself (0103). Deleting it would erase the record that this subject must stay erased.',
   security_audit_logs:
     'Append-only for the app role (0043_audit_log_immutability); only the SECURITY DEFINER delete_user_data() purges it.',
   enterprise_audit_events:
@@ -499,4 +501,74 @@ export async function eraseUserAccountData(
 export async function eraseProfileRow(userId: string): Promise<void> {
   const db = getNeonDb();
   await db.execute(`delete from public.${PROFILE_TABLE} where id = $1`, [userId]);
+}
+
+/**
+ * The suppression list (0103_erasure_tombstones.sql). It is the only record of
+ * an erasure obligation that outlives the `profiles` row, and therefore the
+ * only thing that can put a subject back in the queue after a restore.
+ */
+const TOMBSTONE_TABLE = 'erasure_tombstones';
+
+/**
+ * Outcome of a suppression-list write. `skipped` means this deployment has no
+ * `erasure_tombstones` table yet — a deployment state, not a failed obligation.
+ */
+export interface ErasureTombstoneResult {
+  recorded: boolean;
+  skipped?: boolean;
+  error?: string;
+}
+
+/**
+ * Record — or re-record — that `userId` must stay erased.
+ *
+ * Written BEFORE the erasure, because the erasure destroys the `profiles` row
+ * that queues the account: a tombstone written afterwards would be missing for
+ * exactly the runs that died in between, which is the case it exists for.
+ * Re-running it advances `last_swept_at`, the cron's cursor over the list.
+ */
+export async function openErasureTombstone(userId: string): Promise<ErasureTombstoneResult> {
+  const db = getNeonDb();
+  try {
+    // The identifier comes from the module constant above; the only
+    // user-controlled value is bound as $1.
+    await db.execute(
+      `insert into public.${TOMBSTONE_TABLE} (user_id)
+       values ($1)
+       on conflict (user_id) do update
+          set last_swept_at = now()`,
+      [userId],
+    );
+    return { recorded: true };
+  } catch (error) {
+    if (isSchemaAbsent(error)) return { recorded: false, skipped: true };
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Failed to record the erasure tombstone');
+    return { recorded: false, error: message };
+  }
+}
+
+/**
+ * Mark the tombstone as settled once an erasure reported every table and every
+ * stored object gone. An open tombstone keeps the subject in the sweep queue
+ * unconditionally, so a run that died halfway is retried rather than forgotten.
+ */
+export async function closeErasureTombstone(userId: string): Promise<ErasureTombstoneResult> {
+  const db = getNeonDb();
+  try {
+    await db.execute(
+      `update public.${TOMBSTONE_TABLE}
+          set erased_at = now()
+        where user_id = $1
+          and erased_at is null`,
+      [userId],
+    );
+    return { recorded: true };
+  } catch (error) {
+    if (isSchemaAbsent(error)) return { recorded: false, skipped: true };
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Failed to settle the erasure tombstone');
+    return { recorded: false, error: message };
+  }
 }
