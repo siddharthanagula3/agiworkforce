@@ -649,8 +649,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Store task_id → user_id with TTL so the status endpoint can verify the
   // requesting user owns the task. Durable (Redis) so polling works regardless
-  // of which serverless instance the follow-up request lands on.
-  await storeVideoTask(taskId, userId);
+  // of which serverless instance the follow-up request lands on. The model id
+  // rides along because the status endpoint has to name it in the EU AI Act
+  // Article 50(2) marker and the provider never echoes it back.
+  await storeVideoTask(taskId, userId, model.id);
 
   logger.info(
     { userId: userId, provider, taskId, estimatedCostCents },

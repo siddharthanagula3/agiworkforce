@@ -133,21 +133,12 @@ export const designTokens = {
     '2xl': '1536px',
   },
 
-  zIndex: {
-    hide: -1,
-    auto: 'auto',
-    base: 0,
-    docked: 10,
-    dropdown: 1000,
-    sticky: 1100,
-    banner: 1200,
-    overlay: 1300,
-    modal: 1400,
-    popover: 1500,
-    skipLink: 1600,
-    toast: 1700,
-    tooltip: 1800,
-  },
+  // No `zIndex` scale here on purpose. Stacking is decided in CSS: the layers
+  // are `--z-*` in apps/web/app/globals.css and the overlay primitives in
+  // packages/ui/ui/src/primitives select one with `z-[var(--z-<layer>,…)]`.
+  // A TypeScript copy of those numbers had no importer and drifted to a
+  // different scale entirely (1000–1800) than the stylesheets used, which is
+  // the defect ExecutionPlan #99 describes; it was deleted rather than renumbered.
 } as const;
 
 // Type definitions for design tokens

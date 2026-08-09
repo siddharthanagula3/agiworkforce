@@ -33,8 +33,17 @@ const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToke
 const TTL_SECONDS = 6 * 60 * 60; // 6 hours
 const TTL_MS = TTL_SECONDS * 1000;
 
-interface TaskEntry {
+export interface VideoTaskRecord {
   userId: string;
+  /**
+   * Catalog model id the task was submitted with. The status endpoint needs it
+   * to emit the EU AI Act Article 50(2) marker on the finished video, and the
+   * provider's status payload never echoes it back.
+   */
+  model?: string;
+}
+
+interface TaskEntry extends VideoTaskRecord {
   expiresAt: number;
 }
 
@@ -56,15 +65,19 @@ function pruneLocal(now: number): void {
   }
 }
 
-/** Record `taskId -> userId` for TTL, in Redis and in-process. */
-export async function storeVideoTask(taskId: string, userId: string): Promise<void> {
+/** Record `taskId -> {userId, model}` for TTL, in Redis and in-process. */
+export async function storeVideoTask(
+  taskId: string,
+  userId: string,
+  model?: string,
+): Promise<void> {
   const now = Date.now();
   pruneLocal(now);
-  localStore.set(taskId, { userId, expiresAt: now + TTL_MS });
+  localStore.set(taskId, { userId, ...(model ? { model } : {}), expiresAt: now + TTL_MS });
 
   if (!redis) return;
   try {
-    await redis.set(taskKey(taskId), userId, { ex: TTL_SECONDS });
+    await redis.set(taskKey(taskId), { userId, ...(model ? { model } : {}) }, { ex: TTL_SECONDS });
   } catch (err) {
     // The task exists provider-side and the same-instance layer still holds it,
     // but a poll landing elsewhere will now be denied. Loud, because the user
@@ -77,20 +90,26 @@ export async function storeVideoTask(taskId: string, userId: string): Promise<vo
 }
 
 /**
- * Resolve the owner of `taskId`, or `undefined` when ownership cannot be
+ * Resolve the record for `taskId`, or `undefined` when ownership cannot be
  * proven. Callers must treat `undefined` as "deny".
  */
-export async function getVideoTaskOwner(taskId: string): Promise<string | undefined> {
+export async function getVideoTask(taskId: string): Promise<VideoTaskRecord | undefined> {
   const local = localStore.get(taskId);
   if (local) {
-    if (local.expiresAt >= Date.now()) return local.userId;
+    if (local.expiresAt >= Date.now()) {
+      return { userId: local.userId, ...(local.model ? { model: local.model } : {}) };
+    }
     localStore.delete(taskId);
   }
 
   if (!redis) return undefined;
   try {
-    const owner = await redis.get<string>(taskKey(taskId));
-    return owner ?? undefined;
+    const stored = await redis.get<VideoTaskRecord | string>(taskKey(taskId));
+    if (!stored) return undefined;
+    // Entries written before the model was recorded are a bare userId string.
+    // They stay valid for authorization; they just carry no model.
+    if (typeof stored === 'string') return { userId: stored };
+    return stored.userId ? stored : undefined;
   } catch (err) {
     logger.warn(
       { err, taskId },

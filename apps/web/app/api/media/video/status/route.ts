@@ -7,7 +7,12 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { getVideoTaskOwner } from '@/lib/video-task-store';
+import { getVideoTask } from '@/lib/video-task-store';
+import {
+  aiGeneratedHeaders,
+  buildAiGeneratedProvenance,
+  type AiGeneratedProvenance,
+} from '@/lib/compliance/ai-act';
 
 /**
  * Video Generation Status API
@@ -31,6 +36,13 @@ interface VideoStatusResponse {
   thumbnail_url?: string;
   progress?: number;
   error?: string;
+  /**
+   * EU AI Act Article 50(2) marker. Emitted with the finished video — this is
+   * the only response that carries the artefact, so it is the only place the
+   * mark can be attached server-side. The `x-agi-ai-generated` header carries
+   * the same fact for consumers that never parse the body.
+   */
+  provenance?: AiGeneratedProvenance;
 }
 
 // Runway task status response
@@ -337,10 +349,10 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   // lands on a different instance than the one that created the task still
   // resolves. Missing ownership fails closed rather than allowing a
   // provider-side task to be polled by guessable ID.
-  const taskOwner = await getVideoTaskOwner(taskId);
-  if (!taskOwner || taskOwner !== userId) {
+  const task = await getVideoTask(taskId);
+  if (!task || task.userId !== userId) {
     logger.warn(
-      { taskId, requestingUser: userId, taskOwner },
+      { taskId, requestingUser: userId, taskOwner: task?.userId },
       'Video task ownership missing or mismatched - rejecting status request',
     );
     throw createError.forbidden('You do not have permission to check this task');
@@ -383,10 +395,25 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
     'Video status retrieved',
   );
 
+  // Article 50(2): the finished video is synthetic content, so the response
+  // that hands it over must mark it. `task.model` is absent only for tasks
+  // created before the store recorded it; those fall back to the provider's
+  // own name so the artefact is still marked rather than silently unmarked.
+  const provenance =
+    statusResponse.status === 'completed' && statusResponse.video_url
+      ? buildAiGeneratedProvenance({
+          kind: 'video',
+          provider,
+          model: task.model ?? provider,
+        })
+      : undefined;
+  if (provenance) statusResponse.provenance = provenance;
+
   return NextResponse.json(statusResponse, {
     headers: {
       ...getCorsHeaders(request),
       ...getSecurityHeaders(),
+      ...(provenance ? aiGeneratedHeaders(provenance) : {}),
     },
   });
 }

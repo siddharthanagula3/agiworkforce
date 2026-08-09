@@ -70,7 +70,12 @@ vi.mock('@/lib/api-auth', () => ({
 const mockGetVideoTaskOwner = vi.fn();
 
 vi.mock('@/lib/video-task-store', () => ({
-  getVideoTaskOwner: (...args: unknown[]) => mockGetVideoTaskOwner(...args),
+  // The route reads the whole record (owner + model, the latter for the
+  // Article 50(2) marker); ownership still comes from the same double.
+  getVideoTask: async (...args: unknown[]) => {
+    const userId = await mockGetVideoTaskOwner(...args);
+    return userId ? { userId, model: 'veo-3.1' } : undefined;
+  },
 }));
 
 // ---------------------------------------------------------------------------

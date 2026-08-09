@@ -70,6 +70,7 @@ import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contr
 import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
 import { CameraCaptureDialog } from './CameraCaptureDialog';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
+import { AI_INTERACTION_DISCLOSURE } from '@/lib/compliance/ai-act';
 
 /**
  * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
@@ -3079,7 +3080,10 @@ const ChatComposerNewComponent = ({
             <span aria-hidden="true">·</span>
           </>
         ) : null}
-        <span>AGI can make mistakes. Check important info.</span>
+        {/* EU AI Act Article 50(1): the person must be told they are
+            interacting with an AI system. Every web chat entry point mounts
+            this composer, so this is the disclosure for all of them. */}
+        <span data-testid="ai-act-interaction-disclosure">{AI_INTERACTION_DISCLOSURE}</span>
         <span aria-hidden="true">·</span>
         <Link
           href="/privacy"

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
@@ -23,6 +24,11 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
+import {
+  aiGeneratedHeaders,
+  buildAiGeneratedProvenance,
+  type AiGeneratedProvenance,
+} from '@/lib/compliance/ai-act';
 import {
   authenticatedMediaUrl,
   deleteStoredMedia,
@@ -82,6 +88,13 @@ interface ImageGenerationResponse {
    * inline `b64_json` that must never be persisted into a chat message.
    */
   persisted?: boolean;
+  /**
+   * EU AI Act Article 50(2) marker — one claim per entry of `images`, same
+   * order. Present on every successful generation; the response header
+   * `x-agi-ai-generated` carries the same fact for consumers that never parse
+   * the body.
+   */
+  provenance?: AiGeneratedProvenance[];
 }
 
 const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
@@ -713,6 +726,16 @@ async function generateWithStability(
 }
 
 /**
+ * SHA-256 of the artefact bytes, for the Article 50(2) claim. Hashing the
+ * base64 rather than decoding it first would bind the claim to a transport
+ * encoding, not to the image.
+ */
+function sha256HexFromBase64(b64: string): string {
+  const payload = b64.includes(',') ? (b64.split(',').pop() ?? '') : b64;
+  return createHash('sha256').update(Buffer.from(payload, 'base64')).digest('hex');
+}
+
+/**
  * Main handler for image generation
  */
 async function handleImageGeneration(request: NextRequest): Promise<NextResponse> {
@@ -1138,6 +1161,27 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // EU AI Act Article 50(2): mark the artefacts as artificially generated
+  // BEFORE the persistence branch, because that branch replaces the inline
+  // bytes with a URL, after which nothing downstream can hash them. One claim
+  // per image, index-aligned with `result.images`.
+  //
+  // A provider that returns `url` instead of `b64_json` has no bytes here yet;
+  // that claim starts with an empty hash and is REPLACED inside the persistence
+  // branch once the bytes are fetched (see `hashClaim` below), so the only
+  // claims that ship unhashed are ones whose bytes never reach this process.
+  const generatedAt = new Date().toISOString();
+  const provenance: AiGeneratedProvenance[] = result.images.map((img) => {
+    const hash = img.b64_json ? sha256HexFromBase64(img.b64_json) : undefined;
+    return buildAiGeneratedProvenance({
+      kind: 'image',
+      provider,
+      model: result.model,
+      generatedAt,
+      ...(hash ? { contentHashSha256: hash } : {}),
+    });
+  });
+
   // -------------------------------------------------------------------------
   // PER-4 / PER-6 / PER-26 — persist BEFORE settling the charge.
   //
@@ -1178,6 +1222,21 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
               return { idx, error: 'provider returned neither image bytes nor a URL' };
             }
 
+            // The url-returning provider shape only materialises its bytes
+            // here, so this is the first point the Article 50(2) claim can be
+            // bound to the artefact. Replace the placeholder rather than ship a
+            // claim whose content hash is empty.
+            const existingClaim = provenance[idx];
+            if (existingClaim && !existingClaim.content_hash_sha256) {
+              provenance[idx] = buildAiGeneratedProvenance({
+                kind: 'image',
+                provider,
+                model: result.model,
+                generatedAt,
+                contentHashSha256: createHash('sha256').update(bytes).digest('hex'),
+              });
+            }
+
             const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
             storedPathname = stored.pathname;
 
@@ -1198,6 +1257,14 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
               provider,
               model: result.model,
               sourceSurface: 'web',
+              // The Article 50(2) claim travels with the asset row so it
+              // outlives this response: `/api/files/[id]` reads it back and
+              // re-emits it as `x-agi-ai-generated`/`x-agi-ai-provenance` on
+              // every later fetch of the bytes. (The Library LISTING endpoints
+              // do not surface it — `listMediaAssets` never selects metadata
+              // and `/api/library` projects it away — so the marker rides the
+              // bytes, not the catalog row.)
+              metadata: { aiAct: provenance[idx] },
             });
 
             if (!assetId) {
@@ -1310,6 +1377,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     // message. The client must not turn that into a `data:` URL — see
     // `useMediaGeneration`.
     persisted: storageConfigured,
+    provenance,
   };
 
   try {
@@ -1325,6 +1393,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     headers: {
       ...getCorsHeaders(request),
       ...getSecurityHeaders(),
+      // Several images share one response, so the claims stay in the body and
+      // the header carries only the detectable-as-synthetic fact.
+      ...aiGeneratedHeaders(),
     },
   });
 }

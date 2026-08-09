@@ -4,11 +4,13 @@ import 'server-only';
  * Managed provider failover for the Web twin (AUTO-ROUTER-MIGRATION-01).
  *
  * Mirrors the gateway's landed semantics (services/api-gateway/src/routes/
- * llm.ts failover section, commit "feat(gateway): execute the resolver's
- * fallback plan"): rotate to the resolver's next candidate ONLY
+ * llm.ts failover section): rotate to the resolver's next candidate ONLY
  *   - on availability-class failures (connection / server_error /
- *     server_overload / capacity_off_switch / api_timeout) — never on
- *     credential failures, aborts, safety stops, context or
+ *     server_overload / capacity_off_switch / api_timeout, plus
+ *     direct-provider rate limits), or on a credential rejection, which
+ *     condemns the ONE provider account whose managed key was refused and
+ *     therefore skips that provider's remaining routes instead of replaying
+ *     the same rejected key — never on aborts, safety stops, context or
  *     invalid-model errors, or billing errors;
  *   - before the first byte reaches the client — route.ts's rotation point
  *     is `startProviderStream`'s first-chunk peek, so a rotated attempt has
@@ -33,7 +35,7 @@ import 'server-only';
  * `managedUsage` through unchanged).
  */
 
-import { classifyError } from '@agiworkforce/provider-runtime';
+import { classifyError, CredentialFailoverState } from '@agiworkforce/provider-runtime';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
@@ -46,7 +48,11 @@ import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
  *  services/api-gateway/src/lib/providerStreamSafety.ts's
  *  FAILOVER_ELIGIBLE_CATEGORIES, plus direct-provider rate limits. A managed
  *  Auto request should not fail because one upstream project exhausted quota;
- *  explicit selections remain rotation-free by construction. */
+ *  explicit selections remain rotation-free by construction.
+ *
+ *  Availability only: credential rejections rotate under the separate
+ *  provider-scoped rule below (`CredentialFailoverState`), exactly as in the
+ *  gateway. */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
@@ -135,6 +141,12 @@ export function createFailoverPlan(
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
+  // Every attempt on this route authenticates with the PLATFORM's key for the
+  // upstream it targets, so a rejected credential (401/403, revoked OAuth
+  // token, disabled org, exhausted credit balance) condemns one provider
+  // account and says nothing about the request or the other providers on the
+  // plan. Per-request, never cached across requests: a suspension can lift.
+  const credentialFailover = new CredentialFailoverState();
   // CPST `retries` lineage: each attempt view must be built from the LATEST
   // attempt view, not the original request view, or the counter re-computes
   // `(original.retries ?? 0) + 1 = 1` on every rotation and the ledger
@@ -153,6 +165,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, model: candidate },
           'Managed failover candidate skipped: provider resolution failed',
+        );
+        continue;
+      }
+      if (credentialFailover.blocksRoute(provider)) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: provider credentials already rejected',
         );
         continue;
       }
@@ -196,10 +215,11 @@ export function createFailoverPlan(
    *
    * Rotation answers an outage by switching to a different model, which is a
    * worse answer than the user asked for and is why explicit selections are
-   * rotation-free. OpenRouter resells the same models, so an Anthropic 503 can
-   * be retried as the identical model on another wire — the user's choice is
-   * preserved, and there is nothing to disclose because nothing changed except
-   * the path.
+   * rotation-free. OpenRouter resells the same models, so an Anthropic 503 —
+   * or an Anthropic key the platform can no longer use — can be retried as the
+   * identical model on another wire under a different credential; the user's
+   * choice is preserved, and there is nothing to disclose because nothing
+   * changed except the path.
    *
    * That difference is why this is allowed where rotation is not: it runs for
    * explicit selections and for requests with an empty fallback plan.
@@ -239,7 +259,14 @@ export function createFailoverPlan(
 
   return {
     next: (error: unknown): FailoverAttempt | null => {
-      if (!isFailoverEligibleError(error, options.signal)) return null;
+      if (options.signal.aborted) return null;
+      const category = classifyError(error).category;
+      // Recorded BEFORE any candidate lookup so the rejected provider's own
+      // remaining plan routes are skipped instead of burning the turn on
+      // guaranteed repeat rejections. Returns true only for the credential
+      // class, which also admits a rotation the availability set refuses.
+      const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
+      if (!credentialRotation && !isFailoverEligibleError(error, options.signal)) return null;
 
       const viaRoute = routeRetryAttempt();
       if (viaRoute) {
@@ -248,7 +275,8 @@ export function createFailoverPlan(
             requestId: processed.requestId,
             model: viaRoute.model,
             fromProvider: processed.provider,
-            category: classifyError(error).category,
+            category,
+            credentialRejectedProviders: credentialFailover.rejectedProviders(),
           },
           'Managed failover: retrying the same model via OpenRouter',
         );
@@ -265,7 +293,8 @@ export function createFailoverPlan(
             fromProvider: processed.provider,
             toModel: attempt.model,
             toProvider: attempt.provider,
-            category: classifyError(error).category,
+            category,
+            credentialRejectedProviders: credentialFailover.rejectedProviders(),
           },
           'Managed failover: rotating to fallback route',
         );
