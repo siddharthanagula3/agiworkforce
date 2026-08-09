@@ -5,7 +5,7 @@ import {
   effectivePlanTier,
   getBillingPlanProductLimits,
   normalizeBillingPlanTier,
-  type BillingPlanLimit,
+  toEnforceableBillingPlanLimit,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -53,10 +53,25 @@ export interface OrganizationEntitlements {
   sharedConnectorLimit: number | null;
 }
 
-function toEnforceableLimit(limit: BillingPlanLimit | undefined): number | null {
-  if (limit === 'unlimited') return null;
-  return typeof limit === 'number' ? limit : 0;
-}
+/*
+ * Limit conversion is deliberately NOT redeclared here.
+ *
+ * A local copy used to read:
+ *
+ *   if (limit === 'unlimited') return null;
+ *   return typeof limit === 'number' ? limit : 0;
+ *
+ * which has no 'custom' arm, so every Enterprise limit — `projects`,
+ * `customMcpServers`, all declared 'custom' in the catalog — fell through to 0.
+ * `shareProject` and `shareConnector` both refuse outright at `=== 0`, so the
+ * only tier that negotiates its limits was the only tier that could not share a
+ * single project or connector.
+ *
+ * This is the second copy of that same defect. The first was fixed in
+ * `free-plan-entitlements.ts` and pinned by a regression test, and this one
+ * survived because the fix went to a copy rather than to the owner. Import the
+ * canonical converter instead of writing a third.
+ */
 
 /**
  * Resolve the organization's plan from its owner's subscription.
@@ -96,8 +111,8 @@ export async function getOrganizationEntitlements(
     plan,
     // The org's shared set is capped by the same product dimensions the plan
     // already declares. Team is projects 25 / customMcpServers 25.
-    sharedProjectLimit: toEnforceableLimit(limits?.projects),
-    sharedConnectorLimit: toEnforceableLimit(limits?.customMcpServers),
+    sharedProjectLimit: toEnforceableBillingPlanLimit(limits?.projects),
+    sharedConnectorLimit: toEnforceableBillingPlanLimit(limits?.customMcpServers),
   };
 }
 
