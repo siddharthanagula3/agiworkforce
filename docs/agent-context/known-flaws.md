@@ -6,6 +6,38 @@ Last updated: 2026-08-08
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-08-08 The desktop visual baseline is a different app state, and the threshold hides it
+
+- **DESKTOP-VISUAL-BASELINE-WRONG-STATE — OPEN, blocks every CI run that
+  touches desktop scope.** `apps/desktop/e2e/visual-regression.spec.ts` fails
+  at 3.13% against a 3.0% ceiling. Downloading the Playwright artifact and
+  opening the attached diff shows the two images are not drifted renders of the
+  same screen — they are DIFFERENT APPLICATION STATES.
+  - Baseline: full marketing hero ("Beyond one model. Beyond one surface.",
+    "Local stays local", "BYOK on Desktop + CLI", "Cloud on every surface")
+    plus an in-app sign-in card with a "Sign in to AGI Cloud" button.
+  - Actual in CI: the fallback card — "In-app sign-in is not configured in this
+    build, so AGI Desktop will sign you in through your browser instead."
+    So the committed baseline was captured where in-app sign-in WAS configured
+    (a developer machine), and CI, which renders the unconfigured fallback, has
+    never matched it. It went unnoticed because the lane has been skipped since
+    2026-07-21, when CI's `check` job went red.
+- **The second finding is the more serious one.** A completely different page
+  scores 3.13%. Most of the screen is background, so the pixel ratio barely
+  moves for a total layout change, and a 3.0% ceiling therefore cannot catch a
+  full-page regression. The gate reads as protection and is not.
+- **Why regenerating alone is wrong.** `UPDATE_VISUAL_BASELINES=1` would turn
+  CI green and lock in whichever state the runner happens to produce, leaving
+  a threshold that still cannot detect the regression class it exists for. The
+  baseline also has to be produced on LINUX to match CI font rendering, so it
+  cannot be regenerated from macOS.
+- **What a fix needs.** (1) Regenerate in the CI environment, so the state is
+  the reproducible one rather than a developer's. (2) Tighten the ceiling
+  substantially, or compare a cropped region rather than a mostly-empty
+  1440x900 viewport. (3) Decide whether the sign-in-configured state should be
+  forced in the deterministic-mock harness so the screen under test is the real
+  one rather than a fallback.
+
 ## 2026-08-08 Parallel AGI execution writes outcomes to a stray database
 
 - **AGI-EXECUTOR-PARALLEL-ORPHAN-DB — OPEN, needs a small design decision.**
