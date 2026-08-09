@@ -55,6 +55,20 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+const PG_UNDEFINED_COLUMN = '42703';
+
+/**
+ * The immediate hard-delete below is irreversible, so only ONE failure may
+ * reach it: the deployment genuinely has no `deletion_requested_at` /
+ * `deletion_scheduled_for` columns. A dropped connection, a statement timeout
+ * or a permission error must not be read as "the schema is old" — that turned
+ * every transient Neon blip into an unrecoverable erasure.
+ */
+function isMissingDeletionColumns(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
+}
+
 export async function DELETE(request: NextRequest) {
   // Strict rate limit - this is a destructive action (5 req/min per IP)
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
@@ -99,7 +113,7 @@ export async function DELETE(request: NextRequest) {
     // grace window is support-reversible only — see the HONESTY CONTRACT above
     // before advertising a self-serve cancel.
     try {
-      await db.execute(
+      const scheduledRows = await db.execute(
         `update profiles
          set deletion_requested_at = $1,
              deletion_scheduled_for = $2
@@ -110,11 +124,40 @@ export async function DELETE(request: NextRequest) {
           userId,
         ],
       );
+
+      if (scheduledRows === 0) {
+        // The purge cron selects due accounts FROM `profiles`, so a schedule
+        // that matched no profile row is a schedule nothing will ever consume.
+        // Reporting `scheduledFor` here would be the same lie PER-24 removed.
+        logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
+        return NextResponse.json(
+          {
+            error:
+              'Account deletion could not be scheduled because your profile record was not found. Nothing was deleted. Please contact support@agiworkforce.com.',
+          },
+          { status: 500, headers: SECURITY_HEADERS },
+        );
+      }
     } catch (updateErr: unknown) {
-      // Profiles table may not have deletion columns yet; fall back to immediate delete
+      const updateErrMsg = updateErr instanceof Error ? updateErr.message : String(updateErr);
+
+      if (!isMissingDeletionColumns(updateErr)) {
+        logger.error({ userId, error: updateErrMsg }, 'Account deletion scheduling failed');
+        return NextResponse.json(
+          {
+            error:
+              'Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact support@agiworkforce.com if this persists.',
+          },
+          { status: 500, headers: SECURITY_HEADERS },
+        );
+      }
+
+      // Profiles table has no deletion columns on this deployment; the grace
+      // window cannot be recorded, so erase now rather than promise a window
+      // no cron can close.
       logger.warn(
-        { userId, error: updateErr instanceof Error ? updateErr.message : String(updateErr) },
-        'Soft deletion failed; attempting immediate delete',
+        { userId, error: updateErrMsg },
+        'Deletion columns are not provisioned; attempting immediate delete',
       );
 
       try {
@@ -124,11 +167,14 @@ export async function DELETE(request: NextRequest) {
         // their removal.
         const erasure = await eraseUserAccountData(userId);
         if (!erasure.complete) {
+          // `eraseUserAccountData` deletes table by table and reports what it
+          // got through, so an incomplete run HAS removed data. Claiming
+          // otherwise sent users away believing their account was untouched.
           logger.error({ userId, erasure }, 'Immediate account erasure was incomplete');
           return NextResponse.json(
             {
               error:
-                'Account deletion could not be completed. No data was partially removed from your account. Please contact support@agiworkforce.com.',
+                'Account deletion did not finish. Some of your data has already been removed and the rest is still stored; your sign-in still works. Please contact support@agiworkforce.com so the erasure can be completed.',
             },
             { status: 500, headers: SECURITY_HEADERS },
           );
