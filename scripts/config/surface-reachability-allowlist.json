@@ -55,7 +55,6 @@
           "apps/desktop/src/components/ui/Table.tsx",
           "apps/desktop/src/components/ui/index.ts",
           "apps/desktop/src/constants/index.ts",
-          "apps/desktop/src/constants/timeouts.ts",
           "apps/desktop/src/core/index.ts",
           "apps/desktop/src/data/index.ts",
           "apps/desktop/src/features/agent-collaboration/AgentCollaborationPanel.tsx",
