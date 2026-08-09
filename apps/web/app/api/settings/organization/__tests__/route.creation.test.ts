@@ -76,6 +76,10 @@ describe('organization creation and plan response', () => {
 
   it('creates one organization and its owner membership in the same transaction', async () => {
     mockQuery
+      // Membership pre-check, then the purchased-seat read-back, both before the
+      // transaction: no existing organization, no per-seat purchase.
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([organization]);
@@ -85,9 +89,9 @@ describe('organization creation and plan response', () => {
 
     expect(response.status).toBe(201);
     expect(mockTransaction).toHaveBeenCalledOnce();
-    expect(mockQuery.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock');
-    expect(mockQuery.mock.calls[1]?.[0]).toContain('organization_members');
-    expect(mockQuery.mock.calls[2]?.[0]).toContain('insert into public.organizations');
+    expect(mockQuery.mock.calls[2]?.[0]).toContain('pg_advisory_xact_lock');
+    expect(mockQuery.mock.calls[3]?.[0]).toContain('organization_members');
+    expect(mockQuery.mock.calls[4]?.[0]).toContain('insert into public.organizations');
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('insert into public.organization_members'),
       [organizationId, 'team-owner', 'owner'],
@@ -105,13 +109,20 @@ describe('organization creation and plan response', () => {
   });
 
   it('refuses a second organization after the serialized membership check finds one', async () => {
-    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        organization_id: organizationId,
-        user_id: 'team-owner',
-        role: 'owner',
-      },
-    ]);
+    mockQuery
+      // Pre-check misses (a membership created between the two reads is exactly
+      // what the serialized in-transaction check exists to catch), then the
+      // purchased-seat read-back, then the advisory lock.
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          organization_id: organizationId,
+          user_id: 'team-owner',
+          role: 'owner',
+        },
+      ]);
 
     const response = await POST(createRequest({ name: 'Second Team', slug: 'second-team' }));
 

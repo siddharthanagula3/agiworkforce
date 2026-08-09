@@ -25,6 +25,7 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
+import { isValidPlan, type PlanTier } from '@features/billing/components/Billing/types';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -32,10 +33,12 @@ import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
 
 /**
  * Billing plan types
+ *
+ * Aliased, not redeclared: `PlanTier` already derives the billable tiers from
+ * the shared catalog (packages/contracts/types/src/billing-catalog.ts), and two
+ * hand-written unions of the same thing drift one release at a time.
  */
-// pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02 (see
-// packages/contracts/types/src/billing-catalog.ts). Locked tiers are free, basic, pro, max, team, enterprise.
-export type BillingPlan = 'free' | 'basic' | 'pro' | 'max' | 'max_15x' | 'team' | 'enterprise';
+export type BillingPlan = PlanTier;
 
 /**
  * Subscription status types
@@ -80,16 +83,6 @@ export interface BillingUsage {
 
 type UsageApiResponse = ManagedUsageSummaryResponse;
 
-const MANAGED_BILLING_PLANS = new Set<BillingPlan>([
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-  'team',
-  'enterprise',
-]);
-
 const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>([
   'active',
   'trialing',
@@ -105,9 +98,7 @@ const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>([
 function normalizeManagedBillingPlan(plan: string): BillingPlan {
   const legacyNormalized = plan === 'pro_plus' ? 'max' : plan === 'hobby' ? 'basic' : plan;
   const normalized = normalizeBillingPlanTier(legacyNormalized);
-  return MANAGED_BILLING_PLANS.has(normalized as BillingPlan)
-    ? (normalized as BillingPlan)
-    : 'free';
+  return isValidPlan(normalized) ? normalized : 'free';
 }
 
 function normalizeSubscriptionStatus(status: string): SubscriptionStatus {

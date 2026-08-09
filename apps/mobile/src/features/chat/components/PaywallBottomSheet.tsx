@@ -37,21 +37,11 @@ import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Static lookup tables — module-level so they are never recreated on render.
 // ---------------------------------------------------------------------------
-
-const TIER_LABELS: Record<string, string> = {
-  'local-only': 'Local Mode',
-  byok: 'Local Mode + BYOK',
-  free: 'Free',
-  basic: 'Basic',
-  pro: 'Pro',
-  max: 'Max',
-  team: 'Team',
-  enterprise: 'Enterprise',
-};
 
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
@@ -73,6 +63,22 @@ const UNKNOWN_FEATURE_LABEL = 'This feature';
 
 /** Fallback label when the tier key is unrecognised. */
 const UNKNOWN_TIER_LABEL = 'a higher';
+
+/**
+ * Plan name for a `requiredTier` straight off the wire, or the vague fallback
+ * when the key is not a plan we sell.
+ *
+ * Read from the shared billing catalog rather than a local table: the tiers this
+ * sheet names are the same ones `BILLING_PLAN_CAPABILITY_TIERS` gates on, so a
+ * local copy that lagged the catalog turned real refusals into "Upgrade to a
+ * higher" — which is what `video_generation` (gated to Max 15x) rendered while
+ * `max_15x` was missing here.
+ */
+function tierLabelFor(requiredTier: string): string {
+  return isBillingPlanTier(requiredTier)
+    ? BILLING_PLAN_PRICING[requiredTier].label
+    : UNKNOWN_TIER_LABEL;
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -108,7 +114,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
 
     const featureLabel = FEATURE_LABELS[feature] ?? UNKNOWN_FEATURE_LABEL;
-    const tierLabel = TIER_LABELS[requiredTier] ?? UNKNOWN_TIER_LABEL;
+    const tierLabel = tierLabelFor(requiredTier);
 
     // Sales handoff is intentionally exact, not normalize-and-guess: an
     // unrecognised future tier must fail closed rather than becoming an
@@ -253,7 +259,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                   `https://agiworkforce.com/contact-sales?plan=${encodeURIComponent(salesTier)}`,
                 )
               }
-              accessibilityLabel={`Contact Sales for ${TIER_LABELS[salesTier]}`}
+              accessibilityLabel={`Contact Sales for ${tierLabel}`}
             />
           ) : (
             <Text
