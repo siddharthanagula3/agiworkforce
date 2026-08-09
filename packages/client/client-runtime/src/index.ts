@@ -10,6 +10,12 @@
 // Runtime environment detection
 export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect';
 
+// Local/Cloud app-mode contract — the persisted trust boundary, read once.
+// The resolver is the module's whole public surface; the key, the parser and
+// the mode type stay private to `./mode`. Mirrored in desktop-index.ts, which
+// apps/desktop aliases the package root to.
+export { resolveClientChatExecutionMode } from './mode';
+
 // Capability-aware command dispatch
 export { command, commandWithWarning } from './command';
 export type { CommandResult } from './command';

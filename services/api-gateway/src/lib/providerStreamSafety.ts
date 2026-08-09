@@ -244,13 +244,17 @@ export function toSafeProviderFailure(
 }
 
 /**
- * Managed failover admission (AUTO-ROUTER-MIGRATION-01): only availability
+ * Managed failover admission (AUTO-ROUTER-MIGRATION-01): availability
  * failures of the upstream transport — 5xx-class, connection, or a provider
  * timeout — may rotate to the resolver's next cross-provider fallback route.
- * Terminal credential failures and provider rate limits never rotate (pinned
- * in `__tests__/routes/llm-provider-model-id.test.ts`), and the gateway-owned
+ * Provider rate limits never rotate even with a plan in hand (pinned in
+ * `__tests__/routes/llm-managed-failover.test.ts`), and the gateway-owned
  * deadline never rotates because the shared per-request deadline has already
  * expired, so a further attempt could not run to completion anyway.
+ *
+ * This set is availability only. Credential rejections rotate under the
+ * separate provider-scoped rule in `@agiworkforce/provider-runtime`'s
+ * `CredentialFailoverState`, which routes.llm applies alongside this check.
  */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',

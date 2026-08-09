@@ -212,15 +212,33 @@ const config = {
         category: ['DEFAULT'],
         data: [{ mimeType: 'text/plain' }],
       },
-      // AUDIT-FIX: H-11 — verified Android App Link for https://agiworkforce.com/*.
-      // autoVerify=true forces the OS to fetch /.well-known/assetlinks.json
-      // before this filter is honored, so an unverified third-party app
-      // cannot claim the same VIEW intent.
+      // AUDIT-FIX: H-11 — verified Android App Link for the handled paths on
+      // https://agiworkforce.com. autoVerify=true forces the OS to fetch
+      // /.well-known/assetlinks.json before this filter is honored, so an
+      // unverified third-party app cannot claim the same VIEW intent.
+      //
+      // Declaring the bare host claimed every marketing, pricing, docs and blog
+      // URL on the domain: an installed app swallowed those taps and dropped
+      // the user on a screen with nothing to show, because no handler matches
+      // them. The paths below are the ones `app/_layout.tsx` routes.
+      //
+      // These entries are checked against the AASA components web serves by
+      // `__tests__/android-intent-filters.test.ts`, which derives them from
+      // `apps/web/lib/server/mobile-app-association.ts`. Nothing checks them
+      // against `app/_layout.tsx` — adding a path here without a handler there
+      // reopens the dead-end above, so add the handler in the same change.
       {
         action: 'VIEW',
         autoVerify: true,
         category: ['DEFAULT', 'BROWSABLE'],
-        data: [{ scheme: 'https', host: 'agiworkforce.com' }],
+        data: [
+          // Desktop companion pairing: code in the query string.
+          { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
+          // Desktop companion pairing: code as one path segment.
+          { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
+          // Clerk account recovery handoff.
+          { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
+        ],
       },
     ],
   },

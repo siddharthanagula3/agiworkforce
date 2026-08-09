@@ -2,6 +2,7 @@ import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/clien
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getExtensionTokensCssAuto } from './tokens';
+import { t } from './i18n';
 import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
@@ -209,7 +210,7 @@ type ManagedCloudGateAction =
   | 'usage'
   | 'retry';
 let managedCloudChatState: ManagedCloudChatState = 'loading';
-let managedCloudGateMessage = 'Checking your AGI Cloud account…';
+let managedCloudGateMessage = t('spGateChecking');
 let managedCloudGateAction: ManagedCloudGateAction = 'none';
 let managedCloudGateActionLabel = '';
 
@@ -225,9 +226,9 @@ function setManagedCloudChatState(
   managedCloudGateMessage =
     options.message ??
     (state === 'signed_out'
-      ? 'Sign in to use AGI Cloud chat.'
+      ? t('spGateSignedOut')
       : state === 'unavailable'
-        ? 'AGI Cloud chat is unavailable.'
+        ? t('spGateUnavailable')
         : managedCloudGateMessage);
   managedCloudGateAction = options.action ?? 'none';
   managedCloudGateActionLabel = options.actionLabel ?? '';
@@ -246,9 +247,9 @@ function setManagedCloudChatState(
   }
   if (input) {
     input.disabled = state !== 'ready';
-    if (state === 'ready') input.placeholder = 'Ask anything... (/ for commands)';
-    else if (state === 'signed_out') input.placeholder = 'Sign in to chat';
-    else if (state === 'unavailable') input.placeholder = 'AGI Cloud access required';
+    if (state === 'ready') input.placeholder = t('spComposerPlaceholder');
+    else if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
+    else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
   }
   updateSendButton();
 }
@@ -4277,11 +4278,11 @@ function updateContextButton(): void {
   const hostname = currentPageHostname || 'page';
   if (_ctx.pendingPageContext) {
     contextBtn.classList.add('has-context');
-    contextBtn.title = 'Page context attached — click to detach';
+    contextBtn.title = t('spContextBtnAttached');
     contextBtn.textContent = hostname;
   } else {
     contextBtn.classList.remove('has-context');
-    contextBtn.title = 'Attach page content to next message';
+    contextBtn.title = t('spContextBtnAttach');
     contextBtn.textContent = hostname;
   }
 }
@@ -4299,15 +4300,15 @@ function updateSendButton(): void {
   if (_ctx.isStreaming) {
     btn.disabled = false;
     btn.setAttribute('data-mode', 'stop');
-    btn.title = 'Stop generating';
-    btn.setAttribute('aria-label', 'Stop response');
+    btn.title = t('spSendStop');
+    btn.setAttribute('aria-label', t('spSendStopAria'));
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
   } else {
     btn.disabled = managedCloudChatState !== 'ready' || historyRestoreInProgress;
     btn.setAttribute('data-mode', 'send');
-    btn.title = 'Send';
-    btn.setAttribute('aria-label', 'Send message');
+    btn.title = t('spSendSend');
+    btn.setAttribute('aria-label', t('spSendSendAria'));
     clearChildren(btn);
     btn.appendChild(renderIcon(ArrowUp, 16));
   }
@@ -4621,16 +4622,16 @@ function setBlockedState(blocked: boolean): void {
     inputEl.disabled = !availability.chat || managedCloudChatState !== 'ready';
     if (managedCloudChatState === 'ready') {
       inputEl.placeholder = availability.pageContext
-        ? 'Ask anything... (/ for commands)'
-        : 'Ask anything (page context unavailable)';
+        ? t('spComposerPlaceholder')
+        : t('spComposerPlaceholderNoPageContext');
     }
   }
   updateContextButton();
   if (contextBtn) {
     contextBtn.disabled = !availability.pageContext;
     contextBtn.title = availability.pageContext
-      ? 'Attach page content to next message'
-      : 'Page context is unavailable on this browser page';
+      ? t('spContextBtnAttach')
+      : t('spContextBtnUnavailable');
   }
   updateSendButton();
 }
@@ -4939,13 +4940,20 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   overlay.appendChild(footer);
 
   // ── Step labels for each step's primary button ───────────────────────────
-  const stepLabels: string[] = ['I understand', 'Next', 'Next', "Let's go", 'Done'];
+  const stepLabels: string[] = [
+    t('spOnboardingUnderstand'),
+    t('spNext'),
+    t('spNext'),
+    t('spOnboardingLetsGo'),
+    t('spOnboardingDone'),
+  ];
+  const total = String(TOTAL_STEPS);
   const stepAriaLabels: string[] = [
-    'Continue — step 1 of 5',
-    'Continue — step 2 of 5',
-    'Continue — step 3 of 5',
-    'Continue — step 4 of 5',
-    'Dismiss onboarding',
+    t('spOnboardingContinueAria', ['1', total]),
+    t('spOnboardingContinueAria', ['2', total]),
+    t('spOnboardingContinueAria', ['3', total]),
+    t('spOnboardingContinueAria', ['4', total]),
+    t('spOnboardingDismissAria'),
   ];
 
   // ── Navigation logic ─────────────────────────────────────────────────────
@@ -4971,8 +4979,8 @@ function buildOnboardingOverlay(onComplete: () => void): void {
       backBtn.removeAttribute('hidden');
     }
     // Primary button label
-    nextBtn.textContent = stepLabels[step] ?? 'Next';
-    nextBtn.setAttribute('aria-label', stepAriaLabels[step] ?? 'Continue');
+    nextBtn.textContent = stepLabels[step] ?? t('spNext');
+    nextBtn.setAttribute('aria-label', stepAriaLabels[step] ?? t('spWizardContinueAria'));
     // Focus primary button on each step transition
     nextBtn.focus();
   }
@@ -5064,7 +5072,7 @@ function buildUI(): void {
   });
   const modelBadge = document.createElement('span');
   modelBadge.id = 'sp-model-badge';
-  modelBadge.textContent = 'AI Assistant';
+  modelBadge.textContent = t('spModelBadgeDefault');
   const chevron = document.createElement('span');
   chevron.className = 'sp-chevron';
   chevron.replaceChildren(renderIcon(ChevronDown, 12));
@@ -5842,9 +5850,9 @@ function buildUI(): void {
     title: 'Capture page screenshot',
   });
   drawerCaptureBtn.appendChild(renderIcon(Camera, 13));
-  drawerCaptureBtn.appendChild(document.createTextNode(' Capture'));
+  drawerCaptureBtn.appendChild(document.createTextNode(t('spDrawerCapture')));
   drawerCaptureBtn.addEventListener('click', async () => {
-    drawerCaptureBtn.textContent = ' Capturing…';
+    drawerCaptureBtn.textContent = t('spDrawerCapturing');
     (drawerCaptureBtn as HTMLButtonElement).disabled = true;
     try {
       const res = (await chrome.runtime.sendMessage({
@@ -5853,12 +5861,12 @@ function buildUI(): void {
         quality: 90,
       })) as { success: boolean; error?: string };
       if (res.success) {
-        drawerCaptureBtn.textContent = ' Captured!';
+        drawerCaptureBtn.textContent = t('spDrawerCaptured');
         drawerCaptureBtn.classList.add('active');
         setTimeout(() => {
           drawerCaptureBtn.replaceChildren(
             renderIcon(Camera, 13),
-            document.createTextNode(' Capture'),
+            document.createTextNode(t('spDrawerCapture')),
           );
           drawerCaptureBtn.classList.remove('active');
           (drawerCaptureBtn as HTMLButtonElement).disabled = false;
@@ -5867,11 +5875,11 @@ function buildUI(): void {
         throw new Error(res.error ?? 'Failed');
       }
     } catch {
-      drawerCaptureBtn.textContent = ' Failed';
+      drawerCaptureBtn.textContent = t('spDrawerCaptureFailed');
       setTimeout(() => {
         drawerCaptureBtn.replaceChildren(
           renderIcon(Camera, 13),
-          document.createTextNode(' Capture'),
+          document.createTextNode(t('spDrawerCapture')),
         );
         (drawerCaptureBtn as HTMLButtonElement).disabled = false;
       }, 1500);
@@ -5910,7 +5918,7 @@ function buildUI(): void {
   });
   drawerGroupBtn.appendChild(renderIcon(Folder, 13));
   let drawerGrouped = false;
-  const drawerGroupLabel = document.createTextNode(' Group');
+  const drawerGroupLabel = document.createTextNode(t('spDrawerGroupTab'));
   drawerGroupBtn.appendChild(drawerGroupLabel);
   drawerGroupBtn.addEventListener('click', () => {
     const msgType = drawerGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
@@ -5919,7 +5927,9 @@ function buildUI(): void {
       (response: { success?: boolean; grouped?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !response?.success) return;
         drawerGrouped = response.grouped ?? false;
-        drawerGroupLabel.textContent = drawerGrouped ? ' Ungroup' : ' Group';
+        drawerGroupLabel.textContent = drawerGrouped
+          ? t('spDrawerUngroupTab')
+          : t('spDrawerGroupTab');
         drawerGroupBtn.classList.toggle('active', drawerGrouped);
       },
     );
@@ -5997,22 +6007,22 @@ function buildUI(): void {
     pairingError.textContent = '';
     switch (state.phase) {
       case 'idle':
-        pairingLabel.textContent = 'Not paired';
+        pairingLabel.textContent = t('spPairingIdle');
         pairingFingerprint.setAttribute('hidden', '');
-        drawerPairBtn.textContent = 'Pair with Desktop';
+        drawerPairBtn.textContent = t('spPairingPair');
         (drawerPairBtn as HTMLButtonElement).disabled = false;
         drawerPairBtn.removeAttribute('hidden');
         drawerUnpairBtn.setAttribute('hidden', '');
         break;
       case 'requesting':
-        pairingLabel.textContent = 'Pairing…';
+        pairingLabel.textContent = t('spPairingInProgress');
         pairingFingerprint.setAttribute('hidden', '');
-        drawerPairBtn.textContent = 'Pairing…';
+        drawerPairBtn.textContent = t('spPairingInProgress');
         (drawerPairBtn as HTMLButtonElement).disabled = true;
         drawerUnpairBtn.setAttribute('hidden', '');
         break;
       case 'paired':
-        pairingLabel.textContent = 'Paired';
+        pairingLabel.textContent = t('spPairingPaired');
         if (state.fingerprint) {
           pairingFingerprint.textContent = state.fingerprint;
           pairingFingerprint.removeAttribute('hidden');
@@ -6023,10 +6033,10 @@ function buildUI(): void {
         drawerUnpairBtn.removeAttribute('hidden');
         break;
       case 'error':
-        pairingLabel.textContent = 'Pairing failed';
+        pairingLabel.textContent = t('spPairingFailed');
         pairingFingerprint.setAttribute('hidden', '');
         if (state.error) pairingError.textContent = state.error;
-        drawerPairBtn.textContent = 'Retry Pairing';
+        drawerPairBtn.textContent = t('spPairingRetry');
         (drawerPairBtn as HTMLButtonElement).disabled = false;
         drawerPairBtn.removeAttribute('hidden');
         drawerUnpairBtn.setAttribute('hidden', '');
@@ -6221,14 +6231,14 @@ function buildUI(): void {
     const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
     // Distinguish "no tab" from "this tab can never be automated"; both
     // disable the button, but only one of them is the user's mistake.
-    allowlistOriginLabel.textContent = origin ?? 'No site to add on this page';
+    allowlistOriginLabel.textContent = origin ?? t('spAllowlistNoSite');
     (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
     if (origin) {
       const present = list.includes(origin);
-      allowlistToggleBtn.textContent = present ? 'Remove' : 'Add';
+      allowlistToggleBtn.textContent = present ? t('spAllowlistRemove') : t('spAllowlistAdd');
       allowlistToggleBtn.classList.toggle('is-remove', present);
     } else {
-      allowlistToggleBtn.textContent = 'Add';
+      allowlistToggleBtn.textContent = t('spAllowlistAdd');
       allowlistToggleBtn.classList.remove('is-remove');
     }
     await renderDrawerAllowlistList(list, origin);
@@ -6376,10 +6386,10 @@ function buildUI(): void {
           .catch(() => {});
       } else {
         deleteBtn.classList.add('is-confirm');
-        deleteBtn.textContent = 'Confirm?';
+        deleteBtn.textContent = t('spMemoryDeleteConfirm');
         confirmTimer = setTimeout(() => {
           deleteBtn.classList.remove('is-confirm');
-          deleteBtn.textContent = 'Delete';
+          deleteBtn.textContent = t('spMemoryDelete');
           confirmTimer = null;
         }, DRAWER_DELETE_CONFIRM_MS);
       }
@@ -6507,7 +6517,7 @@ function buildUI(): void {
       const validated = validateBridgeUrl(raw);
       if (!validated) {
         const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
-        drawerBridgeError.textContent = `Only local URLs (${allowed}) are allowed`;
+        drawerBridgeError.textContent = t('spBridgeUrlNotAllowed', [allowed]);
         drawerBridgeError.removeAttribute('hidden');
         setTimeout(() => drawerBridgeError.setAttribute('hidden', ''), 8000);
         return;
@@ -6541,34 +6551,33 @@ function buildUI(): void {
     class: 'sp-cloud-signin-prompt',
     id: 'sp-cloud-signin-prompt',
   });
-  const signinDescription = el(
-    'span',
-    { class: 'sp-cloud-signin-desc' },
-    'Sign in to use AGI Managed Cloud chat.',
-  );
+  const signinDescription = el('span', { class: 'sp-cloud-signin-desc' }, t('spCloudSignInPrompt'));
   signinPrompt.appendChild(signinDescription);
 
   const signinBtn = el('button', { class: 'sp-cloud-signin-btn', id: 'sp-cloud-signin-btn' });
   let signInAwaitingCompletion = false;
-  signinBtn.textContent = 'Sign in to AGI Cloud';
+  signinBtn.textContent = t('spCloudSignIn');
   signinBtn.addEventListener('click', async () => {
     signinBtn.setAttribute('disabled', '');
-    signinBtn.textContent = signInAwaitingCompletion ? 'Checking…' : 'Opening sign in…';
+    signinBtn.textContent = signInAwaitingCompletion
+      ? t('spCloudSignInChecking')
+      : t('spCloudSignInOpening');
     try {
       if (signInAwaitingCompletion) {
         await refreshCloudAccountUI(true);
       } else {
         await openClerkSignIn();
         signInAwaitingCompletion = true;
-        signinDescription.textContent =
-          'Finish sign-in in the new tab, then return here and click Check sign-in.';
+        signinDescription.textContent = t('spCloudSignInReturnTab');
       }
     } catch (error) {
       signinDescription.textContent =
-        error instanceof Error ? error.message : 'Unable to open AGI account sign-in.';
+        error instanceof Error ? error.message : t('spCloudSignInOpenFailed');
     } finally {
       signinBtn.removeAttribute('disabled');
-      signinBtn.textContent = signInAwaitingCompletion ? 'Check sign-in' : 'Sign in to AGI Cloud';
+      signinBtn.textContent = signInAwaitingCompletion
+        ? t('spCloudCheckSignIn')
+        : t('spCloudSignIn');
     }
   });
   signinPrompt.appendChild(signinBtn);
@@ -6579,15 +6588,19 @@ function buildUI(): void {
     id: 'sp-cloud-signed-in',
     style: 'display:none',
   });
-  const avatarEl = el('div', { class: 'sp-cloud-avatar', id: 'sp-cloud-avatar' }, 'A');
+  const avatarEl = el(
+    'div',
+    { class: 'sp-cloud-avatar', id: 'sp-cloud-avatar' },
+    t('spCloudAvatarFallback'),
+  );
   const userInfoEl = el('div', { class: 'sp-cloud-user-info' });
   const userLabelEl = el('div', {
     class: 'sp-cloud-user-label',
     id: 'sp-cloud-user-label',
   });
-  userLabelEl.textContent = 'AGI Account';
+  userLabelEl.textContent = t('spCloudAccountFallbackName');
   const userTierEl = el('div', { class: 'sp-cloud-user-tier', id: 'sp-cloud-user-tier' });
-  userTierEl.textContent = 'Free tier';
+  userTierEl.textContent = t('spCloudFreeTier');
   userInfoEl.appendChild(userLabelEl);
   userInfoEl.appendChild(userTierEl);
   const signoutBtn = el(
@@ -6605,7 +6618,7 @@ function buildUI(): void {
     id: 'sp-quota-bar-wrap',
     style: 'display:none',
   });
-  const quotaLabelEl = el('span', { id: 'sp-quota-label' }, 'Chrome access requires a paid plan.');
+  const quotaLabelEl = el('span', { id: 'sp-quota-label' }, t('spQuotaPaidPlanRequired'));
   quotaWrap.appendChild(quotaLabelEl);
 
   // Upgrade row (shown when quota exhausted)
@@ -6617,12 +6630,12 @@ function buildUI(): void {
   const quotaExhaustedLabel = el(
     'span',
     { style: 'font-size:10px;color:var(--agi-ext-danger)' },
-    'Free chat remains available on Web, Mobile, and Desktop.',
+    t('spQuotaFreeElsewhere'),
   );
   const quotaUpgradeBtn = el(
     'button',
     { class: 'sp-quota-upgrade-btn', id: 'sp-quota-upgrade-btn' },
-    'Upgrade',
+    t('spQuotaUpgrade'),
   );
   quotaUpgradeRow.appendChild(quotaExhaustedLabel);
   quotaUpgradeRow.appendChild(quotaUpgradeBtn);
@@ -6740,9 +6753,9 @@ function buildUI(): void {
       _ctx.reasoningEffort = undefined;
       signinDescription.textContent = isClerkExtensionAuthConfigured()
         ? signInAwaitingCompletion
-          ? 'Finish sign-in in the new tab, then click Check sign-in.'
-          : 'Sign in to use AGI Managed Cloud chat.'
-        : 'AGI account sign-in is not configured in this build.';
+          ? t('spCloudSignInFinishTab')
+          : t('spCloudSignInPrompt')
+        : t('spCloudSignInUnconfigured');
       if (isClerkExtensionAuthConfigured()) signinBtn.removeAttribute('disabled');
       else signinBtn.setAttribute('disabled', '');
       signinPrompt.style.display = '';
@@ -6754,10 +6767,10 @@ function buildUI(): void {
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
         message: isClerkExtensionAuthConfigured()
-          ? 'Sign in to start chatting in Chrome.'
-          : 'Open AGI to finish account setup.',
+          ? t('spGateSignInToChat')
+          : t('spGateFinishSetup'),
         action: isClerkExtensionAuthConfigured() ? 'sign_in' : 'open_web',
-        actionLabel: isClerkExtensionAuthConfigured() ? 'Sign in' : 'Open AGI',
+        actionLabel: isClerkExtensionAuthConfigured() ? t('spGateSignIn') : t('spGateOpenAgi'),
       });
       return;
     }
@@ -6782,24 +6795,24 @@ function buildUI(): void {
         await transitionManagedCloudOwner(null);
         await clearAuthToken();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-        signinDescription.textContent = 'Your session expired. Sign in again to continue.';
+        signinDescription.textContent = t('spCloudSessionExpired');
         signinPrompt.style.display = '';
         signedInView.style.display = 'none';
         setManagedCloudChatState('signed_out', {
-          message: 'Your session expired. Sign in again to continue.',
+          message: t('spCloudSessionExpired'),
           action: 'sign_in',
-          actionLabel: 'Sign in',
+          actionLabel: t('spGateSignIn'),
         });
         return;
       }
 
       signinPrompt.style.display = 'none';
       signedInView.style.display = '';
-      userTierEl.textContent = 'Account unavailable';
+      userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
-        message: 'We could not verify your AGI Cloud account.',
+        message: t('spGateVerifyFailed'),
         action: 'retry',
-        actionLabel: 'Retry',
+        actionLabel: t('spGateRetry'),
       });
       return;
     }
@@ -6823,9 +6836,11 @@ function buildUI(): void {
     cloudLinkHint.style.display = '';
     cloudLinkRow.style.display = 'flex';
     userLabelEl.textContent =
-      currentAccountProfile?.displayName ?? currentAccountProfile?.email ?? 'AGI Account';
+      currentAccountProfile?.displayName ??
+      currentAccountProfile?.email ??
+      t('spCloudAccountFallbackName');
     userLabelEl.title = currentAccountProfile?.email ?? '';
-    avatarEl.textContent = currentAccountProfile?.initials ?? 'A';
+    avatarEl.textContent = currentAccountProfile?.initials ?? t('spCloudAvatarFallback');
     userTierEl.textContent = formatManagedTierLabel(
       access.accountPlanTier ?? access.subscriptionTier,
     );
@@ -6838,23 +6853,24 @@ function buildUI(): void {
       quotaWrap.style.display = '';
       quotaLabelEl.textContent =
         access.subscriptionStatus === 'past_due'
-          ? 'Payment is past due. Update billing to restore Chrome access.'
+          ? t('spBillingPastDue')
           : access.subscriptionStatus === 'canceled'
-            ? 'This subscription is canceled. Manage billing to restore Chrome access.'
-            : `This subscription is ${subscriptionStatusLabel}. Manage billing to restore Chrome access.`;
-      quotaExhaustedLabel.textContent = 'Paid Chrome access is paused.';
-      quotaUpgradeBtn.textContent = 'Manage billing';
+            ? t('spBillingCanceled')
+            : t('spBillingOtherStatus', [subscriptionStatusLabel]);
+      quotaExhaustedLabel.textContent = t('spBillingPaused');
+      quotaUpgradeBtn.textContent = t('spBillingManage');
+      quotaUpgradeBtn.dataset['destination'] = 'billing';
       quotaUpgradeRow.style.display = '';
       quotaBadgeEl.classList.add('visible', 'exhausted');
       quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = 'Billing';
+      quotaBadgeEl.textContent = t('spBillingBadge');
       setManagedCloudChatState('unavailable', {
         message:
           access.subscriptionStatus === 'past_due'
-            ? 'Update billing to restore AGI in Chrome.'
-            : `Your paid subscription is ${subscriptionStatusLabel}.`,
+            ? t('spGateBillingPastDue')
+            : t('spGateSubscriptionStatus', [subscriptionStatusLabel]),
         action: 'billing',
-        actionLabel: 'Manage billing',
+        actionLabel: t('spBillingManage'),
       });
       return;
     }
@@ -6870,7 +6886,9 @@ function buildUI(): void {
           ? formatUsageRemaining(100 - access.usagePercentage)
           : 'usage unavailable';
       const resets = formatUsageResetIn(access.usageResetAt ?? null);
-      quotaLabelEl.textContent = resets ? `Cloud: ${usage} · ${resets}` : `Cloud: ${usage}`;
+      quotaLabelEl.textContent = resets
+        ? t('spQuotaCloudUsageWithReset', [usage, resets])
+        : t('spQuotaCloudUsage', [usage]);
       quotaUpgradeRow.style.display = 'none';
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
@@ -6889,19 +6907,20 @@ function buildUI(): void {
     }
 
     quotaWrap.style.display = '';
-    quotaLabelEl.textContent = 'AGI in Chrome requires Pro or higher.';
-    quotaExhaustedLabel.textContent = 'Free chat remains available on Web, Mobile, and Desktop.';
-    quotaUpgradeBtn.textContent = 'Upgrade';
+    quotaLabelEl.textContent = t('spQuotaProRequired');
+    quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
+    quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
+    quotaUpgradeBtn.dataset['destination'] = 'pricing';
     quotaUpgradeRow.style.display = '';
 
     quotaBadgeEl.classList.add('visible');
     quotaBadgeEl.classList.remove('has-prompts');
     quotaBadgeEl.classList.add('exhausted');
-    quotaBadgeEl.textContent = 'Upgrade';
+    quotaBadgeEl.textContent = t('spQuotaUpgrade');
     setManagedCloudChatState('unavailable', {
-      message: 'AGI in Chrome requires Pro or higher.',
+      message: t('spQuotaProRequired'),
       action: 'upgrade',
-      actionLabel: 'View plans',
+      actionLabel: t('spGateViewPlans'),
     });
   };
 
@@ -6914,8 +6933,10 @@ function buildUI(): void {
 
   // Upgrade button — open agiworkforce.com pricing
   quotaUpgradeBtn.addEventListener('click', () => {
+    // The destination is read from the state that set the label, not from the
+    // label itself: a translated catalog would never match an English literal.
     const url =
-      quotaUpgradeBtn.textContent === 'Manage billing'
+      quotaUpgradeBtn.dataset['destination'] === 'billing'
         ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
         : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=developer_surfaces';
     chrome.tabs.create({ url }).catch(() => {});
@@ -6928,7 +6949,7 @@ function buildUI(): void {
       console.warn('[SidePanel] Clerk auth listener failed:', error);
     });
   } else {
-    signinDescription.textContent = 'AGI account sign-in is not configured in this build.';
+    signinDescription.textContent = t('spCloudSignInUnconfigured');
     signinBtn.setAttribute('disabled', '');
   }
 
@@ -6996,7 +7017,7 @@ function buildUI(): void {
           if (url.protocol !== 'http:' && url.protocol !== 'https:') {
             // Browser-internal pages have no hostname worth showing; `hostname`
             // is the raw extension id there. Same reason as pageChipLabel().
-            aboutUrlSpan.textContent = 'Browser page';
+            aboutUrlSpan.textContent = t('spAboutBrowserPage');
             aboutUrlSpan.removeAttribute('title');
           } else {
             const chars = [...`${url.hostname}${url.pathname}`];
@@ -7005,7 +7026,7 @@ function buildUI(): void {
             aboutUrlSpan.title = tab.url;
           }
         } catch {
-          aboutUrlSpan.textContent = 'Unknown';
+          aboutUrlSpan.textContent = t('spAboutUnknownPage');
         }
       }
     } catch {
@@ -7357,7 +7378,7 @@ function buildUI(): void {
       (recResp: { success?: boolean; actions?: unknown[] } | undefined) => {
         if (chrome.runtime.lastError || !recResp?.success) {
           const origPlaceholder = saveNameInput.placeholder;
-          saveNameInput.placeholder = 'Failed to retrieve actions';
+          saveNameInput.placeholder = t('spShortcutActionsFailed');
           saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
           setTimeout(() => {
             saveNameInput.placeholder = origPlaceholder;
@@ -7373,7 +7394,7 @@ function buildUI(): void {
         chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: recActions }, () => {
           if (chrome.runtime.lastError) {
             const origPlaceholder = saveNameInput.placeholder;
-            saveNameInput.placeholder = 'Failed to save shortcut';
+            saveNameInput.placeholder = t('spShortcutSaveFailed');
             saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
             setTimeout(() => {
               saveNameInput.placeholder = origPlaceholder;
@@ -7497,10 +7518,10 @@ function buildUI(): void {
       return;
     }
     (scSaveBtn as HTMLButtonElement).disabled = true;
-    scSaveBtn.textContent = 'Saving...';
+    scSaveBtn.textContent = t('spShortcutSaving');
     chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: [], prompt }, () => {
       (scSaveBtn as HTMLButtonElement).disabled = false;
-      scSaveBtn.textContent = 'Create shortcut';
+      scSaveBtn.textContent = t('spShortcutCreate');
       if (chrome.runtime.lastError) {
         scNameInput.style.borderColor = 'var(--agi-ext-danger)';
         setTimeout(() => {
@@ -7601,7 +7622,7 @@ function buildUI(): void {
     ntPromptInput.style.borderColor = '';
     ntFormError.textContent = '';
     ntSaveBtn.removeAttribute('disabled');
-    ntSaveBtn.textContent = 'Create Task';
+    ntSaveBtn.textContent = t('spTaskCreate');
   };
   resetScheduledTaskDraftForOwnerTransition = resetNewTaskForm;
 
@@ -7634,7 +7655,7 @@ function buildUI(): void {
     }
     ntFormError.textContent = '';
     ntSaveBtn.setAttribute('disabled', 'true');
-    ntSaveBtn.textContent = 'Creating…';
+    ntSaveBtn.textContent = t('spTaskCreating');
     const createRequest = scheduledTaskCreateRequestFence.begin(_ctx.managedCloudOwner);
     chrome.runtime.sendMessage(
       {
@@ -7653,11 +7674,10 @@ function buildUI(): void {
           return;
         }
         ntSaveBtn.removeAttribute('disabled');
-        ntSaveBtn.textContent = 'Create Task';
+        ntSaveBtn.textContent = t('spTaskCreate');
         const runtimeError = chrome.runtime.lastError?.message;
         if (runtimeError || response?.success !== true) {
-          ntFormError.textContent =
-            runtimeError || response?.error || 'The scheduled task could not be created.';
+          ntFormError.textContent = runtimeError || response?.error || t('spTaskCreateFailed');
           return;
         }
         resetNewTaskForm();
@@ -7678,18 +7698,18 @@ function buildUI(): void {
     el('div', { class: 'sp-wf-group-desc' }, 'Organize tabs into groups for focused workflows.'),
   );
   const groupBtnsRow = el('div', { class: 'sp-wf-group-btns' });
-  const wfGroupAddBtn = el('button', { class: 'sp-wf-group-action-btn' }, '+ Group Tab');
-  const wfGroupRemoveBtn = el('button', { class: 'sp-wf-group-action-btn' }, '- Ungroup Tab');
+  const wfGroupAddBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabAdd'));
+  const wfGroupRemoveBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabRemove'));
   wfGroupAddBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage(
       { type: 'ADD_TAB_TO_GROUP' },
       (resp: { success?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !resp?.success) return;
         wfGroupAddBtn.classList.add('active');
-        wfGroupAddBtn.textContent = 'Grouped!';
+        wfGroupAddBtn.textContent = t('spGroupTabAdded');
         setTimeout(() => {
           wfGroupAddBtn.classList.remove('active');
-          wfGroupAddBtn.textContent = '+ Group Tab';
+          wfGroupAddBtn.textContent = t('spGroupTabAdd');
         }, 1500);
       },
     );
@@ -7699,9 +7719,9 @@ function buildUI(): void {
       { type: 'REMOVE_TAB_FROM_GROUP' },
       (resp: { success?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !resp?.success) return;
-        wfGroupRemoveBtn.textContent = 'Removed!';
+        wfGroupRemoveBtn.textContent = t('spGroupTabRemoved');
         setTimeout(() => {
-          wfGroupRemoveBtn.textContent = '- Ungroup Tab';
+          wfGroupRemoveBtn.textContent = t('spGroupTabRemove');
         }, 1500);
       },
     );
@@ -7903,7 +7923,7 @@ function buildUI(): void {
     title: 'Add current tab to group',
   });
   groupBtn.appendChild(renderIcon(Folder, 14));
-  const groupBtnLabel = document.createTextNode(' Group');
+  const groupBtnLabel = document.createTextNode(t('spDrawerGroupTab'));
   groupBtn.appendChild(groupBtnLabel);
   let isGrouped = false;
   groupBtn.addEventListener('click', () => {
@@ -7913,7 +7933,7 @@ function buildUI(): void {
       (response: { success?: boolean; grouped?: boolean } | undefined) => {
         if (chrome.runtime.lastError || !response?.success) return;
         isGrouped = response.grouped ?? false;
-        groupBtnLabel.textContent = isGrouped ? ' Ungroup' : ' Group';
+        groupBtnLabel.textContent = isGrouped ? t('spDrawerUngroupTab') : t('spDrawerGroupTab');
         groupBtn.classList.toggle('has-context', isGrouped);
       },
     );
@@ -8007,9 +8027,9 @@ function buildUI(): void {
       if (action === 'sign_in') {
         await openClerkSignIn();
         setManagedCloudChatState('signed_out', {
-          message: 'Finish sign-in in the new tab, then return here.',
+          message: t('spGateReturnAfterSignIn'),
           action: 'retry',
-          actionLabel: 'Check sign-in',
+          actionLabel: t('spCloudCheckSignIn'),
         });
       } else if (action === 'open_web') {
         await chrome.tabs.create({ url: 'https://agiworkforce.com' });
@@ -8030,9 +8050,9 @@ function buildUI(): void {
       }
     } catch (error) {
       setManagedCloudChatState('unavailable', {
-        message: error instanceof Error ? error.message : 'Unable to open AGI Cloud.',
+        message: error instanceof Error ? error.message : t('spGateOpenFailed'),
         action: 'retry',
-        actionLabel: 'Retry',
+        actionLabel: t('spGateRetry'),
       });
     } finally {
       cloudGateAction.disabled = false;
@@ -8294,7 +8314,7 @@ function buildUI(): void {
     id: 'sp-context-chip',
     title: 'Attach page content to next message',
   });
-  contextBtn.textContent = currentPageHostname || 'page';
+  contextBtn.textContent = currentPageHostname || t('spContextChipFallback');
   contextBtn.addEventListener('click', async () => {
     if (_ctx.pendingPageContext) {
       _ctx.pendingPageContext = null;
@@ -8303,7 +8323,7 @@ function buildUI(): void {
     }
     const chip = contextBtn!;
     const prevText = chip.textContent ?? '';
-    chip.textContent = 'capturing…';
+    chip.textContent = t('spContextChipCapturing');
     chip.classList.add('loading');
     chip.disabled = true;
     const ctx = await capturePageContext();
@@ -8335,14 +8355,14 @@ function buildUI(): void {
 
   function renderAutonomyChip(askFirst: boolean): void {
     autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
-    autonomyLabel.textContent = askFirst ? 'Ask first' : 'Full access';
+    autonomyLabel.textContent = askFirst ? t('spAutonomyAskFirst') : t('spAutonomyFullAccess');
     autonomyChip.title = askFirst
-      ? 'Every browser action is confirmed before it runs. Click to allow the agent to act without asking.'
-      : 'The agent can act in your browser without asking. Click to require confirmation for each action.';
+      ? t('spAutonomyAskFirstTooltip')
+      : t('spAutonomyFullAccessTooltip');
     autonomyChip.setAttribute('aria-pressed', String(!askFirst));
     autonomyChip.setAttribute(
       'aria-label',
-      askFirst ? 'Permission mode: ask before acting' : 'Permission mode: full access',
+      askFirst ? t('spAutonomyAskFirstAria') : t('spAutonomyFullAccessAria'),
     );
   }
 
@@ -8422,17 +8442,17 @@ function buildUI(): void {
     const valueLabel = ready
       ? EFFORT_LABEL[state.effort!]
       : state.status === 'awaiting-route'
-        ? 'Auto'
-        : 'N/A';
+        ? t('spEffortAuto')
+        : t('spEffortUnavailable');
 
-    effortButton.textContent = `Advanced · ${valueLabel}`;
+    effortButton.textContent = t('spEffortButton', [valueLabel]);
     effortButton.title = state.description;
     effortButton.dataset['disabled'] = String(!ready);
     effortButton.setAttribute(
       'aria-label',
       ready
-        ? `Reasoning effort: ${valueLabel}`
-        : `Reasoning effort unavailable. ${state.description}`,
+        ? t('spEffortAriaReady', [valueLabel])
+        : t('spEffortAriaUnavailable', [state.description]),
     );
     effortValue.textContent = valueLabel;
     effortDescription.textContent = state.description;
@@ -8499,7 +8519,7 @@ function buildUI(): void {
     title: 'Quick mode: prioritize lower latency for each reply',
     'data-active': 'false',
   });
-  quickModeToggle.textContent = 'Quick';
+  quickModeToggle.textContent = t('spQuickMode');
   chrome.storage.local.get({ agi_quick_mode: false }, (items) => {
     const active = items['agi_quick_mode'] === true;
     _ctx.quickMode = active;
@@ -8851,14 +8871,18 @@ function renderShortcutRows(
     item.appendChild(info);
     const btns = el('div', { class: 'sp-wf-shortcut-btns' });
     const resultConversationId = backgroundConversationId('shortcut', sc.id);
-    const playBtn = el('button', { class: 'sp-wf-btn-replay', title: 'Replay workflow' }, ' Play');
+    const playBtn = el(
+      'button',
+      { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
+      t('spShortcutPlay'),
+    );
     playBtn.addEventListener('click', () => {
       playBtn.textContent = '...';
       (playBtn as HTMLButtonElement).disabled = true;
       chrome.runtime.sendMessage(
         { type: 'REPLAY_SHORTCUT', shortcutId: sc.id },
         (resp: { success?: boolean } | undefined) => {
-          playBtn.textContent = ' Play';
+          playBtn.textContent = t('spShortcutPlay');
           (playBtn as HTMLButtonElement).disabled = false;
           // A prompt shortcut produces an answer rather than a page effect.
           // Show it here instead of leaving the user with a spinner that

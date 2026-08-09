@@ -20,10 +20,21 @@
  *    field names to the canonical cross-surface inner key names defined here.
  *    See apps/web/stores/settingsStore.ts for the web side.
  *
+ *    An inner key's meaning is a CONVENTION between surfaces, not something this
+ *    module can enforce: the server stores each namespace as a free-form record
+ *    and merges it key-by-key, so nothing rejects a second surface that reuses a
+ *    key for something else. What holds a meaning in place is a test per surface.
+ *    `language.locale` is the INTERFACE locale — Desktop feeds it straight into
+ *    i18n (apps/desktop/src/services/managedCloudSettingsSync.ts) — so Mobile's
+ *    spoken voice language rides a separate key, `language.speechLocale`, and
+ *    this module never reads `locale`. Before that split the two surfaces
+ *    overwrote each other every sync cycle. Pinned by
+ *    __tests__/cloudSettingsMapping.test.ts.
+ *
  * 4. NEVER include: BYOK/provider API keys, device tokens, model paths,
  *    providerMode, selectedVoiceId, selectedPresetId, ttsProvider, speechRate,
- *    speechPitch, speechLanguage (device-specific audio), backgroundFetchEnabled,
- *    hapticsEnabled, biometric settings, autoApproveMode (security policy),
+ *    speechPitch, backgroundFetchEnabled, hapticsEnabled,
+ *    biometric settings, autoApproveMode (security policy),
  *    device capability-detection results,
  *    isTemporaryChat (session-scoped).
  */
@@ -79,8 +90,21 @@ export interface CloudNotifications {
 
 /** Inner shape of the `language` namespace. */
 export interface CloudLanguage {
-  /** IETF language tag prefix for locale (e.g. 'en', 'fr', 'es'). */
+  /**
+   * Interface locale (e.g. 'en', 'fr', 'es') — the language the UI is rendered
+   * in. Mobile keeps its own copy in MMKV (`src/i18n`), not in this store, so
+   * this module neither reads nor writes the key; joining the two is a separate
+   * change. The server merges the `language` namespace key-by-key, so a mobile
+   * push leaves any stored `locale` intact meanwhile.
+   */
   locale?: string;
+  /**
+   * IETF language tag prefix the speech voices are filtered by (e.g. 'en',
+   * 'fr'). Separate from `locale`: an English UI with French voice replies is a
+   * legitimate pairing, and collapsing both onto one key made every sync cycle
+   * overwrite one surface's choice with the other's.
+   */
+  speechLocale?: string;
 }
 
 /** Inner shape of the `chat` namespace. */
@@ -172,7 +196,7 @@ export function toCloudSettings(
       enabled: notificationsEnabled,
     },
     language: {
-      locale: speechLanguage,
+      speechLocale: speechLanguage,
     },
     ...(memoryPolicyInitialized
       ? {
@@ -246,13 +270,26 @@ export function applyCloudSettings(partial: CloudSettings): void {
     store.setNotificationsEnabled(partial.notifications.enabled);
   }
 
-  // language
-  if (partial.language?.locale !== undefined) {
-    store.setSpeechLanguage(partial.language.locale);
+  // language — `locale` is the interface locale, deliberately not read here.
+  // Falling back to it when `speechLocale` is absent would restore the loop
+  // where Desktop's UI language retunes this device's voices.
+  if (partial.language?.speechLocale !== undefined) {
+    store.setSpeechLanguage(partial.language.speechLocale);
   }
 
-  // capabilities — only the two account-memory policy keys owned by Mobile.
-  // Recursive sync merging preserves Web's allowToolAssistedGeneration key.
+  // capabilities — Mobile reads only these two keys. `allowToolAssistedGeneration`
+  // is written by Web (apps/web/features/settings/sections/CapabilitiesSection.tsx)
+  // and by Desktop (managedCloudSettingsSync.ts); Mobile has no control for it and
+  // never applies it. It survives a Mobile push because pushSettings() merges the
+  // stored server document under the local projection (cloudSyncEngine.ts).
+  //
+  // KNOWN ASYMMETRY, pre-existing and NOT closed here: `capabilities.memory` is the
+  // account memory master on Web and Desktop, and the server reads it that way
+  // (apps/web/lib/services/managed-memory-context-service.ts). Mobile binds it to
+  // `referencePastChats` because Mobile's own master is device-local; the memory
+  // screen moves the two together, but Mobile's separate "reference past chats"
+  // switch can still move the account master on its own. Giving Mobile a real
+  // account master is a UI/store change outside this module.
   if (partial.capabilities?.memory !== undefined) {
     store.setReferencePastChats(partial.capabilities.memory);
   }

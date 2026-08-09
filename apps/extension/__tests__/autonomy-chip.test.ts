@@ -42,8 +42,8 @@ describe('autonomy chip', () => {
   });
 
   it('labels both states and tints the permissive one as a warning', () => {
-    expect(panel).toContain("'Ask first'");
-    expect(panel).toContain("'Full access'");
+    expect(panel).toContain("t('spAutonomyAskFirst')");
+    expect(panel).toContain("t('spAutonomyFullAccess')");
     // The risky mode carries the warning colour, not the safe one.
     expect(panel).toContain(".sp-autonomy-chip[data-mode='full']");
     expect(panel).toContain('--agi-ext-warning-bg');
@@ -57,6 +57,8 @@ describe('autonomy chip', () => {
 
   it('exposes the mode to assistive tech', () => {
     expect(panel).toContain("autonomyChip.setAttribute('aria-pressed'");
-    expect(panel).toContain('Permission mode: ask before acting');
+    // The English lives in _locales/en/messages.json; __tests__/i18n.test.ts
+    // proves the key resolves.
+    expect(panel).toContain("t('spAutonomyAskFirstAria')");
   });
 });

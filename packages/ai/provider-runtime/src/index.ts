@@ -81,6 +81,9 @@ export { detectGateway, gatewayEnforcesUserSideLimits, type GatewayId } from './
 // ----- fallback -----
 export { buildFallbackChain, type FallbackStrategy, type FallbackChainOptions } from './fallback';
 
+// ----- failover admission -----
+export { CredentialFailoverState } from './failover';
+
 // ----- history (repair) -----
 export {
   repairMessageHistory,

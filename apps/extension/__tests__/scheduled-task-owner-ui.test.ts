@@ -138,7 +138,7 @@ describe('scheduled-task owner fence wiring', () => {
     expect(form).toContain("newTaskForm.classList.remove('open')");
     expect(form).toContain("ntNameInput.value = ''");
     expect(form).toContain("ntPromptInput.value = ''");
-    expect(form).toContain("ntSaveBtn.textContent = 'Create Task'");
+    expect(form).toContain("ntSaveBtn.textContent = t('spTaskCreate')");
     expect(form).toContain(
       'scheduledTaskCreateRequestFence.isCurrent(createRequest, _ctx.managedCloudOwner)',
     );
