@@ -34,6 +34,22 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // argon2 is a native addon: argon2.cjs picks its .node binary at require time
+  // via node-gyp-build(__dirname), which output tracing can only follow to the
+  // BUILD host's platform. Vercel builds on linux-x64 and runs the functions on
+  // linux-arm64, so the single prebuild that got traced was never the one the
+  // lambda needed:
+  //   No native build was found for platform=linux arch=arm64 ... node=24.18.0
+  //   loaded from: /var/task/node_modules/.pnpm/argon2@0.44.0/node_modules/argon2
+  // api-key-service.ts touches argon2 at module scope and lib/api-auth.ts imports
+  // it statically, so that miss took down every handler whose graph reaches it —
+  // 143 of 196 API routes answered an empty-body 500 instead of a 401. Shipping
+  // every prebuild removes the dependency on which machine built the deployment.
+  // The glob targets the pnpm store path because that is the realpath __dirname
+  // resolves to at runtime, as the error above shows.
+  outputFileTracingIncludes: {
+    '/**': ['../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**'],
+  },
   // Type checking during build — all TS errors resolved as of 2026-02-28.
   typescript: {
     ignoreBuildErrors: false,
