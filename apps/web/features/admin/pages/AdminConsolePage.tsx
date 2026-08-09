@@ -192,8 +192,10 @@ export default function AdminConsolePage() {
             <KeyRound className="h-5 w-5 text-emerald-300" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-white">Identity</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Organization, SSO, and directory-sync configuration now have canonical migrations and
-              RLS. First-party SSO sign-in and SCIM provisioning remain intentionally deferred.
+              Organization, SSO, and directory-sync configuration have canonical migrations and RLS.
+              Enterprise SSO sign-in (Clerk enterprise connections, /api/admin/sso) and SCIM 2.0
+              provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls
+              capability.
             </p>
           </div>
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">

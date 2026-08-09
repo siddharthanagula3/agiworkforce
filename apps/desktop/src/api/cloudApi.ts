@@ -26,6 +26,7 @@ import {
   ManagedMediaImageGenerationRequestSchema,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
+  TOOL_APPROVAL_RESUME_PATH,
   type ManagedMediaImageProvider,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunHandle,
@@ -1024,7 +1025,7 @@ export async function sendCloudApprovalResume(
     let res: Response;
     try {
       res = await accountBoundCloudFetch(
-        `${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`,
+        `${CLOUD_API_BASE_URL}${TOOL_APPROVAL_RESUME_PATH}`,
         {
           method: 'POST',
           headers,

@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  managedCloudPreferencesNamespacePath,
+} from '@agiworkforce/cloud-contracts';
+
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
 /**
@@ -15,12 +20,9 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 export async function fetchStoredPreferenceNamespace<T extends object>(
   namespace: string,
 ): Promise<Partial<T>> {
-  const response = await fetch(
-    `/api/settings/preferences?namespace=${encodeURIComponent(namespace)}`,
-    {
-      credentials: 'include',
-    },
-  );
+  const response = await fetch(managedCloudPreferencesNamespacePath(namespace), {
+    credentials: 'include',
+  });
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as {
       error?: { message?: string };
@@ -94,7 +96,7 @@ export async function savePreferenceNamespace<T extends object>(
   value: T,
 ): Promise<void> {
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-  const response = await fetch('/api/settings/preferences', {
+  const response = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
     method: 'PUT',
     headers,
     credentials: 'include',

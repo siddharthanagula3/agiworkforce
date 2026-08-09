@@ -201,6 +201,31 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
+  it('starts the OAuth flow for a configured provider outside VALID_CONNECTOR_IDS', async () => {
+    // `airtable` is in the web catalog (features/connectors/data/connectors.ts)
+    // but NOT in this route's 34-id VALID_CONNECTOR_IDS allowlist, and the OAuth
+    // registry accepts any well-formed connectorId. Before the POST gate learned
+    // about OAuth-configured ids, GET advertised airtable as available — so the
+    // directory rendered a live Connect button — and this POST answered 400
+    // "Invalid connector ID". Availability and connectability must agree.
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['airtable']));
+
+    const getBody = (await (await GET(getRequest())).json()) as { available: string[] };
+    expect(getBody.available).toContain('airtable');
+
+    const response = await POST(postRequest('airtable'));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      connectorId: 'airtable',
+      oauthStartPath: '/api/connectors/oauth/start?connectorId=airtable',
+    });
+    // The 409 is a redirect to consent, not a connection: nothing is persisted.
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
+    ).toBe(false);
+  });
+
   it('reports an OAuth grant as connected, without exposing any token material', async () => {
     mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
     mocks.oauthGrants.mockResolvedValue([

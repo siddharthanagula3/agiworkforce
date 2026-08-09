@@ -23,9 +23,6 @@ export const AUTH_SIGN_IN_TIMEOUT_MS = 30_000;
 /** Timeout for auth sign-out operations (2 seconds) */
 export const AUTH_SIGN_OUT_TIMEOUT_MS = 2_000;
 
-/** Timeout for setSession operations (10 seconds) */
-export const SET_SESSION_TIMEOUT_MS = 10_000;
-
 /** Timeout for profile fetch operations (15 seconds) */
 export const PROFILE_FETCH_TIMEOUT_MS = 15_000;
 

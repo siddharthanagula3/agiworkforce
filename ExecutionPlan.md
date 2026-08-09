@@ -168,7 +168,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Area: security
 - Severity: critical
 - Writes: `packages/platform/utils/src/logger.ts`
-- Verify: `pnpm --filter @agiworkforce/platform-utils test logger` (new: PEM block, `ASIA…`, `aws_secret_access_key`, `gho_/ghu_/ghr_`, variable-length `AIza…`; and `ts=1721469876543` must NOT redact)
+- Verify: `pnpm --filter @agiworkforce/utils test logger` (new: PEM block, `ASIA…`, `aws_secret_access_key`, `gho_/ghu_/ghr_`, variable-length `AIza…`; and `ts=1721469876543` must NOT redact)
 - Evidence: `packages/platform/utils/src/logger.ts:40–161` vs `apps/cli/src/secret_redaction.rs:8–104`; card regex at `logger.ts` matches epoch-ms, a case `apps/desktop/src-tauri/src/sys/security/log_redaction.rs:99–106` already fixed.
 
 ### 12. VS Code extension sends DB passwords in the git diff to the model
@@ -214,7 +214,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — agent write-denial verified and its dead arm removed — d16a0df18
 - Area: security
 - Severity: critical
-- Writes: `apps/cli/src/memory.rs`, `apps/cli/src/tools/path_security.rs`
+- Writes: `apps/cli/src/memory.rs`, apps/cli/src/tools/path_security.rs (as reported by the audit; no such file in this tree)
 - Verify: `cargo test -p agiworkforce-cli --lib rules_file_write_denied` (new: agent `write_file` to `<git-root>/.agiworkforce/rules/*.md` is denied, or loaded content is wrapped in the untrusted marker)
 - Evidence: `apps/cli/src/memory.rs` loads `<git-root>/.agiworkforce/rules/*.md` into every future session as trusted instructions; no denylist in path security.
 
@@ -223,7 +223,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — extension message-policy coverage — 00afb5349
 - Area: security
 - Severity: high
-- Writes: `apps/desktop/src-tauri/src/sys/commands/media.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/tool_config.rs`, `apps/desktop/src/lib/runtime/TauriRuntime.ts`
+- Writes: `apps/desktop/src-tauri/src/sys/commands/media.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/tool_config.rs`, apps/desktop/src/lib/runtime/TauriRuntime.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:trust-boundaries` and `cargo test -p agiworkforce-desktop media_local_mode_blocked` (new)
 - Evidence: `media.rs:208–235, 301–330` (raw `reqwest` + `bearer_auth`, no privacy/mode read, bypasses the TS `guardedFetch` chokepoint); `tool_config.rs:53–62` filters only when `model_capabilities` is `Some`, and `TauriRuntime.ts:1046–1090` never populates it (fail-open).
 
@@ -241,7 +241,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — refuse SVG attachments, cap avatars — f8b20a313
 - Area: security
 - Severity: high
-- Writes: `packages/contracts/types/src/chat.ts`, `apps/web/app/api/uploads/presign/route.ts`, `apps/web/app/api/uploads/avatar/complete/route.ts` (new), `apps/web/app/api/uploads/knowledge-file/complete/route.ts` (new)
+- Writes: `packages/contracts/types/src/chat.ts`, `apps/web/app/api/uploads/presign/route.ts`, apps/web/app/api/uploads/avatar/complete/route.ts (as reported by the audit; no such file in this tree) (new), apps/web/app/api/uploads/knowledge-file/complete/route.ts (as reported by the audit; no such file in this tree) (new)
 - Verify: `pnpm --filter @agiworkforce/web test uploads` (new: `image/svg+xml` rejected for every `kind`; `scanUploadBytes` runs for all kinds)
 - Evidence: `chat.ts:134–263` (broad `image/` prefix at 25 MiB vs 16-entry list at 12 MiB); `presign/route.ts:84–97` runs the narrow check only when `kind === 'chat-attachment'`; `scanUploadBytes` has exactly one caller.
 
@@ -293,7 +293,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — CLI env contract — 49d509f47
 - Area: ops
 - Severity: high
-- Writes: `apps/web/.env.example`, `apps/web/lib/validate-env.ts`, `scripts/env-doctor.mjs`, `apps/cli/.env.example` (new), `scripts/check-env-contract.mjs`
+- Writes: `apps/web/.env.example`, `apps/web/lib/validate-env.ts`, `scripts/env-doctor.mjs`, `apps/cli/.env.example` (new), scripts/check-env-contract.mjs (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:env-contract && pnpm env:doctor`
 - Evidence: `UPLOAD_SCAN_WEBHOOK_URL` (scanner silently off when unset), `ENCRYPTION_KEY`, `DESKTOP_TOKEN_SECRET` (two spellings), `STRIPE_PRICE_TEAM_*` (Team checkout fails closed; `apps/web/lib/__tests__/public-billing-copy.test.ts:88` documents the gap instead of failing), `CONNECTOR_OAUTH_*_CLIENT_ID/SECRET` (runtime-derived names), `RESEND_API_KEY` + 5 support vars with hardcoded `support@agiworkforce.com` defaults; `apps/cli` ships no example for ~20 vars and `check:env-contract` inspects six hardcoded scopes excluding the CLI.
 - ⚠ Serial with #23.
@@ -342,7 +342,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: REVERTED (2026-08-09) — REVERTED. The fix was inert: the fail-closed branch could not fire, and the numeric arm of `automationsPerDay` has no producer. Reverting exposed the real finding, which is larger than this item — `hasFeature`, `checkFeatureAccess`, `checkAutomationLimit`/`checkApiCallLimit`/`checkStorageLimit`, eight grace-period helpers and the whole `constants/pricing.ts` module have zero production callers. That is a dead subsystem, not a limit bug; it needs its own item rather than a patch to one constant. Revert verified byte-identical to HEAD by checksum.
 - Area: billing
 - Severity: critical
-- Writes: `packages/contracts/types/src/billing-catalog.ts`, `apps/desktop/src/constants/pricing.ts`, `apps/desktop/src/constants/planFeatures.ts`, `apps/desktop/src/lib/featureGates.ts`
+- Writes: `packages/contracts/types/src/billing-catalog.ts`, `apps/desktop/src/constants/pricing.ts`, `apps/desktop/src/constants/planFeatures.ts`, apps/desktop/src/lib/featureGates.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm --filter @agiworkforce/types test billing-catalog && pnpm --filter @agiworkforce/desktop test featureGates` (new: no tier is simultaneously unlimited and capped; unlimited tiers carry a cost ceiling)
 - Evidence: Enterprise resolves every rolling cap to `null` with $1,000,000 ledger headroom at price 0; `featureGates.ts:72` reads a table capping local-only/byok at 5/10 while `featureGates.ts:107` enforces "unlimited" for the same tiers, and no server-side automation counter exists.
 - ⚠ Serial with #28.
@@ -393,7 +393,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — origin_surface accepts cli — e5d0727b9 (0099)
 - Area: correctness
 - Severity: high
-- Writes: `apps/desktop/src/stores/connectorsStore.ts`, `apps/desktop/src/stores/chatPreferencesStore.ts`, `packages/client/client-runtime/src/http.ts`, `apps/extension/src/features/background/synced-preferences.ts`, `apps/extension/src/features/background/__tests__/synced-preferences.test.ts`
+- Writes: `apps/desktop/src/stores/connectorsStore.ts`, `apps/desktop/src/stores/chatPreferencesStore.ts`, `packages/client/client-runtime/src/http.ts`, `apps/extension/src/features/background/synced-preferences.ts`, apps/extension/src/features/background/**tests**/synced-preferences.test.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm --filter @agiworkforce/desktop test connectorsStore && pnpm --filter @agiworkforce/extension test synced-preferences` (new: persist keys are unique repo-wide; every synced key has a writer)
 - Evidence: `connectorsStore.ts:344–347` (two stores share key `connectors-store` at v7/v4, forcing the v7 `version < 6` migration to reset the catalog; twin collision on `agiworkforce-chat-preferences`); `packages/client/client-runtime/src/http.ts:25` reads `agi-auth-token`, which has no writer anywhere, so `routeToCloud()` always POSTs unauthenticated; `synced-preferences.ts:13` syncs `agi_in_page_panel_enabled` (real key: `in_page_panel_enabled`) and the test asserts the typo.
 
@@ -402,7 +402,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — one owner for the admin role pair — e5d0727b9 (0100)
 - Area: security
 - Severity: high
-- Writes: `apps/web/shared/stores/authentication-store.ts`, `apps/web/shared/stores/authentication-manager.ts`, `apps/desktop/src/stores/logoutCleanup.ts`
+- Writes: `apps/web/shared/stores/authentication-store.ts`, apps/web/shared/stores/authentication-manager.ts (as reported by the audit; no such file in this tree), `apps/desktop/src/stores/logoutCleanup.ts`
 - Verify: `pnpm --filter @agiworkforce/web test authentication-store && pnpm --filter @agiworkforce/desktop test logoutCleanup` (new: after logout no key written by any store remains)
 - Evidence: `authentication-store.ts:126–134` patterns match neither `auth_token` nor `refresh_token` (`apps/web/shared/lib/api.ts:45–46`), and `logout()` calls the no-op `authService.logout()` (`authentication-manager.ts:92–94`) instead of `apiClient.clearTokens()`; `logoutCleanup.ts:192–221` lists 13 keys, missing `agiworkforce-memory`, `agiworkforce-custom-instructions`, `research-store`, and 3 of its 13 have no writer.
 - Note: the web leg is lower-impact than the audit implies — `apiClient.login()`/`setToken()` appear to be dead code (auth is Clerk-cookie based). Fix anyway; delete the dead client if confirmed.
@@ -421,7 +421,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — signaling resync contract — 2ac7e148a
 - Area: data
 - Severity: high
-- Writes: `apps/web/db/neon/0104_origin_surface_cli.sql` (new), `apps/web/app/api/cloud-agent/runs/route.ts`
+- Writes: apps/web/db/neon/0104_origin_surface_cli.sql (as reported by the audit; no such file in this tree) (new), apps/web/app/api/cloud-agent/runs/route.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:neon-migrations && pnpm --filter @agiworkforce/web test cloud_agent_runs`
 - Evidence: `apps/web/db/neon/0061_cloud_agent_runs.sql:14–16` CHECK omits `cli` while the Zod schema allows it; only `unknown` is remapped to `api`.
 
@@ -430,7 +430,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: BLOCKED (2026-08-09) — BLOCKED — needs writes outside the declared Writes set. Cloud-code approval rows can be inserted but not decided; closing it touches the agent loop and the approvals service together.
 - Area: data
 - Severity: high
-- Writes: `apps/web/lib/services/cloud-code-agent-loop.ts`, `apps/web/app/api/cloud-code/approvals/route.ts` (new)
+- Writes: `apps/web/lib/services/cloud-code-agent-loop.ts`, apps/web/app/api/cloud-code/approvals/route.ts (as reported by the audit; no such file in this tree) (new)
 - Verify: `pnpm --filter @agiworkforce/web test cloud-code-approvals` (new: approve → resume, reject → abort, expiry sweep)
 - Evidence: `apps/web/db/neon/0082_cloud_code_agent_turns.sql:102–127`; the table has one INSERT, no SELECT/UPDATE, and `preApproved` is supplied only by tests.
 - ⚠ Serial with #22.
@@ -440,7 +440,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop event emission — 4f1e0c35b
 - Area: data
 - Severity: high
-- Writes: `apps/web/lib/server/scim/scim-auth.ts`, the 11 other TS call sites, `apps/web/db/neon/0105_admin_role_helper.sql` (new)
+- Writes: `apps/web/lib/server/scim/scim-auth.ts`, the 11 other TS call sites, apps/web/db/neon/0105_admin_role_helper.sql (as reported by the audit; no such file in this tree) (new)
 - Verify: `pnpm check:hardcoded-arrays && pnpm --filter @agiworkforce/web test scim-auth`
 - Evidence: `apps/web/lib/server/scim/scim-auth.ts:116`; canonical `isOrganizationAdminRole()` has exactly one caller; the RLS helper `app_row_is_readable` also inlines the pair.
 
@@ -472,7 +472,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — connector persist key — ae0e7ed6c
 - Area: correctness
 - Severity: high
-- Writes: `packages/contracts/types/src/signaling.ts`, `apps/desktop/src/services/signalingClient.ts`, `apps/mobile/services/signaling.ts`
+- Writes: `packages/contracts/types/src/signaling.ts`, apps/desktop/src/services/signalingClient.ts (as reported by the audit; no such file in this tree), apps/mobile/services/signaling.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:protocol-types && pnpm --filter @agiworkforce/types test signaling`
 - Evidence: `signaling.ts:67–121` lacks `sync_request`, `approval_queued`, `connection_timeout`, `server_shutdown`; both clients drop them via `default: break`, killing mobile reconnect state-sync.
 
@@ -490,7 +490,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop tool-confirmation client narrowed to reachable surface — 3c6bf9a7e
 - Area: correctness
 - Severity: high
-- Writes: `packages/client/desktop-command-client/src/toolConfirmation.ts`, `packages/contracts/types/src/agent-mode.ts`
+- Writes: `packages/client/desktop-command-client/src/toolConfirmation.ts`, packages/contracts/types/src/agent-mode.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm --filter @agiworkforce/desktop-command-client test toolConfirmation` (new: the TS union equals the Rust `serde` wire values)
 - Evidence: `toolConfirmation.ts:14` (`supervised|autonomous|restricted`) vs `apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:118–125` (`safe|plan|build|autopilot`); used by `RecorderHud.tsx` and `BridgeStatusCard.tsx`, so not dead.
 
@@ -519,7 +519,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — canonical chat/schedule path builders — 68591008c
 - Area: correctness
 - Severity: high
-- Writes: `apps/web/lib/runtime/WebChatRuntime.ts`, `apps/web/features/schedules/services/schedule-api.ts`, `apps/mobile/services/streaming.ts`, `packages/ui/unified-chat/src/lib/connector-connect-required.ts`, `packages/contracts/cloud-contracts/src/paths.ts`
+- Writes: `apps/web/lib/runtime/WebChatRuntime.ts`, `apps/web/features/schedules/services/schedule-api.ts`, `apps/mobile/services/streaming.ts`, `packages/ui/unified-chat/src/lib/connector-connect-required.ts`, packages/contracts/cloud-contracts/src/paths.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:cloud-contract-ownership && pnpm --filter @agiworkforce/web test schedule-api`
 - Evidence: `MANAGED_CLOUD_CHAT_BASE_PATH` has 13 non-test literal re-typings (5 in `WebChatRuntime.ts:343–391`); `/api/me` has 10+ literals with disagreeing query params; `schedule-api.ts:140,154,164` addresses one resource three ways (raw literal / builder / constant); `apps/mobile/services/streaming.ts:233–234` shadows the imported `TOOL_APPROVAL_RESUME_PATH`; `connector-connect-required.ts:55–56,135` is a third independent `CONNECTOR_OAUTH_START_PATH` inside a strict pathname-equality trust check.
 
@@ -610,7 +610,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Area: correctness
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/sys/commands/chat/compaction.rs`, `apps/desktop/src-tauri/src/core/agent/context_compactor.rs`, `apps/cli/src/subagent_v2.rs`, `apps/cli/src/config.rs`, `apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs`, `packages/ai/providers/anthropic/src/translate.ts`, `apps/web/app/api/github/webhook/route.ts`, `apps/desktop/src/stores/settings/voice.ts`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src-tauri/src/sys/commands/settings.rs`, `apps/desktop/src-tauri/src/data/settings/models.rs`
-- Verify: `cargo test -p agiworkforce-desktop compaction && cargo test -p agiworkforce-cli --lib max_tokens && pnpm --filter @agiworkforce/anthropic test translate`
+- Verify: `cargo test -p agiworkforce-desktop compaction && cargo test -p agiworkforce-cli --lib max_tokens && pnpm --filter @agiworkforce/providers-anthropic test translate`
 - Evidence: `compaction.rs:106–117` (flat 100k/50k, command takes no model; sibling `context_monitor.rs:117–186` resolves the real window); `context_compactor.rs:40–41`; `subagent_v2.rs:457–465` (4096 vs a 128k registry max, never overridden); `config.rs:132–134` (default 8192) and `:803–808` (ceiling 200k, both registry-independent — 150k passes local validation and is rejected upstream); `anthropic_agent.rs:63–79`; `translate.ts:96,283`; `github/webhook/route.ts:429–439` (1024, direct `api.anthropic.com` call); `voice.ts:433,1308`; `settingsStore.ts:331` + `settings.rs:388` + `models.rs:205`.
 - ⚠ Serial with #59 (`settingsStore.ts`), #67 (`request-processor.ts`).
 
@@ -638,7 +638,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop settings store ownership — ac20a2962
 - Area: security
 - Severity: high
-- Writes: `apps/desktop/src-tauri/src/sys/security/capabilities.rs`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx`
+- Writes: apps/desktop/src-tauri/src/sys/security/capabilities.rs (as reported by the audit; no such file in this tree), `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx`
 - Verify: `cargo test -p agiworkforce-desktop capability_default_denied` (new) `&& pnpm --filter @agiworkforce/desktop test settingsStore`
 - Evidence: `capabilities.rs:25–28` `is_enabled` returns `unwrap_or(true)`; `settingsStore.ts:1594–1603, 1707–1714` swallows the sync failure to `console.error` and still shows success, so `terminalAccess`/`fileOperations`/`codeExecution` stay live after being turned off; `DesktopCloudSettingsModal.tsx:496,515` indexes an untyped `Record<string, boolean>` with `native_web_search`, a key with exactly one hit repo-wide.
 - ⚠ Serial with #56 (`settingsStore.ts`).
@@ -657,7 +657,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: BLOCKED (2026-08-09) — BLOCKED — needs writes outside the declared Writes set. The provider-URL duplication is real and nearly every cited site confirmed, but the canonical registry and its consumers cannot be changed independently.
 - Area: security
 - Severity: medium
-- Writes: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/video/generate/route.ts`, `apps/web/app/api/media/video/status/route.ts`, `apps/web/app/api/llm/v1/embeddings/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/web/scripts/test-llm-keys.ts`, `apps/web/lib/server/container-files.ts`, `apps/web/features/settings/components/CustomModelsSettings.tsx`, `apps/desktop/src/features/settings/CustomModelsSettings.tsx`, `apps/desktop/electron/config.ts`, `apps/desktop/vite.config.ts`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src/utils/security.ts`, `apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs`, `apps/desktop/src-tauri/src/core/llm/web_search_config.rs`, `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/voice.rs`
+- Writes: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/video/generate/route.ts`, `apps/web/app/api/media/video/status/route.ts`, `apps/web/app/api/llm/v1/embeddings/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/web/scripts/test-llm-keys.ts`, `apps/web/lib/server/container-files.ts`, `apps/web/features/settings/components/CustomModelsSettings.tsx`, `apps/desktop/src/features/settings/CustomModelsSettings.tsx`, `apps/desktop/electron/config.ts`, `apps/desktop/vite.config.ts`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src/utils/security.ts`, `apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs`, apps/desktop/src-tauri/src/core/llm/web_search_config.rs (as reported by the audit; no such file in this tree), `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/voice.rs`
 - Verify: `pnpm check:provider-contracts && cargo check --workspace`
 - Evidence: `generativelanguage.googleapis.com` retyped in 6 files (`image/generate/route.ts:487,550`, `video/generate/route.ts:324`, `video/status/route.ts:218`, `embeddings/route.ts:132`, `control-plane/status/route.ts:54`, `test-llm-keys.ts:38`); `container-files.ts:88,99,117`; identical preset tables in the two `CustomModelsSettings.tsx`; `electron/config.ts:69` + `vite.config.ts:164` + `tauri.conf.json:37` + dead `security.ts:495–507` duplicate `GATEWAY_BASE_URL` (`apps/desktop/src/api/config.ts:19` says every module should import from there); `conversation_summarizer.rs:669,733`, `perplexity.rs:120`, `veo3.rs:85`, `web_search_config.rs:72` bypass `default_base_url()` (`core/llm/providers/direct_api_provider.rs:386–413`); `provider_dispatch.rs:638` duplicates `apps/cli/src/models/mod.rs:98`; `apps/cli/src/voice.rs:887` = `apps/desktop/src-tauri/src/sys/commands/voice.rs:522`.
 - ⚠ Serial with #54, #55, #49, #50.
@@ -695,7 +695,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop pagination contract — ac20a2962
 - Area: ops
 - Severity: medium
-- Writes: `apps/desktop/src/stores/chat/chatStore.ts`, `apps/desktop/src/features/chat/CommandPalette.tsx`, `apps/desktop/src/features/mcp/MCPBundleBrowser.tsx`, `apps/mobile/stores/chat/chatViewStore.ts`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/extension/src/webmcp.ts`, `apps/web/shared/lib/api.ts`, `apps/web/shared/lib/api-enhanced.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx`, `apps/web/features/schedules/components/SchedulesPage.tsx`, `apps/desktop/e2e/fixtures/mock-data.ts`
+- Writes: `apps/desktop/src/stores/chat/chatStore.ts`, `apps/desktop/src/features/chat/CommandPalette.tsx`, `apps/desktop/src/features/mcp/MCPBundleBrowser.tsx`, `apps/mobile/stores/chat/chatViewStore.ts`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/extension/src/webmcp.ts`, `apps/web/shared/lib/api.ts`, `apps/web/shared/lib/api-enhanced.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx`, `apps/web/features/schedules/components/SchedulesPage.tsx`, apps/desktop/e2e/fixtures/mock-data.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:hardcoded-arrays && pnpm typecheck:all`
 - Evidence: 300 ms debounce independently chosen in 7 files (`chatStore.ts:170`, `CommandPalette.tsx:218`, `MCPBundleBrowser.tsx:651`, `chatViewStore.ts:251`, `LibraryView.tsx:175`, `GlobalSearchDialog.tsx:167`, `webmcp.ts:377`); 3-attempt retry defaults (`api.ts:31`, `api-enhanced.ts:115`, +2); page size 50 in 6 places with `SCHEDULE_PAGE_SIZE=50`/`RUN_PAGE_SIZE=20` duplicated verbatim across desktop and web; `mock-data.ts:221–267` asserts a standalone pricing table where 3 of 5 model IDs (`gpt-5.5`, `deepseek-chat`, `qwen-max`) don't exist in the catalog.
 
@@ -737,7 +737,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop reasoning renderer deduplicated — ac20a2962
 - Area: perf
 - Severity: critical
-- Writes: `packages/ui/unified-chat/src/components/MarkdownContent.tsx`, `packages/ui/unified-chat/src/stores/chatStore.ts`
+- Writes: packages/ui/unified-chat/src/components/MarkdownContent.tsx (as reported by the audit; no such file in this tree), `packages/ui/unified-chat/src/stores/chatStore.ts`
 - Verify: `pnpm --filter @agiworkforce/unified-chat test MarkdownContent` (new: memoized) plus a main-thread profile of a 16k-char answer (currently 7.3 s)
 - Evidence: `MarkdownContent` is a plain function component with no `React.memo`, calls `preprocessMath(content)` without `useMemo`, and reallocates all six plugin arrays each render; `appendToMessage` rebuilds the array via `messages.map(...)` per chunk.
 
@@ -746,7 +746,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — desktop approval UI single owner — ac20a2962
 - Area: perf
 - Severity: high
-- Writes: `apps/web/db/neon/0106_sync_and_search_indexes.sql` (new), `apps/web/app/api/chat/search/route.ts`
+- Writes: apps/web/db/neon/0106_sync_and_search_indexes.sql (as reported by the audit; no such file in this tree) (new), apps/web/app/api/chat/search/route.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:neon-migrations && pnpm test:db-migrate`
 - Evidence: `cloud_sync_version_seq` is one sequence for all users and tables with single-column `server_version` indexes and no user scoping; history search pulls the user's entire conversation-ID list with no LIMIT (≈180 KB of binds at 5,000 UUIDs) then runs `content ilike '%q%'` against `web_messages`.
 
@@ -815,7 +815,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — mobile/vscode limits from contracts — 49d509f47
 - Area: ux
 - Severity: high
-- Writes: `apps/extension-vscode/package.nls.json` (new), `apps/extension-vscode/src/**`, `apps/cli/Cargo.toml`, `apps/cli/src/tui/widgets/**`, `apps/cli/locales/**` (new)
+- Writes: apps/extension-vscode/package.nls.json (as reported by the audit; no such file in this tree) (new), `apps/extension-vscode/src/**`, `apps/cli/Cargo.toml`, `apps/cli/src/tui/widgets/**`, `apps/cli/locales/**` (new)
 - Verify: `pnpm --filter agi-workforce test && cargo test -p agiworkforce-cli --lib tui`
 - Evidence: zero hits for `useTranslation`/`vscode-nls`/`vscode.l10n` in `apps/extension-vscode/src`; no i18n/l10n crate in `Cargo.lock`; `apps/cli/src/tui/widgets/{command_popup,agent_picker}.rs` bake box-drawing headers, hint bars and empty states into render functions.
 
@@ -824,7 +824,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — thin-surface endpoint resolution — 49d509f47
 - Area: ci
 - Severity: medium
-- Writes: `packages/i18n/locales/{zh,ru,pt,ko,ja,it,fr,de,ar,hi,es}/**`, `apps/mobile/src/components/AgiMark.tsx`, `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx`, `apps/mobile/src/components/MathBlock.tsx`, `apps/mobile/src/lib/sandboxedArtifactHtml.ts`, `apps/mobile/src/lib/syntaxHighlight.ts`, `apps/mobile/src/features/connectors/AddCustomConnectorModal.tsx`
+- Writes: `packages/i18n/locales/{zh,ru,pt,ko,ja,it,fr,de,ar,hi,es}/**`, apps/mobile/src/components/AgiMark.tsx (as reported by the audit; no such file in this tree), `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx`, apps/mobile/src/components/MathBlock.tsx (as reported by the audit; no such file in this tree), apps/mobile/src/lib/sandboxedArtifactHtml.ts (as reported by the audit; no such file in this tree), apps/mobile/src/lib/syntaxHighlight.ts (as reported by the audit; no such file in this tree), apps/mobile/src/features/connectors/AddCustomConnectorModal.tsx (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:i18n-parity && pnpm check:no-hex-mobile` (both must exit 0)
 - Evidence: parity fails live with 2,075 findings (pricing.json 1,120, v3.json 418, auth.json 220, common.json 207, models.json 80, chat.json 10); hex check fails with exactly 15 findings at `AgiMark.tsx:17`, `WebSearchResultCard.tsx:7,68`, `MathBlock.tsx:269`, `sandboxedArtifactHtml.ts:22,51`, `syntaxHighlight.ts:295`, `AddCustomConnectorModal.tsx:194,230`.
 
@@ -855,7 +855,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: REVERTED (2026-08-09) — REVERTED. The load-testing tooling was removed entirely rather than landed half-built: tools/load and .github/workflows/load.yml are gone, verified absent from disk, index and HEAD tree. A load suite that does not run is worse than none, because its presence reads as coverage. SCALE-VER-001 still wants a real one.
 - Area: ci
 - Severity: critical
-- Writes: `tools/load/` (new), `.github/workflows/load.yml` (new)
+- Writes: tools/load/ (as reported by the audit; no such file in this tree) (new), .github/workflows/load.yml (as reported by the audit; no such file in this tree) (new)
 - Verify: `pnpm exec k6 run tools/load/streaming-chat.js` producing p95 TTFT, max concurrent streams, and Neon connection ceiling
 - Evidence: no k6/artillery/autocannon/locust/JMeter/gatling/vegeta, no Lighthouse CI, no web-vitals, no `perf` script anywhere.
 
@@ -883,7 +883,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: BLOCKED (2026-08-09) — BLOCKED — real, all four evidence claims confirmed, but it bundles two builds that cannot move independently inside one Writes set.
 - Area: data
 - Severity: critical
-- Writes: `apps/web/app/layout.tsx`, `apps/web/lib/analytics/events.ts` (new), `apps/web/app/(marketing)/**`, `apps/web/app/api/chat/guest/route.ts` (new)
+- Writes: `apps/web/app/layout.tsx`, apps/web/lib/analytics/events.ts (as reported by the audit; no such file in this tree) (new), `apps/web/app/(marketing)/**`, apps/web/app/api/chat/guest/route.ts (as reported by the audit; no such file in this tree) (new)
 - Verify: `pnpm --filter @agiworkforce/web test analytics` (new: activation/conversion/retention events emitted) and an anonymous visitor can send one message without an account
 - Evidence: `rg -c "gtag('event'"` across `apps/web` returns 0 files; GA is not mounted until analytics cookies are accepted (default off); no PostHog/Mixpanel/Amplitude/Segment; every acquisition CTA routes to `/login` and the auth gate returns 401 with no guest branch.
 
@@ -901,7 +901,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — web route contract — 7aa633875
 - Area: legal
 - Severity: critical
-- Writes: `apps/web/db/neon/0107_terms_acceptance.sql` (new), `apps/web/app/(auth)/sign-up/**`, `apps/web/lib/server/terms.ts` (new)
+- Writes: apps/web/db/neon/0107_terms_acceptance.sql (as reported by the audit; no such file in this tree) (new), `apps/web/app/(auth)/sign-up/**`, `apps/web/lib/server/terms.ts` (new)
 - Verify: `pnpm check:neon-migrations && pnpm --filter @agiworkforce/web test terms-acceptance`
 - Evidence: no clickwrap at signup and no `terms_accepted` column anywhere; without proof of assent the arbitration clause, class-action waiver and liability cap are unenforceable.
 
@@ -920,7 +920,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — provider runtime contract — 664df8b69
 - Area: security
 - Severity: critical
-- Writes: `apps/web/lib/crypto/envelope.ts`, `apps/web/db/neon/0109_key_version.sql` (new), `scripts/reencrypt.mjs` (new), `docs/security/key-rotation.md` (new)
+- Writes: `apps/web/lib/crypto/envelope.ts`, apps/web/db/neon/0109_key_version.sql (as reported by the audit; no such file in this tree) (new), `scripts/reencrypt.mjs` (new), `docs/security/key-rotation.md` (new)
 - Verify: `pnpm --filter @agiworkforce/web test envelope` (new: decrypt resolves by embedded key version; the re-encryption script is idempotent)
 - Evidence: zero key-id/version byte in any envelope and zero `key_version` column across 98 migrations; no re-encryption script, no rotation runbook, no `docs/security/` directory. Rotating any of the five AES-256-GCM keys today silently invalidates every ciphertext (forcing a mass revoke of every Google/Slack connector grant). Vault/KMS decision is in §Founder.
 
@@ -929,7 +929,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: BLOCKED (2026-08-09) — BLOCKED — the app-layer half is already fixed; the remaining half is outside the Writes set. Exposure is real.
 - Area: data
 - Severity: critical
-- Writes: `apps/web/lib/server/blob.ts`, `apps/web/app/api/files/[id]/route.ts`, `apps/web/app/api/uploads/presign/route.ts`
+- Writes: apps/web/lib/server/blob.ts (as reported by the audit; no such file in this tree), `apps/web/app/api/files/[id]/route.ts`, `apps/web/app/api/uploads/presign/route.ts`
 - Verify: `pnpm --filter @agiworkforce/web test files` (new: object URLs are signed and expire; the ownership check is load-bearing)
 - Evidence: the privacy policy itself states in bold that anyone with the link can open the file without signing in, which makes the ownership check decorative for any URL that has left the app.
 - ⚠ Serial with #19 (`presign/route.ts`).
@@ -949,7 +949,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — client-runtime retry policy — 664df8b69
 - Area: mobile
 - Severity: critical
-- Writes: `apps/web/app/.well-known/apple-app-site-association/route.ts`, `apps/web/app/pair/**` (new), `apps/mobile/app.json`, `apps/mobile/app/_layout.tsx`, `apps/web/app/api/notifications/send/route.ts`
+- Writes: `apps/web/app/.well-known/apple-app-site-association/route.ts`, `apps/web/app/pair/**` (new), apps/mobile/app.json (as reported by the audit; no such file in this tree), `apps/mobile/app/_layout.tsx`, apps/web/app/api/notifications/send/route.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm --filter @agiworkforce/web test deep-links` (new: every claimed path resolves 200) and `pnpm --filter @agiworkforce/mobile test notifications`
 - Evidence: all three claimed Universal Link paths 404 on web and the in-app pairing handler is gated on a value hardcoded `null`, so both branches of every email/QR CTA are dead while a CI job certifies the association documents; Android `autoVerify` has no path filter, so marketing/pricing/blog links open the app into a dead end; one server-side sender covers eleven client event types, the only opt-in toggle lives on web (a mobile-only user can never receive a notification although iOS spends its one-shot prompt), and there is no `google-services.json`.
 
@@ -958,7 +958,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — mobile contract migration — 664df8b69
 - Area: legal
 - Severity: critical
-- Writes: `apps/web/app/legal/subprocessors/page.tsx`, `docs/store/app-store-listing.md`, `apps/web/lib/__tests__/public-billing-copy.test.ts`
+- Writes: apps/web/app/legal/subprocessors/page.tsx (as reported by the audit; no such file in this tree), docs/store/app-store-listing.md (as reported by the audit; no such file in this tree), `apps/web/lib/__tests__/public-billing-copy.test.ts`
 - Verify: `pnpm --filter @agiworkforce/web test public-billing-copy` (new: the markdown listing is parsed and asserted, not just the two JSON files)
 - Evidence: every push notification body (containing user scheduled-task names) is relayed through Expo and every launch calls Expo's update endpoint, yet Expo is absent from a subprocessors page whose own header says omitting a live processor "is a compliance defect, not a documentation gap"; the human-readable listing still prints "Hobby — $5/mo" and advertises BYOK and computer-use behind flags hardcoded `false`.
 

@@ -9,6 +9,11 @@
  * for a short-lived PUT URL and uploads bytes straight to R2.
  */
 
+import {
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  managedCloudPreferencesNamespacePath,
+} from '@agiworkforce/cloud-contracts';
+
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
@@ -557,7 +562,7 @@ class SettingsService {
         fetch('/api/me', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('/api/settings/preferences?namespace=profile', {
+        fetch(managedCloudPreferencesNamespacePath('profile'), {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -657,7 +662,7 @@ class SettingsService {
       if (profile.language !== undefined) extPayload['language'] = profile.language;
 
       if (Object.keys(extPayload).length > 0) {
-        const prefRes = await fetch('/api/settings/preferences', {
+        const prefRes = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -718,7 +723,7 @@ class SettingsService {
         return { data: hardcodedDefaults, error: 'User not authenticated' };
       }
 
-      const res = await fetch('/api/settings/preferences', {
+      const res = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -753,7 +758,7 @@ class SettingsService {
 
       const csrfToken = await getCsrfToken();
 
-      const res = await fetch('/api/settings/preferences', {
+      const res = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

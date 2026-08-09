@@ -1,5 +1,27 @@
 import Image from 'next/image';
 
+import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
+
+/**
+ * The home hero is the only place on the site that draws App Store / Google
+ * Play badges, so it is the one place a distribution claim can be made by
+ * accident. It previously hardcoded its own "Coming Soon" chip, duplicating
+ * `SURFACE_STATUS.mobile` — the release-state registry that `/download`
+ * already reads. Two copies of the same fact drift, and the earlier version of
+ * this claim was not merely stale: `/mobile` once linked real badges at
+ * `apps.apple.com/app/agi/id6742817665` and
+ * `play.google.com/store/apps/details?id=com.agiworkforce.app` for an app that
+ * was never published (removed in 35653e948).
+ *
+ * So the chip now prints whatever the registry says, and the badges render
+ * ONLY while the registry still reports mobile as unreleased. They carry no
+ * `href` — there is no listing to point at — so the day someone moves
+ * `SURFACE_STATUS.mobile` off `COMING_SOON_LABEL` the badges disappear rather
+ * than becoming unclickable furniture under a "Released" chip. Restoring them
+ * then means adding verified store URLs on purpose, which is the point.
+ */
+const MOBILE_UNRELEASED = SURFACE_STATUS.mobile === COMING_SOON_LABEL;
+
 function AppleIcon() {
   return (
     <svg className="agi-store-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -42,23 +64,29 @@ export function MobileHeroVisual() {
         />
       </div>
 
-      {/* Store buttons — right of phone, vertically centered */}
+      {/* Store buttons — right of phone, vertically centered.
+          These are <span>s, not <a>s: an anchor with no href is a dead control
+          that reads as a link. The visible text is the accessible text. */}
       <div className="agi-mobile-store-col">
-        <span className="agi-store-soon">Coming Soon</span>
-        <a className="agi-store-btn" aria-label="Download on the App Store" tabIndex={-1}>
-          <AppleIcon />
-          <div className="agi-store-text">
-            <span className="agi-store-sub">Download on the</span>
-            <span className="agi-store-name">App Store</span>
-          </div>
-        </a>
-        <a className="agi-store-btn" aria-label="Get it on Google Play" tabIndex={-1}>
-          <PlayIcon />
-          <div className="agi-store-text">
-            <span className="agi-store-sub">Get it on</span>
-            <span className="agi-store-name">Google Play</span>
-          </div>
-        </a>
+        <span className="agi-store-soon">{SURFACE_STATUS.mobile}</span>
+        {MOBILE_UNRELEASED ? (
+          <>
+            <span className="agi-store-btn">
+              <AppleIcon />
+              <div className="agi-store-text">
+                <span className="agi-store-sub">Download on the</span>
+                <span className="agi-store-name">App Store</span>
+              </div>
+            </span>
+            <span className="agi-store-btn">
+              <PlayIcon />
+              <div className="agi-store-text">
+                <span className="agi-store-sub">Get it on</span>
+                <span className="agi-store-name">Google Play</span>
+              </div>
+            </span>
+          </>
+        ) : null}
       </div>
     </div>
   );

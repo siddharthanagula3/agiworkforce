@@ -364,7 +364,17 @@ export function PrivacySection() {
           </p>
           <p style={{ margin: 0 }}>
             Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
-            data or use it to train third-party models without your explicit opt-in.
+            data, and we do not train AGI-owned models on your prompts, responses or files. There is
+            no training opt-in, because that data path does not exist. Managed Cloud requests are
+            routed to the hosted provider serving the model you selected, and provider-side handling
+            is governed by that provider&rsquo;s terms &mdash; the current list is at{' '}
+            <Link
+              href="/subprocessors"
+              style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+            >
+              /subprocessors
+            </Link>
+            .
           </p>
         </ExpandableSection>
 

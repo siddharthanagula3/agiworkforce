@@ -25,6 +25,7 @@ import {
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
+  TOOL_APPROVAL_RESUME_PATH,
   ToolApprovalResumeErrorResponseSchema,
   ToolApprovalResumeRequestSchema,
   type ManagedCloudAgentRunReference,
@@ -77,7 +78,12 @@ const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
  */
 export const FREE_TRIAL_GATEWAY = 'https://agiworkforce.com';
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
-export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_ENDPOINT}/approve`;
+/**
+ * Composed from the canonical contract path, not from `FREE_TRIAL_ENDPOINT`,
+ * so a server-side move of the resume route cannot leave Chrome posting
+ * approvals at a dead URL while the initial-turn endpoint still works.
+ */
+export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
 export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
 

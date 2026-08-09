@@ -40,6 +40,7 @@ import {
   readPersistedCloudToolApproval,
   readManagedCloudAgentRunHandle,
   CloudToolApprovalProjectionSchema,
+  TOOL_APPROVAL_RESUME_PATH,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
@@ -2685,7 +2686,7 @@ export function useResolveToolApproval(
             operationId: resumeOperationId,
           }),
         });
-        const response = await fetch('/api/llm/v1/chat/completions/approve', {
+        const response = await fetch(TOOL_APPROVAL_RESUME_PATH, {
           method: 'POST',
           headers,
           body: JSON.stringify({

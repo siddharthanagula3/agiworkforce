@@ -23,8 +23,21 @@
  * (`conversation_id`, `task_id`, `artifact_id`, `project_id`, `organization_id`),
  * or be explicitly allowlisted below with a reason.
  *
+ * Scope: `apps/web/app/api` AND `apps/web/lib`. The service layer is not a
+ * second-class caller — 40 modules under `apps/web/lib` open the same BYPASSRLS
+ * owner connection, and `docs/engineering/service-layer-architecture.md` moves
+ * query bodies OUT of routes and INTO those modules. Scanning routes alone
+ * meant this gate's coverage shrank every time the migration it exists to
+ * protect made progress.
+ *
  * Usage: node scripts/check-db-isolation.mjs
  * Exit:  0 = clean · 1 = at least one unscoped statement
+ *
+ * NOT covered (tracked as CRIT-015, still open): this gate reasons about
+ * statements, not about schema. A NEW tenant-scoped table can land in
+ * `apps/web/db/neon` with neither an RLS policy nor an entry in
+ * USER_OWNED_TABLES below, and nothing here fails. Eleven tables are in that
+ * state today.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -114,6 +127,11 @@ const SCOPE_TOKENS = [
 /**
  * Statements that legitimately span users. Each entry must say WHY, because an
  * unexplained allowlist entry is how this gate quietly stops working.
+ *
+ * An entry with `tables` exempts that file ONLY for the named tables; every
+ * other user-owned table in the same file is still policed. Prefer that form —
+ * a bare `match` retires a whole file, including code written after the reason
+ * was true.
  */
 const ALLOWLIST = [
   {
@@ -132,6 +150,34 @@ const ALLOWLIST = [
   { match: /api\/health/, reason: 'health probe touches no user data' },
   { match: /api\/releases/, reason: 'release metadata is global, not user-owned' },
   { match: /api\/waitlist/, reason: 'waitlist rows are pre-account' },
+  {
+    match: /lib\/server\/account-erasure\.ts$/,
+    tables: ['media_assets'],
+    reason:
+      'eraseUserMedia() deletes by id from a list it just read with `where user_id = $1`, ' +
+      'after the R2 objects are gone; the id list IS the owner constraint',
+  },
+  {
+    match: /lib\/services\/push-notification-service\.ts$/,
+    tables: ['mobile_devices'],
+    reason:
+      'invalidateTokens() clears the exact push tokens Expo reported as unregistered; a token ' +
+      'is a device credential, not a user, and the whole point is that it may belong to anyone',
+  },
+  {
+    match: /lib\/services\/schedule-service\.ts$/,
+    tables: ['scheduled_tasks'],
+    reason:
+      'the scheduler worker writes back to the task id it claimed from the due-set in the same ' +
+      'transaction; there is no request subject to constrain by',
+  },
+  {
+    match: /lib\/services\/security-monitoring-service\.ts$/,
+    tables: ['security_audit_logs'],
+    reason:
+      'getTopIpAddresses() is platform abuse detection — per-user counts cannot detect an ' +
+      'attacker spraying many accounts from one IP',
+  },
 ];
 
 function walk(dir, out = []) {
@@ -154,7 +200,14 @@ function extractStatements(source) {
   const statements = [];
   const re = /`([^`]*?(?:from|into|update|join)\s+(?:public\.)?[a-z_]+[\s\S]*?)`/gi;
   let m;
-  while ((m = re.exec(source))) statements.push(m[1]);
+  while ((m = re.exec(source))) {
+    // The span between two unrelated backticks is not a query. Eight such spans
+    // were being "scanned" — JS bodies containing the word `from` in a comment —
+    // and one of them is prose naming a user-owned table, which would otherwise
+    // have to be allowlisted as if it were a real cross-user statement. A query
+    // opens with a query verb; nothing else does.
+    if (/^\s*(?:with|select|insert|update|delete)\b/i.test(m[1])) statements.push(m[1]);
+  }
   return statements;
 }
 
@@ -198,7 +251,10 @@ function resolvesToScope(source, name, depth) {
 }
 
 const errors = [];
-const files = walk(path.join(root, 'apps/web/app/api'));
+const files = [
+  ...walk(path.join(root, 'apps/web/app/api')),
+  ...walk(path.join(root, 'apps/web/lib')),
+];
 let scanned = 0;
 let ownerConnectionFiles = 0;
 
@@ -207,10 +263,12 @@ for (const file of files) {
   const rel = path.relative(root, file);
   if (!/getNeonDb\(\)|getNeonChatDb\(\)/.test(source)) continue;
   ownerConnectionFiles += 1;
-  if (ALLOWLIST.some((a) => a.match.test(rel))) continue;
+  const exemptions = ALLOWLIST.filter((a) => a.match.test(rel));
+  if (exemptions.some((a) => !a.tables)) continue;
+  const exemptTables = new Set(exemptions.flatMap((a) => a.tables));
 
   for (const sql of extractStatements(source)) {
-    const tables = tablesIn(sql);
+    const tables = tablesIn(sql).filter((t) => !exemptTables.has(t));
     if (tables.length === 0) continue;
     scanned += 1;
     const lower = sql.toLowerCase();
@@ -243,5 +301,5 @@ if (errors.length > 0) {
 
 console.log(
   `Database isolation check passed (${scanned} owner-connection statements over user-owned ` +
-    `tables across ${ownerConnectionFiles} route files, all owner-constrained).`,
+    `tables across ${ownerConnectionFiles} route and service modules, all owner-constrained).`,
 );

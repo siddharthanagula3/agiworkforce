@@ -60,26 +60,44 @@ async function loadOwnedConnection(
     };
   }
 
-  const rows = await principal.db.query<SSOConnectionRow>(
-    `select ${SSO_CONNECTION_SELECT_COLUMNS} from sso_connections where id = $1 limit 1`,
-    [parsed.data.connectionId],
-  );
+  // Both reads below talk to the database, and both run before either handler's
+  // try block. Left bare, a Neon outage or an unmigrated `sso_connections`
+  // relation escapes as an unhandled rejection — the caller sees a bare
+  // framework 500 and the operator gets no log line. Route them through the
+  // same mapping every other SSO handler uses so infrastructure failure is
+  // reported as infrastructure failure (503 when the database is unreachable),
+  // never as a benign "not verified" or a disabled-SSO shrug.
+  try {
+    const rows = await principal.db.query<SSOConnectionRow>(
+      `select ${SSO_CONNECTION_SELECT_COLUMNS} from sso_connections where id = $1 limit 1`,
+      [parsed.data.connectionId],
+    );
 
-  const row = rows[0];
-  if (!row) {
-    return { error: NextResponse.json({ error: 'SSO connection not found' }, { status: 404 }) };
+    const row = rows[0];
+    if (!row) {
+      return { error: NextResponse.json({ error: 'SSO connection not found' }, { status: 404 }) };
+    }
+
+    const forbidden = await requireOrgRole(
+      principal,
+      row.organization_id,
+      ['owner'],
+      ENDPOINT,
+      'verify-sso-domain',
+    );
+    if (forbidden) return { error: forbidden };
+
+    return { principal, row };
+  } catch (error) {
+    return {
+      error: ssoErrorResponse(error, {
+        userId: principal.userId,
+        connectionId: parsed.data.connectionId,
+        endpoint: ENDPOINT,
+        action: 'load-sso-connection',
+      }),
+    };
   }
-
-  const forbidden = await requireOrgRole(
-    principal,
-    row.organization_id,
-    ['owner'],
-    ENDPOINT,
-    'verify-sso-domain',
-  );
-  if (forbidden) return { error: forbidden };
-
-  return { principal, row };
 }
 
 async function readJson(request: NextRequest): Promise<unknown | symbol> {

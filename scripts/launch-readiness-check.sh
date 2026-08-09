@@ -26,7 +26,7 @@ echo "=== LAUNCH READINESS CHECK ==="
 echo ""
 
 # 1. Git state
-echo "[1/8] Git state"
+echo "[1/9] Git state"
 if [ -z "$(git status --porcelain | grep -v '\.claude/settings.local.json')" ]; then
   pass "working tree clean"
 else
@@ -42,7 +42,7 @@ fi
 
 # 2. Cargo state
 echo ""
-echo "[2/8] Rust workspace"
+echo "[2/9] Rust workspace"
 if cargo check --workspace 2>&1 | tail -1 | grep -q "Finished"; then
   pass "cargo check --workspace green"
 else
@@ -51,7 +51,7 @@ fi
 
 # 3. CLI tests
 echo ""
-echo "[3/8] CLI tests"
+echo "[3/9] CLI tests"
 test_result=$(cargo test -p agiworkforce-cli --bin agi 2>&1 | grep "test result" | tail -1)
 if echo "$test_result" | grep -q "0 failed"; then
   pass "$test_result"
@@ -61,7 +61,7 @@ fi
 
 # 4. Release binary
 echo ""
-echo "[4/8] Release binary"
+echo "[4/9] Release binary"
 cargo build --release -p agiworkforce-cli 2>&1 | tail -1 | grep -q "Finished" && pass "release build green" || fail "release build failed"
 binary="./target/release/agi"
 legacy_binary="./target/release/agiworkforce"
@@ -90,7 +90,7 @@ fi
 
 # 5. Smoke test all 22 subcommands respond to --help
 echo ""
-echo "[5/8] Subcommand smoke test (22 expected)"
+echo "[5/9] Subcommand smoke test (22 expected)"
 sub_count=$($binary -h 2>&1 | grep -E "^  [a-z]+" | wc -l | tr -d ' ')
 if [ "$sub_count" = "23" ]; then
   pass "all 22 subcommands + 'help' present"
@@ -102,7 +102,7 @@ $binary --dump-system-prompt 2>&1 | head -5 | grep -qE "^(You are|<|Yo|.+)" && p
 
 # 6. CI workflow files exist
 echo ""
-echo "[6/8] CI workflows"
+echo "[6/9] CI workflows"
 for f in .github/workflows/release-cli.yml .github/workflows/release-desktop.yml .github/workflows/ci.yml; do
   if [ -f "$f" ]; then
     pass "$f exists"
@@ -113,7 +113,7 @@ done
 
 # 7. Required GitHub secrets (can't actually check, but warn)
 echo ""
-echo "[7/8] GitHub secrets (requires manual check)"
+echo "[7/9] GitHub secrets (requires manual check)"
 warn "verify these secrets are set in github repo settings:"
 info "https://github.com/siddharthanagula3/agiworkforce/settings/secrets/actions"
 info "  - NPM_TOKEN (npm automation token)"
@@ -124,13 +124,24 @@ info "  - see apps/desktop/MACOS_RELEASE_RUNBOOK.md for encoding and rotation"
 
 # 8. Required external resources
 echo ""
-echo "[8/8] External resources (requires manual check)"
+echo "[8/9] External resources (requires manual check)"
 warn "verify these external accounts/repos exist:"
 info "  - npm @agiworkforce scope: https://www.npmjs.com/settings/agiworkforce/packages"
 info "    (your npm account must have publish access)"
 info "  - Homebrew tap repo: https://github.com/siddharthanagula3/homebrew-tap"
 info "    (must exist with at least a README)"
 info "  - clone tap locally: ~/code/homebrew-tap (for update-homebrew-tap.sh)"
+
+# 9. Audit remediation ledger — a release cannot be completed while the
+#    remediation plan still carries unchecked tasks.
+echo ""
+echo "[9/9] Audit remediation ledger"
+if audit_progress=$(node scripts/check-audit-progress.mjs 2>&1); then
+  pass "$audit_progress"
+else
+  fail "audit remediation ledger has open tasks — see AuditRemediationLedger.md"
+  echo "$audit_progress" | head -8 | sed 's/^/      /'
+fi
 
 # Summary
 echo ""
