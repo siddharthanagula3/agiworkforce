@@ -13,7 +13,7 @@ import {
   getPresignedUploadUrl,
   isObjectStorageConfigured,
 } from '@/lib/server/object-storage';
-import { validateAttachmentMeta } from '@agiworkforce/types';
+import { IMAGE_ATTACHMENT_MIME_TYPES, validateAttachmentMeta } from '@agiworkforce/types';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
@@ -51,6 +51,13 @@ const CleanupRequestSchema = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
 });
 
+/**
+ * Avatars are rendered at ~40px. The 25 MiB attachment ceiling is sized for
+ * project knowledge documents, not for a profile picture, and every avatar
+ * lands in the public bucket permanently.
+ */
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
 function extOf(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot >= 0
@@ -85,6 +92,10 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   if (!validation.ok) {
     throw createError.validation(validation.message);
   }
+  // Per-kind narrowing on top of the shared contract. Every kind gets a cap and
+  // a type roster here: the presigned PUT stamps the object with the caller's
+  // declared Content-Type and the bucket is public, so whatever this route
+  // signs for is world-readable under that type the instant the PUT lands.
   if (kind === 'chat-attachment') {
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
       throw createError.validation('Chat attachments are limited to 12 MiB.');
@@ -93,6 +104,16 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
       throw createError.validation(
         'Chat supports images, PDFs, and text/code files. Convert Office files to PDF first.',
       );
+    }
+  } else if (kind === 'avatar') {
+    if (byteCount > MAX_AVATAR_BYTES) {
+      throw createError.validation(
+        `Avatars are limited to ${MAX_AVATAR_BYTES / (1024 * 1024)} MiB.`,
+      );
+    }
+    const avatarMime = mimeType.split(';', 1)[0]!.trim().toLowerCase();
+    if (!IMAGE_ATTACHMENT_MIME_TYPES.includes(avatarMime)) {
+      throw createError.validation('Avatars must be a PNG, JPEG, GIF, WebP, or HEIC image.');
     }
   }
 
