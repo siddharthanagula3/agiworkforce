@@ -3064,6 +3064,62 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
 # Phase 9 — Final validation and stop gate
 
+> ## Phase 9 stop-gate run — 2026-08-09, commit `8af15d594`
+>
+> Executed, not asserted. Everything below is a command that ran on this commit.
+>
+> **9B — repository state.** Working tree clean. `check:generated-artifacts`
+> passes, so generated output regenerates with no diff. One `eslint-disable`
+> across `apps/web/lib/security` and `apps/web/lib/server` combined.
+>
+> **9C — repository guardrails: 16/16 pass.** repo-organization, agent-context,
+> reference-integrity, doc-status, secrets, i18n-parity, neon-migrations,
+> module-reachability, boundaries, trust-boundaries, db-isolation, model-catalog,
+> marketing-models, hardcoded-arrays, ci-guardrails, workflow-cargo-features.
+>
+> Two of those were failing when the gate was first run and are now fixed. One
+> was a production regression introduced by this remediation: MATCH-008 emptied
+> `vercel.json`'s rewrites as "inert", and five were host-scoped routes serving
+> the entire OpenAI-compatible API on api.agiworkforce.com. `check:ci-guardrails`
+> caught it because it hardcodes a requirement for that exact route — a guard
+> written in advance against precisely this cleanup. See commit 8af15d594.
+>
+> **9C — test suites.** web 7,052 / desktop-rust 4,690 / desktop-fe 2,531 /
+> cli 1,869 / extension 1,458 / vscode 880 / gateway 312 / unified-chat 967 /
+> types 536 / ui 82 / utils 158. Typecheck clean on web and desktop; clippy
+> `-D warnings` exit 0.
+>
+> **9C — NOT satisfied, and these block the gate:**
+>
+> - **75 skipped or ignored tests** remain (40 `#[ignore]` Rust, 35 `.skip`).
+>   Rule 10 of this ledger is explicit that a skipped test is a blocker until the
+>   test itself is repaired and executed. This count only became visible after a
+>   regression in `check-llm-failure-guardrails.mjs` was fixed — a comment-line
+>   skip I introduced treated a leading `#` as prose, so every bare `#[ignore]`
+>   was discarded and `--strict` reported ZERO against a tree holding 40.
+> - **4 non-blocking CI steps** that the gate's "a command that is flaky is not a
+>   pass" rule reaches: Semgrep (security audit), Rust dependency advisories,
+>   the Windows `cargo test --workspace --lib` lane, and the AP-09 lock-drift
+>   advisory. The first two are CRIT-018's subject and carry a founder decision
+>   recorded there.
+> - **Desktop/mobile/CLI/VS Code/Chrome release builds, E2E per surface, and the
+>   load suite** have not been run here. E2E is correctly blocking in
+>   `e2e-tests.yml` (it carries an explicit comment forbidding
+>   `continue-on-error`), but this session did not execute it.
+>
+> **9D — runtime acceptance matrix: NOT RUN.** It requires a deployed build, and
+> the argon2 fix (`d4cc8e8e5`) that unbreaks the authenticated API is committed
+> and unpushed. Nothing in 9D can be honestly claimed until that ships.
+>
+> **9E — product truth.** The DOC block corrected the false capability claims the
+> audit named. The generation half is not done: DOC-028 has zero link or
+> distribution-state tests, so nothing stops those claims returning.
+>
+> **9F — the completion output is therefore `AUDIT_REMEDIATION_INCOMPLETE`.**
+> next_task: the 75 skipped tests (BASE-008) and the 9D runtime matrix.
+> reason: rule 10 — no stop with skipped gates — and no deployed build to verify
+> against.
+
 The agent may print `AUDIT_REMEDIATION_COMPLETE` only after every condition below is true.
 
 ## 9A. Ledger completeness
