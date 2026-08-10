@@ -231,7 +231,14 @@ export const proxy: NextMiddleware = async (request, event) => {
     return attachApiCors(request, buildCspResponse(request));
   }
 
-  if (isClerkSessionRoute(request)) {
+  // The root page is auth-aware: app/page.tsx calls auth() so signed-in users
+  // land in the product while signed-out users see marketing. It therefore
+  // needs Clerk's request context even though it is publicly reachable. Use a
+  // native exact-path check here instead of teaching Clerk's deprecated route
+  // matcher about a non-auth path. When `/` bypasses clerkMiddleware(), the
+  // signed-in RSC render throws "auth() was called but Clerk can't detect usage
+  // of clerkMiddleware()".
+  if (request.nextUrl.pathname === '/' || isClerkSessionRoute(request)) {
     const response = await clerkAwareProxy(request, event);
     return response ? attachApiCors(request, response) : response;
   }
