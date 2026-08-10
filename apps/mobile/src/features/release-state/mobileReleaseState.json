@@ -6,7 +6,7 @@
     "CRIT-007 release-state registry for the Mobile surface.",
     "This file is the ONLY place that may state whether AGI has a live App Store or",
     "Google Play listing. Product copy, billing ownership labels, store links, and",
-    "the release scripts all read it through lib/releaseState.ts, so a claim can",
+    "the release scripts all read it through src/features/release-state/index.ts, so a claim can",
     "never be typed into a screen by hand again.",
     "Flipping a store to \"published\" is a two-part act: set the status AND record",
     "the store-assigned listingId that scripts/release/verify-store-listings.mjs",

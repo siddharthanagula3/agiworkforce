@@ -14,7 +14,7 @@ import {
   subscriptionManagementUrl,
   subscriptionSourceLabel,
 } from '@/src/features/billing/subscriptionSource';
-import { storeDisplayNameOf, storeSubscriptionManagementUrlOf } from '@/lib/releaseState';
+import { storeDisplayNameOf, storeSubscriptionManagementUrlOf } from '@/src/features/release-state';
 
 describe('subscription owner guard', () => {
   it('routes every entitled subscription to its recorded owner', () => {

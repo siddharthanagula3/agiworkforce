@@ -10,7 +10,7 @@
  * `subscription_source` arrives from `/api/me`, so a server bug or a hostile
  * response was all it took to render that.
  *
- * Both facts now come from the release-state registry (`lib/releaseState.ts`),
+ * Both facts now come from the release-state registry (`src/features/release-state/index.ts`),
  * which fails closed: while a store has no verified listing the label degrades
  * to the same neutral wording used for an unknown owner and no URL is offered.
  * The guard still BLOCKS the plan change either way — an unattributable owner
@@ -18,7 +18,7 @@
  */
 import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
-import { storeDisplayName, storeSubscriptionManagementUrl } from '@/lib/releaseState';
+import { storeDisplayName, storeSubscriptionManagementUrl } from '@/src/features/release-state';
 
 export type MobileBillingSource = MeSubscriptionSource | 'unknown';
 
