@@ -5,8 +5,8 @@
  * named "the Apple App Store" and handed out `apps.apple.com` links for an app
  * with zero `v-mobile-*` release tags and no listing on either store.
  *
- * `lib/mobileReleaseState.json` is now the only record of that fact and
- * `lib/releaseState.ts` the only reader. This suite is the contract on both:
+ * `src/features/release-state/mobileReleaseState.json` is now the only record of that fact and
+ * `src/features/release-state/index.ts` the only reader. This suite is the contract on both:
  *
  *   1. the registry may not claim more than the repository can prove (release
  *      tags, and the ids the app actually builds as);
@@ -33,7 +33,7 @@ import {
   storeSubscriptionManagementUrl,
   storeSubscriptionManagementUrlOf,
   type StoreDistributionRecord,
-} from '@/lib/releaseState';
+} from '@/src/features/release-state';
 
 const mobileRoot = join(__dirname, '..');
 const repoRoot = join(mobileRoot, '..', '..');

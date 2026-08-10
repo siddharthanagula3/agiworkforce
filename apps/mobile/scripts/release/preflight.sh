@@ -146,7 +146,7 @@ if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" || "${PROFILE}" == 
 fi
 
 # --- Store release-state registry (CRIT-007) -------------------------------
-# lib/mobileReleaseState.json decides whether the app may name a store or hand
+# src/features/release-state/mobileReleaseState.json decides whether the app may name a store or hand
 # out a store link. Reconcile it with the live stores before shipping: a record
 # that claims a listing which does not exist is a false distribution claim, and
 # a live listing the record has not caught up with means the app is still
@@ -157,7 +157,7 @@ if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" ]]; then
   if node "${MOBILE_DIR}/scripts/release/verify-store-listings.mjs"; then
     log_ok "release-state registry matches the live App Store and Play listings"
   else
-    die "store release-state registry disagrees with the live stores — update apps/mobile/lib/mobileReleaseState.json deliberately before releasing"
+    die "store release-state registry disagrees with the live stores — update apps/mobile/src/features/release-state/mobileReleaseState.json deliberately before releasing"
   fi
 fi
 

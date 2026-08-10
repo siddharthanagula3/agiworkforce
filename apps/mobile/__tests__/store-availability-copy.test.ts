@@ -6,7 +6,7 @@
  * may state or imply that the app can be installed from it, link to a listing,
  * or quote a store rating.
  *
- * This is GATED on `lib/mobileReleaseState.json`, not on wording. The day AGI
+ * This is GATED on `src/features/release-state/mobileReleaseState.json`, not on wording. The day AGI
  * actually ships on a store, that store's record flips to `published` with the
  * verified listing id, this suite stops policing its phrasing, and the screens
  * are free to advertise the real listing — which is the outcome we want. What
@@ -21,7 +21,11 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 
-import { MOBILE_STORE_IDS, isStorePublished, type MobileStoreId } from '@/lib/releaseState';
+import {
+  MOBILE_STORE_IDS,
+  isStorePublished,
+  type MobileStoreId,
+} from '@/src/features/release-state';
 
 const mobileRoot = join(__dirname, '..');
 
@@ -79,14 +83,14 @@ const STORE_CLAIM_PATTERNS: Readonly<Record<MobileStoreId, ReadonlyArray<RegExp>
  * The list is asserted below so a third file cannot join it quietly — that is
  * the whole point: every other module has to ask the registry.
  *
- *   lib/releaseState.ts — the registry reader. It holds the display names and
+ *   src/features/release-state/index.ts — the registry reader. It holds the display names and
  *     returns them ONLY through `isStoreDistributionVerified`, which is null
  *     for every store today (see mobile-release-state.test.ts).
  *   lib/safeOpenURL.ts — the outbound-URL allowlist. Listing a host there
  *     permits nothing on its own; it only refuses everything else. Removing the
  *     hosts would not remove a claim, it would remove a security control.
  */
-const REGISTRY_OWNED_FILES = ['lib/releaseState.ts', 'lib/safeOpenURL.ts'] as const;
+const REGISTRY_OWNED_FILES = ['src/features/release-state/index.ts', 'lib/safeOpenURL.ts'] as const;
 
 function isRegistryOwned(relativePath: string): boolean {
   return (REGISTRY_OWNED_FILES as readonly string[]).includes(relativePath.split('\\').join('/'));

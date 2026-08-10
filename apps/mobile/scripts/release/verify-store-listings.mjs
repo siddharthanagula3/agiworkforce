@@ -3,7 +3,8 @@
  * CRIT-007 release gate: the release-state registry must agree with the live
  * stores before any store name or store link is allowed to reach a user.
  *
- * `lib/mobileReleaseState.json` decides whether `lib/releaseState.ts` hands out
+ * `src/features/release-state/mobileReleaseState.json` decides whether
+ * `src/features/release-state/index.ts` hands out
  * a store name, a listing URL, or a subscription-management URL. This script is
  * the automated verification that lets that record be trusted:
  *
@@ -24,7 +25,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = join(HERE, '..', '..', 'lib', 'mobileReleaseState.json');
+const REGISTRY_PATH = join(
+  HERE,
+  '..',
+  '..',
+  'src',
+  'features',
+  'release-state',
+  'mobileReleaseState.json',
+);
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -140,7 +149,7 @@ function reconcile(store, record, live) {
   }
   if (!published && live.live) {
     throw new Error(
-      `"${store}" has a live listing (${live.listingId}) while the release-state registry still says unpublished — update lib/mobileReleaseState.json deliberately`,
+      `"${store}" has a live listing (${live.listingId}) while the release-state registry still says unpublished — update src/features/release-state/mobileReleaseState.json deliberately`,
     );
   }
   if (!published) {
