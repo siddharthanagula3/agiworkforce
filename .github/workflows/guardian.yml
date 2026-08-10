@@ -1,0 +1,167 @@
+# AGI Guardian — automated repository review (Phase 1: shadow mode).
+#
+# Runs the Guardian deterministic scan on every push to main and on every
+# pull-request update, publishes per-category Check Runs on the exact reviewed
+# SHA, and maintains ONE editable summary comment per PR.
+#
+# Design constraints (see docs/guardian/ADR-001-architecture.md):
+# - Shadow mode: category checks conclude success/neutral, never failure;
+#   only "AGI Guardian / Final Policy" may ever fail, and only once the
+#   repository config opts into blocking mode.
+# - No duplication of ci.yml lanes: the scan reuses repo-owned check scripts
+#   that are NOT already in the CI fast path, and reads (rather than re-runs)
+#   expensive lanes.
+# - Fork PRs run under the read-only pull_request token: the scan still runs,
+#   but publishing degrades to a workflow artifact (no secrets, no writes).
+# - Never uses pull_request_target with a checkout of untrusted code.
+name: AGI Guardian
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  schedule:
+    # Nightly deep audit (03:17 UTC keeps clear of common load spikes).
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      deep:
+        description: 'Run the deep audit lane (trust boundaries, knip)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  # One live run per PR (or ref): a new head SHA cancels the obsolete run.
+  group: guardian-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guardian:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Draft PRs are skipped until ready_for_review (config: review_drafts).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Guardian scan
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          DEEP: ${{ (github.event_name == 'schedule' || inputs.deep == true) && '--deep' || '' }}
+        run: |
+          pnpm --filter @agiworkforce/guardian-github scan -- \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --output-dir "$GITHUB_WORKSPACE/.guardian" \
+            --head-sha "$HEAD_SHA" \
+            ${BASE_SHA:+--base-sha "$BASE_SHA"} \
+            $DEEP
+
+      - name: Upload Guardian report
+        if: always() && hashFiles('.guardian/guardian-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: guardian-report-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .guardian/
+          retention-days: 30
+
+      - name: Publish Check Runs and PR summary
+        # Fork PRs carry a read-only token; publishing is skipped and the
+        # artifact above is the reviewable output.
+        if: |
+          always() && hashFiles('.guardian/guardian-checks.json') != '' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.event.repository.id)
+        uses: actions/github-script@v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const headSha = process.env.HEAD_SHA;
+            const { category_checks, policy_check } = JSON.parse(
+              fs.readFileSync('.guardian/guardian-checks.json', 'utf8'),
+            );
+
+            // Stale-head guard: never publish against a superseded head SHA.
+            if (context.eventName === 'pull_request') {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+              });
+              if (pr.head.sha !== headSha) {
+                core.notice(`Skipping publish: head moved from ${headSha} to ${pr.head.sha}`);
+                return;
+              }
+            }
+
+            const createCheck = async (payload, overflowBatches = []) => {
+              const { data: created } = await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ...payload,
+              });
+              // Annotations beyond the first 50 go out as check-run updates.
+              for (const batch of overflowBatches) {
+                await github.rest.checks.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  check_run_id: created.id,
+                  output: { ...payload.output, annotations: batch },
+                });
+              }
+            };
+
+            for (const check of category_checks) {
+              await createCheck(check.payload, check.overflowBatches);
+            }
+            await createCheck(policy_check);
+
+            // Maintain exactly ONE summary comment per PR, edited in place.
+            if (context.eventName === 'pull_request') {
+              const body = fs.readFileSync('.guardian/guardian-summary.md', 'utf8');
+              const marker = '<!-- agi-guardian-summary -->';
+              const issue_number = context.payload.pull_request.number;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                per_page: 100,
+              });
+              const existing = comments.find((c) => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number,
+                  body,
+                });
+              }
+            }
