@@ -166,11 +166,6 @@ const BUDGETS = [
     why: 'RETIRED_PROVIDER_HOSTS — the subtraction applied to the canonical allowlist.',
   },
   {
-    file: 'apps/web/features/settings/components/CustomModelsSettings.tsx',
-    max: 4,
-    why: 'BYOK base-URL presets shown to the user for prefill; not an outbound endpoint.',
-  },
-  {
     file: 'apps/desktop/src/features/settings/CustomModelsSettings.tsx',
     max: 6,
     why: 'BYOK base-URL presets shown to the user for prefill; not an outbound endpoint.',
