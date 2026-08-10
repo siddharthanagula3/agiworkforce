@@ -308,7 +308,12 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
   });
 
-  it('links an Apple-owned subscription to the Apple management surface', () => {
+  // CRIT-007: this screen used to tell the user "You purchased this
+  // subscription through the Apple App Store" and offer a store link, for an
+  // app that has never had an App Store listing. The alert must still block the
+  // plan change, but it may not name a store or link to one while the
+  // release-state registry has no verified listing.
+  it('blocks a store-sourced subscription without claiming a store AGI has no listing on', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -322,14 +327,22 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
 
     expect(Alert.alert).toHaveBeenCalledWith(
       'Subscription managed elsewhere',
-      expect.stringContaining('Apple App Store'),
+      expect.stringContaining('another platform'),
       expect.any(Array),
     );
+    const message = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[1] as string;
+    expect(message).not.toMatch(/apple app store/i);
+    expect(message).not.toMatch(/google play/i);
+
     const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
       text?: string;
       onPress?: () => void;
     }>;
+    // No store link is offered at all — only the dismiss button.
+    expect(buttons.map((button) => button.text)).toEqual(['OK']);
     buttons.find((button) => button.text === 'Open subscriptions')?.onPress?.();
-    expect(openExternalUrl).toHaveBeenCalledWith('https://apps.apple.com/account/subscriptions');
+    expect(openExternalUrl).not.toHaveBeenCalledWith(
+      'https://apps.apple.com/account/subscriptions',
+    );
   });
 });

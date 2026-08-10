@@ -180,6 +180,31 @@ impl CdpEndpoint {
         }
     }
 
+    /// Wait until nothing answers the DevTools version endpoint any more.
+    ///
+    /// Closing a browser kills the process, but the port is not guaranteed to
+    /// be free the instant `wait()` returns. Without this, a close immediately
+    /// followed by a relaunch could see the *dying* instance still answering,
+    /// hand back a handle bound to it, and leave the freshly spawned process
+    /// orphaned — the "close, then relaunch" half of the browser-control
+    /// lifecycle. Returns `false` if the endpoint is still answering when the
+    /// deadline passes; the caller decides how loud that is.
+    pub async fn wait_for_shutdown(&self, timeout: Duration) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        loop {
+            if self.browser_ws_endpoint().await.is_err() {
+                return true;
+            }
+
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
     pub async fn create_target(&self, url: &str) -> Result<CdpTarget> {
         let create_url = format!(
             "{}/json/new?{}",
@@ -292,6 +317,69 @@ impl Default for PlaywrightConfig {
 /// by [`executable_override`] and takes precedence over install-location
 /// discovery for both Chromium and Firefox.
 const BROWSER_EXECUTABLE_ENV: &str = "AGIWORKFORCE_BROWSER_EXECUTABLE";
+
+/// How long a freshly spawned browser gets to open its DevTools port.
+///
+/// The wait is bounded and additionally short-circuits the moment the child
+/// process exits, so a failed launch reports in well under this budget instead
+/// of spinning.
+const LAUNCH_CDP_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long a closed browser gets to stop answering on the DevTools port
+/// before the next launch is allowed to probe it.
+const CLOSE_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Read whatever the exited child wrote to stderr, capped so a chatty browser
+/// cannot blow up the error message. Only called after the process has exited,
+/// so the read cannot block on a live pipe.
+fn drain_child_stderr(child: &mut Child) -> String {
+    use std::io::Read;
+
+    const MAX_BYTES: usize = 2000;
+
+    let Some(mut stderr) = child.stderr.take() else {
+        return "<not captured>".to_string();
+    };
+
+    let mut buffer = Vec::new();
+    if stderr.read_to_end(&mut buffer).is_err() {
+        return "<unreadable>".to_string();
+    }
+
+    if buffer.is_empty() {
+        return "<empty>".to_string();
+    }
+
+    buffer.truncate(MAX_BYTES);
+    String::from_utf8_lossy(&buffer).trim().to_string()
+}
+
+/// Profile directory used when the caller does not name one.
+///
+/// Chrome (and every Chromium fork) refuses to open a second instance against
+/// a user-data directory that is already in use: the newly spawned process
+/// forwards its command line to the running instance and exits immediately.
+/// With no `--user-data-dir` that is the *default* profile, so on the very
+/// common stock-macOS setup — the user's own Chrome already open — the
+/// browser-control runtime spawned a process that died instantly and the
+/// DevTools port never opened. Automation therefore gets its own profile
+/// directory, which also keeps agent browsing out of the user's logged-in
+/// session.
+fn default_automation_profile_dir() -> Result<String> {
+    let base = dirs::data_dir().ok_or_else(|| {
+        Error::Other(
+            "Failed to resolve the application data directory for the browser automation profile."
+                .to_string(),
+        )
+    })?;
+
+    Ok(base
+        .join("agiworkforce")
+        .join("browser-profiles")
+        .join("automation")
+        .to_string_lossy()
+        .into_owned())
+}
 
 /// Read and validate [`BROWSER_EXECUTABLE_ENV`].
 ///
@@ -547,7 +635,11 @@ pub struct PlaywrightBridge {
     config: PlaywrightConfig,
     process: Arc<Mutex<Option<Child>>>,
     browsers: Arc<Mutex<HashMap<String, BrowserHandle>>>,
-    browser_processes: Arc<Mutex<HashMap<String, Child>>>,
+    /// `Some(child)` for a browser this process started, `None` for one that
+    /// was already running on the DevTools port and got adopted on reconnect.
+    /// The distinction decides how the browser is closed: a child we own is
+    /// killed, an adopted one is asked to close over CDP.
+    browser_processes: Arc<Mutex<HashMap<String, Option<Child>>>>,
 }
 
 impl PlaywrightBridge {
@@ -609,6 +701,82 @@ impl PlaywrightBridge {
         Ok(())
     }
 
+    /// Spawn `exe` and wait for it to open the configured DevTools port.
+    ///
+    /// Two failure modes are distinguished, because they need different fixes
+    /// and the old code reported neither:
+    ///
+    /// * the process exits before DevTools opens — the usual cause on a stock
+    ///   machine (an already-running instance took over the command line, a
+    ///   quarantined or unsigned binary, a bad `--user-data-dir`). The wait
+    ///   short-circuits the moment `try_wait` reports an exit and the child's
+    ///   own stderr is included, instead of burning the whole timeout and
+    ///   throwing the output away.
+    /// * the process is alive but never opens the port — reported after a
+    ///   bounded wait, with the child cleaned up so nothing is left running.
+    ///
+    /// Neither path can spin: every loop iteration re-checks the deadline.
+    async fn spawn_and_await_cdp(
+        &self,
+        exe: &str,
+        args: &[String],
+        timeout: Duration,
+    ) -> Result<(Child, String)> {
+        let port = self.config.ws_port;
+
+        let mut child = Command::new(exe)
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| {
+                Error::Other(format!(
+                    "Failed to start the browser executable \"{exe}\": {error}. Set {BROWSER_EXECUTABLE_ENV} to the absolute path of a browser binary to override discovery."
+                ))
+            })?;
+
+        let endpoint = self.endpoint();
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        loop {
+            match endpoint.browser_ws_endpoint().await {
+                Ok(ws_endpoint) => return Ok((child, ws_endpoint)),
+                Err(probe_error) => {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            let stderr = drain_child_stderr(&mut child);
+                            let _ = child.wait();
+                            return Err(Error::Other(format!(
+                                "The browser executable \"{exe}\" exited ({status}) before Chrome DevTools opened on port {port}. \
+                                 This usually means another instance of the same browser was already running and took over the \
+                                 launch, or the profile directory could not be used. Browser output: {stderr}"
+                            )));
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            tracing::warn!(
+                                "Could not check the browser process state while waiting for CDP on port {}: {}",
+                                port,
+                                error
+                            );
+                        }
+                    }
+
+                    if tokio::time::Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(Error::Other(format!(
+                            "The browser executable \"{exe}\" started but Chrome DevTools never became reachable on port {port} within {}s: {probe_error}",
+                            timeout.as_secs()
+                        )));
+                    }
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    }
+
     pub async fn launch_browser(
         &self,
         browser_type: BrowserType,
@@ -618,30 +786,28 @@ impl PlaywrightBridge {
 
         let browser_id = uuid::Uuid::new_v4().to_string();
 
-        let (exe, args) = self.build_browser_command(&browser_type, &options)?;
-
-        let mut child = Command::new(&exe)
-            .args(&args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| Error::Other(format!("Failed to launch browser: {}", e)))?;
-
-        let ws_endpoint = match self
-            .endpoint()
-            .wait_for_browser_ws_endpoint(Duration::from_secs(10))
-            .await
-        {
-            Ok(endpoint) => endpoint,
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(Error::Other(format!(
-                    "Browser process launched but Chrome DevTools never became reachable on port {}: {}",
-                    self.config.ws_port, error
-                )));
+        // Reconnect before relaunch. A browser started by an earlier app run is
+        // still listening on the DevTools port, and spawning a second instance
+        // against the same profile only makes the new process hand off its
+        // command line and exit. Adopting the running one is what "reconnect"
+        // means for this runtime.
+        let (child, ws_endpoint) = match self.endpoint().browser_ws_endpoint().await {
+            Ok(existing) => {
+                tracing::info!(
+                    "Chrome DevTools already reachable on port {}; adopting the running browser instead of spawning another",
+                    self.config.ws_port
+                );
+                (None, existing)
+            }
+            Err(_) => {
+                let (exe, args) = self.build_browser_command(&browser_type, &options)?;
+                let (child, ws_endpoint) = self
+                    .spawn_and_await_cdp(&exe, &args, LAUNCH_CDP_TIMEOUT)
+                    .await?;
+                (Some(child), ws_endpoint)
             }
         };
+
         let handle = BrowserHandle {
             id: browser_id.clone(),
             browser_type: browser_type.clone(),
@@ -666,21 +832,63 @@ impl PlaywrightBridge {
     pub async fn close_browser_by_id(&self, id: &str) -> Result<()> {
         tracing::info!("Closing browser: {}", id);
 
-        // Acquire both locks in consistent order: browsers -> processes
-        let mut browsers = self.browsers.lock().await;
-        let mut processes = self.browser_processes.lock().await;
+        let mut stopped = false;
+        let mut adopted_ws_endpoint = None;
 
-        if let Some(_handle) = browsers.remove(id) {
-            if let Some(mut child) = processes.remove(id) {
-                tracing::info!("Killing browser process for {}", id);
-                let _ = child.kill();
-                let _ = child.wait();
+        {
+            // Acquire both locks in consistent order: browsers -> processes
+            let mut browsers = self.browsers.lock().await;
+            let mut processes = self.browser_processes.lock().await;
+
+            if let Some(handle) = browsers.remove(id) {
+                match processes.remove(id) {
+                    Some(Some(mut child)) => {
+                        tracing::info!("Killing browser process for {}", id);
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        stopped = true;
+                    }
+                    // Adopted on reconnect: there is no child to kill, so ask
+                    // the browser itself to close over CDP.
+                    Some(None) => {
+                        adopted_ws_endpoint = Some(handle.ws_endpoint.clone());
+                    }
+                    None => {
+                        tracing::warn!("Browser process not found for {}", id);
+                    }
+                }
             } else {
-                tracing::warn!("Browser process not found for {}", id);
+                // It might be already closed or doesn't exist
+                tracing::warn!("Browser {} not found to close", id);
             }
-        } else {
-            // It might be already closed or doesn't exist
-            tracing::warn!("Browser {} not found to close", id);
+        }
+
+        if let Some(ws_endpoint) = adopted_ws_endpoint {
+            stopped = true;
+            // `Browser.close` tears the socket down as it runs, so a transport
+            // error here is expected and is not proof the browser survived —
+            // the shutdown probe below is what decides that.
+            if let Err(error) = self
+                .send_cdp_command(&ws_endpoint, "Browser.close", serde_json::json!({}))
+                .await
+            {
+                tracing::debug!(
+                    "CDP Browser.close on port {} returned an error (usually the socket closing): {}",
+                    self.config.ws_port,
+                    error
+                );
+            }
+        }
+
+        // Do not report the browser closed while its DevTools port is still
+        // answering: the next launch would attach to the dying instance and
+        // strand the process it just spawned.
+        if stopped && !self.endpoint().wait_for_shutdown(CLOSE_SHUTDOWN_TIMEOUT).await {
+            tracing::warn!(
+                "Browser {} was killed but Chrome DevTools is still answering on port {}. A relaunch may attach to the previous instance.",
+                id,
+                self.config.ws_port
+            );
         }
 
         Ok(())
@@ -691,11 +899,7 @@ impl PlaywrightBridge {
         Ok(browsers.values().cloned().collect())
     }
 
-    fn build_browser_command(
-        &self,
-        browser_type: &BrowserType,
-        options: &BrowserOptions,
-    ) -> Result<(String, Vec<String>)> {
+    fn build_browser_args(&self, options: &BrowserOptions) -> Result<Vec<String>> {
         let mut args = vec![
             format!("--remote-debugging-port={}", self.config.ws_port),
             "--no-first-run".to_string(),
@@ -706,9 +910,14 @@ impl PlaywrightBridge {
             args.push("--headless=new".to_string());
         }
 
-        if let Some(ref user_data_dir) = options.user_data_dir {
-            args.push(format!("--user-data-dir={}", user_data_dir));
-        }
+        // Always pass a profile directory. See `default_automation_profile_dir`:
+        // without one the spawned process hands off to an already-running
+        // Chrome and exits before the DevTools port is ever opened.
+        let user_data_dir = match options.user_data_dir.clone() {
+            Some(dir) => dir,
+            None => default_automation_profile_dir()?,
+        };
+        args.push(format!("--user-data-dir={}", user_data_dir));
 
         if let Some(ref proxy) = options.proxy {
             args.push(format!("--proxy-server={}", proxy));
@@ -754,6 +963,16 @@ impl PlaywrightBridge {
                 );
             }
         }
+
+        Ok(args)
+    }
+
+    fn build_browser_command(
+        &self,
+        browser_type: &BrowserType,
+        options: &BrowserOptions,
+    ) -> Result<(String, Vec<String>)> {
+        let args = self.build_browser_args(options)?;
 
         let exe = match browser_type {
             BrowserType::Chromium => match executable_override()? {
@@ -1308,6 +1527,230 @@ mod tests {
             .build_browser_command(&BrowserType::Chromium, &BrowserOptions::default())
             .unwrap();
         assert_eq!(exe, bundled.to_string_lossy());
+    }
+
+    /// Reserve a port the OS says is free, then release it so the test can use
+    /// it as a DevTools port nothing is listening on.
+    fn free_local_port() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+        let port = listener.local_addr().expect("read local addr").port();
+        drop(listener);
+        port
+    }
+
+    async fn bridge_on_free_port() -> PlaywrightBridge {
+        PlaywrightBridge::with_config(PlaywrightConfig {
+            ws_port: free_local_port(),
+            ..PlaywrightConfig::default()
+        })
+        .await
+        .expect("bridge construction")
+    }
+
+    #[tokio::test]
+    async fn launch_args_always_carry_a_dedicated_profile_directory() {
+        // Regression: with no --user-data-dir, Chrome hands the command line to
+        // an already-running instance and exits, so the DevTools port never
+        // opens. That is the ordinary state of a stock Mac with Chrome open.
+        let bridge = PlaywrightBridge::new().await.unwrap();
+        let args = bridge
+            .build_browser_args(&BrowserOptions::default())
+            .expect("default options must produce launch args");
+
+        let profile_arg = args
+            .iter()
+            .find(|arg| arg.starts_with("--user-data-dir="))
+            .unwrap_or_else(|| {
+                panic!("launch args must pin a profile directory, got: {args:?}")
+            });
+        assert!(
+            profile_arg.contains("agiworkforce"),
+            "automation profile must live under the app data directory, got: {profile_arg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn launch_args_keep_an_explicitly_requested_profile_directory() {
+        let bridge = PlaywrightBridge::new().await.unwrap();
+        let args = bridge
+            .build_browser_args(&BrowserOptions {
+                user_data_dir: Some("/tmp/agiworkforce-test-profile".to_string()),
+                ..BrowserOptions::default()
+            })
+            .expect("explicit profile must produce launch args");
+
+        assert!(
+            args.contains(&"--user-data-dir=/tmp/agiworkforce-test-profile".to_string()),
+            "explicit profile directory was dropped: {args:?}"
+        );
+        assert_eq!(
+            args.iter()
+                .filter(|arg| arg.starts_with("--user-data-dir="))
+                .count(),
+            1,
+            "exactly one profile directory may be passed: {args:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_reports_a_browser_that_dies_before_devtools_opens() {
+        // Stands in for the real stock-machine failure: the spawned browser
+        // hands off to a running instance and exits immediately. The launcher
+        // must say so straight away instead of waiting out the whole timeout
+        // and reporting a bare connection error.
+        let bridge = bridge_on_free_port().await;
+        let (exe, args) = if cfg!(windows) {
+            (
+                r"C:\Windows\System32\cmd.exe".to_string(),
+                vec!["/c".to_string(), "exit 3".to_string()],
+            )
+        } else {
+            (
+                "/bin/sh".to_string(),
+                vec!["-c".to_string(), "echo browser-said-no 1>&2; exit 3".to_string()],
+            )
+        };
+
+        let started = std::time::Instant::now();
+        let error = bridge
+            .spawn_and_await_cdp(&exe, &args, Duration::from_secs(6))
+            .await
+            .expect_err("a process that exits immediately must not look like a launched browser")
+            .to_string();
+        let elapsed = started.elapsed();
+
+        assert!(
+            error.contains("exited"),
+            "error must name the early exit: {error}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(4),
+            "early exit must be reported without waiting out the timeout, took {elapsed:?}"
+        );
+        #[cfg(not(windows))]
+        assert!(
+            error.contains("browser-said-no"),
+            "error must carry the browser's own stderr: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_gives_up_on_a_live_process_that_never_opens_devtools() {
+        // The other half of "never spin indefinitely": the process stays alive
+        // but the port never opens, so the bounded wait has to end and the
+        // child must not be left running.
+        let bridge = bridge_on_free_port().await;
+        let (exe, args) = if cfg!(windows) {
+            (
+                r"C:\Windows\System32\cmd.exe".to_string(),
+                vec!["/c".to_string(), "ping -n 60 127.0.0.1 > NUL".to_string()],
+            )
+        } else {
+            (
+                "/bin/sh".to_string(),
+                vec!["-c".to_string(), "sleep 60".to_string()],
+            )
+        };
+
+        let started = std::time::Instant::now();
+        let error = bridge
+            .spawn_and_await_cdp(&exe, &args, Duration::from_secs(1))
+            .await
+            .expect_err("a process that never opens the port must not look like a launched browser")
+            .to_string();
+
+        assert!(
+            error.contains("never became reachable"),
+            "error must explain the port never opened: {error}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the wait must honour its own deadline"
+        );
+    }
+
+    /// Stand-in for a browser that is already listening on the DevTools port:
+    /// answers `/json/version` with a `webSocketDebuggerUrl` and nothing else.
+    fn spawn_fake_cdp_version_endpoint(ws_url: &'static str) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake CDP endpoint");
+        let port = listener.local_addr().expect("read local addr").port();
+
+        std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader, Write};
+
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let Ok(peek) = stream.try_clone() else { continue };
+                let mut reader = BufReader::new(peek);
+
+                // Read the request head so the client is not left writing into
+                // a socket nobody drains.
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line) {
+                        Ok(0) => break,
+                        Ok(_) if line.trim().is_empty() => break,
+                        Ok(_) => {}
+                        Err(_) => break,
+                    }
+                }
+
+                let body = format!("{{\"webSocketDebuggerUrl\":\"{ws_url}\"}}");
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+
+        port
+    }
+
+    #[tokio::test]
+    async fn launch_adopts_a_browser_that_is_already_serving_devtools() {
+        // "Reconnect" in the browser-control lifecycle: a runtime left by an
+        // earlier app run still owns the port and the automation profile.
+        // Spawning a second instance against that profile only makes the new
+        // process hand off its command line and die, so the running one has to
+        // be adopted — without consulting executable discovery at all.
+        let port = spawn_fake_cdp_version_endpoint("ws://127.0.0.1:1/devtools/browser/adopted");
+        let bridge = PlaywrightBridge::with_config(PlaywrightConfig {
+            ws_port: port,
+            ..PlaywrightConfig::default()
+        })
+        .await
+        .expect("bridge construction");
+
+        let handle = bridge
+            .launch_browser(BrowserType::Chromium, BrowserOptions::default())
+            .await
+            .expect("a running DevTools endpoint must be adopted, not relaunched");
+
+        assert_eq!(handle.ws_endpoint, "ws://127.0.0.1:1/devtools/browser/adopted");
+
+        let processes = bridge.browser_processes.lock().await;
+        assert!(
+            matches!(processes.get(&handle.id), Some(None)),
+            "adopting a running browser must not register a child process to kill"
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_shutdown_returns_immediately_when_nothing_is_listening() {
+        let endpoint = CdpEndpoint::new(free_local_port());
+        let started = std::time::Instant::now();
+        assert!(
+            endpoint.wait_for_shutdown(Duration::from_secs(5)).await,
+            "an unused port must count as shut down"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "shutdown detection must not wait out its timeout"
+        );
     }
 
     #[test]

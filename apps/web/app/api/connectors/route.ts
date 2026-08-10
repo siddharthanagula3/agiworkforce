@@ -44,6 +44,12 @@ import {
   getOAuthConfiguredConnectorIds,
   isConnectorOAuthConfigured,
 } from '@/lib/connectors/oauth-registry';
+import {
+  isDeviceLocalConnector,
+  isKnownConnectorId,
+  resolveConnectorHealth,
+  type ConnectorHealth,
+} from '@/lib/connectors/catalog';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 
@@ -101,51 +107,18 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
-// Allowlist of valid connector IDs to prevent arbitrary data injection
-const VALID_CONNECTOR_IDS = new Set([
-  'gmail',
-  'google-calendar',
-  'google-drive',
-  'notion',
-  'slack',
-  'github',
-  'google-sheets',
-  'outlook',
-  'onedrive',
-  'dropbox',
-  'linear',
-  'jira',
-  'teams',
-  'confluence',
-  'asana',
-  'zoom',
-  'hubspot',
-  'salesforce',
-  'calendly',
-  'intercom',
-  'google-analytics',
-  'mailchimp',
-  'stripe',
-  'shopify',
-  'linkedin',
-  'twitter',
-  'discord',
-  'openai',
-  'elevenlabs',
-  'local-filesystem',
-  'terminal',
-  'browser-automation',
-  'screen-vision',
-  'ollama',
-]);
-
-const LOCAL_CONNECTOR_IDS = new Set([
-  'local-filesystem',
-  'terminal',
-  'browser-automation',
-  'screen-vision',
-  'ollama',
-]);
+/**
+ * AUDIT-FIX CRIT-001: the id allowlist and the device-local set are no longer
+ * maintained here.
+ *
+ * They used to be two literal sets in this file. `VALID_CONNECTOR_IDS` listed 34
+ * of the catalog's 89 ids, so an operator who registered an OAuth app or mapped
+ * an MCP endpoint for any of the other 55 (airtable, gitlab, figma, …) got an id
+ * that GET advertised in `available` — the directory rendered a live Connect
+ * button — and POST then rejected as "Invalid connector ID". Both sets now come
+ * from `lib/connectors/catalog.ts`, which is the same registry the directory
+ * copy is generated from, so the two cannot drift again.
+ */
 
 // ─── GET: list connected services ──────────────────────────────────────────────
 
@@ -212,6 +185,13 @@ async function handleGetConnectors(request: NextRequest) {
     scopes?: string[];
     /** OAuth grants only: true when the stored token can no longer be renewed. */
     needsReauthorization?: boolean;
+    /**
+     * One resolved state per connector, from `resolveConnectorHealth()` in the
+     * canonical registry — the server's own answer to "what should the user be
+     * told about this connector right now", rather than five booleans the
+     * client has to recombine (and could recombine differently on each surface).
+     */
+    health?: ConnectorHealth;
   };
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
@@ -284,7 +264,28 @@ async function handleGetConnectors(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ connectors, available: getAvailableConnectorIds() });
+  const available = getAvailableConnectorIds();
+  const availableSet = new Set(available);
+  // Health is attached last so every entry — user row, GitHub App installation,
+  // OAuth grant, custom MCP — goes through the same resolver. A `custom-…` id
+  // has no registry record on purpose; the resolver's fail-closed default would
+  // report it `not-configured`, which is wrong for a connector the user just
+  // added, so those keep the connected state their own source proves.
+  const withHealth: ConnectorEntry[] = connectors.map((entry) =>
+    entry.source === 'custom'
+      ? { ...entry, health: 'connected' as const }
+      : {
+          ...entry,
+          health: resolveConnectorHealth({
+            connectorId: entry.connectorId,
+            available: availableSet.has(entry.connectorId),
+            connected: true,
+            needsReauthorization: entry.needsReauthorization === true,
+          }),
+        },
+  );
+
+  return NextResponse.json({ connectors: withHealth, available });
 }
 
 // ─── POST: save new connection ─────────────────────────────────────────────────
@@ -319,7 +320,7 @@ async function handleCreateConnector(request: NextRequest) {
   // Connect button for it — and POST then rejects with "Invalid connector ID"
   // instead of handing back the 409 + oauthStartPath that opens consent.
   if (
-    !VALID_CONNECTOR_IDS.has(body.connectorId) &&
+    !isKnownConnectorId(body.connectorId) &&
     !operatorMappedIds.has(body.connectorId) &&
     !isConnectorOAuthConfigured(body.connectorId)
   ) {
@@ -329,7 +330,7 @@ async function handleCreateConnector(request: NextRequest) {
   // Device-local connectors belong to Desktop Local mode. A cloud API row
   // cannot make the managed runtime reach a user's filesystem, terminal,
   // browser, screen, or Ollama instance, so never persist one here.
-  const isLocal = LOCAL_CONNECTOR_IDS.has(body.connectorId);
+  const isLocal = isDeviceLocalConnector(body.connectorId);
   if (isLocal) {
     return NextResponse.json(
       {
@@ -490,7 +491,7 @@ async function handleDeleteConnector(request: NextRequest) {
 
   if (
     !connectorId ||
-    (!VALID_CONNECTOR_IDS.has(connectorId) &&
+    (!isKnownConnectorId(connectorId) &&
       !getOperatorMappedConnectorIds().has(connectorId) &&
       !isConnectorOAuthConfigured(connectorId))
   ) {

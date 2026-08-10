@@ -22,11 +22,11 @@
  *     is gone; ConnectorConsentSummary states what is true instead.
  *
  *  2. The "Provided tools" list came from CONNECTOR_TOOLS in
- *     config/connector-logos.ts, which advertises tool names for connectors with
- *     no runtime implementation anywhere ("Read emails", "Send email", ...). The
- *     only entry that mirrors real wire names is `github`
- *     (lib/user-connector-tools.ts L180-240). We now render tools only for
- *     connectors whose tools actually exist, and say so honestly otherwise.
+ *     config/connector-logos.ts, which advertised tool names for connectors with
+ *     no runtime implementation anywhere ("Read emails", "Send email", ...).
+ *     That map is deleted; the list now comes from `supportedActions` in
+ *     `@/lib/connectors/catalog`, which is non-empty only for a connector with a
+ *     shipped adapter (today: github, lib/user-connector-tools.ts L180-240).
  *
  *  3. `actionCount` on the connector record has no backing implementation, so it
  *     is not rendered as a capability count.
@@ -42,17 +42,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@agiworkforce/ui';
-import { getConnectorTools } from '../config/connector-logos';
+import { getConnectorCapability } from '@/lib/connectors/catalog';
+import { RISK_CLASS_COPY } from '../data/connectors';
 import { ConnectorConsentSummary } from './ConnectorConsentSummary';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
-
-/**
- * Connector ids whose advertised tool list matches tools that actually exist in
- * a runtime path. Today that is exactly the GitHub App built-in, whose three
- * tools are defined in lib/user-connector-tools.ts. Adding an id here is a claim
- * that invoking those tools works — do not add one speculatively.
- */
-const CONNECTORS_WITH_REAL_TOOLS = new Set(['github']);
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -100,7 +93,14 @@ export function ConnectorOverviewDialog({
 }: ConnectorOverviewDialogProps) {
   if (!connector) return null;
 
-  const tools = CONNECTORS_WITH_REAL_TOOLS.has(connector.id) ? getConnectorTools(connector.id) : [];
+  // Only a shipped adapter has a static tool list. The registry is the single
+  // owner of that fact (audit CRIT-001) — this file used to keep its own
+  // `CONNECTORS_WITH_REAL_TOOLS` set alongside two more copies elsewhere.
+  const capability = getConnectorCapability(connector.id);
+  const tools = capability?.supportedActions ?? [];
+  // Risk ceiling from the canonical registry. An id the registry has never seen
+  // is treated as the highest class, not the lowest.
+  const riskClass = capability?.riskClass ?? 'high-impact';
 
   const handleConnect = () => {
     onConnect();
@@ -127,6 +127,14 @@ export function ConnectorOverviewDialog({
         <div className="space-y-4 pt-1">
           {/* Description */}
           <p className="text-sm text-muted-foreground leading-relaxed">{connector.description}</p>
+
+          {/* What a working credential for this provider could reach at most.
+              Stated before consent, and deliberately about the CEILING rather
+              than about whichever tools happen to be wired today. */}
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Access level:</span>{' '}
+            {RISK_CLASS_COPY[riskClass]}
+          </p>
 
           {/* Plain-language consent summary — every line traceable, see
               docs/legal/agent-authority-and-connector-scopes.md */}

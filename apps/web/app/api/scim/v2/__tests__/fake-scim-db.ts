@@ -518,11 +518,51 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     row['updated_at'] = now();
   }
 
+  /**
+   * Deep copy of every table, row objects included.
+   *
+   * Rows are mutated in place by `assignUser`, so a shallow array copy would
+   * share row identity with the live state and "restore" nothing.
+   */
+  function snapshot(): FakeScimDbState {
+    const copy = {} as FakeScimDbState;
+    for (const table of Object.keys(state) as Array<keyof FakeScimDbState>) {
+      copy[table] = state[table].map((row) => ({ ...row }));
+    }
+    return copy;
+  }
+
+  function restore(saved: FakeScimDbState): void {
+    for (const table of Object.keys(state) as Array<keyof FakeScimDbState>) {
+      // Splice in place: `state` is handed to the test, so the array identity
+      // has to survive a rollback.
+      state[table].length = 0;
+      state[table].push(...saved[table]);
+    }
+  }
+
   const adapter = {
     query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
       run(sql, params) as unknown as T[],
     execute: async (sql: string, params?: unknown[]): Promise<number> => run(sql, params).length,
-    transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(adapter),
+    /**
+     * A REAL transaction: commit on resolve, roll every table back on throw.
+     *
+     * This used to be `fn(adapter)` — a passthrough that never rolled anything
+     * back. Any test asserting "a failed multi-statement write leaves no
+     * partial state" would then have passed against code that had no
+     * transaction at all, which is exactly the assertion the SCIM group
+     * writes need to be held to.
+     */
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+      const saved = snapshot();
+      try {
+        return await fn(adapter);
+      } catch (error) {
+        restore(saved);
+        throw error;
+      }
+    },
     withUser: () => adapter,
   };
 
