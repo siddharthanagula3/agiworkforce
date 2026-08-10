@@ -66,11 +66,21 @@ describe('web proxy', () => {
     expect(matchesProxy('/chat')).toBe(true);
   });
 
-  it('keeps public marketing pages out of Clerk session middleware while preserving CSP', async () => {
+  it('runs the auth-aware root page through Clerk session middleware while preserving CSP', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');
 
     const response = await proxy(new NextRequest('http://localhost/'), {} as never);
+
+    expect(clerkState.clerkPaths).toEqual(['/']);
+    expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
+  it('keeps ordinary public marketing pages outside Clerk session middleware', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(new NextRequest('http://localhost/about'), {} as never);
 
     expect(clerkState.clerkPaths).toEqual([]);
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
