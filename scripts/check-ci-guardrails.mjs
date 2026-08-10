@@ -251,9 +251,20 @@ if (repositoryFiles.status !== 0) {
 }
 
 requireIncludes('.github/workflows/ci.yml', 'Semgrep (security audit)');
-requireIncludes('.github/workflows/ci.yml', 'continue-on-error: true');
-requireIncludes('.github/workflows/ci.yml', 'TEMPORARY revert to advisory mode');
-requireIncludes('.github/workflows/ci.yml', 'proper drive-to-zero');
+
+// These two used to pin the phrases "TEMPORARY revert to advisory mode" and
+// "proper drive-to-zero", so the advisory state could not be dropped without
+// someone noticing. That guarded the wrong thing. The scanner was CRASHING —
+// semgrep 1.36.0 in the pinned 2023 action image rejects the `MEDIUM` severity
+// that registry rules now use — and `continue-on-error: true` swallowed it, so
+// the tracked "41 findings" backlog was never being counted. A comment
+// describing a backlog stayed truthfully in place while the scan it described
+// ran zero rules.
+//
+// What must not regress is the distinction the old step could not make: a
+// scanner that FAILED TO RUN must never report the same as a clean scan.
+requireIncludes('.github/workflows/ci.yml', 'This is a broken scanner, not a clean scan');
+requireIncludes('.github/workflows/ci.yml', 'semgrep==');
 
 requireIncludes(
   '.github/workflows/actions-pinned-check.yml',

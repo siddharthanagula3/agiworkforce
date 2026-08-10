@@ -8,7 +8,11 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { loadStripe } from '@stripe/stripe-js';
-import { isPerSeatBillingPlan, type SelfServePaidPlanTier } from '@agiworkforce/types';
+import {
+  isPerSeatBillingPlan,
+  MIN_PURCHASABLE_SEATS,
+  type SelfServePaidPlanTier,
+} from '@agiworkforce/types';
 
 /**
  * Seat count to send with a per-seat plan, or `undefined` for per-account plans.
@@ -18,7 +22,7 @@ import { isPerSeatBillingPlan, type SelfServePaidPlanTier } from '@agiworkforce/
  */
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
-  if (typeof seats !== 'number' || !Number.isInteger(seats) || seats < 1) {
+  if (typeof seats !== 'number' || !Number.isInteger(seats) || seats < MIN_PURCHASABLE_SEATS) {
     throw new Error(`${plan} is billed per seat; choose how many seats to buy.`);
   }
   return seats;

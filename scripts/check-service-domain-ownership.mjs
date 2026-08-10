@@ -145,14 +145,12 @@ for (const [canonicalPath, canonicalPackage] of [
 
 for (const relativePath of [
   `${trustPath}/package.json`,
-  `${trustPath}/README.md`,
   `${trustPath}/tsconfig.json`,
   `${trustPath}/vitest.config.ts`,
   `${trustPath}/src/index.ts`,
   `${trustPath}/src/egress-policy.ts`,
   `${trustPath}/src/__tests__/egress-policy.test.ts`,
   `${searchPath}/package.json`,
-  `${searchPath}/README.md`,
   `${searchPath}/tsconfig.json`,
   `${searchPath}/vitest.config.ts`,
   `${searchPath}/src/index.ts`,

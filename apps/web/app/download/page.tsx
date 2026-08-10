@@ -9,7 +9,7 @@ import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitli
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
+const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
 export const metadata = buildMetadata({
   title: 'Download AGI | Desktop and Product Availability',
