@@ -493,4 +493,284 @@ mod tests {
             "Action should be trusted after approval with trust=true"
         );
     }
+
+    // ------------------------------------------------------------------
+    // CRIT-004 — the approval lifecycle the renderer depends on.
+    //
+    // Every test below drives `ApprovalController` exactly the way
+    // `core/agent/autonomous.rs` and `core/llm/tool_executor/mod.rs` drive it
+    // in production: request -> emit -> wait -> terminal state.
+    // ------------------------------------------------------------------
+
+    fn approval_payload(action_id: &str) -> ApprovalRequestPayload {
+        ApprovalRequestPayload {
+            action_id: action_id.to_string(),
+            tool_name: "terminal_execute".to_string(),
+            title: "Run a shell command".to_string(),
+            description: "Runs `git status` in the project root".to_string(),
+            reason: "Waiting for approval to execute: terminal_execute".to_string(),
+            risk_level: "high".to_string(),
+            scope: ApprovalScope {
+                scope_type: ApprovalScopeType::Terminal,
+                command: Some("git status".to_string()),
+                cwd: Some("/tmp".to_string()),
+                path: None,
+                domain: None,
+                description: Some("Shell command".to_string()),
+                risk: "high".to_string(),
+            },
+            workflow_hash: None,
+            action_signature: "sig-crit-004".to_string(),
+        }
+    }
+
+    /// The emitted envelope must tell the renderer when the card dies.
+    /// Without `expiresAtMs` a surface can only show a card that never stops
+    /// being current, which is the "stale approval" half of CRIT-004.
+    #[tokio::test]
+    async fn test_permission_required_envelope_carries_a_deadline() {
+        use tauri::Listener;
+
+        let temp_dir = TempDir::new().unwrap();
+        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+
+        let captured: Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let sink = captured.clone();
+        app_handle.listen("agent:permission_required", move |event| {
+            let parsed: serde_json::Value = serde_json::from_str(event.payload())
+                .expect("agent:permission_required payload must be JSON");
+            *sink.lock().unwrap() = Some(parsed);
+        });
+
+        let controller_clone = controller.clone();
+        let app_handle_clone = app_handle.clone();
+        let request = task::spawn(async move {
+            controller_clone
+                .request_approval_with_timeout(
+                    &app_handle_clone,
+                    approval_payload("envelope-1"),
+                    Duration::from_secs(30),
+                )
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        controller
+            .resolve("envelope-1", ApprovalResolution::Approved { trust: false })
+            .await
+            .expect("the request must be pending and answerable");
+
+        let resolution = request.await.unwrap().unwrap();
+        assert_eq!(resolution, ApprovalResolution::Approved { trust: false });
+
+        let payload = captured
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("agent:permission_required must be emitted");
+
+        assert_eq!(
+            payload["actionId"].as_str(),
+            Some("envelope-1"),
+            "existing consumers key off actionId; payload was {}",
+            payload
+        );
+        let requested = payload["requestedAtMs"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("envelope must carry requestedAtMs; got {}", payload));
+        let expires = payload["expiresAtMs"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("envelope must carry expiresAtMs; got {}", payload));
+        assert!(
+            expires > requested,
+            "expiresAtMs ({}) must be after requestedAtMs ({})",
+            expires,
+            requested
+        );
+        assert_eq!(
+            payload["timeoutSeconds"].as_u64(),
+            Some(30),
+            "timeoutSeconds must reflect the bound actually applied; payload was {}",
+            payload
+        );
+    }
+
+    /// An unanswered approval must reach a terminal denial on its own instead
+    /// of parking the suspended step on a `oneshot` receiver forever.
+    #[tokio::test]
+    async fn test_unanswered_approval_expires_to_a_terminal_denial() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+
+        // The outer guard is only a safety net so a regression cannot hang the
+        // suite: the controller's own 150ms deadline is what must fire.
+        let started = Instant::now();
+        let resolution = tokio::time::timeout(
+            Duration::from_secs(5),
+            controller.request_approval_with_timeout(
+                &app_handle,
+                approval_payload("expiry-1"),
+                Duration::from_millis(150),
+            ),
+        )
+        .await
+        .expect("request_approval must return on its own deadline, not wait forever")
+        .expect("expiry is a resolution, not a transport failure");
+
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "request_approval must return on its own deadline"
+        );
+        match &resolution {
+            ApprovalResolution::Rejected { reason } => {
+                let reason = reason.as_deref().unwrap_or_default();
+                assert!(
+                    reason.contains("expired"),
+                    "expiry must say so; got {:?}",
+                    reason
+                );
+            }
+            other => panic!("expected a rejection, got {:?}", other),
+        }
+
+        // The slot is gone, and the outcome is remembered as terminal.
+        let late = controller
+            .resolve("expiry-1", ApprovalResolution::Approved { trust: false })
+            .await;
+        let error = late.expect_err("an expired approval must not be approvable afterwards");
+        assert!(
+            error.to_string().contains("already resolved"),
+            "a late approve must be refused as already-resolved, got: {}",
+            error
+        );
+    }
+
+    /// A caller that wraps `request_approval` in its own timeout drops the
+    /// future. That must release the pending slot, not leak it.
+    #[tokio::test]
+    async fn test_cancelled_request_releases_the_pending_slot() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+
+        let outer = tokio::time::timeout(
+            Duration::from_millis(80),
+            controller.request_approval_with_timeout(
+                &app_handle,
+                approval_payload("cancelled-1"),
+                Duration::from_secs(30),
+            ),
+        )
+        .await;
+        assert!(outer.is_err(), "the outer timeout should win here");
+
+        let late = controller
+            .resolve("cancelled-1", ApprovalResolution::Approved { trust: false })
+            .await;
+        let error = late.expect_err("a cancelled request has no live waiter");
+        assert!(
+            error.to_string().contains("not pending"),
+            "a cancelled request must free its slot and report 'not pending', got: {}",
+            error
+        );
+    }
+
+    /// Double-clicking Approve, or a retried IPC call, must not surface an
+    /// error on a card the user already answered successfully.
+    #[tokio::test]
+    async fn test_duplicate_identical_decision_is_idempotent() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+
+        let controller_clone = controller.clone();
+        let app_handle_clone = app_handle.clone();
+        let request = task::spawn(async move {
+            controller_clone
+                .request_approval_with_timeout(
+                    &app_handle_clone,
+                    approval_payload("dup-1"),
+                    Duration::from_secs(30),
+                )
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        controller
+            .resolve("dup-1", ApprovalResolution::Approved { trust: false })
+            .await
+            .expect("first click must be accepted");
+
+        let second = controller
+            .resolve("dup-1", ApprovalResolution::Approved { trust: false })
+            .await;
+        assert!(
+            second.is_ok(),
+            "replaying the identical decision must be a no-op, got: {:?}",
+            second.err()
+        );
+
+        let resolution = request.await.unwrap().unwrap();
+        assert_eq!(resolution, ApprovalResolution::Approved { trust: false });
+    }
+
+    /// Idempotency must not become "last writer wins": a decision that
+    /// contradicts the one already applied has to be refused.
+    #[tokio::test]
+    async fn test_conflicting_decision_after_resolution_is_refused() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+
+        let app = tauri::test::mock_app();
+        let app_handle = app.handle().clone();
+
+        let controller_clone = controller.clone();
+        let app_handle_clone = app_handle.clone();
+        let request = task::spawn(async move {
+            controller_clone
+                .request_approval_with_timeout(
+                    &app_handle_clone,
+                    approval_payload("conflict-1"),
+                    Duration::from_secs(30),
+                )
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        controller
+            .resolve(
+                "conflict-1",
+                ApprovalResolution::Rejected {
+                    reason: Some("Denied by user in the execution panel".to_string()),
+                },
+            )
+            .await
+            .expect("first decision must be accepted");
+
+        let flipped = controller
+            .resolve("conflict-1", ApprovalResolution::Approved { trust: true })
+            .await;
+        let error = flipped.expect_err("a denial must not be upgradable to an approval");
+        assert!(
+            error.to_string().contains("already resolved as rejected"),
+            "the refusal must name the standing decision, got: {}",
+            error
+        );
+
+        let resolution = request.await.unwrap().unwrap();
+        assert!(matches!(resolution, ApprovalResolution::Rejected { .. }));
+    }
 }

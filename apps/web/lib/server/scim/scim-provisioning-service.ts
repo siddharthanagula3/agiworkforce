@@ -623,45 +623,58 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string })?.code === '23505';
 }
 
+/**
+ * Create the SCIM resource and its membership as ONE unit.
+ *
+ * Splitting them meant a failure inside `reconcileMembership` — the
+ * `organization_members` write, the only statement here that touches a table
+ * SCIM does not own — left a `scim_provisioned_users` row behind after a 500.
+ * The IdP retries a 500, and the retry then hit the userName uniqueness index
+ * and answered 409 forever: a user who could never be provisioned and whose
+ * resource granted no access.
+ */
 export async function createScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   input: ParsedScimUser,
   rawBody: Record<string, unknown>,
 ): Promise<ScimProvisionedUserRow> {
-  let rows: ScimProvisionedUserRow[];
-  try {
-    rows = await db.query<ScimProvisionedUserRow>(
-      `insert into scim_provisioned_users
+  const { row, outcome } = await db.transaction(async (tx) => {
+    let rows: ScimProvisionedUserRow[];
+    try {
+      rows = await tx.query<ScimProvisionedUserRow>(
+        `insert into scim_provisioned_users
          (connection_id, organization_id, external_id, user_name, email,
           given_name, family_name, display_name, active, raw_attributes)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
        returning ${USER_COLUMNS}`,
-      [
-        ctx.connectionId,
-        ctx.organizationId,
-        input.externalId,
-        input.userName,
-        input.email,
-        input.givenName,
-        input.familyName,
-        input.displayName,
-        input.active,
-        // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
-        JSON.stringify(stripScimSensitiveAttributes(rawBody)),
-      ],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `User ${input.userName} already exists`, 'uniqueness');
+        [
+          ctx.connectionId,
+          ctx.organizationId,
+          input.externalId,
+          input.userName,
+          input.email,
+          input.givenName,
+          input.familyName,
+          input.displayName,
+          input.active,
+          // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
+          JSON.stringify(stripScimSensitiveAttributes(rawBody)),
+        ],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `User ${input.userName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new Error('Failed to create SCIM user: no row returned');
+    const created = rows[0];
+    if (!created) throw new Error('Failed to create SCIM user: no row returned');
 
-  const outcome = await reconcileMembership(db, ctx, row);
+    return { row: created, outcome: await reconcileMembership(tx, ctx, created) };
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'user.provisioned',
@@ -686,10 +699,15 @@ export async function replaceScimUser(
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
 
-  let rows: ScimProvisionedUserRow[];
-  try {
-    rows = await db.query<ScimProvisionedUserRow>(
-      `update scim_provisioned_users
+  // The attribute write and the access change are one unit. `active: false` is
+  // a deprovision: persisting it while the `organization_members` delete fails
+  // would leave a resource that READS as deactivated next to a person who still
+  // has access — the most dangerous way for this call to half-succeed.
+  const { row, outcome } = await db.transaction(async (tx) => {
+    let rows: ScimProvisionedUserRow[];
+    try {
+      rows = await tx.query<ScimProvisionedUserRow>(
+        `update scim_provisioned_users
           set external_id = $4,
               user_name = $5,
               email = $6,
@@ -701,32 +719,34 @@ export async function replaceScimUser(
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
         returning ${USER_COLUMNS}`,
-      [
-        userId,
-        ctx.connectionId,
-        ctx.organizationId,
-        input.externalId,
-        input.userName,
-        input.email,
-        input.givenName,
-        input.familyName,
-        input.displayName,
-        input.active,
-        // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
-        JSON.stringify(stripScimSensitiveAttributes(rawBody)),
-      ],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `User ${input.userName} already exists`, 'uniqueness');
+        [
+          userId,
+          ctx.connectionId,
+          ctx.organizationId,
+          input.externalId,
+          input.userName,
+          input.email,
+          input.givenName,
+          input.familyName,
+          input.displayName,
+          input.active,
+          // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
+          JSON.stringify(stripScimSensitiveAttributes(rawBody)),
+        ],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `User ${input.userName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new ScimError(404, `User ${userId} not found`);
+    const replaced = rows[0];
+    if (!replaced) throw new ScimError(404, `User ${userId} not found`);
 
-  const outcome = await reconcileMembership(db, ctx, row);
+    return { row: replaced, outcome: await reconcileMembership(tx, ctx, replaced) };
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: row.active ? 'user.updated' : 'user.deactivated',
@@ -880,10 +900,14 @@ export async function patchScimUser(
 
   const state = applyUserPatchOperations(existing, operations);
 
-  let rows: ScimProvisionedUserRow[];
-  try {
-    rows = await db.query<ScimProvisionedUserRow>(
-      `update scim_provisioned_users
+  // PATCH is the shape every IdP uses to deprovision (`replace active false`),
+  // so the attribute write and the membership revocation commit together or
+  // not at all — see replaceScimUser for why the half-applied case is unsafe.
+  const { row, outcome } = await db.transaction(async (tx) => {
+    let rows: ScimProvisionedUserRow[];
+    try {
+      rows = await tx.query<ScimProvisionedUserRow>(
+        `update scim_provisioned_users
           set user_name = $4,
               external_id = $5,
               email = $6,
@@ -894,30 +918,32 @@ export async function patchScimUser(
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
         returning ${USER_COLUMNS}`,
-      [
-        userId,
-        ctx.connectionId,
-        ctx.organizationId,
-        state.userName,
-        state.externalId,
-        state.email,
-        state.givenName,
-        state.familyName,
-        state.displayName,
-        state.active,
-      ],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `User ${state.userName} already exists`, 'uniqueness');
+        [
+          userId,
+          ctx.connectionId,
+          ctx.organizationId,
+          state.userName,
+          state.externalId,
+          state.email,
+          state.givenName,
+          state.familyName,
+          state.displayName,
+          state.active,
+        ],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `User ${state.userName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new ScimError(404, `User ${userId} not found`);
+    const patched = rows[0];
+    if (!patched) throw new ScimError(404, `User ${userId} not found`);
 
-  const outcome = await reconcileMembership(db, ctx, row);
+    return { row: patched, outcome: await reconcileMembership(tx, ctx, patched) };
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: row.active ? 'user.updated' : 'user.deactivated',
@@ -1104,31 +1130,56 @@ async function reconcileGroupMembers(
   }
 }
 
+/**
+ * Every group write below runs inside ONE transaction.
+ *
+ * A group write is never a single statement: it touches `scim_groups`,
+ * `scim_group_members`, and — through reconciliation — `organization_members`.
+ * Run unwrapped, a member id the IdP has not provisioned yet (which is routine:
+ * Okta and Entra do not guarantee user-before-group ordering) made
+ * `addGroupMembers` throw 400 partway through, leaving:
+ *
+ *   - on POST, an orphan `scim_groups` row. The IdP saw a failure, retried the
+ *     identical create, and got 409 uniqueness from then on — the group could
+ *     never converge.
+ *   - on PUT/PATCH-replace, an EMPTIED member set, because the delete lands
+ *     before the failing re-add. Everyone whose role came from that group was
+ *     silently demoted by a request that returned an error.
+ *
+ * `touchConnection` and `recordSyncEvent` stay OUTSIDE the transaction and run
+ * only after it commits: they are best-effort observability that must not be
+ * able to roll back real work, and an event describing a rolled-back write
+ * would be a false audit record.
+ */
 export async function createScimGroup(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   input: ParsedScimGroup,
 ): Promise<ScimGroupRow> {
-  let rows: ScimGroupRow[];
-  try {
-    rows = await db.query<ScimGroupRow>(
-      `insert into scim_groups (connection_id, organization_id, external_id, display_name)
+  const row = await db.transaction(async (tx) => {
+    let rows: ScimGroupRow[];
+    try {
+      rows = await tx.query<ScimGroupRow>(
+        `insert into scim_groups (connection_id, organization_id, external_id, display_name)
        values ($1, $2, $3, $4)
        returning ${GROUP_COLUMNS}`,
-      [ctx.connectionId, ctx.organizationId, input.externalId, input.displayName],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `Group ${input.displayName} already exists`, 'uniqueness');
+        [ctx.connectionId, ctx.organizationId, input.externalId, input.displayName],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `Group ${input.displayName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new Error('Failed to create SCIM group: no row returned');
+    const created = rows[0];
+    if (!created) throw new Error('Failed to create SCIM group: no row returned');
 
-  await addGroupMembers(db, ctx, row.id, input.memberIds);
-  await reconcileGroupMembers(db, ctx, input.memberIds);
+    await addGroupMembers(tx, ctx, created.id, input.memberIds);
+    await reconcileGroupMembers(tx, ctx, input.memberIds);
+    return created;
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.provisioned',
@@ -1151,36 +1202,41 @@ export async function replaceScimGroup(
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
 
-  const previousMembers = await getScimGroupMembers(db, ctx, groupId);
+  const row = await db.transaction(async (tx) => {
+    const previousMembers = await getScimGroupMembers(tx, ctx, groupId);
 
-  let rows: ScimGroupRow[];
-  try {
-    rows = await db.query<ScimGroupRow>(
-      `update scim_groups
+    let rows: ScimGroupRow[];
+    try {
+      rows = await tx.query<ScimGroupRow>(
+        `update scim_groups
           set display_name = $4, external_id = $5, version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
         returning ${GROUP_COLUMNS}`,
-      [groupId, ctx.connectionId, ctx.organizationId, input.displayName, input.externalId],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `Group ${input.displayName} already exists`, 'uniqueness');
+        [groupId, ctx.connectionId, ctx.organizationId, input.displayName, input.externalId],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `Group ${input.displayName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new ScimError(404, `Group ${groupId} not found`);
+    const updated = rows[0];
+    if (!updated) throw new ScimError(404, `Group ${groupId} not found`);
 
-  // PUT replaces the member set wholesale.
-  await db.execute('delete from scim_group_members where group_id = $1 and organization_id = $2', [
-    groupId,
-    ctx.organizationId,
-  ]);
-  await addGroupMembers(db, ctx, groupId, input.memberIds);
+    // PUT replaces the member set wholesale. The delete and the re-add are one
+    // unit: a bad id in `input.memberIds` must not leave the group emptied.
+    await tx.execute(
+      'delete from scim_group_members where group_id = $1 and organization_id = $2',
+      [groupId, ctx.organizationId],
+    );
+    await addGroupMembers(tx, ctx, groupId, input.memberIds);
 
-  const affected = new Set([...previousMembers.map((member) => member.id), ...input.memberIds]);
-  await reconcileGroupMembers(db, ctx, [...affected]);
+    const affected = new Set([...previousMembers.map((member) => member.id), ...input.memberIds]);
+    await reconcileGroupMembers(tx, ctx, [...affected]);
+    return updated;
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.updated',
@@ -1201,79 +1257,88 @@ export async function patchScimGroup(
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
 
-  let displayName = existing.display_name;
-  let externalId = existing.external_id;
-  const affected = new Set<string>();
+  // RFC 7644 §3.5.2: "the server MUST apply the entire set of operations or
+  // none". Every operation in the list therefore runs in one transaction, so a
+  // list like [remove members, add unknown-member] cannot commit the remove and
+  // then fail — which previously emptied the group and demoted its members on a
+  // request that returned 400.
+  const row = await db.transaction(async (tx) => {
+    let displayName = existing.display_name;
+    let externalId = existing.external_id;
+    const affected = new Set<string>();
 
-  for (const operation of operations) {
-    const normalized = operation.path ? normalizePatchPath(operation.path) : 'members';
+    for (const operation of operations) {
+      const normalized = operation.path ? normalizePatchPath(operation.path) : 'members';
 
-    if (!GROUP_PATCH_PATHS.has(normalized)) {
-      throw new ScimError(400, `Unsupported PATCH path "${operation.path}"`, 'invalidPath');
+      if (!GROUP_PATCH_PATHS.has(normalized)) {
+        throw new ScimError(400, `Unsupported PATCH path "${operation.path}"`, 'invalidPath');
+      }
+
+      if (normalized === 'displayname') {
+        displayName = requireString(operation.value, 'displayName', MAX_NAME_PART);
+        continue;
+      }
+
+      if (normalized === 'externalid') {
+        externalId =
+          operation.op === 'remove'
+            ? null
+            : optionalString(operation.value, 'externalId', MAX_EXTERNAL_ID);
+        continue;
+      }
+
+      // members
+      if (operation.op === 'remove' && operation.value === undefined) {
+        const current = await getScimGroupMembers(tx, ctx, groupId);
+        current.forEach((member) => affected.add(member.id));
+        await tx.execute(
+          'delete from scim_group_members where group_id = $1 and organization_id = $2',
+          [groupId, ctx.organizationId],
+        );
+        continue;
+      }
+
+      const memberIds = parseMemberValues(operation.value);
+      memberIds.forEach((memberId) => affected.add(memberId));
+
+      if (operation.op === 'remove') {
+        await removeGroupMembers(tx, ctx, groupId, memberIds);
+      } else if (operation.op === 'replace') {
+        const current = await getScimGroupMembers(tx, ctx, groupId);
+        current.forEach((member) => affected.add(member.id));
+        await tx.execute(
+          'delete from scim_group_members where group_id = $1 and organization_id = $2',
+          [groupId, ctx.organizationId],
+        );
+        await addGroupMembers(tx, ctx, groupId, memberIds);
+      } else {
+        await addGroupMembers(tx, ctx, groupId, memberIds);
+      }
     }
 
-    if (normalized === 'displayname') {
-      displayName = requireString(operation.value, 'displayName', MAX_NAME_PART);
-      continue;
-    }
-
-    if (normalized === 'externalid') {
-      externalId =
-        operation.op === 'remove'
-          ? null
-          : optionalString(operation.value, 'externalId', MAX_EXTERNAL_ID);
-      continue;
-    }
-
-    // members
-    if (operation.op === 'remove' && operation.value === undefined) {
-      const current = await getScimGroupMembers(db, ctx, groupId);
-      current.forEach((member) => affected.add(member.id));
-      await db.execute(
-        'delete from scim_group_members where group_id = $1 and organization_id = $2',
-        [groupId, ctx.organizationId],
-      );
-      continue;
-    }
-
-    const memberIds = parseMemberValues(operation.value);
-    memberIds.forEach((memberId) => affected.add(memberId));
-
-    if (operation.op === 'remove') {
-      await removeGroupMembers(db, ctx, groupId, memberIds);
-    } else if (operation.op === 'replace') {
-      const current = await getScimGroupMembers(db, ctx, groupId);
-      current.forEach((member) => affected.add(member.id));
-      await db.execute(
-        'delete from scim_group_members where group_id = $1 and organization_id = $2',
-        [groupId, ctx.organizationId],
-      );
-      await addGroupMembers(db, ctx, groupId, memberIds);
-    } else {
-      await addGroupMembers(db, ctx, groupId, memberIds);
-    }
-  }
-
-  let rows: ScimGroupRow[];
-  try {
-    rows = await db.query<ScimGroupRow>(
-      `update scim_groups
+    let rows: ScimGroupRow[];
+    try {
+      rows = await tx.query<ScimGroupRow>(
+        `update scim_groups
           set display_name = $4, external_id = $5, version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
         returning ${GROUP_COLUMNS}`,
-      [groupId, ctx.connectionId, ctx.organizationId, displayName, externalId],
-    );
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ScimError(409, `Group ${displayName} already exists`, 'uniqueness');
+        [groupId, ctx.connectionId, ctx.organizationId, displayName, externalId],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ScimError(409, `Group ${displayName} already exists`, 'uniqueness');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const row = rows[0];
-  if (!row) throw new ScimError(404, `Group ${groupId} not found`);
+    const patched = rows[0];
+    if (!patched) throw new ScimError(404, `Group ${groupId} not found`);
 
-  await reconcileGroupMembers(db, ctx, [...affected]);
+    await reconcileGroupMembers(tx, ctx, [...affected]);
+    return patched;
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.updated',
@@ -1293,18 +1358,25 @@ export async function deleteScimGroup(
 
   const members = await getScimGroupMembers(db, ctx, groupId);
 
-  await db.execute(
-    'delete from scim_groups where id = $1 and connection_id = $2 and organization_id = $3',
-    [groupId, ctx.connectionId, ctx.organizationId],
-  );
+  // The delete and the re-reconciliation are one unit. Run apart, a failure in
+  // reconciliation left the group row gone while its members kept the elevated
+  // role it had mapped — a privilege outliving the only thing that justified
+  // it, with nothing left in the schema to explain or revoke it.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      'delete from scim_groups where id = $1 and connection_id = $2 and organization_id = $3',
+      [groupId, ctx.connectionId, ctx.organizationId],
+    );
 
-  // Deleting a group can lower the role its members had mapped, so everyone in
-  // it is reconciled against the remaining groups.
-  await reconcileGroupMembers(
-    db,
-    ctx,
-    members.map((member) => member.id),
-  );
+    // Deleting a group can lower the role its members had mapped, so everyone
+    // in it is reconciled against the remaining groups.
+    await reconcileGroupMembers(
+      tx,
+      ctx,
+      members.map((member) => member.id),
+    );
+  });
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.deprovisioned',

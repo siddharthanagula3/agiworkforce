@@ -218,6 +218,23 @@ describe('POST /api/checkout', () => {
   // /terms told the customer tax was their obligation to us. This is the only
   // Checkout-Session creation site, so it is the only place the claim can be
   // made true.
+  //
+  // The `customer_update` assertion is a SECOND regression on top of that one.
+  // This request runs the returning-buyer path (`profiles.stripe_customer_id`
+  // is `cus_test123` in the setup above), and Stripe refuses a session that
+  // enables `tax_id_collection` for an existing customer without
+  // `customer_update[name] = 'auto'`:
+  //
+  //   "Tax ID collection requires updating business name on the customer. To
+  //    enable tax ID collection for an existing customer, please set
+  //    `customer_update[name]` to `auto`."
+  //   (https://docs.stripe.com/tax/checkout/tax-ids — "Existing customers")
+  //
+  // That is a StripeInvalidRequestError at create time, which this route maps
+  // to "Invalid checkout configuration. Please contact support." — so shipping
+  // tax collection without the name flag does not under-collect tax, it stops
+  // anyone from buying at all. The parameters come from ONE owner,
+  // lib/billing/tax-policy.ts.
   it('collects tax and a business tax id on every checkout session', async () => {
     const response = await POST(
       new NextRequest('http://localhost/api/checkout', {
@@ -231,6 +248,9 @@ describe('POST /api/checkout', () => {
       expect.objectContaining({
         automatic_tax: { enabled: true },
         tax_id_collection: { enabled: true },
+        billing_address_collection: 'required',
+        customer: 'cus_test123',
+        customer_update: { address: 'auto', name: 'auto' },
       }),
     );
   });

@@ -16,11 +16,27 @@ import {
   Globe,
   Copy,
   Search,
+  Power,
+  PowerOff,
 } from 'lucide-react';
 
 interface BrowserViewerProps {
   className?: string;
   tabId?: string;
+}
+
+/**
+ * Show the backend's own message instead of a generic failure.
+ *
+ * When no supported browser is installed, the Rust launcher reports every
+ * install location it probed plus the `AGIWORKFORCE_BROWSER_EXECUTABLE`
+ * override. That text is the only thing that tells a user on a stock machine
+ * what to do, so it has to reach the screen verbatim.
+ */
+function describeRuntimeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'The browser-control runtime could not be started.';
 }
 
 export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
@@ -38,6 +54,9 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     navigateTab,
     getUrl,
     getTitle,
+    launchBrowser,
+    closeBrowser,
+    openTab,
   } = useBrowserStore(
     useShallow((s) => ({
       screenshots: s.screenshots,
@@ -53,6 +72,9 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
       navigateTab: s.navigateTab,
       getUrl: s.getUrl,
       getTitle: s.getTitle,
+      launchBrowser: s.launchBrowser,
+      closeBrowser: s.closeBrowser,
+      openTab: s.openTab,
     })),
   );
 
@@ -70,6 +92,8 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const [urlBarValue, setUrlBarValue] = useState('');
   const [pageTitle, setPageTitle] = useState('');
   const [isNavigating, setIsNavigating] = useState(false);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -269,6 +293,48 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     }
   };
 
+  /**
+   * Start the browser-control runtime.
+   *
+   * `browserStore.launchBrowser` -> `browser_launch` -> `PlaywrightBridge`
+   * executable discovery had no caller anywhere in the desktop UI, so the
+   * platform-specific discovery could not be reached by a user at all. This is
+   * that entry point: it starts the runtime, opens a first tab so the address
+   * bar and live view come alive, and renders the launcher's diagnostic when
+   * no supported browser can be found.
+   */
+  const handleStartRuntime = async () => {
+    if (runtimeBusy) return;
+    setRuntimeBusy(true);
+    setRuntimeError(null);
+    try {
+      await launchBrowser('Chromium', false);
+      await openTab('about:blank');
+    } catch (error) {
+      console.error('Failed to start the browser-control runtime:', error);
+      setRuntimeError(describeRuntimeError(error));
+    } finally {
+      setRuntimeBusy(false);
+    }
+  };
+
+  const handleStopRuntime = async () => {
+    if (runtimeBusy || !activeSessionId) return;
+    setRuntimeBusy(true);
+    setRuntimeError(null);
+    if (isStreaming) {
+      stopStreaming();
+    }
+    try {
+      await closeBrowser(activeSessionId);
+    } catch (error) {
+      console.error('Failed to stop the browser-control runtime:', error);
+      setRuntimeError(describeRuntimeError(error));
+    } finally {
+      setRuntimeBusy(false);
+    }
+  };
+
   const handleCopyUrl = () => {
     if (urlBarValue) {
       navigator.clipboard.writeText(urlBarValue);
@@ -286,6 +352,31 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
       {/* Navigation bar */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border bg-muted/10">
         <div className="flex items-center gap-0.5">
+          {activeSessionId ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleStopRuntime}
+              disabled={runtimeBusy}
+              className="h-7 w-7 p-0"
+              title="Stop browser"
+              aria-label="Stop browser"
+            >
+              <PowerOff className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleStartRuntime}
+              disabled={runtimeBusy}
+              className="h-7 w-7 p-0"
+              title="Start browser"
+              aria-label="Start browser"
+            >
+              <Power className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -466,14 +557,43 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
             </div>
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-2">
-              <div className="text-sm">No screenshot available</div>
-              {!isStreaming && currentTabId && (
-                <Button variant="default" size="sm" onClick={toggleStreaming}>
-                  <Play className="h-4 w-4 mr-2" />
-                  Start Live View
-                </Button>
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground p-4">
+            <div className="text-center space-y-2 max-w-lg">
+              {activeSessionId ? (
+                <>
+                  <div className="text-sm">No screenshot available</div>
+                  {!isStreaming && currentTabId && (
+                    <Button variant="default" size="sm" onClick={toggleStreaming}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Start Live View
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="text-sm">The browser is not running</div>
+                  <p className="text-xs text-muted-foreground/80">
+                    Start it to let agents browse, and to watch what they do here.
+                  </p>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleStartRuntime}
+                    disabled={runtimeBusy}
+                  >
+                    <Power className="h-4 w-4 mr-2" />
+                    {runtimeBusy ? 'Starting…' : 'Start browser'}
+                  </Button>
+                </>
+              )}
+
+              {runtimeError && (
+                <p
+                  role="alert"
+                  className="text-xs text-destructive whitespace-pre-wrap text-left break-words"
+                >
+                  {runtimeError}
+                </p>
               )}
             </div>
           </div>

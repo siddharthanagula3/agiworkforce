@@ -149,7 +149,9 @@ describe('ConnectorsPage', () => {
       // ConnectorListRow buttons do not use filter/header labels.
       const label = btn.textContent ?? '';
       return (
-        !['All', 'Connected', 'Ready', 'Coming soon', 'Browse', 'Connectors'].includes(label) &&
+        !['All', 'Connected', 'Ready', 'Not available here', 'Browse', 'Connectors'].includes(
+          label,
+        ) &&
         !label.startsWith('0') &&
         label.length > 0
       );
@@ -179,7 +181,7 @@ describe('ConnectorsPage', () => {
     await renderConnectorsPage();
     expect(screen.getByText(/Browse \(\d+\)/)).toBeDefined();
     expect(screen.getByRole('button', { name: 'Ready' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Coming soon' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Not available here' })).toBeDefined();
   });
 
   // 7. Shows search input placeholder
@@ -289,7 +291,7 @@ describe('ConnectorsPage', () => {
     const firstConnectorRow = listRows.find((btn) => {
       const label = btn.textContent ?? '';
       return (
-        !['All', 'Connected', 'Ready', 'Coming soon', 'Connectors', 'Prev', 'Next'].includes(
+        !['All', 'Connected', 'Ready', 'Not available here', 'Connectors', 'Prev', 'Next'].includes(
           label,
         ) &&
         !label.startsWith('0') &&
@@ -489,7 +491,7 @@ describe('ConnectorsPage — OAuth-granted connectors', () => {
   });
 
   // The honest default: zero providers are configured, so an OAuth connector
-  // with no server-side app must stay "Coming soon" with no Connect control.
+  // with no server-side app must stay "Not available here" with no Connect control.
   it('keeps an unconfigured connector unavailable with no Connect button', async () => {
     stubConnectorsResponse({ connectors: [], available: [] });
 
@@ -497,6 +499,6 @@ describe('ConnectorsPage — OAuth-granted connectors', () => {
     await openLinearDetail();
 
     expect(screen.queryByRole('button', { name: /^Connect$/ })).toBeNull();
-    expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not available here').length).toBeGreaterThan(0);
   });
 });

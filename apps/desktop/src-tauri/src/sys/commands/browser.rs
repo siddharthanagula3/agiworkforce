@@ -533,9 +533,43 @@ impl BrowserStateWrapper {
         Ok(bridge.endpoint())
     }
 
+    /// Make sure a browser with Chrome DevTools enabled is running before a
+    /// caller tries to talk to it.
+    ///
+    /// `PlaywrightBridge::launch_browser` — and with it the whole
+    /// platform-specific executable discovery — had no production caller: the
+    /// only route to it was the `browser_launch` command, which nothing in the
+    /// desktop UI invoked. Every agent browser tool went straight to
+    /// `create_target`, so on a machine where no browser had been started by
+    /// hand the user got a bare "Failed to connect to Chrome DevTools" and no
+    /// way to fix it. This is the wiring: the first tab request starts the
+    /// runtime, reusing an already-running one when the port answers.
+    pub async fn ensure_browser_runtime(&self) -> Result<(), String> {
+        let state = self.get()?;
+        let bridge = state.playwright.lock().await;
+
+        if bridge.endpoint().browser_ws_endpoint().await.is_ok() {
+            return Ok(());
+        }
+
+        tracing::info!(
+            "No Chrome DevTools endpoint on port {}; starting the browser-control runtime",
+            bridge.cdp_port()
+        );
+
+        bridge
+            .launch_browser(BrowserType::Chromium, BrowserOptions::default())
+            .await
+            .map(|handle| {
+                tracing::info!("Browser-control runtime started ({})", handle.id);
+            })
+            .map_err(|error| format!("Could not start the browser-control runtime: {}", error))
+    }
+
     pub async fn create_cdp_tab(&self, url: &str) -> Result<String, String> {
         ensure_navigation_host_allowed(url)?;
         let state = self.get()?;
+        self.ensure_browser_runtime().await?;
         let endpoint = self.get_cdp_endpoint().await?;
         let target = endpoint
             .create_target(url)

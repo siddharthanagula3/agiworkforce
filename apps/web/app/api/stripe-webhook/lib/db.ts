@@ -17,6 +17,7 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
   buildPurchasedSeatRecord,
   persistPurchasedSeatsOnOrganization,
@@ -451,6 +452,45 @@ export async function upsertSubscriptionFromSession(
     // Stripe's redelivery provisions the purchase once Stripe answers again.
     // Swallowing this granted the paid tier on an assumed `active` status.
     throw new Error('Cannot provision entitlement: Stripe subscription status is unconfirmed');
+  }
+
+  // Tax outcome for this sale, recorded before anything is provisioned.
+  //
+  // `automatic_tax` can complete with 0 (unregistered jurisdiction, or a
+  // reverse-charge B2B buyer who supplied a VAT number) — that is a correct
+  // calculation, not a miss. What must never pass silently is a session where
+  // Stripe could NOT calculate (`failed` / `requires_location_inputs`) or where
+  // automatic tax was never requested: the money has already moved, so the
+  // company owes tax on a sale it did not collect tax for, and only a loud,
+  // greppable record makes that reconcilable.
+  //
+  // Entitlement is deliberately NOT withheld here. The buyer has paid; the
+  // amount they were charged is Stripe's, and revoking access over an
+  // accounting shortfall would punish the customer for our misconfiguration.
+  // The fail-closed guard that matters (an unpaid or incomplete checkout) is
+  // the subscription status read above, not this.
+  const taxOutcome = describeSessionTax(session);
+  if (taxOutcome.calculated) {
+    logger.info(
+      {
+        sessionId: session.id,
+        userId: resolvedUserId,
+        taxStatus: taxOutcome.status,
+        taxAmountMinor: taxOutcome.taxAmountMinor,
+        taxIdTypes: taxOutcome.taxIdTypes,
+      },
+      'Checkout session tax calculated by Stripe Tax',
+    );
+  } else {
+    logger.error(
+      {
+        sessionId: session.id,
+        userId: resolvedUserId,
+        subscriptionId: stripeSubId,
+        taxStatus: taxOutcome.status,
+      },
+      'TAX NOT COLLECTED: Stripe did not calculate tax for a completed checkout session; provisioning the paid entitlement anyway and flagging the sale for manual tax reconciliation',
+    );
   }
 
   if (!stripePriceId && stripeSubId) {
