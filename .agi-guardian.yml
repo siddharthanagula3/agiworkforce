@@ -1,0 +1,61 @@
+# AGI Guardian repository configuration.
+# Schema: packages/guardian/core/src/config.ts (GuardianConfigSchema).
+# Invalid values fail closed to shadow-mode defaults — see parseGuardianConfig.
+version: 1
+
+# shadow: findings publish as neutral check runs and advisory comments only.
+# Promote to `advisory`, then `blocking`, only after precision is proven
+# against the evaluation corpus (docs/guardian/IMPLEMENTATION_STATUS.md).
+mode: shadow
+
+triggers:
+  push:
+    enabled: true
+    branches:
+      - main
+  pull_request:
+    enabled: true
+    actions:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  schedule:
+    nightly: true
+    weekly_full_audit: true
+
+review:
+  max_inline_comments: 10
+  minimum_inline_confidence: 0.88
+  minimum_summary_confidence: 0.72
+  review_drafts: false
+  include_preexisting_context: true
+  cancel_stale_runs: true
+
+blocking:
+  new_critical: true
+  new_high_security: true
+  deterministic_scanner_failure: true
+  existing_debt: false
+  technical_debt: false
+  ai_slop: false
+
+baseline:
+  strategy: accepted-main
+  fail_on_expired_suppressions: true
+
+ignore:
+  paths:
+    - '**/generated/**'
+    - '**/dist/**'
+    - '**/build/**'
+    - '**/coverage/**'
+    - '**/vendor/**'
+    - '**/*.lock'
+
+privacy:
+  source_retention: none
+  redact_secrets_before_model: true
+
+commands:
+  enabled: true
