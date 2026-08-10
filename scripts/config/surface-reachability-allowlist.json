@@ -322,8 +322,6 @@
           "apps/web/features/chat/types/index.ts",
           "apps/web/features/index.ts",
           "apps/web/features/media/index.ts",
-          "apps/web/features/settings/components/CustomCommandsSettings.tsx",
-          "apps/web/features/settings/components/CustomModelsSettings.tsx",
           "apps/web/features/settings/components/Settings/ExportData.tsx",
           "apps/web/features/settings/components/Settings/Notifications.tsx",
           "apps/web/features/settings/components/Settings/Profile.tsx",
