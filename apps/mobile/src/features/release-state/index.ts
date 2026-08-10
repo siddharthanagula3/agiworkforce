@@ -9,7 +9,8 @@
  * app the store has never heard of.
  *
  * The fix is not new copy. It is that NO module may assert a distribution fact
- * on its own any more. `lib/mobileReleaseState.json` is the single record, this
+ * on its own any more. `src/features/release-state/mobileReleaseState.json` is the single record,
+ * this
  * module is the only reader, and every accessor here FAILS CLOSED: it returns
  * `null` unless the registry both declares the store published AND carries the
  * store-assigned listing id that `scripts/release/verify-store-listings.mjs`
@@ -26,7 +27,7 @@
  * (`SURFACE_STATUS.mobile`); the registry test asserts the two agree, so the
  * two surfaces cannot describe mobile's availability differently.
  *
- * Pure module by `lib/` rules: no React state, no I/O, no platform APIs.
+ * Pure release-state module: no React state, no I/O, no native APIs.
  */
 import registryJson from './mobileReleaseState.json';
 
