@@ -15,6 +15,7 @@ import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { getProviderDefaultModel, getTaskModelForProvider } from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { routeGitHubWebhookEvent } from './webhook-router';
+import { recordDeliveryOnce } from './delivery-dedup';
 
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
 const BOT_MENTION = '@agi-workforce';
@@ -85,6 +86,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (routedEvent.kind === 'ping') {
     return NextResponse.json({ received: true, event: 'ping' });
   }
+
+  // Replay protection (migration 0106): GitHub retries and manual redeliveries
+  // reuse the delivery id, so exactly one request per id may proceed past this
+  // point. Runs after signature verification (unauthenticated traffic must not
+  // grow the table) and after the ignored/ping short-circuits (no ledger rows
+  // for events we never act on). Fails open on DB unavailability — the review
+  // pipeline's own debounce remains as the second layer.
+  {
+    const payloadRecord = rawPayload as Record<string, unknown>;
+    const dedupOutcome = await recordDeliveryOnce(getNeonDb(), {
+      deliveryId: request.headers.get('x-github-delivery'),
+      event: event ?? 'unknown',
+      action: typeof payloadRecord['action'] === 'string' ? payloadRecord['action'] : null,
+      installationId:
+        typeof (payloadRecord['installation'] as Record<string, unknown> | undefined)?.['id'] ===
+        'number'
+          ? ((payloadRecord['installation'] as Record<string, unknown>)['id'] as number)
+          : null,
+    });
+    if (dedupOutcome === 'duplicate') {
+      logger.info(
+        { deliveryId: request.headers.get('x-github-delivery'), event },
+        'Duplicate GitHub webhook delivery acknowledged without reprocessing',
+      );
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  }
+
   if (routedEvent.kind === 'installation-deleted') {
     try {
       const db = getNeonDb();
