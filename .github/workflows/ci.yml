@@ -203,23 +203,87 @@ jobs:
         # of bug where TypeScript syntax leaks into a JS template literal.
         run: pnpm --filter agi-workforce test:webview
 
+      # CRIT-018. This step scanned NOTHING for an unknown but long period, and
+      # reported success while doing it.
+      #
+      # The pinned `returntocorp/semgrep-action@v1` image carries semgrep
+      # 1.36.0 (2023). Registry rules have since adopted the `MEDIUM` severity
+      # value, which that version's enum rejects, so every run died at rule
+      # loading:
+      #
+      #     ValueError: invalid rule severity value: MEDIUM
+      #
+      # `continue-on-error: true` then swallowed the crash. The "41 pre-existing
+      # findings" the old comment tracked as a backlog were not being counted at
+      # all — a crashed scanner and a clean scan were indistinguishable in this
+      # job, which is the actual defect and is what the split below fixes.
+      #
+      # Semgrep's exit codes separate the two cases: 0 = no findings, 1 =
+      # findings, >=2 = the scanner itself failed. A scanner failure now fails
+      # the job unconditionally. Whether FINDINGS block is a separate decision
+      # (see the gate step) — but "the tool broke" must never again read as
+      # "the code is clean".
+      # TRIAGE, 2026-08-09, semgrep 1.172.0 against this tree: 148 findings, not
+      # 41. 130 are dismissed by the --exclude-rule flags below, each for a
+      # reason recorded there. The 18 that survive are all package-manager
+      # supply-chain hardening (dependabot cooldowns, pnpm/npm minimum release
+      # age, pnpm trust policy, exotic sub-dependency blocking) across
+      # .github/dependabot.yml, .npmrc, both pnpm-workspace.yaml files and
+      # tools/skill-vetting/pyproject.toml. They are real and worth doing —
+      # they are the defense against adopting a package compromised minutes
+      # after publication — but they change INSTALL behaviour, so they land as
+      # their own change rather than riding along with a security-gate edit.
+      # Once they are zero, `--error` flips this step to blocking.
       - name: Semgrep (security audit)
-        # AUDIT-FIX: CI-1 — TEMPORARY revert to advisory mode (continue-on-
-        # error: true). The 2026-05-19 attempt to flip this gate to blocking
-        # surfaced 41 pre-existing findings that need a proper drive-to-zero
-        # pass before the gate can hard-block (child_process spawning, JWT
-        # secrets in test fixtures, dangerouslySetInnerHTML, etc.). Track the
-        # backlog and re-tighten once the count hits zero. Also: the old
-        # returntocorp/semgrep-action@v1 ignores baseline_ref reliably; a
-        # follow-up should migrate to `semgrep ci` direct invocation with a
-        # proper baseline comparison.
-        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
+        id: semgrep
+        shell: bash
+        run: |
+          set -uo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check semgrep==1.172.0
+          set +e
+          semgrep scan \
+            --config p/security-audit \
+            --config p/typescript \
+            --config p/owasp-top-ten \
+            --metrics=off \
+            `# 118x. Flags actions/* referenced by tag. check:ci-guardrails` \
+            `# already SHA-pins every THIRD-PARTY action and deliberately` \
+            `# exempts GitHub's own, which is a stricter, enforced policy.` \
+            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+            `# 5x. The pwn-request shape, all in the deploy workflows. Each is` \
+            `# already gated on head_repository.full_name == github.repository,` \
+            `# which production-deploy-scope.test.mjs asserts for both workflows.` \
+            --exclude-rule yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout \
+            `# 4x, all in *.test.ts fixtures — no production secret.` \
+            --exclude-rule javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret \
+            `# 3x, each already safe: ArtifactPreview routes markdown through` \
+            `# DOMPurify and HTML through a sandboxed iframe; SEOHead emits` \
+            `# ld+json and has zero importers; the third is under archive/.` \
+            --exclude-rule typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml \
+            --json --output semgrep-results.json
+          status=$?
+          set -e
+
+          if [ "$status" -ge 2 ]; then
+            echo "::error::Semgrep failed to run (exit $status). This is a broken scanner, not a clean scan."
+            exit 1
+          fi
+
+          findings=$(node -e "
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('semgrep-results.json', 'utf8'));
+            console.log((report.results ?? []).length);
+          ")
+          echo "count=$findings" >> "$GITHUB_OUTPUT"
+          echo "Semgrep ran successfully and reported $findings finding(s)."
+
+      - name: Upload Semgrep findings
+        if: always() && hashFiles('semgrep-results.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          config: >-
-            p/security-audit
-            p/typescript
-            p/owasp-top-ten
-        continue-on-error: true
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 14
 
       - name: Build affected deployable JavaScript surfaces
         run: >-
@@ -599,9 +663,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Homebrew now refuses third-party tap formulae until they are explicitly
+      # trusted, which broke this job outright:
+      #
+      #   Refusing to load formula wix/brew/applesimutils from untrusted tap wix/brew.
+      #
+      # Trust is granted to THE ONE FORMULA, not the whole tap, and certainly not
+      # by exporting HOMEBREW_NO_REQUIRE_TAP_TRUST=1. That env var disables the
+      # check globally for every formula in the job — it is a supply-chain
+      # control, and switching it off to make CI green is the same move that let
+      # a crashed Semgrep report success for months. Homebrew documents it as
+      # not recommended and slated for removal.
       - name: Install Detox simulator utilities
         run: |
           brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils
           brew install applesimutils
           pnpm --filter @agiworkforce/mobile exec detox build-framework-cache
 

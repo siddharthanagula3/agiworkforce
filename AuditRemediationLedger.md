@@ -1479,7 +1479,7 @@ The business-layer report shows that substantial billing, entitlement, and enter
       Triaged 2026-08-09. There is nothing to remediate: Mobile sells no subscription at
       all, so there is no store lifecycle to reconcile. The whole purchase/restore/receipt
       slice was deliberately removed in `77169d3f1` under
-      `docs/decisions/2026-07-30-mobile-store-billing-boundary.md` (Accepted) because every
+      docs/decisions/2026-07-30-mobile-store-billing-boundary.md (retired by the doc sweep in this merge) (Accepted) because every
       product identifier was a placeholder. Current source confirms it: `apps/mobile/package.json`
       has no StoreKit/Play Billing/react-native-iap/RevenueCat dependency, `apps/web/app/api/mobile/`
       holds only `content-report`, `feedback`, and `push-token`, and a repo-wide grep for

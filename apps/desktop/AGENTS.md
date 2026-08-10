@@ -4,7 +4,7 @@ Status: Current
 Owner: Desktop lead
 Last updated: 2026-08-04
 
-Read root `AGENTS.md`, then this file, then `apps/desktop/README.md`.
+Read root `AGENTS.md`, then this file.
 
 ## Scope
 

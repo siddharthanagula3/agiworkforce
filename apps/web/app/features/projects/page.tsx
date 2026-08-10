@@ -167,7 +167,7 @@ export default function ProjectsFeaturePage() {
           title="Start your first project."
           body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work. Give the work you repeat a place to live."
           ctas={[
-            { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
+            { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/download', label: 'Get notified' },
           ]}
         />

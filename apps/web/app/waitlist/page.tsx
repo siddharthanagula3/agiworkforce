@@ -15,7 +15,7 @@ const WHILE_YOU_WAIT = [
   {
     title: 'Try AGI Web',
     body: 'Hosted chat with projects and artifacts, in the browser today.',
-    href: '/login?redirectTo=%2Fchat',
+    href: '/login?redirectTo=%2F',
   },
   {
     title: 'Run AGI Locally',

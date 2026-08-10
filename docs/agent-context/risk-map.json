@@ -139,12 +139,7 @@
       "id": "repo-organization",
       "severity": "medium",
       "owner": "Platform lead",
-      "paths": [
-        "AGENTS.md",
-        "CLAUDE.md",
-        "docs/agent-context",
-        "docs/plans/pre-release-repo-organization-2026-05-20.md"
-      ],
+      "paths": ["AGENTS.md", "CLAUDE.md", "docs/agent-context"],
       "reviewFocus": "Agent docs match JSON maps; no root clutter regressions; known flaws are indexed",
       "checks": ["pnpm check:agent-context", "pnpm check:repo-organization"]
     }

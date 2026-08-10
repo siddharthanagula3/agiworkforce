@@ -907,7 +907,6 @@ if (exists('docs/cli/COMMAND_SURFACE.md')) {
   }
 }
 
-requireIncludes('apps/web/README.md', '`features/` - product-domain feature code.');
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/web/features/`');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features');
@@ -919,13 +918,7 @@ requireIncludes(
   'docs/cli/COMMAND_SURFACE.md',
   'registered_builtin_commands_have_tui_runtime_coverage',
 );
-requireIncludes(
-  'apps/mobile/src/features/schedules/README.md',
-  'apps/mobile/src/features/schedules',
-);
 requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');
-requireIncludes('apps/mobile/components/README.md', 'retained only for shared UI primitives');
-requireIncludes('apps/mobile/src/features/voice/README.md', 'Cloud STT/TTS calls');
 requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
 requireIncludes(
   'docs/engineering/naming-conventions.md',

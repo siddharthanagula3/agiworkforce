@@ -146,12 +146,21 @@ export function isPerSeatBillingPlan(plan: string | null | undefined): boolean {
 /**
  * Seat-quantity bounds for per-seat checkout.
  *
- * The floor is 1 because an organization always has at least its owner. The
- * ceiling is Stripe's documented maximum quantity for a subscription line item
- * — it is an API bound, NOT a product claim about team size, and exists so an
- * unvalidated client integer cannot reach Stripe.
+ * The floor is 2 (founder decision, 2026-08-08): Team prices the organization
+ * layer — central billing, seat management, member lifecycle — over an
+ * allowance identical to Pro's, so a single-seat Team was $5/mo for company
+ * scaffolding one person cannot use. One person belongs on Pro. This also
+ * matches the comparables, which both require more than one seat.
+ *
+ * A team that shrinks to one person therefore cannot reduce to a single seat;
+ * it moves to Pro instead. Team only became self-serve on 2026-08-04, so the
+ * population this strands is small, but it is not nil.
+ *
+ * The ceiling is Stripe's documented maximum quantity for a subscription line
+ * item — an API bound, NOT a product claim about team size, so an unvalidated
+ * client integer cannot reach Stripe.
  */
-export const MIN_PURCHASABLE_SEATS = 1;
+export const MIN_PURCHASABLE_SEATS = 2;
 export const MAX_PURCHASABLE_SEATS = 999_999;
 
 /** Clamp/validate a requested seat count; returns null when it is not a usable quantity. */

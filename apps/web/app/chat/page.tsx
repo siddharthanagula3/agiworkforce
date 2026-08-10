@@ -1,19 +1,11 @@
-'use client';
-
-import dynamic from 'next/dynamic';
-import ChatLoading from './loading';
+import { WebChatRoot } from '@/features/chat/components/WebChatRoot';
 
 /**
- * GOV-25: the chat bundle is a `ssr: false` dynamic import, which previously
- * had NO `loading` option — a cold load painted a blank page until the client
- * chunk arrived. Reusing the segment's `loading.tsx` skeleton makes cold load
- * and in-app navigation look identical instead of showing nothing.
+ * `/chat` predates the move of the product onto the root domain (2026-08-08).
+ * It stays a real route rather than a redirect because it has been a linkable,
+ * bookmarked URL and every `/chat/*` child still lives here; `app/page.tsx`
+ * mounts the same component for signed-in visitors on `/`.
  */
-const WebChatPage = dynamic(() => import('@features/chat/pages/WebChatPage'), {
-  ssr: false,
-  loading: () => <ChatLoading />,
-});
-
 export default function Page() {
-  return <WebChatPage />;
+  return <WebChatRoot />;
 }

@@ -1,14 +1,13 @@
 <!--
   This file is the VS Code Marketplace "Details" page — it ships byte-identical
   inside the VSIX. Keep it user-facing; every claim here must be true of the
-  packaged extension. Contributor and architecture notes live in
-  docs/CONTRIBUTING-NOTES.md and AGENTS.md, both excluded from the VSIX.
+  packaged extension. Contributor and architecture notes live in AGENTS.md,
+  which .vscodeignore excludes from the VSIX.
 
-  Ownership metadata for scripts/check-readme-ownership.mjs:
   Status: Current
   Owner: Extension lead
   Purpose: Marketplace listing copy for the AGI Workforce VS Code extension.
-  Last updated: 2026-08-05
+  Last updated: 2026-08-08
 -->
 
 # AGI Workforce for VS Code

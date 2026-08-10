@@ -85,9 +85,8 @@ scheduler, screen capture, ROI, auth, file upload, document/media/code,
 overlay, and adjacent small domains. `apps/desktop/src/components` is now
 reserved for shared UI primitives only.
 
-Every current Web, Mobile, and Desktop top-level feature folder now has a local
-ownership README, and `pnpm check:readme-ownership` enforces feature README
-coverage.
+Per-directory ownership READMEs were retired on 2026-08-08; feature ownership is
+tracked through CODEOWNERS instead.
 
 ## Why
 
