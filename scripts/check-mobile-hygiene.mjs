@@ -174,9 +174,6 @@ if (!exists(featureRoot)) {
     if (!isKebabCase(featureName)) {
       errors.push(`Mobile feature directory must be kebab-case: ${featureDir}`);
     }
-    if (!exists(`${featureDir}/README.md`)) {
-      errors.push(`Mobile feature directory must have README.md: ${featureDir}`);
-    }
     if (!exists(`${featureDir}/index.ts`) && !exists(`${featureDir}/index.tsx`)) {
       errors.push(`Mobile feature directory must have index.ts or index.tsx: ${featureDir}`);
     }

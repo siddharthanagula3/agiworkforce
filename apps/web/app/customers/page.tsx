@@ -128,7 +128,7 @@ export default function CustomersPage() {
           </p>
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <div className="agi-fl-cta-row">
-              <Link href="/login?redirectTo=%2Fchat" className="agi-fl-cta agi-fl-cta--primary">
+              <Link href="/login?redirectTo=%2F" className="agi-fl-cta agi-fl-cta--primary">
                 Try AGI Web
               </Link>
               <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
@@ -191,7 +191,7 @@ export default function CustomersPage() {
           title="Be the case study we ask to publish."
           body="AGI Web runs in the browser now, and Desktop and the CLI are released for Local and BYOK work. If it earns a place in your stack, we will ask your permission before your name ever appears here."
           ctas={[
-            { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
+            { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/contact-sales', label: 'Talk to Sales' },
           ]}

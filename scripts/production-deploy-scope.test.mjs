@@ -6,6 +6,7 @@ import {
   classifyDeployScope,
   formatGithubOutputs,
   isEligibleProductionRun,
+  selectSurfaceBaseline,
 } from './production-deploy-scope.mjs';
 
 test('web-only changes do not spend unrelated expensive runners', () => {
@@ -177,6 +178,89 @@ test('a red or foreign CI completion is ineligible for production', () => {
     false,
   );
   assert.equal(isEligibleProductionRun(successfulRun, 'attacker/fork'), false);
+});
+
+test('the baseline is the commit a surface last SHIPPED from, not the last green run', () => {
+  const WEB = 'Deploy verified web artifact';
+  const base = {
+    conclusion: 'success',
+    event: 'push',
+    head_branch: 'main',
+    head_repository: { full_name: 'owner/repository' },
+  };
+
+  // The exact shape that stranded the argon2 outage fix: the newest run
+  // succeeded overall while its web job SKIPPED, so its commit is not evidence
+  // that web shipped. Taking it as the baseline is what hid every earlier
+  // unshipped web change.
+  const runs = [
+    { ...base, head_sha: 'newest', jobs: [{ name: WEB, conclusion: 'skipped' }] },
+    { ...base, head_sha: 'shipped', jobs: [{ name: WEB, conclusion: 'success' }] },
+    { ...base, head_sha: 'older', jobs: [{ name: WEB, conclusion: 'success' }] },
+  ];
+
+  assert.equal(selectSurfaceBaseline(runs, 'owner/repository', WEB), 'shipped');
+});
+
+test('a failed deploy job is not a baseline, and neither is a foreign run', () => {
+  const WEB = 'Deploy verified web artifact';
+  const base = {
+    conclusion: 'success',
+    event: 'push',
+    head_branch: 'main',
+    head_repository: { full_name: 'owner/repository' },
+  };
+
+  assert.equal(
+    selectSurfaceBaseline(
+      [{ ...base, head_sha: 'failed', jobs: [{ name: WEB, conclusion: 'failure' }] }],
+      'owner/repository',
+      WEB,
+    ),
+    null,
+  );
+
+  // A fork's run must never set the baseline for this repository.
+  assert.equal(
+    selectSurfaceBaseline(
+      [
+        {
+          ...base,
+          head_sha: 'fork',
+          head_repository: { full_name: 'attacker/fork' },
+          jobs: [{ name: WEB, conclusion: 'success' }],
+        },
+      ],
+      'owner/repository',
+      WEB,
+    ),
+    null,
+  );
+});
+
+test('surfaces are tracked independently', () => {
+  const WEB = 'Deploy verified web artifact';
+  const GATEWAY = 'Promote verified gateway image to production';
+  const base = {
+    conclusion: 'success',
+    event: 'push',
+    head_branch: 'main',
+    head_repository: { full_name: 'owner/repository' },
+  };
+
+  const runs = [
+    { ...base, head_sha: 'web-only', jobs: [{ name: WEB, conclusion: 'success' }] },
+    { ...base, head_sha: 'both', jobs: [{ name: GATEWAY, conclusion: 'success' }] },
+  ];
+
+  assert.equal(selectSurfaceBaseline(runs, 'owner/repository', WEB), 'web-only');
+  assert.equal(selectSurfaceBaseline(runs, 'owner/repository', GATEWAY), 'both');
+});
+
+test('never deployed reads as null, which the caller must treat as deploy-everything', () => {
+  const WEB = 'Deploy verified web artifact';
+  assert.equal(selectSurfaceBaseline([], 'owner/repository', WEB), null);
+  assert.equal(selectSurfaceBaseline(undefined, 'owner/repository', WEB), null);
 });
 
 test('Vercel Git integration cannot race the CI-owned main promotion', () => {

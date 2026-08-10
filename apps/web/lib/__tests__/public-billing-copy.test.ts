@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
   getModelsForTierAndSurface,
+  MIN_PURCHASABLE_SEATS,
   type BillingPlanPricing,
 } from '@agiworkforce/types';
 
@@ -63,9 +64,14 @@ describe('public billing truth', () => {
     // Team is per-seat, so the published contract must expose the seat count
     // clients have to send. A documented plan with an undocumented required
     // field is worse than no documentation.
+    // MIN_PURCHASABLE_SEATS is 2, not 1: `feat(billing): require two seats to
+    // buy team` made a one-seat Team purchase invalid, because a one-seat team
+    // is an Individual plan at a team price. This assertion is what keeps the
+    // PUBLISHED schema honest about that — a documented `minimum: 1` would send
+    // integrators into a validator that rejects them.
     expect(document.components.schemas.CheckoutRequest.properties.seats).toMatchObject({
       type: 'integer',
-      minimum: 1,
+      minimum: MIN_PURCHASABLE_SEATS,
     });
     expect(document.components.schemas.CheckoutRequest.properties.billingInterval.enum).toEqual([
       'monthly',

@@ -4,7 +4,7 @@ Status: Current
 Owner: Web lead
 Last updated: 2026-06-03
 
-Read root `AGENTS.md`, then this file, then `apps/web/README.md`.
+Read root `AGENTS.md`, then this file.
 
 ## Scope
 

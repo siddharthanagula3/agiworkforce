@@ -118,12 +118,26 @@ export function BudgetTrackerDisplay({
                     Plan usage
                   </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Current period:</span>
-                  <span className="font-medium tabular-nums">
-                    {Math.min(100, Math.max(0, Math.round(creditBalance.usage_percentage)))}% used
-                  </span>
-                </div>
+                {/* Free's allowance is internal: the server sends no percentage
+                    for it, so there is nothing to render and nothing to game.
+                    The plan still meters and still refuses when exhausted. */}
+                {creditBalance.usage_visible && creditBalance.usage_percentage !== null ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current period:</span>
+                    <span className="font-medium tabular-nums">
+                      {Math.min(100, Math.max(0, Math.round(creditBalance.usage_percentage)))}% used
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      {creditBalance.has_usage_remaining ? 'Included usage' : 'Limit reached'}
+                    </span>
+                    <a href="/pricing" className="font-medium underline underline-offset-2">
+                      Upgrade
+                    </a>
+                  </div>
+                )}
               </>
             ) : null}
           </>

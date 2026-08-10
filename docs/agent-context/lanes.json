@@ -364,7 +364,6 @@
       "ownerRole": "Release owner",
       "ownedWritePaths": [
         ".github/**",
-        "docs/launch/**",
         "scripts/release.sh",
         "scripts/publish-cli.sh",
         "scripts/launch-*.sh",

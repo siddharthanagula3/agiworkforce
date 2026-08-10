@@ -4,7 +4,7 @@ Status: Current
 Owner: Extension lead
 Last updated: 2026-05-21
 
-Read root `AGENTS.md`, then this file, then `apps/extension/README.md`.
+Read root `AGENTS.md`, then this file.
 
 ## Scope
 

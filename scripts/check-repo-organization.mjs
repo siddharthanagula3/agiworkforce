@@ -221,27 +221,6 @@ if (fs.existsSync(path.join(root, 'opencode.json'))) {
   errors.push('Root opencode.json is retired. Use .opencode/opencode.json.');
 }
 
-if (fs.existsSync(path.join(root, 'apps/web/pnpm-workspace.yaml'))) {
-  const webReadme = fs.existsSync(path.join(root, 'apps/web/README.md'))
-    ? fs.readFileSync(path.join(root, 'apps/web/README.md'), 'utf8')
-    : '';
-  if (!webReadme.includes('apps/web/pnpm-workspace.yaml')) {
-    errors.push('apps/web/pnpm-workspace.yaml must be documented in apps/web/README.md');
-  }
-}
-
-const planPath = path.join(root, 'docs/plans/pre-release-repo-organization-2026-05-20.md');
-if (!fs.existsSync(planPath)) {
-  errors.push('Missing pre-release repo organization plan.');
-} else {
-  const plan = fs.readFileSync(planPath, 'utf8');
-  for (const marker of ['Status:', 'Owner:', 'Last updated:', 'LLM Operability']) {
-    if (!plan.includes(marker)) {
-      errors.push(`Pre-release plan missing marker: ${marker}`);
-    }
-  }
-}
-
 if (errors.length > 0) {
   console.error('Repo organization check failed:');
   for (const error of errors) {
