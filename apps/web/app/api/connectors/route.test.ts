@@ -61,6 +61,9 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { CONNECTOR_CAPABILITIES } from '@/lib/connectors/catalog';
+
 import { DELETE, GET, POST } from './route';
 
 function getRequest(): NextRequest {
@@ -224,6 +227,60 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(
       mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
     ).toBe(false);
+  });
+
+  it('never rejects a connector the directory itself lists (audit CRIT-001)', async () => {
+    // The route used to carry its own `VALID_CONNECTOR_IDS` set of 34 ids while
+    // the directory rendered 89. Every id in the gap answered 400 "Invalid
+    // connector ID" — a message about a connector the product had just shown
+    // the user — instead of the honest "not implemented for this provider".
+    // Both lists are now the canonical registry, so this asserts the gap is
+    // closed for every catalog entry rather than for one sampled id.
+    const rejected: string[] = [];
+    for (const connector of CONNECTORS) {
+      const response = await POST(postRequest(connector.id));
+      if (response.status === 400) rejected.push(connector.id);
+    }
+    expect(rejected).toEqual([]);
+  });
+
+  it('answers an unbuilt connector honestly instead of pretending it saved', async () => {
+    // airtable with nothing configured: not operator-mapped, no OAuth app.
+    const response = await POST(postRequest('airtable'));
+
+    expect(response.status).toBe(501);
+    await expect(response.json()).resolves.toMatchObject({ connectorId: 'airtable' });
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
+    ).toBe(false);
+  });
+
+  it('refuses an id the canonical registry has never heard of', async () => {
+    const response = await POST(postRequest('totally-made-up'));
+
+    expect(response.status).toBe(400);
+    expect(CONNECTOR_CAPABILITIES['totally-made-up']).toBeUndefined();
+  });
+
+  it('reports resolved health with each connector, not raw flags to recombine', async () => {
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+    mocks.oauthGrants.mockResolvedValue([
+      {
+        connectorId: 'linear',
+        grantedScopes: ['read'],
+        connectedAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        needsReauthorization: true,
+      },
+    ]);
+
+    const body = (await (await GET(getRequest())).json()) as {
+      connectors: Array<{ connectorId: string; health?: string }>;
+    };
+
+    expect(body.connectors.find((c) => c.connectorId === 'linear')?.health).toBe(
+      'needs-reauthorization',
+    );
   });
 
   it('reports an OAuth grant as connected, without exposing any token material', async () => {

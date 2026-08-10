@@ -30,7 +30,7 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { getConnectorTools } from '../config/connector-logos';
+import { getConnectorCapability } from '@/lib/connectors/catalog';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
 import {
@@ -56,6 +56,7 @@ import {
   CATEGORIES,
   CONNECTORS,
   getConnectorAvailabilityLabelFor,
+  RISK_CLASS_COPY,
   type Connector,
   type ConnectorCategory,
 } from '../data/connectors';
@@ -70,7 +71,11 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Connected', value: 'connected' },
   { label: 'Ready', value: 'ready' },
-  { label: 'Coming soon', value: 'request_access' },
+  // The value stays `request_access` — it is the URL contract the OAuth broker
+  // return leg reads (features/connectors/lib/connector-oauth-notice.ts). The
+  // LABEL is honest now: nothing is in flight for these, this deployment simply
+  // has no way to connect them (audit CRIT-001).
+  { label: 'Not available here', value: 'request_access' },
 ];
 
 // ─── InspectMcpServerDialog ───────────────────────────────────────────────────
@@ -441,7 +446,13 @@ interface ConnectorDetailPanelProps {
 }
 
 function useConnectorTools(connectorId: string): string[] {
-  return React.useMemo(() => getConnectorTools(connectorId), [connectorId]);
+  // Canonical registry only (audit CRIT-001). Non-empty exclusively for a
+  // connector with a shipped adapter, so the Tools block below can no longer
+  // render invented capability badges for an unbuilt integration.
+  return React.useMemo(
+    () => [...(getConnectorCapability(connectorId)?.supportedActions ?? [])],
+    [connectorId],
+  );
 }
 
 /**
@@ -555,11 +566,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 users "the per-tool permissions you saved for X are deleted",
                 but there was no UI to save any — the panel existed unmounted.
 
-                Gated to connectors whose CONNECTOR_TOOLS entries are real wire
-                names. Today that is GitHub only (they mirror GITHUB_TOOL_DEFS);
-                every other connector's list is prose with no backing tool, and
-                its real tools are discovered at runtime by
-                catalogToConnectorToolDefs, which a static config cannot mirror.
+                Gated on the canonical registry's `supportedActions`, which are
+                real wire names. Today that is GitHub only (they mirror
+                GITHUB_TOOL_DEFS); every other connector's tools are discovered
+                at runtime by catalogToConnectorToolDefs, which no static table
+                can mirror.
               */}
               {hasWireToolNames(connector.id) && (
                 <Button
@@ -691,7 +702,15 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
       )}
 
       {/* Description */}
-      <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+      <p className="mb-2 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+
+      {/* Risk ceiling, from the canonical capability registry (audit CRIT-001).
+          Shown whether or not the connector is connectable here, because it is
+          a fact about the provider rather than about this deployment. */}
+      <p className="mb-5 text-xs leading-relaxed text-muted-foreground/80">
+        <span className="font-medium text-muted-foreground">Access level:</span>{' '}
+        {RISK_CLASS_COPY[connector.riskClass]}
+      </p>
 
       {/* Tools — only shown for connectors that actually work in this deployment,
           so fabricated capability badges never render as product state. */}
@@ -981,7 +1000,7 @@ export function ConnectorsPage() {
     activeStatus === 'ready'
       ? 'Ready'
       : activeStatus === 'request_access'
-        ? 'Coming soon'
+        ? 'Not available here'
         : 'Browse';
   const totalBrowsePages = Math.ceil(browseConnectors.length / ITEMS_PER_PAGE);
   const pagedBrowseConnectors = browseConnectors.slice(

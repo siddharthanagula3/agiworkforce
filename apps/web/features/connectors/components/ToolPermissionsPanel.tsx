@@ -3,17 +3,19 @@
 /**
  * ⚠️ CALLERS MUST GATE ON WIRE TOOL NAMES.
  *
- * This panel writes tool-permission decisions keyed by whatever strings
- * CONNECTOR_TOOLS (config/connector-logos.ts) contains for the connector. The
- * store's real consumers — useChatStream's approval auto-resolve and
+ * This panel writes tool-permission decisions keyed by the strings it renders.
+ * The store's real consumers — useChatStream's approval auto-resolve and
  * ToolTimeline's ToolPermissionQuickPicker — key by the WIRE tool name parsed
- * from `mcp__<serverId>__<toolName>`. Today only the github entry in
- * CONNECTOR_TOOLS holds wire names; every other connector's list is
- * display-label marketing copy with no backing implementation, so opening
- * this panel for those would save decisions under keys nothing ever reads
- * (silent no-op permissions). Operator-mapped and custom connectors advertise
- * their tool names at runtime from the remote catalog, which this static
- * config cannot know.
+ * from `mcp__<serverId>__<toolName>`, so anything else saves decisions under
+ * keys nothing ever reads (silent no-op permissions).
+ *
+ * The list therefore comes from `supportedActions` in
+ * `@/lib/connectors/catalog`, which holds wire names and is populated only for
+ * a connector with a shipped adapter — github today. It replaced
+ * `CONNECTOR_TOOLS` (config/connector-logos.ts), a table of display-label
+ * marketing copy with no backing implementation, deleted under audit CRIT-001.
+ * Operator-mapped and custom connectors advertise their tool names at runtime
+ * from the remote catalog, which no static table can know.
  *
  * ConnectorsPage is the only caller. It renders this dialog for a connected
  * connector but only ever opens it behind `hasWireToolNames(connector.id)`
@@ -33,7 +35,7 @@ import {
   DialogDescription,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { getConnectorTools } from '../config/connector-logos';
+import { getConnectorCapability } from '@/lib/connectors/catalog';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';
 
@@ -165,7 +167,10 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   if (!connector) return null;
 
-  const tools = getConnectorTools(connector.id);
+  // Registry `supportedActions` are wire tool names — the exact keys the
+  // permission store and the chat tool loop use. Empty for every connector
+  // without a shipped adapter, which renders the honest empty state below.
+  const tools = getConnectorCapability(connector.id)?.supportedActions ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

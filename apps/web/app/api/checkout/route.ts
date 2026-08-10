@@ -15,6 +15,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
@@ -410,16 +411,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       // `/terms` asserted tax obligations to the customer — so the product
       // claimed a duty it did not discharge.
       //
-      // `automatic_tax` requires Stripe Tax to be enabled on the account and a
-      // registered origin address; Stripe determines the rate from the
-      // customer's location. `tax_id_collection` lets a business customer enter
-      // a VAT/GST number, which is what makes B2B reverse-charge work in the EU
-      // and UK. `customer_update.address` is REQUIRED by Stripe whenever
-      // automatic tax runs against an existing customer: without it the session
-      // create call fails for any customer whose address Stripe cannot save.
-      automatic_tax: { enabled: true },
-      tax_id_collection: { enabled: true },
-      ...(stripeCustomerId ? { customer_update: { address: 'auto' as const } } : {}),
+      // The parameters, and the reason each one is required, live in ONE place:
+      // lib/billing/tax-policy.ts. In particular `customer_update.name` must be
+      // sent alongside `tax_id_collection` for an existing customer or Stripe
+      // rejects the create call outright, which is a total checkout outage
+      // rather than a missing tax line.
+      ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {

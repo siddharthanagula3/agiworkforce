@@ -1,0 +1,40 @@
+{
+  "surface": "mobile",
+  "statusLabel": "Coming soon",
+  "released": false,
+  "readme": [
+    "CRIT-007 release-state registry for the Mobile surface.",
+    "This file is the ONLY place that may state whether AGI has a live App Store or",
+    "Google Play listing. Product copy, billing ownership labels, store links, and",
+    "the release scripts all read it through lib/releaseState.ts, so a claim can",
+    "never be typed into a screen by hand again.",
+    "Flipping a store to \"published\" is a two-part act: set the status AND record",
+    "the store-assigned listingId that scripts/release/verify-store-listings.mjs",
+    "resolved against the live listing. Accessors fail closed and return null while",
+    "either half is missing, so an optimistic status edit alone still surfaces no",
+    "store link and no store name.",
+    "The website carries the same fact in apps/web/lib/marketing-constants.ts",
+    "(SURFACE_STATUS.mobile). __tests__/mobile-release-state.test.ts asserts the two",
+    "agree and that neither drifts from the repository's v-mobile-* release tags."
+  ],
+  "stores": {
+    "apple": {
+      "store": "apple",
+      "status": "unpublished",
+      "productionId": "com.agiworkforce.app",
+      "listingId": null,
+      "listingUrl": null,
+      "subscriptionManagementUrl": null,
+      "evidence": "Zero v-mobile-* tags in this repository and no App Store Connect listing has been verified. store-listing/LISTING-METADATA-IOS.json is a submission draft, not evidence of a live listing; it also records in_app_purchases:false and that no StoreKit product exists, so an 'apple' subscription source cannot legitimately occur yet."
+    },
+    "google": {
+      "store": "google",
+      "status": "unpublished",
+      "productionId": "com.agiworkforce.app",
+      "listingId": null,
+      "listingUrl": null,
+      "subscriptionManagementUrl": null,
+      "evidence": "Zero v-mobile-* tags in this repository and no Google Play listing has been verified. store-listing/LISTING-METADATA-ANDROID.json is a submission draft and records that no Google Play Billing products exist, so a 'google' subscription source cannot legitimately occur yet."
+    }
+  }
+}
