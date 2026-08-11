@@ -287,8 +287,7 @@ jest.mock('../services/authSession', () => ({
 jest.mock('@agiworkforce/types', () => {
   const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
-    isMinuteWithinQuietHours: actual.isMinuteWithinQuietHours,
-    isDateWithinQuietHours: actual.isDateWithinQuietHours,
+    ...actual,
     createAuditEvent: jest.fn((params: Record<string, unknown>) => ({
       eventId: 'audit-test-id',
       userId: params.userId,
@@ -499,7 +498,7 @@ function makeAgent(overrides: Record<string, unknown> = {}): Record<string, unkn
   return {
     id: `agent-${Math.random().toString(36).slice(2)}`,
     name: 'Test Agent',
-    model: 'claude-opus-5',
+    model: 'fixture-agent-model',
     status: 'running',
     currentStep: 'Processing files',
     progress: 50,

@@ -194,7 +194,7 @@ export function UpgradeConfirmDialog({
               : checkoutRequired
                 ? `Your current plan has no paid Stripe charge to credit, so this is not a prorated upgrade. Starting ${planLabel} costs ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)} today. Your existing AGI usage will carry over after checkout completes.`
                 : amountDue
-                  ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                  ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today—the prorated difference for the rest of your current billing period. Your renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
                   : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>

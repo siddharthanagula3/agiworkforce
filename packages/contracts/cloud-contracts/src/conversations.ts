@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  getDefaultAutoRoutingProfile,
+  INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+  INTERACTIVE_CARDS_METADATA_KEY,
+} from '@agiworkforce/types';
+
+/** Registry-owned default selection used when Cloud callers omit a model. */
+export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
@@ -32,6 +40,16 @@ export function managedCloudMetadataLength(value: unknown): number {
  */
 export const ManagedCloudMessageMetadataSchema = z
   .record(z.string(), z.unknown())
+  .superRefine((value, ctx) => {
+    const cards = value[INTERACTIVE_CARDS_METADATA_KEY];
+    if (Array.isArray(cards) && cards.length > INTERACTIVE_CARDS_MAX_PER_MESSAGE) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [INTERACTIVE_CARDS_METADATA_KEY],
+        message: `Message metadata contains too many interactive cards (${cards.length}, limit ${INTERACTIVE_CARDS_MAX_PER_MESSAGE}).`,
+      });
+    }
+  })
   .refine((value) => managedCloudMetadataLength(value) <= MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH, {
     message: `Message metadata exceeds ${MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH} characters. Large payloads (for example an inline data: image) must be uploaded to storage and referenced by id, not embedded in the message.`,
   });
@@ -103,7 +121,7 @@ export type ManagedCloudConversationListQuery = z.infer<
 export const ManagedCloudCreateConversationRequestSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().max(500).optional().default('New conversation'),
-  model: z.string().min(1).optional().default('auto'),
+  model: z.string().min(1).optional().default(MANAGED_CLOUD_DEFAULT_MODEL_SELECTION),
   projectId: z.string().max(200).nullable().optional(),
   isTemporary: z.boolean().optional().default(false),
 });
@@ -140,7 +158,7 @@ export const ManagedCloudCreateMessageRequestSchema = z.object({
     .min(1)
     .max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH)
     .refine((value) => value.trim().length > 0, 'Message content cannot be only whitespace'),
-  model: z.string().min(1).optional().default('auto'),
+  model: z.string().min(1).optional().default(MANAGED_CLOUD_DEFAULT_MODEL_SELECTION),
   role: ManagedCloudMessageRoleSchema.optional().default('user'),
   metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
   skipLlm: z.boolean().optional().default(false),

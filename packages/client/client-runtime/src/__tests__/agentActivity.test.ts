@@ -62,8 +62,22 @@ describe('portable agent activity projection', () => {
       status: 'completed',
       stopReason: 'end-turn',
       completedAtMs: 1_200,
-      entries: [expect.objectContaining({ status: 'completed', completedAtMs: 1_200 })],
+      entries: [
+        expect.objectContaining({
+          summary: 'Response ready',
+          status: 'completed',
+          completedAtMs: 1_200,
+        }),
+      ],
     });
+
+    const cancelled = finishAgentActivityLocally(starting, {
+      status: 'cancelled',
+      completedAtMs: 1_300,
+    });
+    expect(cancelled.entries).toEqual([
+      expect.objectContaining({ summary: 'Response cancelled', status: 'cancelled' }),
+    ]);
   });
 
   it('projects canonical task states without inventing a surface-local enum', () => {

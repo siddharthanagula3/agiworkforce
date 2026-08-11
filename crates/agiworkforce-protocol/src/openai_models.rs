@@ -120,7 +120,7 @@ pub struct ModelAvailabilityNux {
 pub struct ModelPreset {
     /// Stable identifier for the preset.
     pub id: String,
-    /// Model slug (e.g., "gpt-5").
+    /// Catalog model slug.
     pub model: String,
     /// Display name shown in UIs.
     pub display_name: String,

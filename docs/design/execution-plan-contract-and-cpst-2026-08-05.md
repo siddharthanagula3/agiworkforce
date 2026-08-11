@@ -35,9 +35,10 @@ Two consequences:
    do not degrade the product.
 
 Motivating example (dated, and the only market datum in this document):
-a provider price step-up for Claude Sonnet 5 dated **2026-09-01** was cited in
+a provider price step-up for Anthropic's balanced model tier dated **2026-09-01** was cited in
 the brief that commissioned this design. **No repo file records that change.**
-What the repo does record is the current curated price for `claude-sonnet-5` in
+What the repo does record is the current curated price for the catalog-selected
+Anthropic balanced model in
 `packages/ai/model-registry/catalog/models.curation.json` — `costOverride`
 `inputCost: 3`, `outputCost: 15`, `cached_input: 0.3` — in USD per 1M tokens
 (the per-million divisor is applied in

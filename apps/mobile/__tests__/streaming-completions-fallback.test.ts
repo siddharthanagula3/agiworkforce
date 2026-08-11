@@ -13,8 +13,14 @@
  * available only via `text()`) and assert the reply still renders.
  */
 
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
+const MODEL_ID = requireMobileCloudModel(
+  (model) => model.provider === 'openai',
+  'OpenAI Mobile Cloud model',
+).id;
 
 const SSE = [
   'data: {"choices":[{"delta":{"content":"2 plus 2 "}}]}',
@@ -100,7 +106,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000001',
@@ -132,7 +138,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000002',
@@ -199,7 +205,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000003',
@@ -244,7 +250,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const callbacks = { onDelta, onDone: jest.fn(), onError: jest.fn() };
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000006',
@@ -284,7 +290,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const onDelta = jest.fn();
     await streamChat(
       {
-        model: 'gpt-5.6-sol',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000102',
@@ -334,7 +340,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const onDelta = jest.fn();
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000007',
@@ -364,7 +370,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       const operationId = '0190a000-0000-7000-8000-000000000004';
       const completion = streamChat(
         {
-          model: 'gpt-5.6-luna',
+          model: MODEL_ID,
           messages: [{ role: 'user', content: 'retry me safely' }],
           stream: true,
           operationId,
@@ -459,7 +465,7 @@ describe('completions stream fallback (RN null response.body)', () => {
               workMode: 'chat',
               state: 'completed',
               provider: 'openai',
-              model: 'gpt-5.6-luna',
+              model: MODEL_ID,
               lastEventSequence: 2,
               cancellationRequestedAt: null,
               completedAt: now,
@@ -482,7 +488,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     };
     await streamChat(
       {
-        model: 'gpt-5.6-luna',
+        model: MODEL_ID,
         messages: [{ role: 'user', content: 'resume this run' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000008',

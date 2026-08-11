@@ -18,11 +18,12 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { RecordTermsAcceptance } from './RecordTermsAcceptance';
+import { ContinueWithCurrentTerms, RecordTermsAcceptance } from './RecordTermsAcceptance';
 import SignupCompletePage from './page';
 
 describe('signup terms recorder', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     mocks.replace.mockReset();
     mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
     vi.stubGlobal(
@@ -32,6 +33,7 @@ describe('signup terms recorder', () => {
   });
 
   it('records the acceptance before handing the new account on to the app', async () => {
+    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
@@ -43,7 +45,20 @@ describe('signup terms recorder', () => {
     expect(url).toBe('/api/terms/accept');
     expect(init.method).toBe('POST');
     expect(init.headers).toMatchObject({ 'x-csrf-token': 'csrf-test-token' });
-    expect(init.body).toBe(JSON.stringify({ surface: 'web-signup' }));
+    expect(init.body).toBe(
+      JSON.stringify({ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }),
+    );
+    expect(window.sessionStorage.getItem('agi.terms-accepted-version')).toBeNull();
+  });
+
+  it('consumes the pre-auth marker without rewriting a current acceptance', async () => {
+    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+
+    render(<ContinueWithCurrentTerms redirectTo="/chat" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(window.sessionStorage.getItem('agi.terms-accepted-version')).toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('surfaces a failed record instead of continuing as if it had been written', async () => {
@@ -56,9 +71,31 @@ describe('signup terms recorder', () => {
 
     expect(await screen.findByTestId('terms-record-failed')).toBeInTheDocument();
     expect(mocks.replace).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /continue without recording/i })).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires a reload and fresh review when the displayed revision is stale', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: 'TERMS_VERSION_OUTDATED' }, currentVersion: '2099-01-01' },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    expect(await screen.findByTestId('terms-version-outdated')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /reload and review current policies/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it('does not call the recorder when there is no account to attribute it to', async () => {
@@ -108,12 +145,13 @@ describe('/signup/complete terms gate', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/terms/accept', expect.anything());
   });
 
-  it('does not re-prompt the /signup flow, which already ticked the box', async () => {
+  it('does not let a pre-auth marker authorize the post-auth account write', async () => {
     window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
 
     await renderComplete();
 
-    expect(screen.queryByTestId('terms-gate-blocked')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
+    expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 });

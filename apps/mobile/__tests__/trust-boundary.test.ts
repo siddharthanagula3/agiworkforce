@@ -12,6 +12,8 @@
 
 // Mobile uses Jest (react-native test runner); describe/it/expect are globals.
 
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
+
 // ---------------------------------------------------------------------------
 // conversationMode.ts logic — mirrors apps/mobile/src/features/chat/utils/
 // ---------------------------------------------------------------------------
@@ -44,11 +46,11 @@ describe('conversationMode routing', () => {
   });
 
   it('ollama/ prefix → local mode', () => {
-    expect(executionModeForModel('ollama/llama3')).toBe('local');
+    expect(executionModeForModel(`ollama/${SYNTHETIC_LOCAL_MODEL_ID}`)).toBe('local');
   });
 
   it('lm-studio model → local mode', () => {
-    expect(executionModeForModel('lm-studio/mistral-7b')).toBe('local');
+    expect(executionModeForModel(`lm-studio/${SYNTHETIC_LOCAL_MODEL_ID}`)).toBe('local');
   });
 
   it('local: provider maps to local', () => {
@@ -81,7 +83,7 @@ describe('mobile trust-boundary gate invariants', () => {
   });
 
   it('local model is never routed to cloud_managed', () => {
-    const mode = executionModeForModel('ollama/llama3');
+    const mode = executionModeForModel(`ollama/${SYNTHETIC_LOCAL_MODEL_ID}`);
     const provider = providerForExecutionMode(mode);
     expect(provider).toBe('local');
     expect(provider).not.toBe('cloud_managed');

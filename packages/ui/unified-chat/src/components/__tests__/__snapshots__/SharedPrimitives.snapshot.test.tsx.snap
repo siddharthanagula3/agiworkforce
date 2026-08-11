@@ -297,7 +297,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     <span
       class="inline-flex items-center gap-1"
     >
-      Default model: Llama 3.2 8B
+      Default model: Local Model Fixture
     </span>
   </div>
   <div
@@ -394,7 +394,7 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
     <span
       class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
     >
-      Claude Sonnet 4.6
+      Direct Model Fixture
     </span>
   </div>
   <p
@@ -479,7 +479,7 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
     <span
       class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
     >
-      Llama 3.2 8B
+      Local Model Fixture
     </span>
   </div>
   <p

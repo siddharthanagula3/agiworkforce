@@ -3,7 +3,7 @@
 // What this does at prebuild time:
 //   1. Adds com.google.mlkit:genai-prompt to android/app/build.gradle dependencies.
 //      genai-prompt exposes Generation.getClient() / GenerativeModel, ML Kit's real
-//      chat/prompt inference surface over Gemini Nano via AICore (transitively pulls in
+//      chat/prompt inference surface over the OS-resident model via AICore (transitively pulls in
 //      genai-common for FeatureStatus/DownloadStatus/StreamingCallback).
 //   2. Copies AGIAICoreModule.kt + AGIAICorePackage.kt into the generated source tree.
 //   3. Registers AGIAICorePackage() in MainApplication.kt's getPackages() list.
@@ -23,7 +23,7 @@ const path = require('path');
 const PLUGIN_NAME = 'agi-aicore-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
-// Public ML Kit GenAI Prompt artifact on Google Maven — provides Gemini Nano
+// Public ML Kit GenAI Prompt artifact on Google Maven — provides AICore inference
 // on-device inference on AICore-capable devices (Pixel 8+, Galaxy S24+).
 // Source: https://dl.google.com/dl/android/maven2/com/google/mlkit/genai-prompt/maven-metadata.xml
 const AICORE_DEP = "implementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'";

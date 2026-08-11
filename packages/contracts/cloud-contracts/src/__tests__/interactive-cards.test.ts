@@ -9,9 +9,75 @@ import {
 import {
   ClarifyCardBodySchema,
   ItineraryCardBodySchema,
+  MapSearchCardBodySchema,
+  isAllowedMapSearchProviderUrl,
   parseInteractiveCardDelta,
   readPersistedInteractiveCards,
 } from '../interactive-cards';
+
+describe('map search card contract', () => {
+  const body = {
+    title: 'Coffee near Austin',
+    query: 'coffee shops near Austin, Texas',
+    actions: [
+      {
+        provider: 'google_maps',
+        label: 'Open in Google Maps',
+        url: 'https://www.google.com/maps/search/?api=1&query=coffee',
+      },
+      {
+        provider: 'openstreetmap',
+        label: 'Open in OpenStreetMap',
+        url: 'https://www.openstreetmap.org/search?query=coffee',
+      },
+    ],
+  };
+
+  it('accepts bounded HTTPS provider-search actions', () => {
+    expect(MapSearchCardBodySchema.safeParse(body).success).toBe(true);
+  });
+
+  it('rejects duplicate providers and unsafe URLs', () => {
+    expect(
+      MapSearchCardBodySchema.safeParse({
+        ...body,
+        actions: [body.actions[0], body.actions[0]],
+      }).success,
+    ).toBe(false);
+    expect(
+      MapSearchCardBodySchema.safeParse({
+        ...body,
+        actions: [{ ...body.actions[0], url: 'javascript:alert(1)' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      MapSearchCardBodySchema.safeParse({
+        ...body,
+        actions: [{ ...body.actions[0], url: 'https://evil.example/maps/search/?api=1' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('allows only the exact provider origin, path, and required search query', () => {
+    expect(
+      isAllowedMapSearchProviderUrl(
+        'https://www.google.com/maps/search/?api=1&query=coffee',
+        'google_maps',
+      ),
+    ).toBe(true);
+    expect(
+      isAllowedMapSearchProviderUrl(
+        'https://www.openstreetmap.org/search?query=coffee',
+        'openstreetmap',
+      ),
+    ).toBe(true);
+    expect(
+      isAllowedMapSearchProviderUrl('https://www.google.com:444/maps/search/?api=1&query=coffee'),
+    ).toBe(false);
+    expect(isAllowedMapSearchProviderUrl('https://www.google.com/maps/@30,-97,12z')).toBe(false);
+    expect(isAllowedMapSearchProviderUrl('https://www.openstreetmap.org/search')).toBe(false);
+  });
+});
 
 /**
  * Slice 1 guards the DEGRADATION path, which ships before any producer exists.

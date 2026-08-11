@@ -3,7 +3,8 @@ import 'server-only';
 import { isTextAttachmentMeta } from '@agiworkforce/types';
 import { matchDenylistedUpload } from '@/lib/moderation';
 import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
-import { getObject, objectKeyFromStorageUri } from './object-storage';
+import { objectKeyFromStorageUri } from './object-storage';
+import { getProjectKnowledgeObject } from './project-knowledge-object-storage';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
 const MAX_PDF_PAGES = 250;
@@ -217,7 +218,7 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  const object = await getObject(objectKey);
+  const object = await getProjectKnowledgeObject(objectKey);
   if (!object) {
     throw new ProjectKnowledgeExtractionError(
       'object_missing',

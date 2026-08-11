@@ -21,8 +21,8 @@ AGI is an AI assistant with two independent modes.
 
 **Local Mode (default, no account).** A quantized open-weight language model
 runs on the device through ExecuTorch or llama.rn. Inference happens entirely
-on-device; no prompt or response leaves the phone. The default model is
-Qwen3-4B-Instruct-2507 (Apache-2.0), a ~2 GB download the app fetches on first
+on-device; no prompt or response leaves the phone. The catalog-selected default
+is an Apache-2.0 model that the app fetches on first
 run. Chats are stored in a local SQLite database that is encrypted at rest with
 SQLCipher; the key lives in the iOS Keychain.
 

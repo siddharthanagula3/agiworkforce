@@ -8,10 +8,9 @@ import {
   getDefaultCloudModelIdForTier,
   getDefaultSelectableModelId,
   getModelByIdForCloudAccess,
+  isSelectableModelIdForAccess,
   isAutoMode,
   isCloudManagedModelId,
-  isSelectableModelId,
-  isSelectableModelIdForCloudAccess,
 } from './service';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
@@ -26,23 +25,29 @@ function isCloudUnlocked(): boolean {
 
 function normalizeSelectableModelId(modelId: string): string | null {
   const resolvedModelId = normalizeModelId(modelId) ?? modelId;
-  return isSelectableModelIdForCloudAccess(resolvedModelId, isCloudUnlocked())
+  return isSelectableModelIdForAccess(
+    resolvedModelId,
+    isCloudUnlocked(),
+    useTierStore.getState().tier,
+  )
     ? resolvedModelId
     : null;
 }
 
 function filterSelectableModelIds(ids: string[]): string[] {
   const cloudUnlocked = isCloudUnlocked();
-  return ids.filter((id) => isSelectableModelIdForCloudAccess(id, cloudUnlocked));
+  const tier = useTierStore.getState().tier;
+  return ids.filter((id) => isSelectableModelIdForAccess(id, cloudUnlocked, tier));
 }
 
 function filterThinkingState(
   thinkingEnabledPerModel: Record<string, boolean> | undefined,
 ): Record<string, boolean> {
   const cloudUnlocked = isCloudUnlocked();
+  const tier = useTierStore.getState().tier;
   return Object.fromEntries(
     Object.entries(thinkingEnabledPerModel ?? {}).filter(([id]) =>
-      isSelectableModelIdForCloudAccess(id, cloudUnlocked),
+      isSelectableModelIdForAccess(id, cloudUnlocked, tier),
     ),
   );
 }
@@ -206,11 +211,17 @@ export const useModelStore = create<ModelState>()(
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<ModelState>;
         const cloudUnlocked = isCloudUnlocked();
+        const tier = useTierStore.getState().tier;
+        const persistedModelId = persistedState.selectedModel
+          ? (normalizeModelId(persistedState.selectedModel) ?? persistedState.selectedModel)
+          : null;
+        const tierDefault = getDefaultCloudModelIdForTier(tier);
         const selectedModel =
-          persistedState.selectedModel &&
-          isSelectableModelIdForCloudAccess(persistedState.selectedModel, cloudUnlocked)
-            ? persistedState.selectedModel
-            : getDefaultSelectableModelId(persistedState.selectedModel);
+          persistedModelId && isSelectableModelIdForAccess(persistedModelId, cloudUnlocked, tier)
+            ? persistedModelId
+            : persistedModelId && isCloudManagedModelId(persistedModelId) && tierDefault
+              ? tierDefault
+              : getDefaultSelectableModelId(persistedModelId);
         const filteredThinkingState = filterThinkingState(persistedState.thinkingEnabledPerModel);
         const thinkingEnabledPerModel = modelRequiresThinking(selectedModel)
           ? { ...filteredThinkingState, [selectedModel]: true }

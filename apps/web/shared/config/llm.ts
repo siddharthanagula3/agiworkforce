@@ -55,7 +55,11 @@ export interface ModelMetadata {
   name: string;
   provider: string;
   modelType: string;
-  contextWindow: number;
+  /**
+   * Published token context limit for text/chat models. Media APIs can omit
+   * this when their provider contract uses other units.
+   */
+  contextWindow?: number;
   inputCost: number;
   outputCost: number;
   capabilities: ModelCapabilities;
@@ -111,7 +115,12 @@ export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 export const PROVIDERS_IN_ORDER: string[] = config.providersInOrder;
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
-  Object.entries(MODEL_METADATA).map(([id, m]) => [id, m.contextWindow]),
+  Object.entries(MODEL_METADATA).flatMap(([id, model]) => {
+    const contextWindow = model.contextWindow;
+    return typeof contextWindow === 'number' && Number.isFinite(contextWindow) && contextWindow > 0
+      ? [[id, contextWindow]]
+      : [];
+  }),
 );
 
 // ---- Helper functions ----
@@ -145,7 +154,14 @@ export function getProviderModels(provider: string): ModelMetadata[] {
 
 export function getModelContextWindow(modelId: string): number {
   const canonicalModelId = normalizeModelId(modelId);
-  return (canonicalModelId ? MODEL_CONTEXT_WINDOWS[canonicalModelId] : undefined) ?? 128_000;
+  const metadata = canonicalModelId ? MODEL_METADATA[canonicalModelId] : undefined;
+  const publishedContextWindow = canonicalModelId
+    ? MODEL_CONTEXT_WINDOWS[canonicalModelId]
+    : undefined;
+  if (metadata && publishedContextWindow === undefined) {
+    throw new Error(`Model ${canonicalModelId} does not publish a token context window`);
+  }
+  return publishedContextWindow ?? 128_000;
 }
 
 export function formatCost(inputCost?: number, outputCost?: number): string {
@@ -193,8 +209,8 @@ export function getAllowedAutoModesForTier(_tier: string | null | undefined): st
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
-  // Free users chat on the direct Gemini 3.5 Flash-Lite model (not the managed
-  // Auto preset). Keeping the default + reset on the same id avoids a flip.
+  // Free users chat on the catalog-owned direct free-trial model (not the
+  // managed Auto preset). Keeping the default + reset on the same id avoids a flip.
   if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
   return 'auto';
 }

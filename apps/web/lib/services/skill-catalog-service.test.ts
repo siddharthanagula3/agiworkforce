@@ -11,7 +11,11 @@ vi.mock('@/lib/logger', () => ({
 import {
   executeManagedSkillTool,
   findManagedSkillByName,
+  getBundledSkillDownload,
+  getBundledSkillDownloadForPlugins,
   getManagedSkillCatalog,
+  getManagedSkillDirectory,
+  getManagedSkillLayers,
   parseSkillLayersConfig,
   resetManagedSkillCatalogCacheForTests,
 } from './skill-catalog-service';
@@ -66,13 +70,34 @@ describe('managed Skill catalog service', () => {
     const first = await getManagedSkillCatalog();
     const second = await getManagedSkillCatalog();
 
-    expect(first).toHaveLength(1);
-    expect(first[0]).toMatchObject({
-      name: 'design-review',
-      description: 'Review UI for release polish.',
-      source: 'personal',
-    });
+    expect(first).toContainEqual(
+      expect.objectContaining({
+        name: 'design-review',
+        description: 'Review UI for release polish.',
+        source: 'personal',
+      }),
+    );
     expect(second).toBe(first);
+  });
+
+  it('always loads the canonical bundled root before optional overlays', () => {
+    expect(getManagedSkillLayers()).toEqual([
+      expect.objectContaining({
+        rootDir: expect.stringContaining('.agents/skills'),
+        source: 'bundled',
+      }),
+      { rootDir: root, source: 'personal' },
+    ]);
+  });
+
+  it('keeps draft entries visible in the directory but out of execution', async () => {
+    await expect(getManagedSkillDirectory()).resolves.toContainEqual(
+      expect.objectContaining({
+        name: 'skill-creator',
+        frontmatter: expect.objectContaining({ draft: true }),
+      }),
+    );
+    await expect(findManagedSkillByName('skill-creator')).resolves.toBeNull();
   });
 
   it('performs exact-name lookup without accepting a host location', async () => {
@@ -93,5 +118,45 @@ describe('managed Skill catalog service', () => {
     expect(result.content).toContain('Inspect the rendered interface');
     expect(result.content).not.toContain(root);
     expect(result.content).not.toContain('SKILL.md');
+  });
+
+  it('executes an included bundled skill and downloads only its canonical SKILL.md', async () => {
+    const result = await executeManagedSkillTool(
+      { action: 'load', name: 'code-review' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(result).toMatchObject({ isError: false, code: 'skill_loaded' });
+    expect(result.content).toContain('Prioritize correctness');
+
+    const download = await getBundledSkillDownload('code-review');
+    expect(download?.content.toString('utf-8')).toContain('name: code-review');
+    await expect(getBundledSkillDownload('design-review')).resolves.toBeNull();
+    await expect(getBundledSkillDownload('skill-creator')).resolves.toBeNull();
+  });
+
+  it('downloads a plugin-owned bundle only when that plugin is enabled', async () => {
+    await expect(
+      getBundledSkillDownloadForPlugins(new Set(), 'literature-review'),
+    ).resolves.toBeNull();
+
+    const download = await getBundledSkillDownloadForPlugins(
+      new Set(['research-pack']),
+      'literature-review',
+    );
+    expect(download?.content.toString('utf-8')).toContain('name: literature-review');
+  });
+
+  it('does not auto-grant a bundled skill required tools', async () => {
+    const refused = await executeManagedSkillTool(
+      { action: 'load', name: 'document-creation' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(refused).toMatchObject({ isError: true, code: 'skill_dependencies_unavailable' });
+
+    const allowed = await executeManagedSkillTool(
+      { action: 'load', name: 'document-creation' },
+      { availableTools: new Set(['skill', 'create_office_file']) },
+    );
+    expect(allowed).toMatchObject({ isError: false, code: 'skill_loaded' });
   });
 });

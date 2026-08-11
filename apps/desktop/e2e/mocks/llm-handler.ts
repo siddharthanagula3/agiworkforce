@@ -58,7 +58,7 @@ export const MOCK_LLM_RESPONSE = 'Mock response for E2E testing.';
  */
 function buildAnthropicSSEBody(text: string): string {
   const lines: string[] = [
-    `data: ${JSON.stringify({ type: 'message_start', message: { id: 'mock-msg-e2e', type: 'message', role: 'assistant', content: [], model: 'claude-mock', usage: { input_tokens: 5, output_tokens: 10 } } })}`,
+    `data: ${JSON.stringify({ type: 'message_start', message: { id: 'mock-msg-e2e', type: 'message', role: 'assistant', content: [], model: 'fixture-stream-model', usage: { input_tokens: 5, output_tokens: 10 } } })}`,
     '',
     `data: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}`,
     '',
@@ -83,14 +83,14 @@ function buildOpenAISSEBody(text: string): string {
     id: 'mock-chatcmpl-e2e',
     object: 'chat.completion.chunk',
     created: Math.floor(Date.now() / 1000),
-    model: 'gpt-mock',
+    model: 'fixture-stream-model',
     choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }],
   });
   const done = JSON.stringify({
     id: 'mock-chatcmpl-e2e',
     object: 'chat.completion.chunk',
     created: Math.floor(Date.now() / 1000),
-    model: 'gpt-mock',
+    model: 'fixture-stream-model',
     choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
   });
   return `data: ${chunk}\n\ndata: ${done}\n\ndata: [DONE]\n\n`;
@@ -105,7 +105,7 @@ function buildOpenAIJSONBody(text: string): string {
     id: 'mock-chatcmpl-e2e',
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
-    model: 'gpt-mock',
+    model: 'fixture-stream-model',
     choices: [
       {
         index: 0,

@@ -2,9 +2,9 @@
  * PaywallBottomSheet
  *
  * Opens as a @gorhom/bottom-sheet modal when an ApiPaywallError is caught in
- * the chat send path. Renders the gated feature name, required tier, optional
- * reason string, an honest availability message (or Contact Sales handoff for
- * sales-assisted tiers), and a "Try later" dismissal.
+ * the chat send path. Renders the gated feature, server reason, and the action
+ * that can actually resolve it: subscribe, update billing, upgrade, or contact
+ * sales. An inactive subscriber must never be mislabeled as a lower-tier user.
  *
  * Design mirrors the web InlinePaywallCard but uses React Native primitives.
  *
@@ -21,6 +21,7 @@
  *     feature={paywallProps?.feature ?? 'token_cap'}
  *     requiredTier={paywallProps?.requiredTier ?? 'basic'}
  *     reason={paywallProps?.reason}
+ *     recoveryAction={paywallProps?.recoveryAction}
  *     onDismiss={() => paywallRef.current?.close()}
  *   />
  */
@@ -33,11 +34,13 @@ import BottomSheet, {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { ArrowUpCircle, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
+import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 
 // ---------------------------------------------------------------------------
 // Static lookup tables — module-level so they are never recreated on render.
@@ -47,7 +50,6 @@ const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
   video_generation: 'Video generation',
   opus_5: 'Opus 5 access',
-  gpt_5_5: 'GPT-5.5 access',
   computer_use: 'Computer use',
   deep_research: 'Deep research',
   image_quota: 'More image generation',
@@ -91,6 +93,18 @@ export interface PaywallSheetProps {
   requiredTier: string;
   /** Optional human-readable reason from the server (e.g. '10/10 images used'). */
   reason?: string;
+  /** Recovery that can actually resolve the server refusal. */
+  recoveryAction?: PaywallRecoveryAction;
+  /**
+   * Optional caller-owned recovery. Billing settings uses this for its real
+   * portal action instead of navigating back to itself.
+   */
+  onPrimaryAction?: () => void | Promise<void>;
+  /**
+   * Honest replacement for the CTA when this surface has no allowed recovery
+   * action (for example, native plan changes before store products exist).
+   */
+  primaryActionUnavailableMessage?: string;
   /** Called when the user dismisses the sheet. */
   onDismiss: () => void;
 }
@@ -106,8 +120,20 @@ export interface PaywallSheetProps {
  * Pass `ref` to imperatively call `.expand()` / `.close()`.
  */
 export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
-  function PaywallBottomSheetInner({ feature, requiredTier, reason, onDismiss }, forwardedRef) {
+  function PaywallBottomSheetInner(
+    {
+      feature,
+      requiredTier,
+      reason,
+      recoveryAction = 'upgrade',
+      onPrimaryAction,
+      primaryActionUnavailableMessage,
+      onDismiss,
+    },
+    forwardedRef,
+  ) {
     const colors = useThemeColors();
+    const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
 
     // Expose expand() / close() / snapToIndex() to the parent via forwardRef.
@@ -121,7 +147,31 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     // external-navigation CTA. The destination is a fixed HTTPS AGI origin and
     // still passes through the strict safeOpenURL allowlist.
     const salesTier =
-      requiredTier === 'team' || requiredTier === 'enterprise' ? requiredTier : null;
+      recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise')
+        ? requiredTier
+        : null;
+    const title =
+      recoveryAction === 'manage_billing'
+        ? 'Update billing'
+        : recoveryAction === 'subscribe'
+          ? 'Choose a plan'
+          : `Upgrade to ${tierLabel}`;
+    const body =
+      recoveryAction === 'manage_billing'
+        ? `${featureLabel} is unavailable until your subscription is active.`
+        : recoveryAction === 'subscribe'
+          ? `${featureLabel} requires an active subscription.`
+          : `${featureLabel} requires the ${tierLabel} plan.`;
+    const primaryActionLabel =
+      recoveryAction === 'manage_billing'
+        ? 'Manage billing'
+        : recoveryAction === 'subscribe'
+          ? 'View plans'
+          : salesTier
+            ? 'Contact Sales'
+            : 'View upgrade options';
+    const hasPrimaryAction =
+      onPrimaryAction !== undefined || salesTier !== null || !primaryActionUnavailableMessage;
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -135,6 +185,21 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     const handleDismiss = useCallback(() => {
       sheetRef.current?.close();
     }, []);
+
+    const handlePrimaryAction = useCallback(() => {
+      sheetRef.current?.close();
+      if (onPrimaryAction) {
+        void onPrimaryAction();
+        return;
+      }
+      if (salesTier) {
+        void openExternalUrl(
+          `https://agiworkforce.com/contact-sales?plan=${encodeURIComponent(salesTier)}`,
+        );
+        return;
+      }
+      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+    }, [onPrimaryAction, router, salesTier]);
 
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
@@ -206,7 +271,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                   flexWrap: 'wrap',
                 }}
               >
-                Upgrade to {tierLabel}
+                {title}
               </Text>
             </View>
 
@@ -231,7 +296,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               marginBottom: reason ? 8 : 20,
             }}
           >
-            {featureLabel} requires the {tierLabel} plan.
+            {body}
           </Text>
 
           {/* Server-supplied reason (e.g. "10/10 images used this month") */}
@@ -248,18 +313,14 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </Text>
           ) : null}
 
-          {/* CTAs */}
-          {salesTier ? (
+          {/* CTA follows the server-derived recovery action. */}
+          {hasPrimaryAction ? (
             <Button
-              title="Contact Sales"
+              title={primaryActionLabel}
               variant="primary"
               size="md"
-              onPress={() =>
-                void openExternalUrl(
-                  `https://agiworkforce.com/contact-sales?plan=${encodeURIComponent(salesTier)}`,
-                )
-              }
-              accessibilityLabel={`Contact Sales for ${tierLabel}`}
+              onPress={handlePrimaryAction}
+              accessibilityLabel={salesTier ? `Contact Sales for ${tierLabel}` : primaryActionLabel}
             />
           ) : (
             <Text
@@ -270,7 +331,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                 marginBottom: 4,
               }}
             >
-              Upgrades aren't available in the app yet. Check back soon.
+              {primaryActionUnavailableMessage}
             </Text>
           )}
           <Pressable

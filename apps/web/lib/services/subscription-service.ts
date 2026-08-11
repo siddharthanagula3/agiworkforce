@@ -267,9 +267,9 @@ export class SubscriptionService {
   }
 
   /**
-   * Move an active paid credit account into a replacement upgrade period.
-   * Existing usage counters and purchased top-ups stay on the account; only
-   * the included plan-allocation difference is added.
+   * Add an upgrade's included plan-allocation difference to the active account.
+   * The current renewal date may remain unchanged; existing usage counters and
+   * purchased top-ups stay on the account.
    */
   static async carryCreditsForUpgradePeriod(
     userId: string,

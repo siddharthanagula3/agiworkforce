@@ -18,8 +18,11 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
-import type { ScheduleTask, ScheduledExecutionResult } from './schedule-service';
+import type {
+  ScheduleTask,
+  ScheduledExecutionResult,
+  ScheduledTaskExecutor,
+} from './schedule-service';
 
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_OUTPUT_CHARS = 100_000;
@@ -43,15 +46,19 @@ function validateAgentTask(task: ScheduleTask): string {
  * Claiming, retries, terminal status, and recurrence advancement remain in
  * schedule-service; this module owns only provider execution and billing.
  */
-export async function executeScheduledAgent(
+export const executeScheduledAgent: ScheduledTaskExecutor = async function executeScheduledAgent(
   task: ScheduleTask,
   signal: AbortSignal,
   runId: string,
+  scope,
 ): Promise<ScheduledExecutionResult> {
   const prompt = validateAgentTask(task);
+  if (task.userId !== scope.userId) {
+    throw new Error('Scheduled execution scope does not match the task owner');
+  }
   signal.throwIfAborted();
 
-  const subscription = await SubscriptionService.getSubscription(task.userId);
+  const subscription = await SubscriptionService.getSubscription(scope.db, scope.userId);
   const subscriptionTier = subscription?.plan_tier ?? 'free';
   if (
     subscription &&
@@ -91,6 +98,7 @@ export async function executeScheduledAgent(
     kind: 'scheduled_agent_execution',
     taskId: task.id,
     runId,
+    organizationId: scope.organizationId,
     prompt,
     requestedModel: task.model,
     provider: route.provider,
@@ -98,8 +106,8 @@ export async function executeScheduledAgent(
     providerModelId: route.providerModelId,
   });
   const reservation = await reserveManagedUsageRequest({
-    db: getNeonDb(),
-    userId: task.userId,
+    db: scope.db,
+    userId: scope.userId,
     idempotencyKey,
     requestHash,
     provider: route.provider,
@@ -201,4 +209,4 @@ export async function executeScheduledAgent(
     }
     throw error;
   }
-}
+};

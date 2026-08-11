@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecutorchPreset } from '@agiworkforce/types';
+import { getDefaultModel, getLiteModeModel } from '../catalog.js';
 import { tier2Generate, tier2LoadModel, tier2Release, _setLLMModuleForTesting } from '../tier2.js';
 
 const makeInstance = () => ({
@@ -25,38 +26,27 @@ beforeEach(() => {
   tier2Release();
 });
 
-const QWEN3_PRESET: ExecutorchPreset = {
-  modelName: 'qwen3-4b-quantized',
-  modelSource: 'https://example.com/qwen3_4b.pte',
-  tokenizerSource: 'https://example.com/tokenizer.json',
-  tokenizerConfigSource: 'https://example.com/tokenizer_config.json',
-};
-
-const LLAMA_PRESET: ExecutorchPreset = {
-  modelName: 'llama-3.2-1b-spinquant',
-  modelSource: 'https://example.com/llama3_2_spinquant.pte',
-  tokenizerSource: 'https://example.com/tokenizer.json',
-  tokenizerConfigSource: 'https://example.com/tokenizer_config.json',
-};
+const DEFAULT_PRESET: ExecutorchPreset = getDefaultModel().executorchPreset!;
+const ALTERNATE_PRESET: ExecutorchPreset = getLiteModeModel()!.executorchPreset!;
 
 describe('tier2: LLMModule loading', () => {
   it('calls fromModelName with preset fields on first load', async () => {
-    await tier2LoadModel(QWEN3_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
     expect(mockFromModelName).toHaveBeenCalledOnce();
     expect(mockFromModelName).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelName: 'qwen3-4b-quantized',
-        modelSource: QWEN3_PRESET.modelSource,
-        tokenizerSource: QWEN3_PRESET.tokenizerSource,
-        tokenizerConfigSource: QWEN3_PRESET.tokenizerConfigSource,
+        modelName: DEFAULT_PRESET.modelName,
+        modelSource: DEFAULT_PRESET.modelSource,
+        tokenizerSource: DEFAULT_PRESET.tokenizerSource,
+        tokenizerConfigSource: DEFAULT_PRESET.tokenizerConfigSource,
       }),
       undefined,
     );
   });
 
   it('does not reload if same preset is already loaded', async () => {
-    await tier2LoadModel(QWEN3_PRESET);
-    await tier2LoadModel(QWEN3_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
     expect(mockFromModelName).toHaveBeenCalledOnce();
   });
 
@@ -69,8 +59,8 @@ describe('tier2: LLMModule loading', () => {
         }),
     );
 
-    const first = tier2LoadModel(QWEN3_PRESET);
-    const second = tier2LoadModel(QWEN3_PRESET);
+    const first = tier2LoadModel(DEFAULT_PRESET);
+    const second = tier2LoadModel(DEFAULT_PRESET);
     expect(mockFromModelName).toHaveBeenCalledOnce();
 
     resolveLoad(mockInstance);
@@ -85,8 +75,8 @@ describe('tier2: LLMModule loading', () => {
       .mockImplementationOnce(() => Promise.resolve(firstInstance))
       .mockImplementationOnce(() => Promise.resolve(secondInstance));
 
-    await tier2LoadModel(QWEN3_PRESET);
-    await tier2LoadModel(LLAMA_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
+    await tier2LoadModel(ALTERNATE_PRESET);
 
     expect(mockFromModelName).toHaveBeenCalledTimes(2);
     expect(firstInstance.delete).toHaveBeenCalledOnce();
@@ -102,28 +92,28 @@ describe('tier2: LLMModule loading', () => {
         }),
     );
 
-    const pending = tier2LoadModel(QWEN3_PRESET);
+    const pending = tier2LoadModel(DEFAULT_PRESET);
     tier2Release();
     resolveLoad(lateInstance);
     await pending;
 
     expect(lateInstance.delete).toHaveBeenCalledOnce();
 
-    await tier2LoadModel(QWEN3_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
     expect(mockFromModelName).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('tier2: generate — basic', () => {
   it('returns text from generate()', async () => {
-    const result = await tier2Generate(QWEN3_PRESET, { prompt: 'Hello' });
+    const result = await tier2Generate(DEFAULT_PRESET, { prompt: 'Hello' });
     expect(result.text).toBe('hello from model');
     expect(result.runtime).toBe('executorch');
     expect(result.aborted).toBe(false);
   });
 
   it('assembles messages: system, history, user in order', async () => {
-    await tier2Generate(QWEN3_PRESET, {
+    await tier2Generate(DEFAULT_PRESET, {
       prompt: 'What is 2+2?',
       systemPrompt: 'You are a math tutor.',
       messages: [
@@ -140,12 +130,12 @@ describe('tier2: generate — basic', () => {
 
   it('calls setTokenCallback when onToken provided', async () => {
     const onToken = vi.fn();
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi', onToken });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi', onToken });
     expect(mockInstance.setTokenCallback).toHaveBeenCalledWith({ tokenCallback: onToken });
   });
 
   it('resets token callback to a no-op when no onToken is provided', async () => {
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi' });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi' });
     expect(mockInstance.setTokenCallback).toHaveBeenCalledWith({
       tokenCallback: expect.any(Function),
     });
@@ -153,7 +143,7 @@ describe('tier2: generate — basic', () => {
 
   it('calls onDone after generate resolves', async () => {
     const onDone = vi.fn();
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi', onDone });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi', onDone });
     expect(onDone).toHaveBeenCalledWith({ aborted: false });
   });
 });
@@ -167,12 +157,12 @@ describe('tier2: generate — tools API', () => {
         parameters: { type: 'object', properties: {} },
       },
     ];
-    await tier2Generate(QWEN3_PRESET, { prompt: 'What is the weather?', tools });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'What is the weather?', tools });
     expect(mockInstance.generate).toHaveBeenCalledWith(expect.any(Array), tools);
   });
 
   it('passes undefined tools when no tools provided', async () => {
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi' });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi' });
     expect(mockInstance.generate).toHaveBeenCalledWith(expect.any(Array), undefined);
   });
 
@@ -181,7 +171,7 @@ describe('tier2: generate — tools API', () => {
       { name: 'search', description: 'Web search' },
       { name: 'calculator', description: 'Math calc' },
     ];
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Search and calc', tools });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Search and calc', tools });
     const calledTools = mockInstance.generate.mock.calls[0][1];
     expect(calledTools).toHaveLength(2);
     expect(calledTools[0]).toMatchObject({ name: 'search' });
@@ -191,7 +181,7 @@ describe('tier2: generate — tools API', () => {
 
 describe('tier2: tier2Release', () => {
   it('deletes the model instance on release', async () => {
-    await tier2LoadModel(QWEN3_PRESET);
+    await tier2LoadModel(DEFAULT_PRESET);
     tier2Release();
     expect(mockInstance.delete).toHaveBeenCalledOnce();
   });
@@ -202,9 +192,9 @@ describe('tier2: tier2Release', () => {
   });
 
   it('after release, next generate re-loads the model', async () => {
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi' });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi' });
     tier2Release();
-    await tier2Generate(QWEN3_PRESET, { prompt: 'Hi again' });
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi again' });
     expect(mockFromModelName).toHaveBeenCalledTimes(2);
   });
 });
@@ -220,7 +210,7 @@ describe('tier2: cancellation', () => {
     );
 
     const controller = new AbortController();
-    const pending = tier2Generate(QWEN3_PRESET, { prompt: 'Hi', signal: controller.signal });
+    const pending = tier2Generate(DEFAULT_PRESET, { prompt: 'Hi', signal: controller.signal });
     controller.abort();
     resolveGenerate('late text');
 

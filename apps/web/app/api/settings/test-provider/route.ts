@@ -31,7 +31,6 @@ const SETTINGS_PROVIDER_ALIASES: Record<string, Provider> = {
   openai: 'openai',
   perplexity: 'perplexity',
   qwen: 'qwen',
-  sonar: 'perplexity',
   'x.ai': 'xai',
   xai: 'xai',
   zhipu: 'zhipu',

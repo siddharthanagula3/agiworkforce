@@ -14,6 +14,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { listCanonicalModels } from '@agiworkforce/types';
+
+const TRANSCRIPTION_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.provider === 'openai' && candidate.modelType === 'stt',
+  );
+  if (!model) throw new Error('Canonical transcription model fixture is missing');
+  return model.id;
+})();
 
 vi.mock('server-only', () => ({}));
 
@@ -57,7 +66,7 @@ import { POST } from '@/app/api/llm/v1/audio/transcriptions/route';
 function makeRequest(file: File): NextRequest {
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('model', 'gpt-4o-transcribe');
+  fd.append('model', TRANSCRIPTION_MODEL);
   return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
     method: 'POST',
     headers: { authorization: 'Bearer fake-jwt' },

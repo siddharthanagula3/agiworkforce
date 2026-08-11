@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   authUser: vi.fn(async () => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (): Promise<Response | null> => null),
   getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })),
+  resolveActiveOrganizationId: vi.fn(async (): Promise<string | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +27,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: () => mocks.getSubscription() },
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
@@ -57,6 +61,7 @@ describe('POST /api/projects/[id]/duplicate', () => {
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
     mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   });
 
   it('copies settings and knowledge files, and names the copy distinctly', async () => {
@@ -75,6 +80,25 @@ describe('POST /api/projects/[id]/duplicate', () => {
     // The tuned configuration is the point of duplicating.
     expect(insertCall?.[1]).toContain('Always cite sources.');
     expect(insertCall?.[1]).toContain('Q3 Analysis (copy)');
+  });
+
+  it('authorizes the source and binds the copy to the active workspace', async () => {
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    mocks.resolveActiveOrganizationId.mockResolvedValue(organizationId);
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
+      .mockResolvedValueOnce([]);
+
+    const res = await call();
+
+    expect(res.status).toBe(200);
+    const [sourceSql, sourceParams] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sourceSql).toMatch(/organization_id is not distinct from \$3::uuid/i);
+    expect(sourceParams[2]).toBe(organizationId);
+    const [insertSql, insertParams] = mocks.query.mock.calls[1] as [string, unknown[]];
+    expect(insertSql).toMatch(/user_id, organization_id, name/i);
+    expect(insertParams[1]).toBe(organizationId);
   });
 
   it('routes the insert through the same quota guard as create', async () => {

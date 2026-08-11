@@ -239,7 +239,7 @@ mod tests {
         std::fs::create_dir_all(&global_dir).expect("mkdir");
 
         let global_config = ProjectConfig {
-            default_model: Some("claude-3-opus".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             theme: Some("dark".to_string()),
             auto_approve_tools: Some(true),
             ..Default::default()
@@ -254,7 +254,7 @@ mod tests {
             defaults: ProjectConfig::default(),
         };
 
-        assert_eq!(hierarchy.default_model(), Some("claude-3-opus"));
+        assert_eq!(hierarchy.default_model(), Some("fixture-primary-model"));
         assert_eq!(hierarchy.theme(), Some("dark"));
         assert!(hierarchy.auto_approve_tools());
         // Default for auto_format_on_save should still be true
@@ -267,7 +267,7 @@ mod tests {
         let tmp = TempDir::new().expect("tempdir");
 
         let global_config = ProjectConfig {
-            default_model: Some("claude-3-opus".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             theme: Some("dark".to_string()),
             auto_approve_tools: Some(true),
             language: Some("en".to_string()),
@@ -275,7 +275,7 @@ mod tests {
         };
 
         let project_config = ProjectConfig {
-            default_model: Some("gpt-4o".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             // theme intentionally not set at project level
             auto_approve_tools: Some(false),
             ..Default::default()
@@ -294,7 +294,7 @@ mod tests {
         };
 
         // Project-level value wins
-        assert_eq!(hierarchy.default_model(), Some("gpt-4o"));
+        assert_eq!(hierarchy.default_model(), Some("fixture-primary-model"));
         // Falls through to global
         assert_eq!(hierarchy.theme(), Some("dark"));
         // Project explicitly sets false, overriding global true
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn test_partial_override() {
         let global_config = ProjectConfig {
-            default_model: Some("claude-3-sonnet".to_string()),
+            default_model: Some("fixture-secondary-model".to_string()),
             theme: Some("light".to_string()),
             auto_approve_tools: Some(false),
             auto_format_on_save: Some(false),
@@ -330,7 +330,7 @@ mod tests {
         // Only theme is overridden at project level
         assert_eq!(hierarchy.theme(), Some("solarized"));
         // Everything else falls through to global
-        assert_eq!(hierarchy.default_model(), Some("claude-3-sonnet"));
+        assert_eq!(hierarchy.default_model(), Some("fixture-secondary-model"));
         assert!(!hierarchy.auto_approve_tools());
         assert!(!hierarchy.auto_format_on_save());
         assert_eq!(hierarchy.language(), Some("fr"));
@@ -341,14 +341,14 @@ mod tests {
     #[test]
     fn test_resolved_config() {
         let global_config = ProjectConfig {
-            default_model: Some("claude-3-opus".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             theme: Some("dark".to_string()),
             language: Some("en".to_string()),
             ..Default::default()
         };
 
         let project_config = ProjectConfig {
-            default_model: Some("gpt-4o".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             custom_instructions: Some("Be concise".to_string()),
             ..Default::default()
         };
@@ -360,7 +360,10 @@ mod tests {
         };
 
         let resolved = hierarchy.resolved();
-        assert_eq!(resolved.default_model.as_deref(), Some("gpt-4o"));
+        assert_eq!(
+            resolved.default_model.as_deref(),
+            Some("fixture-primary-model")
+        );
         assert_eq!(resolved.theme.as_deref(), Some("dark"));
         assert_eq!(resolved.custom_instructions.as_deref(), Some("Be concise"));
         assert_eq!(resolved.language.as_deref(), Some("en"));
@@ -376,7 +379,7 @@ mod tests {
         std::fs::create_dir_all(&project_root).expect("mkdir");
 
         let config = ProjectConfig {
-            default_model: Some("gpt-4o".to_string()),
+            default_model: Some("fixture-primary-model".to_string()),
             theme: Some("monokai".to_string()),
             auto_approve_tools: Some(true),
             ..Default::default()
@@ -389,7 +392,10 @@ mod tests {
 
         let loaded =
             ConfigHierarchy::load_config_file(&expected_path).expect("load should succeed");
-        assert_eq!(loaded.default_model.as_deref(), Some("gpt-4o"));
+        assert_eq!(
+            loaded.default_model.as_deref(),
+            Some("fixture-primary-model")
+        );
         assert_eq!(loaded.theme.as_deref(), Some("monokai"));
         assert_eq!(loaded.auto_approve_tools, Some(true));
     }

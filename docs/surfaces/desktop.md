@@ -22,8 +22,8 @@ Native Mac / Windows / Linux app for the same chat layer that runs on web and mo
 - **1,111** `.ts`/`.tsx` files in `apps/desktop/src/` · **303,407** LOC
 - **1,488** `#[tauri::command]` decorators across **137** source files
 - **118** stores (was claimed 84 in older memory — undercount)
-- **74** component subdirs in `apps/desktop/src/components/` — all since moved into
-  `apps/desktop/src/features/` and `apps/desktop/src/ui/`. `apps/desktop/src/components/`
+- **74** component subdirs in the former Desktop components tree — all since moved into
+  `apps/desktop/src/features/` and `apps/desktop/src/ui/`. The old tree
   no longer exists; `pnpm check:structure-conventions` fails if any of those retired
   domain directories (including `ui/`) or an import of their old paths reappears.
 
@@ -162,7 +162,7 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 
 ## Current open work (Wave 6, in flight)
 
-1. **W6 #19** — Remove `?? 'gpt-5.4'` hardcoded fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
+1. **W6 #19** — Remove hardcoded model fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
 2. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
 
 ## Gotchas

@@ -45,7 +45,8 @@ import {
   tier2LoadModel,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
-import type { OnDeviceModel } from '@agiworkforce/types';
+import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
 // Mobile first-run has no public cloud provider routing.
 const DISCLOSURE_PROVIDERS: string[] = [];
@@ -89,7 +90,7 @@ function tierFromCapabilities(
 
 // ---------------------------------------------------------------------------
 // Pick recommended downloadable model for a tier.
-// Locked: Qwen3-4B-Instruct-2507 (role='default') is the primary.
+// The catalog model with role='default' is the primary recommendation.
 // Tier 1 = Apple Foundation Models / AICore (no download).
 // ---------------------------------------------------------------------------
 type RecommendedModel = OnDeviceModel & { needsDownload: boolean };
@@ -120,14 +121,15 @@ function pickModelForPickerSelection(
   modelId: string,
   fallbackTier: LocalRuntimeTier,
 ): RecommendedModel | null {
-  if (modelId === 'auto' || modelId === 'auto-balanced') return pickRecommendedModel(fallbackTier);
+  const autoProfile = getAutoRoutingProfiles().find((profile) => profile.id === modelId)?.profile;
+  if (autoProfile === 'balanced') return pickRecommendedModel(fallbackTier);
 
   const localModels = getShippableModels();
-  if (modelId === 'auto-economy') {
+  if (autoProfile === 'economy') {
     const liteModel = localModels.find((model) => model.role === 'lite-mode');
     return liteModel ? { ...liteModel, needsDownload: liteModel.fileSizeBytes > 0 } : null;
   }
-  if (modelId === 'auto-premium') {
+  if (autoProfile === 'premium') {
     const premiumModel = localModels.find(
       (model) => model.role === 'premium-vision-pack' || model.role === 'premium-multimodal-alt',
     );
@@ -254,13 +256,15 @@ export default function OnboardingScreen() {
 
   const finishOnboarding = useCallback(() => {
     storage.set('onboarding-done', 'true');
-    storage.set('onboarding-mode', 'local');
+    // Retire the pre-intent preference key. It was write-only and could not
+    // carry an auth handoff; the validated route intent below owns that job.
+    storage.delete('onboarding-mode');
     router.replace({ pathname: '/(app)' as const });
   }, [router]);
 
   // Cloud path from first run: Managed Cloud is public alpha (no invite, no
   // waitlist — signing in IS the entitlement, ClerkTokenBridge flips cloudUnlocked
-  // on success). Let a new user reach hosted models (gpt-5.6-luna etc.) + cloud
+  // on success). Let a new user reach catalog-selected hosted models + cloud
   // tools/web-search without first downloading a local model. Marks onboarding
   // done so they never bounce back here, records the cloud preference, and routes
   // to the same Clerk sign-in the in-app cloud gate uses.
@@ -271,8 +275,8 @@ export default function OnboardingScreen() {
     }
     cancelDownload(recommendedModel.id);
     storage.set('onboarding-done', 'true');
-    storage.set('onboarding-mode', 'cloud');
-    router.replace({ pathname: '/(auth)/login' as const });
+    storage.delete('onboarding-mode');
+    router.replace(beginCloudPostAuthIntent());
   }, [recommendedModel.id, router]);
 
   // ---------------------------------------------------------------------------
@@ -687,7 +691,7 @@ function DeviceTierScreen({
         </Text>
       </Pressable>
 
-      {/* Cloud path — reach hosted models (gpt-5.6-luna etc.) + cloud tools/web
+      {/* Cloud path — reach catalog-selected hosted models + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}
       <Pressable
         testID="device-tier-cloud-btn"

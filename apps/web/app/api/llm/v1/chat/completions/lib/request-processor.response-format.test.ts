@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { ChatCompletionRequestSchema } from './request-processor';
+
+const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
 /**
  * `response_format` was validated and then read nowhere else in the repo, so a
@@ -21,7 +24,7 @@ import { ChatCompletionRequestSchema } from './request-processor';
  */
 
 const base = {
-  model: 'claude-opus-5',
+  model: CHAT_MODEL,
   messages: [{ role: 'user' as const, content: 'hello' }],
 };
 

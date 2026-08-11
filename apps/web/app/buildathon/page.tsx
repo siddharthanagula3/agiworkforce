@@ -2,8 +2,6 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
-const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-
 export const metadata = buildMetadata({
   title: 'Siddhartha Nagula | Buildathon Profile | AGIWorkforce',
   description:
@@ -86,36 +84,9 @@ const TECH_STACK = [
   'GitHub Actions',
 ];
 
-const PROFILE_JSON_LD = {
-  '@context': 'https://schema.org',
-  '@type': 'ProfilePage',
-  mainEntity: {
-    '@type': 'Person',
-    name: 'Siddhartha Nagula',
-    alternateName: 'siddharthanagula3',
-    description:
-      'Founder & AI Systems Engineer building AGIWorkforce, a model-neutral AI application suite across web, desktop, CLI, VS Code extension, Chrome extension, and mobile.',
-    url: `${APP_URL}/buildathon`,
-    sameAs: [
-      'https://github.com/siddharthanagula3',
-      'https://www.linkedin.com/in/siddharthanagula',
-      'https://leetcode.com/u/nagulasiddharth1',
-    ],
-  },
-};
-
-function serializeJsonLd(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c');
-}
-
 export default function BuildathonPage() {
   return (
     <div data-design="agi">
-      {/* JSON-LD structured data */}
-      <script type="application/ld+json" suppressHydrationWarning>
-        {serializeJsonLd(PROFILE_JSON_LD)}
-      </script>
-
       <main className="agi-shell">
         <Header />
 

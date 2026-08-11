@@ -48,6 +48,26 @@ const PublishSchema = z.object({
   conversationId: z.string().trim().uuid().optional(),
 });
 
+const PG_UNDEFINED_TABLE = '42P01';
+
+function isPublishedArtifactSchemaUnavailable(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== 'object') return false;
+    const row = candidate as Record<string, unknown>;
+    if (row['code'] === PG_UNDEFINED_TABLE) return true;
+    candidate = row['cause'];
+  }
+  return false;
+}
+
+function publishingUnavailableResponse(): NextResponse {
+  return NextResponse.json(
+    { error: { message: 'Artifact publishing is not configured in this environment yet.' } },
+    { status: 503 },
+  );
+}
+
 async function handlePublish(request: NextRequest): Promise<Response> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -88,6 +108,7 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     if (error instanceof PublishedArtifactValidationError) {
       throw createError.validation(error.message);
     }
+    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
     throw error;
   }
 
@@ -112,7 +133,13 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await getUserScopedDb(request);
-  const artifacts = await listPublishedArtifacts(db, { userId });
+  let artifacts;
+  try {
+    artifacts = await listPublishedArtifacts(db, { userId });
+  } catch (error) {
+    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
+    throw error;
+  }
 
   return NextResponse.json({
     artifacts: artifacts.map((artifact) => ({

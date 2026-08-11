@@ -32,12 +32,17 @@ export async function tier1Generate(opts: GenerateOptions): Promise<GenerateResu
         opts.onDone?.(state.doneEvent);
       }
     });
+    const abortHandler = () => {
+      if (typeof mod.cancel === 'function') void mod.cancel(requestId);
+    };
+    opts.signal?.addEventListener('abort', abortHandler, { once: true });
     try {
       const text = await mod.generate(opts.prompt, systemPrompt, messages, requestId);
       const aborted = !!state.doneEvent?.aborted || !!opts.signal?.aborted;
       if (!state.doneEvent) opts.onDone?.({ aborted });
       return { text: aborted ? '' : text, runtime: 'foundation_models', aborted };
     } finally {
+      opts.signal?.removeEventListener('abort', abortHandler);
       sub.remove();
     }
   }
@@ -55,12 +60,17 @@ export async function tier1Generate(opts: GenerateOptions): Promise<GenerateResu
         opts.onDone?.(state.doneEvent);
       }
     });
+    const abortHandler = () => {
+      if (typeof mod.cancel === 'function') void mod.cancel(requestId);
+    };
+    opts.signal?.addEventListener('abort', abortHandler, { once: true });
     try {
       const text = await mod.generate(opts.prompt, systemPrompt, messages, requestId);
       const aborted = !!state.doneEvent?.aborted || !!opts.signal?.aborted;
       if (!state.doneEvent) opts.onDone?.({ aborted });
       return { text: aborted ? '' : text, runtime: 'aicore', aborted };
     } finally {
+      opts.signal?.removeEventListener('abort', abortHandler);
       sub.remove();
     }
   }

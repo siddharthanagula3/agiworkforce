@@ -114,4 +114,19 @@ describe('AccountSection active sessions', () => {
     expect(requests).toContainEqual({ url: '/api/settings/sessions', method: 'DELETE' });
     expect(mockLogout).toHaveBeenCalledOnce();
   });
+
+  it('replaces a timed-out session request with an actionable retry state', async () => {
+    const timeoutSignal = AbortSignal.abort(new DOMException('Timed out', 'TimeoutError'));
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutSignal);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('Timed out', 'TimeoutError'));
+
+    render(<AccountSection />);
+
+    expect(
+      await screen.findByText('Active sessions took too long to load. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading active sessions…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    timeoutSpy.mockRestore();
+  });
 });

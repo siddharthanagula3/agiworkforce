@@ -12,7 +12,14 @@
 
 import { describe, test, expect } from 'vitest';
 import { classifyTaskLocally, resolveAutoRoute } from '@agiworkforce/routing';
-import { getAllModels, getModelMetadata, normalizeModelId, MODEL_METADATA } from '@shared/config/llm';
+import {
+  getAllModels,
+  getModelContextWindow,
+  getModelMetadata,
+  normalizeModelId,
+  MODEL_CONTEXT_WINDOWS,
+  MODEL_METADATA,
+} from '@shared/config/llm';
 
 describe('L1 Security - Provider Routing (No Hardcoding)', () => {
   test('SECURITY: model catalog is loaded from metadata (models.json), not empty/hardcoded', () => {
@@ -91,5 +98,15 @@ describe('L1 Security - Provider Routing (No Hardcoding)', () => {
     // (normalizeModelId echoes unknown ids; the catalog lookup is the guard.)
     expect(getModelMetadata('totally-not-a-real-model-xyz')).toBeNull();
     expect(MODEL_METADATA['totally-not-a-real-model-xyz']).toBeUndefined();
+  });
+
+  test('SECURITY: media metadata never receives a fabricated token context', () => {
+    const videoModelId = getAllModels().find((model) => model.capabilities.videoGen)?.id;
+    expect(videoModelId).toBeDefined();
+    expect(MODEL_CONTEXT_WINDOWS).not.toHaveProperty(videoModelId!);
+    expect(() => getModelContextWindow(videoModelId!)).toThrow(
+      'does not publish a token context window',
+    );
+    expect(Object.values(MODEL_CONTEXT_WINDOWS).every((value) => value > 0)).toBe(true);
   });
 });

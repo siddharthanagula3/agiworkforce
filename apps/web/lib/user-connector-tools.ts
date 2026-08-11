@@ -73,6 +73,7 @@ import {
 } from '@agiworkforce/mcp';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import {
@@ -1315,18 +1316,24 @@ interface OrgSharedConnectorRow extends CustomConnectorRow {
  * request can influence it, so a member of org A can never reach org B's shared
  * connectors even if they guess an `orgmcp-` id.
  */
-async function resolveConnectorOrganizationId(userId: string): Promise<string | null> {
+async function resolveConnectorOrganizationId(
+  userId: string,
+  admittedOrganizationId?: string | null,
+): Promise<string | null> {
   const db = getNeonDb();
   try {
-    const [row] = await db.query<{ organization_id: string }>(
+    if (admittedOrganizationId === undefined) {
+      return await resolveActiveOrganizationId(db, userId);
+    }
+    if (admittedOrganizationId === null) return null;
+    const [membership] = await db.query<{ organization_id: string }>(
       `select organization_id
          from public.organization_members
-        where user_id = $1
-        order by joined_at asc
+        where organization_id = $1 and user_id = $2
         limit 1`,
-      [userId],
+      [admittedOrganizationId, userId],
     );
-    return row?.organization_id ?? null;
+    return membership?.organization_id ?? null;
   } catch (error) {
     if (isUndefinedTable(error)) return null;
     throw error;
@@ -1448,6 +1455,7 @@ async function buildOrgSharedConnectorCatalog(
 
 async function executeOrgSharedConnectorTool(
   userId: string,
+  admittedOrganizationId: string | null | undefined,
   orgShortId: string,
   toolName: string,
   args: Record<string, unknown>,
@@ -1455,7 +1463,7 @@ async function executeOrgSharedConnectorTool(
   // Re-resolve BOTH the membership and the share at execution time. A member
   // removed from the org, or a connector un-shared, must stop working on the
   // very next call — not when a cache expires.
-  const organizationId = await resolveConnectorOrganizationId(userId);
+  const organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
   if (!organizationId) {
     return {
       handled: true,
@@ -1540,6 +1548,8 @@ export async function loadUserConnectorToolDefs(
 
 export interface LoadUserConnectorToolOptions {
   customConnectorLimit?: number;
+  /** Workspace captured at request admission; null is Personal. */
+  organizationId?: string | null;
   /**
    * GOV-7: the caller's billing plan tier, used to resolve the per-plan
    * connector-tool ceiling. Omitted/unknown falls back to
@@ -1637,8 +1647,9 @@ export async function loadUserConnectorToolCatalog(
 
     // 4. Connectors the user's ORGANIZATION shares with its members (0086).
     // Same failure posture as 3: each row degrades to no tools independently.
-    // The org is resolved from the membership table, never from the request.
-    const organizationId = await resolveConnectorOrganizationId(userId);
+    // The route captures the active workspace at admission so a background
+    // continuation cannot drift into a newly selected workspace mid-turn.
+    const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
     if (organizationId) {
       const sharedRows = await getOrgSharedConnectorRows(
         userId,
@@ -1710,6 +1721,7 @@ export async function loadUserConnectorToolCatalog(
  */
 export function makeUserConnectorExecutor(
   userId: string,
+  organizationId?: string | null,
 ): (
   serverId: string,
   toolName: string,
@@ -1732,7 +1744,7 @@ export function makeUserConnectorExecutor(
     // un-shared connector stops working on the very next call.
     const orgShortId = orgShortIdFromServerId(serverId);
     if (orgShortId !== null) {
-      return executeOrgSharedConnectorTool(userId, orgShortId, toolName, args);
+      return executeOrgSharedConnectorTool(userId, organizationId, orgShortId, toolName, args);
     }
 
     const map = loadConnectorMcpMap();

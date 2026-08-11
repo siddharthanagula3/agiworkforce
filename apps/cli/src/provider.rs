@@ -73,7 +73,7 @@ impl From<&model_catalog::Model> for ModelInfo {
 /// *unambiguous* prefix match).
 ///
 /// The prefix fallback only resolves when exactly one catalog entry matches the
-/// bidirectional prefix relation. An ambiguous query like `gpt-5` that matches
+/// bidirectional prefix relation. A truncated query that matches
 /// several entries returns `None` rather than silently binding to whichever
 /// model happens to come first in catalog order — otherwise capability,
 /// pricing, and deprecation lookups could bind to the wrong model.
@@ -111,17 +111,7 @@ pub fn models_for_provider(provider: &str) -> Vec<ModelInfo> {
 
 fn looks_like_local_ollama_model(model_id: &str) -> bool {
     let lower = model_id.to_lowercase();
-    lower.starts_with("ollama:")
-        || (lower.contains(':') && !lower.contains('/'))
-        || lower.starts_with("llama")
-        || lower.starts_with("codellama")
-        || lower.starts_with("qwen2")
-        || lower.starts_with("qwen3")
-        || lower.starts_with("gemma")
-        || lower.starts_with("phi")
-        || lower.starts_with("deepseek-r1")
-        || lower.starts_with("nomic-embed")
-        || lower.contains("command-r")
+    lower.starts_with("ollama:") || (lower.contains(':') && !lower.contains('/'))
 }
 
 /// Auto-detect the provider name from a model ID string.
@@ -161,35 +151,21 @@ pub fn supports_tool_use(model_id: &str) -> bool {
 /// used. Returns `Some(value)` only when a model-specific temperature is both
 /// recommended *and* accepted by that provider.
 ///
-/// OpenAI reasoning models (`o1`/`o3` families) reject any temperature other
-/// than their server default of 1, so we must NOT send `0.0` to them — we return
-/// `None` and let the caller omit the parameter. The `o1`/`o3` detection matches
-/// the family as a delimited prefix (e.g. `o3`, `o1-preview`, `openai/o3-mini`)
-/// rather than a bare substring, so unrelated IDs that merely contain "o1"/"o3"
-/// are not misclassified.
+/// Provider-specific sampling exclusions are enforced by the request boundary
+/// from `reasoning.rejectsSamplingParameters` in the canonical catalog. This
+/// helper only supplies an accepted family default where one is documented.
 #[allow(dead_code)] // reserved: per-model temperature defaulting (exercised by tests)
 pub fn default_temperature(model_id: &str) -> Option<f64> {
-    let lower = model_id.to_lowercase();
-
-    // OpenAI reasoning models (o1/o3 families): the API rejects any non-default
-    // temperature, so omit the parameter entirely.
-    if is_openai_reasoning_family(&lower) {
-        return None;
-    }
-
-    // DeepSeek's reasoner prefers deterministic output and accepts low temps.
-    if lower.contains("deepseek-reasoner") {
+    // The DeepSeek reasoning tier prefers deterministic output and accepts low
+    // temperatures. Both provider and reasoning support come from the catalog.
+    if provider_for_model(model_id) == Some("deepseek") && supports_reasoning(model_id) {
         return Some(0.0);
     }
 
-    // Gemini models default to 1.0. This used to carry an exact-ID list
-    // (`gemini-3.5-flash-lite`/`gemini-3.6-flash` => None) on the speculation
-    // that those releases "may reject sampling parameters in future API
-    // revisions" — nothing in the repo backs that, and models.json flags no
-    // Gemini model. Models whose provider genuinely rejects sampling parameters
+    // Google models default to 1.0. Models whose provider genuinely rejects sampling parameters
     // are excluded at the request boundary from the catalog flag
     // (`models::streaming::effective_temperature`), not from a list here.
-    if lower.starts_with("gemini") {
+    if provider_for_model(model_id) == Some("google") {
         return Some(1.0);
     }
 
@@ -197,21 +173,6 @@ pub fn default_temperature(model_id: &str) -> Option<f64> {
     // OpenAI non-reasoning: use provider default
     // Ollama: use provider default
     None
-}
-
-/// True when `lower` (an already-lowercased model ID) names an OpenAI `o1`/`o3`
-/// reasoning-family model. Matches the family token as a prefix or after a
-/// `/` or `:` separator (e.g. `o3`, `o1-mini`, `openai/o3`) instead of a bare
-/// `contains`, so IDs like `gpt-4o1234` or `mistral-o3-tuned` do not misfire.
-#[allow(dead_code)] // reserved: only caller is default_temperature (also reserved)
-fn is_openai_reasoning_family(lower: &str) -> bool {
-    let stem = lower.rsplit(['/', ':']).next().unwrap_or(lower);
-    for family in ["o1", "o3"] {
-        if stem == family || stem.starts_with(&format!("{family}-")) {
-            return true;
-        }
-    }
-    false
 }
 
 /// Check if a model supports extended thinking / reasoning mode.
@@ -234,7 +195,7 @@ pub fn is_deprecated(model_id: &str) -> bool {
 ///
 /// Example output:
 /// ```text
-/// claude-opus-5  (anthropic)  [active]
+/// catalog-selected-model  (provider)  [active]
 ///   Context window:  1M tokens
 ///   Max output:      128K tokens
 ///   Pricing:         $5.00 / $25.00 per 1M tokens (input/output)
@@ -251,9 +212,14 @@ pub fn format_model_detail(model: &ModelInfo) -> String {
     let price = if model.input_price_per_1m == 0.0 && model.output_price_per_1m == 0.0 {
         "free (local)".to_string()
     } else {
+        let tier_note = if model_catalog::input_token_pricing_tiers(&model.id).is_empty() {
+            "base"
+        } else {
+            "base; request tiers available"
+        };
         format!(
-            "${:.2} / ${:.2} per 1M tokens (input/output)",
-            model.input_price_per_1m, model.output_price_per_1m
+            "${:.2} / ${:.2} per 1M tokens (input/output, {tier_note})",
+            model.input_price_per_1m, model.output_price_per_1m,
         )
     };
     let yes_no = |b: bool| if b { "yes" } else { "no" };
@@ -303,9 +269,14 @@ pub fn format_model_list() -> String {
         let price = if model.input_price_per_1m == 0.0 {
             "free".to_string()
         } else {
+            let tier_note = if model_catalog::input_token_pricing_tiers(&model.id).is_empty() {
+                "base"
+            } else {
+                "base+tiered"
+            };
             format!(
-                "${:.2}/${:.2}",
-                model.input_price_per_1m, model.output_price_per_1m
+                "${:.2}/${:.2} {tier_note}",
+                model.input_price_per_1m, model.output_price_per_1m,
             )
         };
 
@@ -317,7 +288,7 @@ pub fn format_model_list() -> String {
 
     out.push_str(
         "\nFlags: T=tools, V=vision, R=reasoning. !=deprecated, B=beta.\n\
-         Prices per 1M tokens (input/output).\n",
+         Prices per 1M tokens (input/output); `base+tiered` has request-input bands shown by `agi --cost MODEL`.\n",
     );
     out
 }
@@ -502,6 +473,27 @@ impl MessageNormalizer {
 mod tests {
     use super::*;
 
+    fn openai_catalog_models() -> Vec<ModelInfo> {
+        model_catalog()
+            .into_iter()
+            .filter(|model| model.provider == "openai")
+            .collect()
+    }
+
+    fn first_openai_model() -> ModelInfo {
+        openai_catalog_models()
+            .into_iter()
+            .next()
+            .expect("embedded catalog must include an OpenAI text model")
+    }
+
+    fn first_model_matching(provider: &str, predicate: impl Fn(&ModelInfo) -> bool) -> ModelInfo {
+        models_for_provider(provider)
+            .into_iter()
+            .find(predicate)
+            .unwrap_or_else(|| panic!("embedded catalog lacks required {provider} model"))
+    }
+
     // ── model_catalog ──────────────────────────────────────────
 
     #[test]
@@ -510,25 +502,23 @@ mod tests {
     }
 
     #[test]
-    fn test_catalog_has_new_models() {
+    fn test_catalog_has_expected_provider_families() {
         let catalog = model_catalog();
-        let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
-        // The CLI exposes the exact provider ID from models.json.
-        assert!(ids.contains(&"claude-opus-5"));
-        assert!(ids.contains(&"claude-sonnet-5"));
-        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
-        assert!(ids.contains(&"gpt-5.6-sol"));
-        assert!(ids.contains(&"gpt-5.6-luna"));
-        assert!(ids.contains(&"gemini-3.6-flash"));
-        assert!(ids.contains(&"gemini-3.1-pro-preview"));
-        assert!(ids.contains(&"gemini-3.5-flash-lite"));
-        // xAI flagship is sourced from models.json.
-        assert!(ids.contains(&"grok-4.5"));
-        assert!(ids.contains(&"MiniMax-M3"));
-        assert!(ids.contains(&"kimi-k3"));
-        assert!(ids.contains(&"deepseek-v4-flash"));
-        assert!(ids.contains(&"deepseek-v4-pro"));
-        assert!(ids.contains(&"glm-5.2"));
+        for provider in [
+            "anthropic",
+            "openai",
+            "google",
+            "xai",
+            "minimax",
+            "moonshot",
+            "deepseek",
+            "zhipu",
+        ] {
+            assert!(
+                catalog.iter().any(|model| model.provider == provider),
+                "CLI catalog must expose the registry's {provider} family"
+            );
+        }
     }
 
     #[test]
@@ -616,30 +606,22 @@ mod tests {
     #[test]
     fn test_reasoning_models_flagged() {
         let catalog = model_catalog();
-        let reasoning_ids: Vec<&str> = catalog
-            .iter()
-            .filter(|m| m.supports_reasoning)
-            .map(|m| m.id.as_str())
-            .collect();
-        // Reasoning support is sourced from models.json.
-        assert!(reasoning_ids.contains(&"claude-opus-5"));
-        assert!(reasoning_ids.contains(&"claude-sonnet-5"));
-        // Haiku 4.5 supports extended thinking (models.json capabilities.thinking=true,
-        // flipped in the effort-catalog wave).
-        assert!(reasoning_ids.contains(&"claude-sonnet-5"));
-        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
-        assert!(reasoning_ids.contains(&"gpt-5.6-sol"));
-        assert!(reasoning_ids.contains(&"gpt-5.6-luna"));
-        assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
-        // xAI flagship has reasoning enabled.
-        assert!(reasoning_ids.contains(&"grok-4.5"));
-        assert!(reasoning_ids.contains(&"deepseek-v4-pro"));
+        assert!(catalog.iter().any(|model| model.supports_reasoning));
+        for model in catalog {
+            assert_eq!(
+                supports_reasoning(&model.id),
+                model.supports_reasoning,
+                "{}",
+                model.id
+            );
+        }
     }
 
     #[test]
-    fn test_current_flash_lite_supports_reasoning() {
-        let model = find_model("gemini-3.5-flash-lite").unwrap();
-        assert!(model.supports_reasoning);
+    fn test_google_catalog_includes_a_reasoning_model() {
+        assert!(models_for_provider("google")
+            .iter()
+            .any(|model| model.supports_reasoning));
     }
 
     /// Guard against test-vs-SSOT drift: derive reasoning expectations from
@@ -688,50 +670,49 @@ mod tests {
     }
 
     #[test]
-    fn test_audio_capabilities() {
-        // gpt-5.6-sol is the current OpenAI flagship in models.json
-        let gpt56_sol = find_model("gpt-5.6-sol").unwrap();
-        assert!(!gpt56_sol.supports_audio_input);
-        assert!(!gpt56_sol.supports_audio_output);
-
-        let gemini_flash = find_model("gemini-3.5-flash-lite").unwrap();
-        assert!(gemini_flash.supports_audio_input);
-        assert!(!gemini_flash.supports_audio_output);
-        assert!(gemini_flash.supports_pdf);
-
-        // Capability flags are sourced from the current catalog record.
-        let claude = find_model("claude-opus-5").unwrap();
-        assert!(!claude.supports_audio_input);
-        assert!(!claude.supports_audio_output);
-    }
-
-    #[test]
-    fn test_pdf_support() {
-        // Capability flags are sourced from the current catalog record.
-        let claude = find_model("claude-opus-5").unwrap();
-        assert!(!claude.supports_pdf);
-
-        let gemini = find_model("gemini-3.1-pro-preview").unwrap();
-        assert!(!gemini.supports_pdf);
-
-        // gpt-5.6-sol is the current OpenAI flagship in models.json
-        let gpt56_sol = find_model("gpt-5.6-sol").unwrap();
-        assert!(!gpt56_sol.supports_pdf);
+    fn test_capabilities_match_shared_catalog() {
+        for model in model_catalog() {
+            let shared = crate::model_catalog::find(&model.id)
+                .expect("provider view model must resolve in shared catalog");
+            assert_eq!(model.supports_tools, shared.supports_tools, "{}", model.id);
+            assert_eq!(
+                model.supports_vision, shared.supports_vision,
+                "{}",
+                model.id
+            );
+            assert_eq!(
+                model.supports_reasoning, shared.supports_reasoning,
+                "{}",
+                model.id
+            );
+            assert_eq!(
+                model.supports_audio_input, shared.supports_audio_input,
+                "{}",
+                model.id
+            );
+            assert_eq!(
+                model.supports_audio_output, shared.supports_audio_output,
+                "{}",
+                model.id
+            );
+            assert_eq!(model.supports_pdf, shared.supports_pdf, "{}", model.id);
+        }
     }
 
     // ── find_model ─────────────────────────────────────────────
 
     #[test]
     fn test_find_model_exact() {
-        let model = find_model("gpt-5.6-sol");
+        let id = first_openai_model().id;
+        let model = find_model(&id);
         assert!(model.is_some());
         assert_eq!(model.unwrap().provider, "openai");
     }
 
     #[test]
     fn test_find_model_case_insensitive() {
-        // Matching uses the provider ID from the current catalog.
-        let model = find_model("Claude-Opus-5");
+        let id = first_openai_model().id.to_ascii_uppercase();
+        let model = find_model(&id);
         assert!(model.is_some());
     }
 
@@ -741,20 +722,10 @@ mod tests {
     }
 
     #[test]
-    fn test_find_model_new_entries() {
-        // New entries are sourced from the current catalog.
-        assert!(find_model("claude-opus-5").is_some());
-        assert!(find_model("claude-sonnet-5").is_some());
-        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
-        assert!(find_model("gpt-5.6-sol").is_some());
-        assert!(find_model("gpt-5.6-luna").is_some());
-        assert!(find_model("gemini-3.6-flash").is_some());
-        assert!(find_model("gemini-3.1-pro-preview").is_some());
-        assert!(find_model("gemini-3.5-flash-lite").is_some());
-        // xAI flagship is sourced from models.json.
-        assert!(find_model("grok-4.5").is_some());
-        assert!(find_model("minimax-m3").is_some());
-        assert!(find_model("glm-5.2").is_some());
+    fn test_find_model_resolves_every_catalog_entry() {
+        for model in model_catalog() {
+            assert!(find_model(&model.id).is_some(), "{}", model.id);
+        }
     }
 
     // ── models_for_provider ────────────────────────────────────
@@ -794,48 +765,52 @@ mod tests {
     fn test_provider_for_model_catalog_anthropic() {
         let model = first_model_id_for("anthropic");
         assert_eq!(provider_for_model(&model), Some("anthropic"));
-        assert_eq!(provider_for_model("claude-anything"), None);
+        assert_eq!(provider_for_model("fixture-unknown-anthropic-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_catalog_openai() {
         let model = first_model_id_for("openai");
         assert_eq!(provider_for_model(&model), Some("openai"));
-        assert_eq!(provider_for_model("gpt-future"), None);
+        assert_eq!(provider_for_model("fixture-unknown-cloud-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_catalog_google() {
         let model = first_model_id_for("google");
         assert_eq!(provider_for_model(&model), Some("google"));
-        assert_eq!(provider_for_model("gemini-future"), None);
+        assert_eq!(provider_for_model("fixture-unknown-google-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_catalog_minimax() {
         let model = first_model_id_for("minimax");
         assert_eq!(provider_for_model(&model), Some("minimax"));
-        assert_eq!(provider_for_model("minimax-future"), None);
+        assert_eq!(provider_for_model("fixture-unknown-minimax-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_catalog_xai() {
         let model = first_model_id_for("xai");
         assert_eq!(provider_for_model(&model), Some("xai"));
-        assert_eq!(provider_for_model("grok-future"), None);
+        assert_eq!(provider_for_model("fixture-unknown-xai-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_catalog_deepseek() {
         let model = first_model_id_for("deepseek");
         assert_eq!(provider_for_model(&model), Some("deepseek"));
-        assert_eq!(provider_for_model("deepseek-future"), None);
+        assert_eq!(provider_for_model("fixture-unknown-deepseek-model"), None);
     }
 
     #[test]
     fn test_provider_for_model_local_ollama_names() {
-        assert_eq!(provider_for_model("llama3.1"), Some("ollama"));
-        assert_eq!(provider_for_model("qwen2.5"), Some("ollama"));
+        assert_eq!(provider_for_model("ollama:fixture-model"), Some("ollama"));
+        assert_eq!(
+            provider_for_model("fixture-local-model:latest"),
+            Some("ollama")
+        );
+        assert_eq!(provider_for_model("fixture-local-model"), None);
     }
 
     #[test]
@@ -853,20 +828,18 @@ mod tests {
 
     #[test]
     fn test_supports_tool_use_true() {
-        // Tool support is sourced from models.json.
-        assert!(supports_tool_use("claude-opus-5"));
-        // gpt-5.6-sol is the current OpenAI flagship (tools=true)
-        assert!(supports_tool_use("gpt-5.6-sol"));
-        assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        // grok-4.5 is the live xAI flagship in models.json (supersedes grok-4.3).
-        assert!(supports_tool_use("grok-4.5"));
-        assert!(supports_tool_use("deepseek-v4-pro"));
+        let tool_models: Vec<ModelInfo> = model_catalog()
+            .into_iter()
+            .filter(|model| model.supports_tools)
+            .collect();
+        assert!(!tool_models.is_empty());
+        assert!(tool_models.iter().all(|model| supports_tool_use(&model.id)));
     }
 
     #[test]
     fn test_supports_tool_use_false() {
-        assert!(!supports_tool_use("llama3.1"));
-        assert!(!supports_tool_use("qwen2.5"));
+        assert!(!supports_tool_use("fixture-local-model:latest"));
+        assert!(!supports_tool_use("ollama:fixture-model"));
     }
 
     #[test]
@@ -878,23 +851,9 @@ mod tests {
 
     #[test]
     fn test_default_temperature_reasoning_models() {
-        // DeepSeek's reasoner accepts a deterministic temperature.
-        assert_eq!(default_temperature("deepseek-reasoner"), Some(0.0));
-        // OpenAI o1/o3 reasoning models reject any non-default temperature, so
-        // the parameter must be omitted (None) rather than forced to 0.0.
-        assert_eq!(default_temperature("o3"), None);
-        assert_eq!(default_temperature("o1-preview"), None);
-        assert_eq!(default_temperature("o3-mini"), None);
-        assert_eq!(default_temperature("openai/o3"), None);
-    }
-
-    #[test]
-    fn test_default_temperature_substring_o1_o3_not_misfired() {
-        // IDs that merely *contain* "o1"/"o3" as a substring (not the OpenAI
-        // reasoning family) must not be forced to a reasoning temperature.
-        assert_eq!(default_temperature("gpt-4o-2024"), None);
-        assert_eq!(default_temperature("mistral-o3-tuned"), None);
-        assert_eq!(default_temperature("model-o1234"), None);
+        let reasoning_model = first_model_matching("deepseek", |model| model.supports_reasoning);
+        assert_eq!(default_temperature(&reasoning_model.id), Some(0.0));
+        assert_eq!(default_temperature("fixture-reasoning-model"), None);
     }
 
     #[test]
@@ -905,36 +864,35 @@ mod tests {
         // do not add an ID back here. The flag is enforced in
         // `models::streaming::effective_temperature`, which is what the request
         // body actually reads.
-        for id in [
-            "gemini-3.1-pro-preview",
-            "gemini-3.5-flash-lite",
-            "gemini-3.6-flash",
-        ] {
+        for model in models_for_provider("google") {
             assert_eq!(
-                default_temperature(id),
+                default_temperature(&model.id),
                 Some(1.0),
-                "{id} must take the Gemini family default — per-model sampling \
-                 exclusions belong in models.json, not in an ID arm here"
+                "{} must take the Google family default — per-model sampling \
+                 exclusions belong in models.json, not in an ID arm here",
+                model.id
             );
         }
     }
 
     #[test]
-    fn test_default_temperature_claude_none() {
-        assert_eq!(default_temperature("claude-opus-5"), None);
-        assert_eq!(default_temperature("claude-sonnet-5"), None);
+    fn test_default_temperature_anthropic_none() {
+        for model in models_for_provider("anthropic") {
+            assert_eq!(default_temperature(&model.id), None);
+        }
     }
 
     #[test]
     fn test_default_temperature_openai_non_reasoning_none() {
-        assert_eq!(default_temperature("gpt-5.6-sol"), None);
-        assert_eq!(default_temperature("gpt-5.6-luna"), None);
+        for model in openai_catalog_models() {
+            assert_eq!(default_temperature(&model.id), None);
+        }
     }
 
     #[test]
     fn test_default_temperature_ollama_none() {
-        assert_eq!(default_temperature("llama3.1"), None);
-        assert_eq!(default_temperature("qwen2.5"), None);
+        assert_eq!(default_temperature("fixture-local-model:latest"), None);
+        assert_eq!(default_temperature("ollama:fixture-model"), None);
     }
 
     #[test]
@@ -946,20 +904,25 @@ mod tests {
 
     #[test]
     fn test_supports_reasoning_true() {
-        // Reasoning support is sourced from models.json.
-        assert!(supports_reasoning("claude-opus-5"));
-        assert!(supports_reasoning("claude-sonnet-5"));
-        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
-        assert!(supports_reasoning("gpt-5.6-sol"));
-        assert!(supports_reasoning("gpt-5.6-luna"));
-        assert!(supports_reasoning("gemini-3.1-pro-preview"));
-        assert!(supports_reasoning("deepseek-v4-pro"));
+        let reasoning_models: Vec<ModelInfo> = model_catalog()
+            .into_iter()
+            .filter(|model| model.supports_reasoning)
+            .collect();
+        assert!(!reasoning_models.is_empty());
+        assert!(reasoning_models
+            .iter()
+            .all(|model| supports_reasoning(&model.id)));
     }
 
     #[test]
     fn test_supports_reasoning_false() {
-        assert!(!supports_reasoning("llama3.1"));
-        assert!(supports_reasoning("gemini-3.5-flash-lite"));
+        for model in model_catalog()
+            .into_iter()
+            .filter(|model| !model.supports_reasoning)
+        {
+            assert!(!supports_reasoning(&model.id));
+        }
+        assert!(!supports_reasoning("fixture-local-model:latest"));
     }
 
     #[test]
@@ -971,11 +934,9 @@ mod tests {
 
     #[test]
     fn test_is_deprecated_false() {
-        assert!(!is_deprecated("claude-opus-5"));
-        assert!(!is_deprecated("gpt-5.6-sol"));
-        assert!(!is_deprecated("gemini-3.1-pro-preview"));
-        assert!(!is_deprecated("grok-4.5"));
-        assert!(!is_deprecated("minimax-m3"));
+        for model in model_catalog() {
+            assert_eq!(is_deprecated(&model.id), model.status == "deprecated");
+        }
     }
 
     #[test]
@@ -987,25 +948,24 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_paid_model() {
-        // The formatter consumes the current catalog limits and prices.
-        // context: 1,000,000 (1M), input $5.00/output $25.00
-        let model = find_model("claude-opus-5").unwrap();
+        let model = model_catalog()
+            .into_iter()
+            .find(|model| model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0)
+            .expect("catalog must contain a paid model");
         let detail = format_model_detail(&model);
-        assert!(detail.contains("claude-opus-5"));
-        assert!(detail.contains("(anthropic)"));
-        assert!(detail.contains("[active]"));
-        assert!(detail.contains("1M tokens"));
-        assert!(detail.contains("$5.00 / $25.00"));
-        assert!(detail.contains("Tool use:        yes"));
-        assert!(detail.contains("Vision:          yes"));
-        assert!(detail.contains("Reasoning:       yes"));
-        assert!(detail.contains("PDF:             no"));
+        assert!(detail.contains(&model.id));
+        assert!(detail.contains(&format!("({})", model.provider)));
+        assert!(detail.contains(&format!("[{}]", model.status)));
+        assert!(detail.contains(&format!(
+            "${:.2} / ${:.2}",
+            model.input_price_per_1m, model.output_price_per_1m
+        )));
     }
 
     #[test]
     fn test_format_model_detail_free_model() {
         let model = ModelInfo {
-            id: "local-ollama-model".to_string(),
+            id: "fixture-local-model".to_string(),
             provider: "ollama".to_string(),
             context_window: 128_000,
             input_price_per_1m: 0.0,
@@ -1021,7 +981,7 @@ mod tests {
             release_date: "local".to_string(),
         };
         let detail = format_model_detail(&model);
-        assert!(detail.contains("local-ollama-model"));
+        assert!(detail.contains("fixture-local-model"));
         assert!(detail.contains("(ollama)"));
         assert!(detail.contains("[active]"));
         assert!(detail.contains("128K tokens"));
@@ -1032,10 +992,14 @@ mod tests {
     }
 
     #[test]
-    fn test_format_model_detail_deepseek_v4_pro() {
-        // deepseek-v4-pro in models.json: tools=yes, vision=yes, reasoning=yes,
-        // pricing $0.435/$0.87 per 1M tokens (permanent discount since 2026-05-22).
-        let model = find_model("deepseek-v4-pro").unwrap();
+    fn test_format_model_detail_deepseek_capable_tier() {
+        let model = models_for_provider("deepseek")
+            .into_iter()
+            .filter(|model| {
+                model.supports_tools && model.supports_vision && model.supports_reasoning
+            })
+            .max_by(|left, right| left.input_price_per_1m.total_cmp(&right.input_price_per_1m))
+            .expect("catalog must contain a fully capable DeepSeek tier");
         let detail = format_model_detail(&model);
         assert!(detail.contains("Tool use:        yes"));
         assert!(detail.contains("Vision:          yes"));
@@ -1058,18 +1022,7 @@ mod tests {
     #[test]
     fn test_format_model_list_contains_new_models() {
         let list = format_model_list();
-        // The formatted list consumes the current catalog.
-        assert!(list.contains("claude-opus-5"));
-        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
-        assert!(list.contains("gpt-5.6-sol"));
-        assert!(list.contains("gpt-5.6-luna"));
-        assert!(list.contains("gemini-3.6-flash"));
-        assert!(list.contains("gemini-3.1-pro-preview"));
-        assert!(list.contains("gemini-3.5-flash-lite"));
-        // xAI flagship is sourced from models.json.
-        assert!(list.contains("grok-4.5"));
-        assert!(list.contains("MiniMax-M3"));
-        assert!(list.contains("glm-5.2"));
+        assert!(model_catalog().iter().all(|model| list.contains(&model.id)));
     }
 
     #[test]
@@ -1096,6 +1049,22 @@ mod tests {
         let list = format_model_list();
         // Should contain "out" column for max output tokens
         assert!(list.contains("out"));
+    }
+
+    #[test]
+    fn tiered_catalog_prices_are_labeled_as_base_projections() {
+        let tiered = model_catalog()
+            .into_iter()
+            .find(|model| !model_catalog::input_token_pricing_tiers(&model.id).is_empty())
+            .expect("embedded catalog must include a request-tiered model");
+
+        let detail = format_model_detail(&tiered);
+        let list = format_model_list();
+
+        assert!(detail.contains("base; request tiers available"));
+        assert!(list
+            .lines()
+            .any(|line| { line.contains(&tiered.id) && line.contains("base+tiered") }));
     }
 
     // ── format_context_size ────────────────────────────────────

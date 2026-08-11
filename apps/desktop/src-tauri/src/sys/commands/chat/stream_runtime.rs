@@ -1,3 +1,4 @@
+use crate::core::llm::token_counter::TokenCounter;
 use crate::sys::commands::chat::pending::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::chat::state::should_stop_for_conversation;
 use futures_util::StreamExt;
@@ -13,8 +14,12 @@ const ARTIFACT_TOOL_NAME: &str = "create_artifact";
 pub(super) struct ConsumeStreamResult {
     pub tool_calls: Vec<crate::core::llm::sse_parser::StreamingToolCall>,
     pub token_count: u32,
+    /// Local completion-token estimate using the same counter as router
+    /// metering. Used only when the provider omits final usage.
+    pub estimated_output_tokens: u32,
     pub usage: Option<crate::core::llm::sse_parser::TokenUsage>,
     pub credits: Option<crate::core::llm::CreditsInfo>,
+    pub model: Option<String>,
     pub finish_reason: Option<String>,
     pub was_stopped: bool,
 }
@@ -39,12 +44,14 @@ pub(super) async fn consume_llm_stream(
     idle_timeout_secs: u64,
 ) -> Result<ConsumeStreamResult, String> {
     let mut token_count = 0u32;
+    let mut estimated_output_tokens = 0u32;
     let mut full_reasoning = String::new();
     let mut thinking_started = false;
     let mut was_stopped = false;
     let mut final_usage = None;
     let mut final_credits = None;
     let mut final_finish_reason: Option<String> = None;
+    let mut final_model: Option<String> = None;
 
     let mut accumulated_tool_calls: HashMap<
         usize,
@@ -146,6 +153,20 @@ pub(super) async fn consume_llm_stream(
                     // lower bound.  The authoritative count comes from the
                     // provider's usage object (final_usage) when available.
                     token_count += 1;
+                }
+                let estimated_chunk_tokens = TokenCounter::estimate_text_tokens(&chunk.content)
+                    .saturating_add(
+                        chunk
+                            .reasoning
+                            .as_deref()
+                            .map(TokenCounter::estimate_text_tokens)
+                            .unwrap_or(0),
+                    );
+                estimated_output_tokens = estimated_output_tokens
+                    .saturating_add(u32::try_from(estimated_chunk_tokens).unwrap_or(u32::MAX));
+
+                if let Some(model) = chunk.model.as_ref() {
+                    final_model = Some(model.clone());
                 }
 
                 if let Some(finish) = &chunk.finish_reason {
@@ -255,8 +276,10 @@ pub(super) async fn consume_llm_stream(
     Ok(ConsumeStreamResult {
         tool_calls,
         token_count,
+        estimated_output_tokens,
         usage: final_usage,
         credits: final_credits,
+        model: final_model,
         finish_reason: final_finish_reason,
         was_stopped,
     })

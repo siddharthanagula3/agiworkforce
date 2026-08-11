@@ -1,4 +1,5 @@
 import type { ExecutorchPreset } from '@agiworkforce/types';
+import { getLocalModelCatalog } from './catalog';
 import type { GenerateOptions, GenerateResult } from './types';
 
 // react-native-executorch 0.8.4 exports LLMModule (not ETLLMModule).
@@ -43,32 +44,23 @@ interface LLMModuleStatic {
 }
 
 /**
- * Runtime metadata for ExecuTorch VLM presets, keyed by preset `modelName`.
- * `ExecutorchPreset` (the shared catalog contract) carries only the four
- * source fields; the vision `capabilities` flag and the model card's
- * recommended sampling settings live here, MIRRORING react-native-executorch
- * 0.8.4's own exported preset constants (`LFM2_5_VL_450M_QUANTIZED` in
- * constants/modelUrls.js) — verify against the package export when upgrading.
+ * Resolve catalog-owned runtime metadata for an ExecuTorch VLM preset.
+ * Capability flags and model-card sampling settings live beside the preset's
+ * artifact identity so a model replacement never requires a runtime edit.
  */
-const EXECUTORCH_VLM_PRESETS: Record<
-  string,
-  { capabilities: readonly string[]; generationConfig?: Readonly<Record<string, number>> }
-> = {
-  'lfm2.5-vl-450m-quantized': {
-    capabilities: ['vision'],
-    // LiquidAI's LFM2-VL model card sampling settings — without them the model
-    // often produces generic / repetitive responses (package modelUrls.js).
-    generationConfig: { temperature: 0.1, minP: 0.15, repetitionPenalty: 1.05 },
-  },
-};
-
-/** VLM metadata for a preset, or undefined for text-only presets. */
 export function executorchVlmPresetInfo(
   modelName: string,
 ):
   | { capabilities: readonly string[]; generationConfig?: Readonly<Record<string, number>> }
   | undefined {
-  return EXECUTORCH_VLM_PRESETS[modelName];
+  const preset = getLocalModelCatalog()
+    .map((model) => model.executorchPreset)
+    .find((candidate) => candidate?.modelName === modelName);
+  if (!preset?.capabilities?.includes('vision')) return undefined;
+  return {
+    capabilities: preset.capabilities,
+    ...(preset.generationConfig ? { generationConfig: preset.generationConfig } : {}),
+  };
 }
 
 let _llmModuleOverride: LLMModuleStatic | null = null;

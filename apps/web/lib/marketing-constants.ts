@@ -68,11 +68,10 @@ export const COMING_SOON_LABEL = 'Coming soon';
  * Evidence for each value, re-verify before changing:
  *   web      — this application. `app/login` resolves, and `app/page.tsx` serves
  *              the product itself to a signed-in visitor (2026-08-08 root move).
- *   desktop  — git tag `v-desktop-1.2.0`. `.github/workflows/release-desktop.yml`
- *              publishes Linux x86_64 + notarized universal macOS artifacts;
- *              `app/api/download/route.ts` resolves live GitHub release
- *              installers. Per-PLATFORM availability is resolved at request time
- *              by `/download` — do not restate it as a static claim here.
+ *   desktop  — git tag `v-desktop-1.2.0` has Linux x86_64 package assets.
+ *              The public download route additionally requires the matching
+ *              updater signature, so per-platform installability is resolved at
+ *              request time by `/download` and is not implied by this label.
  *   cli      — git tag `v-cli-1.0.0`. `.github/workflows/release-cli.yml` builds
  *              six targets and publishes `@agiworkforce/cli` to npm.
  *   mobile   — ZERO `v-mobile-*` tags. Workflow exists; nothing published.
@@ -84,7 +83,7 @@ export const COMING_SOON_LABEL = 'Coming soon';
  */
 export const SURFACE_STATUS = {
   web: 'Available now',
-  desktop: 'Released · v1.2.0',
+  desktop: 'Linux assets · v1.2.0',
   cli: 'Released · v1.0.0',
   mobile: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,

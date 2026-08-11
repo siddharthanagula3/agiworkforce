@@ -10,6 +10,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/read-json-body';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 // Postgres SQLSTATE for undefined_function — raised when a called function
 // signature does not exist (e.g. a migration adding/altering it hasn't run).
@@ -110,6 +111,7 @@ async function handleGet(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
@@ -118,8 +120,9 @@ async function handleGet(request: NextRequest) {
 
   // Recent searches
   if (type === 'recent') {
-    const rows = await db.query<RecentSearchRow>('select * from get_recent_searches($1, $2)', [
+    const rows = await db.query<RecentSearchRow>('select * from get_recent_searches($1, $2, $3)', [
       userId,
+      organizationId,
       limit,
     ]);
     return NextResponse.json({ searches: rows });
@@ -132,22 +135,21 @@ async function handleGet(request: NextRequest) {
     const days = parseInt(url.searchParams.get('days') ?? '7', 10);
     try {
       const rows = await db.query<PopularSearchRow>(
-        'select * from get_popular_searches($1, $2, $3)',
-        [userId, limit, days],
+        'select * from get_popular_searches($1, $2, $3, $4)',
+        [userId, organizationId, limit, days],
       );
       return NextResponse.json({ searches: rows });
     } catch (error) {
-      // The user-scoped 3-arg get_popular_searches(text, int, int) lands with
-      // migration 0045. On an environment where 0045 hasn't been applied, the
-      // old 2-arg overload is the only one present and Postgres raises
-      // undefined_function (42883) for the 3-arg call. Popular searches is a
+      // The workspace-scoped overload lands with migration 0110. On an
+      // environment where it has not been applied, Postgres raises
+      // undefined_function (42883). Popular searches is a
       // best-effort pre-fill for the search modal — degrade to an empty list
       // instead of 500-ing the whole modal open. Mirrors the
       // PG_UNDEFINED_COLUMN migration-lag fallback in /api/projects/[id] (PUT).
       // Any other DB error still propagates so real bugs are not masked.
       if ((error as { code?: string } | null)?.code === PG_UNDEFINED_FUNCTION) {
         logger.warn(
-          '[search] get_popular_searches unavailable (migration 0045 not applied?); returning empty list',
+          '[search] workspace-scoped get_popular_searches unavailable (migration 0110 not applied?); returning empty list',
         );
         return NextResponse.json({ searches: [] });
       }
@@ -158,16 +160,19 @@ async function handleGet(request: NextRequest) {
   // Search suggestions
   if (type === 'suggestions') {
     if (q.trim().length < 2) return NextResponse.json({ suggestions: [] });
-    const rows = await db.query<SuggestionRow>('select * from get_search_suggestions($1, $2, $3)', [
-      userId,
-      q,
-      limit,
-    ]);
+    const rows = await db.query<SuggestionRow>(
+      'select * from get_search_suggestions($1, $2, $3, $4)',
+      [userId, organizationId, q, limit],
+    );
     return NextResponse.json({ suggestions: rows });
   }
 
   // Full search (default)
   if (!q.trim()) throw createError.validation('q query param required for search');
+
+  // This route uses the privileged adapter because the search RPCs predate the
+  // RLS surface. The durable workspace resolved above is bound to every query;
+  // a client-supplied org is never an authorization input here.
 
   const includeArchived = url.searchParams.get('includeArchived') === 'true';
   const role = url.searchParams.get('role') as 'user' | 'assistant' | 'system' | null;
@@ -175,8 +180,12 @@ async function handleGet(request: NextRequest) {
   const endDate = url.searchParams.get('endDate');
 
   // Search sessions by title
-  const sessionParams: unknown[] = [userId, `%${q}%`];
-  const sessionClauses: string[] = ['user_id = $1', 'title ilike $2'];
+  const sessionParams: unknown[] = [userId, `%${q}%`, organizationId];
+  const sessionClauses: string[] = [
+    'user_id = $1',
+    'title ilike $2',
+    'organization_id is not distinct from $3::uuid',
+  ];
   if (!includeArchived) sessionClauses.push('deleted_at is null');
   if (startDate) {
     sessionClauses.push(`created_at >= $${sessionParams.length + 1}`);
@@ -206,8 +215,12 @@ async function handleGet(request: NextRequest) {
   // `/chat/${sessionId}`, which would 404 for a project id. Wiring a
   // dedicated project result card that navigates to `/chat/projects/${id}` is a
   // follow-up; this keeps the addition purely additive and non-breaking.
-  const projectParams: unknown[] = [userId, `%${q}%`];
-  const projectClauses: string[] = ['user_id = $1', '(name ilike $2 or description ilike $2)'];
+  const projectParams: unknown[] = [userId, `%${q}%`, organizationId];
+  const projectClauses: string[] = [
+    'user_id = $1',
+    '(name ilike $2 or description ilike $2)',
+    'organization_id is not distinct from $3::uuid',
+  ];
   if (!includeArchived) projectClauses.push('deleted_at is null');
   if (startDate) {
     projectClauses.push(`created_at >= $${projectParams.length + 1}`);
@@ -230,10 +243,11 @@ async function handleGet(request: NextRequest) {
   // Search the user's cataloged files (media_assets — the Library) by display
   // filename or generation prompt. Owner-scoped, soft-delete-aware. Kept in a
   // separate `files` array because file results navigate to /library, not /chat.
-  const fileParams: unknown[] = [userId, `%${q}%`];
+  const fileParams: unknown[] = [userId, `%${q}%`, organizationId];
   const fileClauses: string[] = [
     'user_id = $1',
     "(coalesce(metadata->>'filename','') ilike $2 or coalesce(prompt,'') ilike $2)",
+    'organization_id is not distinct from $3::uuid',
     'deleted_at is null',
   ];
   if (startDate) {
@@ -258,11 +272,15 @@ async function handleGet(request: NextRequest) {
   // to select the caller's conversation ids in a separate unbounded query and
   // bind them all back as a uuid[] — ~180 KB of parameters at 5,000
   // conversations, for a restriction the join already applies.
-  const msgParams: unknown[] = [userId, `%${q}%`];
+  const msgParams: unknown[] = [userId, `%${q}%`, organizationId];
   // Every clause is table-qualified: web_messages and web_conversations both
   // have created_at, so an unqualified date filter is an ambiguous reference
   // and Postgres rejects the whole query.
-  const msgClauses: string[] = ['c.user_id = $1', 'm.content ilike $2'];
+  const msgClauses: string[] = [
+    'c.user_id = $1',
+    'm.content ilike $2',
+    'c.organization_id is not distinct from $3::uuid',
+  ];
   // Both tombstones are honoured, on the same includeArchived switch as the
   // session and project queries above: /api/chat/sync soft-deletes a message by
   // setting m.deleted_at while preserving its content, so filtering only on the
@@ -387,7 +405,12 @@ async function handleGet(request: NextRequest) {
 
   // Fire-and-forget search tracking
   if (q.trim()) {
-    db.query('select track_search($1, $2, $3)', [userId, q, stats.totalResults]).catch(() => {
+    db.query('select track_search($1, $2, $3, $4)', [
+      userId,
+      organizationId,
+      q,
+      stats.totalResults,
+    ]).catch(() => {
       // Non-critical - swallow errors silently
     });
   }
@@ -409,6 +432,7 @@ async function handlePost(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const body = await readJsonBody(request);
   const parsed = TrackSearchSchema.safeParse(body);
@@ -416,7 +440,12 @@ async function handlePost(request: NextRequest) {
 
   const { query, resultCount } = parsed.data;
 
-  await db.query('select track_search($1, $2, $3)', [userId, query, resultCount]);
+  await db.query('select track_search($1, $2, $3, $4)', [
+    userId,
+    organizationId,
+    query,
+    resultCount,
+  ]);
 
   return NextResponse.json({ tracked: true });
 }
@@ -430,10 +459,11 @@ async function handleDelete(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [result] = await db.query<{ clear_search_history: number }>(
-    'select clear_search_history($1)',
-    [userId],
+    'select clear_search_history($1, $2)',
+    [userId, organizationId],
   );
 
   return NextResponse.json({ cleared: result?.clear_search_history ?? 0 });

@@ -1,6 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersonalizationPreferences } from '../../stores/settingsStore';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 const invokeMock = vi.fn();
 const listenHandlers = new Map<string, (event: { payload: unknown }) => void>();
 const listenMock = vi.fn(async (event: string, handler: (event: { payload: unknown }) => void) => {
@@ -167,7 +169,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
     });
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_create_conversation', {
@@ -184,7 +186,7 @@ describe('TauriRuntime', () => {
         content: 'Hello from runtime',
         userId: 'user-123',
         conversationId: 42,
-        modelOverride: 'claude-sonnet-5',
+        modelOverride: FIXTURE_MODEL_ID,
         stream: true,
         frontendMessageId: expect.any(String),
       }),
@@ -207,7 +209,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
     });
 
     const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
@@ -223,7 +225,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
     });
 
     const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
@@ -240,7 +242,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from a project chat', {
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
     });
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_create_conversation', {
@@ -313,7 +315,7 @@ describe('TauriRuntime', () => {
 
     await runtime.sendMessage('byok-fork', 'Use my OpenAI key', {
       provider: 'openai',
-      model: 'gpt-5.6-sol',
+      model: FIXTURE_MODEL_ID,
     });
 
     expect(invokeMock).toHaveBeenCalledWith('chat_send_message', {
@@ -367,7 +369,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'tinyllama:latest',
+      model: 'fixture-local-model:current',
       provider: 'ollama',
       agentMode: 'ask',
     });
@@ -1053,7 +1055,7 @@ describe('TauriRuntime', () => {
     });
 
     await runtime.sendMessage('frontend-conversation-id', 'What does the file say?', {
-      model: 'tinyllama:latest',
+      model: 'fixture-local-model:current',
       provider: 'ollama',
       attachments: [textFile, imageFile],
     });
@@ -1086,7 +1088,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'tinyllama:latest',
+      model: 'fixture-local-model:current',
     });
 
     const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');

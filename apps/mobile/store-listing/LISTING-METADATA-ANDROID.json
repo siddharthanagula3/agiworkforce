@@ -84,7 +84,7 @@
     "price": "Free",
     "in_app_purchases": false
   },
-  "release_notes_v1_2_0": "AGI 1.2 — Cloud public alpha.\n\n• AGI Cloud is now open to any signed-in user — no invite or waitlist\n• Cloud chat and web search on the free tier; image generation on Pro and above\n• On-device AI chat still works fully offline, no account needed\n• Default model: Qwen3-4B (Apache 2.0, ~2 GB)\n• On-device voice transcription\n• DPDP Act 2023 and EU AI Act Article 50 compliant\n\nEmail support@agiworkforce.com — we read everything.",
+  "release_notes_v1_2_0": "AGI 1.2 — Cloud public alpha.\n\n• AGI Cloud is now open to any signed-in user — no invite or waitlist\n• Cloud chat and web search on the free tier; image generation on Pro and above\n• On-device AI chat still works fully offline, no account needed\n• Catalog-selected on-device model downloads once and runs locally\n• On-device voice transcription\n• DPDP Act 2023 and EU AI Act Article 50 compliant\n\nEmail support@agiworkforce.com — we read everything.",
   "play_console_review_notes_file": "apps/mobile/store-listing/REVIEWER-NOTES-ANDROID.md",
   "feature_graphic": {
     "required": true,

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE,
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+  MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationBranchesResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -25,7 +27,7 @@ import {
 const conversation = {
   id: '0190a000-0000-7000-8000-0000000000aa',
   title: 'Cloud chat',
-  model: 'auto',
+  model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   project_id: 'project-1',
   pinned: true,
   starred: true,
@@ -143,11 +145,26 @@ describe('managed-cloud conversation wire contract', () => {
     ).toBe(false);
   });
 
+  it('reports the interactive-card count guard before the total metadata size guard', () => {
+    const parsed = ManagedCloudMessageWireSchema.safeParse({
+      ...message,
+      metadata: {
+        interactiveCards: Array.from({ length: INTERACTIVE_CARDS_MAX_PER_MESSAGE + 1 }, () => ({})),
+        oversizedLaterField: 'x'.repeat(MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH),
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.message).toMatch(/too many interactive cards/i);
+    }
+  });
+
   it('normalizes snake_case rows once for Mobile, Desktop, and Web adapters', () => {
     expect(normalizeManagedCloudConversation(conversation)).toEqual({
       id: conversation.id,
       title: 'Cloud chat',
-      model: 'auto',
+      model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
       projectId: 'project-1',
       pinned: true,
       starred: true,
@@ -173,11 +190,17 @@ describe('managed-cloud conversation wire contract', () => {
   });
 
   it('keeps create/update/message request shapes aligned with the routes', () => {
+    expect(ManagedCloudCreateConversationRequestSchema.parse({}).model).toBe(
+      MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
+    );
+    expect(ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello' }).model).toBe(
+      MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
+    );
     expect(
       ManagedCloudCreateConversationRequestSchema.parse({
         id: conversation.id,
         title: 'Cloud chat',
-        model: 'auto',
+        model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
         projectId: null,
         isTemporary: true,
       }),

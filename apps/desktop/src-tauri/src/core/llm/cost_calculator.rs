@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 
-use crate::core::llm::models_config::{ModelEntry, PricingWindowEntry};
+use crate::core::llm::models_config::{LongContextPricing, ModelEntry, PricingWindowEntry};
 use crate::core::llm::Provider;
 
 /// Anthropic's published cache-WRITE surcharge, applied only when the catalog
@@ -26,12 +26,19 @@ struct Pricing {
     cache_write_multiplier: Option<f64>,
     /// Absolute per-million price of a cache WRITE, from the catalog's
     /// `cached_write`. Preferred over the multiplier; `None` when the model
-    /// declares no write price (pre-GPT-5.6 OpenAI models, whose writes are
-    /// free — i.e. billed once at the plain input rate and nothing more).
+    /// declares no write price (for inclusive prompt accounting, an unpriced
+    /// write is billed once at the plain input rate and nothing more).
     cache_write_per_million: Option<f64>,
     /// Dated pricing windows from the catalog's `pricingSchedule`. Empty for
     /// the usual single-price model.
     schedule: Vec<PricingWindowEntry>,
+    /// Ordered request-wide token-pricing bands from the catalog. The greatest
+    /// threshold strictly below a request wins.
+    input_token_pricing_tiers: Vec<LongContextPricing>,
+    /// Whether cache read/write counters are additional to `prompt_tokens`.
+    /// This is derived from the catalog model's origin provider so a model
+    /// proxied through Managed Cloud preserves its provider accounting shape.
+    cache_tokens_disjoint_from_input: bool,
 }
 
 impl Pricing {
@@ -55,7 +62,31 @@ impl Pricing {
             cache_write_multiplier: self.cache_write_multiplier,
             cache_write_per_million: window.cached_write.or(self.cache_write_per_million),
             schedule: Vec::new(),
+            input_token_pricing_tiers: self.input_token_pricing_tiers.clone(),
+            cache_tokens_disjoint_from_input: self.cache_tokens_disjoint_from_input,
         }
+    }
+
+    /// Resolve date pricing, then apply a strict long-context threshold to the
+    /// whole request. Exactly the threshold remains base-priced.
+    fn for_request(&self, as_of: NaiveDate, input_tokens: u64) -> Pricing {
+        let mut pricing = self.as_of(as_of);
+        let Some(tier) = pricing
+            .input_token_pricing_tiers
+            .iter()
+            .filter(|tier| input_tokens > tier.threshold_tokens)
+            .max_by_key(|tier| tier.threshold_tokens)
+            .cloned()
+        else {
+            return pricing;
+        };
+
+        pricing.input_per_million = tier.input_cost;
+        pricing.output_per_million = tier.output_cost;
+        pricing.cache_read_per_million = tier.cached_input.or(pricing.cache_read_per_million);
+        pricing.cache_write_per_million = tier.cached_write.or(pricing.cache_write_per_million);
+        pricing.input_token_pricing_tiers.clear();
+        pricing
     }
 
     fn cost(&self, input_tokens: u32, output_tokens: u32) -> f64 {
@@ -87,11 +118,11 @@ fn window_covers(window: &PricingWindowEntry, as_of: NaiveDate) -> bool {
 /// Media type for per-unit pricing (images and video).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MediaType {
-    /// Standard-quality image generation (e.g., GPT Image 2, Imagen 4)
+    /// Standard-quality image generation through a catalog-selected image model.
     ImageStandard,
-    /// High-quality / HD image generation (e.g., Imagen 4 Ultra, GPT Image 2)
+    /// High-quality / HD image generation through a catalog-selected image model.
     ImageHD,
-    /// Video generation priced per second (e.g., Runway, Veo 3)
+    /// Video generation priced per second through a catalog-selected provider.
     VideoPerSecond,
 }
 
@@ -109,6 +140,11 @@ struct MediaPricing {
 /// Catalog entry -> pricing record, carrying the model's dated schedule so the
 /// per-request date can select the window that applies.
 fn catalog_pricing(model: &ModelEntry) -> Pricing {
+    let input_token_pricing_tiers = if model.input_token_pricing_tiers.is_empty() {
+        model.long_context.iter().cloned().collect()
+    } else {
+        model.input_token_pricing_tiers.clone()
+    };
     Pricing {
         input_per_million: model.input_cost,
         output_per_million: model.output_cost,
@@ -119,9 +155,13 @@ fn catalog_pricing(model: &ModelEntry) -> Pricing {
             .and_then(|policy| policy.write_multiplier),
         cache_write_per_million: model.cached_write,
         schedule: model.pricing_schedule.clone(),
+        input_token_pricing_tiers,
+        cache_tokens_disjoint_from_input: Provider::from_string(&model.provider)
+            == Some(Provider::Anthropic),
     }
 }
 
+#[derive(Clone)]
 pub struct CostCalculator {
     pricing: HashMap<(Provider, String), Pricing>,
     provider_defaults: HashMap<Provider, Pricing>,
@@ -172,6 +212,8 @@ impl CostCalculator {
                             .default_pricing
                             .cache_write_per_million,
                         schedule: Vec::new(),
+                        input_token_pricing_tiers: Vec::new(),
+                        cache_tokens_disjoint_from_input: provider == Provider::Anthropic,
                     },
                 );
             }
@@ -195,7 +237,7 @@ impl CostCalculator {
                 cost_per_unit: 0.08,
             },
         );
-        // Google image generation (Imagen 4)
+        // Google catalog-selected image generation
         media_pricing.insert(
             (Provider::Google, MediaType::ImageStandard),
             MediaPricing {
@@ -208,7 +250,7 @@ impl CostCalculator {
                 cost_per_unit: 0.08,
             },
         );
-        // Google Veo 3 video (~$0.08 per second)
+        // Google catalog-selected video generation (~$0.08 per second)
         media_pricing.insert(
             (Provider::Google, MediaType::VideoPerSecond),
             MediaPricing {
@@ -226,9 +268,9 @@ impl CostCalculator {
     }
 
     /// Providers whose pricing entries ManagedCloud may proxy through.
-    /// ManagedCloud routes to models like `gpt-5.6-luna` (OpenAI), `deepseek-v4-flash`
-    /// (DeepSeek), current Gemini models, etc. -- instead of duplicating every
-    /// pricing entry, we look up the model under its original provider.
+    /// ManagedCloud routes to catalog models owned by several origin providers.
+    /// Instead of duplicating every pricing entry, look the model up under its
+    /// original provider.
     const MANAGED_CLOUD_ORIGIN_PROVIDERS: &'static [Provider] = &[
         Provider::OpenAI,
         Provider::Anthropic,
@@ -292,7 +334,7 @@ impl CostCalculator {
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
-            .map(|pricing| pricing.as_of(as_of));
+            .map(|pricing| pricing.for_request(as_of, u64::from(input_tokens)));
 
         match pricing {
             Some(p) => p.cost(input_tokens, output_tokens),
@@ -328,7 +370,11 @@ impl CostCalculator {
         cache_creation_tokens: u32,
         as_of: NaiveDate,
     ) -> f64 {
-        if prompt_tokens == 0 && completion_tokens == 0 {
+        if prompt_tokens == 0
+            && completion_tokens == 0
+            && cache_read_tokens == 0
+            && cache_creation_tokens == 0
+        {
             return 0.0;
         }
 
@@ -344,10 +390,9 @@ impl CostCalculator {
                     self.model_pricing(provider, canonical.as_str())
                 }
             })
-            .or_else(|| self.provider_defaults.get(&provider))
-            .map(|pricing| pricing.as_of(as_of));
+            .or_else(|| self.provider_defaults.get(&provider));
 
-        let pricing = match pricing {
+        let base_pricing = match pricing {
             Some(p) => p,
             None => {
                 tracing::warn!(
@@ -364,36 +409,40 @@ impl CostCalculator {
             }
         };
 
+        // Token-pricing thresholds apply to the complete request input. For
+        // disjoint accounting, cache buckets are additional to prompt tokens;
+        // for inclusive accounting, they are already subsets of the prompt.
+        let tier_input_tokens = if base_pricing.cache_tokens_disjoint_from_input {
+            u64::from(prompt_tokens)
+                .saturating_add(u64::from(cache_read_tokens))
+                .saturating_add(u64::from(cache_creation_tokens))
+        } else {
+            u64::from(prompt_tokens)
+        };
+        let pricing = base_pricing.for_request(as_of, tier_input_tokens);
+
         let input_rate = pricing.input_per_million / 1_000_000.0;
         let output_rate = pricing.output_per_million / 1_000_000.0;
 
         // Cache rates come from the CATALOG, not from a hardcoded multiplier.
-        // This previously assumed 0.1x for Anthropic and 0.5x for OpenAI/Managed
-        // Cloud. The catalog prices a cache read at 0.1x input for both
-        // gpt-5.6-sol (5 -> 0.5) and gpt-5.6-luna (1 -> 0.1), so managed-cloud
-        // cache reads were being costed at five times their real price. Falling
-        // back to the full input rate when the catalog prices no cache read is
-        // deliberate: over-costing a cached token is recoverable, inventing a
-        // discount the provider does not give is not. This branch keys on the
-        // ABSENCE of a catalog cache-read price, not on any caching capability
-        // flag, so it covers every unpriced model — `minimax-m3` (caching
-        // declared, no read price) and `grok-4.5` (no read price, caching not
-        // declared) alike. The web tracker and the gateway now fall back the
-        // same way, so all three bill that request identically.
+        // Earlier code assumed provider-wide cache multipliers. Catalog rates
+        // differ by model, so that could overcharge a managed-cloud request.
+        // Falling back to the full input rate when the catalog prices no cache
+        // read is deliberate: over-costing a cached token is recoverable,
+        // inventing a discount the provider does not give is not. This branch
+        // keys on the ABSENCE of a catalog cache-read price, not a provider or
+        // model name. The web tracker and gateway use the same rule.
         let cache_read_rate = pricing
             .cache_read_per_million
             .map(|per_million| per_million / 1_000_000.0)
             .unwrap_or(input_rate);
         // Cache-WRITE rate, in preference order: the catalog's published
         // absolute price (`cached_write`), then a declared multiplier on the
-        // input rate, then a provider-shaped fallback. Anthropic bills a written
-        // token ONLY as a write (its cache counters are disjoint from input), so
-        // an undeclared price there falls back to the published surcharge rather
-        // than to a free write. Everywhere else the written token stays inside
-        // the prompt and the input rate means "billed once, no surcharge" —
-        // the free-cache-write case every pre-GPT-5.6 OpenAI model is in. The
-        // GPT-5.6 family DOES publish a write price (1.25x uncached input on
-        // both automatic and explicit breakpoints), so it is billed for writes.
+        // input rate, then an accounting-shape fallback. A disjoint cache write
+        // exists outside prompt tokens and therefore needs the published
+        // surcharge fallback. An inclusive write is removed from ordinary
+        // prompt input below and re-billed at this absolute rate, so an
+        // undeclared rate falls back to the input rate exactly once.
         let cache_write_rate = pricing
             .cache_write_per_million
             .map(|per_million| per_million / 1_000_000.0)
@@ -402,47 +451,26 @@ impl CostCalculator {
                     .cache_write_multiplier
                     .map(|multiplier| input_rate * multiplier)
             })
-            .unwrap_or_else(|| match provider {
-                Provider::Anthropic => input_rate * ANTHROPIC_CACHE_WRITE_FALLBACK_MULTIPLIER,
-                _ => input_rate,
+            .unwrap_or_else(|| {
+                if pricing.cache_tokens_disjoint_from_input {
+                    input_rate * ANTHROPIC_CACHE_WRITE_FALLBACK_MULTIPLIER
+                } else {
+                    input_rate
+                }
             });
 
-        match provider {
-            Provider::Anthropic => {
-                let regular_input =
-                    prompt_tokens.saturating_sub(cache_read_tokens + cache_creation_tokens);
-                let input_cost = (regular_input as f64 * input_rate)
-                    + (cache_creation_tokens as f64 * cache_write_rate)
-                    + (cache_read_tokens as f64 * cache_read_rate);
-                let output_cost = completion_tokens as f64 * output_rate;
-                input_cost + output_cost
-            }
-            Provider::OpenAI | Provider::ManagedCloud => {
-                // OpenAI reports prompt_tokens INCLUSIVE of the cache buckets:
-                // cache reads are a SUBSET of the prompt (so they are subtracted
-                // and re-billed at the read rate), and written tokens are
-                // freshly-sent uncached input that stays inside `regular_input`.
-                // A cache WRITE is therefore billed as its input token plus the
-                // SURCHARGE over the input rate — for the GPT-5.6 family that
-                // totals the published 1.25x. A model that declares no write
-                // price has a write rate equal to the input rate, so the
-                // surcharge is exactly zero and its writes stay free.
-                let regular_input = prompt_tokens.saturating_sub(cache_read_tokens);
-                let cache_write_surcharge = (cache_write_rate - input_rate).max(0.0);
-                let input_cost = (regular_input as f64 * input_rate)
-                    + (cache_creation_tokens as f64 * cache_write_surcharge)
-                    + (cache_read_tokens as f64 * cache_read_rate);
-                let output_cost = completion_tokens as f64 * output_rate;
-                input_cost + output_cost
-            }
-            _ => self.calculate(
-                provider,
-                exact_model,
-                prompt_tokens,
-                completion_tokens,
-                as_of,
-            ),
-        }
+        let ordinary_input = if pricing.cache_tokens_disjoint_from_input {
+            prompt_tokens
+        } else {
+            prompt_tokens
+                .saturating_sub(cache_read_tokens)
+                .saturating_sub(cache_creation_tokens)
+        };
+        let input_cost = (ordinary_input as f64 * input_rate)
+            + (cache_creation_tokens as f64 * cache_write_rate)
+            + (cache_read_tokens as f64 * cache_read_rate);
+        let output_cost = completion_tokens as f64 * output_rate;
+        input_cost + output_cost
     }
 
     /// Calculates the cost for a media generation operation.
@@ -509,30 +537,32 @@ mod tests {
     /// bounds are UTC calendar days, inclusive on both sides.
     const FIXTURE_MODEL: &str = "fixture-scheduled-model";
 
-    /// SYNTHETIC model that prices neither side of caching — the state
-    /// `grok-4.5` (tier-allowed, cached tokens reported) and `minimax-m3` are
-    /// both in today. Registered under two providers so
-    /// the same unpriced entry can be billed with disjoint (Anthropic) and
-    /// subset (managed cloud) token accounting.
+    /// SYNTHETIC model that prices neither side of caching. Registered under
+    /// two accounting shapes so the same unpriced entry can be billed with
+    /// disjoint and inclusive cache counters.
     const UNPRICED_CACHE_MODEL: &str = "fixture-unpriced-cache-model";
 
     fn unpriced_cache_calculator() -> CostCalculator {
-        let pricing = Pricing {
+        let inclusive_pricing = Pricing {
             input_per_million: 0.3,
             output_per_million: 1.2,
             cache_read_per_million: None,
             cache_write_multiplier: None,
             cache_write_per_million: None,
             schedule: Vec::new(),
+            input_token_pricing_tiers: Vec::new(),
+            cache_tokens_disjoint_from_input: false,
         };
+        let mut disjoint_pricing = inclusive_pricing.clone();
+        disjoint_pricing.cache_tokens_disjoint_from_input = true;
         let mut map = HashMap::new();
         map.insert(
             (Provider::ManagedCloud, UNPRICED_CACHE_MODEL.to_string()),
-            pricing.clone(),
+            inclusive_pricing,
         );
         map.insert(
             (Provider::Anthropic, UNPRICED_CACHE_MODEL.to_string()),
-            pricing,
+            disjoint_pricing,
         );
         CostCalculator {
             pricing: map,
@@ -572,6 +602,8 @@ mod tests {
                     cached_write_1h: None,
                 },
             ],
+            input_token_pricing_tiers: Vec::new(),
+            cache_tokens_disjoint_from_input: true,
         };
         let mut map = HashMap::new();
         map.insert((Provider::Anthropic, FIXTURE_MODEL.to_string()), pricing);
@@ -582,12 +614,299 @@ mod tests {
         }
     }
 
+    fn tiered_fixture_calculator() -> CostCalculator {
+        let pricing = Pricing {
+            input_per_million: 1.0,
+            output_per_million: 10.0,
+            cache_read_per_million: Some(0.1),
+            cache_write_multiplier: None,
+            cache_write_per_million: Some(1.25),
+            schedule: Vec::new(),
+            input_token_pricing_tiers: vec![
+                LongContextPricing {
+                    threshold_tokens: 128,
+                    input_cost: 2.0,
+                    output_cost: 20.0,
+                    cached_input: Some(0.2),
+                    cached_write: Some(2.5),
+                    cached_write_1h: None,
+                },
+                LongContextPricing {
+                    threshold_tokens: 256,
+                    input_cost: 4.0,
+                    output_cost: 40.0,
+                    cached_input: Some(0.4),
+                    cached_write: Some(5.0),
+                    cached_write_1h: None,
+                },
+            ],
+            cache_tokens_disjoint_from_input: true,
+        };
+        let mut map = HashMap::new();
+        map.insert(
+            (Provider::Anthropic, "fixture-tiered-model".to_string()),
+            pricing,
+        );
+        CostCalculator {
+            pricing: map,
+            provider_defaults: HashMap::new(),
+            media_pricing: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn ordered_token_pricing_tiers_use_strict_greatest_threshold_boundaries() {
+        let calc = tiered_fixture_calculator();
+        let cost = |input_tokens| {
+            calc.calculate(
+                Provider::Anthropic,
+                "fixture-tiered-model",
+                input_tokens,
+                0,
+                standard_window_date(),
+            )
+        };
+        let expected = |tokens: u32, rate: f64| f64::from(tokens) / 1_000_000.0 * rate;
+
+        assert!((cost(128) - expected(128, 1.0)).abs() < 1e-12);
+        assert!((cost(129) - expected(129, 2.0)).abs() < 1e-12);
+        assert!((cost(256) - expected(256, 2.0)).abs() < 1e-12);
+        assert!((cost(257) - expected(257, 4.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn disjoint_cache_tokens_participate_in_token_pricing_thresholds() {
+        let calc = tiered_fixture_calculator();
+        let cost = |cache_read_tokens| {
+            calc.calculate_with_cache(
+                Provider::Anthropic,
+                "fixture-tiered-model",
+                100,
+                0,
+                cache_read_tokens,
+                0,
+                standard_window_date(),
+            )
+        };
+
+        let at_threshold = (100.0 * 1.0 + 28.0 * 0.1) / 1_000_000.0;
+        let above_threshold = (100.0 * 2.0 + 29.0 * 0.2) / 1_000_000.0;
+        assert!((cost(28) - at_threshold).abs() < 1e-12);
+        assert!((cost(29) - above_threshold).abs() < 1e-12);
+    }
+
+    fn catalog_token_pricing_model(
+        provider: Option<Provider>,
+    ) -> (&'static ModelEntry, &'static LongContextPricing, Provider) {
+        let model = super::super::models_config::config()
+            .models
+            .values()
+            .find(|entry| {
+                (!entry.input_token_pricing_tiers.is_empty() || entry.long_context.is_some())
+                    && provider.is_none_or(|expected| entry.provider == expected.as_string())
+            })
+            .expect("catalog must contain a request-tier-priced model");
+        let tier = if model.input_token_pricing_tiers.is_empty() {
+            model.long_context.as_ref()
+        } else {
+            model
+                .input_token_pricing_tiers
+                .iter()
+                .min_by_key(|tier| tier.threshold_tokens)
+        }
+        .expect("filtered model must retain a token-pricing tier");
+        let provider = Provider::from_string(&model.provider)
+            .expect("long-context catalog provider must map to a native provider");
+        (model, tier, provider)
+    }
+
+    fn active_catalog_model(
+        provider: Provider,
+        predicate: impl Fn(&ModelEntry) -> bool,
+    ) -> &'static ModelEntry {
+        super::super::models_config::config()
+            .models
+            .values()
+            .find(|entry| {
+                entry.provider == provider.as_string()
+                    && entry.deprecated != Some(true)
+                    && predicate(entry)
+            })
+            .expect("catalog must contain an active model matching the test capability")
+    }
+
+    fn founder_standard_anthropic_model() -> &'static str {
+        &active_catalog_model(Provider::Anthropic, |entry| {
+            entry.pricing_schedule.is_empty()
+                && entry.input_cost == 3.0
+                && entry.output_cost == 15.0
+                && entry.cached_input == Some(0.3)
+                && entry.cached_write == Some(3.75)
+        })
+        .id
+    }
+
+    /// Pick a prompt size that remains on the catalog's base tier. The exact
+    /// long-context threshold is intentionally base-priced; models without a
+    /// long tier use one million tokens so their per-million rate is direct.
+    fn base_tier_prompt_tokens(model: &ModelEntry) -> u32 {
+        model
+            .input_token_pricing_tiers
+            .iter()
+            .chain(model.long_context.iter())
+            .map(|tier| tier.threshold_tokens)
+            .min()
+            .map(|threshold| {
+                u32::try_from(threshold)
+                    .expect("test catalog threshold must fit the native token counter")
+            })
+            .unwrap_or(1_000_000)
+    }
+
+    #[test]
+    fn long_context_threshold_is_strict_and_switches_the_whole_request() {
+        let calc = CostCalculator::new();
+        let (model, tier, provider) = catalog_token_pricing_model(None);
+        let threshold = u32::try_from(tier.threshold_tokens)
+            .expect("test catalog threshold must fit the native token counter");
+        let output_tokens = 1_000;
+
+        let at_threshold = calc.calculate(
+            provider,
+            &model.id,
+            threshold,
+            output_tokens,
+            standard_window_date(),
+        );
+        let base = model.effective_pricing(standard_window_date());
+        let expected_base = (f64::from(threshold) / 1_000_000.0) * base.input_cost
+            + (f64::from(output_tokens) / 1_000_000.0) * base.output_cost;
+        assert!((at_threshold - expected_base).abs() < 1e-12);
+
+        let above = threshold
+            .checked_add(1)
+            .expect("test threshold must allow a boundary token");
+        let above_threshold = calc.calculate(
+            provider,
+            &model.id,
+            above,
+            output_tokens,
+            standard_window_date(),
+        );
+        let expected_long = (f64::from(above) / 1_000_000.0) * tier.input_cost
+            + (f64::from(output_tokens) / 1_000_000.0) * tier.output_cost;
+        assert!((above_threshold - expected_long).abs() < 1e-12);
+        assert_ne!(above_threshold, expected_base);
+    }
+
+    #[test]
+    fn long_context_cache_rates_are_catalog_derived() {
+        let calc = CostCalculator::new();
+        let (model, tier, provider) = catalog_token_pricing_model(Some(Provider::OpenAI));
+        let prompt_tokens = u32::try_from(tier.threshold_tokens)
+            .expect("test catalog threshold must fit the native token counter")
+            .checked_add(1)
+            .expect("test threshold must allow a boundary token");
+        let completion_tokens = 1_000;
+        let cache_read_tokens = 10_000;
+        let cache_creation_tokens = 5_000;
+        let input_rate = tier.input_cost / 1_000_000.0;
+        let output_rate = tier.output_cost / 1_000_000.0;
+        let cache_read_rate = tier
+            .cached_input
+            .expect("selected long-context tier must price cache reads")
+            / 1_000_000.0;
+        let cache_write_rate = tier
+            .cached_write
+            .expect("selected long-context tier must price cache writes")
+            / 1_000_000.0;
+        let regular_input = prompt_tokens
+            .saturating_sub(cache_read_tokens)
+            .saturating_sub(cache_creation_tokens);
+        let expected = f64::from(regular_input) * input_rate
+            + f64::from(cache_read_tokens) * cache_read_rate
+            + f64::from(cache_creation_tokens) * cache_write_rate
+            + f64::from(completion_tokens) * output_rate;
+
+        let cost = calc.calculate_with_cache(
+            provider,
+            &model.id,
+            prompt_tokens,
+            completion_tokens,
+            cache_read_tokens,
+            cache_creation_tokens,
+            standard_window_date(),
+        );
+        assert!((cost - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn tiered_openai_compatible_cache_rates_are_not_discarded() {
+        // Select a tiered catalog model outside the historical OpenAI native
+        // allowlist. Its adapter still reports inclusive cache subsets, and
+        // those buckets must retain the catalog's tier-specific rates.
+        let calc = CostCalculator::new();
+        let (model, tier, provider) = super::super::models_config::config()
+            .models
+            .values()
+            .find_map(|entry| {
+                let provider = Provider::from_string(&entry.provider)?;
+                if matches!(
+                    provider,
+                    Provider::Anthropic | Provider::OpenAI | Provider::ManagedCloud
+                ) {
+                    return None;
+                }
+                let tier = entry
+                    .input_token_pricing_tiers
+                    .iter()
+                    .min_by_key(|tier| tier.threshold_tokens)
+                    .or(entry.long_context.as_ref())?;
+                (tier.cached_input.is_some() && tier.cached_write.is_some())
+                    .then_some((entry, tier, provider))
+            })
+            .expect("catalog must contain a tiered inclusive-cache model outside OpenAI");
+        let prompt_tokens = u32::try_from(tier.threshold_tokens)
+            .expect("test catalog threshold must fit the native token counter")
+            .checked_add(1)
+            .expect("test threshold must allow a boundary token");
+        let cache_read_tokens = 10_000;
+        let cache_creation_tokens = 5_000;
+        let ordinary_input = prompt_tokens
+            .saturating_sub(cache_read_tokens)
+            .saturating_sub(cache_creation_tokens);
+        let expected = (f64::from(ordinary_input) * tier.input_cost
+            + f64::from(cache_read_tokens)
+                * tier
+                    .cached_input
+                    .expect("selected tier must price cache reads")
+            + f64::from(cache_creation_tokens)
+                * tier
+                    .cached_write
+                    .expect("selected tier must price cache writes"))
+            / 1_000_000.0;
+
+        let cost = calc.calculate_with_cache(
+            provider,
+            &model.id,
+            prompt_tokens,
+            0,
+            cache_read_tokens,
+            cache_creation_tokens,
+            standard_window_date(),
+        );
+        assert!((cost - expected).abs() < 1e-12);
+    }
+
     #[test]
     fn calculate_returns_positive_for_known_model() {
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::Anthropic, |entry| {
+            entry.input_cost > 0.0 && entry.output_cost > 0.0
+        });
         let cost = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             1000,
             500,
             standard_window_date(),
@@ -602,13 +921,10 @@ mod tests {
     #[test]
     fn calculate_returns_zero_for_zero_tokens() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(
-            Provider::OpenAI,
-            "gpt-5.6-luna",
-            0,
-            0,
-            standard_window_date(),
-        );
+        let model = active_catalog_model(Provider::OpenAI, |entry| {
+            !entry.input_token_pricing_tiers.is_empty() || entry.long_context.is_some()
+        });
+        let cost = calc.calculate(Provider::OpenAI, &model.id, 0, 0, standard_window_date());
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "zero tokens must produce zero cost"
@@ -685,18 +1001,23 @@ mod tests {
     #[test]
     fn calculate_with_cache_anthropic_applies_cache_discount() {
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::Anthropic, |entry| {
+            entry
+                .cached_input
+                .is_some_and(|rate| rate < entry.input_cost)
+        });
         let cost_no_cache = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             1000,
             500,
             standard_window_date(),
         );
-        // With cache: 500 cache_read tokens billed at 0.1x should be cheaper
+        // Same total input with half moved to a disjoint cache-read bucket.
         let cost_cached = calc.calculate_with_cache(
             Provider::Anthropic,
-            "claude-opus-5",
-            1000,
+            &model.id,
+            500,
             500,
             500, // cache_read_tokens
             0,   // cache_creation_tokens
@@ -712,34 +1033,42 @@ mod tests {
 
     #[test]
     fn cache_read_rate_comes_from_the_catalog_not_a_hardcoded_multiplier() {
-        // Regression pin. This path used to hardcode 0.5x the input rate for
-        // OpenAI and ManagedCloud, while models.json prices gpt-5.6-luna at
-        // inputCost 0.2 and cached_input 0.02 — i.e. 0.1x. Managed-cloud cache
-        // reads were therefore costed at FIVE TIMES their real price. Asserting
-        // the exact catalog-derived figure makes reinstating any fixed
-        // multiplier fail.
+        // Regression pin. This path used to hardcode a provider-wide cache-read
+        // multiplier. Select a catalog model whose rate disproves that multiplier
+        // so reinstating it fails without pinning a concrete model or price.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::OpenAI, |entry| {
+            entry
+                .cached_input
+                .is_some_and(|rate| (rate - entry.input_cost * 0.5).abs() > 1e-9)
+        });
+        let prompt_tokens = base_tier_prompt_tokens(model);
+        let pricing = model.effective_pricing(standard_window_date());
+        let expected_rate = pricing
+            .cached_input
+            .expect("selected catalog model must price cache reads");
 
-        // 1M cache-read tokens, nothing else, so the result IS the cache-read rate.
+        // Every prompt token is a cache read; the request remains base-tier.
         let cost = calc.calculate_with_cache(
             Provider::ManagedCloud,
-            "gpt-5.6-luna",
-            1_000_000, // prompt_tokens, all of which are cache reads
-            0,         // completion_tokens
-            1_000_000, // cache_read_tokens
-            0,         // cache_creation_tokens
+            &model.id,
+            prompt_tokens,
+            0,
+            prompt_tokens,
+            0,
             standard_window_date(),
         );
 
-        // catalog: cached_input = 0.02 per million (post-2026-07-30 price cut).
-        let expected = 0.02_f64;
+        let token_scale = f64::from(prompt_tokens) / 1_000_000.0;
+        let expected = token_scale * expected_rate;
+        let stale_multiplier_cost = token_scale * pricing.input_cost * 0.5;
         assert!(
             (cost - expected).abs() < 1e-9,
-            "cache-read cost {} should equal the catalog cached_input {} — a hardcoded \
-             0.5x multiplier would give {}",
+            "cache-read cost {} should equal the catalog-derived {} — the stale \
+             provider multiplier would give {}",
             cost,
             expected,
-            0.1
+            stale_multiplier_cost
         );
     }
 
@@ -780,7 +1109,7 @@ mod tests {
         let cost = calc.calculate_with_cache(
             Provider::Anthropic,
             UNPRICED_CACHE_MODEL,
-            1_000_000, // prompt_tokens, every one of them written to the cache
+            0,         // ordinary prompt tokens; cache writes are disjoint
             0,         // completion_tokens
             0,         // cache_read_tokens
             1_000_000, // cache_creation_tokens
@@ -797,17 +1126,20 @@ mod tests {
     #[test]
     fn managed_cloud_looks_up_origin_provider_pricing() {
         let calc = CostCalculator::new();
-        // ManagedCloud should find gpt-5.6-luna pricing via OpenAI origin
+        let model = active_catalog_model(Provider::OpenAI, |entry| {
+            !entry.input_token_pricing_tiers.is_empty() || entry.long_context.is_some()
+        });
+        // ManagedCloud should find the selected model's pricing via its origin.
         let cost = calc.calculate(
             Provider::ManagedCloud,
-            "gpt-5.6-luna",
+            &model.id,
             1_000_000,
             1_000_000,
             standard_window_date(),
         );
         let direct_cost = calc.calculate(
             Provider::OpenAI,
-            "gpt-5.6-luna",
+            &model.id,
             1_000_000,
             1_000_000,
             standard_window_date(),
@@ -915,13 +1247,14 @@ mod tests {
     fn dated_pricing_covers_every_cache_rate_not_just_input_and_output() {
         // The first window prices cache reads at $0.2/M and 5m cache writes at
         // $2.5/M; the second inherits $0.3/M and $3.75/M from the top-level
-        // fields. Anthropic reports cache tokens separately, so 1M of each
-        // isolates the two cache rates.
+        // fields. Disjoint cache accounting can report no ordinary prompt or
+        // output tokens, so 1M of each cache bucket isolates the two rates and
+        // proves that a cache-only usage record is not discarded.
         let calc = scheduled_fixture_calculator();
         let first = calc.calculate_with_cache(
             Provider::Anthropic,
             FIXTURE_MODEL,
-            2_000_000, // prompt tokens, all of them cache reads/writes
+            0, // ordinary prompt tokens; cache buckets are disjoint
             0,
             1_000_000, // cache_read_tokens
             1_000_000, // cache_creation_tokens
@@ -930,7 +1263,7 @@ mod tests {
         let second = calc.calculate_with_cache(
             Provider::Anthropic,
             FIXTURE_MODEL,
-            2_000_000,
+            0,
             0,
             1_000_000,
             1_000_000,
@@ -957,14 +1290,9 @@ mod tests {
         // verificationLog, never a product price. Fixed dates on both sides of
         // that retired 2026-09-01 boundary.
         let calc = CostCalculator::new();
+        let model = founder_standard_anthropic_model();
         for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
-            let cost = calc.calculate(
-                Provider::Anthropic,
-                "claude-sonnet-5",
-                1_000_000,
-                1_000_000,
-                date,
-            );
+            let cost = calc.calculate(Provider::Anthropic, model, 1_000_000, 1_000_000, date);
             assert!(
                 (cost - 18.0).abs() < 1e-9,
                 "Sonnet 5 must bill the standard $18.00 for 1M+1M on {}, got ${}",
@@ -974,8 +1302,8 @@ mod tests {
 
             let cached = calc.calculate_with_cache(
                 Provider::Anthropic,
-                "claude-sonnet-5",
-                2_000_000,
+                model,
+                0, // ordinary prompt tokens; cache buckets are disjoint
                 0,
                 1_000_000, // cache_read_tokens  @ $0.30/M
                 1_000_000, // cache_creation_tokens @ $3.75/M
@@ -995,16 +1323,19 @@ mod tests {
         // Scheduleless models must be date-invariant, which is what keeps every
         // other test in this file independent of the calendar.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::Anthropic, |entry| {
+            entry.pricing_schedule.is_empty()
+        });
         let early = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             1_000_000,
             1_000_000,
             NaiveDate::from_ymd_opt(2020, 1, 1).expect("valid date"),
         );
         let late = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             1_000_000,
             1_000_000,
             NaiveDate::from_ymd_opt(2099, 12, 31).expect("valid date"),
@@ -1023,106 +1354,134 @@ mod tests {
 
     #[test]
     fn openai_bills_cache_writes_for_models_that_declare_a_write_price() {
-        // OpenAI started charging for prompt-cache WRITES with the GPT-5.6
-        // family: 1.25x the uncached input rate. gpt-5.6-sol is $5/M input and
-        // declares cached_write $6.25/M. prompt_tokens are INCLUSIVE, so 1M
-        // prompt tokens that are all cache writes cost 1M * $6.25/M = $6.25 —
-        // the plain input charge plus the 0.25x write surcharge. Before this
-        // was wired, cache_creation_tokens were ignored entirely and the same
-        // request billed only $5.00.
+        // Prompt tokens are inclusive for this provider. When every token is a
+        // cache write, the total must therefore be the catalog write rate (the
+        // base input charge plus only the write surcharge), not the input rate.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::OpenAI, |entry| entry.cached_write.is_some());
+        let prompt_tokens = base_tier_prompt_tokens(model);
+        let write_rate = model
+            .effective_pricing(standard_window_date())
+            .cached_write
+            .expect("selected catalog model must price cache writes");
         let cost = calc.calculate_with_cache(
             Provider::OpenAI,
-            "gpt-5.6-sol",
-            1_000_000, // prompt_tokens
-            0,         // completion_tokens
-            0,         // cache_read_tokens
-            1_000_000, // cache_creation_tokens
+            &model.id,
+            prompt_tokens,
+            0,
+            0,
+            prompt_tokens,
             standard_window_date(),
         );
+        let expected = f64::from(prompt_tokens) / 1_000_000.0 * write_rate;
         assert!(
-            (cost - 6.25).abs() < 1e-9,
-            "1M GPT-5.6 Sol cache-write tokens must bill the catalog $6.25/M, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "cache-write tokens must bill the catalog-derived write rate; expected ${expected}, got ${}",
             cost
         );
     }
 
     #[test]
-    fn managed_cloud_bills_gpt_5_6_cache_writes_through_the_origin_provider() {
-        // gpt-5.6-luna: $0.2/M input, cached_write $0.25/M. Managed Cloud proxies
-        // the origin provider's pricing, so the write surcharge must survive the
-        // origin lookup.
+    fn managed_cloud_bills_catalog_cache_writes_through_the_origin_provider() {
+        // Managed Cloud proxies the origin provider's pricing, so a catalog
+        // write surcharge must survive the origin lookup.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::OpenAI, |entry| entry.cached_write.is_some());
+        let prompt_tokens = base_tier_prompt_tokens(model);
+        let write_rate = model
+            .effective_pricing(standard_window_date())
+            .cached_write
+            .expect("selected catalog model must price cache writes");
         let cost = calc.calculate_with_cache(
             Provider::ManagedCloud,
-            "gpt-5.6-luna",
-            1_000_000,
+            &model.id,
+            prompt_tokens,
             0,
             0,
-            1_000_000,
+            prompt_tokens,
             standard_window_date(),
         );
+        let expected = f64::from(prompt_tokens) / 1_000_000.0 * write_rate;
         assert!(
-            (cost - 0.25).abs() < 1e-9,
-            "1M GPT-5.6 Luna cache-write tokens must bill the catalog $0.25/M, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "managed-cloud cache writes must retain the origin catalog rate; expected ${expected}, got ${}",
             cost
         );
     }
 
     #[test]
-    fn pre_gpt_5_6_openai_models_keep_free_cache_writes() {
-        // gpt-5.4-mini predates the GPT-5.6 write-billing change and declares no
-        // cached_write, so a written token bills exactly once at the $0.75/M
-        // input rate — identical to the same request with no cache activity.
-        // This is the pin that stops a blanket 1.25x surcharge being reinstated.
+    fn managed_cloud_preserves_disjoint_cache_accounting_from_origin_provider() {
         let calc = CostCalculator::new();
-        let with_writes = calc.calculate_with_cache(
-            Provider::OpenAI,
-            "gpt-5.4-mini",
-            1_000_000,
+        let model = active_catalog_model(Provider::Anthropic, |entry| {
+            entry.cached_input.is_some() && entry.cached_write.is_some()
+        });
+        let ordinary_tokens = 10_000;
+        let cache_read_tokens = 4_000;
+        let cache_creation_tokens = 2_000;
+        let pricing = model.effective_pricing(standard_window_date());
+        let expected = (f64::from(ordinary_tokens) * pricing.input_cost
+            + f64::from(cache_read_tokens)
+                * pricing
+                    .cached_input
+                    .expect("selected origin model must price cache reads")
+            + f64::from(cache_creation_tokens)
+                * pricing
+                    .cached_write
+                    .expect("selected origin model must price cache writes"))
+            / 1_000_000.0;
+
+        let cost = calc.calculate_with_cache(
+            Provider::ManagedCloud,
+            &model.id,
+            ordinary_tokens,
             0,
-            0,
-            1_000_000, // cache_creation_tokens
-            standard_window_date(),
-        );
-        let without_writes = calc.calculate(
-            Provider::OpenAI,
-            "gpt-5.4-mini",
-            1_000_000,
-            0,
+            cache_read_tokens,
+            cache_creation_tokens,
             standard_window_date(),
         );
         assert!(
-            (with_writes - 0.75).abs() < 1e-9,
-            "a free cache write must bill the plain input rate ($0.75), got ${}",
-            with_writes
-        );
-        assert!(
-            (with_writes - without_writes).abs() < f64::EPSILON,
-            "an undeclared write price must add nothing: ${} vs ${}",
-            with_writes,
-            without_writes
+            (cost - expected).abs() < 1e-12,
+            "managed-cloud metering must preserve the origin's disjoint cache shape"
         );
     }
 
     #[test]
     fn openai_cache_reads_and_writes_bill_each_prompt_token_exactly_once() {
-        // gpt-5.6-terra: $2/M input, cached_input $0.2/M, cached_write $2.5/M.
-        // A 1M prompt made of 400k cache reads + 200k cache writes + 400k plain
-        // input bills 400k*$2 + 200k*$2.5 + 400k*$0.2 = $0.8 + $0.5 + $0.08.
+        // Build a mixed inclusive prompt from catalog rates. Plain, read, and
+        // write buckets must be mutually exclusive in the resulting charge.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::OpenAI, |entry| {
+            entry.cached_input.is_some() && entry.cached_write.is_some()
+        });
+        let prompt_tokens = base_tier_prompt_tokens(model);
+        let cache_read_tokens = prompt_tokens.saturating_mul(4) / 10;
+        let cache_creation_tokens = prompt_tokens.saturating_mul(2) / 10;
+        let plain_tokens = prompt_tokens
+            .saturating_sub(cache_read_tokens)
+            .saturating_sub(cache_creation_tokens);
+        let pricing = model.effective_pricing(standard_window_date());
+        let expected = (f64::from(plain_tokens) * pricing.input_cost
+            + f64::from(cache_read_tokens)
+                * pricing
+                    .cached_input
+                    .expect("selected catalog model must price cache reads")
+            + f64::from(cache_creation_tokens)
+                * pricing
+                    .cached_write
+                    .expect("selected catalog model must price cache writes"))
+            / 1_000_000.0;
         let cost = calc.calculate_with_cache(
             Provider::OpenAI,
-            "gpt-5.6-terra",
-            1_000_000,
+            &model.id,
+            prompt_tokens,
             0,
-            400_000,
-            200_000,
+            cache_read_tokens,
+            cache_creation_tokens,
             standard_window_date(),
         );
         assert!(
-            (cost - 1.38).abs() < 1e-9,
-            "mixed OpenAI prompt must bill $1.38, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "mixed inclusive prompt must bill each token once; expected ${expected}, got ${}",
             cost
         );
     }
@@ -1132,25 +1491,29 @@ mod tests {
         // Regression pin. This is a SOURCE change, not a price change: Anthropic
         // writes used to be billed as a hardcoded 1.25x multiplier on the input
         // rate and are now billed from the catalog's absolute `cached_write`.
-        // For every Anthropic model whose cached_write equals 1.25x input —
-        // claude-opus-5 is $5/M input with cached_write $6.25/M — that is
-        // behavior-neutral. The pin exists so the rate stays catalog-driven: if
-        // a future Anthropic model prices writes at anything other than 1.25x,
-        // the published number must win over the old multiplier.
+        // The selected model and all expected rates come from the catalog so a
+        // roster or price update requires no consumer-test edit.
         let calc = CostCalculator::new();
+        let model = active_catalog_model(Provider::Anthropic, |entry| {
+            entry.cached_write.is_some() && entry.output_cost > 0.0
+        });
+        let pricing = model.effective_pricing(standard_window_date());
         let cost = calc.calculate_with_cache(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             0, // Anthropic reports cache tokens separately from input_tokens
             1, // keep the request non-empty
             0,
             1_000_000,
             standard_window_date(),
         );
-        let output_rate = 25.0 / 1_000_000.0;
+        let expected = pricing
+            .cached_write
+            .expect("selected catalog model must price cache writes")
+            + pricing.output_cost / 1_000_000.0;
         assert!(
-            (cost - (6.25 + output_rate)).abs() < 1e-9,
-            "1M Opus 5 cache-write tokens must bill the catalog $6.25/M, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "1M cache-write tokens must bill the catalog-derived rate, got ${}",
             cost
         );
     }

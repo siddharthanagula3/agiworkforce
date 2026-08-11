@@ -181,7 +181,8 @@ mod tests {
         let service = EmbeddingService::new_in_memory_degraded().unwrap();
         let generator = service.generator();
         let guard = generator.blocking_lock();
-        assert!(guard.dimensions() > 0);
+        assert_eq!(guard.dimensions(), 0);
+        assert_eq!(guard.model_id(), "embedding:runtime-unresolved");
     }
 }
 

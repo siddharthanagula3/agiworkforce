@@ -26,6 +26,7 @@ import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { WEB_APP_URL } from '../../api/config';
+import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
 import { openExternalUrl } from '../../utils/navigation';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { selectAuthError, useAuthStore } from '../../stores/auth';
@@ -438,7 +439,9 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       <h1 className="text-xl font-semibold tracking-tight text-foreground">Sign in to AGI Cloud</h1>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         {step === 'credentials'
-          ? 'Sign in right here. Local Mode keeps working without an account.'
+          ? supportsLocalAppMode
+            ? 'Sign in right here. Local Mode keeps working without an account.'
+            : 'Sign in right here to continue to AGI Cloud.'
           : step === 'email_code'
             ? 'Enter the code we emailed you.'
             : step === 'second_factor'
@@ -775,14 +778,16 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
             : 'Sign in through your browser instead'}
         </Button>
 
-        <button
-          type="button"
-          onClick={() => setMode('local')}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Use Local Mode
-        </button>
+        {supportsLocalAppMode ? (
+          <button
+            type="button"
+            onClick={() => setMode('local')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Use Local Mode
+          </button>
+        ) : null}
       </div>
     </div>
   );

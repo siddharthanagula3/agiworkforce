@@ -2,8 +2,10 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { SYNTHETIC_CLOUD_MODEL_ID } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
+const mockSelectedModelId = SYNTHETIC_CLOUD_MODEL_ID;
 const mockSetLanguage = jest.fn<
   Promise<{ language: string; directionChanged: boolean } | null>,
   [string]
@@ -75,7 +77,7 @@ jest.mock('../stores/settingsStore', () => ({
 // MMKV/expo-crypto native glue that this suite has no reason to load.
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (state: { selectedModel: string }) => unknown) =>
-    selector({ selectedModel: 'claude-opus-4-5' }),
+    selector({ selectedModel: mockSelectedModelId }),
 }));
 
 jest.mock('../src/features/billing/store', () => ({
@@ -83,7 +85,8 @@ jest.mock('../src/features/billing/store', () => ({
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
-  getShortDisplayName: (id: string) => (id === 'claude-opus-4-5' ? 'Claude Opus 4.5' : 'Not set'),
+  getShortDisplayName: (id: string) =>
+    id === mockSelectedModelId ? 'Fixture Cloud Model' : 'Not set',
 }));
 
 jest.mock('../src/features/settings/common', () => {

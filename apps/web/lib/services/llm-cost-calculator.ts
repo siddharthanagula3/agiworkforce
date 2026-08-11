@@ -4,9 +4,8 @@ import {
   getProviderConfig,
   listCanonicalModels,
   normalizeModelId,
-  resolveEffectiveModelPricing,
+  resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
-import { isPromoExpired } from '@agiworkforce/routing';
 import { logger } from '@/lib/logger';
 
 /**
@@ -20,19 +19,20 @@ import { logger } from '@/lib/logger';
  * Runtime overrides remain supported for emergency pricing patches, but
  * canonical pricing should be changed in the shared catalog.
  *
- * Effective-dated pricing: `getPricing` is date-aware through TWO catalog
- * mechanisms, both keyed off the caller-supplied `now` (never a clock read
+ * Effective pricing: `getPricing` composes THREE catalog mechanisms, keyed off
+ * caller-supplied request facts (never an internal clock read
  * inside the pricing path, so the same inputs always bill the same):
- *  1. `pricingSchedule` — dated windows resolved by
- *     `resolveEffectiveModelPricing` (`@agiworkforce/types`). Bounds are UTC
+ *  1. `pricingSchedule` — dated windows resolved by the shared catalog pricing
+ *     resolver (`@agiworkforce/types`). Bounds are UTC
  *     calendar days, inclusive on both sides, and every rate field moves
  *     together: input, output, cache read, and both cache-write tiers. No
  *     shipped model schedules a price today; the mechanism exists for an
  *     announced PRODUCT price change.
  *  2. `promo_expires_at` + `post_promo_prices` — the older two-phase form,
- *     applied on top via `isPromoExpired` (from `@agiworkforce/routing`, the
- *     same date-boundary logic `effectiveInputPrice`/`effectiveOutputPrice`
- *     use). No model currently sets both.
+ *     applied by that same shared resolver. No model currently sets both.
+ *  3. `inputTokenPricingTiers` — ordered strict input-token thresholds applied
+ *     after the date and promotion layers, so a short-context override can
+ *     never overwrite a provider's published large-request rates.
  * Cache read/write rates come from the catalog when declared; when they are
  * not, `resolveCacheRates` below decides. It is the single definition inside
  * this app; the gateway and the desktop calculator mirror its numbers, and
@@ -122,13 +122,10 @@ export const CACHE_WRITE_FALLBACK_MULTIPLIERS = {
  * over-costing a cached token is recoverable where billing a tenth of the real
  * rate is not. That branch keys on the ABSENCE of a catalog `cached_input`
  * price and NOT on `capabilities.caching` — no billing path checks that
- * capability — so it covers both `minimax-m3` (caching declared, no read
- * price) and models that report cached tokens without declaring caching at
- * all. `grok-4.5` (xai, $2/M input, no `cached_input`, `caching: false`) is the
- * live example: it is in `tierAllowedModels.flagship_additions`, its adapter
- * fills cached-token counts from `prompt_tokens_details.cached_tokens`, and
- * its cache reads bill at $2/M here instead of the $0.20/M a flat 0.1x used to
- * invent.
+ * capability — so it covers both caching-capable models with no read price and
+ * models that report cached tokens without declaring caching at all. Those
+ * cache reads bill at full input price instead of a flat discount the catalog
+ * never published.
  *
  * The write fallback is provider-shaped: with
  * Anthropic-style disjoint accounting the written tokens are billed ONLY as a
@@ -137,8 +134,8 @@ export const CACHE_WRITE_FALLBACK_MULTIPLIERS = {
  * part of the prompt and are subtracted from the billable-input bucket, so an
  * undeclared write rate falls back to the plain input rate — that is exactly
  * "free cache writes" (each token billed once, at the input rate), which is
- * what pre-GPT-5.6 OpenAI models get. The GPT-5.6 family declares
- * `cached_write` (1.25x input) and is billed for it.
+ * what inclusive providers with no write surcharge get. Models that declare
+ * `cached_write` are billed at the catalog-owned rate.
  */
 export function resolveCacheRates(pricing: CacheRateInputs): {
   read: number;
@@ -185,6 +182,20 @@ function normalizeProviderId(provider: string | null | undefined): string | null
 }
 
 export class LLMCostCalculator {
+  private static resolveTierInputTokens(
+    provider: string,
+    model: string,
+    now: Date,
+    promptTokens: number,
+    cacheReadTokens = 0,
+    cacheCreationTokens = 0,
+  ): number {
+    const untieredPricing = this.getPricing(provider, model, now, 0);
+    return untieredPricing.cacheTokensDisjointFromInput
+      ? promptTokens + cacheReadTokens + cacheCreationTokens
+      : promptTokens;
+  }
+
   /**
    * Calculate paid managed usage in whole ledger cents. Non-empty provider
    * work consumes at least one cent so sub-cent calls cannot bypass paid caps.
@@ -223,11 +234,20 @@ export class LLMCostCalculator {
     return Math.ceil(this.calculateCostDollars(provider, model, usage, now) * 1_000_000);
   }
 
-  private static calculateCostDollars(
+  /**
+   * Calculate the unrounded provider cost in dollars.
+   *
+   * Multi-call agent flows must add these exact request costs before applying
+   * the ledger's whole-cent rounding. Calling `calculateCost` for every step
+   * would round each sub-cent request independently, while combining token
+   * counters before this call would incorrectly apply nonlinear input-length
+   * tiers across request boundaries.
+   */
+  static calculateCostDollars(
     provider: string,
     model: string,
     usage: TokenUsage,
-    now: Date,
+    now: Date = new Date(),
   ): number {
     try {
       // Validate inputs
@@ -263,7 +283,20 @@ export class LLMCostCalculator {
       );
       const cacheCreation5mTokens = cacheCreationTokens - cacheCreation1hTokens;
 
-      const pricing = this.getPricing(provider, model, now);
+      // Threshold pricing is based on TOTAL input in one provider request.
+      // Inclusive accounting already reports cache tokens inside promptTokens;
+      // disjoint accounting reports them separately and must add both buckets.
+      // Resolve the accounting shape without a tier first, then price the exact
+      // request total. This remains catalog-driven and adds no model-ID branch.
+      const tierInputTokens = this.resolveTierInputTokens(
+        provider,
+        model,
+        now,
+        promptTokens,
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      const pricing = this.getPricing(provider, model, now, tierInputTokens);
 
       // Split the prompt into billable (full-rate) input vs cached portions so each
       // token bills exactly once at the correct rate. For inclusive-prompt providers
@@ -300,9 +333,47 @@ export class LLMCostCalculator {
    * Used by the prompt-cache analytics path so it reports the same write price
    * the billing path charges.
    */
-  static getCacheWriteCostPerMtok(provider: string, model: string, now: Date = new Date()): number {
+  static getCacheWriteCostPerMtok(
+    provider: string,
+    model: string,
+    now: Date = new Date(),
+    inputTokens = 0,
+    cacheReadTokens = 0,
+    cacheCreationTokens = 0,
+  ): number {
     try {
-      return resolveCacheRates(this.getPricing(provider, model, now)).write5m;
+      const tierInputTokens = this.resolveTierInputTokens(
+        provider,
+        model,
+        now,
+        inputTokens,
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens)).write5m;
+    } catch {
+      return FALLBACK_PRICING.inputCostPer1MTokens;
+    }
+  }
+
+  static getCacheReadCostPerMtok(
+    provider: string,
+    model: string,
+    now: Date = new Date(),
+    inputTokens = 0,
+    cacheReadTokens = 0,
+    cacheCreationTokens = 0,
+  ): number {
+    try {
+      const tierInputTokens = this.resolveTierInputTokens(
+        provider,
+        model,
+        now,
+        inputTokens,
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens)).read;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
@@ -323,9 +394,16 @@ export class LLMCostCalculator {
 
   /**
    * Get pricing for a model
+   * `inputTokens` is TOTAL input in this single provider request (ordinary +
+   * cache read/write buckets when the provider reports those disjointly).
    * Always returns valid pricing (never throws)
    */
-  static getPricing(provider: string, model: string, now: Date = new Date()): ModelPricing {
+  static getPricing(
+    provider: string,
+    model: string,
+    now: Date = new Date(),
+    inputTokens = 0,
+  ): ModelPricing {
     try {
       const canonicalModelId = normalizeModelId(model);
       if (canonicalModelId && runtimePricingOverrides[canonicalModelId]) {
@@ -335,24 +413,13 @@ export class LLMCostCalculator {
       const resolvedModelId = canonicalModelId ?? model;
       const metadata = getModelMetadataById(resolvedModelId);
       if (metadata) {
-        // Once promo_expires_at has passed, bill every rate field -- not
-        // just input/output -- from post_promo_prices. Leaving cached_input/
-        // cached_write on the pre-promo top-level fields would keep
-        // undercharging cache reads/writes after the headline rate already
-        // reverted (the bug this whole method exists to fix).
-        const postPromo =
-          metadata.post_promo_prices && isPromoExpired(resolvedModelId, now)
-            ? metadata.post_promo_prices
-            : undefined;
-        // Dated pricing windows resolve first; the older promo block, when a
-        // model still uses one, is layered on top of the resolved rates.
-        const effective = resolveEffectiveModelPricing(metadata, now);
+        const effective = resolveEffectiveModelPricingForInputTokens(metadata, now, inputTokens);
         return {
-          inputCostPer1MTokens: postPromo?.input ?? effective.inputCost,
-          outputCostPer1MTokens: postPromo?.output ?? effective.outputCost,
-          cachedInputCostPer1MTokens: postPromo?.cached_input ?? effective.cached_input,
-          cachedWriteCostPer1MTokens: postPromo?.cached_write ?? effective.cached_write,
-          cachedWrite1hCostPer1MTokens: postPromo?.cached_write_1h ?? effective.cached_write_1h,
+          inputCostPer1MTokens: effective.inputCost,
+          outputCostPer1MTokens: effective.outputCost,
+          cachedInputCostPer1MTokens: effective.cached_input,
+          cachedWriteCostPer1MTokens: effective.cached_write,
+          cachedWrite1hCostPer1MTokens: effective.cached_write_1h,
           // Anthropic reports input_tokens disjoint from cache_read/cache_creation.
           cacheTokensDisjointFromInput: metadata.provider === 'anthropic',
         };
@@ -426,9 +493,24 @@ export class LLMCostCalculator {
    * Get input cost per million tokens for a model
    * Used for prompt caching calculations
    */
-  static getInputCostPerMtok(provider: string, model: string, now: Date = new Date()): number {
+  static getInputCostPerMtok(
+    provider: string,
+    model: string,
+    now: Date = new Date(),
+    inputTokens = 0,
+    cacheReadTokens = 0,
+    cacheCreationTokens = 0,
+  ): number {
     try {
-      return this.getPricing(provider, model, now).inputCostPer1MTokens;
+      const tierInputTokens = this.resolveTierInputTokens(
+        provider,
+        model,
+        now,
+        inputTokens,
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      return this.getPricing(provider, model, now, tierInputTokens).inputCostPer1MTokens;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
@@ -436,7 +518,7 @@ export class LLMCostCalculator {
 
   /**
    * Add a new model pricing at runtime
-   * Useful for dynamically adding new models (e.g., Claude 5, GPT-6)
+   * Useful for dynamically adding newly released models.
    */
   static addModelPricing(model: string, inputCost: number, outputCost: number): void {
     const canonicalModelId = normalizeModelId(model) ?? model;

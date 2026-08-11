@@ -15,7 +15,7 @@ import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailabi
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Runs on Your Machine',
   description:
-    'The native AGI app, built in Rust. Download the signed Linux x64 AppImage. macOS and Windows installers are not yet published. Run local models with Ollama and LM Studio.',
+    'The native AGI app, built in Rust. Check verified Linux x64 installer availability; macOS and Windows installers are not yet published. Run local models with Ollama and LM Studio.',
   path: '/desktop',
 });
 
@@ -31,7 +31,7 @@ export default function DesktopPage() {
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI Desktop</p>
               <h1 id="agi-fl-desktop-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Runs on</span>
+                <span className="agi-fl-h1-line">Runs on</span>{' '}
                 <span className="agi-fl-h1-line">
                   <em className="agi-fl-h1-em">your machine.</em>
                 </span>
@@ -166,21 +166,21 @@ export default function DesktopPage() {
             { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
             { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
             { k: 'Skills', v: 'Markdown + frontmatter' },
-            { k: 'Published installer', v: 'Linux x64 AppImage · signed stable channel' },
+            { k: 'Published package assets', v: 'Linux x64 · installer signature pending' },
             { k: 'macOS & Windows', v: 'Installers not published · no release date announced' },
           ]}
         />
 
         <FinalCta
           eyebrow="Linux x64"
-          title="Install AGI Desktop on Linux."
-          body="The download control appears only when the stable release API verifies a signed Linux x64 AppImage. macOS and Windows installers are not published."
+          title="Check AGI Desktop for Linux."
+          body="The download control appears only when the stable release API verifies a complete Linux x64 AppImage and signature pair. macOS and Windows installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: '/byok', label: 'Set Up BYOK' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp="Linux x64 · signed AppImage release channel"
+          stamp="Linux x64 · verification required before download"
         />
 
         <MarketingFooter />

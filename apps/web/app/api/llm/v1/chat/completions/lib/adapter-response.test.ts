@@ -47,13 +47,13 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
     expect(result.content).toBe('Cats are mammals.');
     expect(result.finishReason).toBe('stop');
-    expect(result.model).toBe('claude-opus-5');
+    expect(result.model).toBe('fixture-model');
   });
 
   it('coalesces empty content to "" (not null) for a tool-only response', async () => {
@@ -71,7 +71,7 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'tool_use' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -86,7 +86,7 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'max_tokens' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -117,7 +117,7 @@ describe('drainToLlmResponse · tool_calls index scheme', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'tool_use' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -137,7 +137,7 @@ describe('drainToLlmResponse · tool_calls index scheme', () => {
         { type: 'text-delta', delta: 'hi' },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -161,7 +161,7 @@ describe('drainToLlmResponse · usage and cache fields', () => {
         },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -201,7 +201,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -233,7 +233,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'usage', inputTokens: 10, outputTokens: 5 },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -246,7 +246,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'text-delta', delta: 'hi' },
         { type: 'stop', reason: 'end_turn' },
       ]),
-      'claude-opus-5',
+      'fixture-model',
       toUpstreamError,
     );
 
@@ -264,7 +264,7 @@ describe('drainToLlmResponse · error handling', () => {
           { type: 'error', message: 'invalid x-api-key', code: '401', retryable: false },
           { type: 'stop', reason: 'error' },
         ]),
-        'claude-opus-5',
+        'fixture-model',
         toUpstreamError,
       ),
     ).rejects.toThrow(/authentication error \(401\)/i);

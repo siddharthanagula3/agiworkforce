@@ -299,6 +299,42 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
         expect(error).toBeDefined();
       }
     });
+
+    it('does not schedule auth-account purge when an active video blocks data-only erasure', async () => {
+      mockNeonQuery.mockImplementation(async (sql: string) => {
+        if (sql.includes("to_regclass('public.video_generation_jobs')")) {
+          return [{ provisioned: true }];
+        }
+        if (
+          sql.includes('update public.profiles') &&
+          sql.includes('video_generation_erasure_fence_token')
+        ) {
+          return [{ id: mockUser.id }];
+        }
+        if (sql.includes('from public.video_generation_jobs')) {
+          return [{ has_blocking: true }];
+        }
+        return [];
+      });
+
+      const { DELETE } = await import('@/app/api/user/data/route');
+      const response = await DELETE(
+        new NextRequest('http://localhost/api/user/data', {
+          method: 'DELETE',
+          headers: { authorization: 'Bearer valid_token' },
+        }),
+      );
+
+      expect(response.status).toBe(500);
+      const sql = mockNeonQuery.mock.calls.map((call) => String(call[0]));
+      expect(sql.some((statement) => statement.includes('delete_user_data'))).toBe(false);
+      expect(sql.some((statement) => /set deletion_scheduled_for/iu.test(statement))).toBe(false);
+      expect(
+        mockNeonExecute.mock.calls.some((call) =>
+          String(call[0]).includes('video_generation_erasure_fence_token = null'),
+        ),
+      ).toBe(true);
+    });
   });
 
   describe('Audit Logging', () => {
@@ -539,7 +575,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
             {
               id: 'conversation_1',
               title: 'Export me',
-              model: 'claude-sonnet',
+              model: 'fixture-conversation-model',
               project_id: 'project_1',
               pinned: true,
               created_at: mockUser.created_at,

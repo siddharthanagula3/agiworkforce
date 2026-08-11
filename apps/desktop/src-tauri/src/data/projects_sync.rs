@@ -1629,7 +1629,11 @@ mod tests {
     fn sync_scoping_pull_stamps_the_pulling_account_as_owner() {
         let conn = fresh_db();
 
-        apply_project_deltas(&conn, "user-b", &[live_delta("cloud-new", "B's project", "3")]);
+        apply_project_deltas(
+            &conn,
+            "user-b",
+            &[live_delta("cloud-new", "B's project", "3")],
+        );
 
         let owner: Option<String> = conn
             .query_row(

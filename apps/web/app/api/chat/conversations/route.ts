@@ -23,6 +23,7 @@ import {
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
 } from '@agiworkforce/cloud-contracts';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 function parsePositiveInt(raw: string | null, fallback: number, max?: number): number {
@@ -82,9 +83,10 @@ async function handleGetConversations(request: NextRequest) {
 
   try {
     const db = getNeonChatDb();
-    const where = ['user_id = $1'];
+    const organizationId = await resolveActiveOrganizationId(db, userId);
+    const where = ['user_id = $1', 'organization_id is not distinct from $2'];
     where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
-    const params: unknown[] = [userId];
+    const params: unknown[] = [userId, organizationId];
     if (projectId) {
       params.push(projectId);
       where.push(`project_id = $${params.length}`);
@@ -103,8 +105,8 @@ async function handleGetConversations(request: NextRequest) {
     const offsetParameter = params.length;
 
     // Fetch one extra row to cheaply detect whether another page exists
-    // without a separate count(*) query. Every shape remains owner-scoped;
-    // projectId only narrows the authenticated user's own conversations.
+    // without a separate count(*) query. Every shape remains owner-and-workspace-scoped;
+    // projectId only narrows the authenticated user's conversations in that workspace.
     const [rows, historyStatsRows] = await Promise.all([
       db.query<ChatConversationRow>(
         `
@@ -131,10 +133,11 @@ async function handleGetConversations(request: NextRequest) {
                 )::text as message_count
               from web_conversations
               where user_id = $1
+                and organization_id is not distinct from $2
                 and deleted_at is null
                 and is_temporary = false
             `,
-            [userId],
+            [userId, organizationId],
           )
         : Promise.resolve([]),
     ]);
@@ -184,6 +187,7 @@ async function handleCreateConversation(request: NextRequest) {
   }
   const body = validationResult.data;
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   if (body.projectId) {
     let ownedProject: { id: string } | undefined;
@@ -206,18 +210,20 @@ async function handleCreateConversation(request: NextRequest) {
 
   try {
     // Accept a client-supplied UUID (offline-first id); fall back to the DB default.
-    // ON CONFLICT makes a retried create idempotent, and the owner-guarded WHERE
-    // ensures a client can never overwrite another user's conversation by id.
+    // ON CONFLICT makes a retried create idempotent, and the owner/workspace-guarded
+    // WHERE ensures a client can never overwrite a conversation from another scope.
     const [conversation] = await db.query<ChatConversationRow>(
       `
-        insert into web_conversations (id, user_id, title, model, project_id, is_temporary)
-        values (coalesce($5::uuid, gen_random_uuid()), $1, $2, $3, $4, $6)
+        insert into web_conversations
+          (id, user_id, organization_id, title, model, project_id, is_temporary)
+        values (coalesce($5::uuid, gen_random_uuid()), $1, $7, $2, $3, $4, $6)
         on conflict (id) do update set
           title = excluded.title,
           model = excluded.model,
           project_id = excluded.project_id,
           updated_at = now()
         where web_conversations.user_id = $1
+          and web_conversations.organization_id is not distinct from $7
         returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
@@ -227,6 +233,7 @@ async function handleCreateConversation(request: NextRequest) {
         body.projectId ?? null,
         body.id ?? null,
         body.isTemporary ?? false,
+        organizationId,
       ],
     );
     if (!conversation) {

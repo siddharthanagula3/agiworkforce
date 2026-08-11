@@ -76,5 +76,13 @@
   "pageTitle": "Preços",
   "freeLocalByok": "Modelos locais e suas próprias chaves de API, sempre grátis",
   "seatTotal_one": "{{count}} assento · {{total}}/mês",
-  "seatTotal_other": "{{count}} assentos · {{total}}/mês"
+  "seatTotal_other": "{{count}} assentos · {{total}}/mês",
+  "perSeatPrice": "{{price}}/assento/mês",
+  "perSeatPriceAnnual": "{{price}}/assento/ano",
+  "seatTotalAnnual_one": "{{count}} assento · {{total}}/ano",
+  "seatTotalAnnual_other": "{{count}} assentos · {{total}}/ano",
+  "seatCadenceMonthly_one": "{{count}} assento · cobrança mensal",
+  "seatCadenceMonthly_other": "{{count}} assentos · cobrança mensal",
+  "seatCadenceAnnual_one": "{{count}} assento · cobrança anual",
+  "seatCadenceAnnual_other": "{{count}} assentos · cobrança anual"
 }

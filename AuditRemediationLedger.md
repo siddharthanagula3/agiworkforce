@@ -1345,7 +1345,6 @@ The scale report is organized under the visible sections **Spend**, **Throughput
 
   occurrences under `apps/web/app/api`. Offset-only pagination on a high-growth table is what this task forbids, and none remains on the web API surface.\*\*
 
-
 - [ ] **SCALE-GROW-004 — Enforce opaque cursor pagination.** No unbounded list or offset-only path on high-growth tables.
 
       > **Triage 2026-08-09 — SATISFIED — zero `OFFSET # AGI Workforce — Audit Remediation Execution Plan
@@ -1631,24 +1630,24 @@ The business-layer report shows that substantial billing, entitlement, and enter
 
       Release-name arm, SATISFIED: the audit's only cited site is
       `audit/master-checklist-gap-audit-2026-08-05.md:456` → `apps/web/app/dev/inline-toolcall-demo/page.tsx:28-30`,
-      "hardcodes a non-existent `https://www.anthropic.com/news/claude-4-7` URL and a
+      "hardcodes a non-existent versioned-model announcement URL and a
       fabricated release title". `git blame -L 26,36` shows those lines were rewritten in
       `4354d3d8b` (2026-08-07, after the audit): the fixture now points at the real
       `https://www.anthropic.com/news` / "Anthropic · News"
       (`apps/web/app/dev/inline-toolcall-demo/page.tsx:32-33`), and the invented release
-      survives only inside the comment that records its removal (lines 28-31).
+      no longer survives in the source comment either (lines 28-31).
 
       Model-ID arm, FIXED 2026-08-09: `examples/multi-provider-chat.ts` — the repo's only
       scripted developer demo (`package.json:170`, `demo:multi-provider`) — pinned
-      `claude-haiku-4.5` for its Anthropic target. That ID was retired from the canonical
-      catalog in `f62274b63` (2026-07-28, "retire haiku 4.5") and the demo, authored in
+      a now-retired Anthropic compact-model ID for its Anthropic target. That ID was retired from the canonical
+      catalog in `f62274b63` (2026-07-28, "retire the prior compact generation") and the demo, authored in
       `75cc0ef5a`, was never updated. `packages/ai/providers/anthropic/src/translate.ts:293`
       sends `req.model` to the wire verbatim, so every run with `ANTHROPIC_API_KEY` set was
-      a guaranteed 404. Repointed to `claude-sonnet-5` — the cheapest Anthropic model the
-      catalog still serves ($3/1M in), matching the demo's cheap-tier intent on the OpenAI
-      side (`gpt-5.4-mini`). Verified: a scratch checker that resolves every `model: '...'`
+      a guaranteed 404. Repointed to the catalog's current Anthropic default, matching the
+      demo's catalog-derived provider-default policy on the OpenAI side. Verified: a scratch
+      checker that resolves every `model: '...'`
       literal in the demo against `packages/contracts/types/src/models.json` exits 1 before
-      the change (`[claude-haiku-4.5] not in models.json`) and 0 after;
+      the change (`[retired Anthropic demo model] not in models.json`) and 0 after;
       `node scripts/check-model-catalog-integrity.mjs` → exit 0;
       `npx tsx examples/multi-provider-chat.ts "ping"` with no keys reaches the demo's own
       documented "No providers available" exit, proving it still compiles and runs.
@@ -1656,19 +1655,19 @@ The business-layer report shows that substantial billing, entitlement, and enter
       OPEN residue (guard ownership, not this task's to touch): the class guard
       `scripts/check-model-catalog-integrity.mjs` cannot catch this recurrence — its
       `SCAN_ROOTS` is `['apps', 'packages', 'services']` (line 149), so `examples/` and
-      `tools/` are never walked, and `claude-haiku-4.5` is absent from
+      `tools/` are never walked, and that retired compact-model ID is absent from
       `REMOVED_SELECTABLE_MODEL_IDS`/`DISALLOWED_SUBSTRING` (lines 58-127) even though the
       catalog dropped it. Closing that needs two edits to a shared guard script.
 
       OPEN residue (separate subtree): `tools/skill-vetting` hardcodes retired Anthropic
       IDs — `src/skillspector/providers/anthropic/provider.py:45,47`
-      (`claude-opus-4-6`, `claude-sonnet-4-6`) and
-      `src/skillspector/providers/anthropic_proxy/provider.py:209` (`claude-sonnet-4-6`).
-      `claude-opus-4-6` is explicitly on this repo's removed-ID denylist
+      (retired previous-generation flagship and balanced defaults) and
+      `src/skillspector/providers/anthropic_proxy/provider.py:209` (the same retired balanced default).
+      The retired flagship ID is explicitly on this repo's removed-ID denylist
       (`scripts/check-model-catalog-integrity.mjs:59-60,119-120`). It is a developer tool,
       not a demo, and its defaults are backed by its own bundled registry
-      (`.../anthropic/model_registry.yaml:16,20,24` — `claude-opus-4-5`,
-      `claude-sonnet-4-6`, `claude-opus-4-6`), so correcting it means editing that registry
+      (`.../anthropic/model_registry.yaml:16,20,24` — three retired previous-generation
+      Anthropic entries), so correcting it means editing that registry
       plus both providers plus their tests.
 
 ## 7B. Rewrite stale capability statements

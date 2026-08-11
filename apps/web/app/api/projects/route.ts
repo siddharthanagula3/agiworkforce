@@ -29,6 +29,7 @@ import {
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -38,6 +39,7 @@ async function handleGetProjects(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -61,7 +63,8 @@ async function handleGetProjects(request: NextRequest) {
   // personal: `conversation_count` still binds `c.user_id = $1`, so a member
   // opening a shared project sees their own threads in it and nobody else's.
   const sharedScope = await resolveSharedProjectScope(db, userId);
-  const sharedProjectIds = sharedScope?.projectIds ?? [];
+  const sharedProjectIds =
+    sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
 
   let data: Record<string, unknown>[];
   try {
@@ -73,13 +76,15 @@ async function handleGetProjects(request: NextRequest) {
                  from web_conversations c
                 where c.project_id = p.id::text
                   and c.user_id = $1
+                  and c.organization_id is not distinct from $5::uuid
                   and c.deleted_at is null) as conversation_count
-         from user_projects p
-        where p.deleted_at is null
+        from user_projects p
+       where p.deleted_at is null
+          and p.organization_id is not distinct from $5::uuid
           and (p.user_id = $1 or p.id = any($4::uuid[]))
        order by p.updated_at desc
        limit $2 offset $3`,
-      [userId, limit, offset, sharedProjectIds],
+      [userId, limit, offset, sharedProjectIds, organizationId],
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch projects');
@@ -102,6 +107,7 @@ async function handleCreateProject(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let rawBody: unknown;
   try {
@@ -118,9 +124,17 @@ async function handleCreateProject(request: NextRequest) {
   }
 
   // Build columns/values for the insert, optionally including round-10 fields
-  const baseColumns = ['user_id', 'name', 'description', 'instructions', 'color'];
+  const baseColumns = [
+    'user_id',
+    'organization_id',
+    'name',
+    'description',
+    'instructions',
+    'color',
+  ];
   const baseValues: unknown[] = [
     userId,
+    organizationId,
     body.name.trim(),
     body.description?.trim() ?? '',
     body.instructions?.trim() ?? '',
@@ -187,6 +201,7 @@ async function handleCreateProject(request: NextRequest) {
       if (!inserted || typeof inserted['id'] !== 'string') throw new Error('No row returned');
       await replaceProjectConversationMembership(tx, {
         userId,
+        organizationId,
         projectId: inserted['id'],
         conversationIds: body.conversationIds ?? [],
       });

@@ -6,6 +6,34 @@ import { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 vi.mock('server-only', () => ({}));
 
+const modelCatalogMocks = vi.hoisted(() => ({
+  runwayApiModelId: undefined as string | undefined,
+  runwayAvailability: 'live' as 'live' | 'unavailable',
+}));
+const videoReleasePolicyMocks = vi.hoisted(() => ({ runwayEnabled: true }));
+
+vi.mock('@/lib/server/video-provider-release-policy', () => ({
+  isVideoProviderReleaseEnabled: (provider: 'google' | 'runway' | 'openrouter') =>
+    provider !== 'runway' || videoReleasePolicyMocks.runwayEnabled,
+}));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  return {
+    ...actual,
+    getModelMetadataById: (id: string) => {
+      const model = actual.getModelMetadataById(id);
+      return model?.provider === 'runway'
+        ? {
+            ...model,
+            apiModelId: modelCatalogMocks.runwayApiModelId ?? model.apiModelId,
+            availability: modelCatalogMocks.runwayAvailability,
+          }
+        : model;
+    },
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Mock: rate-limit — allow by default
 // ---------------------------------------------------------------------------
@@ -114,6 +142,26 @@ const managedUsageMocks = vi.hoisted(() => ({
   delivered: vi.fn(async () => undefined),
 }));
 const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
+const durableJobMocks = vi.hoisted(() => ({
+  admit: vi.fn(),
+  releaseAdmission: vi.fn(),
+  create: vi.fn(),
+  beginSubmission: vi.fn(),
+  getByIdempotencyKey: vi.fn(),
+  recordProviderTask: vi.fn(),
+  failBeforeProviderStart: vi.fn(),
+  failClaimed: vi.fn(),
+  markUnknown: vi.fn(),
+  workflowStart: vi.fn(),
+  workflowOwnerStart: vi.fn(),
+  workflowOwnerCancel: vi.fn(),
+  attachmentWorkflowStart: vi.fn(),
+  incidentAlert: vi.fn(),
+  orphanSettlementAlert: vi.fn(),
+  transcriptSync: vi.fn(),
+  storeReady: vi.fn(),
+  current: undefined as Record<string, unknown> | undefined,
+}));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
@@ -124,6 +172,60 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
+vi.mock('@/lib/server/media-storage', () => ({
+  isVideoStorageConfigured: vi.fn(() => true),
+}));
+
+vi.mock('@/lib/server/video-generation-jobs', () => ({
+  acquireVideoGenerationAdmission: (...args: unknown[]) => durableJobMocks.admit(...args),
+  beginVideoProviderSubmission: (...args: unknown[]) => durableJobMocks.beginSubmission(...args),
+  createVideoGenerationJob: (...args: unknown[]) => durableJobMocks.create(...args),
+  getVideoGenerationJobByIdempotencyKey: (...args: unknown[]) =>
+    durableJobMocks.getByIdempotencyKey(...args),
+  recordVideoProviderTask: (...args: unknown[]) => durableJobMocks.recordProviderTask(...args),
+  failVideoGenerationBeforeProviderStart: (...args: unknown[]) =>
+    durableJobMocks.failBeforeProviderStart(...args),
+  releaseVideoGenerationAdmission: (...args: unknown[]) =>
+    durableJobMocks.releaseAdmission(...args),
+}));
+vi.mock('@/lib/server/video-job-store-readiness', () => ({
+  isVideoJobStoreReady: (...args: unknown[]) => durableJobMocks.storeReady(...args),
+}));
+vi.mock('@/lib/server/video-generation-transcript', () => ({
+  syncVideoGenerationTranscript: (...args: unknown[]) => durableJobMocks.transcriptSync(...args),
+}));
+vi.mock('@/lib/workflows/start-video-generation-workflow', () => ({
+  startVideoGenerationWorkflowExecution: (...args: unknown[]) =>
+    durableJobMocks.workflowStart(...args),
+  startVideoGenerationWorkflowOwner: (...args: unknown[]) =>
+    durableJobMocks.workflowOwnerStart(...args),
+  startVideoProviderTaskAttachmentRecovery: (...args: unknown[]) =>
+    durableJobMocks.attachmentWorkflowStart(...args),
+}));
+vi.mock('@/lib/services/video-incident-alert-service', () => ({
+  deliverPendingVideoIncidentAlert: (...args: unknown[]) => durableJobMocks.incidentAlert(...args),
+  deliverVideoSettlementIncidentByReservation: (...args: unknown[]) =>
+    durableJobMocks.orphanSettlementAlert(...args),
+}));
+
+vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+  failClaimedVideoGenerationJob: (...args: unknown[]) => durableJobMocks.failClaimed(...args),
+  markClaimedVideoGenerationOutcomeUnknown: (...args: unknown[]) =>
+    durableJobMocks.markUnknown(...args),
+  publicVideoJobStatus: (job: Record<string, unknown>) => ({
+    success: true,
+    task_id: job['id'],
+    status:
+      job['status'] === 'submitting'
+        ? 'queued'
+        : job['status'] === 'outcome_unknown'
+          ? 'failed'
+          : job['status'],
+    ...(job['assetId'] ? { video_url: `/api/files/${String(job['assetId'])}` } : {}),
+    ...(job['publicError'] ? { error: job['publicError'] } : {}),
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -143,12 +245,70 @@ global.fetch = mockFetch;
 // Import route after all mocks are in place
 // ---------------------------------------------------------------------------
 import { POST, OPTIONS } from '@/app/api/media/video/generate/route';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  isExecutableVideoModel,
+  isModelLive,
+  modelsCatalog,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
 
 // ---------------------------------------------------------------------------
 // Shared test helpers
 // ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/video/generate';
+
+function requireCatalogVideoModel(
+  predicate: (model: ModelMetadata) => boolean,
+  description: string,
+  executable = true,
+): ModelMetadata {
+  const model = Object.values(modelsCatalog.models).find(
+    (candidate) =>
+      candidate.modelType === 'video' &&
+      candidate.capabilities.videoGen &&
+      (!executable || isExecutableVideoModel(candidate)) &&
+      predicate(candidate),
+  );
+  if (!model) throw new Error('Catalog fixture is missing ' + description + '.');
+  return model;
+}
+
+const RUNWAY_MODEL = requireCatalogVideoModel(
+  (model) => model.provider === 'runway',
+  'the curated Runway video model',
+  false,
+);
+if (!RUNWAY_MODEL.apiModelId) {
+  throw new Error('Catalog fixture is missing the Runway provider mapping.');
+}
+const RUNWAY_MODEL_ID = RUNWAY_MODEL.id;
+const RUNWAY_API_MODEL_ID = RUNWAY_MODEL.apiModelId;
+
+const googleDefaultId = getRoutingSlotModel('video_generation');
+const GOOGLE_DEFAULT_MODEL = requireCatalogVideoModel(
+  (model) => model.id === googleDefaultId,
+  'the Google video default',
+);
+const GOOGLE_DEFAULT_MODEL_ID = GOOGLE_DEFAULT_MODEL.id;
+const GOOGLE_ECONOMY_MODEL = requireCatalogVideoModel(
+  (model) =>
+    model.provider === 'google' &&
+    model.id !== GOOGLE_DEFAULT_MODEL_ID &&
+    (model.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY) <
+      (GOOGLE_DEFAULT_MODEL.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY),
+  'a lower-cost Google video model',
+);
+const GOOGLE_ECONOMY_MODEL_ID = GOOGLE_ECONOMY_MODEL.id;
+
+const NON_VIDEO_MODEL_ID = Object.values(modelsCatalog.models).find(
+  (model) => model.modelType !== 'video' && isModelLive(model),
+)?.id;
+if (!NON_VIDEO_MODEL_ID || !getModelMetadataById(NON_VIDEO_MODEL_ID)) {
+  throw new Error('Catalog fixture is missing a live non-video model.');
+}
 
 function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
   return new NextRequest(BASE_URL, {
@@ -199,7 +359,11 @@ describe('POST /api/media/video/generate', () => {
       attempt_count: 1,
     });
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: TEST_USER.userId });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: {},
+      userId: TEST_USER.userId,
+      organizationId: null,
+    });
     managedUsageMocks.reserve.mockImplementation(async (input) => ({
       db: input.db,
       userId: input.userId,
@@ -208,18 +372,196 @@ describe('POST /api/media/video/generate', () => {
       leaseToken: 'lease-video',
       estimatedCostCents: input.estimatedCostCents,
     }));
+    modelCatalogMocks.runwayApiModelId = undefined;
+    modelCatalogMocks.runwayAvailability = 'live';
+    // Most tests below exercise the already-built Runway mechanics behind the
+    // release gate. A dedicated regression asserts the production fail-close.
+    videoReleasePolicyMocks.runwayEnabled = true;
+    durableJobMocks.create.mockImplementation(async (input) => {
+      const now = new Date().toISOString();
+      const job = {
+        ...input,
+        id: '11111111-1111-4111-8111-111111111111',
+        workflowRunId: input.workflowRunId,
+        providerTaskId: null,
+        status: 'submitting',
+        providerStartedAt: null,
+        cancelRequestedAt: null,
+        providerCancelAttemptedAt: null,
+        providerCancelAcknowledgedAt: null,
+        cancelAttempts: 0,
+        cancelLastError: null,
+        progress: null,
+        assetId: null,
+        publicError: null,
+        billingOutcome: null,
+        reconcileFailures: 0,
+        nextAttemptAt: now,
+        reconcileClaimToken: null,
+        reconcileClaimExpiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+        terminalAt: null,
+      };
+      durableJobMocks.current = job;
+      return job;
+    });
+    durableJobMocks.beginSubmission.mockImplementation(async () => {
+      const job = {
+        ...durableJobMocks.current,
+        providerStartedAt: new Date().toISOString(),
+        reconcileClaimToken: 'submission-claim',
+        reconcileClaimExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+      };
+      durableJobMocks.current = job;
+      return job;
+    });
+    durableJobMocks.getByIdempotencyKey.mockResolvedValue(null);
+    durableJobMocks.admit.mockResolvedValue(true);
+    durableJobMocks.releaseAdmission.mockResolvedValue(undefined);
+    durableJobMocks.storeReady.mockResolvedValue(true);
+    durableJobMocks.workflowStart.mockImplementation(async () => {
+      durableJobMocks.current = {
+        ...durableJobMocks.current,
+        workflowRunId: 'wrun-video-1',
+      };
+      return { workflowRunId: 'wrun-video-1' };
+    });
+    durableJobMocks.workflowOwnerCancel.mockResolvedValue(undefined);
+    durableJobMocks.workflowOwnerStart.mockResolvedValue({
+      workflowRunId: 'wrun-video-1',
+      cancel: durableJobMocks.workflowOwnerCancel,
+    });
+    durableJobMocks.attachmentWorkflowStart.mockResolvedValue({
+      workflowRunId: 'wrun-attachment-1',
+    });
+    durableJobMocks.failBeforeProviderStart.mockResolvedValue({ status: 'failed' });
+    durableJobMocks.incidentAlert.mockResolvedValue(true);
+    durableJobMocks.orphanSettlementAlert.mockResolvedValue(true);
+    durableJobMocks.transcriptSync.mockResolvedValue('updated');
+    durableJobMocks.recordProviderTask.mockImplementation(async (input) => {
+      const job = {
+        ...durableJobMocks.current,
+        providerTaskId: input.providerTaskId,
+        status: 'queued',
+      };
+      durableJobMocks.current = job;
+      return job;
+    });
+    durableJobMocks.failClaimed.mockResolvedValue({ status: 'failed' });
+    durableJobMocks.markUnknown.mockResolvedValue({ status: 'outcome_unknown' });
 
     // Set env vars
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
-    delete process.env['GOOGLE_API_KEY'];
+    process.env['GOOGLE_API_KEY'] = 'test-google-key';
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env['RUNWAY_API_KEY'];
     delete process.env['GOOGLE_API_KEY'];
+    delete process.env['GOOGLE_BASE_URL'];
+    delete process.env['OPENROUTER_API_KEY'];
+    delete process.env['OPENROUTER_BASE_URL'];
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
+  });
+
+  describe('Success — OpenRouter video provider', () => {
+    it('submits the exact catalog tuple and reserves the catalog formula cost', async () => {
+      const { calculateCatalogVideoCostCents, getModels, resolveVideoGenerationOutputSize } =
+        await import('@agiworkforce/types');
+      const candidates = getModels({
+        modelTypes: ['video'],
+        requireCapabilities: { videoGen: true },
+      }).filter(
+        (model) =>
+          model.provider === 'open_router' &&
+          model.videoGeneration?.pricing?.unit === 'video_tokens',
+      );
+      expect(candidates).toHaveLength(1);
+      const model = candidates[0]!;
+      const output = resolveVideoGenerationOutputSize(model, '480p', '21:9');
+      const estimatedCostCents = calculateCatalogVideoCostCents({
+        model,
+        resolution: '480p',
+        aspectRatio: '21:9',
+        durationSecs: 30,
+        generateAudio: false,
+      });
+      expect(output).toBeTruthy();
+      expect(estimatedCostCents).toBeGreaterThan(0);
+      process.env['OPENROUTER_API_KEY'] = 'openrouter-test-secret';
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'synthetic-provider-task',
+            polling_url: 'https://provider.invalid/task',
+            status: 'pending',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a snowy mountain',
+          provider: 'openrouter',
+          model: model.id,
+          duration_secs: 30,
+          resolution: '480p',
+          aspect_ratio: '21:9',
+          generate_audio: false,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        success: true,
+        provider: 'openrouter',
+        status: 'queued',
+      });
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: model.id, estimatedCostCents }),
+      );
+      const [url, request] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://openrouter.ai/api/v1/videos');
+      expect(request.headers).toMatchObject({
+        Authorization: 'Bearer openrouter-test-secret',
+      });
+      expect(JSON.parse(String(request.body))).toEqual({
+        model: model.apiModelId,
+        prompt: 'a snowy mountain',
+        duration: 30,
+        size: `${output!.width}x${output!.height}`,
+        generate_audio: false,
+      });
+    });
+
+    it('rejects a tuple absent from the selected catalog model before billing or egress', async () => {
+      const { getModels } = await import('@agiworkforce/types');
+      const model = getModels({
+        modelTypes: ['video'],
+        requireCapabilities: { videoGen: true },
+      }).find((candidate) => candidate.provider === 'open_router');
+      expect(model).toBeTruthy();
+      process.env['OPENROUTER_API_KEY'] = 'openrouter-test-secret';
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a snowy mountain',
+          provider: 'openrouter',
+          model: model!.id,
+          duration_secs: 30,
+          resolution: '4k',
+          aspect_ratio: '16:9',
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   // =========================================================================
@@ -299,6 +641,54 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
+  describe('Platform moderation floor', () => {
+    it('blocks prohibited video prompts before admission, reservation, or provider egress', async () => {
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'generate a sexually explicit video of a 12 year old',
+          provider: 'google',
+        }),
+      );
+
+      expect(response.status).toBe(422);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'content_policy_violation' },
+      });
+      expect(durableJobMocks.admit).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Web chat transcript ownership', () => {
+    it('denies a cross-tenant assistant placeholder before reservation or provider egress', async () => {
+      const query = vi.fn().mockResolvedValue([]);
+      rlsMocks.getUserScopedDb.mockResolvedValueOnce({
+        db: { query },
+        userId: TEST_USER.userId,
+        organizationId: null,
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'fixture video prompt',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          assistant_message_id: '33333333-3333-4333-8333-333333333333',
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(query).toHaveBeenCalledWith(expect.stringMatching(/conversation\.user_id = \$2/i), [
+        '22222222-2222-4222-8222-222222222222',
+        TEST_USER.userId,
+        '33333333-3333-4333-8333-333333333333',
+      ]);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.admit).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   // =========================================================================
   // Rate limiting
   // =========================================================================
@@ -324,7 +714,7 @@ describe('POST /api/media/video/generate', () => {
     it('should pass rate limit key "video-generation" to withRateLimit', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'task-abc123' }),
+        json: async () => ({ id: 'task-abc123', name: 'operations/task-abc123' }),
       });
 
       const { withRateLimit } = await import('@/lib/rate-limit');
@@ -345,8 +735,10 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('Access denied');
+      expect(data.error).toMatchObject({
+        code: 'subscription_required',
+        required_plans: ['max_15x', 'enterprise'],
+      });
     });
 
     it('should return 403 when subscription status is past_due', async () => {
@@ -356,8 +748,11 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('Access denied');
+      expect(data.error).toMatchObject({
+        code: 'subscription_inactive',
+        current_plan: 'max_15x',
+        required_plans: ['max_15x', 'enterprise'],
+      });
     });
 
     it('should return 403 when plan tier is free', async () => {
@@ -401,7 +796,7 @@ describe('POST /api/media/video/generate', () => {
       });
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'task-xyz' }),
+        json: async () => ({ id: 'task-xyz', name: 'operations/task-xyz' }),
       });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
@@ -421,7 +816,7 @@ describe('POST /api/media/video/generate', () => {
       mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'max_15x' });
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'task-xyz' }),
+        json: async () => ({ id: 'task-xyz', name: 'operations/task-xyz' }),
       });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
@@ -523,12 +918,70 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(503);
       expect(data.error.message).toContain('Service temporarily unavailable');
     });
+
+    it('does not reroute an explicit Runway request to configured Google', async () => {
+      delete process.env['RUNWAY_API_KEY'];
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+
+      expect(response.status).toBe(503);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
+    it('fails the stale Runway catalog model closed before reservation or egress', async () => {
+      modelCatalogMocks.runwayApiModelId = 'synthetic-retired-provider-model';
+      videoReleasePolicyMocks.runwayEnabled = false;
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
+    it('does not execute a non-live Runway model even when Google is configured', async () => {
+      modelCatalogMocks.runwayAvailability = 'unavailable';
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
+    it('rejects a live non-video catalog model before reservation or egress', async () => {
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a sunset', model: NON_VIDEO_MODEL_ID }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
   });
 
   describe('Usage admission', () => {
     it('requires a stable idempotency identity before provider work', async () => {
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }, { 'Idempotency-Key': '' }),
+        makeAuthedRequest(
+          { prompt: 'a sunset', provider: 'runway', model: RUNWAY_MODEL_ID },
+          { 'Idempotency-Key': '' },
+        ),
       );
 
       expect(response.status).toBe(400);
@@ -539,7 +992,7 @@ describe('POST /api/media/video/generate', () => {
     it('rejects an image operation identity before reserving or calling the video provider', async () => {
       const response = await POST(
         makeAuthedRequest(
-          { prompt: 'a sunset', provider: 'runway' },
+          { prompt: 'a sunset', provider: 'runway', model: RUNWAY_MODEL_ID },
           { 'Idempotency-Key': 'agi.media.web.image.operation-123' },
         ),
       );
@@ -555,10 +1008,16 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('reserves, starts, and settles the accepted video task through one lifecycle', async () => {
+    it('persists and starts the accepted video task without settling before delivery', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-xyz' }) });
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
 
       expect(response.status).toBe(200);
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
@@ -570,23 +1029,343 @@ describe('POST /api/media/video/generate', () => {
           isFlagship: false,
         }),
       );
-      expect(managedUsageMocks.providerStarted).toHaveBeenCalledTimes(1);
-      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+      expect(durableJobMocks.beginSubmission).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          outcome: 'completed',
-          usage: expect.objectContaining({ operation: 'video', taskId: 'runway_task-xyz' }),
+          userId: TEST_USER.userId,
+          provider: 'runway',
+          sourceSurface: 'web',
         }),
       );
-      expect(managedUsageMocks.delivered).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.recordProviderTask).toHaveBeenCalledWith(
+        expect.objectContaining({ providerTaskId: 'task-xyz' }),
+      );
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+      expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
       expect(mockCheckAvailable).not.toHaveBeenCalled();
       expect(mockDeductCredits).not.toHaveBeenCalled();
       expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
       expect(managedUsageMocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(
-        managedUsageMocks.providerStarted.mock.invocationCallOrder[0]!,
+        durableJobMocks.create.mock.invocationCallOrder[0]!,
       );
-      expect(managedUsageMocks.providerStarted.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(durableJobMocks.admit.mock.invocationCallOrder[0]).toBeLessThan(
+        managedUsageMocks.reserve.mock.invocationCallOrder[0]!,
+      );
+      expect(durableJobMocks.workflowOwnerStart.mock.invocationCallOrder[0]).toBeLessThan(
+        durableJobMocks.create.mock.invocationCallOrder[0]!,
+      );
+      expect(durableJobMocks.create.mock.invocationCallOrder[0]).toBeLessThan(
+        durableJobMocks.beginSubmission.mock.invocationCallOrder[0]!,
+      );
+      expect(durableJobMocks.beginSubmission.mock.invocationCallOrder[0]).toBeLessThan(
         mockFetch.mock.invocationCallOrder[0]!,
       );
+    });
+
+    it('replays the same active durable job without a second reservation or provider start', async () => {
+      const body = {
+        prompt: 'a sunset',
+        provider: 'runway' as const,
+        model: RUNWAY_MODEL_ID,
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-once' }) });
+
+      const first = await POST(makeAuthedRequest(body));
+      const active = durableJobMocks.current;
+      durableJobMocks.getByIdempotencyKey.mockResolvedValue(active);
+      const replay = await POST(makeAuthedRequest(body));
+
+      expect(first.status).toBe(200);
+      expect(replay.status).toBe(200);
+      expect((await replay.json()).task_id).toBe('11111111-1111-4111-8111-111111111111');
+      expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.create).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.workflowOwnerStart).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.beginSubmission).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails before reservation and provider egress when the durable job schema is unavailable', async () => {
+      durableJobMocks.storeReady.mockResolvedValue(false);
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('does not reserve credits when a data/account erasure fence owns admission', async () => {
+      durableJobMocks.admit.mockResolvedValueOnce(false);
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'video_generation_admission_busy' },
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('refunds and never contacts the provider when Workflow cannot be attached', async () => {
+      durableJobMocks.workflowOwnerStart.mockRejectedValueOnce(new Error('Workflow unavailable'));
+      managedUsageMocks.finalize.mockResolvedValueOnce({
+        requestStatus: 'released',
+        operationResult: 'finalized',
+        settlementStatus: 'succeeded',
+        actualCostCents: 0,
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      );
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(durableJobMocks.failBeforeProviderStart).not.toHaveBeenCalled();
+      expect(durableJobMocks.beginSubmission).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('attempts the owed human alert when a pre-egress refund is immediately terminal', async () => {
+      durableJobMocks.workflowOwnerStart.mockRejectedValueOnce(new Error('Workflow unavailable'));
+      managedUsageMocks.finalize.mockResolvedValueOnce({
+        requestStatus: 'released',
+        operationResult: 'finalized',
+        settlementStatus: 'terminal',
+        actualCostCents: 0,
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(durableJobMocks.orphanSettlementAlert).toHaveBeenCalledOnce();
+      expect(durableJobMocks.incidentAlert).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('retains and alerts an immediate-terminal refund when job persistence fails', async () => {
+      durableJobMocks.create.mockRejectedValueOnce(new Error('profile erasure fence won'));
+      managedUsageMocks.finalize.mockResolvedValueOnce({
+        requestStatus: 'released',
+        operationResult: 'finalized',
+        settlementStatus: 'terminal',
+        actualCostCents: 0,
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      );
+      expect(durableJobMocks.orphanSettlementAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          idempotencyKey: 'agi.media.web.video.operation-123',
+        }),
+      );
+      expect(durableJobMocks.workflowOwnerStart).toHaveBeenCalledOnce();
+      expect(durableJobMocks.workflowOwnerCancel).toHaveBeenCalledOnce();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('keeps the prestarted Workflow when INSERT commit and recovery read are ambiguous', async () => {
+      durableJobMocks.create.mockRejectedValueOnce(new Error('connection lost after insert'));
+      durableJobMocks.getByIdempotencyKey
+        .mockResolvedValueOnce(null)
+        .mockRejectedValueOnce(new Error('Neon unavailable'));
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(durableJobMocks.workflowOwnerStart).toHaveBeenCalledOnce();
+      expect(durableJobMocks.workflowOwnerCancel).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('never starts provider work when cancellation wins the atomic begin boundary', async () => {
+      durableJobMocks.beginSubmission.mockRejectedValueOnce(
+        new Error('video provider submission already claimed'),
+      );
+      durableJobMocks.getByIdempotencyKey
+        .mockResolvedValueOnce(null)
+        .mockImplementation(async () => ({
+          ...durableJobMocks.current,
+          cancelRequestedAt: new Date().toISOString(),
+        }));
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(durableJobMocks.recordProviderTask).not.toHaveBeenCalled();
+    });
+
+    it('replays a completed durable job without charging or starting the provider again', async () => {
+      const body = {
+        prompt: 'a sunset',
+        provider: 'runway' as const,
+        model: RUNWAY_MODEL_ID,
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-once' }) });
+      await POST(makeAuthedRequest(body));
+      durableJobMocks.getByIdempotencyKey.mockResolvedValue({
+        ...durableJobMocks.current,
+        status: 'completed',
+        assetId: '11111111-1111-4111-8111-111111111111',
+        billingOutcome: 'completed',
+        terminalAt: new Date().toISOString(),
+      });
+
+      const replay = await POST(makeAuthedRequest(body));
+
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({
+        task_id: '11111111-1111-4111-8111-111111111111',
+        status: 'completed',
+        video_url: '/api/files/11111111-1111-4111-8111-111111111111',
+      });
+      expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.create).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.beginSubmission).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['failed', 'outcome_unknown'] as const)(
+      'replays a terminal %s durable job as failed instead of lying that it is queued',
+      async (status) => {
+        const body = {
+          prompt: 'a sunset',
+          provider: 'runway' as const,
+          model: RUNWAY_MODEL_ID,
+        };
+        mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-once' }) });
+        await POST(makeAuthedRequest(body));
+        durableJobMocks.getByIdempotencyKey.mockResolvedValue({
+          ...durableJobMocks.current,
+          status,
+          publicError: 'The provider result could not be delivered.',
+          billingOutcome: status === 'failed' ? 'released' : 'outcome_unknown',
+          terminalAt: new Date().toISOString(),
+        });
+
+        const replay = await POST(makeAuthedRequest(body));
+
+        expect(replay.status).toBe(200);
+        expect(await replay.json()).toMatchObject({
+          task_id: '11111111-1111-4111-8111-111111111111',
+          status: 'failed',
+          error: 'The provider result could not be delivered.',
+        });
+        expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('rejects a changed body under the same video idempotency key before billing or egress', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-once' }) });
+      await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+      durableJobMocks.getByIdempotencyKey.mockResolvedValue(durableJobMocks.current);
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a different request',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data.error.code).toBe('idempotency_conflict');
+      expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('recovers the winning durable job when reservation reports an in-progress race', async () => {
+      const body = {
+        prompt: 'a sunset',
+        provider: 'runway' as const,
+        model: RUNWAY_MODEL_ID,
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'winning-task' }) });
+      await POST(makeAuthedRequest(body));
+      const winner = durableJobMocks.current;
+
+      vi.clearAllMocks();
+      durableJobMocks.getByIdempotencyKey.mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+      const { ManagedUsageRequestError } =
+        await import('@/lib/services/managed-usage-request-service');
+      managedUsageMocks.reserve.mockRejectedValueOnce(
+        new ManagedUsageRequestError(
+          'An identical request is already in progress.',
+          409,
+          'idempotency_in_progress',
+        ),
+      );
+
+      const response = await POST(makeAuthedRequest(body));
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.task_id).toBe('11111111-1111-4111-8111-111111111111');
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(durableJobMocks.beginSubmission).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
@@ -594,6 +1373,23 @@ describe('POST /api/media/video/generate', () => {
   // Happy path — Runway provider
   // =========================================================================
   describe('Success — Runway provider', () => {
+    it('fails closed in the release policy before reservation or provider egress', async () => {
+      videoReleasePolicyMocks.runwayEnabled = false;
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.admit).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it('should return 200 with task_id when Runway task is created', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -601,21 +1397,28 @@ describe('POST /api/media/video/generate', () => {
       });
 
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a cinematic sunset', provider: 'runway' }),
+        makeAuthedRequest({
+          prompt: 'a cinematic sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
       );
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.task_id).toBe('runway_runway-task-abc123');
+      expect(data.task_id).toBe('11111111-1111-4111-8111-111111111111');
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('runway');
       expect(typeof data.estimated_duration_secs).toBe('number');
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'runway-gen-4', estimatedCostCents: 25 }),
+        expect.objectContaining({ model: RUNWAY_MODEL_ID, estimatedCostCents: 48 }),
       );
       const [, runwayRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(JSON.parse(String(runwayRequest.body))).toMatchObject({ model: 'gen4_turbo' });
+      expect(JSON.parse(String(runwayRequest.body))).toMatchObject({
+        model: RUNWAY_API_MODEL_ID,
+        ratio: '1280:720',
+      });
     });
 
     it('should include estimated_duration_secs based on video duration', async () => {
@@ -625,7 +1428,12 @@ describe('POST /api/media/video/generate', () => {
       });
 
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a sunset', provider: 'runway', duration_secs: 8 }),
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+          duration_secs: 8,
+        }),
       );
       const data = await response.json();
 
@@ -634,17 +1442,18 @@ describe('POST /api/media/video/generate', () => {
       expect(data.estimated_duration_secs).toBe(140);
     });
 
-    it('should default to Runway provider when RUNWAY_API_KEY is set and no provider is specified', async () => {
+    it('uses the canonical Google slot rather than silently falling back to Runway', async () => {
+      process.env['GOOGLE_API_KEY'] = 'test-google-key';
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'runway-default-task', status: 'PENDING' }),
+        json: async () => ({ name: 'operations/google-default-task', done: false }),
       });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.provider).toBe('runway');
+      expect(data.provider).toBe('google');
     });
   });
 
@@ -670,24 +1479,39 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.task_id).toBe('google_12345678');
+      expect(data.task_id).toBe('11111111-1111-4111-8111-111111111111');
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('google');
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'veo-3.1', estimatedCostCents: 240 }),
+        expect.objectContaining({ model: GOOGLE_DEFAULT_MODEL_ID, estimatedCostCents: 160 }),
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: 6, resolution: '720p' },
+        parameters: { durationSeconds: 4, resolution: '720p' },
       });
     });
 
-    it('reserves catalog pricing for the billable 8-second 4k Veo request', async () => {
+    it('submits through the canonical validated Google API root override', async () => {
+      process.env['GOOGLE_BASE_URL'] = 'https://generativelanguage.googleapis.com/regional/v1beta';
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ name: 'operations/4k-task', done: false }),
+        json: async () => ({ name: 'operations/override-task', done: false }),
       });
 
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^https:\/\/generativelanguage\.googleapis\.com\/regional\/v1beta\/models\/[^/]+:predictLongRunning$/u,
+        ),
+        expect.any(Object),
+      );
+    });
+
+    it('rejects a higher-resolution Google tuple instead of silently extending its duration', async () => {
       const response = await POST(
         makeAuthedRequest({
           prompt: 'a cinematic mountain',
@@ -697,9 +1521,30 @@ describe('POST /api/media/video/generate', () => {
         }),
       );
 
+      expect(response.status).toBe(400);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('reserves catalog pricing for an explicit valid 8-second 4k Veo request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ name: 'operations/4k-task', done: false }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic mountain',
+          provider: 'google',
+          duration_secs: 8,
+          resolution: '4k',
+        }),
+      );
+
       expect(response.status).toBe(200);
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'veo-3.1', estimatedCostCents: 480 }),
+        expect.objectContaining({ model: GOOGLE_DEFAULT_MODEL_ID, estimatedCostCents: 480 }),
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
@@ -707,11 +1552,67 @@ describe('POST /api/media/video/generate', () => {
       });
     });
 
+    it('rejects a non-native Google duration before reservation or provider egress', async () => {
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google', duration_secs: 5 }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('rejects 4k on Veo Lite using the selected model pricing capabilities', async () => {
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a snowy mountain',
+          provider: 'google',
+          model: GOOGLE_ECONOMY_MODEL_ID,
+          duration_secs: 8,
+          resolution: '4k',
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(durableJobMocks.create).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('uses the valid four-second default and Lite catalog price without mutation', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ name: 'operations/lite-task', done: false }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a snowy mountain',
+          provider: 'google',
+          model: GOOGLE_ECONOMY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: GOOGLE_ECONOMY_MODEL_ID, estimatedCostCents: 20 }),
+      );
+      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
+        parameters: { durationSeconds: 4, resolution: '720p' },
+      });
+    });
+
     it('rejects a requested model whose catalog provider contradicts the provider field', async () => {
       process.env['RUNWAY_API_KEY'] = 'test-runway-key';
 
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'runway', model: 'veo-3.1' }),
+        makeAuthedRequest({
+          prompt: 'a snowy mountain',
+          provider: 'runway',
+          model: GOOGLE_DEFAULT_MODEL_ID,
+        }),
       );
 
       expect(response.status).toBe(400);
@@ -731,7 +1632,13 @@ describe('POST /api/media/video/generate', () => {
         text: async () => 'Unauthorized',
       });
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
       const data = await response.json();
 
       // createError.serviceUnavailable => 503
@@ -747,14 +1654,20 @@ describe('POST /api/media/video/generate', () => {
         text: async () => 'Too Many Requests',
       });
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
       const data = await response.json();
 
       expect(response.status).toBe(429);
       expect(data.error.message).toContain('Too many requests');
     });
 
-    it('should return 500 when Runway returns a generic server error', async () => {
+    it('marks a Runway 5xx outcome unknown because the provider may have accepted it', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -762,24 +1675,39 @@ describe('POST /api/media/video/generate', () => {
         text: async () => 'Internal Server Error',
       });
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_ERROR');
+      expect(response.status).toBe(503);
+      expect(data.error.code).toBe('SERVICE_UNAVAILABLE');
+      expect(durableJobMocks.markUnknown).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.failClaimed).not.toHaveBeenCalled();
     });
 
-    it('should return 500 when Runway returns no task ID', async () => {
+    it('marks an accepted Runway response without a task ID outcome unknown', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ status: 'PENDING' }), // missing id
       });
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error.code).toBe('INTERNAL_ERROR');
+      expect(response.status).toBe(503);
+      expect(data.error.code).toBe('SERVICE_UNAVAILABLE');
+      expect(durableJobMocks.markUnknown).toHaveBeenCalledTimes(1);
     });
 
     it('should return 503 when Google Veo returns 401', async () => {
@@ -818,21 +1746,107 @@ describe('POST /api/media/video/generate', () => {
       expect(data.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('should return 500 when fetch throws a network error', async () => {
+    it('records a network-lost provider start as outcome unknown without replay', async () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
-      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
-      await response.json();
-
-      expect(response.status).toBe(500);
-      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
-        expect.objectContaining({
-          outcome: 'failed',
-          actualCostCents: 0,
-          usage: expect.objectContaining({ operation: 'video', reason: 'provider_failed' }),
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
         }),
       );
+      await response.json();
+
+      expect(response.status).toBe(503);
+      expect(durableJobMocks.markUnknown).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: '11111111-1111-4111-8111-111111111111' }),
+        expect.any(String),
+        undefined,
+      );
+      expect(durableJobMocks.failClaimed).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
       expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
+    });
+
+    it('recovers a transient task-attachment failure without abandoning the known provider task', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'provider-task-started' }),
+      });
+      durableJobMocks.recordProviderTask.mockRejectedValueOnce(new Error('database unavailable'));
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      await expect(response.json()).resolves.toMatchObject({
+        task_id: '11111111-1111-4111-8111-111111111111',
+        status: 'queued',
+      });
+      expect(durableJobMocks.recordProviderTask).toHaveBeenCalledTimes(2);
+      expect(durableJobMocks.markUnknown).not.toHaveBeenCalled();
+      expect(durableJobMocks.failClaimed).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+    });
+
+    it('copies a known provider id into durable recovery when every direct DB attach fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'provider-task-started' }),
+      });
+      durableJobMocks.recordProviderTask.mockRejectedValue(new Error('database unavailable'));
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.attachmentWorkflowStart).toHaveBeenCalledWith({
+        jobId: '11111111-1111-4111-8111-111111111111',
+        providerTaskId: 'provider-task-started',
+      });
+      expect(durableJobMocks.markUnknown).not.toHaveBeenCalled();
+    });
+
+    it('records outcome_unknown when neither DB nor Workflow can retain a known provider id', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'provider-task-started' }),
+      });
+      durableJobMocks.recordProviderTask.mockRejectedValue(new Error('database unavailable'));
+      durableJobMocks.attachmentWorkflowStart.mockRejectedValueOnce(
+        new Error('Workflow unavailable'),
+      );
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(durableJobMocks.markUnknown).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: '11111111-1111-4111-8111-111111111111' }),
+        expect.any(String),
+        'provider-task-started',
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 });

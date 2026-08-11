@@ -12,6 +12,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { loadManagedReflectRecap } from '@/lib/services/reflect-service';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const ReflectQuerySchema = z.object({
   range: ManagedCloudReflectRangeSchema.default('30d'),
@@ -29,8 +31,9 @@ async function handleGet(request: NextRequest) {
     timezone: url.searchParams.get('timezone') ?? undefined,
   });
   if (!parsed.success) throw createError.validation('Invalid Reflect query', parsed.error);
+  const organizationId = await resolveActiveOrganizationId(getNeonDb(), userId);
 
-  const result = await loadManagedReflectRecap({ userId, ...parsed.data });
+  const result = await loadManagedReflectRecap({ userId, organizationId, ...parsed.data });
   if (result.kind === 'memory-disabled') {
     return NextResponse.json(
       {

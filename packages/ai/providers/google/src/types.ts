@@ -58,7 +58,7 @@ export type GeminiToolConfig = {
 export interface GeminiThinkingConfig {
   includeThoughts?: boolean;
   thinkingBudget?: number;
-  /** Gemini 3.x discrete thinking level (current control; supersedes thinkingBudget). */
+  /** Provider discrete thinking level (current control; supersedes thinkingBudget). */
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
 }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -13,62 +12,90 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
  * caller via Clerk, records owner_id, and returns a revoke token so the
  * link can be taken down later via DELETE /api/share/[token].
  */
+export type ShareExpiryDays = 1 | 7 | 30;
+
+export interface ActiveConversationShare {
+  url: string;
+  token: string;
+  expiresAt: string;
+  messageCount: number;
+}
+
+function readCreatedShare(value: unknown): ActiveConversationShare {
+  if (!value || typeof value !== 'object') throw new Error('Invalid share response');
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row['shareUrl'] !== 'string' ||
+    typeof row['token'] !== 'string' ||
+    typeof row['expiresAt'] !== 'string' ||
+    typeof row['messageCount'] !== 'number'
+  ) {
+    throw new Error('Invalid share response');
+  }
+  return {
+    url: row['shareUrl'],
+    token: row['token'],
+    expiresAt: row['expiresAt'],
+    messageCount: row['messageCount'],
+  };
+}
+
 export function useShareConversation(conversationTitle?: string, modelId?: string) {
   const [isSharing, setIsSharing] = useState(false);
-  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [activeShare, setActiveShare] = useState<ActiveConversationShare | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const messages = useChatStore((s) => s.messages);
   const hasMessages = messages.length > 0;
 
-  const share = useCallback(async () => {
-    if (isSharing) return;
-    setIsSharing(true);
-    try {
-      const payload = {
-        title: conversationTitle || 'Shared Session',
-        model_id: modelId,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          created_at: m.createdAt,
-        })),
-      };
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
-        throw new Error(msg);
+  const share = useCallback(
+    async (expiresInDays: ShareExpiryDays): Promise<boolean> => {
+      if (isSharing) return false;
+      if (!hasMessages) {
+        setError('Add a message before creating a public link.');
+        return false;
       }
-      const data = (await res.json()) as { shareUrl: string; token: string };
-      setShareToken(data.token);
-      toast.success('Share link created', {
-        description: data.shareUrl,
-        duration: 8000,
-        action: {
-          label: 'Copy link',
-          onClick: () => {
-            void navigator.clipboard.writeText(data.shareUrl);
-            toast.success('Link copied');
-          },
-        },
-      });
-    } catch (err) {
-      toast.error('Could not share conversation', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setIsSharing(false);
-    }
-  }, [conversationTitle, modelId, messages, isSharing]);
+      setIsSharing(true);
+      setError(null);
+      try {
+        const payload = {
+          title: conversationTitle || 'Shared Session',
+          model_id: modelId,
+          expires_in_days: expiresInDays,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            created_at: m.createdAt,
+          })),
+        };
+        const res = await fetch('/api/share', {
+          method: 'POST',
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
+          throw new Error(msg);
+        }
+        setActiveShare(readCreatedShare(await res.json()));
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not create the public link.');
+        return false;
+      } finally {
+        setIsSharing(false);
+      }
+    },
+    [conversationTitle, modelId, messages, isSharing, hasMessages],
+  );
 
-  const revoke = useCallback(async () => {
-    if (!shareToken) return;
+  const revoke = useCallback(async (): Promise<boolean> => {
+    if (!activeShare) return false;
+    setIsSharing(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/share/${shareToken}`, {
+      const res = await fetch(`/api/share/${activeShare.token}`, {
         method: 'DELETE',
         headers: await addCsrfHeaders(),
         credentials: 'include',
@@ -76,14 +103,23 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
       if (!res.ok) {
         throw new Error('Failed to revoke share link');
       }
-      setShareToken(null);
-      toast.success('Share link revoked');
+      setActiveShare(null);
+      return true;
     } catch (err) {
-      toast.error('Could not revoke share link', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
+      setError(err instanceof Error ? err.message : 'Could not revoke the public link.');
+      return false;
+    } finally {
+      setIsSharing(false);
     }
-  }, [shareToken]);
+  }, [activeShare]);
 
-  return { share, revoke, isSharing, hasMessages, hasActiveShare: shareToken !== null };
+  return {
+    share,
+    revoke,
+    isSharing,
+    hasMessages,
+    activeShare,
+    error,
+    clearError: () => setError(null),
+  };
 }

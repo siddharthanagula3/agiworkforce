@@ -223,7 +223,7 @@ describe('Company Hub Store', () => {
       const { updateTokenUsage } = useCompanyHubStore.getState();
 
       updateTokenUsage({
-        'claude-3-sonnet': {
+        'fixture-usage-model': {
           provider: 'anthropic',
           inputTokens: 100,
           outputTokens: 50,
@@ -234,7 +234,7 @@ describe('Company Hub Store', () => {
       });
 
       const state = useCompanyHubStore.getState();
-      expect(state.tokenUsage['claude-3-sonnet']).toBeDefined();
+      expect(state.tokenUsage['fixture-usage-model']).toBeDefined();
       expect(state.sessionTokens).toBe(150);
       expect(state.sessionCost).toBe(0.01);
     });
@@ -243,7 +243,7 @@ describe('Company Hub Store', () => {
       const { updateTokenUsage } = useCompanyHubStore.getState();
 
       updateTokenUsage({
-        'claude-3-sonnet': {
+        'fixture-usage-model': {
           provider: 'anthropic',
           inputTokens: 100,
           outputTokens: 50,
@@ -254,7 +254,7 @@ describe('Company Hub Store', () => {
       });
 
       updateTokenUsage({
-        'claude-3-sonnet': {
+        'fixture-usage-model': {
           provider: 'anthropic',
           inputTokens: 200,
           outputTokens: 100,
@@ -265,7 +265,7 @@ describe('Company Hub Store', () => {
       });
 
       const state = useCompanyHubStore.getState();
-      expect(state.tokenUsage['claude-3-sonnet']!.totalTokens).toBe(450);
+      expect(state.tokenUsage['fixture-usage-model']!.totalTokens).toBe(450);
       expect(state.sessionTokens).toBe(450);
       expect(state.sessionCost).toBeCloseTo(0.03);
     });
@@ -273,18 +273,18 @@ describe('Company Hub Store', () => {
     it('should add tokens', () => {
       const { addTokens } = useCompanyHubStore.getState();
 
-      addTokens('gpt-4', 1000, 0.05, 'openai');
+      addTokens('fixture-model', 1000, 0.05, 'openai');
 
       const state = useCompanyHubStore.getState();
-      expect(state.tokenUsage['gpt-4']).toBeDefined();
-      expect(state.tokenUsage['gpt-4']!.totalTokens).toBe(1000);
+      expect(state.tokenUsage['fixture-model']).toBeDefined();
+      expect(state.tokenUsage['fixture-model']!.totalTokens).toBe(1000);
       expect(state.sessionTokens).toBe(1000);
     });
 
     it('should reset token usage', () => {
       const { addTokens, resetTokenUsage } = useCompanyHubStore.getState();
 
-      addTokens('gpt-4', 1000, 0.05, 'openai');
+      addTokens('fixture-model', 1000, 0.05, 'openai');
       resetTokenUsage();
 
       const state = useCompanyHubStore.getState();

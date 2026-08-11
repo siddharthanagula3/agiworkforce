@@ -1,10 +1,12 @@
 import { readFileSync } from 'fs';
 import path from 'path';
+import { requireAutoMode } from '../test-utils/modelFixtures';
 
 var mockMmkv: Map<string, string>;
 var mockActiveCloudOwnerId: string | null;
 var mockActiveCloudEpoch: number;
 var mockWhenMmkvReady: jest.Mock;
+const AUTO_MODEL_ID = requireAutoMode().id;
 
 jest.mock('@/lib/mmkv', () => {
   mockMmkv = new Map<string, string>();
@@ -212,7 +214,7 @@ describe('offline queue account provenance', () => {
           id: 'legacy',
           conversationId: 'legacy-conversation',
           content: 'Legacy private prompt',
-          model: 'auto-balanced',
+          model: AUTO_MODEL_ID,
           queuedAt: '2026-07-26T00:00:00.000Z',
           retryCount: 0,
         },
@@ -243,7 +245,7 @@ describe('offline queue account provenance', () => {
       offlineQueueModule.offlineQueue.enqueue({
         conversationId: 'cloud-conversation-a',
         content: 'Account A prompt',
-        model: 'auto-balanced',
+        model: AUTO_MODEL_ID,
         provenance: CLOUD_A_PROVENANCE,
       }),
     ).toThrow('inactive account');
@@ -253,7 +255,7 @@ describe('offline queue account provenance', () => {
     offlineQueueModule.offlineQueue.enqueue({
       conversationId: 'cloud-conversation-a',
       content: 'Account A private prompt',
-      model: 'auto-balanced',
+      model: AUTO_MODEL_ID,
       provenance: CLOUD_A_PROVENANCE,
     } as never);
     mockActiveCloudOwnerId = 'user-b';
@@ -275,7 +277,7 @@ describe('offline queue account provenance', () => {
     {
       activeMode: 'local' as const,
       provenance: CLOUD_A_PROVENANCE,
-      model: 'auto-balanced',
+      model: AUTO_MODEL_ID,
     },
   ])(
     'does not replay a $provenance.scope entry while current mode is $activeMode',
@@ -301,7 +303,7 @@ describe('offline queue account provenance', () => {
     offlineQueueModule.offlineQueue.enqueue({
       conversationId: 'cloud-conversation-a',
       content: 'Account A prompt',
-      model: 'auto-balanced',
+      model: AUTO_MODEL_ID,
       provenance: CLOUD_A_PROVENANCE,
     });
     const send = jest.fn().mockImplementation(async () => {
@@ -326,7 +328,7 @@ describe('offline queue account provenance', () => {
     offlineQueueModule.offlineQueue.enqueue({
       conversationId: 'same-conversation',
       content: 'same content',
-      model: 'auto-balanced',
+      model: AUTO_MODEL_ID,
       provenance: CLOUD_A_PROVENANCE,
     });
 
@@ -343,7 +345,7 @@ describe('offline queue account provenance', () => {
     offlineQueueModule.offlineQueue.enqueue({
       conversationId: 'cloud-conversation',
       content: 'Cloud prompt',
-      model: 'auto-balanced',
+      model: AUTO_MODEL_ID,
       provenance: CLOUD_A_PROVENANCE,
     } as never);
 

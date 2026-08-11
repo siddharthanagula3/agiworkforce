@@ -191,7 +191,9 @@ pub fn redact_log_record(line: &str, filter: LevelFilter) -> Option<String> {
     // `file`/`line` locate the log site and carry no user data.
     if let (Some(file), Some(line_number)) = (
         record.get("filename").and_then(serde_json::Value::as_str),
-        record.get("line_number").and_then(serde_json::Value::as_u64),
+        record
+            .get("line_number")
+            .and_then(serde_json::Value::as_u64),
     ) {
         kept.push(format!("at={file}:{line_number}"));
     }
@@ -329,7 +331,9 @@ mod tests {
 
     #[test]
     fn drops_lines_that_are_not_tracing_json_records() {
-        assert!(redact_log_record("2026-08-09 WARN plain text log line", LevelFilter::All).is_none());
+        assert!(
+            redact_log_record("2026-08-09 WARN plain text log line", LevelFilter::All).is_none()
+        );
         assert!(redact_log_record("", LevelFilter::All).is_none());
         assert!(redact_log_record("[1,2,3]", LevelFilter::All).is_none());
     }

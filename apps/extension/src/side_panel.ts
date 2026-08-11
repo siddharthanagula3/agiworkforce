@@ -891,7 +891,7 @@ function injectStyles(): void {
       padding: 1px 6px;
       /*
        * A Chrome side panel is ~320-500px and cannot be widened. Model ids run
-       * long ("gemini-3.5-flash-lite", "mcp"-namespaced routes), and with only
+       * long (catalog model IDs, "mcp"-namespaced routes), and with only
        * white-space:nowrap this badge held its full intrinsic width and pushed
        * #sp-header-right — which is flex-shrink:0 — off the panel edge, taking
        * the header icon buttons with it. Truncate here so the actions survive.

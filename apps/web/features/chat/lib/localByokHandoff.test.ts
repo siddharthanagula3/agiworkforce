@@ -11,13 +11,29 @@ import {
   type WebLocalToByokPreview,
 } from './localByokHandoff';
 import type { Conversation, Message } from '@shared/stores/web-chat-store';
+import { getProviderConfig, getProviderSurface, PROVIDERS_IN_ORDER } from '@agiworkforce/types';
+
+function requireDirectByokFixture(): { modelId: string; providerLabel: string } {
+  for (const provider of PROVIDERS_IN_ORDER) {
+    if (getProviderSurface(provider) !== 'byok') continue;
+    const providerLabel = getProviderConfig(provider)?.label;
+    if (providerLabel) return { modelId: `${provider}/fixture-byok-model`, providerLabel };
+  }
+  throw new Error('Canonical model registry is missing a direct-BYOK provider fixture');
+}
+
+const LOCAL_MODEL_ID = 'ollama/fixture-local-model';
+const LM_STUDIO_MODEL_ID = 'lmstudio/fixture-local-model';
+const LM_STUDIO_COMPAT_MODEL_ID = 'lm-studio/fixture-local-model';
+const BYOK_FIXTURE = requireDirectByokFixture();
+const BYOK_MODEL_ID = BYOK_FIXTURE.modelId;
 
 const conversation: Conversation = {
   id: 'conv-local',
   title: 'Local thread',
   createdAt: '2026-05-21T00:00:00.000Z',
   updatedAt: '2026-05-21T00:00:00.000Z',
-  model: 'ollama/llama3',
+  model: LOCAL_MODEL_ID,
 };
 
 const messages: Message[] = [
@@ -26,14 +42,14 @@ const messages: Message[] = [
     role: 'user',
     content: 'Local context',
     createdAt: '2026-05-21T00:00:01.000Z',
-    model: 'ollama/llama3',
+    model: LOCAL_MODEL_ID,
   },
 ];
 
 describe('localByokHandoff', () => {
   it('classifies local and direct BYOK provider modes from model ids', () => {
-    expect(getProviderModeForModel('ollama/llama3')).toBe('Local');
-    expect(getProviderModeForModel('open_router/deepseek-r1')).toBe('DirectByok');
+    expect(getProviderModeForModel(LOCAL_MODEL_ID)).toBe('Local');
+    expect(getProviderModeForModel(BYOK_MODEL_ID)).toBe('DirectByok');
   });
 
   it('classifies LM Studio as Local from the registry, with no per-provider special case', () => {
@@ -41,13 +57,13 @@ describe('localByokHandoff', () => {
     // short-circuited the registry lookup. The mode now comes from the provider's
     // `trustModes: ['local']` harness; drop that harness and this goes null, which
     // is exactly what would silently disable the fork ceremony below.
-    expect(getProviderModeForModel('lmstudio/qwen2.5-7b-instruct')).toBe('Local');
-    expect(getProviderModeForModel('lm-studio/qwen2.5-7b-instruct')).toBe('Local');
+    expect(getProviderModeForModel(LM_STUDIO_MODEL_ID)).toBe('Local');
+    expect(getProviderModeForModel(LM_STUDIO_COMPAT_MODEL_ID)).toBe('Local');
     expect(
       shouldForkLocalToByok({
-        conversation: { ...conversation, model: 'lmstudio/qwen2.5-7b-instruct' },
-        messages: [{ ...messages[0]!, model: 'lmstudio/qwen2.5-7b-instruct' }],
-        targetModelId: 'open_router/deepseek-r1',
+        conversation: { ...conversation, model: LM_STUDIO_MODEL_ID },
+        messages: [{ ...messages[0]!, model: LM_STUDIO_MODEL_ID }],
+        targetModelId: BYOK_MODEL_ID,
       }),
     ).toBe(true);
   });
@@ -57,7 +73,7 @@ describe('localByokHandoff', () => {
       shouldForkLocalToByok({
         conversation,
         messages,
-        targetModelId: 'open_router/deepseek-r1',
+        targetModelId: BYOK_MODEL_ID,
       }),
     ).toBe(true);
     expect(
@@ -96,7 +112,7 @@ describe('localByokHandoff', () => {
   });
 
   it('names the concrete destination provider from the model registry', () => {
-    expect(getByokTargetProviderLabel('open_router/deepseek-r1')).toBe('OpenRouter');
+    expect(getByokTargetProviderLabel(BYOK_MODEL_ID)).toBe(BYOK_FIXTURE.providerLabel);
     expect(getByokTargetProviderLabel('')).toBeUndefined();
   });
 
@@ -118,7 +134,7 @@ describe('localByokHandoff', () => {
 // a BYOK provider with no context selection, secret scan, payload preview,
 // consent or provider label.
 describe('routeLocalToByokSend', () => {
-  const byokModel = 'open_router/deepseek-r1';
+  const byokModel = BYOK_MODEL_ID;
 
   it('opens the consent ceremony instead of sending when a Local chat continues onto BYOK', () => {
     const startCeremony = vi.fn();
@@ -234,11 +250,11 @@ describe('resolveRegenerateBoundaryRefusal', () => {
     const refusal = resolveRegenerateBoundaryRefusal({
       conversation,
       messages,
-      targetModelId: 'open_router/deepseek-r1',
+      targetModelId: BYOK_MODEL_ID,
     });
 
     expect(refusal).toBeTypeOf('string');
-    expect(refusal).toContain('OpenRouter');
+    expect(refusal).toContain(BYOK_FIXTURE.providerLabel);
     expect(refusal).toContain('local model');
     // Points at the flow that DOES run the ceremony rather than dead-ending.
     expect(refusal).toContain('BYOK fork');
@@ -249,14 +265,14 @@ describe('resolveRegenerateBoundaryRefusal', () => {
       resolveRegenerateBoundaryRefusal({
         conversation,
         messages,
-        targetModelId: 'ollama/llama3',
+        targetModelId: LOCAL_MODEL_ID,
       }),
     ).toBeNull();
     expect(
       resolveRegenerateBoundaryRefusal({
-        conversation: { ...conversation, model: 'open_router/deepseek-r1' },
-        messages: [{ ...messages[0]!, model: 'open_router/deepseek-r1' }],
-        targetModelId: 'open_router/deepseek-r1',
+        conversation: { ...conversation, model: BYOK_MODEL_ID },
+        messages: [{ ...messages[0]!, model: BYOK_MODEL_ID }],
+        targetModelId: BYOK_MODEL_ID,
       }),
     ).toBeNull();
   });

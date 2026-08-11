@@ -23,6 +23,10 @@ pub struct ROICalculator {
     db: Arc<Mutex<Connection>>,
     avg_hourly_rate: f64,
     baseline_error_rate: f64,
+    /// Optional user-selected comparison rate for valuing local-model tokens.
+    /// There is no universal cloud counterfactual, so the default is no claimed
+    /// savings rather than a hardcoded fictional rate.
+    local_token_baseline_per_million: Option<f64>,
 }
 
 impl ROICalculator {
@@ -31,6 +35,7 @@ impl ROICalculator {
             db,
             avg_hourly_rate: 50.0,
             baseline_error_rate: 0.15,
+            local_token_baseline_per_million: None,
         }
     }
 
@@ -41,6 +46,11 @@ impl ROICalculator {
 
     pub fn with_baseline_error_rate(mut self, rate: f64) -> Self {
         self.baseline_error_rate = rate;
+        self
+    }
+
+    pub fn with_local_token_baseline_per_million(mut self, rate: f64) -> Self {
+        self.local_token_baseline_per_million = Some(rate.max(0.0));
         self
     }
 
@@ -219,6 +229,7 @@ impl ROICalculator {
                 "SELECT COALESCE(SUM(cost), 0.0)
              FROM messages
              WHERE created_at >= ? AND created_at <= ?
+             AND role = 'assistant'
              AND cost IS NOT NULL",
                 params![start, end],
                 |row| row.get(0),
@@ -230,13 +241,17 @@ impl ROICalculator {
                 "SELECT COALESCE(SUM(tokens), 0)
              FROM messages
              WHERE created_at >= ? AND created_at <= ?
+             AND role = 'assistant'
              AND provider = 'ollama'",
                 params![start, end],
                 |row| row.get(0),
             )
             .unwrap_or(0);
 
-        let cost_saved = (ollama_tokens as f64 / 1000.0) * 0.002;
+        let cost_saved = self
+            .local_token_baseline_per_million
+            .map(|rate| (ollama_tokens as f64 / 1_000_000.0) * rate)
+            .unwrap_or(0.0);
 
         Ok((total_cost, cost_saved))
     }
@@ -333,5 +348,33 @@ mod tests {
 
         assert_eq!(calculator.avg_hourly_rate, 75.0);
         assert_eq!(calculator.baseline_error_rate, 0.20);
+    }
+
+    #[tokio::test]
+    async fn llm_costs_count_assistant_requests_once_and_use_explicit_local_baseline() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE messages (
+                created_at INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                cost REAL,
+                tokens INTEGER,
+                provider TEXT
+            );
+            INSERT INTO messages VALUES (10, 'user', 0.25, 100, 'openai');
+            INSERT INTO messages VALUES (10, 'assistant', 0.75, 50, 'openai');
+            INSERT INTO messages VALUES (10, 'assistant', 0.0, 1000000, 'ollama');",
+        )
+        .expect("analytics fixture schema must initialize");
+        let calculator = ROICalculator::new(Arc::new(Mutex::new(conn)))
+            .with_local_token_baseline_per_million(2.0);
+
+        let (actual_cost, local_savings) = calculator
+            .calculate_llm_costs(0, 20)
+            .await
+            .expect("ROI query must succeed");
+
+        assert!((actual_cost - 0.75).abs() < f64::EPSILON);
+        assert!((local_savings - 2.0).abs() < f64::EPSILON);
     }
 }

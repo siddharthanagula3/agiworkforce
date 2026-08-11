@@ -33,13 +33,6 @@ const SAMPLE_RATE: u32 = 16_000;
 /// Maximum recording duration (seconds) to prevent runaway captures.
 const MAX_RECORDING_SECS: u64 = 120;
 
-/// OpenAI speech-to-text model id used for the transcription endpoint.
-/// This is an STT model on the `/v1/audio/transcriptions` endpoint, not a
-/// chat/completion model in `packages/contracts/types/src/models.json`, so it is owned
-/// here as a single named constant rather than routed through the model
-/// catalog. Update this in one place if OpenAI retires `gpt-4o-transcribe`.
-const OPENAI_STT_MODEL: &str = "gpt-4o-transcribe";
-
 /// Minimum recording duration (milliseconds) to filter out accidental taps.
 const MIN_RECORDING_MS: u128 = 300;
 
@@ -290,7 +283,11 @@ pub async fn run_voice_mode(
                 if turn.via_subscription {
                     output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
                 } else {
-                    output::print_cost(&session.model, turn.input_tokens, turn.output_tokens);
+                    output::print_recorded_cost(
+                        turn.input_tokens,
+                        turn.output_tokens,
+                        turn.cost_usd,
+                    );
                 }
             }
             Err(e) => {
@@ -876,9 +873,11 @@ async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Re
         .mime_str("audio/wav")
         .context("Failed to create multipart file part")?;
 
+    let stt_model = crate::model_catalog::preferred_model_for_type("openai", "stt")
+        .context("Canonical model catalog has no live OpenAI speech-to-text model")?;
     let form = reqwest::multipart::Form::new()
         .part("file", file_part)
-        .text("model", OPENAI_STT_MODEL)
+        .text("model", stt_model)
         .text("language", language.to_string())
         .text("response_format", "text");
 

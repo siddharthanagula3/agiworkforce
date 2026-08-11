@@ -413,7 +413,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
         </View>
         <View
           accessibilityHint="Opens the model picker"
-          accessibilityLabel="Model: Claude Sonnet 5, reasoning effort Medium"
+          accessibilityLabel="Model: Fixture Model, reasoning effort Medium"
           accessibilityRole="button"
           accessibilityState={
             {
@@ -473,7 +473,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
               }
             }
           >
-            Claude Sonnet 5
+            Fixture Model
           </Text>
           <Text
             className="text-sm text-white "

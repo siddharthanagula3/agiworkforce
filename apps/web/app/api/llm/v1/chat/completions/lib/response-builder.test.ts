@@ -7,6 +7,8 @@ vi.mock('@/lib/logger', () => ({
 
 import { buildUpstreamErrorResponse } from './response-builder';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 describe('buildUpstreamErrorResponse', () => {
   // CHANGED BY AUDIT-FIX SYS-17/SYS-18 — read loudly.
   //
@@ -31,8 +33,8 @@ describe('buildUpstreamErrorResponse', () => {
         429,
       ),
       'google',
-      'gemini-3.5-flash-lite',
-      'gemini-3.5-flash-lite',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
       'user-1',
       'request-1',
       'streaming',
@@ -54,8 +56,8 @@ describe('buildUpstreamErrorResponse', () => {
         500,
       ),
       'anthropic',
-      'claude-x',
-      'claude-x',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
       'user-1',
       'request-1',
       'streaming',
@@ -76,8 +78,8 @@ describe('buildUpstreamErrorResponse', () => {
     const response = buildUpstreamErrorResponse(
       upstreamError('OpenAI API error (400): prompt is too long: 250000 tokens > 200000 maximum'),
       'openai',
-      'gpt-x',
-      'gpt-x',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
       'user-1',
       'request-1',
       'non-streaming',
@@ -93,8 +95,8 @@ describe('buildUpstreamErrorResponse', () => {
     const response = buildUpstreamErrorResponse(
       upstreamError('Google API error (400): blocked by SAFETY finish reason'),
       'google',
-      'gemini-x',
-      'gemini-x',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
       'user-1',
       'request-1',
       'streaming',
@@ -110,8 +112,8 @@ describe('buildUpstreamErrorResponse', () => {
     const response = buildUpstreamErrorResponse(
       upstreamError('OpenAI request timeout after 60000ms'),
       'openai',
-      'gpt-x',
-      'gpt-x',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
       'user-1',
       'request-1',
       'streaming',

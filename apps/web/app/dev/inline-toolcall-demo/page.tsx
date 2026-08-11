@@ -26,7 +26,7 @@ import {
 const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   {
     // Synthetic layout data, but pointed at a real, stable page: the previous
-    // fixture invented an `/news/claude-4-7` announcement and a release title
+    // fixture invented a versioned-model announcement and release title
     // that do not exist. A screenshot of this harness is meant to be diffed
     // against a competitor's UI, so it must not contain a fabricated release.
     url: 'https://www.anthropic.com/news',
@@ -295,7 +295,7 @@ export default function InlineToolCallDemoPage() {
             className="rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30 p-6"
           >
             <WebSearchCard
-              query="agi workforce claude opus 5 release"
+              query="agi workforce provider release"
               resultCount={5}
               results={FILESYSTEM_RESULTS}
             />
@@ -318,7 +318,7 @@ export default function InlineToolCallDemoPage() {
                 status="success"
                 kind="web-search"
                 iconStyle="badge"
-                argSummary="agi workforce claude opus 5"
+                argSummary="agi workforce provider release"
               />
               <InlineToolCall
                 id="bs-2"

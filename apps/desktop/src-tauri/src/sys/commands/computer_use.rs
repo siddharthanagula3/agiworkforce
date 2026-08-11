@@ -997,8 +997,7 @@ fn cancelled_opa_result() -> serde_json::Value {
 /// Executes an OPA (Observe-Plan-Act) computer use task.
 ///
 /// Stream 2 params:
-/// - `model`: explicit model id from the catalog (e.g. `claude-opus-5`,
-///   `gpt-5.6-sol`, `gemini-3.1-pro`, `grok-4.5`). `None` lets the
+/// - `model`: explicit vision-capable model id from the catalog. `None` lets the
 ///   router pick the user's default vision model.
 /// - `provider`: explicit provider name (`anthropic`, `openai`, `google`,
 ///   `xai`, etc). `None` resolves from the model id.

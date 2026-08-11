@@ -43,6 +43,14 @@ function getErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
+function getTermsAcceptanceUrl(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const candidate = (body as { acceptanceUrl?: unknown }).acceptanceUrl;
+  return typeof candidate === 'string' && candidate.startsWith('/login/complete?')
+    ? candidate
+    : null;
+}
+
 function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDetails | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const candidate = body as Record<string, unknown>;
@@ -105,6 +113,7 @@ function DeviceForm() {
   const [loading, setLoading] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
+  const [termsReviewHref, setTermsReviewHref] = useState<string | null>(null);
   const redirectParams = new URLSearchParams();
   if (code) redirectParams.set('user_code', code);
   if (isDesktopSurface) redirectParams.set('surface', 'desktop');
@@ -191,6 +200,7 @@ function DeviceForm() {
 
     setLoading(true);
     setMessage(null);
+    setTermsReviewHref(null);
     try {
       const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
       const csrfJson = (await csrfRes.json().catch(() => null)) as { token?: string } | null;
@@ -202,10 +212,14 @@ function DeviceForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfJson.token },
         credentials: 'include',
-        body: JSON.stringify({ user_code: code.trim().toUpperCase() }),
+        body: JSON.stringify({
+          user_code: code.trim().toUpperCase(),
+          ...(isDesktopSurface ? { surface: 'desktop' } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        setTermsReviewHref(getTermsAcceptanceUrl(body));
         throw new Error(getErrorMessage(body, t('auth:device.approvalFailed')));
       }
       setMessage({
@@ -267,6 +281,7 @@ function DeviceForm() {
           onChange={(e) => {
             setCode(formatUserCode(e.target.value));
             setMessage(null);
+            setTermsReviewHref(null);
           }}
           required
           placeholder="ABCD-1234"
@@ -306,6 +321,11 @@ function DeviceForm() {
             {message.text}
           </p>
         )}
+        {termsReviewHref ? (
+          <Link href={termsReviewHref} className="agi-link">
+            Review current policies
+          </Link>
+        ) : null}
         <button
           type="submit"
           disabled={

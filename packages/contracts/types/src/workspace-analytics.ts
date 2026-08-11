@@ -37,7 +37,7 @@
  *   workspaceId: 'ws-acme',
  *   userId: 'usr-alice',
  *   eventType: 'model_call',
- *   eventName: 'claude-opus-5/chat',
+ *   eventName: `${selectedModel.id}/chat`,
  *   metadata: { inputTokens: 1200, outputTokens: 340, costUsd: 0.048 },
  *   timestamp: '2026-03-19T10:00:00Z',
  * };
@@ -59,8 +59,8 @@ export interface WorkspaceAnalyticsEvent {
   /**
    * Specific event name within the category.
    *
-   * Examples: `"agent/started"`, `"tool/bash"`, `"claude-opus-5/chat"`,
-   * `"ui/settings_opened"`.
+   * Examples: `"agent/started"`, `"tool/bash"`, a catalog-derived model call
+   * name, or `"ui/settings_opened"`.
    */
   eventName: string;
 
@@ -92,10 +92,7 @@ export interface WorkspaceAnalyticsEvent {
  *   totalTokens: 12_000_000,
  *   totalCost: 240.00,
  *   activeUsers: 18,
- *   topModels: [
- *     { model: 'claude-opus-5', count: 3100 },
- *     { model: 'gpt-5.6-sol',          count: 1200 },
- *   ],
+ *   topModels: topCatalogModels.map(({ id: model, count }) => ({ model, count })),
  *   topTools: [
  *     { tool: 'bash',               count: 9200 },
  *     { tool: 'read_file',          count: 7800 },
@@ -132,7 +129,7 @@ export interface WorkspaceAnalyticsSummary {
 
   /** Top models by call count, ordered descending. */
   topModels: Array<{
-    /** Model identifier (e.g., `"claude-opus-5"`). */
+    /** Model identifier resolved from the canonical model catalog. */
     model: string;
     /** Number of calls to this model in the period. */
     count: number;

@@ -7,7 +7,7 @@
  * - Mode chip: Ask / Auto / Plan / Bypass, with descriptions in a Radix Popover.
  * - Reasoning control: one discrete slider backed by the selected model's exact
  *   catalog-supported values. Hidden
- *   when that model has no provider effort request path (for example Haiku 4.5).
+ *   when that model has no provider effort request path.
  * - Temp chip: single-tap boolean toggle. When ON, the conversation does not persist.
  *
  * A small orange dot appears on a chip when source === 'conversation-override',

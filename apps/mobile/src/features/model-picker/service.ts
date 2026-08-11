@@ -26,6 +26,7 @@ import {
 } from '@agiworkforce/types';
 import {
   AUTO_MODES as MOBILE_AUTO_MODES,
+  DEFAULT_AUTO_MODE_ID as MOBILE_DEFAULT_AUTO_MODE_ID,
   MODEL_LIST as CLOUD_MODEL_LIST,
   getCloudModelsForTier,
   getProviderById as getCloudProviderById,
@@ -173,6 +174,7 @@ export const DEFAULT_LOCAL_MODEL_ID = DEFAULT_LOCAL_MODEL.id;
 
 /** Canonical Auto profiles with Mobile-only icon presentation. */
 export const AUTO_MODES: AutoModeDef[] = MOBILE_AUTO_MODES;
+export const DEFAULT_AUTO_MODE_ID = MOBILE_DEFAULT_AUTO_MODE_ID;
 
 export const PROVIDERS: ProviderDef[] = [
   {
@@ -363,6 +365,27 @@ export function isSelectableModelIdForCloudAccess(id: string, cloudUnlocked: boo
   return isSelectableModelId(id) || (cloudUnlocked && isCloudManagedModelId(id));
 }
 
+/**
+ * Validate a selection against both the Local/Cloud trust boundary and the
+ * user's current Cloud plan. Persisted Mobile state and conversation metadata
+ * must use this same predicate as the picker so a downgraded account cannot
+ * restore and dispatch a model the UI would correctly show as locked.
+ */
+export function isSelectableModelIdForAccess(
+  id: string,
+  cloudUnlocked: boolean,
+  subscriptionTier: string,
+): boolean {
+  if (isSelectableModelId(id)) return true;
+  return (
+    cloudUnlocked && isCloudManagedModelId(id) && canAccessCloudModelForTier(id, subscriptionTier)
+  );
+}
+
+export function getAutoModeById(id: string): AutoModeDef | undefined {
+  return autoModeMap.get(id);
+}
+
 export function getModelByIdForCloudAccess(
   id: string,
   cloudUnlocked: boolean,
@@ -402,9 +425,8 @@ export function isAutoMode(id: string): boolean {
  * `allModelMap` holds the local models plus ONE preview cloud model per
  * provider (LOCKED_CLOUD_MODELS), not the whole cloud catalog — so looking a
  * cloud id up there missed almost every cloud model and fell through to the
- * raw wire id. The Models screen rendered "gpt-5.6-terra" as the active model
- * while the composer chip, which goes through getShortDisplayName, said
- * "GPT-5.6 Terra" for the same selection.
+ * raw wire id. The Models screen therefore exposed a catalog key while the
+ * composer chip, which goes through getShortDisplayName, showed its name.
  *
  * Consulting the full cloud source first makes both helpers agree. The id
  * remains the last-resort fallback for an id no registry knows.
@@ -416,12 +438,24 @@ export function getDisplayName(id: string): string {
 }
 
 /**
+ * Managed Cloud receipts must resolve through the current cloud catalog.
+ * Unknown historical ids describe removed capacity, not dynamic local models.
+ */
+export function getManagedDisplayName(id: string | null | undefined): string {
+  const normalizedId = id?.trim() ?? '';
+  if (!normalizedId) return 'Unavailable model';
+  const autoMode = autoModeMap.get(normalizedId);
+  if (autoMode) return autoMode.name;
+  return cloudModelSourceMap.get(normalizedId)?.name ?? 'Unavailable model';
+}
+
+/**
  * Shown when a persisted selection matches nothing the catalog knows.
  *
  * This helper feeds user-facing chrome (the composer model chip, the Models
  * settings row, the Add-to-chat sheet). Falling back to the id printed a raw
- * wire id such as `gpt-5.6-terra` into those surfaces, which is developer
- * output, not a model name. A neutral label is the truthful answer: the app
+ * wire value into those surfaces, which is developer output, not a model name.
+ * A neutral label is the truthful answer: the app
  * cannot name a model it no longer ships.
  */
 export const UNKNOWN_MODEL_LABEL = 'Not set';

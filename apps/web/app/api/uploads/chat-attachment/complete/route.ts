@@ -24,6 +24,8 @@ import {
 } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { SYNCED_APP_SURFACES, type SyncedAppSurface } from '@agiworkforce/types';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const CompleteChatAttachmentSchema = z.object({
   storageKey: z.string().min(1).max(600),
@@ -70,6 +72,11 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Object storage is not configured');
   }
 
+  // Capture workspace provenance once, before object inspection. Both the
+  // idempotency read and final catalog write must remain in this scope even if
+  // another tab switches the account's active workspace while scanning runs.
+  const organizationId = await resolveActiveOrganizationId(getNeonDb(), userId);
+
   const parsed = CompleteChatAttachmentSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
@@ -90,7 +97,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const existing = await getMediaAssetByStoragePathname(userId, storageKey);
+  const existing = await getMediaAssetByStoragePathname(userId, storageKey, organizationId);
   if (existing) {
     return NextResponse.json({
       attachment: {
@@ -157,6 +164,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
 
   const id = await insertMediaAsset({
     userId,
+    organizationId,
     kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
     mimeType,
     byteSize: object.data.byteLength,

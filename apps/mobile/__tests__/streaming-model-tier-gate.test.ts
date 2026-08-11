@@ -12,8 +12,12 @@
  * `PaywallBottomSheet` upgrade prompt renders instead.
  */
 
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
+const MODEL_ID = requireMobileCloudModel().id;
+const MODEL_ACCESS_MESSAGE = `Model ${MODEL_ID} requires PRO subscription or higher.`;
 
 async function loadStreamingService() {
   jest.resetModules();
@@ -76,7 +80,7 @@ describe('model-tier-gate 403 handling', () => {
       text: async () =>
         JSON.stringify({
           error: {
-            message: 'Model gemini-3.5-flash-lite requires PRO subscription or higher.',
+            message: MODEL_ACCESS_MESSAGE,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: 'pro',
@@ -87,7 +91,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.5-flash-lite',
+        model: MODEL_ID,
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000011',
@@ -100,7 +104,7 @@ describe('model-tier-gate 403 handling', () => {
     expect(err).toBeInstanceOf(ApiPaywallError);
     expect(err.feature).toBe('model_access');
     expect(err.requiredTier).toBe('pro');
-    expect(err.reason).toBe('Model gemini-3.5-flash-lite requires PRO subscription or higher.');
+    expect(err.reason).toBe(MODEL_ACCESS_MESSAGE);
   });
 
   it('falls back to a generic Error for a 403 without the model_not_available code', async () => {
@@ -116,7 +120,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.5-flash-lite',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000012',
@@ -145,7 +149,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.5-flash-lite',
+        model: MODEL_ID,
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000013',

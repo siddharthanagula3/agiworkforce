@@ -48,6 +48,7 @@
  * @packageDocumentation
  */
 
+import { getRoutingSlotModel } from '@agiworkforce/types';
 import type { TaskFamily, TaskFamilySignals } from '../../task-family';
 import type { RoutingTaskType } from '../../types';
 
@@ -89,6 +90,20 @@ export const CORPUS_RUNTIME_PROFILE_ID = 'web/cloud-chat';
  */
 const COMPUTER_USE_UNAVAILABLE: BaselineRoutePin = 'unavailable:no_eligible_route';
 
+const BASELINE_ROUTES = {
+  workhorseBalanced: `${getRoutingSlotModel('workhorse_general')}@balanced`,
+  workhorseEconomy: `${getRoutingSlotModel('workhorse_general')}@economy`,
+  generalBalanced: `${getRoutingSlotModel('general_balanced')}@balanced`,
+  generalPremium: `${getRoutingSlotModel('flagship_general')}@premium`,
+  codingBalanced: `${getRoutingSlotModel('coding_balanced')}@balanced`,
+  codingPremium: `${getRoutingSlotModel('flagship_coding')}@premium`,
+  multimodalBalanced: `${getRoutingSlotModel('multimodal_balanced')}@balanced`,
+  longContextBalanced: `${getRoutingSlotModel('long_context_balanced')}@balanced`,
+  reasoningEconomy: `${getRoutingSlotModel('reasoning_economy')}@economy`,
+  reasoningBalanced: `${getRoutingSlotModel('reasoning_balanced')}@balanced`,
+  reasoningPremium: `${getRoutingSlotModel('reasoning_premium_pro')}@premium`,
+} as const satisfies Record<string, BaselineRoutePin>;
+
 export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
   // ── deep_research ───────────────────────────────────────────────────────
   {
@@ -101,7 +116,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Deep Research toggle alone is decisive.',
   },
   {
@@ -110,7 +125,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, webSearch: true, messageCharCount: 120 },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Research outranks the plain web-search toggle.',
   },
   {
@@ -119,7 +134,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, workMode: 'agiwork' },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Research outranks agiwork, matching resolveToolAwareTaskType order.',
   },
   {
@@ -128,7 +143,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, declaredToolCount: 3, toolChoiceForced: true },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Caller tools do not displace an explicit research request.',
   },
   {
@@ -137,7 +152,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, estimatedInputTokens: 90_000 },
     taskType: 'research',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Research outranks the long-context guard; free tier clamps the band.',
   },
   {
@@ -150,7 +165,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Research outranks attachments.',
   },
 
@@ -161,7 +176,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', messageCharCount: 200 },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'The work-mode toggle alone is decisive.',
   },
   {
@@ -170,7 +185,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', codeExecution: true },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'agiwork outranks code_execution, matching resolveToolAwareTaskType.',
   },
   {
@@ -179,7 +194,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', officeCreation: true },
     taskType: 'agentic',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Both map to agentic; agiwork is checked first and reported as such.',
   },
   {
@@ -188,7 +203,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', declaredToolCount: 8 },
     taskType: 'agentic',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Work mode outranks a caller tool surface.',
   },
   {
@@ -197,7 +212,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', estimatedInputTokens: 120_000 },
     taskType: 'agentic',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gpt-5.4-mini@economy',
+    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
     note: 'Free tier clamps agentic to the economy band.',
   },
   {
@@ -210,7 +225,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'Work mode outranks attachments.',
   },
 
@@ -221,7 +236,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, messageCharCount: 160 },
     taskType: 'agentic',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Office creation alone is decisive.',
   },
   {
@@ -230,7 +245,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, workMode: 'chat' },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'Explicit chat work mode does not suppress the office toggle.',
   },
   {
@@ -239,7 +254,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, codeExecution: true },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'Office creation outranks code execution, mirroring the tool-aware order.',
   },
   {
@@ -248,7 +263,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, declaredToolCount: 2 },
     taskType: 'agentic',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Caller tools do not displace the office toggle.',
   },
   {
@@ -257,7 +272,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, estimatedInputTokens: 65_000 },
     taskType: 'agentic',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gpt-5.4-mini@economy',
+    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
     note: 'Office creation outranks the long-context guard.',
   },
   {
@@ -266,7 +281,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, thinkingMode: true, priorTurnCount: 2 },
     taskType: 'agentic',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-sol@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.generalPremium,
     note: 'Office creation outranks extended thinking.',
   },
 
@@ -277,7 +292,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, messageCharCount: 240 },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'Run-code toggle alone is decisive.',
   },
   {
@@ -286,7 +301,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, workMode: 'chat' },
     taskType: 'coding',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'Chat work mode does not suppress the run-code toggle.',
   },
   {
@@ -295,7 +310,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, declaredToolCount: 5, toolChoiceForced: true },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'The explicit sandbox toggle outranks a caller tool surface.',
   },
   {
@@ -304,7 +319,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, webSearch: true },
     taskType: 'coding',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'Code execution outranks the web-search toggle.',
   },
   {
@@ -313,7 +328,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, estimatedInputTokens: 80_000 },
     taskType: 'coding',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gpt-5.4-mini@economy',
+    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
     note: 'Free tier clamps coding to the economy band.',
   },
   {
@@ -322,7 +337,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, thinkingMode: true, priorTurnCount: 9 },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'Code execution outranks extended thinking.',
   },
 
@@ -333,7 +348,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, messageCharCount: 55 },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
     note: 'Plain web-search toggle without the Deep Research mode.',
   },
   {
@@ -342,7 +357,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webFetch: true, messageCharCount: 90 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'web_fetch grounds the answer without changing the canonical task type.',
   },
   {
@@ -351,7 +366,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, webFetch: true, workMode: 'chat' },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Both grounding toggles collapse to one family.',
   },
   {
@@ -360,7 +375,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, messageCharCount: 30, priorTurnCount: 1 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A grounded one-liner still classifies as simple_chat canonically.',
   },
   {
@@ -369,7 +384,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, attachments: [{ mime: 'image/png', type: 'image' }] },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Explicit tool toggles outrank attachments in the priority order.',
   },
   {
@@ -378,7 +393,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webFetch: true, declaredToolCount: 4 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Server-owned grounding outranks a caller tool surface.',
   },
 
@@ -469,7 +484,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { attachments: [{ mime: 'image/png', type: 'image' }], messageCharCount: 25 },
     taskType: 'multimodal',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.6-flash@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.multimodalBalanced,
     note: 'A single image attachment.',
   },
   {
@@ -478,7 +493,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { attachments: [{ mime: 'video/mp4', type: 'video' }] },
     taskType: 'multimodal',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.6-flash@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.multimodalBalanced,
     note: 'Video MIME routes to the same family as image.',
   },
   {
@@ -490,7 +505,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'multimodal',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.6-flash@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.multimodalBalanced,
     note: 'A bare screenshot with no tool surface is vision, not automation.',
   },
   {
@@ -505,7 +520,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'multimodal',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Free tier clamps multimodal to the economy band.',
   },
   {
@@ -517,7 +532,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'multimodal',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.6-flash@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.multimodalBalanced,
     note: 'Attachments outrank the long-context guard, matching classifyTaskLocally.',
   },
   {
@@ -526,7 +541,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { attachments: [{ mime: 'image/gif', type: 'image' }], thinkingMode: true },
     taskType: 'multimodal',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.6-flash@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.multimodalBalanced,
     note: 'Attachments outrank extended thinking.',
   },
 
@@ -537,7 +552,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 50_001, messageCharCount: 400 },
     taskType: 'long_context',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.1-pro-preview@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
     note: 'One token over the threshold — the boundary is strict, as in classify.ts.',
   },
   {
@@ -546,7 +561,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 250_000, priorTurnCount: 40 },
     taskType: 'long_context',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.1-pro-preview@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
     note: 'A long transcript.',
   },
   {
@@ -555,7 +570,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 900_000, workMode: 'chat' },
     taskType: 'long_context',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.1-pro-preview@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
     note: 'An explicit chat work mode is not a decisive signal on its own.',
   },
   {
@@ -564,7 +579,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 60_000 },
     taskType: 'long_context',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Free tier clamps long context to the economy band.',
   },
   {
@@ -573,7 +588,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 120_000, attachments: [] },
     taskType: 'long_context',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.1-pro-preview@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
     note: 'An empty attachment array is not an attachment.',
   },
   {
@@ -582,7 +597,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 51_000, thinkingMode: true, declaredToolCount: 3 },
     taskType: 'long_context',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.1-pro-preview@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
     note: 'The token budget outranks both the tool surface and extended thinking.',
   },
 
@@ -593,7 +608,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 1, messageCharCount: 150 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'A single caller-declared tool.',
   },
   {
@@ -602,7 +617,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { toolChoiceForced: true, messageCharCount: 45 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A forced tool_choice with no tools[] still means a tool loop.',
   },
   {
@@ -611,7 +626,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 16, toolChoiceForced: true },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'Caller tools never change the canonical task type — coding stays coding.',
   },
   {
@@ -620,7 +635,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 6, workMode: 'chat', priorTurnCount: 5 },
     taskType: 'agentic',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Tools plus an explicit chat mode is still a caller loop, not agiwork.',
   },
   {
@@ -629,7 +644,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 2, estimatedInputTokens: 10_000 },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Below the long-context threshold the tool surface decides.',
   },
   {
@@ -638,7 +653,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 3, thinkingMode: true },
     taskType: 'coding',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'A tool surface outranks extended thinking.',
   },
 
@@ -649,7 +664,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, messageCharCount: 210 },
     taskType: 'reasoning',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'qwen-3.7-plus@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.reasoningPremium,
     note: 'The thinking toggle with nothing else set.',
   },
   {
@@ -658,7 +673,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, declaredToolCount: 0 },
     taskType: 'reasoning',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'qwen-3.7-plus@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.reasoningBalanced,
     note: 'A zero-length tools array is not a tool surface.',
   },
   {
@@ -667,7 +682,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, workMode: 'chat', priorTurnCount: 2 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Extended thinking can narrow a plain general request.',
   },
   {
@@ -676,7 +691,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, estimatedInputTokens: 4_000 },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'Extended thinking on a coding request.',
   },
   {
@@ -685,7 +700,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, messageCharCount: 12 },
     taskType: 'reasoning',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'qwen-3.5-flash@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.reasoningEconomy,
     note: 'The thinking toggle outranks the residual length branch.',
   },
   {
@@ -694,7 +709,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, webSearch: false, researchMode: false },
     taskType: 'reasoning',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'qwen-3.7-plus@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.reasoningBalanced,
     note: 'Explicitly false toggles are signals that were considered and rejected.',
   },
 
@@ -705,7 +720,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 4 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A greeting.',
   },
   {
@@ -714,7 +729,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 79, workMode: 'chat' },
     taskType: 'simple_chat',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'One character under the simple-chat boundary.',
   },
   {
@@ -723,7 +738,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 30, priorTurnCount: 0, estimatedInputTokens: 12 },
     taskType: 'simple_chat',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A first turn; the premium tier still routes to the economy band.',
   },
   {
@@ -732,7 +747,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 20, attachments: [] },
     taskType: 'simple_chat',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'An empty attachment array falls through to the length branch.',
   },
   {
@@ -741,7 +756,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 61, declaredToolCount: 0, toolChoiceForced: false },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Tool signals present but negative.',
   },
   {
@@ -750,7 +765,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 15, estimatedInputTokens: 50_000 },
     taskType: 'simple_chat',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Exactly at the long-context threshold, which is strict — not over it.',
   },
 
@@ -761,7 +776,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 80 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Exactly at the simple-chat boundary, which is exclusive.',
   },
   {
@@ -770,7 +785,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 900, priorTurnCount: 6 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'A long plain turn with no tools and no attachments.',
   },
   {
@@ -779,7 +794,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 400, workMode: 'chat' },
     taskType: 'creative_writing',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'Prose intent is a CONTENT signal; only the canonical classifier sees it.',
   },
   {
@@ -788,7 +803,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 2_400, estimatedInputTokens: 30_000 },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Below the long-context threshold.',
   },
   {
@@ -797,7 +812,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 130, attachments: [], declaredToolCount: 0 },
     taskType: 'creative_writing',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'Empty collections are not signals.',
   },
   {
@@ -806,7 +821,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 500, thinkingMode: false, researchMode: false },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Every toggle explicitly off.',
   },
 
@@ -817,7 +832,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: {},
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'No signals at all.',
   },
   {
@@ -826,7 +841,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { priorTurnCount: 3 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'A turn count is not decisive on its own.',
   },
   {
@@ -835,7 +850,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { runtimeProfileId: CORPUS_RUNTIME_PROFILE_ID },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: 'gemini-3.5-flash-lite@economy',
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Surface alone decides nothing; it is recorded, not branched on.',
   },
   {
@@ -844,7 +859,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 8_000, priorTurnCount: 2 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'gpt-5.6-terra@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
     note: 'Under the long-context threshold with no length signal for the residual.',
   },
   {
@@ -853,7 +868,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'chat', declaredToolCount: 0, toolChoiceForced: false },
     taskType: 'coding',
     subscriptionTier: 'max',
-    expectedBaselineRoute: 'claude-opus-5@premium',
+    expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
     note: 'Every toggle off and no length — the coding intent is content-only.',
   },
   {
@@ -862,7 +877,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { attachments: [], webSearch: false, officeCreation: false },
     taskType: 'creative_writing',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: 'claude-sonnet-5@balanced',
+    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
     note: 'Negative signals plus an empty attachment array still cannot decide.',
   },
 ];

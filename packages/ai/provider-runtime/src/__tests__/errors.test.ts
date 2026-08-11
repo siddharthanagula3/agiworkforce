@@ -7,6 +7,9 @@ import {
   parseContextOverflow,
 } from '../errors';
 
+const PRIMARY_FIXTURE_MODEL_ID = 'fixture-primary-model';
+const FALLBACK_FIXTURE_MODEL_ID = 'fixture-fallback-model';
+
 describe('classifyError', () => {
   it('classifies AbortError as aborted/non-retryable', () => {
     const err = Object.assign(new Error('aborted'), { name: 'AbortError' });
@@ -118,7 +121,7 @@ describe('classifyError', () => {
   });
 
   it('classifies invalid model name', () => {
-    const err = { status: 400, message: 'model gpt-99 not found' };
+    const err = { status: 400, message: 'model fixture-missing not found' };
     const c = classifyError(err);
     expect(c.category).toBe('invalid_model');
     expect(c.fallbackable).toBe(true);
@@ -208,10 +211,15 @@ describe('FallbackTriggeredError', () => {
       fallbackable: true,
       message: '529',
     };
-    const err = new FallbackTriggeredError('claude-opus-5', 'claude-sonnet-4.6', c, new Error());
-    expect(err.message).toContain('claude-opus-5');
-    expect(err.message).toContain('claude-sonnet-4.6');
-    expect(err.originalModel).toBe('claude-opus-5');
-    expect(err.fallbackModel).toBe('claude-sonnet-4.6');
+    const err = new FallbackTriggeredError(
+      PRIMARY_FIXTURE_MODEL_ID,
+      FALLBACK_FIXTURE_MODEL_ID,
+      c,
+      new Error(),
+    );
+    expect(err.message).toContain(PRIMARY_FIXTURE_MODEL_ID);
+    expect(err.message).toContain(FALLBACK_FIXTURE_MODEL_ID);
+    expect(err.originalModel).toBe(PRIMARY_FIXTURE_MODEL_ID);
+    expect(err.fallbackModel).toBe(FALLBACK_FIXTURE_MODEL_ID);
   });
 });

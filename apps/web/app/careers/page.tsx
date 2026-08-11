@@ -20,7 +20,7 @@ export default function CareersPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Careers</p>
           <h1 id="agi-careers-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">A small team,</span>
+            <span className="agi-fl-h1-line">A small team,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">on purpose.</em>
             </span>

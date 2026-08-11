@@ -61,6 +61,7 @@ jest.mock('lucide-react-native', () => {
 
 const mockStorageSet = jest.fn();
 const mockStorageGet = jest.fn().mockReturnValue(undefined);
+const mockStorageDelete = jest.fn();
 let mockModelPickerProps: { onSelect?: (modelId: string) => void } | null = null;
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -68,6 +69,7 @@ jest.mock('../lib/mmkv', () => ({
   storage: {
     getString: (...args: unknown[]) => mockStorageGet(...args),
     set: (...args: unknown[]) => mockStorageSet(...args),
+    delete: (...args: unknown[]) => mockStorageDelete(...args),
   },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
@@ -116,6 +118,8 @@ jest.mock('@agiworkforce/compliance', () => ({
 
 const mockDetectCapabilities = jest.fn(() => new Promise(() => {}));
 const mockGetInstalledModel = jest.fn().mockResolvedValue(null);
+const DEFAULT_LOCAL_MODEL_ID = 'fixture-default-local-model';
+const LITE_LOCAL_MODEL_ID = 'fixture-lite-local-model';
 
 jest.mock('../storage/installedModels', () => ({
   getInstalledModel: (...args: unknown[]) => mockGetInstalledModel(...args),
@@ -124,9 +128,9 @@ jest.mock('../storage/installedModels', () => ({
 
 // Local LLM catalog stub
 const mockDefaultLocalModel = {
-  id: 'qwen2.5-1.5b-instruct-q4_k_m',
-  displayName: 'Qwen 2.5 1.5B',
-  family: 'qwen',
+  id: DEFAULT_LOCAL_MODEL_ID,
+  displayName: 'Fixture Standard',
+  family: 'fixture-family',
   paramCountB: 1.5,
   fileSizeBytes: 1_073_741_824,
   supportedRuntimes: ['gguf'],
@@ -144,9 +148,9 @@ const mockDefaultLocalModel = {
 };
 const mockLiteLocalModel = {
   ...mockDefaultLocalModel,
-  id: 'llama-3.2-1b-instruct-spinquant',
+  id: LITE_LOCAL_MODEL_ID,
   displayName: 'AGI Lite',
-  family: 'llama',
+  family: 'fixture-lite-family',
   paramCountB: 1,
   fileSizeBytes: 600_000_000,
   role: 'lite-mode',
@@ -176,6 +180,10 @@ jest.mock('expo-constants', () => ({
 // ---------------------------------------------------------------------------
 
 import OnboardingScreen from '../app/(public)/onboarding';
+import {
+  CLOUD_CHAT_POST_AUTH_INTENT,
+  POST_AUTH_INTENT_PARAM,
+} from '../src/features/auth/services/postAuthIntent';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -238,8 +246,8 @@ describe('Onboarding', () => {
     it('shows Continue when the recommended model is already installed', async () => {
       mockIsDisclosureSatisfied.mockReturnValue(true);
       mockGetInstalledModel.mockResolvedValue({
-        id: 'qwen2.5-1.5b-instruct-q4_k_m',
-        display_name: 'Qwen 2.5 1.5B',
+        id: DEFAULT_LOCAL_MODEL_ID,
+        display_name: mockDefaultLocalModel.displayName,
         runtime: 'local',
         format: 'pte',
         size_bytes: 1_073_741_824,
@@ -385,12 +393,26 @@ describe('Onboarding', () => {
       expect(getByTestId('device-tier-pick-model-btn')).toBeTruthy();
     });
 
+    it('carries an explicit Cloud intent into sign-in without persisting a mode', async () => {
+      const { getByTestId } = await renderAtDeviceTier();
+
+      fireEvent.press(getByTestId('device-tier-cloud-btn'));
+
+      expect(mockStorageSet).toHaveBeenCalledWith('onboarding-done', 'true');
+      expect(mockStorageSet).not.toHaveBeenCalledWith('onboarding-mode', expect.anything());
+      expect(mockStorageDelete).toHaveBeenCalledWith('onboarding-mode');
+      expect(mockReplace).toHaveBeenCalledWith({
+        pathname: '/(auth)/login',
+        params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+      });
+    });
+
     it('uses the selected picker model for the download card', async () => {
       const { getByTestId, getByText } = await renderAtDeviceTier();
 
       await act(async () => {
         fireEvent.press(getByTestId('device-tier-pick-model-btn'));
-        mockModelPickerProps?.onSelect?.('llama-3.2-1b-instruct-spinquant');
+        mockModelPickerProps?.onSelect?.(LITE_LOCAL_MODEL_ID);
         await Promise.resolve();
       });
 

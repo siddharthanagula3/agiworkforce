@@ -29,6 +29,7 @@ import {
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -42,6 +43,8 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+  const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let restored: ChatConversationRow | undefined;
   try {
@@ -52,15 +55,18 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
     // `updated_at` is deliberately NOT bumped: it drives the sidebar's ordering,
     // and restoring an old conversation should return it to its place in the
     // history rather than jumping it to the top as if it had new activity.
-    [restored] = await getNeonChatDb().query<ChatConversationRow>(
+    [restored] = await db.query<ChatConversationRow>(
       `
         update web_conversations
         set deleted_at = null
-        where id = $1 and user_id = $2 and deleted_at is not null
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3
+          and deleted_at is not null
         returning id, title, model, project_id, pinned, starred, archived, is_temporary,
                   created_at, updated_at, deleted_at
       `,
-      [id, userId],
+      [id, userId, organizationId],
     );
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to restore conversation');

@@ -19,7 +19,11 @@ test('generated registry satisfies the canonical JSON schema', () => {
   assert.equal(validate(registry), true, JSON.stringify(validate.errors, null, 2));
 
   const invalid = JSON.parse(JSON.stringify(registry));
-  delete invalid.routes['openai/gpt-5.6-luna'].harnessId;
+  const routeKey = Object.keys(registry.routes).find(
+    (candidate) => registry.routes[candidate].harnessId !== undefined,
+  );
+  assert.ok(routeKey, 'the generated registry must contain a harness-bound route');
+  delete invalid.routes[routeKey].harnessId;
   assert.equal(validate(invalid), false, 'schema must reject a route without its harness binding');
   assert.ok(
     validate.errors?.some(

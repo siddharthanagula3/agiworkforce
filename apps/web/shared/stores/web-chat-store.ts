@@ -288,6 +288,8 @@ export interface MessageMetadata {
     feature: string;
     requiredTier: string;
     reason?: string;
+    /** Recovery implied by the server code; legacy slots default to upgrade. */
+    recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
     /**
      * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`, so a
      * PAID ceiling (rolling window, billing period, rate limit) renders the
@@ -334,6 +336,8 @@ export interface MessageMetadata {
   imageGenAspect?: string;
   /** Model id used for image generation. */
   imageGenModel?: string;
+  /** Bounded ISO instant before which provider-directed image retry should stay disabled. */
+  imageRetryAt?: string;
   /**
    * Generated video URL. Displayed inline when toolType === 'video-generation';
    * its ABSENCE while the tool is running is what drives MessageBubble's
@@ -342,6 +346,20 @@ export interface MessageMetadata {
   videoUrl?: string;
   /** Poster frame for the generated video, when the provider returned one. */
   thumbnailUrl?: string;
+  /** Opaque owner-scoped AGI job id; safe to poll after a page reload. */
+  videoTaskId?: string;
+  /** Durable public job state projected by Workflow/status reconciliation. */
+  videoStatus?: 'queued' | 'processing' | 'completed' | 'failed';
+  /** Canonical provider identity selected by the server. */
+  videoProvider?: 'google' | 'runway' | 'openrouter';
+  /** Canonical catalog model identity selected by the server. */
+  videoModel?: string;
+  /** Latest provider progress reported by the durable reconciler. */
+  videoProgress?: number;
+  /** Durable terminal error projected by the server. */
+  videoError?: string;
+  /** True only when the prior video attempt is terminal and safe to start again. */
+  videoRetryable?: boolean;
 }
 
 export interface MessageToolEntry {
@@ -531,6 +549,7 @@ interface ChatState {
   // Actions - Conversations
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
+  upsertConversation: (conversation: Conversation) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
@@ -755,7 +774,26 @@ export const useChatStore = create<ChatState>()(
 
         // Conversations
         setConversations: (conversations) =>
-          set({ conversations }, undefined, 'chat/setConversations'),
+          set(
+            (state) => {
+              // A conversation opened by a direct URL can be older than the
+              // first paginated sidebar response. Keep that fully-loaded active
+              // row when the list request resolves later, otherwise its saved
+              // model/project metadata disappears until another reload.
+              const activeConversation = state.activeConversationId
+                ? state.conversations.find(({ id }) => id === state.activeConversationId)
+                : undefined;
+              if (
+                !activeConversation ||
+                conversations.some(({ id }) => id === activeConversation.id)
+              ) {
+                return { conversations };
+              }
+              return { conversations: [activeConversation, ...conversations] };
+            },
+            undefined,
+            'chat/setConversations',
+          ),
 
         addConversation: (conversation) =>
           set(
@@ -764,6 +802,23 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/addConversation',
+          ),
+
+        upsertConversation: (conversation) =>
+          set(
+            (state) => {
+              const existingIndex = state.conversations.findIndex(
+                ({ id }) => id === conversation.id,
+              );
+              if (existingIndex === -1) {
+                return { conversations: [conversation, ...state.conversations] };
+              }
+              const conversations = [...state.conversations];
+              conversations[existingIndex] = conversation;
+              return { conversations };
+            },
+            undefined,
+            'chat/upsertConversation',
           ),
 
         updateConversation: (id, updates) =>

@@ -76,6 +76,15 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: true,
     declared: true,
   },
+  // Builds provider search URLs locally and displays them behind explicit user
+  // buttons. No request leaves the boundary until the user chooses a provider.
+  search_maps: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   // SSRF-guarded single-page fetch. Same reasoning as web_search: the URL is a
   // classic exfiltration channel (secrets pasted into a query string) and the
   // page body is untrusted.

@@ -28,7 +28,7 @@ import {
 const validAgent = () => ({
   id: 'agent-1',
   name: 'Researcher',
-  model: 'claude-opus-5',
+  model: 'fixture-agent-model',
   status: 'running',
   currentStep: 'Searching the web',
   progress: 42,

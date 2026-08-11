@@ -40,6 +40,10 @@ const registry = modelRegistry as unknown as {
 const policy = registry.policies.auto;
 
 const PROFILE_ORDER = policy.profileOrder;
+const WORKHORSE_MODEL_ID = policy.slots.workhorse_general!.modelKey;
+const CODING_ESCALATION_MODEL_ID = policy.slots.escalation_coding!.modelKey;
+const CODING_BALANCED_MODEL_ID = policy.slots.coding_balanced!.modelKey;
+const CODING_PREMIUM_MODEL_ID = policy.slots.flagship_coding!.modelKey;
 
 function taskInput(
   family: TaskFamily,
@@ -259,7 +263,7 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const ordering = orderPreferredSlotsForTaskFamily({
       family: 'simple_chat',
       taskType: 'simple_chat',
-      // `gemini-3.5-flash-lite` carries no benchmark block in the registry.
+      // The workhorse route carries no benchmark block in the registry.
       preferredSlots: ['workhorse_general'],
       preferredSlotsByProfile: { economy: ['workhorse_general'] },
       profileOrder: PROFILE_ORDER,
@@ -272,7 +276,7 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const benchmarks = (
       modelRegistry as unknown as { benchmarks: Record<string, Record<string, number>> }
     ).benchmarks;
-    expect(benchmarks['gemini-3.5-flash-lite']).toEqual({});
+    expect(benchmarks[WORKHORSE_MODEL_ID]).toEqual({});
   });
 
   it('rejects an unresolvable slot rather than assuming it passes', () => {
@@ -293,12 +297,16 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const ordering = orderPreferredSlotsForTaskFamily(
       taskInput('code_execution', 'coding', 'premium', fakeCents),
     )!;
-    // glm-5.2 and claude-sonnet-5 share a curator band for coding, so their
+    // The escalation and balanced routes share a curator band for coding, so their
     // relative order is decided by the injected cost function — fakeCents
     // orders sonnet first here, while the resolver integration test (real
-    // estimated cents) pins glm first. Both satisfy the band-ascent invariant;
-    // claude-opus-5 (premium band) must always be last.
-    expect(ordering.escalationLadder).toEqual(['claude-sonnet-5', 'glm-5.2', 'claude-opus-5']);
+    // estimated cents) pins the escalation route first. Both satisfy the band-ascent invariant;
+    // the premium route must always be last.
+    expect(ordering.escalationLadder).toEqual([
+      CODING_BALANCED_MODEL_ID,
+      CODING_ESCALATION_MODEL_ID,
+      CODING_PREMIUM_MODEL_ID,
+    ]);
   });
 
   it('never descends the curator band ladder for any family/task/profile (Decision #10)', () => {
@@ -484,10 +492,10 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     });
     // Authored order picks the flagship; the floor admits all three premium
     // coding slots and cost ranking picks the cheapest of them.
-    expect(off).toMatchObject({ status: 'selected', modelKey: 'claude-opus-5' });
+    expect(off).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
     expect(on).toMatchObject({
       status: 'selected',
-      modelKey: 'glm-5.2',
+      modelKey: CODING_ESCALATION_MODEL_ID,
       effectiveProfile: 'premium',
       reason: 'task_family_pareto',
     });
@@ -521,12 +529,12 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     } as const;
     try {
       delete process.env[TASK_FAMILY_STAGE_ENV];
-      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: 'claude-opus-5' });
+      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
       process.env[TASK_FAMILY_STAGE_ENV] = '1';
-      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: 'glm-5.2' });
+      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
       // An explicit `false` still wins over the env.
       expect(resolveAutoRoute({ ...request, enableTaskFamilyStage: false })).toMatchObject({
-        modelKey: 'claude-opus-5',
+        modelKey: CODING_PREMIUM_MODEL_ID,
       });
     } finally {
       if (original === undefined) delete process.env[TASK_FAMILY_STAGE_ENV];
@@ -547,34 +555,46 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     const ladder =
       on.status === 'selected' ? on.taskFamilyDecision!.ordering!.escalationLadder : [];
     // Authored best-first, so the ladder is cheapest/least-capable first.
-    expect(ladder).toEqual(['glm-5.2', 'claude-sonnet-5', 'claude-opus-5']);
+    expect(ladder).toEqual([
+      CODING_ESCALATION_MODEL_ID,
+      CODING_BALANCED_MODEL_ID,
+      CODING_PREMIUM_MODEL_ID,
+    ]);
 
     const pinned = decideTaskFamilyContinuity({
-      session: { family: 'code_execution', modelKey: 'glm-5.2', priorTurnCount: 2 },
+      session: {
+        family: 'code_execution',
+        modelKey: CODING_ESCALATION_MODEL_ID,
+        priorTurnCount: 2,
+      },
       nextFamily: 'code_execution',
-      candidateModelKey: 'glm-5.2',
+      candidateModelKey: CODING_ESCALATION_MODEL_ID,
       ladder,
     });
-    expect(pinned).toMatchObject({ action: 'pin', modelKey: 'glm-5.2' });
+    expect(pinned).toMatchObject({ action: 'pin', modelKey: CODING_ESCALATION_MODEL_ID });
 
     const escalated = decideTaskFamilyContinuity({
-      session: { family: 'code_execution', modelKey: 'glm-5.2', priorTurnCount: 2 },
+      session: {
+        family: 'code_execution',
+        modelKey: CODING_ESCALATION_MODEL_ID,
+        priorTurnCount: 2,
+      },
       nextFamily: 'code_execution',
-      candidateModelKey: 'claude-sonnet-5',
+      candidateModelKey: CODING_BALANCED_MODEL_ID,
       ladder,
-      failureSignal: 'Insufficient credits for glm-5.2, switched to claude-sonnet-5',
+      failureSignal: `Insufficient credits for ${CODING_ESCALATION_MODEL_ID}, switched to ${CODING_BALANCED_MODEL_ID}`,
     });
     expect(escalated).toMatchObject({
       action: 'escalate',
       reasonCode: 'escalated_on_failure',
-      modelKey: 'claude-sonnet-5',
+      modelKey: CODING_BALANCED_MODEL_ID,
     });
     expect(escalated.cache?.resetsCache).toBe(true);
   });
 
   it('leaves an explicit model selection untouched', () => {
     const explicit = resolveAutoRoute({
-      selection: 'claude-sonnet-5',
+      selection: CODING_BALANCED_MODEL_ID,
       taskType: 'coding',
       subscriptionTier: 'max',
       taskFamily: 'code_execution',
@@ -583,7 +603,7 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     });
     expect(explicit).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-sonnet-5',
+      modelKey: CODING_BALANCED_MODEL_ID,
       reason: 'explicit',
     });
   });

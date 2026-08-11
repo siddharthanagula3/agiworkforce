@@ -132,17 +132,39 @@ describe('organization creation and plan response', () => {
   });
 
   it('returns the status-gated subscription plan without inventing a member limit', async () => {
-    mockQuery.mockResolvedValueOnce([
-      {
-        organization_id: organizationId,
-        user_id: 'team-owner',
-        role: 'owner',
-        provisioning_source: 'manual',
-        provisioned_at: null,
-        joined_at: '2026-07-25T00:00:00.000Z',
-      },
-    ]);
-    mockQuery.mockResolvedValueOnce([{ ...organization, member_count: '1' }]);
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (text.includes('from public.user_settings')) {
+        return [{ organization_id: organizationId }];
+      }
+      if (text.includes('join public.organizations')) {
+        return [
+          {
+            id: organizationId,
+            name: organization.name,
+            slug: organization.slug,
+            role: 'owner',
+            joined_at: '2026-07-25T00:00:00.000Z',
+          },
+        ];
+      }
+      if (text.includes('from public.organization_members')) {
+        return [
+          {
+            organization_id: organizationId,
+            user_id: 'team-owner',
+            role: 'owner',
+            provisioning_source: 'manual',
+            provisioned_at: null,
+            joined_at: '2026-07-25T00:00:00.000Z',
+          },
+        ];
+      }
+      if (text.includes('from public.organizations')) {
+        return [{ ...organization, member_count: '1' }];
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    });
 
     const response = await GET(
       new Request('http://localhost:3000/api/settings/organization') as never,

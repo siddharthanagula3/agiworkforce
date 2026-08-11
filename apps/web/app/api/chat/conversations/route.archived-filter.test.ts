@@ -11,6 +11,9 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
   getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
@@ -40,7 +43,7 @@ describe('GET /api/chat/conversations archived filter', () => {
     const [sql, params] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('user_id = $1');
     expect(sql).toContain('archived = true');
-    expect(params).toEqual(['user-1', 51, 0]);
+    expect(params).toEqual(['user-1', null, 51, 0]);
   });
 
   it('preserves the existing inclusive list contract by default', async () => {

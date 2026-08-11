@@ -66,7 +66,7 @@ pub enum AnthropicThinking {
     Enabled {
         budget_tokens: u32,
     },
-    /// Claude Opus 4.6+ adaptive thinking — the model decides when/how much.
+    /// Provider-managed adaptive thinking — the model decides when/how much.
     Adaptive,
     /// Explicitly disabled (distinct from omitting the field).
     Disabled,
@@ -981,7 +981,7 @@ pub fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
         body["max_output_tokens"] = serde_json::json!(req.max_tokens);
     }
     // Reasoning effort and sampling params are mutually exclusive on
-    // GPT-5/o-series: with an effort set, temperature/top_p are rejected.
+    // OpenAI reasoning requests reject temperature/top_p when effort is set.
     if let Some(effort) = req.reasoning_effort {
         body["reasoning"] = serde_json::json!({ "effort": effort });
     } else {
@@ -1573,7 +1573,7 @@ where
                                         serde_json::Value::Object(serde_json::Map::new()),
                                     );
                                     let index = assembler.completed_len();
-                                    let id = format!("gemini_{index}");
+                                    let id = format!("call_{index}");
                                     on_event(StreamEvent::ToolCallStart {
                                         index,
                                         id: id.clone(),
@@ -2095,7 +2095,7 @@ mod anthropic_request_tests {
         req.reasoning_effort = Some("high");
         let body = build_openai_responses_body(&req);
         assert_eq!(body["reasoning"], serde_json::json!({"effort": "high"}));
-        // GPT-5/o-series reject sampling params alongside reasoning effort.
+        // OpenAI reasoning requests reject sampling params alongside effort.
         assert!(body.get("temperature").is_none());
         assert!(body.get("top_p").is_none());
 
@@ -2171,7 +2171,10 @@ mod credential_transport_tests {
         // proxies and gateways — and apply_headers attached the API key to
         // whatever it was given. An http:// endpoint sent the key in the
         // clear. rust/cleartext-transmission flagged this, correctly.
-        let s = spec("http://gateway.internal/v1/chat", Auth::Bearer("sk-secret".into()));
+        let s = spec(
+            "http://gateway.internal/v1/chat",
+            Auth::Bearer("sk-secret".into()),
+        );
         let err = require_secure_credential_transport(&s.base_url, &s).unwrap_err();
         assert!(
             format!("{err}").contains("cleartext HTTP"),
@@ -2232,7 +2235,10 @@ mod credential_transport_tests {
     #[test]
     fn a_lookalike_host_is_not_loopback() {
         // "localhost.evil.com" must not be mistaken for the local machine.
-        let s = spec("http://localhost.evil.com/v1", Auth::Bearer("sk-secret".into()));
+        let s = spec(
+            "http://localhost.evil.com/v1",
+            Auth::Bearer("sk-secret".into()),
+        );
         assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
     }
 }

@@ -10,6 +10,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 const sendCloudMessage = vi.fn();
 const getCloudConversation = vi.fn();
 const updateConversation = vi.fn().mockResolvedValue(undefined);
@@ -395,7 +397,7 @@ describe('WebRuntime.hasLiveApprovalTurn', () => {
       runtime.hasLiveApprovalTurn('conv_1', {
         assistantMessageId: 'assistant-1',
         runId: '0190a000-0000-7000-8000-000000000099',
-        model: 'gpt-5',
+        model: FIXTURE_MODEL_ID,
         assistantContent: '',
         calls: [{ toolCallId: 'call_1', name: 'read_file', args: {} }],
       }),
@@ -410,7 +412,7 @@ describe('WebRuntime persisted approval loading', () => {
       id: 'conv_1',
       user_id: 'user_1',
       title: 'Chat',
-      model: 'gpt-5',
+      model: FIXTURE_MODEL_ID,
       created_at: '2026-07-17T00:00:00.000Z',
       updated_at: '2026-07-17T00:00:00.000Z',
       messages: [
@@ -419,7 +421,7 @@ describe('WebRuntime persisted approval loading', () => {
           conversation_id: 'conv_1',
           role: 'assistant',
           content: 'Waiting.',
-          model: 'gpt-5',
+          model: FIXTURE_MODEL_ID,
           created_at: '2026-07-17T00:00:00.000Z',
           metadata: {
             cloudAgentRun: {

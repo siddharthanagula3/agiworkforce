@@ -6,18 +6,20 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { loadPluginEntry } from '@/features/plugins/server/registry-source';
-import { isPluginEntryInstallable, type PluginRegistryEntry } from '@agiworkforce/types';
+import {
+  isPluginEntryInstallable,
+  isPluginEntryWebInstallable,
+  type PluginRegistryEntry,
+} from '@agiworkforce/types';
 import { ConnectorChecklist } from './ConnectorChecklist';
 
 /**
  * One plugin, from the hosted registry (CAP-046 slice 3).
  *
- * There is deliberately no install button. Hosted installation does not work
- * today (`PLUGIN_INSTALLS_ENABLED` is false in the plugin store, and no entry
- * carries a published artifact), and a button that no-ops is a dead control.
- * The page states what is true and links to the access request instead; when an
- * entry does become installable, `isPluginEntryInstallable` flips and the
- * install-instructions block below renders the real CLI command.
+ * Installation state is user-owned and authenticated, so this public detail
+ * page deliberately sends Web-installable packs to the real Settings lifecycle
+ * instead of pretending to install them here. Non-Web artifacts keep their
+ * integrity-pinned CLI instructions below.
  */
 
 interface Props {
@@ -33,6 +35,7 @@ function sourceLabel(source: PluginRegistryEntry['source']): string {
 }
 
 function statusLabel(entry: PluginRegistryEntry): string {
+  if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
   if (isPluginEntryInstallable(entry)) return 'Installable';
   if (entry.status === 'deprecated') return 'Deprecated — do not install';
   return 'Declared — not installable yet';
@@ -84,6 +87,7 @@ export default async function PluginDetailPage({ params }: Props) {
 
   const { entry, manifest } = result;
   const installable = isPluginEntryInstallable(entry);
+  const webInstallable = isPluginEntryWebInstallable(entry);
 
   return (
     <div data-design="agi">
@@ -99,7 +103,9 @@ export default async function PluginDetailPage({ params }: Props) {
           </h1>
           <p className="agi-page-lede">
             {entry.description}{' '}
-            {installable ? (
+            {webInstallable ? (
+              <strong>Managed in Website Settings.</strong>
+            ) : installable ? (
               <strong>Published — install it with the AGI CLI (see below).</strong>
             ) : entry.status === 'deprecated' ? (
               <strong>Deprecated — this pack should no longer be installed.</strong>
@@ -110,7 +116,13 @@ export default async function PluginDetailPage({ params }: Props) {
               </strong>
             )}
           </p>
-          {!installable ? (
+          {webInstallable ? (
+            <div className="agi-cta-row" style={{ marginTop: 28 }}>
+              <Link href="/apps" className="agi-cta-primary">
+                Open Plugin settings
+              </Link>
+            </div>
+          ) : !installable ? (
             <div className="agi-cta-row" style={{ marginTop: 28 }}>
               <Link href="/plugins#request-access" className="agi-cta-primary">
                 Request marketplace access

@@ -24,6 +24,7 @@ export default function BusinessPage() {
 
         <FlagshipHero
           eyebrow="AGI for business"
+          titleLines={['AI work your team can govern.']}
           lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },

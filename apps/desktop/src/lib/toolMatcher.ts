@@ -422,11 +422,7 @@ export function inferMcpToolCategory(tool: {
   }
 
   // Image/vision servers
-  if (
-    serverName.includes('image') ||
-    serverName.includes('vision') ||
-    serverName.includes('dalle')
-  ) {
+  if (serverName.includes('image') || serverName.includes('vision')) {
     return 'image';
   }
 

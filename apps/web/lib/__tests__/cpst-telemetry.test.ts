@@ -45,10 +45,10 @@ describe('buildInterimRoutePlanId', () => {
     expect(
       buildInterimRoutePlanId({
         harnessId: 'anthropic/messages',
-        routeId: 'anthropic:claude-sonnet-5',
+        routeId: 'anthropic:fixture-model',
         reason: 'preferred_slot',
       }),
-    ).toBe('interim:anthropic/messages:anthropic:claude-sonnet-5:preferred_slot');
+    ).toBe('interim:anthropic/messages:anthropic:fixture-model:preferred_slot');
   });
 });
 

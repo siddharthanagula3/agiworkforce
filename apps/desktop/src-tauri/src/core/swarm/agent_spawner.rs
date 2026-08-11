@@ -1,6 +1,6 @@
 //! Dynamic Sub-Agent Spawner
 //!
-//! Implements Kimi K2.5's approach of dynamic agent instantiation:
+//! Implements dynamic agent instantiation:
 //! - Trainable orchestrator with frozen sub-agents
 //! - No predefined roles - agents created on-demand
 //! - Circuit breaker pattern for fault tolerance
@@ -47,7 +47,7 @@ impl Default for SubAgentConfig {
                 network_mbps: 10.0, // Limited network
                 storage_mb: 100,    // Limited storage
             },
-            frozen: true, // Sub-agents are frozen by default (Kimi K2.5 pattern)
+            frozen: true, // Sub-agents are frozen by default.
         }
     }
 }

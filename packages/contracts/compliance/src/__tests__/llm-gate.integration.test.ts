@@ -35,6 +35,8 @@ import {
 } from '../index';
 import { InMemoryConsentLedger, InMemoryDisclosureLedger } from './test-ledger';
 
+const FIXTURE_MODEL_ID = 'fixture-chat-model';
+
 /**
  * Fake LLM client. Mirrors the shape of `apps/mobile/services/streaming.ts`
  * + `apps/web/features/chat/lib/chatClient.ts`: every call goes through the
@@ -87,7 +89,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
     await expect(
       client.send({
         providerId: 'anthropic',
-        model: 'claude-sonnet-5',
+        model: FIXTURE_MODEL_ID,
         requireManagedCloud: true,
         body: { messages: [{ role: 'user', content: 'hi' }] },
       }),
@@ -117,7 +119,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
 
     const result = await client.send({
       providerId: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
       requireManagedCloud: true,
       body: { messages: [{ role: 'user', content: 'hi' }] },
     });
@@ -150,7 +152,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
     await expect(
       client.send({
         providerId: 'deepseek',
-        model: 'deepseek-v4-flash',
+        model: FIXTURE_MODEL_ID,
         requireManagedCloud: true,
         body: { messages: [{ role: 'user', content: 'hi' }] },
       }),
@@ -178,7 +180,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
 
     const result = await client.send({
       providerId: 'deepseek',
-      model: 'deepseek-v4-flash',
+      model: FIXTURE_MODEL_ID,
       requireManagedCloud: true,
       body: { messages: [{ role: 'user', content: 'hi' }] },
     });

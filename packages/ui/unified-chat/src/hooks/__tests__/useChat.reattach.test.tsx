@@ -6,6 +6,7 @@ import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000099';
 const RUN_PATH = `/api/llm/v1/chat/completions/runs/${RUN_ID}`;
+const FIXTURE_MODEL_ID = 'fixture-reattachment-model';
 
 function makeRuntime(overrides: Partial<ChatRuntime> = {}) {
   const reattachConversation = vi.fn(async () => {});
@@ -31,7 +32,7 @@ function seedAssistantMessage(metadata: Record<string, unknown>): void {
           id: 'assistant-1',
           role: 'assistant',
           content: 'Working on it.',
-          model: 'claude-opus-5',
+          model: FIXTURE_MODEL_ID,
           metadata,
         },
       ],
@@ -64,7 +65,7 @@ describe('useChat durable-run reattachment', () => {
     await waitFor(() =>
       expect(reattachConversation).toHaveBeenCalledWith('conv-1', {
         assistantMessageId: 'assistant-1',
-        model: 'claude-opus-5',
+        model: FIXTURE_MODEL_ID,
         content: 'Working on it.',
         runReference: openRun,
         hasPersistedApproval: false,

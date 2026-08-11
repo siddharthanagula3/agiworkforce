@@ -87,6 +87,10 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm test:affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
 requireIncludes('package.json', '"test": "turbo run test --concurrency=2"');
 requireIncludes('package.json', '"test:affected": "turbo run test --affected --concurrency=2"');
+requireIncludes(
+  'package.json',
+  'pnpm check:model-catalog && pnpm check:model-id-literals && pnpm check:marketing-models',
+);
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:protocol-types');
 requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');

@@ -40,6 +40,7 @@ import {
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -68,14 +69,18 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   // Owner-only, matching export: duplicating a shared project would copy
   // someone else's material into an account they do not control.
   const [source] = await db.query<Record<string, unknown>>(
     `select * from user_projects
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
       limit 1`,
-    [id, userId],
+    [id, userId, organizationId],
   );
   if (!source) {
     throw createError.notFound('Project not found');
@@ -92,16 +97,18 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
   try {
     [created] = await db.query<Record<string, unknown>>(
       `with inserted as materialized (
-         insert into user_projects (user_id, name, description, instructions, color)
-         values ($1, $2, $3, $4, $5)
+         insert into user_projects
+           (user_id, organization_id, name, description, instructions, color)
+         values ($1, $2, $3, $4, $5, $6)
          returning *
        ), quota_guard as materialized (
-         select public.assert_user_resource_limit('projects', $1, $6)
+         select public.assert_user_resource_limit('projects', $1, $7)
            from (select count(*) from inserted) as dependency
        )
        select inserted.* from inserted cross join quota_guard`,
       [
         userId,
+        organizationId,
         copyName(String(source['name'] ?? 'Project')),
         source['description'] ?? '',
         source['instructions'] ?? '',

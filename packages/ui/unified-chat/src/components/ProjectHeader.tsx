@@ -27,6 +27,12 @@ export interface ProjectHeaderProps {
   presentation: ProjectHeaderPresentation;
   /** Optional class for host-layout integration. */
   className?: string;
+  /**
+   * Omits the repeated icon/title when the host already renders project
+   * identity nearby, while retaining trust, provenance, and availability
+   * context.
+   */
+  compact?: boolean;
 }
 
 const ACCENT_BG: Record<ProjectAccentColor, string> = {
@@ -141,7 +147,7 @@ function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentatio
   );
 }
 
-export function ProjectHeader({ presentation, className }: ProjectHeaderProps) {
+export function ProjectHeader({ presentation, className, compact = false }: ProjectHeaderProps) {
   return (
     <div
       data-testid="project-header"
@@ -153,34 +159,53 @@ export function ProjectHeader({ presentation, className }: ProjectHeaderProps) {
         className,
       )}
     >
-      <div className="flex items-start gap-3">
-        <IconCircle presentation={presentation} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-base font-semibold text-[var(--chat-text-primary)]">
-              {presentation.title}
-            </h2>
-            {presentation.importedFromLabel ? (
-              <span
-                data-testid="project-header-imported-from"
-                className={cn(
-                  'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
-                  'border-violet-500/40 bg-violet-500/10 text-violet-300',
-                )}
-              >
-                {presentation.importedFromLabel}
-              </span>
+      {compact ? (
+        presentation.description ? (
+          <p className="m-0 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
+            {presentation.description}
+          </p>
+        ) : null
+      ) : (
+        <div className="flex items-start gap-3">
+          <IconCircle presentation={presentation} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-base font-semibold text-[var(--chat-text-primary)]">
+                {presentation.title}
+              </h2>
+              {presentation.importedFromLabel ? (
+                <span
+                  data-testid="project-header-imported-from"
+                  className={cn(
+                    'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+                    'border-violet-500/40 bg-violet-500/10 text-violet-300',
+                  )}
+                >
+                  {presentation.importedFromLabel}
+                </span>
+              ) : null}
+            </div>
+            {presentation.description ? (
+              <p className="mt-0.5 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
+                {presentation.description}
+              </p>
             ) : null}
           </div>
-          {presentation.description ? (
-            <p className="mt-0.5 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
-              {presentation.description}
-            </p>
-          ) : null}
         </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
+        {compact && presentation.importedFromLabel ? (
+          <span
+            data-testid="project-header-imported-from"
+            className={cn(
+              'rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+              'border-violet-500/40 bg-violet-500/10 text-violet-300',
+            )}
+          >
+            {presentation.importedFromLabel}
+          </span>
+        ) : null}
         <PrivacyChip presentation={presentation} />
         <ProviderChip presentation={presentation} />
       </div>

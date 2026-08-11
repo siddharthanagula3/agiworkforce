@@ -131,7 +131,7 @@ describe('mobile connector catalog ownership', () => {
 
   it('matches the canonical web catalog on every id and display name', () => {
     const canonical = new Map(
-      readCatalog(WEB_CATALOG, 'export const CONNECTORS: Connector[]').map((entry) => [
+      readCatalog(WEB_CATALOG, 'const CONNECTOR_SEEDS: ConnectorSeed[]').map((entry) => [
         entry.id,
         entry.name,
       ]),

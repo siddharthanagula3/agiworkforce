@@ -81,7 +81,7 @@ struct OllamaRequest {
     tools: Option<Vec<serde_json::Value>>,
     /// Ollama's own extended-thinking toggle. Unlike Anthropic/OpenAI, where
     /// omitting a thinking parameter means "no extended thinking", Ollama's
-    /// newer reasoning models (e.g. qwen3.5) default thinking ON at the API
+    /// some reasoning-capable models default thinking ON at the API
     /// level -- omitting this field does NOT disable it. Must be forwarded
     /// explicitly whenever the caller has an opinion either way.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,7 +110,7 @@ struct OllamaOptions {
     num_predict: Option<u32>,
     /// Ollama's total context window (prompt + response tokens). Ollama
     /// silently defaults this to 4096 regardless of the model's real
-    /// capability (e.g. qwen3.5's advertised 128K) unless set explicitly.
+    /// provider-reported capability unless set explicitly.
     /// AGI Workforce's "Claude Desktop-like" chat mode injects a large system
     /// prompt plus every enabled MCP tool's schema, which alone can consume
     /// nearly all of a 4096 window, leaving the model almost no budget to
@@ -387,23 +387,6 @@ impl OllamaProvider {
         })
     }
 
-    fn model_supports_vision(model: &str) -> bool {
-        let m = model.to_lowercase();
-        m.contains("llava")
-            || m.contains("bakllava")
-            || m.contains("vision")
-            || m.contains("moondream")
-            || m.contains("minicpm")
-            || m.contains("llama3-v")
-            || m.contains("qwen-vl")
-            // Modern vision-capable models (2025-2026)
-            || m.contains("llama4-maverick")
-            || m.contains("llama3.2-vision")
-            || m.contains("gemma3")
-            || m.contains("phi-4-multimodal")
-            || m.contains("minicpm-v")
-    }
-
     /// RETIRED by c2c (2026-07-16) — see [`OllamaRequest`]. Message conversion
     /// now flows through the shared crate serializers in
     /// [`build_ollama_chat_body`].
@@ -447,14 +430,19 @@ impl LLMProvider for OllamaProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        let capabilities = crate::core::llm::capability_detection::detect_ollama_capabilities(
+            &self.client,
+            &self.base_url,
+            &request.model,
+        )
+        .await;
         let user_images = request
             .messages
             .iter()
             .rev()
             .find(|m| m.role == "user")
             .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
-        let supports_vision = Self::model_supports_vision(&request.model);
-        let images = if supports_vision {
+        let images = if capabilities.supports_vision {
             user_images
         } else {
             if let Some(ref imgs) = user_images {
@@ -473,13 +461,7 @@ impl LLMProvider for OllamaProvider {
         let mut prompt_injected_tool_nonce: Option<String> = None;
         let (native_tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
-                let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
-                    &self.client,
-                    &self.base_url,
-                    &request.model,
-                )
-                .await;
-                if caps.supports_tools {
+                if capabilities.supports_tools {
                     (Some(req_tools.as_slice()), request.messages.clone())
                 } else {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
@@ -641,14 +623,19 @@ impl LLMProvider for OllamaProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
+        let capabilities = crate::core::llm::capability_detection::detect_ollama_capabilities(
+            &self.client,
+            &self.base_url,
+            &request.model,
+        )
+        .await;
         let user_images = request
             .messages
             .iter()
             .rev()
             .find(|m| m.role == "user")
             .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
-        let supports_vision = Self::model_supports_vision(&request.model);
-        let images = if supports_vision {
+        let images = if capabilities.supports_vision {
             user_images
         } else {
             if let Some(ref imgs) = user_images {
@@ -667,13 +654,7 @@ impl LLMProvider for OllamaProvider {
         let mut prompt_injected_tool_nonce: Option<String> = None;
         let (native_tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
-                let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
-                    &self.client,
-                    &self.base_url,
-                    &request.model,
-                )
-                .await;
-                if caps.supports_tools {
+                if capabilities.supports_tools {
                     (Some(req_tools.as_slice()), request.messages.clone())
                 } else {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
@@ -894,7 +875,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "tinyllama".to_string(),
+            model: "fixture-local-model".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(10),
             stream: false,
@@ -905,7 +886,7 @@ mod tests {
         };
 
         assert!(provider.is_configured());
-        assert_eq!(request.model, "tinyllama");
+        assert_eq!(request.model, "fixture-local-model");
         assert_eq!(request.max_tokens, Some(10));
         assert!(!request.stream);
     }
@@ -913,7 +894,7 @@ mod tests {
     #[test]
     fn test_ollama_response_preserves_separate_thinking_content() {
         let response: OllamaResponse = serde_json::from_value(serde_json::json!({
-            "model": "qwen3.5:latest",
+            "model": "fixture-reasoning-model:current",
             "message": {
                 "role": "assistant",
                 "thinking": "I should compare the relevant facts first.",

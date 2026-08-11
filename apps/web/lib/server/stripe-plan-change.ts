@@ -1,6 +1,38 @@
 import 'server-only';
 
 import { isPerSeatBillingPlan } from '@agiworkforce/types';
+import type Stripe from 'stripe';
+
+export type CheckoutBillingInterval = 'monthly' | 'yearly';
+
+/**
+ * Resolve the only Stripe billing periods supported by the self-serve upgrade
+ * flow. Multi-month/year prices are intentionally excluded: changing billing
+ * periods resets Stripe's renewal anchor and is not a remaining-period upgrade.
+ */
+export function checkoutBillingIntervalFromStripePrice(
+  recurring: Stripe.Price.Recurring | null | undefined,
+): CheckoutBillingInterval | null {
+  if (!recurring || recurring.interval_count !== 1) return null;
+  if (recurring.interval === 'month') return 'monthly';
+  if (recurring.interval === 'year') return 'yearly';
+  return null;
+}
+
+export function assertSameCheckoutBillingInterval(
+  recurring: Stripe.Price.Recurring | null | undefined,
+  requestedInterval: CheckoutBillingInterval,
+): void {
+  const currentInterval = checkoutBillingIntervalFromStripePrice(recurring);
+  if (!currentInterval) {
+    throw new Error('The current Stripe billing interval could not be verified');
+  }
+  if (currentInterval !== requestedInterval) {
+    throw new Error(
+      `Mid-cycle upgrades must keep your current ${currentInterval} billing cadence so you are charged only the prorated difference for the remaining period. Select ${currentInterval} or change cadence in billing management.`,
+    );
+  }
+}
 
 /**
  * Rank used by BOTH `/api/upgrade/preview` and `/api/upgrade` so a change the
@@ -40,11 +72,10 @@ export type PlanChangeDecision =
  *    "team -> team" and refuses it, which is why it is classified separately.
  *
  * Seat REDUCTION is deliberately refused here rather than silently accepted.
- * The mid-cycle path runs `proration_behavior: 'always_invoice'` with
- * `billing_cycle_anchor: 'now'`, so a reduction would immediately issue a
- * credit/refund — a money-out flow with no scoped policy — and it would also
- * let an org drop below the seats its members already occupy. It is routed to
- * billing management instead.
+ * The mid-cycle path runs `proration_behavior: 'always_invoice'`, so a
+ * reduction would immediately issue a credit/refund — a money-out flow with no
+ * scoped policy — and it would also let an org drop below the seats its members
+ * already occupy. It is routed to billing management instead.
  */
 export function classifyPlanChange(input: {
   currentTier: string;

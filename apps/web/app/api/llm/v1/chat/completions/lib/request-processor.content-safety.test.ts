@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getDefaultModelFor } from '@agiworkforce/types';
+
+const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
 const safetyMocks = vi.hoisted(() => ({
   enforce: vi.fn(),
@@ -61,7 +64,7 @@ function request(prompt: string): NextRequest {
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
+      model: FREE_CHAT_MODEL,
       messages: [
         { role: 'user', content: 'Earlier user message' },
         { role: 'assistant', content: 'Earlier assistant message' },

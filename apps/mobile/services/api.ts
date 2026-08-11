@@ -32,14 +32,24 @@ import {
   ManagedCloudChatAttachmentPresignResponseSchema,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
+import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Paywall error type
 // ---------------------------------------------------------------------------
 
+export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
+
+function recoveryActionForPaywallCode(code: string | null): ApiPaywallRecoveryAction {
+  if (code === 'subscription_required') return 'subscribe';
+  if (code === 'subscription_inactive') return 'manage_billing';
+  return 'upgrade';
+}
+
 /**
- * Thrown by the HTTP client when the API returns HTTP 429 with a structured
- * paywall payload: `{ kind: 'paywall', feature, requiredTier, reason }`.
+ * Thrown by the HTTP client for a structured quota/paywall response, including
+ * HTTP 429 `{ kind: 'paywall', ... }` and the media routes' HTTP 403 plan or
+ * subscription error envelopes.
  *
  * Callers should catch this specifically (not the generic `Error`) to
  * distinguish paywall blocks from other network errors.
@@ -51,13 +61,19 @@ export class ApiPaywallError extends Error {
   readonly requiredTier: string;
   /** Human-readable description from the server (e.g. '10/10 images used this month'). */
   readonly reason: string;
+  /** Structured server code when this originated from an API error envelope. */
+  readonly code: string | null;
+  /** The user action that can actually resolve this refusal. */
+  readonly recoveryAction: ApiPaywallRecoveryAction;
 
-  constructor(feature: string, requiredTier: string, reason: string) {
+  constructor(feature: string, requiredTier: string, reason: string, code: string | null = null) {
     super(`Paywall: ${feature} requires ${requiredTier} tier. ${reason}`);
     this.name = 'ApiPaywallError';
     this.feature = feature;
     this.requiredTier = requiredTier;
     this.reason = reason;
+    this.code = code;
+    this.recoveryAction = recoveryActionForPaywallCode(code);
   }
 }
 
@@ -239,6 +255,33 @@ interface RequestOptions {
   _skipAuthRetry?: boolean;
 }
 
+/**
+ * The 403 plan-upgrade envelope does not currently name its capability. Infer
+ * only the two media routes whose feature is unambiguous; an unknown future
+ * route must stay generic rather than falsely opening the image paywall.
+ */
+function planUpgradeFeatureForPath(
+  path: string,
+): 'image_generation' | 'video_generation' | 'paid_capability' {
+  const pathname = path.split(/[?#]/, 1)[0] ?? path;
+  if (pathname === '/api/media/video' || pathname.startsWith('/api/media/video/')) {
+    return 'video_generation';
+  }
+  if (pathname === '/api/media/image' || pathname.startsWith('/api/media/image/')) {
+    return 'image_generation';
+  }
+  return 'paid_capability';
+}
+
+function minimumTierForPlanUpgradeFeature(
+  feature: ReturnType<typeof planUpgradeFeatureForPath>,
+): string {
+  if (feature === 'image_generation' || feature === 'video_generation') {
+    return BILLING_PLAN_CAPABILITY_TIERS[feature][0] ?? 'basic';
+  }
+  return 'basic';
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -326,13 +369,30 @@ async function request<T>(
       if (response.status === 403) {
         try {
           const parsed = JSON.parse(body) as {
-            error?: { code?: string; message?: string; required_plans?: string[] };
+            error?: {
+              code?: unknown;
+              message?: unknown;
+              required_plans?: unknown;
+            };
           };
-          if (parsed.error?.code === 'plan_upgrade_required') {
+          const code = typeof parsed.error?.code === 'string' ? parsed.error.code : null;
+          if (
+            code === 'plan_upgrade_required' ||
+            code === 'subscription_required' ||
+            code === 'subscription_inactive'
+          ) {
+            const feature = planUpgradeFeatureForPath(path);
+            const requiredTier = Array.isArray(parsed.error?.required_plans)
+              ? parsed.error.required_plans.find(
+                  (candidate): candidate is string =>
+                    typeof candidate === 'string' && isBillingPlanTier(candidate),
+                )
+              : undefined;
             throw new ApiPaywallError(
-              'image_generation',
-              parsed.error.required_plans?.[0] ?? 'pro',
-              parsed.error.message ?? '',
+              feature,
+              requiredTier ?? minimumTierForPlanUpgradeFeature(feature),
+              typeof parsed.error?.message === 'string' ? parsed.error.message : '',
+              code,
             );
           }
         } catch (parseErr) {

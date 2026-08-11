@@ -10,7 +10,7 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerTool {
-    /// Text editor tool for file operations (Claude 4.x: text_editor_20250728)
+    /// Current provider-defined text editor tool for file operations.
     #[serde(rename = "text_editor_20250728")]
     TextEditor20250728 {
         name: String,

@@ -20,6 +20,30 @@ export interface DiscoveredChatModelRecord {
   available?: boolean;
 }
 
+/**
+ * Resolve the user-facing label for model provenance without leaking a
+ * catalog transport identifier. Unknown Local/BYOK identifiers remain
+ * visible verbatim because the host runtime is their only authority.
+ */
+export function getModelPresentationLabel(modelId: string | null | undefined): string {
+  const normalizedModelId = modelId?.trim() ?? '';
+  if (!normalizedModelId) return '';
+
+  return getModelMetadataById(normalizedModelId)?.name ?? normalizedModelId;
+}
+
+/**
+ * Resolve model provenance for Managed Cloud receipts. Managed execution may
+ * only use catalog models, so an unknown historical id is unavailable rather
+ * than a dynamic Local/BYOK model that should be exposed verbatim.
+ */
+export function getManagedModelPresentationLabel(modelId: string | null | undefined): string {
+  const normalizedModelId = modelId?.trim() ?? '';
+  if (!normalizedModelId) return 'Unavailable model';
+
+  return getModelMetadataById(normalizedModelId)?.name ?? 'Unavailable model';
+}
+
 /** Validate an IPC/API model-discovery payload before it reaches routing UI. */
 export function parseDiscoveredChatModels(input: unknown): DiscoveredChatModelRecord[] {
   if (!Array.isArray(input)) return [];

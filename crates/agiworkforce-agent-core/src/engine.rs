@@ -52,6 +52,21 @@ pub async fn run_turn(
     let mut final_response = first.outcome.text.clone();
     let mut current_tool_calls = first.outcome.tool_calls.clone();
 
+    // The first completion is already paid for and must be included in the
+    // ledger, but an exhausted turn budget must stop before any tool side
+    // effects or another provider request. Previously the guard ran only after
+    // a continuation, allowing a no-tool first response to bypass it entirely.
+    if let Some(cap) = params.max_budget_usd {
+        let cumulative = host.turn_cost_usd(&totals);
+        if cumulative >= cap {
+            host.on_event(&TurnEvent::BudgetExceeded {
+                cumulative_usd: cumulative,
+                cap_usd: cap,
+            });
+            current_tool_calls.clear();
+        }
+    }
+
     for iteration in 0..params.effective_max {
         // --- Cancellation guard (loop-top) -------------------------------------
         // A user stop that arrived while the previous completion was streaming

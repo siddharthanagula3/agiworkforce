@@ -13,19 +13,19 @@ import { parseGeminiStream, translateGeminiStream } from '../stream';
  * which is why this test pins the REAL recorded CRLF bytes.
  */
 
-// Recorded from a real gemini-3.5-flash `alt=sse` response (2026-07-10, live
+// Recorded from a real Google `alt=sse` response (2026-07-10, live
 // wire probe; thoughtSignature truncated -- its value is irrelevant to
 // framing). Byte-for-byte framing preserved: `\r\n\r\n` between events.
 const LIVE_CRLF_SSE =
   'data: {"candidates": [{"content": {"parts": [{"text": "Hello wire probe."}],"role": "model"},"index": 0}],' +
   '"usageMetadata": {"promptTokenCount": 9,"candidatesTokenCount": 4,"totalTokenCount": 94,' +
   '"promptTokensDetails": [{"modality": "TEXT","tokenCount": 9}],"thoughtsTokenCount": 81,' +
-  '"serviceTier": "standard"},"modelVersion": "gemini-3.5-flash","responseId": "XCZRarmyK9jQz7IP"}\r\n\r\n' +
+  '"serviceTier": "standard"},"modelVersion": "fixture-google-model-version","responseId": "XCZRarmyK9jQz7IP"}\r\n\r\n' +
   'data: {"candidates": [{"content": {"parts": [{"text": "","thoughtSignature": "EqMDCqADARFNMg9Z"}],' +
   '"role": "model"},"finishReason": "STOP","index": 0}],' +
   '"usageMetadata": {"promptTokenCount": 9,"candidatesTokenCount": 4,"totalTokenCount": 94,' +
   '"promptTokensDetails": [{"modality": "TEXT","tokenCount": 9}],"thoughtsTokenCount": 81,' +
-  '"serviceTier": "standard"},"modelVersion": "gemini-3.5-flash","responseId": "XCZRarmyK9jQz7IP"}\r\n\r\n';
+  '"serviceTier": "standard"},"modelVersion": "fixture-google-model-version","responseId": "XCZRarmyK9jQz7IP"}\r\n\r\n';
 
 // Gemini may stream a complete functionCall before a later, separate terminal
 // chunk carries finishReason:STOP. The tool turn must remain a tool turn even

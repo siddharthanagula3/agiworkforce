@@ -18,56 +18,6 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
-// Shared catalog rows
-// ---------------------------------------------------------------------------
-
-const DOWNLOADABLE_MODEL = {
-  id: 'qwen3-4b-instruct-2507',
-  displayName: 'AGI Standard',
-  family: 'qwen3',
-  paramCountB: 4.0,
-  fileSizeBytes: 2_147_483_648,
-  supportedRuntimes: ['executorch', 'llama-rn'],
-  contextWindow: 262_144,
-  capabilities: {
-    text: true,
-    visionIn: false,
-    audioIn: false,
-    toolCalls: true,
-    structuredOutput: true,
-  },
-  license: 'Apache-2.0',
-  role: 'default',
-  shipsInV1: true,
-  executorchPreset: {
-    modelName: 'qwen3-4b-quantized',
-    modelSource: 'https://example.invalid/model.pte',
-    tokenizerSource: 'https://example.invalid/tokenizer.json',
-    tokenizerConfigSource: 'https://example.invalid/tokenizer_config.json',
-  },
-};
-
-const SYSTEM_RUNTIME_MODEL = {
-  id: 'apple-foundation-models',
-  displayName: 'Apple Intelligence',
-  family: 'apple-fm',
-  paramCountB: 3.0,
-  fileSizeBytes: 0,
-  supportedRuntimes: ['apple-foundation-models'],
-  contextWindow: 4_096,
-  capabilities: {
-    text: true,
-    visionIn: true,
-    audioIn: false,
-    toolCalls: true,
-    structuredOutput: true,
-  },
-  license: 'Apple Entitlement',
-  role: 'system-multimodal',
-  shipsInV1: true,
-};
-
-// ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
@@ -163,36 +113,47 @@ jest.mock('expo-constants', () => ({
 
 // Tier-1 device: Apple Intelligence is available and the catalog ships the
 // system-runtime row alongside the downloadable default.
-jest.mock('@agiworkforce/local-llm', () => ({
-  detectCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 8192,
-    tier1Available: true,
-    tier1Runtime: 'foundation_models',
-    tier1Status: 'available',
-    tier2Available: true,
-    tier3Available: true,
-    osVersion: '26.0',
-    thermalThrottled: false,
-  }),
-  getCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 8192,
-    tier1Available: true,
-    tier1Runtime: 'foundation_models',
-    tier1Status: 'available',
-    tier2Available: true,
-    tier3Available: true,
-    osVersion: '26.0',
-    thermalThrottled: false,
-  }),
-  getDefaultModel: jest.fn(() => DOWNLOADABLE_MODEL),
-  getShippableModels: jest.fn(() => [DOWNLOADABLE_MODEL, SYSTEM_RUNTIME_MODEL]),
-  getModelById: jest.fn((id: string) =>
-    [DOWNLOADABLE_MODEL, SYSTEM_RUNTIME_MODEL].find((m) => m.id === id),
-  ),
-  getSystemModelForTier1Runtime: jest.fn(() => SYSTEM_RUNTIME_MODEL),
-  hasRunnableGgufArtifacts: jest.fn(() => false),
-  tier2LoadModel: jest.fn().mockResolvedValue(undefined),
-}));
+jest.mock('@agiworkforce/local-llm', () => {
+  const actual = jest.requireActual(
+    '@agiworkforce/local-llm',
+  ) as typeof import('@agiworkforce/local-llm');
+  const downloadableModel = actual.getDefaultModel();
+  const systemRuntimeModel = actual.getSystemModelForTier1Runtime('foundation_models');
+  if (!systemRuntimeModel) {
+    throw new Error('Local catalog has no system model for the tier-one fixture runtime');
+  }
+
+  return {
+    detectCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 8192,
+      tier1Available: true,
+      tier1Runtime: 'foundation_models',
+      tier1Status: 'available',
+      tier2Available: true,
+      tier3Available: true,
+      osVersion: '26.0',
+      thermalThrottled: false,
+    }),
+    getCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 8192,
+      tier1Available: true,
+      tier1Runtime: 'foundation_models',
+      tier1Status: 'available',
+      tier2Available: true,
+      tier3Available: true,
+      osVersion: '26.0',
+      thermalThrottled: false,
+    }),
+    getDefaultModel: jest.fn(() => downloadableModel),
+    getShippableModels: jest.fn(() => [downloadableModel, systemRuntimeModel]),
+    getModelById: jest.fn((id: string) =>
+      [downloadableModel, systemRuntimeModel].find((model) => model.id === id),
+    ),
+    getSystemModelForTier1Runtime: jest.fn(() => systemRuntimeModel),
+    hasRunnableGgufArtifacts: jest.fn(() => false),
+    tier2LoadModel: jest.fn().mockResolvedValue(undefined),
+  };
+});
 
 jest.mock('../storage/installedModels', () => ({
   recordInstalledModel: jest.fn().mockResolvedValue(undefined),
@@ -280,8 +241,17 @@ jest.mock('expo-document-picker', () => ({
 
 import OnboardingScreen from '../app/(public)/onboarding';
 import ChatTabScreen from '../app/(app)/(tabs)/chat';
+import { getDefaultModel, getSystemModelForTier1Runtime } from '@agiworkforce/local-llm';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { isSelectableLocalCatalogModel } from '../src/features/model-picker/service';
+
+const DOWNLOADABLE_MODEL = getDefaultModel();
+const SYSTEM_RUNTIME_MODEL = getSystemModelForTier1Runtime('foundation_models');
+const SYNTHETIC_RETIRED_MODEL_ID = 'fixture-retired-local-model';
+
+if (!SYSTEM_RUNTIME_MODEL) {
+  throw new Error('Local catalog has no system model for the tier-one fixture runtime');
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -334,7 +304,7 @@ describe('chat tab download banner', () => {
   });
 
   it('still offers the download when the only installed id left the catalog', () => {
-    mockInstalledModelIds = ['retired-model-id'];
+    mockInstalledModelIds = [SYNTHETIC_RETIRED_MODEL_ID];
     const { getByTestId } = render(<ChatTabScreen />);
     expect(getByTestId('download-model-banner')).toBeTruthy();
   });

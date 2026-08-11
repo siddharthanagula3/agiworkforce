@@ -57,19 +57,19 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     if (pickerVisible) {
       await modelPicker.click();
       await browser.pause(500);
-      // Prefer any installed qwen3.5-family model: this test needs a model
-      // that can echo markdown verbatim, and the 0.5b fallback strips the
-      // markers (renders "bold text" without **), failing the structural
-      // checks for model reasons rather than renderer reasons.
-      const clicked = await browser.execute(() => {
+      // A renderer E2E may pin a locally installed model through the test
+      // environment. The repository does not own that runtime model ID.
+      const preferredModel = process.env['AGI_WDIO_MARKDOWN_MODEL_ID'];
+      const clicked = await browser.execute((modelName) => {
+        if (!modelName) return false;
         const buttons = Array.from(document.querySelectorAll('button'));
-        const match = buttons.find((b) => (b.textContent ?? '').includes('qwen3.5'));
+        const match = buttons.find((b) => (b.textContent ?? '').includes(modelName));
         if (match) {
           (match as HTMLButtonElement).click();
           return true;
         }
         return false;
-      });
+      }, preferredModel);
       console.log('MODEL_SELECT_CLICKED', clicked);
       if (!clicked) {
         await browser.keys('Escape');

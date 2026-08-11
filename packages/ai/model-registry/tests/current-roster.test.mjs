@@ -9,41 +9,52 @@ const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..', '..', '..');
 const registry = JSON.parse(
   fs.readFileSync(path.join(PACKAGE_ROOT, 'generated', 'registry.json'), 'utf8'),
 );
+const curation = JSON.parse(
+  fs.readFileSync(path.join(PACKAGE_ROOT, 'catalog', 'models.curation.json'), 'utf8'),
+);
+const retiredModels = JSON.parse(
+  fs.readFileSync(path.join(PACKAGE_ROOT, 'catalog', 'retired-models.json'), 'utf8'),
+);
 const compatibility = JSON.parse(
   fs.readFileSync(
     path.join(REPO_ROOT, 'packages', 'contracts', 'types', 'src', 'models.json'),
     'utf8',
   ),
 );
+const skillSpectorOpenAIRegistry = fs.readFileSync(
+  path.join(
+    REPO_ROOT,
+    'tools',
+    'skill-vetting',
+    'src',
+    'skillspector',
+    'providers',
+    'openai',
+    'model_registry.yaml',
+  ),
+  'utf8',
+);
 
+const openAIProvider = compatibility.providers.openai;
 const currentOpenAI = {
-  'gpt-5.6-sol': {
-    input: 5,
-    cacheRead: 0.5,
-    cacheWrite: 6.25,
-    output: 30,
+  frontier: {
+    modelKey: openAIProvider.defaultModel,
   },
-  // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the official
-  // pricing page. Cache WRITES bill at 1.25x the uncached input rate for the
-  // whole GPT-5.6 family (a billing change introduced with 5.6 — pre-5.6 OpenAI
-  // models declare no write price and keep free writes).
-  'gpt-5.6-terra': {
-    input: 2,
-    cacheRead: 0.2,
-    cacheWrite: 2.5,
-    output: 12,
+  balanced: {
+    modelKey: openAIProvider.taskRouting.chat,
   },
-  'gpt-5.6-luna': {
-    input: 0.2,
-    cacheRead: 0.02,
-    cacheWrite: 0.25,
-    output: 1.2,
+  economy: {
+    modelKey: openAIProvider.taskRouting.fast_completion,
   },
 };
+const currentOpenAIKeys = new Set(Object.values(currentOpenAI).map(({ modelKey }) => modelKey));
 
+const anthropicProvider = compatibility.providers.anthropic;
+const anthropicStandardModelKey = anthropicProvider.defaultModel;
+const anthropicComplexModelKey = anthropicProvider.taskRouting.complex_reasoning;
+const anthropicPremiumModelKey = registry.policies.auto.slots.flagship_coding.modelKey;
 const currentAnthropic = {
-  'claude-fable-5': {
-    providerModelId: 'claude-fable-5',
+  [anthropicComplexModelKey]: {
     input: 10,
     cacheRead: 1,
     cacheWrite5m: 12.5,
@@ -52,8 +63,7 @@ const currentAnthropic = {
     context: 1_000_000,
     maxOutput: 128_000,
   },
-  'claude-opus-5': {
-    providerModelId: 'claude-opus-5',
+  [anthropicPremiumModelKey]: {
     input: 5,
     cacheRead: 0.5,
     cacheWrite5m: 6.25,
@@ -62,8 +72,7 @@ const currentAnthropic = {
     context: 1_000_000,
     maxOutput: 128_000,
   },
-  'claude-sonnet-5': {
-    providerModelId: 'claude-sonnet-5',
+  [anthropicStandardModelKey]: {
     input: 3,
     cacheRead: 0.3,
     cacheWrite5m: 3.75,
@@ -72,28 +81,69 @@ const currentAnthropic = {
     context: 1_000_000,
     maxOutput: 128_000,
   },
-  // claude-haiku-4.5 was removed from the catalog on 2026-07-27 (founder
-  // decision: the Haiku family re-enters when Haiku 5 ships). Its assertions
-  // outlived it here and were failing against the shipped catalog.
 };
 
-test('publishes the GA GPT-5.6 API family with its implemented Responses search harness', () => {
-  for (const [modelKey, expected] of Object.entries(currentOpenAI)) {
-    assert.equal(registry.models[modelKey].identity.providerModelId, modelKey);
+test('generates the optional skill analyzer OpenAI registry from canonical routing', () => {
+  const provider = compatibility.providers.openai;
+  const routedModelIds = [
+    ...new Set([provider.defaultModel, ...Object.values(provider.taskRouting)]),
+  ];
+  assert.match(
+    skillSpectorOpenAIRegistry,
+    new RegExp(`^default_model: '${provider.defaultModel}'$`, 'm'),
+  );
+  for (const modelId of routedModelIds) {
+    assert.match(skillSpectorOpenAIRegistry, new RegExp(`^  '${modelId}':$`, 'm'));
+  }
+});
+
+test('compiles the routed OpenAI reasoning family from one canonical curation record', () => {
+  assert.equal(
+    currentOpenAIKeys.size,
+    Object.keys(currentOpenAI).length,
+    'frontier, balanced, and economy must resolve to three distinct canonical models',
+  );
+  for (const { modelKey } of Object.values(currentOpenAI)) {
+    const curated = curation.models[modelKey];
+    assert.ok(curated, `${modelKey} must resolve in canonical curation`);
+    assert.equal(
+      registry.models[modelKey].identity.providerModelId,
+      curated.apiModelId ?? curated.id ?? modelKey,
+    );
     assert.equal(registry.models[modelKey].lifecycle.availability, 'live');
     assert.equal(registry.models[modelKey].lifecycle.unavailableReason, undefined);
     assert.equal(registry.routes[`openai/${modelKey}`].selectable, true);
-    assert.equal(registry.limits[modelKey].contextTokens, 1_050_000);
-    assert.equal(registry.limits[modelKey].maxInputTokens, 922_000);
-    assert.equal(registry.limits[modelKey].maxOutputTokens, 128_000);
-    assert.equal(registry.limits[modelKey].knowledgeCutoff, '2026-02-16');
+    assert.equal(registry.limits[modelKey].contextTokens, curated.contextOverride);
+    assert.equal(registry.limits[modelKey].maxInputTokens, curated.maxInputTokens);
+    assert.equal(registry.limits[modelKey].maxOutputTokens, curated.maxOutputTokens);
+    assert.equal(registry.limits[modelKey].knowledgeCutoff, curated.knowledgeCutoff);
     assert.equal(registry.capabilities[modelKey].textInput, true);
     assert.equal(registry.capabilities[modelKey].imageInput, true);
     assert.equal(registry.capabilities[modelKey].textOutput, true);
-    assert.equal(registry.pricing[modelKey].inputPerMillion, expected.input);
-    assert.equal(registry.pricing[modelKey].cacheReadPerMillion, expected.cacheRead);
-    assert.equal(registry.pricing[modelKey].cacheWritePerMillion, expected.cacheWrite);
-    assert.equal(registry.pricing[modelKey].outputPerMillion, expected.output);
+    assert.deepEqual(compatibility.models[modelKey].imageInput, curated.imageInput);
+    assert.equal(registry.pricing[modelKey].inputPerMillion, curated.costOverride.inputCost);
+    assert.equal(registry.pricing[modelKey].cacheReadPerMillion, curated.costOverride.cached_input);
+    assert.equal(
+      registry.pricing[modelKey].cacheWritePerMillion,
+      curated.costOverride.cached_write,
+    );
+    assert.equal(registry.pricing[modelKey].outputPerMillion, curated.costOverride.outputCost);
+    assert.equal(compatibility.models[modelKey].longContext, undefined);
+    assert.deepEqual(
+      compatibility.models[modelKey].inputTokenPricingTiers,
+      curated.inputTokenPricingTiers,
+    );
+    assert.equal(registry.pricing[modelKey].longContext, undefined);
+    assert.deepEqual(
+      registry.pricing[modelKey].inputTokenPricingTiers,
+      curated.inputTokenPricingTiers.map((tier) => ({
+        thresholdTokens: tier.thresholdTokens,
+        inputPerMillion: tier.inputCost,
+        cacheReadPerMillion: tier.cached_input,
+        cacheWritePerMillion: tier.cached_write,
+        outputPerMillion: tier.outputCost,
+      })),
+    );
   }
 
   assert.equal(
@@ -101,32 +151,17 @@ test('publishes the GA GPT-5.6 API family with its implemented Responses search 
     'implemented',
     'native search must stay unavailable until the AGI harness is implemented',
   );
-  for (const modelKey of Object.keys(currentOpenAI)) {
+  for (const modelKey of currentOpenAIKeys) {
     assert.equal(compatibility.models[modelKey].capabilities.search, true);
   }
 });
 
-test('publishes GPT-5.4 Mini as the Free tool-capable OpenAI model', () => {
-  const modelKey = 'gpt-5.4-mini';
-  assert.equal(registry.models[modelKey].identity.providerModelId, modelKey);
-  assert.equal(registry.models[modelKey].lifecycle.availability, 'live');
-  assert.equal(registry.limits[modelKey].contextTokens, 400_000);
-  assert.equal(registry.limits[modelKey].maxInputTokens, 272_000);
-  assert.equal(registry.limits[modelKey].maxOutputTokens, 128_000);
-  assert.equal(registry.limits[modelKey].knowledgeCutoff, '2025-08-31');
-  assert.equal(registry.pricing[modelKey].inputPerMillion, 0.75);
-  assert.equal(registry.pricing[modelKey].cacheReadPerMillion, 0.075);
-  assert.equal(registry.pricing[modelKey].outputPerMillion, 4.5);
-  assert.equal(registry.capabilities[modelKey].functionCalling, true);
-  assert.equal(compatibility.models[modelKey].capabilities.search, true);
-  assert.equal(compatibility.models[modelKey].capabilities.codeExecution, true);
-  assert.equal(compatibility.models[modelKey].tierPolicy.minTier, 'free');
-  assert.equal(registry.policies.auto.slots.coding_fast.modelKey, modelKey);
-});
-
-test('publishes the current Claude roster with exact API IDs, limits, and prompt-cache rates', () => {
+test('publishes the current Anthropic roster with canonical API IDs, limits, and prompt-cache rates', () => {
   for (const [modelKey, expected] of Object.entries(currentAnthropic)) {
-    assert.equal(registry.models[modelKey].identity.providerModelId, expected.providerModelId);
+    assert.equal(
+      registry.models[modelKey].identity.providerModelId,
+      compatibility.models[modelKey].apiModelId,
+    );
     assert.equal(registry.models[modelKey].lifecycle.availability, 'live');
     assert.equal(registry.routes[`anthropic/${modelKey}`].selectable, true);
     assert.equal(registry.limits[modelKey].contextTokens, expected.context);
@@ -141,32 +176,32 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
     assert.equal(registry.pricing[modelKey].outputPerMillion, expected.output);
   }
 
-  const fableReasoning = compatibility.models['claude-fable-5'].reasoning;
-  assert.deepEqual(fableReasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.equal(fableReasoning.defaultEffort, 'high');
-  assert.equal(fableReasoning.canDisableThinking, false);
-  assert.equal(fableReasoning.request.effortPath, 'output_config.effort');
+  const complexReasoning = compatibility.models[anthropicComplexModelKey].reasoning;
+  assert.deepEqual(complexReasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(complexReasoning.defaultEffort, 'high');
+  assert.equal(complexReasoning.canDisableThinking, false);
+  assert.equal(complexReasoning.request.effortPath, 'output_config.effort');
 
-  const sonnetReasoning = compatibility.models['claude-sonnet-5'].reasoning;
-  assert.deepEqual(sonnetReasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.equal(sonnetReasoning.defaultEffort, 'high');
-  assert.equal(sonnetReasoning.canDisableThinking, true);
-  assert.equal(sonnetReasoning.request.togglePath, 'thinking.type');
+  const standardReasoning = compatibility.models[anthropicStandardModelKey].reasoning;
+  assert.deepEqual(standardReasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(standardReasoning.defaultEffort, 'high');
+  assert.equal(standardReasoning.canDisableThinking, true);
+  assert.equal(standardReasoning.request.togglePath, 'thinking.type');
 
-  const opus = compatibility.models['claude-opus-5'];
-  assert.equal(opus.knowledgeCutoff, '2026-05');
-  assert.equal(opus.released, 'July 24, 2026');
-  assert.equal(opus.tierPolicy.minTier, 'max');
-  assert.equal(opus.promptCacheMinimumTokens, 512);
-  assert.deepEqual(opus.providerCompatibility, { nativeWebFetch: false });
-  assert.deepEqual(opus.reasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.equal(opus.reasoning.thinkingDefault, 'adaptive');
-  assert.equal(opus.reasoning.supportsManualThinking, false);
-  assert.equal(opus.reasoning.maxEffortWhenThinkingDisabled, 'high');
-  assert.equal(opus.reasoning.rejectsSamplingParameters, true);
+  const premium = compatibility.models[anthropicPremiumModelKey];
+  assert.equal(premium.knowledgeCutoff, '2026-05');
+  assert.equal(premium.released, 'July 24, 2026');
+  assert.equal(premium.tierPolicy.minTier, 'max');
+  assert.equal(premium.promptCacheMinimumTokens, 512);
+  assert.deepEqual(premium.providerCompatibility, { nativeWebFetch: false });
+  assert.deepEqual(premium.reasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(premium.reasoning.thinkingDefault, 'adaptive');
+  assert.equal(premium.reasoning.supportsManualThinking, false);
+  assert.equal(premium.reasoning.maxEffortWhenThinkingDisabled, 'high');
+  assert.equal(premium.reasoning.rejectsSamplingParameters, true);
 
-  assert.equal(compatibility.models['claude-sonnet-5'].promo_expires_at, undefined);
-  assert.equal(compatibility.models['claude-sonnet-5'].post_promo_prices, undefined);
+  assert.equal(compatibility.models[anthropicStandardModelKey].promo_expires_at, undefined);
+  assert.equal(compatibility.models[anthropicStandardModelKey].post_promo_prices, undefined);
 });
 
 /**
@@ -174,8 +209,8 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
  * `pricing-schedule.test.mjs`; this asserts what the shipped roster actually
  * publishes. Today no model carries a window: every published price is
  * date-invariant, so no request can be billed differently for the same tokens
- * depending on the calendar. Sonnet 5 in particular bills the founder-selected
- * standard rates on every date (Decision #22, reaffirmed 2026-08-05) — a
+ * depending on the calendar. The default Anthropic route in particular bills
+ * the founder-selected standard rates on every date (Decision #22, reaffirmed 2026-08-05) — a
  * provider's introductory window is a provider-cost fact for verificationLog,
  * not a product price.
  */
@@ -189,12 +224,12 @@ test('publishes date-invariant prices — no shipped model carries a pricing sch
     'a shipped pricing schedule is a product price change and needs an explicit founder decision',
   );
 
-  const sonnet = registry.pricing['claude-sonnet-5'];
-  assert.equal(sonnet.inputPerMillion, 3);
-  assert.equal(sonnet.outputPerMillion, 15);
-  assert.equal(sonnet.cacheReadPerMillion, 0.3);
-  assert.equal(sonnet.cacheWritePerMillion, 3.75);
-  assert.equal(sonnet.cacheWrite1hPerMillion, 6);
+  const standard = registry.pricing[anthropicStandardModelKey];
+  assert.equal(standard.inputPerMillion, 3);
+  assert.equal(standard.outputPerMillion, 15);
+  assert.equal(standard.cacheReadPerMillion, 0.3);
+  assert.equal(standard.cacheWritePerMillion, 3.75);
+  assert.equal(standard.cacheWrite1hPerMillion, 6);
 });
 
 test('records only verified openness metadata and leaves the rest unknown', () => {
@@ -203,7 +238,11 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     return { openWeight, license, commercialRestrictions };
   };
 
-  for (const modelKey of ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.2']) {
+  const verifiedOpenWeightKeys = [
+    ...registry.providerModelKeys.deepseek,
+    ...registry.providerModelKeys.zhipu,
+  ];
+  for (const modelKey of verifiedOpenWeightKeys) {
     assert.deepEqual(openness(modelKey), {
       openWeight: true,
       license: 'MIT',
@@ -213,7 +252,11 @@ test('records only verified openness metadata and leaves the rest unknown', () =
 
   // Open weights confirmed, exact license id NOT confirmed — it stays absent
   // instead of being guessed.
-  for (const modelKey of ['kimi-k3', 'minimax-m3']) {
+  const unknownLicenseKeys = [
+    ...registry.providerModelKeys.moonshot,
+    ...registry.providerModelKeys.minimax,
+  ];
+  for (const modelKey of unknownLicenseKeys) {
     assert.deepEqual(openness(modelKey), {
       openWeight: true,
       license: undefined,
@@ -221,7 +264,10 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     });
   }
 
-  for (const modelKey of ['gpt-5.6-sol', 'claude-sonnet-5', 'gemini-3.6-flash', 'grok-4.5']) {
+  const proprietaryKeys = ['openai', 'anthropic', 'google', 'xai'].map(
+    (providerId) => compatibility.providers[providerId].defaultModel,
+  );
+  for (const modelKey of proprietaryKeys) {
     assert.deepEqual(openness(modelKey), {
       openWeight: false,
       license: 'proprietary',
@@ -230,7 +276,7 @@ test('records only verified openness metadata and leaves the rest unknown', () =
   }
 
   // Hosted Qwen variants are unverified on both axes: absent, never guessed.
-  for (const modelKey of ['qwen-3.7-plus', 'qwen-3.5-flash']) {
+  for (const modelKey of registry.providerModelKeys.qwen) {
     assert.deepEqual(openness(modelKey), {
       openWeight: undefined,
       license: undefined,
@@ -239,12 +285,12 @@ test('records only verified openness metadata and leaves the rest unknown', () =
   }
 });
 
-test('publishes exact multimodal Qwen replacement IDs and limits', () => {
-  for (const [modelKey, providerModelId] of [
-    ['qwen-3.7-plus', 'qwen3.7-plus'],
-    ['qwen-3.5-flash', 'qwen3.5-flash'],
-  ]) {
-    assert.equal(registry.models[modelKey].identity.providerModelId, providerModelId);
+test('publishes the canonical multimodal Qwen IDs and limits', () => {
+  for (const modelKey of registry.providerModelKeys.qwen) {
+    assert.equal(
+      registry.models[modelKey].identity.providerModelId,
+      compatibility.models[modelKey].apiModelId,
+    );
     assert.equal(registry.limits[modelKey].contextTokens, 1_000_000);
     assert.equal(registry.limits[modelKey].maxOutputTokens, 64_000);
     assert.equal(registry.capabilities[modelKey].textInput, true);
@@ -255,39 +301,56 @@ test('publishes exact multimodal Qwen replacement IDs and limits', () => {
 });
 
 test('selects the founder-approved roster and subscription bands', () => {
-  assert.equal(compatibility.providers.openai.defaultModel, 'gpt-5.6-sol');
-  assert.equal(compatibility.providers.anthropic.defaultModel, 'claude-sonnet-5');
+  assert.equal(
+    compatibility.providers.openai.defaultModel,
+    compatibility.providers.openai.taskRouting.complex_reasoning,
+  );
+  assert.equal(compatibility.providers.anthropic.defaultModel, anthropicStandardModelKey);
   const selectableRoster = new Set(Object.values(compatibility.tierAllowedModels).flat());
-  for (const modelKey of Object.keys(currentOpenAI)) {
+  for (const modelKey of currentOpenAIKeys) {
     assert.equal(selectableRoster.has(modelKey), true, `${modelKey} must remain selectable`);
   }
   for (const modelKey of Object.keys(currentAnthropic)) {
     assert.equal(selectableRoster.has(modelKey), true, `${modelKey} must remain selectable`);
   }
   const basicRoster = new Set(compatibility.tierAllowedModels.economy);
-  assert.equal(basicRoster.has('gpt-5.6-luna'), true);
-  assert.equal(basicRoster.has('gpt-5.4-mini'), true);
-  assert.equal(basicRoster.has('gemini-3.6-flash'), true);
-  assert.equal(basicRoster.has('gpt-5.6-terra'), false);
-  // Economy carries no Anthropic model since Haiku 4.5 was dropped. Pinned as
-  // false rather than deleted so that re-adding one is a deliberate edit here.
-  assert.equal(basicRoster.has('claude-haiku-4.5'), false);
+  assert.equal(basicRoster.has(currentOpenAI.economy.modelKey), true);
+  assert.equal(basicRoster.has(compatibility.providers.google.defaultModel), true);
+  assert.equal(basicRoster.has(currentOpenAI.balanced.modelKey), false);
+  // Economy carries no Anthropic model. Reintroducing one must be deliberate.
+  const anthropicModelKeys = new Set(registry.providerModelKeys.anthropic);
   assert.equal(
-    [...basicRoster].some((modelKey) => modelKey.startsWith('claude-')),
+    [...basicRoster].some((modelKey) => anthropicModelKeys.has(modelKey)),
     false,
-    'economy has no Anthropic slot until the Haiku family returns',
+    'economy has no Anthropic slot',
   );
-  assert.equal(basicRoster.has('sonar'), false);
-  assert.equal(
-    compatibility.tierAllowedModels.pro_additions.includes('sonar-deep-research'),
-    false,
-  );
-  assert.equal(selectableRoster.has('sonar-pro'), false);
+  for (const modelKey of registry.providerModelKeys.perplexity) {
+    assert.equal(basicRoster.has(modelKey), false);
+    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), false);
+    assert.equal(selectableRoster.has(modelKey), false);
+  }
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);
   assert.equal(
-    openAIRoutes.every((modelKey) => Object.hasOwn(currentOpenAI, modelKey)),
+    openAIRoutes.every((modelKey) => currentOpenAIKeys.has(modelKey)),
     true,
+  );
+  const openAITextModels = Object.values(compatibility.models)
+    .filter((model) => model.modelType === 'chat' || model.modelType === 'reasoning')
+    .filter((model) => model.provider === 'openai')
+    .map((model) => model.id);
+  assert.deepEqual(
+    new Set(openAITextModels),
+    new Set([compatibility.providers.openai.defaultModel, ...openAIRoutes]),
+    'the current OpenAI text roster must be owned entirely by provider routing',
+  );
+  const openAICanonicalizationTargets = Object.values(
+    compatibility.providers.openai.canonicalization,
+  );
+  assert.equal(
+    openAICanonicalizationTargets.every((modelKey) => currentOpenAIKeys.has(modelKey)),
+    true,
+    'OpenAI aliases may target only the current three-model reasoning roster',
   );
   const anthropicRoutes = Object.values(compatibility.providers.anthropic.taskRouting);
   assert.equal(
@@ -296,16 +359,24 @@ test('selects the founder-approved roster and subscription bands', () => {
   );
 
   const slotModels = Object.values(registry.policies.auto.slots).map(({ modelKey }) => modelKey);
-  assert.equal(slotModels.includes('gpt-5.5'), false);
-  assert.equal(slotModels.includes('gpt-5.4-mini'), true);
-  assert.equal(slotModels.includes('claude-sonnet-4.6'), false);
+  for (const retiredModelKey of retiredModels.retiredModelIds) {
+    assert.equal(slotModels.includes(retiredModelKey), false);
+  }
 
+  const freeCodingModel = registry.policies.auto.slots.coding_fast.modelKey;
+  assert.equal(basicRoster.has(freeCodingModel), true);
+  assert.equal(compatibility.models[freeCodingModel].tierPolicy.minTier, 'free');
+  assert.equal(compatibility.models[freeCodingModel].capabilities.tools, true);
+  assert.equal(compatibility.models[freeCodingModel].capabilities.codeExecution, true);
+
+  const addressableFormerPicker = registry.providerModelKeys.perplexity.find(
+    (modelKey) => registry.models[modelKey] && !selectableRoster.has(modelKey),
+  );
   assert.ok(
-    registry.models['sonar-pro'],
+    addressableFormerPicker,
     'a still-served model may remain addressable even after leaving current-generation pickers',
   );
-  assert.equal(registry.models['gpt-5.5'], undefined);
-  assert.equal(registry.models['claude-sonnet-4.6'], undefined);
-  assert.equal(registry.models['kimi-k2.6'], undefined);
-  assert.equal(registry.models['qwen-3.5-plus'], undefined);
+  for (const retiredModelKey of retiredModels.retiredModelIds) {
+    assert.equal(registry.models[retiredModelKey], undefined);
+  }
 });

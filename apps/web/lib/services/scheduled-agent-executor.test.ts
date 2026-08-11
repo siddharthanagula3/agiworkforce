@@ -15,7 +15,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({ query: vi.fn() })) }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
@@ -45,6 +44,7 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import {
   finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
@@ -78,6 +78,13 @@ const task: ScheduleTask = {
   metadata: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
+};
+
+const scopedDb = { query: vi.fn() } as never;
+const executionScope = {
+  db: scopedDb,
+  userId: 'user-1',
+  organizationId: '11111111-1111-4111-8111-111111111111',
 };
 
 describe('scheduled managed agent executor', () => {
@@ -135,9 +142,20 @@ describe('scheduled managed agent executor', () => {
         { ...task, actionType: 'workflow' },
         new AbortController().signal,
         'run-1',
+        executionScope,
       ),
     ).rejects.toThrow(/unsupported scheduled action/i);
     expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects a claimed scope whose owner does not match the task', async () => {
+    await expect(
+      executeScheduledAgent(task, new AbortController().signal, 'run-1', {
+        ...executionScope,
+        userId: 'other-user',
+      }),
+    ).rejects.toThrow(/scope does not match/i);
+    expect(SubscriptionService.getSubscription).not.toHaveBeenCalled();
   });
 
   it('fails closed when the requested model route is unavailable', async () => {
@@ -152,7 +170,7 @@ describe('scheduled managed agent executor', () => {
     });
 
     await expect(
-      executeScheduledAgent(task, new AbortController().signal, 'run-1'),
+      executeScheduledAgent(task, new AbortController().signal, 'run-1', executionScope),
     ).rejects.toThrow(/not available/i);
   });
 
@@ -162,7 +180,7 @@ describe('scheduled managed agent executor', () => {
     );
 
     await expect(
-      executeScheduledAgent(task, new AbortController().signal, 'run-1'),
+      executeScheduledAgent(task, new AbortController().signal, 'run-1', executionScope),
     ).rejects.toThrow(/budget/i);
     expect(buildServerProviderAdapter).not.toHaveBeenCalled();
   });
@@ -174,13 +192,13 @@ describe('scheduled managed agent executor', () => {
     } as never);
 
     await expect(
-      executeScheduledAgent(task, new AbortController().signal, 'run-1'),
+      executeScheduledAgent(task, new AbortController().signal, 'run-1', executionScope),
     ).resolves.toMatchObject({ text: 'Completed result' });
   });
 
   it('routes, executes, and durably settles actual usage under the run id', async () => {
     const signal = new AbortController().signal;
-    const result = await executeScheduledAgent(task, signal, 'run-1');
+    const result = await executeScheduledAgent(task, signal, 'run-1', executionScope);
 
     expect(resolveAutoRoute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -191,8 +209,13 @@ describe('scheduled managed agent executor', () => {
       }),
     );
     expect(buildServerProviderAdapter).toHaveBeenCalledWith('openai');
+    expect(SubscriptionService.getSubscription).toHaveBeenCalledWith(scopedDb, 'user-1');
+    expect(fingerprintManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: executionScope.organizationId }),
+    );
     expect(reserveManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
+        db: scopedDb,
         userId: 'user-1',
         idempotencyKey: 'schedule-run:run-1',
         estimatedCostCents: 2,
@@ -215,7 +238,7 @@ describe('scheduled managed agent executor', () => {
   it('classifies a scheduled flagship route for the rolling flagship ceiling', async () => {
     vi.mocked(getSlotForModel).mockReturnValueOnce('flagship_general_pro_plus');
 
-    await executeScheduledAgent(task, new AbortController().signal, 'run-flagship');
+    await executeScheduledAgent(task, new AbortController().signal, 'run-flagship', executionScope);
 
     expect(reserveManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({ isFlagship: true }),
@@ -225,7 +248,7 @@ describe('scheduled managed agent executor', () => {
   it('does not invent a one-cent minimum when catalog pricing rounds usage to zero', async () => {
     vi.mocked(LLMCostCalculator.calculateCost).mockReturnValueOnce(0);
 
-    await executeScheduledAgent(task, new AbortController().signal, 'run-zero');
+    await executeScheduledAgent(task, new AbortController().signal, 'run-zero', executionScope);
 
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({ actualCostCents: 0, outcome: 'completed' }),
@@ -236,7 +259,7 @@ describe('scheduled managed agent executor', () => {
     vi.mocked(drainToLlmResponse).mockRejectedValueOnce(new Error('provider unavailable'));
 
     await expect(
-      executeScheduledAgent(task, new AbortController().signal, 'run-failed'),
+      executeScheduledAgent(task, new AbortController().signal, 'run-failed', executionScope),
     ).rejects.toThrow(/provider unavailable/i);
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),

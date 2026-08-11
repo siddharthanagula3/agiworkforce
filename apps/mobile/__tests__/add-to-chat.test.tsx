@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -137,13 +137,27 @@ import { useProjectStore } from '../src/features/projects/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { listMediaModels } from '../src/features/chat/actions/mediaMode';
+import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Representative Cloud-capable default used by the capability-gated rows.
-const SEARCH_CAPABLE_MODEL_ID = 'claude-sonnet-5';
+const SEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.search === true,
+  'search-capable Mobile Cloud model',
+).id;
+const SEARCH_UNSUPPORTED_MODEL_ID = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.search !== true,
+  'Mobile Cloud model without search support',
+).id;
+const RESEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel((model) => {
+  const capabilities = getModelMetadataById(model.id)?.capabilities;
+  return capabilities?.research === true && capabilities.search === true;
+}, 'research-and-search-capable Mobile Cloud model').id;
 
 function resetStores() {
   useChatStore.setState({
@@ -167,6 +181,7 @@ function resetStores() {
     activeProjectId: null,
   });
   useChatAppModeStore.setState({ appMode: 'local' });
+  useChatViewStore.setState({ mediaMode: 'text', selectedMediaModel: {} });
   useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
   useTierStore.setState({
     tier: 'free',
@@ -416,7 +431,7 @@ describe('AddToChatSheet', () => {
 
     it('never offers Run code in the + sheet, even fully entitled in Cloud', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-sonnet-5' });
+      useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
       useTierStore.setState({
         tier: 'max',
         grantedCapabilities: ['canUseImages', 'canUseCloudExecution', 'canUseDeepResearch'],
@@ -437,8 +452,56 @@ describe('AddToChatSheet', () => {
       expect(getByText('Video')).toBeTruthy();
     });
 
+    it('updates the selected video-model row immediately after the user picks another model', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'max_15x', grantedCapabilities: ['canUseImages'] });
+      useChatViewStore.setState({ mediaMode: 'video', selectedMediaModel: {} });
+      const candidates = listMediaModels('video');
+      expect(candidates.length).toBeGreaterThan(1);
+      const first = getModelMetadataById(candidates[0]);
+      const second = getModelMetadataById(candidates[1]);
+      expect(first).not.toBeNull();
+      expect(second).not.toBeNull();
+
+      const { getByLabelText } = renderSheet();
+      const firstRow = getByLabelText(new RegExp(`^${first!.name},.*selected$`));
+      const secondRow = getByLabelText(new RegExp(`^${second!.name},`));
+      expect(firstRow.props.accessibilityState.selected).toBe(true);
+      expect(secondRow.props.accessibilityState.selected).toBe(false);
+
+      fireEvent.press(secondRow);
+
+      expect(getByLabelText(new RegExp(`^${first!.name},`)).props.accessibilityState.selected).toBe(
+        false,
+      );
+      expect(
+        getByLabelText(new RegExp(`^${second!.name},.*selected$`)).props.accessibilityState
+          .selected,
+      ).toBe(true);
+    });
+
+    it('clears a non-executable persisted media selection after render without an update loop', async () => {
+      const nonLiveVideoModel = Object.values(modelsCatalog.models).find(
+        (model) =>
+          model.modelType === 'video' &&
+          model.capabilities.videoGen === true &&
+          !isModelLive(model),
+      );
+      expect(nonLiveVideoModel).toBeDefined();
+      useChatViewStore.setState({
+        mediaMode: 'video',
+        selectedMediaModel: { video: nonLiveVideoModel!.id },
+      });
+
+      renderSheet();
+
+      await waitFor(() => {
+        expect(useChatViewStore.getState().selectedMediaModel.video).toBeUndefined();
+      });
+    });
+
     it('does not render a Web search toggle for an unsupported model', () => {
-      useModelStore.setState({ selectedModel: 'deepseek-v4-flash' });
+      useModelStore.setState({ selectedModel: SEARCH_UNSUPPORTED_MODEL_ID });
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
@@ -447,7 +510,7 @@ describe('AddToChatSheet', () => {
 
     it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'qwen-3.7-plus' });
+      useModelStore.setState({ selectedModel: SEARCH_UNSUPPORTED_MODEL_ID });
       useTierStore.setState({ genericWebSearchAvailable: true });
 
       const { queryByText } = renderSheet();
@@ -461,9 +524,8 @@ describe('AddToChatSheet', () => {
     });
 
     it('shows Deep research in Cloud for a research+search model on a paid plan', () => {
-      // claude-opus-5 has capabilities.research: true AND search: true.
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-opus-5' });
+      useModelStore.setState({ selectedModel: RESEARCH_CAPABLE_MODEL_ID });
       useTierStore.setState({
         tier: 'max',
         grantedCapabilities: ['canUseDeepResearch'],
@@ -475,7 +537,7 @@ describe('AddToChatSheet', () => {
 
     it('hides Deep research for a free account even with a research-capable model', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-opus-5' });
+      useModelStore.setState({ selectedModel: RESEARCH_CAPABLE_MODEL_ID });
       useTierStore.setState({ tier: 'free' });
 
       const { queryByText } = renderSheet();
@@ -484,7 +546,7 @@ describe('AddToChatSheet', () => {
 
     it('hides Deep research when the server handshake denies it even on Pro', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-opus-5' });
+      useModelStore.setState({ selectedModel: RESEARCH_CAPABLE_MODEL_ID });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: [] } as never);
 
       const { queryByText } = renderSheet();

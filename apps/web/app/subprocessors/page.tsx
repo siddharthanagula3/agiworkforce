@@ -52,7 +52,7 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
   {
     name: 'Cloudflare',
     purpose:
-      'Two roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here, and are served from permanent public URLs — see the privacy policy. (2) Edge delivery and DDoS protection for the marketing site.',
+      'Two roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site.',
     region: 'Global edge',
   },
   //

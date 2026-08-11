@@ -1,19 +1,27 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import React, { useEffect, useState } from 'react';
+import { Text } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
-const mockUseAuth = jest.fn(() => ({ isLoaded: true, isSignedIn: mockIsSignedIn }));
+const mockUseAuth = jest.fn(() => ({
+  isLoaded: true,
+  isSignedIn: mockIsSignedIn,
+  userId: mockUserId,
+}));
+let mockSearchParams: { postAuthIntent?: string | string[] } = {};
 
 // Capture the props Clerk's AuthView is rendered with so we can assert the
 // app owns dismissal outside the native SwiftUI/Compose touch surface.
 let lastAuthViewProps: { mode?: string; isDismissible?: boolean; onDismiss?: () => void } = {};
 let mockIsSignedIn = false;
+let mockUserId: string | null = null;
 
 jest.mock('expo-router', () => {
   const { Text } = require('react-native');
   return {
     Redirect: ({ href }: { href: string }) => <Text>Redirect:{href}</Text>,
+    useLocalSearchParams: () => mockSearchParams,
     useRouter: () => ({ replace: mockReplace }),
   };
 });
@@ -54,11 +62,52 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 import LoginScreen from '../app/(auth)/login';
+import { useAuthStore } from '../src/features/auth/store';
+import { useTierStore } from '../src/features/billing/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  getDefaultCloudModelIdForTier,
+} from '../src/features/model-picker/service';
+import { useModelStore } from '../src/features/model-picker/store';
+import { useWaitlistStore } from '../src/features/waitlist/store';
+import { resetPostAuthDestinationToLocal } from '../src/features/auth/actions/postAuthIntent';
+import {
+  beginCloudPostAuthIntent,
+  clearPostAuthIntent,
+  CLOUD_CHAT_POST_AUTH_INTENT,
+  peekPostAuthIntent,
+  POST_AUTH_INTENT_PARAM,
+} from '../src/features/auth/services/postAuthIntent';
+
+function AlreadyLoadedAuthGuardHarness() {
+  const [showAuthRoute, setShowAuthRoute] = useState(true);
+  const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+
+  // Mirrors RootLayout's passive auth guard: an already-loaded signed-in
+  // session redirects as soon as the login route commits.
+  useEffect(() => {
+    if (isClerkSignedIn) setShowAuthRoute(false);
+  }, [isClerkSignedIn]);
+
+  return showAuthRoute ? <LoginScreen /> : <Text testID="app-route">App</Text>;
+}
 
 describe('LoginScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsSignedIn = false;
+    mockUserId = null;
+    mockSearchParams = {};
+    clearPostAuthIntent();
+    useWaitlistStore.getState().setCloudAccess(false);
+    useTierStore.getState().setTier('free');
+    useAuthStore.setState({
+      isClerkLoaded: false,
+      isClerkSignedIn: false,
+      clerkUserId: null,
+    });
+    resetPostAuthDestinationToLocal();
     lastAuthViewProps = {};
   });
 
@@ -84,13 +133,62 @@ describe('LoginScreen', () => {
     fireEvent.press(getByTestId('cloud-sign-in-dismiss'));
 
     expect(mockReplace).toHaveBeenCalledWith('/(app)');
+    expect(peekPostAuthIntent()).toBeNull();
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
-  it('redirects into the app once the Clerk session is signed in', () => {
+  it('stages the validated route intent for the root Clerk bridge', () => {
+    const href = beginCloudPostAuthIntent();
+    mockSearchParams = href.params;
+
+    render(<LoginScreen />);
+
+    expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
+  it('clears the intent and returns Local when native navigation cancels sign-in', () => {
+    const href = beginCloudPostAuthIntent();
+    mockSearchParams = href.params;
+    const screen = render(<LoginScreen />);
+
+    screen.unmount();
+
+    expect(peekPostAuthIntent()).toBeNull();
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
+  it('clears stale intent and resets Local for a default login', () => {
+    beginCloudPostAuthIntent();
+
+    render(<LoginScreen />);
+
+    expect(peekPostAuthIntent()).toBeNull();
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
+  it('atomically applies an already-loaded Clerk intent before the auth guard unmounts login', async () => {
+    const ownerId = 'fixture-already-loaded-owner';
     mockIsSignedIn = true;
+    mockUserId = ownerId;
+    mockSearchParams = {
+      [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT,
+    };
+    useWaitlistStore.getState().setCloudAccess(true);
+    useAuthStore.setState({
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: ownerId,
+    });
+    const expectedModelId = getDefaultCloudModelIdForTier(useTierStore.getState().tier);
+    expect(expectedModelId).toBeDefined();
 
-    const { getByText } = render(<LoginScreen />);
+    const screen = render(<AlreadyLoadedAuthGuardHarness />);
 
-    expect(getByText('Redirect:/(app)')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('app-route')).toBeTruthy());
+    expect(peekPostAuthIntent()).toBeNull();
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(useModelStore.getState().selectedModel).toBe(expectedModelId);
   });
 });

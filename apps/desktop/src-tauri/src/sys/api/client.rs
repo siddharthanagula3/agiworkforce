@@ -575,10 +575,7 @@ mod tests {
 
     /// Bind a loopback HTTP server that answers every connection with whatever
     /// `handler` returns for the requested path, counting connections.
-    async fn spawn_http_server<F>(
-        handler: F,
-        connections: Arc<AtomicUsize>,
-    ) -> std::net::SocketAddr
+    async fn spawn_http_server<F>(handler: F, connections: Arc<AtomicUsize>) -> std::net::SocketAddr
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {

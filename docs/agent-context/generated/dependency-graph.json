@@ -15,6 +15,8 @@
       "@agiworkforce/desktop",
       "@agiworkforce/desktop-command-client",
       "@agiworkforce/extension",
+      "@agiworkforce/guardian-core",
+      "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
       "@agiworkforce/licensing",
       "@agiworkforce/local-llm",
@@ -223,6 +225,10 @@
       {
         "from": "@agiworkforce/extension",
         "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/guardian-github",
+        "to": "@agiworkforce/guardian-core"
       },
       {
         "from": "@agiworkforce/local-llm",

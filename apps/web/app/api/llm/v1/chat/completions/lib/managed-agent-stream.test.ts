@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const persistenceMocks = vi.hoisted(() => ({
+  execute: vi.fn(async (..._args: unknown[]) => undefined),
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({ execute: persistenceMocks.execute }),
+}));
+
 const events: string[] = [];
 const finalize = vi.fn(async (_input: unknown) => {
   events.push('settled');
@@ -50,6 +57,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import { buildManagedAgentStream } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
 
 const processed = {
   provider: 'anthropic',
@@ -104,6 +112,46 @@ async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
       ],
     })}\n\n`,
   );
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
+async function* cardGenerator(count = 1): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  yield encoder.encode('data: {"choices":[{"delta":{"content":"Choose a map."}}]}\n\n');
+  for (let index = 0; index < count; index += 1) {
+    const cardId = `tool-map-fixture-${index}`;
+    yield encoder.encode(
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            delta: {
+              x_interactive_card: {
+                card: {
+                  schemaVersion: 1,
+                  cardId,
+                  kind: 'map-search.v1',
+                  createdAt: '2026-08-11T00:00:00.000Z',
+                  fallback: { headline: 'Map search', text: 'Map search: coffee near Austin' },
+                  producedBy: { toolCallId: cardId, toolName: 'search_maps' },
+                  body: {
+                    title: 'Coffee near Austin',
+                    query: 'coffee near Austin',
+                    actions: [
+                      {
+                        provider: 'google_maps',
+                        label: 'Open in Google Maps',
+                        url: 'https://www.google.com/maps/search/?api=1&query=coffee%20near%20Austin',
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      })}\n\n`,
+    );
+  }
   yield encoder.encode('data: [DONE]\n\n');
 }
 
@@ -215,6 +263,7 @@ describe('managed agent stream', () => {
       outcome: 'completed',
       provider: 'anthropic',
       model: 'claude-test',
+      measuredCostDollars: expect.any(Number),
       usage: expect.objectContaining({
         promptTokens: 90,
         completionTokens: 30,
@@ -251,6 +300,7 @@ describe('managed agent stream', () => {
       outcome: 'failed',
       provider: 'anthropic',
       model: 'claude-test',
+      measuredCostDollars: 0,
       usage: expect.objectContaining({ totalTokens: 0 }),
     });
   });
@@ -344,6 +394,36 @@ describe('managed agent stream', () => {
     await reader.cancel();
 
     expect(onTerminal).toHaveBeenCalledWith('cancelled');
+  });
+
+  it('persists validated cards for a detached turn and caps them before metadata serialization', async () => {
+    persistenceMocks.execute.mockClear();
+    const persistable = {
+      ...processed,
+      requestId: 'request-map-fixture',
+      conversationId: '0190a000-0000-7000-8000-000000000003',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000004',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: cardGenerator(INTERACTIVE_CARDS_MAX_PER_MESSAGE + 2),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        userId: 'user-fixture',
+      }),
+    );
+
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect(call).toBeDefined();
+    const params = call?.[1] as unknown[] | undefined;
+    const metadata = JSON.parse(String(params?.[7])) as Record<string, unknown>;
+    expect(metadata['interactiveCards']).toHaveLength(INTERACTIVE_CARDS_MAX_PER_MESSAGE);
   });
 
   it('preserves awaiting-input when disconnect follows a durable approval checkpoint', async () => {

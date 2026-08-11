@@ -27,7 +27,7 @@ Selection happens via the ``SKILLSPECTOR_PROVIDER`` env var:
     anthropic_proxy  → AnthropicProxyProvider  (Vertex-style raw-predict proxy)
     nv_build         → NvBuildProvider         (build.nvidia.com)
 
-When unset, the selector defaults to ``nv_build``.
+When unset, the selector uses the catalog-generated OpenAI provider.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def _select_active_provider() -> LLMProvider:
         return AnthropicProxyProvider()
     if name == "nv_build":
         return NvBuildProvider()
-    if name in ("nv_inference", ""):
+    if name == "nv_inference":
         # Try the optional nv_inference subpackage if it's bundled with
         # this installation; otherwise fall through to nv_build.
         try:
@@ -80,6 +80,10 @@ def _select_active_provider() -> LLMProvider:
             return NvInferenceProvider()
         except ImportError:
             return NvBuildProvider()
+    if name == "":
+        from .openai import OpenAIProvider
+
+        return OpenAIProvider()
 
     raise ValueError(
         f"Unknown SKILLSPECTOR_PROVIDER: {name!r}. "

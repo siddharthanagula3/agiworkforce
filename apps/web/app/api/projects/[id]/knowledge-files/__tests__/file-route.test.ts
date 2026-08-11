@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   getObject: vi.fn(),
   deleteObject: vi.fn(),
+  resolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -25,8 +26,12 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromStorageUri: (value: string) => value,
+  isObjectStorageConfigured: () => true,
   getObject: mocks.getObject,
   deleteObject: mocks.deleteObject,
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
 }));
 
 import { DELETE, GET } from '@/app/api/projects/[id]/knowledge-files/[fileId]/route';
@@ -51,6 +56,7 @@ describe('project knowledge file bytes and deletion', () => {
       contentType: 'text/plain',
     });
     mocks.deleteObject.mockResolvedValue(undefined);
+    mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   });
 
   it('serves bytes only through the authenticated private response', async () => {
@@ -64,6 +70,30 @@ describe('project knowledge file bytes and deletion', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.user_id = $3');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain(
+      'p.organization_id is not distinct from $4::uuid',
+    );
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['file-1', 'project-1', 'user-1', null]);
+  });
+
+  it('denies a knowledge file whose parent project belongs to another workspace', async () => {
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    mocks.resolveActiveOrganizationId.mockResolvedValue(organizationId);
+    mocks.query.mockResolvedValueOnce([]);
+
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1'),
+      context,
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.getObject).not.toHaveBeenCalled();
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual([
+      'file-1',
+      'project-1',
+      'user-1',
+      organizationId,
+    ]);
   });
 
   // CRIT-005 — `.html`, `.xml` and `.svg` are accepted knowledge-file types and

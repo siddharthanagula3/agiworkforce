@@ -4,7 +4,7 @@ import {
   type CapabilityRequirement,
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
-import { effectiveInputPrice, effectiveOutputPrice } from './pricing';
+import { effectiveModelPricing } from './pricing';
 import type { TaskFamily } from './task-family';
 import {
   resolveTaskFamilyOrdering,
@@ -578,9 +578,10 @@ const DEFAULT_AFFORDABILITY_OUTPUT_TOKENS = 1000;
 function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): number {
   const inputTokens = request.estimatedInputTokens ?? 0;
   const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
-  const usd =
-    (inputTokens * effectiveInputPrice(modelKey) + outputTokens * effectiveOutputPrice(modelKey)) /
-    1_000_000;
+  const pricing = effectiveModelPricing(modelKey, inputTokens);
+  const usd = pricing
+    ? (inputTokens * pricing.inputCost + outputTokens * pricing.outputCost) / 1_000_000
+    : 0;
   return usd * 100;
 }
 

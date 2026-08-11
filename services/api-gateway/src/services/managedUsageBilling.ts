@@ -3,11 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   getModelMetadataById,
   normalizeModelId,
-  resolveEffectiveModelPricing,
+  resolveEffectiveModelPricingForInputTokens,
   SLOT_REGISTRY,
   type StreamChunkUsage,
 } from '@agiworkforce/types';
-import { isPromoExpired } from '@agiworkforce/routing';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
@@ -78,8 +77,8 @@ const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
  * Models that back a flagship routing slot.
  *
  * Derived from the slot registry rather than `getSlotForModel`, which answers
- * with the FIRST slot a model appears in — `claude-opus-5` resolves to
- * `flagship_coding`, never to `flagship_coding_pro_plus`, so matching on the
+ * with the FIRST slot a model appears in. A model shared by two flagship
+ * slots resolves to the first one, so matching only later slot names would
  * pro-plus slot names alone tags nothing and the flagship window never binds.
  */
 const FLAGSHIP_MODEL_IDS: ReadonlySet<string> = new Set(
@@ -280,30 +279,6 @@ export function calculateManagedUsageCostCents(
   now: Date = new Date(),
 ): number {
   const metadata = modelPricing(model);
-  // isPromoExpired does its own by-id catalog lookup (packages/ai/routing/src/
-  // pricing.ts), independent of modelPricing()'s alias resolution above --
-  // canonicalize first, or an alias-referenced model would never be detected
-  // as expired.
-  const canonicalModelId = normalizeModelId(model) ?? model;
-  // Dated pricing resolves FIRST: a model may carry `pricingSchedule` windows
-  // (UTC calendar days, both bounds inclusive), and every rate field moves
-  // together -- input, output, cache read, and both cache-write tiers. No model
-  // schedules a price today; the mechanism exists for an announced PRODUCT
-  // price change. The older two-phase promo block is layered on top for models
-  // that still use one. This mirrors apps/web/lib/services/llm-cost-calculator
-  // .ts's getPricing exactly: the ledger and the product must resolve the same
-  // rate for the same date.
-  const effective = resolveEffectiveModelPricing(metadata, now);
-  const postPromo =
-    metadata.post_promo_prices && isPromoExpired(canonicalModelId, now)
-      ? metadata.post_promo_prices
-      : undefined;
-  const inputRate = postPromo?.input ?? effective.inputCost;
-  const outputRate = postPromo?.output ?? effective.outputCost;
-  const cachedInputRate = postPromo?.cached_input ?? effective.cached_input;
-  const cachedWriteRate = postPromo?.cached_write ?? effective.cached_write;
-  const cachedWrite1hRate = postPromo?.cached_write_1h ?? effective.cached_write_1h;
-
   const inputTokens = finiteNonNegative(usage.inputTokens);
   const outputTokens = finiteNonNegative(usage.outputTokens);
   const cacheReadTokens = finiteNonNegative(usage.cacheReadTokens);
@@ -313,10 +288,25 @@ export function calculateManagedUsageCostCents(
     finiteNonNegative(usage.cacheWrite1hTokens),
   );
   const cacheWrite5mTokens = cacheWriteTokens - cacheWrite1hTokens;
+  // The tier threshold uses TOTAL request input. Anthropic-style accounting
+  // reports cache buckets disjoint from inputTokens; OpenAI-compatible
+  // accounting reports them as subsets. This is the same accounting-shape
+  // policy used below to avoid double billing cache tokens.
+  const disjoint = metadata.provider === 'anthropic';
+  const tierInputTokens = disjoint ? inputTokens + cacheReadTokens + cacheWriteTokens : inputTokens;
+  // One shared contract owns composition order: dated window, legacy
+  // post-promo override, then the greatest strict input-length tier. The Web
+  // calculator, routing estimates, embeddings, and this ledger therefore
+  // resolve identical rates for identical request facts.
+  const effective = resolveEffectiveModelPricingForInputTokens(metadata, now, tierInputTokens);
+  const inputRate = effective.inputCost;
+  const outputRate = effective.outputCost;
+  const cachedInputRate = effective.cached_input;
+  const cachedWriteRate = effective.cached_write;
+  const cachedWrite1hRate = effective.cached_write_1h;
 
   // Anthropic reports ordinary input disjoint from cache counters. OpenAI and
   // compatible providers report cache reads AND writes as a subset of input.
-  const disjoint = metadata.provider === 'anthropic';
   const ordinaryInputTokens = disjoint
     ? inputTokens
     : Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
@@ -325,22 +315,18 @@ export function calculateManagedUsageCostCents(
   // desktop calculator prices the same request the same way. This keys on the
   // ABSENCE of a `cached_input` price, NOT on `capabilities.caching` (no
   // billing path reads that flag), so it covers every model the catalog leaves
-  // unpriced. The live case in the paid ledger is `grok-4.5`: xai, $2/M input,
-  // no `cached_input`, `caching: false`, in `tierAllowedModels.flagship_additions`
-  // (see routes/llm.ts FLAGSHIP_ALLOWED_MODELS), and its OpenAI-shaped stream
-  // fills cacheReadTokens from `prompt_tokens_details.cached_tokens`. Its cache
-  // reads bill at $2/M here, not the $0.20/M a flat 0.1x used to invent.
-  // `minimax-m3` is in the same state but is in no tier list, so it cannot
-  // reach this line in production.
+  // unpriced. A reachable flagship addition with OpenAI-shaped usage proves
+  // this path: `prompt_tokens_details.cached_tokens` reaches the ledger, but
+  // absent a catalog read rate those tokens remain full-price. Other unlisted
+  // catalog models may share the same pricing shape without being reachable.
   const cacheReadRate = cachedInputRate ?? inputRate;
   // Catalog-declared write rates win. The fallback is provider-shaped: with
   // disjoint accounting the written tokens are billed ONLY here, so an
   // undeclared rate falls back to Anthropic's published surcharges. With subset
   // accounting the written tokens were just removed from ordinaryInputTokens,
   // so an undeclared rate falls back to the plain input rate -- billed once, no
-  // surcharge. That is the free-cache-write case every pre-GPT-5.6 OpenAI model
-  // is in; the GPT-5.6 family declares cached_write (1.25x uncached input) and
-  // is charged for it.
+  // surcharge. Models without declared cache-write pricing take this branch;
+  // models with a catalog-declared write price take the priced branch above.
   const cacheWrite5mRate =
     cachedWriteRate ??
     (disjoint ? inputRate * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m : inputRate);

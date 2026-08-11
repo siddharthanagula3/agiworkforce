@@ -1399,7 +1399,11 @@ mod tests {
     fn sync_scoping_pull_stamps_the_pulling_account_as_owner() {
         let conn = fresh_db();
 
-        apply_memory_deltas(&conn, "user-b", &[live_delta("cloud-new", "B's memory", "3")]);
+        apply_memory_deltas(
+            &conn,
+            "user-b",
+            &[live_delta("cloud-new", "B's memory", "3")],
+        );
 
         let owner: Option<String> = conn
             .query_row(

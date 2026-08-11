@@ -2,6 +2,12 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import {
+  CONTACT_EMAIL,
+  CONTACT_SUBJECTS,
+  POLICY_LAST_UPDATED,
+  contactMailto,
+} from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Security',
@@ -45,7 +51,7 @@ export const metadata = buildMetadata({
  *   Release integrity ........ .github/workflows/{ci,codeql,release-desktop,
  *                              build-windows-release}.yml
  */
-const LAST_REVIEWED = '5 August 2026';
+const LAST_REVIEWED = POLICY_LAST_UPDATED.security;
 
 const BOUNDARIES: {
   mark: string;
@@ -90,7 +96,8 @@ const DATA_ROWS: { category: string; local: string; byok: string; cloud: string 
     category: 'Uploaded and generated media',
     local: 'Your device',
     byok: 'Your device',
-    cloud: 'Cloudflare R2 object storage, catalogued in Neon',
+    cloud:
+      'Cloudflare R2, catalogued in Neon and served by an authenticated owner-and-workspace-scoped app route; videos use a private bucket, while images and non-video files remain in a public bucket whose raw URLs are not returned by normal product responses',
   },
   {
     category: 'Memories, projects, settings',
@@ -235,18 +242,18 @@ const DB_ROWS: { k: string; v: string }[] = [
   },
   {
     k: 'Where this applies today',
-    v: 'The user-scoped client is used by 22 of 170 hosted API route files: chat and conversation sync, projects, memory, settings and organization sharing, code sessions, schedules, connector permissions, media generation, and the OpenAI-compatible completions endpoints. On those routes the database enforces isolation independently of the application.',
+    v: 'The user-scoped client is used by chat and conversation sync, projects, memory, settings and organization sharing, code sessions, schedules, connector permissions, media generation, research reports, artifact publishing, and OpenAI-compatible endpoints. On those routes the database enforces isolation independently of the application. We do not publish a route count because it changes as routes are added or consolidated.',
   },
   {
     k: 'Where it does not, yet',
-    v: 'The remaining hosted routes connect as the database owner, which bypasses row-level security by design. On those routes ownership is enforced in application code by filtering on the authenticated user identifier. That is a real control and it is what the product ran on before the policies existed — but it is one layer, not two. Widening coverage is an open item below, with no promised date.',
+    v: 'Other hosted routes connect as the database owner, which bypasses row-level security by design. Those routes must implement authentication, ownership, and workspace filters in their application queries; using the owner connection is not itself an isolation control. Widening database-enforced coverage is an open item below, with no promised date.',
   },
 ];
 
 const LOGGING: { k: string; v: string }[] = [
   {
     k: 'What the hosted platform records',
-    v: 'A single module owns the only write into the security event table. It records seven event types: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, administrative action, failed CSRF validation, and invalid signature. Around 28 API route files emit them.',
+    v: 'A single module owns writes into the security event table. It records seven failure and abuse event types — failed authentication, rate-limit exceeded, failed authorization, suspicious activity, administrative action, failed CSRF validation, and invalid signature — plus a separate taxonomy for successful business events. Authentication, account-lifecycle, billing, connector, team and organisation, API-key, and session routes call that module.',
   },
   {
     k: 'What it does not record',
@@ -266,7 +273,7 @@ const LOGGING: { k: string; v: string }[] = [
   },
   {
     k: 'Who can read it',
-    v: 'Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only — update and delete are revoked from the application role — and a scheduled job purges old rows.',
+    v: 'Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only — update and delete are revoked from the application role. A database routine can delete records older than 90 days, but no scheduled route invokes it today, so automatic expiry is not promised.',
   },
 ];
 
@@ -339,7 +346,7 @@ const NOT_DONE: { k: string; v: string }[] = [
   },
   {
     k: 'Database policy coverage',
-    v: 'Row-level security is bound on 22 of 170 hosted API route files. The rest rely on application-layer ownership checks. Named plainly above rather than averaged into a general claim.',
+    v: 'Row-level security is bound on the user-scoped routes named above. Other privileged routes must enforce authenticated ownership and workspace scope in application queries; widening database-enforced coverage remains open work.',
   },
   {
     k: 'Inline styles',
@@ -381,7 +388,7 @@ export default function SecurityPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Security</p>
           <h1 id="agi-security-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Three boundaries,</span>
+            <span className="agi-fl-h1-line">Three boundaries,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">three different answers.</em>
             </span>
@@ -622,12 +629,12 @@ export default function SecurityPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Email{' '}
-            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
-              contact@agiworkforce.com
+            <a href={contactMailto(CONTACT_SUBJECTS.security)} style={{ color: 'var(--agi-ink)' }}>
+              {CONTACT_EMAIL}
             </a>{' '}
-            with <strong>security</strong> in the subject line. This is the mailbox that is actually
-            monitored; we would rather publish one address that works than a dedicated alias that
-            bounces.
+            with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is the
+            mailbox that is actually monitored; we would rather publish one address that works than
+            a dedicated alias that bounces.
           </p>
           <table className="agi-ledger">
             <tbody>
@@ -669,10 +676,9 @@ export default function SecurityPage() {
               <tr>
                 <td>Response</td>
                 <td>
-                  We aim to acknowledge a report within 3 business days and to tell you our
-                  assessment and intended fix window within 10 business days. We are a small team
-                  without a 24/7 rotation; that is the commitment we can actually keep, so it is the
-                  one we are making.
+                  We do not publish a fixed acknowledgement or remediation time. This is not a 24/7
+                  reporting channel; reports are reviewed on a best-effort basis during working
+                  hours.
                 </td>
               </tr>
               <tr>

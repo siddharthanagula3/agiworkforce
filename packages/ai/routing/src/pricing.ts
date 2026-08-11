@@ -22,7 +22,13 @@
 // Import through the package root so legacy `moduleResolution: node` consumers
 // (notably the VS Code extension host) do not need to understand package
 // `exports` subpaths merely to load the classifier.
-import { modelsCatalogJson as modelsCatalog } from '@agiworkforce/types';
+import {
+  isModelPromoExpired,
+  modelsCatalogJson as modelsCatalog,
+  resolveEffectiveModelPricingForInputTokens,
+  type EffectiveModelPricing,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 
 // Narrow read-shape over the catalog — only the pricing-relevant fields. Kept
 // local so changes to the full models.json shape stay isolated here. Exported
@@ -33,11 +39,18 @@ export interface CatalogModel {
   readonly inputCost?: number;
   readonly outputCost?: number;
   readonly cached_input?: number;
+  readonly cached_write?: number;
+  readonly cached_write_1h?: number;
+  readonly pricingSchedule?: ModelMetadata['pricingSchedule'];
+  readonly inputTokenPricingTiers?: ModelMetadata['inputTokenPricingTiers'];
+  readonly longContext?: ModelMetadata['longContext'];
   readonly promo_expires_at?: string | null;
   readonly post_promo_prices?: {
     readonly input: number;
     readonly output: number;
     readonly cached_input?: number;
+    readonly cached_write?: number;
+    readonly cached_write_1h?: number;
   };
   readonly deprecation_date?: string | null;
   readonly tokenizer_drift_factor?: number;
@@ -95,10 +108,7 @@ export function isPromoExpired(
   catalog: Catalog = CATALOG,
 ): boolean {
   const entry = catalog.models[modelId];
-  if (!entry || !entry.promo_expires_at) return false;
-  const cutoff = Date.parse(entry.promo_expires_at);
-  if (Number.isNaN(cutoff)) return false;
-  return now.getTime() >= cutoff;
+  return entry ? isModelPromoExpired(entry, now) : false;
 }
 
 /**
@@ -110,12 +120,7 @@ export function effectiveInputPrice(
   now: Date = new Date(),
   catalog: Catalog = CATALOG,
 ): number {
-  const entry = catalog.models[modelId];
-  if (!entry) return 0;
-  if (isPromoExpired(modelId, now, catalog) && entry.post_promo_prices) {
-    return entry.post_promo_prices.input;
-  }
-  return entry.inputCost ?? 0;
+  return effectiveModelPricing(modelId, 0, now, catalog)?.inputCost ?? 0;
 }
 
 /** Effective output price ($/M tokens) for `modelId` at `now`. */
@@ -124,10 +129,36 @@ export function effectiveOutputPrice(
   now: Date = new Date(),
   catalog: Catalog = CATALOG,
 ): number {
+  return effectiveModelPricing(modelId, 0, now, catalog)?.outputCost ?? 0;
+}
+
+/**
+ * Resolve routing-estimate pricing from the same catalog layers as billing:
+ * dated windows, the legacy post-promo override, then ordered input-length tiers.
+ */
+export function effectiveModelPricing(
+  modelId: string,
+  inputTokens: number,
+  now: Date = new Date(),
+  catalog: Catalog = CATALOG,
+): EffectiveModelPricing | null {
   const entry = catalog.models[modelId];
-  if (!entry) return 0;
-  if (isPromoExpired(modelId, now, catalog) && entry.post_promo_prices) {
-    return entry.post_promo_prices.output;
-  }
-  return entry.outputCost ?? 0;
+  if (!entry) return null;
+  const priced = {
+    inputCost: entry.inputCost ?? 0,
+    outputCost: entry.outputCost ?? 0,
+    ...(entry.cached_input === undefined ? {} : { cached_input: entry.cached_input }),
+    ...(entry.cached_write === undefined ? {} : { cached_write: entry.cached_write }),
+    ...(entry.cached_write_1h === undefined ? {} : { cached_write_1h: entry.cached_write_1h }),
+    ...(entry.pricingSchedule === undefined ? {} : { pricingSchedule: entry.pricingSchedule }),
+    ...(entry.promo_expires_at === undefined ? {} : { promo_expires_at: entry.promo_expires_at }),
+    ...(entry.post_promo_prices === undefined
+      ? {}
+      : { post_promo_prices: entry.post_promo_prices }),
+    ...(entry.inputTokenPricingTiers === undefined
+      ? {}
+      : { inputTokenPricingTiers: entry.inputTokenPricingTiers }),
+    ...(entry.longContext === undefined ? {} : { longContext: entry.longContext }),
+  };
+  return resolveEffectiveModelPricingForInputTokens(priced, now, inputTokens);
 }

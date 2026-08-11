@@ -16,6 +16,7 @@ import {
 } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
 
 function formatDateTime(value: Date | null | undefined): string {
@@ -94,11 +95,13 @@ export function AccountSection() {
   const loadSessions = useCallback(async (signal?: AbortSignal) => {
     setSessionsLoading(true);
     setSessionsError(null);
+    const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
+    const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     try {
       const response = await fetch('/api/settings/sessions', {
         method: 'GET',
         cache: 'no-store',
-        signal,
+        signal: requestSignal,
       });
       const data: unknown = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(readApiError(data, 'Unable to load active sessions.'));
@@ -110,7 +113,13 @@ export function AccountSection() {
       if (!signal?.aborted) setSessions(rows as AccountSession[]);
     } catch (error) {
       if (signal?.aborted) return;
-      setSessionsError(error instanceof Error ? error.message : 'Unable to load active sessions.');
+      setSessionsError(
+        timeoutSignal.aborted
+          ? 'Active sessions took too long to load. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'Unable to load active sessions.',
+      );
     } finally {
       if (!signal?.aborted) setSessionsLoading(false);
     }

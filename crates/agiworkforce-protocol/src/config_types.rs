@@ -35,7 +35,7 @@ pub enum ReasoningSummary {
     None,
 }
 
-/// Controls output length/detail on GPT-5 models via the Responses API.
+/// Controls output length/detail on supported Responses API models.
 /// Serialized with lowercase values to match the OpenAI API.
 #[derive(
     Hash,

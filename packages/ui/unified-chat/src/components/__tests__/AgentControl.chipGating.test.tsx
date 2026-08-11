@@ -3,6 +3,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentControl } from '../AgentControl';
 import { useAgentControlStore } from '../../stores/agentControlStore';
+import { requireCatalogModel } from '../../test/modelCatalogFixtures';
+
+const effortModel = requireCatalogModel(
+  (model) =>
+    model.availability !== 'coming_soon' &&
+    model.availability !== 'unavailable' &&
+    Boolean(model.reasoning?.supportedEfforts?.includes('medium')) &&
+    Boolean(model.reasoning?.supportedEfforts?.includes('high')),
+  'a live model with medium and high reasoning efforts',
+);
 
 /**
  * Desktop honours reasoning effort but NOT agent-mode enforcement, so the two
@@ -34,7 +44,7 @@ describe('AgentControl chip gating', () => {
       <AgentControl
         conversationId="conversation-1"
         projectId={null}
-        modelId="gpt-5.6-luna"
+        modelId={effortModel.id}
         {...props}
       />,
     );

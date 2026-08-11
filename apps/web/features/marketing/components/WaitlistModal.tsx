@@ -18,14 +18,13 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useId,
   useMemo,
   useState,
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { usePathname } from 'next/navigation';
+import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
 
@@ -100,6 +99,7 @@ function WaitlistDialog({
         data-design="agi"
         className="agi-modal-scope agi-waitlist-modal"
         closeLabel="Close waitlist dialog"
+        hideCloseButton
       >
         {state === 'success' ? (
           <div className="agi-waitlist-success" role="status">
@@ -170,89 +170,28 @@ function WaitlistDialog({
             </p>
           </>
         )}
+        <button
+          type="button"
+          aria-label="Close waitlist dialog"
+          className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          onClick={() => handleOpenChange(false)}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">Close waitlist dialog</span>
+        </button>
       </DialogContent>
     </Dialog>
   );
 }
 
-/** Routes where the auto-prompt must never appear (app + auth + the
- * waitlist page itself, which already hosts the inline form). */
-const AUTO_PROMPT_BLOCKLIST = [
-  '/chat',
-  '/chats',
-  '/settings',
-  '/billing',
-  '/admin',
-  '/login',
-  '/signup',
-  '/sign-in',
-  '/sign-up',
-  '/register',
-  '/waitlist',
-  '/verify',
-  '/auth',
-  '/device-auth',
-  '/chat/customize',
-  '/chat/projects',
-  '/pricing',
-  // Added 2026-07-27. This list is default-OPEN: any route not named here shows
-  // a marketing capture over the product. `/device-auth` was blocked but the
-  // other device-pairing route, `/connect/[deviceType]`, was not — so the modal
-  // opened on top of a "Connect VS Code to AGI?" approval prompt and took focus
-  // from the Deny/Approve decision. Verified in a real browser, not inferred.
-  '/connect',
-  // Public share recipients are not prospects to capture mid-read, and a
-  // marketing popup during an incident is the worst possible time for one.
-  '/share',
-  '/shared',
-  '/status',
-  // Signed-in product surfaces.
-  '/tasks',
-  '/chat/library',
-  '/connectors',
-  '/skills',
-];
-
-const AUTO_PROMPT_KEY = 'agi-waitlist-auto-prompted';
-const AUTO_PROMPT_DELAY_MS = 5000;
-
 export function WaitlistModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [source, setSource] = useState<WaitlistModalSource>('website');
-  const pathname = usePathname();
 
   const open = useCallback((nextSource: WaitlistModalSource = 'website') => {
     setSource(nextSource);
     setIsOpen(true);
   }, []);
-
-  // Greet new visitors with the Team & Enterprise early-access prompt once per
-  // session: after a short delay, on marketing pages only, and never twice.
-  // Demo kill-switch: set NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT=1 to guarantee
-  // the auto-prompt never fires (e.g. during a live demo of the marketing site).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] === '1') return;
-    if (AUTO_PROMPT_BLOCKLIST.some((p) => pathname?.startsWith(p))) return;
-    let prompted = false;
-    try {
-      prompted = window.sessionStorage.getItem(AUTO_PROMPT_KEY) === '1';
-    } catch {
-      prompted = true; // storage unavailable: never nag
-    }
-    if (prompted) return;
-
-    const timer = window.setTimeout(() => {
-      try {
-        window.sessionStorage.setItem(AUTO_PROMPT_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-      setSource('website');
-      setIsOpen(true);
-    }, AUTO_PROMPT_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [pathname]);
 
   const value = useMemo(() => ({ open }), [open]);
 

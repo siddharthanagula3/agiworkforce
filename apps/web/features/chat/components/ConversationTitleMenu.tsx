@@ -75,12 +75,10 @@ export function ConversationTitleMenu({
 
   return (
     <div
-      // The cap has to reserve ABSOLUTE space, not a proportion. The header's
-      // icon-button groups are fixed pixel widths, so on a narrow window they eat
-      // proportionally more and a centred 46% ran straight under them. Reserving
-      // 14rem total keeps the title clear of both flanks at every width, while
-      // still yielding to 46% on a wide one.
-      className="absolute left-1/2 flex max-w-[min(46%,calc(100%-14rem))] -translate-x-1/2 items-center"
+      // Stay in the header's flex flow. An absolutely centred title can overlap
+      // the fixed action group when a Sources/Artifacts panel narrows the chat
+      // column even though the browser viewport itself is still wide.
+      className="flex min-w-0 flex-1 items-center justify-center"
     >
       {isRenaming ? (
         <input

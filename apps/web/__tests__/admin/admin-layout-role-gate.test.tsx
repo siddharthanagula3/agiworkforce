@@ -27,14 +27,16 @@ import React from 'react';
 // Hoist all controllable mocks so vi.mock() factories can close over them,
 // and mockReset: true resets only their recorded calls — not the hoisted refs.
 // ---------------------------------------------------------------------------
-const { mockGetUser, mockAuth, mockRedirect, mockAssertAccountActive } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockAuth: vi.fn(),
-  // redirect must be a vi.fn() so we can re-implement it in beforeEach after
-  // mockReset: true clears the implementation that throws NEXT_REDIRECT.
-  mockRedirect: vi.fn(),
-  mockAssertAccountActive: vi.fn(),
-}));
+const { mockGetUser, mockAuth, mockRedirect, mockAssertAccountActive, mockRequireCurrentTerms } =
+  vi.hoisted(() => ({
+    mockGetUser: vi.fn(),
+    mockAuth: vi.fn(),
+    // redirect must be a vi.fn() so we can re-implement it in beforeEach after
+    // mockReset: true clears the implementation that throws NEXT_REDIRECT.
+    mockRedirect: vi.fn(),
+    mockAssertAccountActive: vi.fn(),
+    mockRequireCurrentTerms: vi.fn(),
+  }));
 
 // ---------------------------------------------------------------------------
 // @clerk/nextjs/server
@@ -67,6 +69,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
+}));
+vi.mock('@/lib/server/require-current-terms', () => ({
+  requireCurrentTermsAcceptance: (...args: unknown[]) => mockRequireCurrentTerms(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -103,6 +108,7 @@ describe('AdminLayout — role gate', () => {
     mockRedirect.mockImplementation(throwingRedirect);
     // Default posture for this file: the account is active, so only role decides.
     mockAssertAccountActive.mockResolvedValue(undefined);
+    mockRequireCurrentTerms.mockResolvedValue(undefined);
   });
 
   // --- Unauthenticated ---
@@ -155,6 +161,7 @@ describe('AdminLayout — role gate', () => {
     // CRIT-014 account-status read for the admin it just admitted. Without
     // this the stub above would hide the gate's removal entirely.
     expect(mockAssertAccountActive).toHaveBeenCalledWith('user-123');
+    expect(mockRequireCurrentTerms).toHaveBeenCalledWith('user-123', '/admin');
   });
 
   it('allows access and returns children when publicMetadata.role is "owner"', async () => {

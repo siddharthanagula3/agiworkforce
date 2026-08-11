@@ -154,12 +154,13 @@ describe('registerBuiltinSlashCommands', () => {
   it('/model handler invokes host.setModel only when arg is non-empty', () => {
     registerBuiltinSlashCommands();
     const setModel = vi.fn();
+    const fixtureModelId = 'fixture-command-model';
     getSlashCommand('model')!.handler!('', { conversationId: null, host: { setModel } });
     expect(setModel).not.toHaveBeenCalled();
-    getSlashCommand('model')!.handler!('claude-opus-5', {
+    getSlashCommand('model')!.handler!(fixtureModelId, {
       conversationId: null,
       host: { setModel },
     });
-    expect(setModel).toHaveBeenCalledWith('claude-opus-5');
+    expect(setModel).toHaveBeenCalledWith(fixtureModelId);
   });
 });

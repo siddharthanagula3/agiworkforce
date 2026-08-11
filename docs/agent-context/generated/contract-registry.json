@@ -8,6 +8,7 @@
     "audit",
     "auth",
     "billing-catalog",
+    "billing-topups",
     "capabilities",
     "capability-handshake",
     "chat",
@@ -28,6 +29,7 @@
     "interactive-cards",
     "managed-usage-balance",
     "memory",
+    "mobile-iap",
     "model",
     "model-catalog",
     "on-device-models",
@@ -83,6 +85,7 @@
     "project-knowledge",
     "projects",
     "schedules",
+    "skills",
     "sync",
     "tool-approval-resume",
     "tool-events"

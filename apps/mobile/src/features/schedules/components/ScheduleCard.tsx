@@ -13,6 +13,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import type { Schedule } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
+import { getManagedDisplayName } from '@/src/features/model-picker/service';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -209,7 +210,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
           {/* Row 4: Model + Last run status */}
           <View className="flex-row items-center gap-2 mb-2">
-            <Badge label={schedule.model} color="gray" />
+            <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
           </View>
 

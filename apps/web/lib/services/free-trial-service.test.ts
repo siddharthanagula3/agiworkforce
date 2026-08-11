@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -25,10 +26,40 @@ import {
   getFreeTrialPublicUsage,
   settleFreeTrialRequest,
 } from './free-trial-service';
+import { LLMCostCalculator } from './llm-cost-calculator';
 
 const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
 const WEEKLY_OLDEST = '2026-07-18T12:00:00.000Z';
 const ACCOUNT_PERIOD_END = '2026-08-10T08:30:00.000Z';
+const TIERED_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
+  );
+  const firstTier = candidate?.inputTokenPricingTiers?.[0];
+  if (!candidate || !firstTier) throw new Error('Expected a catalog tiered-pricing fixture');
+  return { ...candidate, firstTier };
+})();
+const FREE_CHAT_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) =>
+      model.tierPolicy?.minTier === 'free' &&
+      typeof model.contextWindow === 'number' &&
+      typeof model.inputCost === 'number' &&
+      typeof model.outputCost === 'number',
+  );
+  if (!candidate) throw new Error('Expected a priced Free chat fixture');
+  return candidate;
+})();
+const ANTHROPIC_CHAT_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) =>
+      model.provider === 'anthropic' &&
+      typeof model.inputCost === 'number' &&
+      typeof model.outputCost === 'number',
+  );
+  if (!candidate) throw new Error('Expected a priced Anthropic chat fixture');
+  return candidate;
+})();
 
 type UsageSnapshot = {
   fiveHourUsedMicrousd?: number;
@@ -195,8 +226,8 @@ describe('free trial service', () => {
         requestId: 'request-budgeted',
         reservedMicrousd: 5_000,
       },
-      provider: 'openai',
-      model: 'gpt-5.6-luna',
+      provider: FREE_CHAT_MODEL.provider,
+      model: FREE_CHAT_MODEL.id,
       estimatedInputTokens: 1_000,
       requestedMaxOutputTokens: 8_192,
     });
@@ -216,20 +247,66 @@ describe('free trial service', () => {
           reservedMicrousd: 5_000,
         },
         provider: 'anthropic',
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_CHAT_MODEL.id,
         estimatedInputTokens: 100,
         requestedMaxOutputTokens: 32,
       }),
     ).toEqual({ ok: true, maxOutputTokens: 32 });
   });
 
+  it('budgets the next provider call separately from prior subthreshold spend', () => {
+    const subthresholdTokens = Math.floor(TIERED_MODEL.firstTier.thresholdTokens * 0.75);
+    const priorCostDollars = LLMCostCalculator.calculateCostDollars(
+      TIERED_MODEL.provider,
+      TIERED_MODEL.id,
+      {
+        promptTokens: subthresholdTokens,
+        completionTokens: 0,
+        totalTokens: subthresholdTokens,
+      },
+    );
+    const separateCallsDollars =
+      priorCostDollars +
+      LLMCostCalculator.calculateCostDollars(TIERED_MODEL.provider, TIERED_MODEL.id, {
+        promptTokens: subthresholdTokens,
+        completionTokens: 1,
+        totalTokens: subthresholdTokens + 1,
+      });
+    const incorrectlyAggregatedDollars = LLMCostCalculator.calculateCostDollars(
+      TIERED_MODEL.provider,
+      TIERED_MODEL.id,
+      {
+        promptTokens: subthresholdTokens * 2,
+        completionTokens: 1,
+        totalTokens: subthresholdTokens * 2 + 1,
+      },
+    );
+    expect(incorrectlyAggregatedDollars).toBeGreaterThan(separateCallsDollars);
+
+    expect(
+      fitFreeTrialOutputBudget({
+        reservation: {
+          kind: 'free_trial',
+          userId: 'user-1',
+          requestId: 'request-separated-calls',
+          reservedMicrousd: Math.ceil(separateCallsDollars * 1_000_000),
+        },
+        provider: TIERED_MODEL.provider,
+        model: TIERED_MODEL.id,
+        estimatedInputTokens: subthresholdTokens,
+        requestedMaxOutputTokens: 1,
+        priorCostDollars,
+      }),
+    ).toEqual({ ok: true, maxOutputTokens: 1 });
+  });
+
   it('uses a byte upper bound for text and the model input ceiling for images', () => {
     const textOnly = estimateConservativeFreeInputTokens({
-      model: 'gpt-5.6-luna',
+      model: FREE_CHAT_MODEL.id,
       messages: [{ role: 'user', content: '🙂' }],
     });
     const withImage = estimateConservativeFreeInputTokens({
-      model: 'gpt-5.6-luna',
+      model: FREE_CHAT_MODEL.id,
       messages: [
         {
           role: 'user',
@@ -242,12 +319,12 @@ describe('free trial service', () => {
     });
 
     expect(textOnly).toBeGreaterThanOrEqual(new TextEncoder().encode('🙂').byteLength);
-    expect(withImage).toBe(1_050_000);
+    expect(withImage).toBe(FREE_CHAT_MODEL.contextWindow);
   });
 
   it('applies the private cap to the provider request and disables cache writes', () => {
     const request = {
-      model: 'gpt-5.6-luna',
+      model: FREE_CHAT_MODEL.id,
       messages: [{ role: 'user', content: 'Hello' }],
       max_tokens: 8_192,
       usePromptCache: true,
@@ -260,7 +337,7 @@ describe('free trial service', () => {
         requestId: 'request-provider',
         reservedMicrousd: 5_000,
       },
-      provider: 'openai',
+      provider: FREE_CHAT_MODEL.provider,
       request,
     });
 
@@ -287,7 +364,7 @@ describe('free trial service', () => {
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: ANTHROPIC_CHAT_MODEL.id,
       usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
     });
 

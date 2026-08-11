@@ -1160,26 +1160,39 @@ async fn infer_provider_for_model(config: &config::CliConfig, model: &str) -> Re
     )
 }
 
-async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::Value {
-    let catalog = provider::model_catalog();
-    let mut models: Vec<serde_json::Value> = catalog
-        .iter()
-        .map(|m| {
+fn catalog_model_json(model: &provider::ModelInfo) -> serde_json::Value {
+    let input_token_pricing_tiers = model_catalog::input_token_pricing_tiers(&model.id)
+        .into_iter()
+        .map(|tier| {
             serde_json::json!({
-                "id": m.id,
-                "provider": m.provider,
-                "source": "catalog",
-                "context_window": m.context_window,
-                "max_output_tokens": m.max_output_tokens,
-                "input_price_per_1m": m.input_price_per_1m,
-                "output_price_per_1m": m.output_price_per_1m,
-                "supports_tools": m.supports_tools,
-                "supports_vision": m.supports_vision,
-                "supports_reasoning": m.supports_reasoning,
-                "status": m.status,
+                "threshold_tokens_exclusive": tier.threshold_tokens,
+                "input_price_per_1m": tier.pricing.input_price_per_1m,
+                "output_price_per_1m": tier.pricing.output_price_per_1m,
+                "cache_read_price_per_1m": tier.pricing.cache_read_price_per_1m,
+                "cache_write_price_per_1m": tier.pricing.cache_write_price_per_1m,
             })
         })
-        .collect();
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "id": model.id,
+        "provider": model.provider,
+        "source": "catalog",
+        "context_window": model.context_window,
+        "max_output_tokens": model.max_output_tokens,
+        "input_price_per_1m": model.input_price_per_1m,
+        "output_price_per_1m": model.output_price_per_1m,
+        "pricing_basis": "base",
+        "input_token_pricing_tiers": input_token_pricing_tiers,
+        "supports_tools": model.supports_tools,
+        "supports_vision": model.supports_vision,
+        "supports_reasoning": model.supports_reasoning,
+        "status": model.status,
+    })
+}
+
+async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::Value {
+    let catalog = provider::model_catalog();
+    let mut models: Vec<serde_json::Value> = catalog.iter().map(catalog_model_json).collect();
 
     let (probes, gateway) = tokio::join!(
         local_models::discover_all(config),
@@ -2694,15 +2707,7 @@ pub async fn run_main() -> Result<()> {
     // --cost with no prompt and no stdin: just show pricing info
     if cli.cost && cli.prompt.is_none() && stdin_content.is_none() {
         let model = cli.model.as_deref().unwrap_or(&app_config.default.model);
-        let (input_rate, output_rate) = output::model_pricing(model);
-        if input_rate == 0.0 && output_rate == 0.0 {
-            println!("Model '{}' — no cost (local/unknown model)", model);
-        } else {
-            println!(
-                "Model '{}' pricing:\n  Input:  ${:.2}/1M tokens\n  Output: ${:.2}/1M tokens",
-                model, input_rate, output_rate
-            );
-        }
+        println!("{}", output::format_model_pricing_report(model));
         return Ok(());
     }
 
@@ -2801,7 +2806,7 @@ pub async fn run_main() -> Result<()> {
 
     // Parse `-m model1,model2,...` fallback-chain syntax. Without this the
     // whole comma-joined string was passed through as a single literal model
-    // id (e.g. "gemma4:e4b,ministral-3:14b"), so the fallback chain never
+    // id (for example, two comma-separated local catalog selections), so the fallback chain never
     // fired and lookups failed with a bogus "model not installed" error. The
     // `Exec` subcommand already parses this correctly (see `FallbackChain::parse`
     // above) — mirror that here for the interactive/one-shot path so `-m`
@@ -3702,7 +3707,11 @@ pub async fn run_oneshot(
                 let cost_str = if turn.via_subscription {
                     output::format_subscription_cost(turn.input_tokens, turn.output_tokens)
                 } else {
-                    output::format_cost(model, turn.input_tokens, turn.output_tokens)
+                    output::format_recorded_cost(
+                        turn.input_tokens,
+                        turn.output_tokens,
+                        turn.cost_usd,
+                    )
                 };
                 let json_out = oneshot_result_json_value(
                     model,
@@ -3779,7 +3788,11 @@ pub async fn run_oneshot(
                 if turn.via_subscription {
                     output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
                 } else {
-                    output::print_cost(model, turn.input_tokens, turn.output_tokens);
+                    output::print_recorded_cost(
+                        turn.input_tokens,
+                        turn.output_tokens,
+                        turn.cost_usd,
+                    );
                 }
             }
             Err(e) => {
@@ -3796,6 +3809,29 @@ pub async fn run_oneshot(
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn catalog_json_labels_base_rates_and_projects_every_input_tier() {
+        let model = provider::model_catalog()
+            .into_iter()
+            .find(|entry| !model_catalog::input_token_pricing_tiers(&entry.id).is_empty())
+            .expect("embedded catalog must include a request-tiered model");
+        let expected = model_catalog::input_token_pricing_tiers(&model.id);
+
+        let projected = catalog_model_json(&model);
+
+        assert_eq!(projected["pricing_basis"], "base");
+        assert_eq!(
+            projected["input_token_pricing_tiers"]
+                .as_array()
+                .map(Vec::len),
+            Some(expected.len())
+        );
+        assert_eq!(
+            projected["input_token_pricing_tiers"][0]["threshold_tokens_exclusive"],
+            expected[0].threshold_tokens
+        );
+    }
 
     #[test]
     fn verbose_and_debug_flags_change_the_effective_log_filter() {

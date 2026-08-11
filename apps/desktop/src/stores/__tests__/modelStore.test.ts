@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getAllowedModelsForTier, getModelMetadata } from '../../constants/llm';
+import { getAllModels, getAllowedModelsForTier, getModelMetadata } from '../../constants/llm';
 import { getModelsForTierAndSurface } from '@agiworkforce/types';
 import {
   useModelStore,
@@ -8,6 +8,22 @@ import {
   getOllamaModelDisplayName,
   selectIsAutoMode,
 } from '../modelStore';
+
+const FIXTURE_MODEL_ID = 'fixture-model';
+const CATALOG_MODEL_ID = getAllowedModelsForTier('max').find(
+  (candidate) => getModelMetadata(candidate)?.provider === 'anthropic',
+);
+if (!CATALOG_MODEL_ID) {
+  throw new Error('Model-store migration tests require a selectable Anthropic catalog model');
+}
+const CONTEXTLESS_MEDIA_MODEL_ID = getAllModels().find(
+  (model) =>
+    model.contextWindow === undefined &&
+    (model.capabilities.imageGen || model.capabilities.videoGen),
+)?.id;
+if (!CONTEXTLESS_MEDIA_MODEL_ID) {
+  throw new Error('Model-store tests require a catalog media model without token context');
+}
 
 // Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
 vi.mock('@tauri-apps/api/core', () => ({
@@ -97,20 +113,21 @@ describe('modelStore', () => {
 
   describe('toggleFavorite', () => {
     it('adds a model to favorites', () => {
-      useModelStore.getState().toggleFavorite('claude-sonnet-5');
+      useModelStore.getState().toggleFavorite(FIXTURE_MODEL_ID);
 
       const state = useModelStore.getState();
-      expect(state.favorites).toContain('claude-sonnet-5');
+      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
     });
 
     it('removes a model from favorites when already present', () => {
-      useModelStore.setState({ favorites: ['claude-sonnet-5', 'gpt-5.6-sol'] });
+      const removableModel = 'fixture-removable-model';
+      useModelStore.setState({ favorites: [removableModel, FIXTURE_MODEL_ID] });
 
-      useModelStore.getState().toggleFavorite('claude-sonnet-5');
+      useModelStore.getState().toggleFavorite(removableModel);
 
       const state = useModelStore.getState();
-      expect(state.favorites).not.toContain('claude-sonnet-5');
-      expect(state.favorites).toContain('gpt-5.6-sol');
+      expect(state.favorites).not.toContain(removableModel);
+      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
     });
   });
 
@@ -198,7 +215,7 @@ describe('modelStore', () => {
   describe('reset', () => {
     it('resets all state to defaults', () => {
       useModelStore.setState({
-        selectedModel: 'gpt-5.6-sol',
+        selectedModel: FIXTURE_MODEL_ID,
         selectedProvider: 'openai',
         favorites: ['model-a', 'model-b'],
         recentModels: ['model-a'],
@@ -226,8 +243,8 @@ describe('modelStore', () => {
           state: {
             selectedModel: 'removed-provider-model',
             selectedProvider: 'anthropic',
-            favorites: ['removed-provider-model', 'claude-sonnet-5'],
-            recentModels: ['removed-provider-model', 'claude-sonnet-5'],
+            favorites: ['removed-provider-model', CATALOG_MODEL_ID],
+            recentModels: ['removed-provider-model', CATALOG_MODEL_ID],
           },
           version: 1,
         }),
@@ -238,8 +255,8 @@ describe('modelStore', () => {
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
-      expect(state.favorites).toEqual(['claude-sonnet-5']);
-      expect(state.recentModels).toEqual(['claude-sonnet-5']);
+      expect(state.favorites).toEqual([CATALOG_MODEL_ID]);
+      expect(state.recentModels).toEqual([CATALOG_MODEL_ID]);
     });
 
     it('replaces a non-selectable legacy Auto alias with canonical Auto', async () => {
@@ -271,16 +288,34 @@ describe('modelStore', () => {
       useModelStore.setState({ selectedModel: 'auto-balanced' });
       expect(selectIsAutoMode(useModelStore.getState())).toBe(false);
 
-      useModelStore.setState({ selectedModel: 'claude-sonnet-5' });
+      useModelStore.setState({ selectedModel: FIXTURE_MODEL_ID });
       expect(selectIsAutoMode(useModelStore.getState())).toBe(false);
     });
 
     it('derives cloud rows from the shared tier + Desktop runtime intersection', () => {
       const expectedIds = getModelsForTierAndSurface('max', 'desktop/cloud-chat', {
         modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
-      }).map((model) => model.id);
+      })
+        .filter(
+          (model) =>
+            typeof model.contextWindow === 'number' &&
+            Number.isFinite(model.contextWindow) &&
+            model.contextWindow > 0,
+        )
+        .map((model) => model.id);
 
       expect(getManagedCloudModelsForTier('max').map((model) => model.id)).toEqual(expectedIds);
+    });
+
+    it('only projects cloud chat models with published token context limits', () => {
+      const models = getManagedCloudModelsForTier('max');
+
+      expect(models).not.toContainEqual(
+        expect.objectContaining({ id: CONTEXTLESS_MEDIA_MODEL_ID }),
+      );
+      expect(
+        models.every((model) => Number.isFinite(model.contextWindow) && model.contextWindow > 0),
+      ).toBe(true);
     });
 
     it('formatOllamaModelSize formats GB correctly', () => {
@@ -295,20 +330,20 @@ describe('modelStore', () => {
 
     it('getOllamaModelDisplayName includes parameter size', () => {
       const model = {
-        name: 'llama3',
+        name: 'fixture-local-model',
         size: 0,
         modified_at: '',
         digest: '',
         details: {
           parameter_size: '8B',
           quantization_level: 'Q4_0',
-          family: 'llama',
-          families: ['llama'],
+          family: 'fixture-family',
+          families: ['fixture-family'],
           parent_model: '',
           format: 'gguf',
         },
       };
-      expect(getOllamaModelDisplayName(model)).toBe('llama3 (8B)');
+      expect(getOllamaModelDisplayName(model)).toBe('fixture-local-model (8B)');
     });
 
     it('getOllamaModelDisplayName returns just name when no param size', () => {

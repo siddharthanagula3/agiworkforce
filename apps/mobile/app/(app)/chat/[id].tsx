@@ -48,7 +48,7 @@ import {
 } from '@/src/features/voice/utils/assistantResponse';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
-import { useChatStore } from '@/stores/chatStore';
+import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
@@ -65,6 +65,7 @@ import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
+  isSelectableModelIdForAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
@@ -173,6 +174,7 @@ export default function ChatScreen() {
   const editMessage = useChatStore((s) => s.editMessage);
   const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
   const renameConversation = useChatStore((s) => s.renameConversation);
+  const setConversationModel = useChatStore((s) => s.setConversationModel);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
@@ -411,11 +413,7 @@ export default function ChatScreen() {
           fail: failVideoGeneration,
           remove: deleteMessage,
           onPaywall: (error) => {
-            setPaywallError({
-              feature: error.feature,
-              requiredTier: error.requiredTier,
-              reason: error.reason,
-            });
+            setPaywallError(paywallErrorStateFromApiError(error));
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Video generation failed:', error);
@@ -464,11 +462,7 @@ export default function ChatScreen() {
           fail: failImageGeneration,
           remove: deleteMessage,
           onPaywall: (error) => {
-            setPaywallError({
-              feature: error.feature,
-              requiredTier: error.requiredTier,
-              reason: error.reason,
-            });
+            setPaywallError(paywallErrorStateFromApiError(error));
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Image generation failed:', error);
@@ -585,7 +579,7 @@ export default function ChatScreen() {
       // Use the canonical classifier, which consults the FULL managed-cloud catalog
       // (cloudModelSourceMap). The old path used getModelById, whose map only holds
       // local models + ONE "preview" cloud model per provider — so every non-preview
-      // cloud model (e.g. Claude Opus 5, GPT-5.5, Grok 4.3) fell through to 'local'
+      // cloud model from another provider fell through to 'local'
       // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
       // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
       return executionModeForSelection(modelId, conversationExecutionMode);
@@ -612,7 +606,8 @@ export default function ChatScreen() {
     const preferredModel =
       conversationExecutionMode === 'cloud'
         ? conversation.model &&
-          executionModeForSelection(conversation.model, conversationExecutionMode) === 'cloud'
+          executionModeForSelection(conversation.model, conversationExecutionMode) === 'cloud' &&
+          isSelectableModelIdForAccess(conversation.model, cloudUnlocked, subscriptionTier)
           ? conversation.model
           : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
         : conversation.model &&
@@ -639,15 +634,18 @@ export default function ChatScreen() {
   const handleModelSelect = useCallback(
     (newModelId: string) => {
       const hasMessages = conversationMessages.length > 0;
+      const nextMode = resolveAppMode(newModelId);
       if (!hasMessages) {
-        setAppMode(resolveAppMode(newModelId) === 'cloud' ? 'cloud' : 'local');
+        setAppMode(nextMode === 'cloud' ? 'cloud' : 'local');
+        if (id && nextMode === conversationExecutionMode) {
+          void setConversationModel(id, newModelId);
+        }
         useModelStore.getState().setModel(newModelId);
         modelPickerRef.current?.close();
         return;
       }
 
       const currentMode = conversationExecutionMode;
-      const nextMode = resolveAppMode(newModelId);
 
       if (currentMode !== nextMode) {
         modelPickerRef.current?.close();
@@ -660,10 +658,18 @@ export default function ChatScreen() {
         return;
       }
 
+      if (id) void setConversationModel(id, newModelId);
       useModelStore.getState().setModel(newModelId);
       modelPickerRef.current?.close();
     },
-    [conversationExecutionMode, conversationMessages.length, resolveAppMode, setAppMode],
+    [
+      conversationExecutionMode,
+      conversationMessages.length,
+      id,
+      resolveAppMode,
+      setAppMode,
+      setConversationModel,
+    ],
   );
 
   const handleModeSwitchConfirm = useCallback(async () => {
@@ -1463,12 +1469,13 @@ export default function ChatScreen() {
           title={title}
         />
 
-        {/* Paywall bottom sheet — shown when the API returns a tier-cap 429. */}
+        {/* Billing recovery sheet — preserves upgrade/subscribe/inactive semantics. */}
         <PaywallBottomSheet
           ref={paywallSheetRef}
           feature={paywallError?.feature ?? 'token_cap'}
           requiredTier={paywallError?.requiredTier ?? 'basic'}
           reason={paywallError?.reason}
+          recoveryAction={paywallError?.recoveryAction}
           onDismiss={clearPaywallError}
         />
 

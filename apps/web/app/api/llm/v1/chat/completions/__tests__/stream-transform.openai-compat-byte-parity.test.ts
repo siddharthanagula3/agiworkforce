@@ -161,14 +161,14 @@ function fixtureFor(model: string): OpenAIChatCompletionChunk[] {
 }
 
 const COMPAT_PROVIDERS: Array<{ provider: string; model: string }> = [
-  { provider: 'minimax', model: 'minimax-m3' },
-  { provider: 'moonshot', model: 'moonshot-v1-8k' },
-  { provider: 'zhipu', model: 'glm-4.6' },
-  { provider: 'qwen', model: 'qwen-max' },
-  { provider: 'openrouter', model: 'openrouter-auto' },
-  { provider: 'deepseek', model: 'deepseek-chat' },
-  { provider: 'xai', model: 'grok-4' },
-  { provider: 'perplexity', model: 'sonar' },
+  { provider: 'minimax', model: 'fixture-model' },
+  { provider: 'moonshot', model: 'fixture-model' },
+  { provider: 'zhipu', model: 'fixture-model' },
+  { provider: 'qwen', model: 'fixture-model' },
+  { provider: 'openrouter', model: 'fixture-model' },
+  { provider: 'deepseek', model: 'fixture-model' },
+  { provider: 'xai', model: 'fixture-model' },
+  { provider: 'perplexity', model: 'fixture-model' },
 ];
 
 describe.each(COMPAT_PROVIDERS)(

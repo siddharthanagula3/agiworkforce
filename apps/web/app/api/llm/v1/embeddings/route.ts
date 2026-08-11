@@ -24,7 +24,13 @@ import {
   toEmbeddingInputs,
   type ManagedEmbeddingsResponse,
 } from '@agiworkforce/cloud-contracts';
-import { getModels, getModelMetadataById, type ModelMetadata } from '@agiworkforce/types';
+import {
+  getModels,
+  getModelMetadataById,
+  resolveEffectiveModelPricingForInputTokens,
+  type ModelMetadata,
+  type PricedModel,
+} from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -63,9 +69,21 @@ function managedUsageErrorResponse(
 }
 
 /** Cost is charged per input token; embedding models produce no output tokens. */
-function estimateEmbeddingCostCents(model: ModelMetadata, estimatedTokens: number): number {
-  // `inputCost` is per million tokens, matching every other catalog entry.
-  return (model.inputCost * estimatedTokens) / 1_000_000;
+export function estimateEmbeddingCostCents(
+  model: PricedModel,
+  estimatedTokens: number,
+  pricedAt: Date = new Date(),
+): number {
+  // Resolve the same date and input-length layers as chat billing. A future
+  // tiered embedding model therefore becomes accurate through one catalog edit
+  // rather than a route-specific pricing branch.
+  const inputRate = resolveEffectiveModelPricingForInputTokens(
+    model,
+    pricedAt,
+    estimatedTokens,
+  ).inputCost;
+  const costDollars = (inputRate * estimatedTokens) / 1_000_000;
+  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * 100)) : 0;
 }
 
 /**

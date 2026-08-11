@@ -12,6 +12,7 @@ import {
   CreditService,
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
+import { isValidTopUpPurchase } from '@agiworkforce/types';
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const current = invoice.parent?.subscription_details?.subscription;
@@ -30,7 +31,14 @@ export async function dispatchStripeEvent(
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.metadata?.['type'] === 'credit_topup') {
         logger.info({ sessionId: session.id }, 'Processing credit top-up checkout');
-        await handleCreditTopUp(db, stripe, session);
+        if (session.payment_status === 'unpaid') {
+          logger.info(
+            { sessionId: session.id },
+            'Credit top-up awaits asynchronous payment confirmation',
+          );
+        } else {
+          await handleCreditTopUp(db, stripe, session);
+        }
       } else {
         await upsertSubscriptionFromSession(db, stripe, session);
       }
@@ -39,7 +47,11 @@ export async function dispatchStripeEvent(
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object as Stripe.Checkout.Session;
       logger.info({ sessionId: session.id }, 'Async payment succeeded');
-      await upsertSubscriptionFromSession(db, stripe, session);
+      if (session.metadata?.['type'] === 'credit_topup') {
+        await handleCreditTopUp(db, stripe, session);
+      } else {
+        await upsertSubscriptionFromSession(db, stripe, session);
+      }
       break;
     }
     case 'checkout.session.async_payment_failed': {
@@ -47,6 +59,10 @@ export async function dispatchStripeEvent(
       const stripeSubId = session.subscription as string | null;
       const stripeCustomerId = session.customer as string | null;
       logger.warn({ sessionId: session.id }, 'Async payment failed');
+
+      // A one-time top-up failure does not make the recurring subscription
+      // past due. The customer bought no balance and can explicitly try again.
+      if (session.metadata?.['type'] === 'credit_topup') break;
 
       if (stripeSubId) {
         await db.execute(
@@ -212,6 +228,23 @@ export async function dispatchStripeEvent(
       const fullyRefunded =
         charge.refunded === true || (charge.amount > 0 && charge.amount_refunded >= charge.amount);
       const revokesPlan = fullyRefunded && !isCreditTopUpCharge;
+      let refundedCreditTarget = charge.amount_refunded;
+      if (isCreditTopUpCharge) {
+        const purchasedCents = Number(charge.metadata?.['credit_amount_cents']);
+        const purchasedUnits = Number(charge.metadata?.['top_up_units']);
+        if (
+          !isValidTopUpPurchase({ amountCents: purchasedCents, units: purchasedUnits }) ||
+          charge.amount < purchasedCents
+        ) {
+          throw new Error(`Invalid credit top-up refund metadata for Charge ${charge.id}`);
+        }
+        // Stripe's refunded amount includes sales tax; only the purchased
+        // balance belongs in the usage ledger. Partial refunds revoke the same
+        // fraction of purchased balance, and a full refund revokes it exactly.
+        refundedCreditTarget = fullyRefunded
+          ? purchasedCents
+          : Math.floor((purchasedCents * charge.amount_refunded) / charge.amount);
+      }
 
       logger.info(
         {
@@ -256,14 +289,15 @@ export async function dispatchStripeEvent(
             [profile.id, refundLedgerDescription],
           );
           const alreadyRevoked = Number(revoked?.revoked_cents ?? 0) || 0;
-          const refundedAmount = Math.max(0, charge.amount_refunded - alreadyRevoked);
+          const refundedAmount = Math.max(0, refundedCreditTarget - alreadyRevoked);
 
           if (refundedAmount > 0) {
-            await db.execute('select handle_refund($1, $2, $3)', [
-              profile.id,
-              refundedAmount,
-              refundLedgerDescription,
-            ]);
+            const params = [profile.id, refundedAmount, refundLedgerDescription];
+            if (isCreditTopUpCharge) {
+              await db.execute('select handle_top_up_refund($1, $2, $3)', params);
+            } else {
+              await db.execute('select handle_refund($1, $2, $3)', params);
+            }
             logger.info(
               {
                 userId: profile.id,

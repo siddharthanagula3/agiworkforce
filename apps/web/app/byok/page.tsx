@@ -29,8 +29,8 @@ export default function ByokPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">BYOK · bring your own keys</p>
           <h1 id="agi-byok-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Your keys.</span>
-            <span className="agi-fl-h1-line">Your providers.</span>
+            <span className="agi-fl-h1-line">Your keys.</span>{' '}
+            <span className="agi-fl-h1-line">Your providers.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">Your billing.</em>
             </span>

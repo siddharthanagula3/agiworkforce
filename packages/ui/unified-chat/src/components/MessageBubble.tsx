@@ -17,7 +17,7 @@ import { CitationPill } from './CitationPill';
 import { DownloadCard } from './DownloadCard';
 import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
 import { ToolCallCard } from './ToolCallCard';
-import { AgentActivityTimeline } from './AgentActivityTimeline';
+import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
 import { getStreamErrorMessage } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
@@ -634,6 +634,7 @@ export function MessageBubble({
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
+  const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const [copied, setCopied] = useState(false);
   // Derived artifacts (host capability) win over the pre-attached list because
   // the projection already merged `message.artifacts` into itself on id.
@@ -797,7 +798,7 @@ export function MessageBubble({
         </div>
       )}
 
-      {!canonicalActivity && message.toolCalls && message.toolCalls.length > 0 && (
+      {!canonicalOwnsToolActivity && message.toolCalls && message.toolCalls.length > 0 && (
         <div className="mt-2 space-y-2">
           {message.toolCalls.map((toolCall) =>
             // Awaiting-approval calls need the approve/reject affordance

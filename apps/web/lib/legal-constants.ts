@@ -80,13 +80,13 @@ export function contactMailto(subject?: string): string {
  * the vulnerability-disclosure policy added.
  */
 export const POLICY_LAST_UPDATED = {
-  terms: '2026-08-05',
-  privacy: '2026-08-05',
+  terms: '2026-08-11',
+  privacy: '2026-08-11',
   acceptableUse: '2026-08-05',
   dpa: '2026-08-05',
   cookies: '2026-08-05',
-  subprocessors: '2026-08-05',
-  security: '2026-08-05',
+  subprocessors: '2026-08-11',
+  security: '2026-08-11',
   sla: '2026-08-05',
   refunds: '2026-08-05',
   accessibility: '2026-08-05',

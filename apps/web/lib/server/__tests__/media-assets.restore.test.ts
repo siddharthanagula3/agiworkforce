@@ -1,12 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
+const { mockQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 
 import { restoreMediaAsset } from '../media-assets';
 
 describe('restoreMediaAsset (Recently-deleted bin restore)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveActiveOrganizationId.mockResolvedValue('org-1');
+  });
 
   it('un-deletes only within the 30-day window, owner-scoped, and returns true on a hit', async () => {
     mockQuery.mockResolvedValue([{ id: 'asset-1' }]);
@@ -19,11 +28,13 @@ describe('restoreMediaAsset (Recently-deleted bin restore)', () => {
     expect(sql).toContain("deleted_at > now() - interval '30 days'");
     // Owner scoping — id is $1, user is $2.
     expect(sql).toContain('user_id = $2');
-    expect(params).toEqual(['asset-1', 'user-owner']);
+    expect(sql).toContain('organization_id is not distinct from $3::uuid');
+    expect(params).toEqual(['asset-1', 'user-owner', 'org-1']);
   });
 
-  it('returns false when nothing was restorable (already live / not owned / purged)', async () => {
+  it('returns false without leaking a Personal/foreign/purged row into an org workspace', async () => {
     mockQuery.mockResolvedValue([]);
     expect(await restoreMediaAsset('user-owner', 'asset-1')).toBe(false);
+    expect(mockQuery.mock.calls[0]?.[1]).toEqual(['asset-1', 'user-owner', 'org-1']);
   });
 });

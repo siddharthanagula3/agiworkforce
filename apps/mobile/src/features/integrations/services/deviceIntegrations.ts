@@ -31,8 +31,8 @@ export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
 export async function getCalendarPermissionStatus(): Promise<PermissionStatus> {
   const { status } = await Calendar.getCalendarPermissionsAsync();
-  if (status === Calendar.PermissionStatus.GRANTED) return 'granted';
-  if (status === Calendar.PermissionStatus.DENIED) return 'denied';
+  if (status === 'granted') return 'granted';
+  if (status === 'denied') return 'denied';
   return 'undetermined';
 }
 

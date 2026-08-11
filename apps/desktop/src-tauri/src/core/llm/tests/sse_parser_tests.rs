@@ -44,7 +44,7 @@ mod tests {
             content: "Hello".to_string(),
             done: false,
             finish_reason: None,
-            model: Some("gpt-4".to_string()),
+            model: Some("fixture-primary-model".to_string()),
             usage: None,
             credits: None,
             tool_calls: None,
@@ -63,7 +63,7 @@ mod tests {
             content: "".to_string(),
             done: true,
             finish_reason: Some("stop".to_string()),
-            model: Some("gpt-4".to_string()),
+            model: Some("fixture-primary-model".to_string()),
             usage: Some(TokenUsage {
                 prompt_tokens: Some(10),
                 completion_tokens: Some(20),
@@ -212,20 +212,20 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_content_delta() {
-        let event = r#"data: {"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-5.6-sol"}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"model":"fixture-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
         assert!(chunk.finish_reason.is_none());
-        assert_eq!(chunk.model.as_deref(), Some("gpt-5.6-sol"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-stream-model"));
         assert!(!chunk.keepalive);
     }
 
     #[test]
     fn test_openai_finish_reason_stop() {
-        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.6-sol"}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"fixture-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -246,7 +246,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_with_usage() {
-        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.6-sol","usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"fixture-stream-model","usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -259,7 +259,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_tool_call_delta() {
-        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"gpt-5.6-sol"}"#;
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"fixture-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -316,7 +316,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_finish_reason_length() {
-        let event = r#"data: {"choices":[{"index":0,"delta":{"content":"..."},"finish_reason":"length"}],"model":"gpt-5.6-sol"}"#;
+        let event = r#"data: {"choices":[{"index":0,"delta":{"content":"..."},"finish_reason":"length"}],"model":"fixture-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -339,7 +339,7 @@ mod production_parser_tests {
     #[test]
     fn test_openai_multi_line_event() {
         // SSE events can have multiple data: lines; only lines with "data:" prefix are parsed
-        let event = "event: message\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}],\"model\":\"gpt-5.6-sol\"}";
+        let event = "event: message\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}],\"model\":\"fixture-stream-model\"}";
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -353,17 +353,20 @@ mod production_parser_tests {
 
     #[test]
     fn test_deepseek_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"DeepSeek says hi"},"finish_reason":null}],"model":"deepseek-v4-flash"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"DeepSeek says hi"},"finish_reason":null}],"model":"fixture-deepseek-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::DeepSeek).unwrap();
 
         assert_eq!(chunk.content, "DeepSeek says hi");
-        assert_eq!(chunk.model.as_deref(), Some("deepseek-v4-flash"));
+        assert_eq!(
+            chunk.model.as_deref(),
+            Some("fixture-deepseek-stream-model")
+        );
     }
 
     #[test]
     fn test_xai_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Grok here"},"finish_reason":null}],"model":"grok-4.5"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Grok here"},"finish_reason":null}],"model":"fixture-xai-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::XAI).unwrap();
 
@@ -372,7 +375,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_perplexity_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Search result"},"finish_reason":null}],"model":"sonar"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Search result"},"finish_reason":null}],"model":"fixture-search-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::Perplexity).unwrap();
 
@@ -381,7 +384,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_qwen_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Qwen response"},"finish_reason":null}],"model":"qwen-3.7-plus"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Qwen response"},"finish_reason":null}],"model":"fixture-qwen-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::Qwen).unwrap();
 
@@ -390,7 +393,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_moonshot_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Kimi says"},"finish_reason":null}],"model":"kimi-k3"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Kimi says"},"finish_reason":null}],"model":"fixture-moonshot-stream-model"}"#;
 
         let chunk = parse_sse_event(event, Provider::Moonshot).unwrap();
 
@@ -420,24 +423,24 @@ mod production_parser_tests {
 
     #[test]
     fn test_ollama_streaming_content() {
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"Hello"},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"Hello"},"done":false}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
-        assert_eq!(chunk.model.as_deref(), Some("llama4-maverick"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-local-stream-model"));
     }
 
     #[test]
     fn test_ollama_done_with_usage() {
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":50}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":50}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
         assert!(chunk.done);
         assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
-        assert_eq!(chunk.model.as_deref(), Some("llama4-maverick"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-local-stream-model"));
         let usage = chunk.usage.unwrap();
         assert_eq!(usage.prompt_tokens, Some(20));
         assert_eq!(usage.completion_tokens, Some(50));
@@ -446,7 +449,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_ollama_done_without_done_reason_defaults_to_stop() {
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":true}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":""},"done":true}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
@@ -467,7 +470,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_ollama_tool_calls() {
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"calculator","arguments":{"expression":"2+2"}}}]},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"calculator","arguments":{"expression":"2+2"}}}]},"done":false}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
@@ -481,7 +484,7 @@ mod production_parser_tests {
     fn test_ollama_tool_calls_synthesize_finish_reason() {
         // When Ollama returns tool calls, finish_reason should be "tool_calls"
         // even if done=false
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"search","arguments":"{\"q\":\"test\"}"}}]},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"search","arguments":"{\"q\":\"test\"}"}}]},"done":false}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
@@ -500,7 +503,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_ollama_empty_message_content() {
-        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":""},"done":false}"#;
 
         let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
 
@@ -586,8 +589,8 @@ mod stream_buffer_tests {
     fn test_multiple_events_in_single_buffer_openai() {
         // Simulates two OpenAI events arriving in one TCP chunk
         let raw = concat!(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}],\"model\":\"gpt-5.6-sol\"}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"model\":\"gpt-5.6-sol\"}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}],\"model\":\"fixture-stream-model\"}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"model\":\"fixture-stream-model\"}\n\n",
         );
 
         let chunks = split_and_parse_events(raw, Provider::OpenAI);
@@ -619,9 +622,9 @@ mod stream_buffer_tests {
     fn test_ollama_single_newline_delimiter() {
         // Ollama uses single-newline delimiters (NDJSON)
         let raw = concat!(
-            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"A\"},\"done\":false}\n",
-            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"B\"},\"done\":false}\n",
-            "{\"model\":\"llama4-maverick\",\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"stop\"}\n",
+            "{\"model\":\"fixture-local-stream-model\",\"message\":{\"role\":\"assistant\",\"content\":\"A\"},\"done\":false}\n",
+            "{\"model\":\"fixture-local-stream-model\",\"message\":{\"role\":\"assistant\",\"content\":\"B\"},\"done\":false}\n",
+            "{\"model\":\"fixture-local-stream-model\",\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"stop\"}\n",
         );
 
         let chunks = split_and_parse_events(raw, Provider::Ollama);

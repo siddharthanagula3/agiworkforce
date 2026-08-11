@@ -8,22 +8,93 @@
  * replaced by the other media model.
  */
 
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getRoutingSlotModel, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import {
+  clearInvalidMediaModelSelections,
   enterMediaMode,
   exitMediaMode,
+  listMediaModels,
   mediaModelIdForMode,
   resolveMediaModelId,
 } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 
-const TEXT_MODEL = 'claude-sonnet-5';
+const TEXT_MODEL = 'fixture-chat-model';
 
 describe('media mode', () => {
   beforeEach(() => {
-    useChatViewStore.setState({ mediaMode: 'text' });
+    useChatViewStore.setState({ mediaMode: 'text', selectedMediaModel: {} });
     useModelStore.setState({ selectedModel: TEXT_MODEL });
+  });
+
+  describe('listMediaModels', () => {
+    it.each(['image', 'video'] as const)(
+      'only offers live %s output models, not models with a generic capability flag',
+      (kind) => {
+        const capability = kind === 'image' ? 'imageGen' : 'videoGen';
+        const offeredIds = listMediaModels(kind);
+        const offeredModels = offeredIds.map((id) => modelsCatalog.models[id]);
+
+        expect(offeredModels.length).toBeGreaterThan(0);
+        for (const model of offeredModels) {
+          expect(model).toMatchObject({
+            modelType: kind,
+            capabilities: { [capability]: true },
+          });
+          expect(isModelLive(model)).toBe(true);
+        }
+      },
+    );
+
+    it('excludes video-input/chat models that merely advertise videoGen', () => {
+      const genericCapabilityModels = Object.values(modelsCatalog.models).filter(
+        (model) => model.capabilities.videoGen === true && model.modelType !== 'video',
+      );
+
+      // Keep this test discriminating: the catalog currently contains at least
+      // one such model, so an empty fixture cannot make the exclusion pass.
+      expect(genericCapabilityModels.length).toBeGreaterThan(0);
+      expect(listMediaModels('video')).not.toEqual(
+        expect.arrayContaining(genericCapabilityModels.map((model) => model.id)),
+      );
+    });
+
+    it('excludes non-live preview video models even when they advertise videoGen', () => {
+      const nonLiveVideoModels = Object.values(modelsCatalog.models).filter(
+        (model) =>
+          model.modelType === 'video' &&
+          model.capabilities.videoGen === true &&
+          !isModelLive(model),
+      );
+
+      expect(nonLiveVideoModels.length).toBeGreaterThan(0);
+      expect(listMediaModels('video')).not.toEqual(
+        expect.arrayContaining(nonLiveVideoModels.map((model) => model.id)),
+      );
+    });
+
+    it.each(['deprecated', 'status'] as const)(
+      'excludes a media model deprecated through its %s lifecycle field',
+      (field) => {
+        const candidate = Object.values(modelsCatalog.models).find(
+          (model) => model.modelType === 'video' && isModelLive(model),
+        );
+        expect(candidate).toBeDefined();
+
+        const originalDeprecated = candidate!.deprecated;
+        const originalStatus = candidate!.status;
+        try {
+          if (field === 'deprecated') candidate!.deprecated = true;
+          else candidate!.status = 'deprecated';
+
+          expect(listMediaModels('video')).not.toContain(candidate!.id);
+        } finally {
+          candidate!.deprecated = originalDeprecated;
+          candidate!.status = originalStatus;
+        }
+      },
+    );
   });
 
   describe('resolveMediaModelId', () => {
@@ -33,6 +104,57 @@ describe('media mode', () => {
 
     it('resolves the video slot from the canonical registry', () => {
       expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
+    });
+
+    it('rejects a persisted generic video-capability model that cannot generate video output', () => {
+      const genericCapabilityModel = Object.values(modelsCatalog.models).find(
+        (model) => model.capabilities.videoGen === true && model.modelType !== 'video',
+      );
+      expect(genericCapabilityModel).toBeDefined();
+
+      useChatViewStore.getState().setMediaModel('video', genericCapabilityModel!.id);
+
+      expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
+      expect(resolveMediaModelId('video')).not.toBe(genericCapabilityModel!.id);
+    });
+
+    it('rejects a persisted non-live preview video model', () => {
+      const nonLiveVideoModel = Object.values(modelsCatalog.models).find(
+        (model) =>
+          model.modelType === 'video' &&
+          model.capabilities.videoGen === true &&
+          !isModelLive(model),
+      );
+      expect(nonLiveVideoModel).toBeDefined();
+
+      useChatViewStore.getState().setMediaModel('video', nonLiveVideoModel!.id);
+
+      expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
+      expect(resolveMediaModelId('video')).not.toBe(nonLiveVideoModel!.id);
+    });
+
+    it('clears an invalid persisted choice so a later lifecycle change cannot reactivate it', () => {
+      const nonLiveVideoModel = Object.values(modelsCatalog.models).find(
+        (model) =>
+          model.modelType === 'video' &&
+          model.capabilities.videoGen === true &&
+          !isModelLive(model),
+      );
+      expect(nonLiveVideoModel).toBeDefined();
+      useChatViewStore.getState().setMediaModel('video', nonLiveVideoModel!.id);
+
+      expect(clearInvalidMediaModelSelections()).toBe(true);
+      expect(useChatViewStore.getState().selectedMediaModel.video).toBeUndefined();
+      expect(clearInvalidMediaModelSelections()).toBe(false);
+
+      const originalAvailability = nonLiveVideoModel!.availability;
+      try {
+        nonLiveVideoModel!.availability = 'live';
+        expect(resolveMediaModelId('video')).toBe(getRoutingSlotModel('video_generation'));
+        expect(resolveMediaModelId('video')).not.toBe(nonLiveVideoModel!.id);
+      } finally {
+        nonLiveVideoModel!.availability = originalAvailability;
+      }
     });
   });
 

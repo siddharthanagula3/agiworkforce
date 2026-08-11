@@ -84,6 +84,7 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       executor,
       baseline,
       userId: 'u1',
+      organizationId: null,
     });
 
     expect(failedCount).toBe(0);
@@ -107,7 +108,12 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       file('/home/user/data.csv', 999),
     ]);
 
-    const { files } = await harvestGeneratedFiles({ executor, baseline, userId: 'u1' });
+    const { files } = await harvestGeneratedFiles({
+      executor,
+      baseline,
+      userId: 'u1',
+      organizationId: null,
+    });
     expect(files.map((f) => f.file_name)).toEqual(['data.csv']);
   });
 
@@ -122,6 +128,7 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       executor,
       baseline: new Map(),
       userId: 'u1',
+      organizationId: null,
     });
     expect(files.map((f) => f.file_name)).toEqual(['chart.png']);
     expect(files[0]!.kind).toBe('image');
@@ -130,20 +137,23 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
   it('counts changed files as failed when media storage is unconfigured (honest note, never silence)', async () => {
     mockIsConfigured.mockReturnValue(false);
     const executor = makeExecutor({ '/home/user': [file('/home/user/a.txt', 5)] });
-    expect(await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' })).toEqual({
-      files: [],
-      failedCount: 1,
-    });
+    expect(
+      await harvestGeneratedFiles({
+        executor,
+        baseline: new Map(),
+        userId: 'u1',
+        organizationId: null,
+      }),
+    ).toEqual({ files: [], failedCount: 1 });
   });
 
   it('returns failedCount 0 when storage is unconfigured but nothing changed', async () => {
     mockIsConfigured.mockReturnValue(false);
     const executor = makeExecutor({ '/home/user': [file('/home/user/a.txt', 5)] });
     const baseline = await snapshotSandboxFiles(executor);
-    expect(await harvestGeneratedFiles({ executor, baseline, userId: 'u1' })).toEqual({
-      files: [],
-      failedCount: 0,
-    });
+    expect(
+      await harvestGeneratedFiles({ executor, baseline, userId: 'u1', organizationId: null }),
+    ).toEqual({ files: [], failedCount: 0 });
   });
 
   it('skips a file whose read fails and still persists the rest', async () => {
@@ -158,6 +168,7 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       executor,
       baseline: new Map(),
       userId: 'u1',
+      organizationId: null,
     });
     expect(files).toHaveLength(1);
     expect(files[0]!.file_name).toBe('good.txt');

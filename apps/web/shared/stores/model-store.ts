@@ -184,13 +184,28 @@ const DEFAULT_MODEL_ID =
 
 function resolveProvider(modelId: string, explicitProvider?: string | null): string | null {
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
-  if (explicitProvider) {
-    return explicitProvider;
-  }
-  if (isAutoModeModelId(canonicalModelId)) {
-    return 'managed_cloud';
-  }
-  return getModelMetadata(canonicalModelId)?.provider ?? null;
+  const catalogProvider = isAutoModeModelId(canonicalModelId)
+    ? 'managed_cloud'
+    : (getModelMetadata(canonicalModelId)?.provider ?? null);
+  return explicitProvider === catalogProvider ? explicitProvider : catalogProvider;
+}
+
+function isSelectableModel(model: AIModel): boolean {
+  return model.availability !== 'coming_soon';
+}
+
+/**
+ * Resolve any persisted, URL-derived, or caller-supplied value to a model the
+ * current catalog actually admits. This runs independently of Zustand's
+ * storage version so deleting a model from the catalog cannot leave a
+ * same-version browser silently sending its retired ID while the picker shows
+ * the visual fallback.
+ */
+export function resolveSelectableModelId(modelId: string | null | undefined): string {
+  const canonicalModelId = modelId ? (normalizeModelId(modelId) ?? modelId) : DEFAULT_MODEL_ID;
+  return AVAILABLE_MODELS.some((model) => model.id === canonicalModelId && isSelectableModel(model))
+    ? canonicalModelId
+    : DEFAULT_MODEL_ID;
 }
 
 /**
@@ -204,7 +219,7 @@ function applyModelSelection(
   modelId: string,
   explicitProvider?: string | null,
 ): Pick<ModelState, 'selectedModelId' | 'selectedModel' | 'selectedProvider'> {
-  const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  const canonicalModelId = resolveSelectableModelId(modelId);
   const provider = resolveProvider(canonicalModelId, explicitProvider);
 
   return {
@@ -267,19 +282,18 @@ export const useModelStore = create<ModelState>()(
       }),
       migrate: (persistedState: unknown) => {
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
-        const normalizedModelId =
-          normalizeModelId(state.selectedModelId) ?? state.selectedModelId ?? DEFAULT_MODEL_ID;
-        const selectedModelId = AVAILABLE_MODELS.some(
-          (model) => model.id === normalizedModelId && model.availability !== 'coming_soon',
-        )
-          ? normalizedModelId
-          : DEFAULT_MODEL_ID;
+        return applyModelSelection(
+          state.selectedModelId ?? DEFAULT_MODEL_ID,
+          state.selectedProvider,
+        );
+      },
+      // Zustand only calls `migrate` when a stored version differs. Validate in
+      // `merge` as well so same-version stale IDs are repaired on every hydrate.
+      merge: (persistedState, currentState) => {
+        const state = (persistedState as Partial<PersistedModelState>) ?? {};
         return {
-          selectedModelId,
-          selectedProvider:
-            selectedModelId === normalizedModelId
-              ? (state.selectedProvider ?? resolveProvider(selectedModelId))
-              : resolveProvider(selectedModelId),
+          ...currentState,
+          ...applyModelSelection(state.selectedModelId ?? DEFAULT_MODEL_ID, state.selectedProvider),
         };
       },
     },

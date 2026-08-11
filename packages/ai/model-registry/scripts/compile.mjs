@@ -83,6 +83,21 @@ const RUST_ROUTING_GENERATED_DIR = path.join(
 );
 const RUST_ROUTING_REGISTRY_JSON = path.join(RUST_ROUTING_GENERATED_DIR, 'model_registry.json');
 const RUST_ROUTING_REGISTRY_MODULE = path.join(RUST_ROUTING_GENERATED_DIR, 'model_registry.rs');
+const SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS = Object.fromEntries(
+  ['openai', 'anthropic'].map((providerId) => [
+    providerId,
+    path.join(
+      ROOT,
+      'tools',
+      'skill-vetting',
+      'src',
+      'skillspector',
+      'providers',
+      providerId,
+      'model_registry.yaml',
+    ),
+  ]),
+);
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
 
@@ -117,6 +132,7 @@ const OVERRIDE_KEYS = [
 const CANONICAL_ORDER = [
   'id',
   'apiModelId',
+  'openRouterSlug',
   'name',
   'provider',
   'modelType',
@@ -140,6 +156,9 @@ const CANONICAL_ORDER = [
   'promo_expires_at',
   'post_promo_prices',
   'pricingSchedule',
+  'inputTokenPricingTiers',
+  // Read compatibility only. Current authored models use the ordered array.
+  'longContext',
   'supersedes',
   'supersedes_effective_date',
   'supersedes_note',
@@ -148,8 +167,10 @@ const CANONICAL_ORDER = [
   'tokenizer_drift_warning',
   'imagePerImageCost',
   'imageApi',
+  'imageOutputMimeType',
   'videoPerSecondCost',
   'videoPerSecondCostByResolution',
+  'videoGeneration',
   'pricingNote',
   'openWeight',
   'license',
@@ -396,6 +417,7 @@ function buildCatalog(curation, synced) {
 
 const AUTO_POLICY_MODEL_IDS = new Set(['auto', 'auto-economy', 'auto-balanced', 'auto-premium']);
 const MEDIA_MODEL_TYPES = new Set(['image', 'video', 'audio', 'tts', 'stt']);
+const GENERATED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function resolveHarnessId(model) {
   if (model.provider === 'managed_cloud') return 'managed-cloud/gateway';
@@ -453,6 +475,104 @@ function normalizeCapabilities(model) {
 
 function positiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function normalizeVideoGeneration(modelKey, video) {
+  if (video === undefined) return undefined;
+  const label = `${modelKey} videoGeneration`;
+  assert.ok(
+    video && typeof video === 'object' && !Array.isArray(video),
+    `${label} must be an object`,
+  );
+  const allowedKeys = ['durationSecs', 'outputSizes', 'supportsAudio', 'supportsSeed', 'pricing'];
+  assert.equal(
+    Object.keys(video).filter((key) => !allowedKeys.includes(key)).length,
+    0,
+    `${label} has unsupported keys`,
+  );
+  assert.ok(
+    Array.isArray(video.durationSecs) && video.durationSecs.length > 0,
+    `${label}.durationSecs must be non-empty`,
+  );
+  assert.equal(
+    new Set(video.durationSecs).size,
+    video.durationSecs.length,
+    `${label}.durationSecs must be unique`,
+  );
+  for (const duration of video.durationSecs) {
+    assert.ok(
+      Number.isInteger(duration) && duration > 0,
+      `${label}.durationSecs must contain positive integers`,
+    );
+  }
+  assert.ok(
+    Array.isArray(video.outputSizes) && video.outputSizes.length > 0,
+    `${label}.outputSizes must be non-empty`,
+  );
+  const tuples = new Set();
+  for (const [index, output] of video.outputSizes.entries()) {
+    const outputLabel = `${label}.outputSizes[${index}]`;
+    assert.deepEqual(
+      Object.keys(output).sort(),
+      ['aspectRatio', 'height', 'resolution', 'width'],
+      `${outputLabel} must carry only the canonical output tuple fields`,
+    );
+    assert.ok(
+      typeof output.resolution === 'string' && output.resolution.length > 0,
+      `${outputLabel}.resolution is required`,
+    );
+    assert.ok(
+      typeof output.aspectRatio === 'string' && output.aspectRatio.length > 0,
+      `${outputLabel}.aspectRatio is required`,
+    );
+    assert.ok(
+      Number.isInteger(output.width) && output.width > 0,
+      `${outputLabel}.width must be a positive integer`,
+    );
+    assert.ok(
+      Number.isInteger(output.height) && output.height > 0,
+      `${outputLabel}.height must be a positive integer`,
+    );
+    const tuple = `${output.resolution}\u0000${output.aspectRatio}`;
+    assert.ok(
+      !tuples.has(tuple),
+      `${label} repeats output tuple ${output.resolution}/${output.aspectRatio}`,
+    );
+    tuples.add(tuple);
+  }
+  assert.equal(typeof video.supportsAudio, 'boolean', `${label}.supportsAudio must be boolean`);
+  if (video.supportsSeed !== undefined) {
+    assert.equal(typeof video.supportsSeed, 'boolean', `${label}.supportsSeed must be boolean`);
+  }
+  if (video.pricing !== undefined) {
+    const pricingKeys = [
+      'unit',
+      'framesPerSecond',
+      'pixelsPerToken',
+      'usdPerToken',
+      'usdPerTokenWithoutAudio',
+    ];
+    assert.equal(
+      Object.keys(video.pricing).filter((key) => !pricingKeys.includes(key)).length,
+      0,
+      `${label}.pricing has unsupported keys`,
+    );
+    assert.equal(video.pricing.unit, 'video_tokens', `${label}.pricing.unit must be video_tokens`);
+    for (const field of ['framesPerSecond', 'pixelsPerToken']) {
+      assert.ok(
+        Number.isInteger(video.pricing[field]) && video.pricing[field] > 0,
+        `${label}.pricing.${field} must be a positive integer`,
+      );
+    }
+    for (const field of ['usdPerToken', 'usdPerTokenWithoutAudio']) {
+      if (video.pricing[field] === undefined) continue;
+      assert.ok(
+        Number.isFinite(video.pricing[field]) && video.pricing[field] > 0,
+        `${label}.pricing.${field} must be positive`,
+      );
+    }
+  }
+  return video;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -526,6 +646,78 @@ export function normalizePricingSchedule(modelKey, schedule) {
   return normalizedSchedule;
 }
 
+function normalizeInputTokenPricingTier(label, tier) {
+  assert.ok(tier && typeof tier === 'object' && !Array.isArray(tier), `${label} must be an object`);
+  assert.ok(
+    Number.isInteger(tier.thresholdTokens) && tier.thresholdTokens > 0,
+    `${label}.thresholdTokens must be a positive integer`,
+  );
+  for (const field of ['inputCost', 'outputCost']) {
+    assert.ok(
+      Number.isFinite(tier[field]) && tier[field] >= 0,
+      `${label}.${field} must be a non-negative number`,
+    );
+  }
+  for (const field of ['cached_input', 'cached_write', 'cached_write_1h']) {
+    if (tier[field] === undefined) continue;
+    assert.ok(
+      Number.isFinite(tier[field]) && tier[field] >= 0,
+      `${label}.${field} must be a non-negative number when present`,
+    );
+  }
+  const unknownKeys = Object.keys(tier).filter(
+    (key) =>
+      ![
+        'thresholdTokens',
+        'inputCost',
+        'outputCost',
+        'cached_input',
+        'cached_write',
+        'cached_write_1h',
+      ].includes(key),
+  );
+  assert.equal(unknownKeys.length, 0, `${label} has unsupported keys: ${unknownKeys.join(', ')}`);
+  return defined({
+    thresholdTokens: tier.thresholdTokens,
+    inputPerMillion: tier.inputCost,
+    outputPerMillion: tier.outputCost,
+    cacheReadPerMillion: tier.cached_input,
+    cacheWritePerMillion: tier.cached_write,
+    cacheWrite1hPerMillion: tier.cached_write_1h,
+  });
+}
+
+/**
+ * Normalize ordered provider-published input-length pricing bands. Curation
+ * uses the compatibility field names consumed by models.json; the normalized
+ * registry uses explicit per-million names. Thresholds must be strictly
+ * increasing so authoring order is deterministic and duplicate bands cannot
+ * silently disagree.
+ */
+export function normalizeInputTokenPricingTiers(modelKey, tiers) {
+  if (tiers === undefined) return undefined;
+  assert.ok(
+    Array.isArray(tiers) && tiers.length > 0,
+    `${modelKey} inputTokenPricingTiers must be a non-empty array when present`,
+  );
+  const normalized = tiers.map((tier, index) =>
+    normalizeInputTokenPricingTier(`${modelKey} inputTokenPricingTiers[${index}]`, tier),
+  );
+  for (let index = 1; index < normalized.length; index += 1) {
+    assert.ok(
+      normalized[index].thresholdTokens > normalized[index - 1].thresholdTokens,
+      `${modelKey} inputTokenPricingTiers thresholds must be strictly increasing`,
+    );
+  }
+  return normalized;
+}
+
+/** @deprecated Compiler read compatibility for the former singleton field. */
+export function normalizeLongContextPricing(modelKey, tier) {
+  if (tier === undefined) return undefined;
+  return normalizeInputTokenPricingTier(`${modelKey} longContext`, tier);
+}
+
 /**
  * Reject a schedule whose windows intersect.
  *
@@ -565,6 +757,44 @@ function formatRoutingSlotLabel(slotId) {
     .split('_')
     .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
     .join(' ');
+}
+
+function resolveAutoPolicy(autoPolicy, catalog) {
+  return {
+    ...autoPolicy,
+    slots: Object.fromEntries(
+      Object.entries(autoPolicy.slots).map(([slotId, slot]) => {
+        const hasModelKey = typeof slot.modelKey === 'string' && slot.modelKey.length > 0;
+        const hasProviderTask = slot.providerTask !== undefined;
+        assert.notEqual(
+          hasModelKey,
+          hasProviderTask,
+          `Routing slot ${slotId} must declare exactly one of modelKey or providerTask`,
+        );
+        if (hasModelKey) return [slotId, { modelKey: slot.modelKey }];
+
+        const { provider, task } = slot.providerTask ?? {};
+        assert.equal(
+          typeof provider,
+          'string',
+          `Routing slot ${slotId}.providerTask.provider must be a string`,
+        );
+        assert.equal(
+          typeof task,
+          'string',
+          `Routing slot ${slotId}.providerTask.task must be a string`,
+        );
+        const providerConfig = catalog.providers?.[provider];
+        assert.ok(providerConfig, `Routing slot ${slotId} references unknown provider ${provider}`);
+        const modelKey = providerConfig.taskRouting?.[task];
+        assert.ok(
+          modelKey,
+          `Routing slot ${slotId} references missing provider task ${provider}.${task}`,
+        );
+        return [slotId, { modelKey }];
+      }),
+    ),
+  };
 }
 
 function normalizeAutoPolicy(autoPolicy) {
@@ -785,14 +1015,31 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
         `Harness ${harnessId} provider ${harness.provider} does not match ${modelKey} provider ${model.provider}`,
       );
     }
+    assert.ok(
+      model.inputTokenPricingTiers === undefined || model.longContext === undefined,
+      `${modelKey} must not declare both inputTokenPricingTiers and legacy longContext`,
+    );
 
     const lifecycle = normalizeLifecycle(model);
+    const videoGeneration = normalizeVideoGeneration(modelKey, model.videoGeneration);
+    if (
+      model.modelType === 'image' &&
+      model.imageApi === 'gemini' &&
+      lifecycle.availability === 'live' &&
+      lifecycle.deprecated !== true
+    ) {
+      assert.ok(
+        GENERATED_IMAGE_MIME_TYPES.has(model.imageOutputMimeType),
+        `${modelKey} is a live Gemini image model and must declare a supported imageOutputMimeType`,
+      );
+    }
     models[modelKey] = {
       identity: defined({
         key: modelKey,
         displayName: model.name,
         provider: model.provider,
         providerModelId: model.apiModelId ?? model.id ?? modelKey,
+        openRouterSlug: model.openRouterSlug,
         kind: model.modelType,
         familyPartner: model.variantPartner,
         // Openness metadata is curation-owned and OPTIONAL: an absent field
@@ -816,11 +1063,13 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     };
     pricing[modelKey] = defined({
       currency: 'USD',
-      unit: model.videoPerSecondCost
-        ? 'per_second'
-        : model.imagePerImageCost
-          ? 'per_image'
-          : 'per_million_tokens',
+      unit: videoGeneration?.pricing
+        ? 'video_tokens'
+        : model.videoPerSecondCost
+          ? 'per_second'
+          : model.imagePerImageCost
+            ? 'per_image'
+            : 'per_million_tokens',
       inputPerMillion: model.inputCost,
       outputPerMillion: model.outputCost,
       cacheReadPerMillion: model.cached_input,
@@ -829,15 +1078,30 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
       imagePerImage: model.imagePerImageCost,
       videoPerSecond: model.videoPerSecondCost,
       videoPerSecondByResolution: model.videoPerSecondCostByResolution,
+      videoTokenFormula: videoGeneration?.pricing,
       promoExpiresAt: model.promo_expires_at,
       postPromoPrices: model.post_promo_prices,
       schedule: normalizePricingSchedule(modelKey, model.pricingSchedule),
+      inputTokenPricingTiers:
+        model.inputTokenPricingTiers !== undefined
+          ? normalizeInputTokenPricingTiers(modelKey, model.inputTokenPricingTiers)
+          : model.longContext !== undefined
+            ? [normalizeLongContextPricing(modelKey, model.longContext)]
+            : undefined,
     });
     limits[modelKey] = defined({
       contextTokens: positiveIntegerOrUndefined(model.contextWindow),
       maxInputTokens: positiveIntegerOrUndefined(model.maxInputTokens),
       maxOutputTokens: positiveIntegerOrUndefined(model.maxOutputTokens),
       knowledgeCutoff: model.knowledgeCutoff,
+      videoGeneration: videoGeneration
+        ? {
+            durationSecs: videoGeneration.durationSecs,
+            outputSizes: videoGeneration.outputSizes,
+            supportsAudio: videoGeneration.supportsAudio,
+            supportsSeed: videoGeneration.supportsSeed,
+          }
+        : undefined,
     });
     capabilities[modelKey] = normalizeCapabilities(model);
     benchmarks[modelKey] = model.benchmarks ?? {};
@@ -847,8 +1111,9 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     id: `verification/${entry.date ?? 'unknown'}/${index + 1}`,
     ...entry,
   }));
-  validateAutoPolicy(routingPolicies.auto, models, capabilities);
-  const autoPolicy = normalizeAutoPolicy(routingPolicies.auto);
+  const resolvedAutoPolicy = resolveAutoPolicy(routingPolicies.auto, catalog);
+  validateAutoPolicy(resolvedAutoPolicy, models, capabilities);
+  const autoPolicy = normalizeAutoPolicy(resolvedAutoPolicy);
   const runtimeProfiles = buildRuntimeProfiles(harnessCatalog);
 
   return {
@@ -874,6 +1139,44 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
 const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\nexport default registry;\n`;
 const RUST_REGISTRY_MODULE_SOURCE = `// This file is generated by @agiworkforce/model-registry.\npub const MODEL_REGISTRY_JSON: &str = include_str!("model_registry.json");\n`;
 
+function yamlSingleQuoted(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function buildSkillSpectorProviderRegistry(catalog, providerId) {
+  const provider = catalog.providers?.[providerId];
+  assert.ok(provider?.defaultModel, `${providerId} provider defaultModel is required`);
+  const routedModelIds = [
+    ...new Set([provider.defaultModel, ...Object.values(provider.taskRouting ?? {})]),
+  ];
+  const lines = [
+    '# This file is generated by @agiworkforce/model-registry.',
+    '# Edit packages/ai/model-registry/catalog/models.curation.json, then run pnpm sync:models.',
+    `default_model: ${yamlSingleQuoted(provider.defaultModel)}`,
+    'models:',
+  ];
+  for (const modelId of routedModelIds) {
+    const model = catalog.models?.[modelId];
+    assert.equal(
+      model?.provider,
+      providerId,
+      `${providerId} route ${modelId} must resolve to its owning provider`,
+    );
+    assert.ok(
+      ['chat', 'code', 'reasoning', 'multimodal'].includes(model.modelType),
+      `${providerId} analyzer route ${modelId} must be chat-capable`,
+    );
+    assert.ok(Number.isInteger(model.contextWindow) && model.contextWindow > 0);
+    assert.ok(Number.isInteger(model.maxOutputTokens) && model.maxOutputTokens > 0);
+    lines.push(
+      `  ${yamlSingleQuoted(modelId)}:`,
+      `    context_length: ${model.contextWindow}`,
+      `    max_output_tokens: ${model.maxOutputTokens}`,
+    );
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 async function buildNormalizedArtifacts(catalog) {
   const harnessCatalog = readJson(HARNESSES_JSON);
   const routingPolicies = readJson(ROUTING_POLICIES_JSON);
@@ -892,6 +1195,12 @@ async function buildNormalizedArtifacts(catalog) {
     typescript: TYPESCRIPT_REGISTRY_MODULE,
     rustJson: await formatJson(registry, RUST_REGISTRY_JSON),
     rustModule: RUST_REGISTRY_MODULE_SOURCE,
+    skillSpectorProviderYamls: Object.fromEntries(
+      Object.keys(SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS).map((providerId) => [
+        providerId,
+        buildSkillSpectorProviderRegistry(catalog, providerId),
+      ]),
+    ),
   };
 }
 
@@ -899,6 +1208,9 @@ function ensureGeneratedDirectories() {
   fs.mkdirSync(GENERATED_DIR, { recursive: true });
   fs.mkdirSync(RUST_GENERATED_DIR, { recursive: true });
   fs.mkdirSync(RUST_ROUTING_GENERATED_DIR, { recursive: true });
+  for (const file of Object.values(SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS)) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+  }
 }
 
 function writeText(file, contents) {
@@ -928,6 +1240,9 @@ async function generate() {
   writeText(RUST_REGISTRY_MODULE, artifacts.rustModule);
   writeText(RUST_ROUTING_REGISTRY_JSON, artifacts.rustJson);
   writeText(RUST_ROUTING_REGISTRY_MODULE, artifacts.rustModule);
+  for (const [providerId, file] of Object.entries(SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS)) {
+    writeText(file, artifacts.skillSpectorProviderYamls[providerId]);
+  }
   console.log(
     `[sync] generate → ${Object.keys(catalog.models).length} compatibility models + ` +
       `${Object.keys(artifacts.registry.models).length} normalized models written`,
@@ -969,6 +1284,9 @@ async function check() {
     checkGeneratedArtifact(RUST_REGISTRY_MODULE, artifacts.rustModule),
     checkGeneratedArtifact(RUST_ROUTING_REGISTRY_JSON, artifacts.rustJson),
     checkGeneratedArtifact(RUST_ROUTING_REGISTRY_MODULE, artifacts.rustModule),
+    ...Object.entries(SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS).map(([providerId, file]) =>
+      checkGeneratedArtifact(file, artifacts.skillSpectorProviderYamls[providerId]),
+    ),
   ].every(Boolean);
   if (!generatedOk) return;
   console.log('[sync] ✓ models.json is in sync with curation + synced inputs.');

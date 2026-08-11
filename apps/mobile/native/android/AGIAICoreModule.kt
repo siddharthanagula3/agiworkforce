@@ -13,15 +13,17 @@ import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.PromptPrefix
 import com.google.mlkit.genai.prompt.TextPart
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 
 // Tier 1 Android: on-device LLM inference via ML Kit GenAI Prompt API
-// (com.google.mlkit:genai-prompt), which drives Gemini Nano through AICore.
+// (com.google.mlkit:genai-prompt), which drives the OS-resident model through AICore.
 class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext), CoroutineScope {
 
   private val job = SupervisorJob()
+  private val generationJobs = ConcurrentHashMap<String, Job>()
   override val coroutineContext = Dispatchers.IO + job
 
   companion object {
@@ -121,13 +123,13 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
     requestId: String,
     promise: Promise
   ) {
-    launch {
+    val generationJob = launch(start = CoroutineStart.LAZY) {
       val model = getOrCreateClient()
       try {
         val status = runCatching { model.checkStatus() }.getOrDefault(FeatureStatus.UNAVAILABLE)
         if (status != FeatureStatus.AVAILABLE) {
           if (status == FeatureStatus.DOWNLOADABLE) triggerBackgroundDownload(model)
-          promise.reject("UNAVAILABLE", "Gemini Nano is not available on this device yet")
+          promise.reject("UNAVAILABLE", "The AICore model is not available on this device yet")
           return@launch
         }
 
@@ -186,8 +188,17 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
           },
         )
         promise.reject("GENERATE_ERROR", e.message, e)
+      } finally {
+        generationJobs.remove(requestId)
       }
     }
+    generationJobs.put(requestId, generationJob)?.cancel()
+    generationJob.start()
+  }
+
+  @ReactMethod
+  fun cancel(requestId: String) {
+    generationJobs.remove(requestId)?.cancel()
   }
 
   // genai-prompt's GenerateContentRequest carries a single TextPart plus an
@@ -220,6 +231,8 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
   }
 
   override fun onCatalystInstanceDestroy() {
+    generationJobs.values.forEach { it.cancel() }
+    generationJobs.clear()
     job.cancel()
     releaseClient()
     super.onCatalystInstanceDestroy()

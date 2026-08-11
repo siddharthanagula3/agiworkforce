@@ -2,7 +2,13 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import {
+  requireProviderDefaultModel,
+  type ChatRequest,
+  type StreamChunk,
+} from '@agiworkforce/types';
+
+const ANTHROPIC_CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
 type AdapterMode =
   | 'success'
@@ -387,7 +393,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
@@ -402,16 +408,16 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
 
     expect(response.status).toBe(200);
-    expect(state.capturedRequest?.model).toBe('claude-opus-5');
+    expect(state.capturedRequest?.model).toBe(ANTHROPIC_CHAT_MODEL);
     expect(state.capturedSignal).toBeInstanceOf(AbortSignal);
     expect(state.buildCalls).toEqual(['anthropic']);
-    expect(response.body.model).toBe('claude-opus-5');
+    expect(response.body.model).toBe(ANTHROPIC_CHAT_MODEL);
     expect(state.billingEvents).toEqual([
       'reserve',
       'provider-started',
@@ -424,7 +430,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     );
     expect(state.usageRows).toContainEqual(
       expect.objectContaining({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         provider: 'anthropic',
         event_type: 'llm_completion',
         prompt_tokens: 2,
@@ -443,7 +449,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
       .post('/api/llm/v1/chat/completions')
       .set('Idempotency-Key', 'test-turn-12345678')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
@@ -459,7 +465,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
       });
 
@@ -478,7 +484,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
       });
 
@@ -493,7 +499,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -513,7 +519,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -532,7 +538,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -559,7 +565,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -579,7 +585,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -603,7 +609,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -627,7 +633,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -651,7 +657,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -676,7 +682,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -704,7 +710,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -733,7 +739,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -752,7 +758,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -776,7 +782,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });

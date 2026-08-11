@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { getModelMetadataById, resolveEffectiveModelPricing } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  resolveEffectiveModelPricingForInputTokens,
+} from '@agiworkforce/types';
 import { logger } from './logger';
 import {
   CACHE_WRITE_FALLBACK_MULTIPLIERS,
@@ -45,19 +48,27 @@ function getCachingModel(model: string) {
  * billing path resolves them, so analytics quote the rate the request was
  * billed at.
  *
- * Known limitation: the older `post_promo_prices` two-phase form is NOT layered
- * on here, while the caller's `inputCostPerMtok` comes from
- * `LLMCostCalculator.getPricing`, which does layer it. No shipped model sets
- * `post_promo_prices.cached_input`, so the two rates cannot disagree today; the
- * moment one does, this must resolve promos the same way `getPricing` does.
+ * This is a safe fallback for callers without a fully composed rate. The live
+ * response path passes `LLMCostCalculator`'s date/promo/input-tier result
+ * explicitly, keeping analytics identical to billing even if those layers
+ * overlap in a future catalog entry.
  */
 function getDeclaredCacheReadPerMtok(
   model: string | undefined,
   pricedAt: Date,
+  inputTokens: number,
+  cacheReadTokens: number,
+  cacheWriteTokens: number,
 ): number | undefined {
   const meta = model ? getModelMetadataById(model) : null;
   if (!meta) return undefined;
-  const cachedInput = resolveEffectiveModelPricing(meta, pricedAt).cached_input;
+  const tierInputTokens =
+    meta.provider === 'anthropic' ? inputTokens + cacheReadTokens + cacheWriteTokens : inputTokens;
+  const cachedInput = resolveEffectiveModelPricingForInputTokens(
+    meta,
+    pricedAt,
+    tierInputTokens,
+  ).cached_input;
   return typeof cachedInput === 'number' ? cachedInput : undefined;
 }
 
@@ -128,8 +139,8 @@ export function calculateCacheSavings(
    * provider-aware). Omitted only by callers with no model context, where the
    * Anthropic-published surcharge is the historical default. Passing the
    * resolved rate is what keeps models that declare NO write price — every
-   * pre-GPT-5.6 OpenAI model — reported at their free-write cost instead of an
-   * invented 25% surcharge.
+   * model with no declared write surcharge reported at its plain-input write
+   * cost instead of an invented 25% surcharge.
    */
   cacheWriteCostPerMtok: number = inputCostPerMtok * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m,
   /**
@@ -140,6 +151,8 @@ export function calculateCacheSavings(
    * now for callers that resolve rates themselves.
    */
   pricedAt: Date = new Date(),
+  /** Fully composed catalog rate from the live billing calculator when known. */
+  cacheReadCostPerMtok?: number,
 ): {
   tokensSavedByCache: number;
   savedCostCents: number;
@@ -151,18 +164,27 @@ export function calculateCacheSavings(
   // The saving is the gap between the input rate and the model's OWN cache-read
   // rate. A flat 0.1x here was wrong in both directions: it under-reported
   // DeepSeek (which reads at 0.02x input) and claimed a 90% saving for every
-  // model the catalog leaves unpriced -- minimax-m3, grok-4.5, and any caller
-  // that passes no `model` at all -- none of which is a saving anyone received.
+  // model the catalog leaves unpriced, or any caller that passes no model at
+  // all, none of which is a saving anyone received.
   // Those now report zero saved, because `resolveCacheRates` prices an unpriced
   // read at the full input rate.
-  const declaredCacheRead = getDeclaredCacheReadPerMtok(response.model, pricedAt);
-  const { read: cacheReadCostPerMtok } = resolveCacheRates({
+  const declaredCacheRead =
+    cacheReadCostPerMtok ??
+    getDeclaredCacheReadPerMtok(
+      response.model,
+      pricedAt,
+      response.promptTokens ?? 0,
+      cachedTokens,
+      cacheWriteTokens,
+    );
+  const { read: effectiveCacheReadCostPerMtok } = resolveCacheRates({
     inputCostPer1MTokens: inputCostPerMtok,
     cachedInputCostPer1MTokens: declaredCacheRead,
   });
 
   // inputCostPerMtok is in dollars per 1M tokens, so convert: tokens * $/Mtok / 1M * 100 cents/$
-  const savedCostCents = (cachedTokens * (inputCostPerMtok - cacheReadCostPerMtok)) / 10_000;
+  const savedCostCents =
+    (cachedTokens * (inputCostPerMtok - effectiveCacheReadCostPerMtok)) / 10_000;
 
   // The full write cost, not just the surcharge, is reported here.
   // Note: Anthropic 1h TTL write is 2.0x — indistinguishable from 5m at this call

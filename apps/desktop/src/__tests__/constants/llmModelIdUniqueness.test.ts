@@ -56,9 +56,8 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
       // When the alias also exists as a live (non-deprecated) catalog
       // entry, the entry takes precedence in MODEL_METADATA so callers
       // looking up the literal ID get the entry's canonical metadata.
-      // (deepseek-chat is the canonical example: V3 entry is still
-      // accessible alongside the v4-flash alias used by clients that
-      // want the latest deepseek chat.)
+      // Live entries remain directly addressable even when a separate alias
+      // points clients at a newer catalog-owned model.
       const meta = MODEL_METADATA[alias];
       const aliasIsLiveEntry = meta && meta.id === alias && !meta.deprecated;
       if (aliasIsLiveEntry) continue;
@@ -115,20 +114,12 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
     }
   });
 
-  it('no model apiModelId contains phantom model names from the audit', () => {
-    const phantomNames = ['gemini-3-deep-think', 'qwen-coder'];
-
+  it('every provider wire id resolves through catalog metadata', () => {
     for (const [modelId, metadata] of canonicalCatalogEntries) {
       if (!metadata.apiModelId) continue;
-
-      for (const phantom of phantomNames) {
-        expect(metadata.apiModelId).not.toBe(phantom);
-        if (metadata.apiModelId === phantom) {
-          throw new Error(
-            `Model "${modelId}" uses phantom apiModelId "${phantom}" — this must be removed`,
-          );
-        }
-      }
+      const normalized = normalizeModelId(metadata.apiModelId);
+      expect(normalized).not.toBeNull();
+      if (normalized) expect(MODEL_METADATA[normalized]?.id).toBe(modelId);
     }
   });
 });

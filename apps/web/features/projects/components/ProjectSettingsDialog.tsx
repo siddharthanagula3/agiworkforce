@@ -263,13 +263,16 @@ export function ProjectSettingsDialog({
           </div>
 
           {/* Footer */}
-          <div className="flex shrink-0 items-center justify-between border-t border-border/60 px-6 py-4">
+          <div
+            data-testid="project-settings-actions"
+            className="grid shrink-0 grid-cols-2 gap-2 border-t border-border/60 px-4 py-3 sm:flex sm:items-center sm:justify-between sm:px-6 sm:py-4"
+          >
             {/* Destructive delete */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="order-3 col-span-2 w-full justify-center text-destructive hover:bg-destructive/10 hover:text-destructive sm:order-none sm:w-auto"
               onClick={() => setDeleteConfirmOpen(true)}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
@@ -281,11 +284,12 @@ export function ProjectSettingsDialog({
               is the same unwired-backend pattern this codebase keeps getting
               bitten by — a capability that exists and no user can reach.
             */}
-            <div className="flex items-center gap-2">
+            <div className="order-2 col-span-2 grid grid-cols-2 gap-2 sm:order-none sm:flex sm:items-center">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="w-full sm:w-auto"
                 disabled={isDuplicating}
                 onClick={() => void handleDuplicate()}
               >
@@ -297,7 +301,7 @@ export function ProjectSettingsDialog({
                 navigation: the route returns Content-Disposition: attachment,
                 so the browser streams the file without holding it in memory.
               */}
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
                 <a href={`/api/projects/${project.id}/export`}>
                   <Download className="mr-1.5 h-4 w-4" />
                   Export
@@ -310,7 +314,7 @@ export function ProjectSettingsDialog({
               type="button"
               onClick={() => void handleSave()}
               disabled={isSaving || !name.trim()}
-              className="rounded-xl px-5"
+              className="order-1 col-span-2 w-full rounded-xl px-5 sm:order-none sm:w-auto"
             >
               Save
             </Button>

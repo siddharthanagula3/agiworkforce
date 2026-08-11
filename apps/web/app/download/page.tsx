@@ -14,7 +14,7 @@ const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 export const metadata = buildMetadata({
   title: 'Download AGI | Desktop and Product Availability',
   description:
-    'Download the signed AGI Desktop AppImage for Linux x64. macOS and Windows installers are not yet published. Check availability across Web, Mobile, CLI, Chrome, and VS Code.',
+    'Check verified AGI Desktop installer availability for Linux, macOS, and Windows, plus current availability across Web, Mobile, CLI, Chrome, and VS Code.',
   path: '/download',
 });
 
@@ -28,15 +28,16 @@ export default function DownloadPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Product availability</p>
           <h1 id="agi-download-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">AGI on</span>
+            <span className="agi-fl-h1-line">AGI on</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">every surface.</em>
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI Web is available in the browser. The Desktop stable release channel is limited to
-            signed Linux x64 AppImages, with live availability verified below. macOS and Windows
-            installers are not published. Other surfaces are individually labeled.
+            AGI Web is available in the browser. Desktop package assets exist for Linux x64, while
+            the verified installer control appears only when the release includes its required
+            updater signature. macOS and Windows installers are not published. Other surfaces are
+            individually labeled.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
@@ -110,7 +111,7 @@ export default function DownloadPage() {
                 'MCP connectors & tool approvals',
                 'Scheduled work with AGI Work',
               ],
-              platforms: 'Linux x64 release channel · macOS and Windows not published',
+              platforms: 'Linux x64 package assets · verified installer status below',
               // Surface state comes from the registry; the per-PLATFORM detail
               // above is resolved live below by DesktopDownloadAvailability.
               status: SURFACE_STATUS.desktop,
@@ -220,13 +221,13 @@ export default function DownloadPage() {
         <FinalCta
           eyebrow="Current availability"
           title="Use AGI now, or follow the next release."
-          body="AGI Web is available now. The signed Linux x64 Desktop AppImage is offered only when the stable release API verifies it; unavailable platforms remain clearly labeled."
+          body="AGI Web is available now. Desktop downloads appear only when the release API verifies a complete installer and signature pair; unavailable platforms remain clearly labeled."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
             { href: '#desktop-downloads', label: 'Desktop availability' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp="Linux x64 · signed AppImage release channel"
+          stamp="Linux x64 · verification required before download"
         />
 
         <MarketingFooter />

@@ -11,6 +11,10 @@ const warnings = [];
 
 const allowedRootFiles = new Set([
   '.git',
+  // Repository-wide AGI Guardian policy. The GitHub integration resolves this
+  // conventional root filename directly, so relocating it would disconnect
+  // the review configuration from the service that owns it.
+  '.agi-guardian.yml',
   '.claudeignore',
   '.dockerignore',
   '.env.example',

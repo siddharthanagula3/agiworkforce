@@ -53,14 +53,14 @@ function projectHeaderPresentation(): ProjectHeaderPresentation {
       updatedAt: '2026-05-20T00:00:00Z',
     },
     lastUsedRelativeLabel: '2h ago',
-    defaultModelLabel: 'Llama 3.2 8B',
+    defaultModelLabel: 'Local Model Fixture',
   });
 }
 
 function sendPreviewLocalPresentation(): SendPreviewPresentation {
   return summarizeSendPreview({
     providerMode: 'Local',
-    modelLabel: 'Llama 3.2 8B',
+    modelLabel: 'Local Model Fixture',
     messageBody: 'hi',
   });
 }
@@ -69,7 +69,7 @@ function sendPreviewByokPresentation(): SendPreviewPresentation {
   return summarizeSendPreview({
     providerMode: 'DirectByok',
     destinationHost: 'api.anthropic.com',
-    modelLabel: 'Claude Sonnet 4.6',
+    modelLabel: 'Direct Model Fixture',
   });
 }
 
@@ -81,7 +81,7 @@ function generatedFilePresentation(): GeneratedFilePresentation {
     privacyMode: 'local',
     providerMode: 'Local',
     provider: 'ollama',
-    model: 'llama3.2:8b',
+    model: 'fixture-local-model',
     status: 'completed',
     workdirUri: 'file:///tmp/snapshot',
     createdAt: '2026-05-20T00:00:00Z',

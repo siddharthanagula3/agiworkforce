@@ -41,6 +41,7 @@ import {
   estimateTimeRemaining,
 } from '@/src/features/companion/components/AgentDashboard';
 import { useAgentStore } from '@/stores/agentStore';
+import { getDisplayName } from '@/src/features/model-picker/service';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
@@ -223,7 +224,7 @@ export default function AgentDetailScreen() {
                 <Text className="text-sm font-semibold text-white" numberOfLines={1}>
                   {agent.name}
                 </Text>
-                <Text className="text-xs text-white/40">{agent.model}</Text>
+                <Text className="text-xs text-white/40">{getDisplayName(agent.model)}</Text>
               </View>
               <Badge label={agent.status} color={getStatusBadgeColor(agent.status)} />
             </View>

@@ -5,6 +5,8 @@ import { StreamIdleTimeoutError } from '../watchdog';
 
 type Chunk = Record<string, unknown>;
 
+const FIXTURE_MODEL_ID = 'fixture-stream-model';
+
 async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
   const out: T[] = [];
   for await (const c of stream) out.push(c);
@@ -48,7 +50,7 @@ function fetchMockResolving(response: Response) {
 const BASE: Omit<StreamFromProviderOptions<{ model: string }>, 'fetchImpl'> = {
   providerId: 'anthropic',
   authToken: 'test-token',
-  request: { model: 'claude-opus-5' },
+  request: { model: FIXTURE_MODEL_ID },
   clientTag: 'agiworkforce-test',
 };
 
@@ -127,7 +129,7 @@ describe('streamFromProvider — request construction', () => {
           authorization: 'Bearer test-token',
           'x-requested-with': 'agiworkforce-test',
         }),
-        body: JSON.stringify({ model: 'claude-opus-5' }),
+        body: JSON.stringify({ model: FIXTURE_MODEL_ID }),
       }),
     );
   });
@@ -241,7 +243,7 @@ describe('streamFromProvider — paywall detection (opt-in)', () => {
   });
 
   it('falls back to a generic error when the paywall body has the wrong kind', async () => {
-    const body = JSON.stringify({ kind: 'downgrade', modelOverride: 'gemini-3.5-flash-lite' });
+    const body = JSON.stringify({ kind: 'downgrade', modelOverride: FIXTURE_MODEL_ID });
     const fetchImpl = fetchMockResolving(errorResponse(429, body));
 
     const chunks = await collect<Chunk>(

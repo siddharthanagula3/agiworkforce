@@ -17,8 +17,14 @@ import {
   type TaskFamilySessionRoute,
 } from '../task-family-continuity';
 
+const LOW_MODEL_ID = 'fixture-low-model';
+const MID_MODEL_ID = 'fixture-mid-model';
+const HIGH_MODEL_ID = 'fixture-high-model';
+const VISION_LOW_MODEL_ID = 'fixture-vision-low-model';
+const VISION_HIGH_MODEL_ID = 'fixture-vision-high-model';
+
 /** Cheapest → most capable, exactly as `escalationLadder` is derived. */
-const LADDER = ['glm-5.2', 'claude-sonnet-5', 'claude-opus-5'] as const;
+const LADDER = [LOW_MODEL_ID, MID_MODEL_ID, HIGH_MODEL_ID] as const;
 
 const session = (modelKey: string, priorTurnCount = 3): TaskFamilySessionRoute => ({
   family: 'code_execution',
@@ -32,13 +38,13 @@ describe('first turn', () => {
       decideTaskFamilyContinuity({
         session: null,
         nextFamily: 'code_execution',
-        candidateModelKey: 'claude-sonnet-5',
+        candidateModelKey: MID_MODEL_ID,
         ladder: [...LADDER],
       }),
     ).toEqual({
       action: 'start',
       reasonCode: 'session_started',
-      modelKey: 'claude-sonnet-5',
+      modelKey: MID_MODEL_ID,
       rung: 1,
     });
   });
@@ -47,7 +53,7 @@ describe('first turn', () => {
     const decision = decideTaskFamilyContinuity({
       session: null,
       nextFamily: 'simple_chat',
-      candidateModelKey: 'glm-5.2',
+      candidateModelKey: LOW_MODEL_ID,
       ladder: [...LADDER],
     });
     expect(decision.cache).toBeUndefined();
@@ -57,15 +63,15 @@ describe('first turn', () => {
 describe('stickiness', () => {
   it('keeps the pin when nothing failed, even if the router preferred another model', () => {
     const decision = decideTaskFamilyContinuity({
-      session: session('claude-sonnet-5'),
+      session: session(MID_MODEL_ID),
       nextFamily: 'code_execution',
-      candidateModelKey: 'glm-5.2',
+      candidateModelKey: LOW_MODEL_ID,
       ladder: [...LADDER],
     });
     expect(decision).toMatchObject({
       action: 'pin',
       reasonCode: 'family_pinned',
-      modelKey: 'claude-sonnet-5',
+      modelKey: MID_MODEL_ID,
     });
   });
 
@@ -73,9 +79,9 @@ describe('stickiness', () => {
     for (const failureSignal of ['', '   ', null, undefined]) {
       expect(
         decideTaskFamilyContinuity({
-          session: session('claude-sonnet-5'),
+          session: session(MID_MODEL_ID),
           nextFamily: 'code_execution',
-          candidateModelKey: 'claude-opus-5',
+          candidateModelKey: HIGH_MODEL_ID,
           ladder: [...LADDER],
           failureSignal,
         }).action,
@@ -85,15 +91,15 @@ describe('stickiness', () => {
 
   it('releases the pin when the family changes and prices the cache reset', () => {
     const decision = decideTaskFamilyContinuity({
-      session: session('claude-sonnet-5', 5),
+      session: session(MID_MODEL_ID, 5),
       nextFamily: 'vision',
-      candidateModelKey: 'gemini-3.6-flash',
-      ladder: ['gemini-3.5-flash-lite', 'gemini-3.6-flash'],
+      candidateModelKey: VISION_HIGH_MODEL_ID,
+      ladder: [VISION_LOW_MODEL_ID, VISION_HIGH_MODEL_ID],
     });
     expect(decision).toMatchObject({
       action: 'reclassify',
       reasonCode: 'family_changed',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: VISION_HIGH_MODEL_ID,
     });
     expect(decision.cache).toMatchObject({ resetsCache: true, warn: true, reason: 'cache-reset' });
   });
@@ -101,9 +107,9 @@ describe('stickiness', () => {
   it('does not apply continuity to an unclassified turn', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('claude-sonnet-5'),
+        session: session(MID_MODEL_ID),
         nextFamily: null,
-        candidateModelKey: 'glm-5.2',
+        candidateModelKey: LOW_MODEL_ID,
         ladder: [...LADDER],
       }),
     ).toMatchObject({ action: 'reclassify', reasonCode: 'family_unclassified' });
@@ -113,16 +119,16 @@ describe('stickiness', () => {
 describe('escalation-only switching', () => {
   it('escalates on a failure signal and prices the cache reset', () => {
     const decision = decideTaskFamilyContinuity({
-      session: session('glm-5.2', 4),
+      session: session(LOW_MODEL_ID, 4),
       nextFamily: 'code_execution',
-      candidateModelKey: 'claude-opus-5',
+      candidateModelKey: HIGH_MODEL_ID,
       ladder: [...LADDER],
-      failureSignal: 'Insufficient credits for glm-5.2, switched to claude-opus-5',
+      failureSignal: `Insufficient credits for ${LOW_MODEL_ID}, switched to ${HIGH_MODEL_ID}`,
     });
     expect(decision).toMatchObject({
       action: 'escalate',
       reasonCode: 'escalated_on_failure',
-      modelKey: 'claude-opus-5',
+      modelKey: HIGH_MODEL_ID,
       rung: 2,
     });
     expect(decision.cache?.resetsCache).toBe(true);
@@ -131,41 +137,41 @@ describe('escalation-only switching', () => {
   it('refuses a downgrade and keeps the pin', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('claude-opus-5'),
+        session: session(HIGH_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'glm-5.2',
+        candidateModelKey: LOW_MODEL_ID,
         ladder: [...LADDER],
         failureSignal: 'provider_error',
       }),
     ).toMatchObject({
       action: 'hold',
       reasonCode: 'ladder_exhausted',
-      modelKey: 'claude-opus-5',
+      modelKey: HIGH_MODEL_ID,
     });
   });
 
   it('refuses a downgrade below a mid-ladder pin', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('claude-sonnet-5'),
+        session: session(MID_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'glm-5.2',
+        candidateModelKey: LOW_MODEL_ID,
         ladder: [...LADDER],
         failureSignal: 'timeout',
       }),
     ).toMatchObject({
       action: 'hold',
       reasonCode: 'downgrade_blocked',
-      modelKey: 'claude-sonnet-5',
+      modelKey: MID_MODEL_ID,
     });
   });
 
   it('refuses a lateral move — it buys nothing and pays the full cache reset', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('claude-sonnet-5'),
+        session: session(MID_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'claude-sonnet-5',
+        candidateModelKey: MID_MODEL_ID,
         ladder: [...LADDER],
         failureSignal: 'provider_error',
       }),
@@ -175,9 +181,9 @@ describe('escalation-only switching', () => {
   it('refuses a candidate that is not on the ladder at all', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('glm-5.2'),
+        session: session(LOW_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'some-model-not-on-this-ladder',
+        candidateModelKey: 'fixture-off-ladder-model',
         ladder: [...LADDER],
         failureSignal: 'provider_error',
       }),
@@ -187,9 +193,9 @@ describe('escalation-only switching', () => {
   it('reports an exhausted ladder rather than silently retrying the top rung', () => {
     expect(
       decideTaskFamilyContinuity({
-        session: session('claude-opus-5'),
+        session: session(HIGH_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'claude-opus-5',
+        candidateModelKey: HIGH_MODEL_ID,
         ladder: [...LADDER],
         failureSignal: 'verifier_fail',
       }),
@@ -197,12 +203,12 @@ describe('escalation-only switching', () => {
   });
 
   it('never returns a model the caller did not offer', () => {
-    const offered = new Set(['claude-sonnet-5', 'glm-5.2']);
+    const offered = new Set([MID_MODEL_ID, LOW_MODEL_ID]);
     for (const failureSignal of [undefined, 'provider_error']) {
       const decision = decideTaskFamilyContinuity({
-        session: session('claude-sonnet-5'),
+        session: session(MID_MODEL_ID),
         nextFamily: 'code_execution',
-        candidateModelKey: 'glm-5.2',
+        candidateModelKey: LOW_MODEL_ID,
         ladder: [...LADDER],
         failureSignal,
       });
@@ -213,7 +219,7 @@ describe('escalation-only switching', () => {
   it('walks the ladder one rung at a time across repeated failures', () => {
     let pin: TaskFamilySessionRoute | null = null;
     const trace: string[] = [];
-    for (const candidate of ['glm-5.2', 'claude-sonnet-5', 'claude-opus-5', 'claude-opus-5']) {
+    for (const candidate of [LOW_MODEL_ID, MID_MODEL_ID, HIGH_MODEL_ID, HIGH_MODEL_ID]) {
       const decision = decideTaskFamilyContinuity({
         session: pin,
         nextFamily: 'code_execution',
@@ -225,17 +231,17 @@ describe('escalation-only switching', () => {
       pin = applyTaskFamilyContinuity(pin, 'code_execution', decision);
     }
     expect(trace).toEqual([
-      'start:glm-5.2',
-      'escalate:claude-sonnet-5',
-      'escalate:claude-opus-5',
-      'hold:claude-opus-5',
+      `start:${LOW_MODEL_ID}`,
+      `escalate:${MID_MODEL_ID}`,
+      `escalate:${HIGH_MODEL_ID}`,
+      `hold:${HIGH_MODEL_ID}`,
     ]);
   });
 });
 
 describe('applyTaskFamilyContinuity', () => {
   it('keeps the existing pin on pin and hold', () => {
-    const existing = session('claude-sonnet-5', 6);
+    const existing = session(MID_MODEL_ID, 6);
     for (const action of ['pin', 'hold'] as const) {
       expect(
         applyTaskFamilyContinuity(existing, 'code_execution', {
@@ -250,22 +256,22 @@ describe('applyTaskFamilyContinuity', () => {
 
   it('resets the cached turn count when the model actually moves', () => {
     expect(
-      applyTaskFamilyContinuity(session('glm-5.2', 9), 'code_execution', {
+      applyTaskFamilyContinuity(session(LOW_MODEL_ID, 9), 'code_execution', {
         action: 'escalate',
         reasonCode: 'escalated_on_failure',
-        modelKey: 'claude-opus-5',
+        modelKey: HIGH_MODEL_ID,
         rung: 2,
       }),
-    ).toEqual({ family: 'code_execution', modelKey: 'claude-opus-5', priorTurnCount: 0 });
+    ).toEqual({ family: 'code_execution', modelKey: HIGH_MODEL_ID, priorTurnCount: 0 });
   });
 
   it('leaves the pin alone for an unclassified turn', () => {
-    const existing = session('glm-5.2');
+    const existing = session(LOW_MODEL_ID);
     expect(
       applyTaskFamilyContinuity(existing, null, {
         action: 'reclassify',
         reasonCode: 'family_unclassified',
-        modelKey: 'glm-5.2',
+        modelKey: LOW_MODEL_ID,
         rung: 0,
       }),
     ).toBe(existing);

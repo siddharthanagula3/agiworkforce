@@ -469,7 +469,7 @@ mod tests {
             .find(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
             .expect("catalog must contain an OpenAI reasoning model");
         // No `chat`-type OpenAI model remains after the latest-family-only
-        // sweep (gpt-5.6 line is all reasoning); any non-reasoning OpenAI
+        // sweep; any non-reasoning OpenAI
         // model exercises the OpenAiCompat (non-Responses) decoder branch.
         let non_reasoning = catalog
             .values()

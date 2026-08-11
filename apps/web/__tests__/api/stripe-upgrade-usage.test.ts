@@ -18,7 +18,7 @@ describe('paid-plan upgrade usage carry-forward', () => {
     dbMocks.query.mockResolvedValue([{ account_id: 'credit-account-1' }]);
   });
 
-  it('moves the active account into the new period while preserving spend and top-ups', async () => {
+  it('adds the upgrade delta once even when the renewal period is unchanged', async () => {
     const periodStart = new Date('2026-07-18T18:00:00.000Z');
     const periodEnd = new Date('2026-08-18T18:00:00.000Z');
 
@@ -41,13 +41,15 @@ describe('paid-plan upgrade usage carry-forward', () => {
       periodStart.toISOString(),
       periodEnd.toISOString(),
       4_000,
+      `subscription-123:${periodStart.toISOString()}:${periodEnd.toISOString()}:4000`,
     ]);
     expect(normalizedSql).toContain(
       'credits_allocated_cents = token_credits.credits_allocated_cents + $5',
     );
     expect(normalizedSql).not.toContain('credits_used_cents = 0');
     expect(normalizedSql).not.toContain('flagship_used_today_cents = 0');
-    expect(normalizedSql).toContain('is distinct from');
+    expect(normalizedSql).toContain("metadata->>'upgrade_allocation_key' = $6");
+    expect(normalizedSql).toContain("'paid plan upgrade allocation'");
   });
 
   it('fails closed instead of silently resetting usage when no account can be carried', async () => {

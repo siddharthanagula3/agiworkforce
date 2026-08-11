@@ -6,6 +6,7 @@ const routeMocks = vi.hoisted(() => ({
   auth: vi.fn(),
   headers: vi.fn(),
   redirect: vi.fn(),
+  requireCurrentTermsAcceptance: vi.fn(),
 }));
 
 vi.mock('next/dynamic', () => ({
@@ -27,6 +28,11 @@ vi.mock('next/navigation', () => ({
   redirect: (url: string) => routeMocks.redirect(url),
 }));
 
+vi.mock('@/lib/server/require-current-terms', () => ({
+  requireCurrentTermsAcceptance: (...args: unknown[]) =>
+    routeMocks.requireCurrentTermsAcceptance(...args),
+}));
+
 vi.mock('@features/chat/pages/UnifiedChatPage', () => ({
   default: () => <div data-testid="unified-chat-page">UnifiedChatPage</div>,
 }));
@@ -43,6 +49,7 @@ beforeEach(() => {
   routeMocks.auth.mockResolvedValue({ userId: 'user_123' });
   routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/chat' }));
   routeMocks.redirect.mockReset();
+  routeMocks.requireCurrentTermsAcceptance.mockResolvedValue(undefined);
 });
 
 describe('/chat route', () => {
@@ -77,5 +84,19 @@ describe('/chat route', () => {
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.redirect).toHaveBeenCalledWith('/login?redirectTo=%2Fchat');
+  });
+
+  it('enforces current terms against the exact requested chat path', async () => {
+    routeMocks.headers.mockResolvedValue(
+      new Headers({ 'x-agi-pathname': '/chat/session-123?panel=artifacts' }),
+    );
+    const { default: ChatLayout } = await import('../../../../app/chat/layout');
+
+    await ChatLayout({ children: <div>Chat</div> });
+
+    expect(routeMocks.requireCurrentTermsAcceptance).toHaveBeenCalledWith(
+      'user_123',
+      '/chat/session-123?panel=artifacts',
+    );
   });
 });

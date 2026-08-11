@@ -85,6 +85,6 @@ mod tests {
         assert!(!is_explicit_model_selection(Some("")));
         assert!(!is_explicit_model_selection(Some("auto")));
         assert!(!is_explicit_model_selection(Some("auto-fast")));
-        assert!(is_explicit_model_selection(Some("gpt-5.6-sol")));
+        assert!(is_explicit_model_selection(Some("fixture-explicit-model")));
     }
 }

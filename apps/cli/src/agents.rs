@@ -23,7 +23,7 @@ pub struct AgentDefinition {
     pub name: String,
     /// Human-readable description from frontmatter.
     pub description: String,
-    /// Optional model override (e.g. "claude-sonnet-5").
+    /// Optional model override selected by the user or inherited from a catalog route.
     pub model: Option<String>,
     /// Allowed tools whitelist. When set, only these tools are available.
     pub tools: Option<Vec<String>>,
@@ -972,7 +972,7 @@ mod tests {
             AgentDefinition {
                 name: "researcher".to_string(),
                 description: "Use for deep multi-source research".to_string(),
-                model: Some("claude-sonnet-5".to_string()),
+                model: Some("fixture-agent-model".to_string()),
                 tools: Some(vec!["web_search".to_string(), "read_file".to_string()]),
                 disallowed_tools: None,
                 max_turns: Some(20),
@@ -1000,7 +1000,7 @@ mod tests {
             out.contains("when to use: Use for deep multi-source research"),
             "{out}"
         );
-        assert!(out.contains("model:       claude-sonnet-5"), "{out}");
+        assert!(out.contains("model:       fixture-agent-model"), "{out}");
         assert!(out.contains("web_search, read_file"), "{out}");
         assert!(out.contains("permission:  plan"), "{out}");
         // Minimal agent falls back to inherited defaults, not fabricated data.
@@ -1021,7 +1021,7 @@ mod tests {
         let content = r#"---
 name: researcher
 description: "Research agent for deep web analysis"
-model: claude-sonnet-5
+model: fixture-agent-model
 tools: [read_file, search_files, web_search, web_fetch]
 disallowedTools: [write_file, run_command]
 maxTurns: 20
@@ -1033,7 +1033,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let fm = parse_agent_frontmatter(content).expect("parse should succeed");
         assert_eq!(fm.name, "researcher");
         assert_eq!(fm.description, "Research agent for deep web analysis");
-        assert_eq!(fm.model.as_deref(), Some("claude-sonnet-5"));
+        assert_eq!(fm.model.as_deref(), Some("fixture-agent-model"));
         assert_eq!(
             fm.tools.as_deref(),
             Some(
@@ -1127,7 +1127,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agents = vec![AgentDefinition {
             name: "researcher".to_string(),
             description: "Research agent".to_string(),
-            model: Some("claude-sonnet-5".to_string()),
+            model: Some("fixture-agent-model".to_string()),
             tools: None,
             disallowed_tools: None,
             max_turns: Some(20),
@@ -1138,7 +1138,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let out = format_agent_list(&agents);
         assert!(out.contains("researcher"));
         assert!(out.contains("Research agent"));
-        assert!(out.contains("model=claude-sonnet-5"));
+        assert!(out.contains("model=fixture-agent-model"));
         assert!(out.contains("max_turns=20"));
         assert!(out.contains("1 agent(s) available."));
     }
@@ -1183,7 +1183,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agent = AgentDefinition {
             name: "reviewer".to_string(),
             description: "Review code".to_string(),
-            model: Some("claude-sonnet-5".to_string()),
+            model: Some("fixture-agent-model".to_string()),
             tools: Some(vec!["read_file".to_string()]),
             disallowed_tools: Some(vec!["run_command".to_string()]),
             max_turns: Some(12),
@@ -1195,7 +1195,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let out = format_agent_detail(&agent);
 
         assert!(out.contains("Agent: reviewer"));
-        assert!(out.contains("model: claude-sonnet-5"));
+        assert!(out.contains("model: fixture-agent-model"));
         assert!(out.contains("permission_mode: plan"));
         assert!(out.contains("disallowed_tools: run_command"));
         assert!(out.contains("You review code."));
@@ -1335,7 +1335,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
     #[test]
     fn test_apply_to_session_sets_model_and_tools() {
         let ctx = make_test_context();
-        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
+        let mut session = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
         let agent = AgentDefinition {
             name: "test-agent".to_string(),
             description: "Test".to_string(),
@@ -1376,13 +1376,25 @@ You are a research specialist. Your job is to analyze topics deeply."#;
     #[test]
     fn test_apply_to_session_with_model_override() {
         let ctx = make_test_context();
-        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
+        let models = crate::model_catalog::models_for("anthropic");
+        let parent_model = models
+            .first()
+            .expect("catalog must contain an Anthropic parent model")
+            .id
+            .clone();
+        let override_model = models
+            .iter()
+            .find(|model| model.id != parent_model)
+            .expect("catalog must contain a distinct Anthropic override model")
+            .id
+            .clone();
+        let mut session = crate::agent::AgentSession::new(&parent_model, &ctx, None);
         let initial_model = session.model.clone();
 
         let agent = AgentDefinition {
             name: "model-override-agent".to_string(),
             description: "Test".to_string(),
-            model: Some("claude-opus-5".to_string()),
+            model: Some(override_model.clone()),
             tools: None,
             disallowed_tools: None,
             max_turns: None,
@@ -1393,13 +1405,13 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
         agent.apply_to_session(&mut session);
         assert_ne!(session.model, initial_model);
-        assert_eq!(session.model, "claude-opus-5");
+        assert_eq!(session.model, override_model);
     }
 
     #[test]
     fn model_invoked_agent_can_only_narrow_parent_authority() {
         let ctx = make_test_context();
-        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
+        let mut session = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
         session.allowed_tools = Some(vec!["read_file".to_string(), "write_file".to_string()]);
         session.disallowed_tools = vec!["web_fetch".to_string()];
         session.max_turns = Some(15);
@@ -1409,7 +1421,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agent = AgentDefinition {
             name: "reviewer".to_string(),
             description: "Review safely".to_string(),
-            model: Some("claude-opus-5".to_string()),
+            model: Some("fixture-override-model".to_string()),
             tools: Some(vec!["read_file".to_string(), "run_command".to_string()]),
             disallowed_tools: Some(vec!["write_file".to_string()]),
             max_turns: Some(20),

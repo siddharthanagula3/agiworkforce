@@ -23,6 +23,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { mapProjectRow } from '@/lib/projects';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,12 +42,16 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [project] = await db.query<Record<string, unknown>>(
     `select * from user_projects
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
       limit 1`,
-    [id, userId],
+    [id, userId, organizationId],
   );
   if (!project) {
     throw createError.notFound('Project not found');

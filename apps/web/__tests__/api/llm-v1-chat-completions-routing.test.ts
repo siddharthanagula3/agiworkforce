@@ -257,6 +257,10 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 // Import the route AFTER all vi.mock() calls
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+const GOOGLE_CHAT_MODEL = requireProviderDefaultModel('google');
+const OPENAI_CHAT_MODEL = requireProviderDefaultModel('openai');
 
 // ---- helpers ----
 
@@ -351,7 +355,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
 
     mockSendRequest.mockResolvedValue({
       content: 'Here is the implementation...',
-      model: 'gemini-3.5-flash-lite',
+      model: GOOGLE_CHAT_MODEL,
       promptTokens: 120,
       completionTokens: 80,
       totalTokens: 200,
@@ -601,7 +605,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
   // of really reaching the Google branch.
   // -------------------------------------------------------------------------
   it('routes an explicit gemini model through the Google adapter path', async () => {
-    const request = makeRequestForModel('gemini-3.6-flash', 'hello');
+    const request = makeRequestForModel(GOOGLE_CHAT_MODEL, 'hello');
     const response = await POST(request);
 
     expect(response.status).toBe(200);
@@ -632,7 +636,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
       plan_tier: 'max',
       stripe_price_id: 'price_max',
     });
-    const request = makeRequestForModel('gpt-5.6-sol', 'hello');
+    const request = makeRequestForModel(OPENAI_CHAT_MODEL, 'hello');
     const response = await POST(request);
 
     expect(response.status).toBe(200);

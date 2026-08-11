@@ -5,8 +5,8 @@ export type LocalRuntimeTier = 1 | 2 | 3;
 
 /**
  * Fine-grained Tier 1 system-model status, sourced from the native side's
- * feature-download state (Android AICore `FeatureStatus`; iOS is always
- * 'unavailable' while Foundation Models is stubbed). `tier1Available` stays a
+ * feature-download state (Android AICore `FeatureStatus`; iOS reports the
+ * Foundation Models runtime availability). `tier1Available` stays a
  * plain boolean (true only for 'available') for existing callers; use
  * `tier1Status` when the caller needs to distinguish "not supported" from
  * "fetching in the background".
@@ -39,7 +39,7 @@ export interface ChatMessage {
 
 /**
  * Opaque tool descriptor passed to the model's chat template.
- * Shape depends on the model — Qwen3 uses the Qwen-Agent JSON schema.
+ * Shape depends on the catalog-selected model and its tokenizer template.
  * Only has effect when the model's tokenizer_config.json includes a tool-call template.
  */
 export type LLMTool = object;

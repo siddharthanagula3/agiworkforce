@@ -6,7 +6,11 @@ import {
   loadPluginCatalog,
   type PluginCatalogResult,
 } from '@/features/plugins/server/registry-source';
-import { isPluginEntryInstallable, type PluginRegistryEntry } from '@agiworkforce/types';
+import {
+  isPluginEntryInstallable,
+  isPluginEntryWebInstallable,
+  type PluginRegistryEntry,
+} from '@agiworkforce/types';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
 /**
@@ -42,6 +46,7 @@ function sourceLabel(source: PluginRegistryEntry['source']): string {
 }
 
 function statusLabel(entry: PluginRegistryEntry): string {
+  if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
   if (isPluginEntryInstallable(entry)) return 'Installable';
   if (entry.status === 'deprecated') return 'Deprecated';
   return 'Declared — not installable yet';
@@ -71,7 +76,7 @@ function availabilityClaim(catalog: PluginCatalogResult, installableCount: numbe
     return 'The registry holds no packs yet.';
   }
   if (installableCount === 0) {
-    return 'No pack is installable yet — every entry is a declared pack with no published artifact.';
+    return 'No pack is installable in this environment yet.';
   }
   return `${installableCount} of ${catalog.entries.length} packs are installable today; the rest are declared and not yet published.`;
 }
@@ -79,7 +84,9 @@ function availabilityClaim(catalog: PluginCatalogResult, installableCount: numbe
 export default async function PluginsPage() {
   const catalog = await loadPluginCatalog();
   const entries = catalog.status === 'ok' ? catalog.entries : [];
-  const installableCount = entries.filter(isPluginEntryInstallable).length;
+  const installableCount = entries.filter(
+    (entry) => isPluginEntryWebInstallable(entry) || isPluginEntryInstallable(entry),
+  ).length;
 
   return (
     <div data-design="agi">
@@ -119,9 +126,9 @@ export default async function PluginsPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">What a status means</h3>
               <p className="agi-reason-p">
-                A pack is only marked installable once a signed-off manifest is published and its
-                checksum is recorded. Until then it is listed as declared, and nothing pretends to
-                install it.
+                Website packs install only from reviewed embedded manifests. CLI and Desktop packs
+                still require a separately published, integrity-pinned artifact. Until one of those
+                paths exists, the entry remains declared and no control pretends to install it.
               </p>
             </li>
           </ul>

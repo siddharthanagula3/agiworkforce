@@ -55,8 +55,8 @@ const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof v
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-test-001',
-    chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as any,
-    requestedModel: 'gpt-5.6-sol',
+    chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    requestedModel: 'fixture-model',
     provider: 'openai',
     estimatedCostCents: 0,
     quotaWarningHeader: null,
@@ -116,11 +116,11 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Hello' }, index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
       }),
       JSON.stringify({
         choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
         usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
       }),
       '[DONE]',
@@ -138,7 +138,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-001',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         inputTokens: 120,
         outputTokens: 80,
@@ -151,11 +151,11 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Hello' }, index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
       }),
       JSON.stringify({
         choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
         usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
       }),
       '[DONE]',
@@ -184,7 +184,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       },
       outcome: 'completed',
       provider: 'openai',
-      model: 'gpt-5.6-sol',
+      model: 'fixture-model',
       usage: expect.objectContaining({
         promptTokens: 120,
         completionTokens: 80,
@@ -197,7 +197,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
   it('captures cached_tokens from prompt_tokens_details (Chat Completions shape)', async () => {
     const events = [
-      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'gpt-5.6-sol' }),
+      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'fixture-model' }),
       JSON.stringify({
         choices: [],
         usage: {
@@ -222,7 +222,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-002',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         cacheReadInputTokens: 150,
       }),
@@ -232,7 +232,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
   it('captures cached_tokens from input_tokens_details (Responses API shape)', async () => {
     const events = [
-      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'gpt-5.6-sol' }),
+      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'fixture-model' }),
       JSON.stringify({
         choices: [],
         usage: {
@@ -257,7 +257,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-003',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         cacheReadInputTokens: 80,
       }),
@@ -269,7 +269,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Hi' }, index: 0 }],
-        model: 'anthropic/claude-sonnet-5',
+        model: 'vendor/fixture-model',
       }),
       JSON.stringify({
         choices: [],
@@ -287,7 +287,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const response = await buildStreamResponse(
       makeRequest() as any,
       makeStream(events),
-      makeProcessed({ provider: 'openrouter', requestedModel: 'anthropic/claude-sonnet-5' }),
+      makeProcessed({ provider: 'openrouter', requestedModel: 'vendor/fixture-model' }),
       'user-004',
       'token-004',
     );
@@ -309,7 +309,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Answer' }, index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
       }),
       JSON.stringify({
         choices: [],
@@ -335,7 +335,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-005',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         reasoningOutputTokens: 320,
       }),
@@ -347,7 +347,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Answer' }, index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-model',
       }),
       JSON.stringify({
         choices: [],
@@ -373,7 +373,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-006',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         reasoningOutputTokens: 240,
       }),
@@ -383,7 +383,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
   it('passes undefined reasoningOutputTokens when no reasoning details present', async () => {
     const events = [
-      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'gpt-5.6-sol' }),
+      JSON.stringify({ choices: [{ delta: { content: 'Hi' }, index: 0 }], model: 'fixture-model' }),
       JSON.stringify({
         choices: [],
         usage: { prompt_tokens: 50, completion_tokens: 25, total_tokens: 75 },
@@ -404,7 +404,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     // reasoningOutputTokens should be undefined (not 0) when not present
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-007',
-      'gpt-5.6-sol',
+      'fixture-model',
       expect.objectContaining({
         reasoningOutputTokens: undefined,
       }),

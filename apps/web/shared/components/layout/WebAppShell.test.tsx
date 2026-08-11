@@ -15,6 +15,23 @@ const routerState = vi.hoisted(() => ({
   pathname: '/chat/projects',
 }));
 
+const shellState = vi.hoisted(() => ({
+  auth: {
+    user: { name: 'Sid', email: 'sid@example.com' } as {
+      name: string;
+      email: string;
+    } | null,
+    isLoading: false,
+    initialized: true,
+  },
+  billing: {
+    subscription: { tier: 'free' } as { tier: string } | null,
+    isLoading: false,
+    initialized: true,
+  },
+  conversationsLoading: false,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerState.push }),
   usePathname: () => routerState.pathname,
@@ -25,8 +42,14 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
-  Sidebar: (props: { collapsed?: boolean }) => (
-    <div data-testid="app-sidebar" data-collapsed={String(props.collapsed ?? false)} />
+  Sidebar: (props: { collapsed?: boolean; isLoading?: boolean; footerSlot?: React.ReactNode }) => (
+    <div
+      data-testid="app-sidebar"
+      data-collapsed={String(props.collapsed ?? false)}
+      data-loading={String(props.isLoading ?? false)}
+    >
+      {props.footerSlot}
+    </div>
   ),
   DropdownMenu: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
@@ -41,6 +64,7 @@ vi.mock('@/lib/hooks/useConversations', () => ({
     conversations: [],
     deleteConversation: vi.fn(),
     updateConversation: vi.fn(),
+    isLoading: shellState.conversationsLoading,
   }),
 }));
 
@@ -51,14 +75,19 @@ vi.mock('@shared/stores/web-chat-store', () => ({
 
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: () => ({
-    user: { name: 'Sid', email: 'sid@example.com' },
+    ...shellState.auth,
     logout: vi.fn(),
   }),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
-  useBillingStore: (selector: (state: { subscription: { tier: string } }) => unknown) =>
-    selector({ subscription: { tier: 'free' } }),
+  useBillingStore: (
+    selector: (state: {
+      subscription: { tier: string } | null;
+      isLoading: boolean;
+      initialized: boolean;
+    }) => unknown,
+  ) => selector(shellState.billing),
 }));
 
 vi.mock('@/features/projects', () => ({
@@ -92,6 +121,13 @@ beforeEach(() => {
   routerState.pathname = '/chat/projects';
   mediaState.matches = false;
   mediaState.listeners.clear();
+  shellState.auth.user = { name: 'Sid', email: 'sid@example.com' };
+  shellState.auth.isLoading = false;
+  shellState.auth.initialized = true;
+  shellState.billing.subscription = { tier: 'free' };
+  shellState.billing.isLoading = false;
+  shellState.billing.initialized = true;
+  shellState.conversationsLoading = false;
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     get matches() {
       return mediaState.matches;
@@ -111,6 +147,28 @@ beforeEach(() => {
 });
 
 describe('WebAppShell responsive navigation', () => {
+  it('renders honest loading chrome while account and conversations hydrate', () => {
+    shellState.auth.user = null;
+    shellState.auth.isLoading = true;
+    shellState.auth.initialized = false;
+    shellState.billing.subscription = null;
+    shellState.billing.isLoading = true;
+    shellState.billing.initialized = false;
+    // Even before the conversations hook begins fetching, unresolved auth
+    // must keep the sidebar out of its genuine-empty state.
+    shellState.conversationsLoading = false;
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading account' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Account menu for User' })).toBeNull();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-loading', 'true');
+  });
+
   it('desktop: renders the persistent sidebar and no mobile navigation trigger', () => {
     render(
       <WebAppShell>

@@ -19,7 +19,11 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import {
+  requireProviderDefaultModel,
+  type ChatRequest,
+  type StreamChunk,
+} from '@agiworkforce/types';
 
 type AdapterMode = 'stream-then-hang' | 'hang-before-token' | 'flood' | 'tool-call-then-hang';
 
@@ -157,7 +161,7 @@ vi.mock('../../src/lib/providerAdapters', () => ({
 const { llmRouter } = await import('../../src/routes/llm');
 const { errorHandler } = await import('../../src/middleware/errorHandler');
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = requireProviderDefaultModel('anthropic');
 
 function rpcArgs(fn: string): Record<string, unknown> | undefined {
   return state.rpcCalls.find((call) => call.fn === fn)?.args;

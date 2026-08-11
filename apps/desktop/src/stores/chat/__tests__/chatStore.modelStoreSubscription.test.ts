@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { getModelContextWindow } from '../../../constants/llm';
+
+const OPENAI_TEST_MODEL_ID = requireProviderDefaultModel('openai');
 
 const CHAT_STORE_MODEL_SUBSCRIPTION_STATE = Symbol.for(
   'agiworkforce.chatStore.modelStoreSubscriptionState',
@@ -33,7 +36,7 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
+        getState: () => ({ selectedModel: OPENAI_TEST_MODEL_ID }),
       },
     }));
 
@@ -52,14 +55,14 @@ describe('chatStore modelStore subscription', () => {
         _selector: (state: { selectedModel: string | null }) => string | null,
         listener: (selectedModel: string | null) => void,
       ) => {
-        listener('gpt-5.6-sol');
+        listener(OPENAI_TEST_MODEL_ID);
         return unsubscribe;
       },
     );
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
+        getState: () => ({ selectedModel: OPENAI_TEST_MODEL_ID }),
         subscribe,
       },
     }));
@@ -70,7 +73,9 @@ describe('chatStore modelStore subscription', () => {
 
     expect(subscribe).toHaveBeenCalled();
     expect(unsubscribe).not.toHaveBeenCalled();
-    expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.6-sol'));
+    expect(useChatStore.getState().tokenUsage.max).toBe(
+      getModelContextWindow(OPENAI_TEST_MODEL_ID),
+    );
   });
 
   it('does not auto-initialize the subscription on import in test mode', async () => {
@@ -78,7 +83,7 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
+        getState: () => ({ selectedModel: OPENAI_TEST_MODEL_ID }),
         subscribe,
       },
     }));

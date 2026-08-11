@@ -89,6 +89,20 @@ describe('ProjectSettingsDialog — delete fires a real server request', () => {
     );
   });
 
+  it('keeps every project action reachable in the narrow two-column layout', () => {
+    renderDialog();
+
+    expect(screen.getByTestId('project-settings-actions').className.split(' ')).toEqual(
+      expect.arrayContaining(['grid', 'grid-cols-2', 'sm:flex']),
+    );
+    expect(screen.getByRole('button', { name: 'Save' }).className.split(' ')).toEqual(
+      expect.arrayContaining(['col-span-2', 'w-full', 'sm:w-auto']),
+    );
+    expect(screen.getByRole('button', { name: /delete project/i }).className.split(' ')).toEqual(
+      expect.arrayContaining(['col-span-2', 'w-full', 'sm:w-auto']),
+    );
+  });
+
   it('sends DELETE /api/projects/[id], then removes locally and toasts success', async () => {
     const fetchMock = vi
       .fn()

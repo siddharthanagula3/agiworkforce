@@ -460,7 +460,7 @@ mod integration_tests {
         };
         metrics.calculate_speedup();
 
-        // Should achieve 4.5x speedup (matching Kimi K2.5 target)
+        // Should achieve the configured target speedup.
         assert!((metrics.speedup_ratio - 4.5).abs() < 0.01);
     }
 

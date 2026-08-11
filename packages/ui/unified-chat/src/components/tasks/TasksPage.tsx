@@ -20,6 +20,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
+import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
 import { TaskDetailPanel } from './TaskDetailPanel';
 import {
   TASK_TONE_BADGE_CLASS,
@@ -452,7 +453,9 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                         </span>
                       </span>
                       <span className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="truncate">{run.model}</span>
+                        <span className="truncate">
+                          {getManagedModelPresentationLabel(run.model)}
+                        </span>
                         <span aria-hidden>·</span>
                         <span className="shrink-0">
                           {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}

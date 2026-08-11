@@ -121,7 +121,7 @@ function fakeDb(options: {
         {
           id: TURN_ID,
           goal: 'Fix the failing test',
-          model: 'claude-x',
+          model: 'fixture-model',
           provider: 'anthropic',
           state: turn.state,
         },

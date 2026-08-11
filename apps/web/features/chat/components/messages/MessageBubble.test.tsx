@@ -1,9 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import {
+  getModelMetadataById,
+  getModels,
+  isExecutableImageModel,
+  isModelLive,
+} from '@agiworkforce/types';
 import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
+
+const IMAGE_MODEL_ID = getModels({
+  modelTypes: ['image'],
+  requireCapabilities: { imageGen: true },
+}).find(isExecutableImageModel)?.id;
+const CHAT_MODEL_ID = getModels({ requireCapabilities: { streaming: true } }).find(
+  (model) => isModelLive(model) && model.modelType !== 'image' && model.modelType !== 'video',
+)?.id;
+
+if (!IMAGE_MODEL_ID || !CHAT_MODEL_ID) {
+  throw new Error('The canonical model catalog must expose live chat and image fixtures');
+}
 
 // Inline stub for the dynamically-imported markdown renderer so tests don't
 // depend on next/dynamic async resolution. importOriginal preserves every
@@ -282,7 +300,7 @@ describe('MessageBubble', () => {
               toolType: 'image-generation',
               imageGenPrompt: 'Draw a star',
               imageGenAspect: '16:9',
-              imageGenModel: 'gpt-image-2',
+              imageGenModel: IMAGE_MODEL_ID,
             },
           })}
         />,
@@ -369,6 +387,108 @@ describe('MessageBubble', () => {
       ).toBeInTheDocument();
     });
 
+    it('offers status resumption when a durable video outlives the client observation window', () => {
+      const onResumeVideo = vi.fn();
+
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoTaskId: '11111111-1111-4111-8111-111111111111',
+              videoStatus: 'processing',
+              videoProgress: 42,
+            },
+          })}
+          onResumeVideo={onResumeVideo}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.getByText('Your video is still being generated')).toBeInTheDocument();
+      expect(screen.getByText(/42% complete/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Resume checking' }));
+      expect(onResumeVideo).toHaveBeenCalledOnce();
+      expect(onResumeVideo).toHaveBeenCalledWith('msg-1');
+    });
+
+    it('uses a video-specific retry only for a terminally failed durable task', () => {
+      const onRetryVideo = vi.fn();
+      const onRegenerate = vi.fn();
+
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Video generation failed: provider rejected the request',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoTaskId: '11111111-1111-4111-8111-111111111111',
+              videoStatus: 'failed',
+              videoRetryable: true,
+            },
+          })}
+          onRegenerate={onRegenerate}
+          onRetryVideo={onRetryVideo}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Try video again' }));
+      expect(onRetryVideo).toHaveBeenCalledOnce();
+      expect(onRetryVideo).toHaveBeenCalledWith('msg-1');
+      expect(onRegenerate).not.toHaveBeenCalled();
+    });
+
+    it('keeps an unbound legacy video failure non-replayable', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Video start response was interrupted.',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoStatus: 'failed',
+            },
+          })}
+          onRegenerate={vi.fn()}
+          onRetryVideo={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Try video again' })).toBeNull();
+      expect(screen.getByText(/older attempt cannot be replayed safely/i)).toBeInTheDocument();
+    });
+
+    it('does not show a persisted unbound placeholder as an endlessly queued provider task after reload', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '\u200B',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoStatus: 'queued',
+            },
+          })}
+          onResumeVideo={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Resume checking' })).toBeNull();
+      expect(screen.getByText('Video start was not confirmed')).toBeInTheDocument();
+      expect(screen.getByText(/you can safely try again/i)).toBeInTheDocument();
+    });
+
     it('renders assistant tool activity in the compact timeline', async () => {
       const msg = makeMessage({
         role: 'assistant',
@@ -434,6 +554,32 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('button', { name: /toggle tool timeline/i })).toBeNull();
     });
 
+    it('keeps a real legacy search action when the canonical envelope has no tool entries', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Verified answer.',
+        metadata: {
+          agentActivity: {
+            schemaVersion: 1,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+            lastSequence: 2,
+            status: 'completed',
+            startedAtMs: 1_000,
+            updatedAtMs: 1_500,
+            completedAtMs: 1_500,
+            entries: [],
+          },
+          tools: [{ id: 'search-action', name: 'web_search', status: 'completed' }],
+        },
+      });
+
+      render(<MessageBubble message={msg} />);
+
+      expect(screen.getByText(/searched the web/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /toggle tool timeline/i })).toBeInTheDocument();
+    });
+
     it('reads a completed assistant response aloud through the list-owned controller', () => {
       const onReadAloud = vi.fn();
       const msg = assistantMsg();
@@ -487,7 +633,7 @@ describe('MessageBubble', () => {
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
     });
 
-    it('shows canonical AGI Work activity instead of the generic thinking fallback', () => {
+    it('shows a concrete response activity instead of the generic thinking fallback', () => {
       const msg = makeMessage({
         role: 'assistant',
         isStreaming: true,
@@ -506,7 +652,7 @@ describe('MessageBubble', () => {
                 kind: 'progress',
                 id: 'progress:starting',
                 progressId: 'starting',
-                summary: 'Starting AGI Work',
+                summary: 'Generating response',
                 status: 'running',
                 startedAtMs: 1_000,
               },
@@ -517,7 +663,7 @@ describe('MessageBubble', () => {
 
       render(<MessageBubble message={msg} />);
 
-      expect(screen.getAllByText('Starting AGI Work').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Generating response').length).toBeGreaterThan(0);
       expect(screen.queryByText('Thinking...')).toBeNull();
     });
 
@@ -751,14 +897,46 @@ describe('MessageBubble', () => {
   });
 
   describe('token metadata in dropdown', () => {
+    it('renders the catalog display name instead of a transport model identifier', () => {
+      const modelName = getModelMetadataById(CHAT_MODEL_ID)?.name;
+      expect(modelName).toBeTruthy();
+
+      render(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant', content: 'test', model: CHAT_MODEL_ID })}
+        />,
+      );
+
+      expect(screen.getByText(modelName!)).toBeInTheDocument();
+      if (modelName !== CHAT_MODEL_ID) {
+        expect(screen.queryByText(CHAT_MODEL_ID)).not.toBeInTheDocument();
+      }
+    });
+
     it('renders without error when tokensUsed and model are set', () => {
       const msg = makeMessage({
         role: 'assistant',
         content: 'test',
-        metadata: { tokensUsed: 1234, model: 'claude-3-5-sonnet' },
+        metadata: { tokensUsed: 1234, model: CHAT_MODEL_ID },
       });
       // The token count appears inside the dropdown menu (portal) · just verify no render error
       expect(() => render(<MessageBubble message={msg} />)).not.toThrow();
+    });
+
+    it('does not resurrect a retired managed model identifier from historical messages', () => {
+      const retiredFixtureId = 'fixture-retired-managed-model';
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'historical answer',
+            model: retiredFixtureId,
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Unavailable model')).toBeInTheDocument();
+      expect(screen.queryByText(retiredFixtureId)).not.toBeInTheDocument();
     });
   });
 
@@ -1055,7 +1233,7 @@ describe('MessageBubble', () => {
               toolType: 'image-generation',
               imageUrl: '/api/files/generated-image',
               imageGenPrompt: 'A crystal robot beside a lake',
-              imageGenModel: 'gpt-image-2',
+              imageGenModel: IMAGE_MODEL_ID,
             },
           })}
         />,

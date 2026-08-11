@@ -2,54 +2,84 @@ use super::{APIError, RequestConfig, Result};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Available Perplexity Sonar models (2025)
+/// Semantic roles for the current Perplexity search catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PerplexityModel {
     /// Standard search model - good balance of speed and quality
     #[default]
-    Sonar,
+    Fast,
     /// Pro search model - more thorough search and reasoning
-    SonarPro,
+    Thorough,
     /// Reasoning model - best for complex questions requiring analysis
-    SonarReasoning,
+    Reasoning,
     /// Deep research model - comprehensive multi-step research
-    SonarDeepResearch,
+    DeepResearch,
 }
 
 impl PerplexityModel {
-    /// Catalog ID for this variant. Every one of these must exist in
-    /// `packages/contracts/types/src/models.json` — see `variants_exist_in_catalog`.
+    /// Catalog ID for this semantic search variant.
+    ///
+    /// Provider model names change independently of this API. Selection stays
+    /// on catalog metadata so replacing a Perplexity model never requires an
+    /// edit here.
     pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Sonar => "sonar",
-            Self::SonarPro => "sonar-pro",
-            Self::SonarReasoning => "sonar-reasoning-pro",
-            Self::SonarDeepResearch => "sonar-deep-research",
-        }
+        use crate::core::llm::models_config;
+
+        let matches_variant = |entry: &&models_config::ModelEntry| {
+            if entry.provider != "perplexity"
+                || entry.model_type != "search"
+                || entry.deprecated == Some(true)
+            {
+                return false;
+            }
+            match self {
+                Self::Fast => entry.quality_tier == "fast" && !entry.capabilities.research,
+                Self::Thorough => {
+                    entry.quality_tier == "balanced"
+                        && entry.capabilities.research
+                        && !entry.capabilities.thinking
+                }
+                Self::Reasoning => {
+                    entry.quality_tier == "balanced" && entry.capabilities.thinking
+                }
+                Self::DeepResearch => {
+                    entry.quality_tier == "best" && entry.capabilities.research
+                }
+            }
+        };
+
+        models_config::get_all_model_entries()
+            .values()
+            .filter(matches_variant)
+            .min_by(|left, right| left.id.cmp(&right.id))
+            .map(|entry| entry.id.as_str())
+            .unwrap_or_else(|| {
+                models_config::get_default_model(&crate::core::llm::Provider::Perplexity)
+            })
     }
 
     /// ID to put on the wire. The catalog owns `apiModelId`, so a Perplexity-side
     /// rename of an ID this enum still names reaches the request body without the
     /// enum being retyped.
     ///
-    /// It does not detect a *retired* ID: `get_api_model_id` returns its input
-    /// unchanged when the key is absent, so a variant dropped from the catalog
-    /// keeps putting the dead literal on the wire. `variants_exist_in_catalog`
-    /// is what fails in that case, in CI, not this function at runtime.
     pub fn wire_id(&self) -> String {
         crate::core::llm::models_config::get_api_model_id(self.as_str())
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "sonar" => Some(Self::Sonar),
-            "sonar-pro" => Some(Self::SonarPro),
-            "sonar-reasoning" | "sonar-reasoning-pro" => Some(Self::SonarReasoning),
-            "sonar-deep-research" => Some(Self::SonarDeepResearch),
-            // Legacy model mapping
-            "pplx-70b-online" | "pplx-7b-online" => Some(Self::Sonar),
-            _ => None,
+        let variants = [
+            Self::Fast,
+            Self::Thorough,
+            Self::Reasoning,
+            Self::DeepResearch,
+        ];
+        if let Some(variant) = variants.into_iter().find(|variant| {
+            variant.as_str().eq_ignore_ascii_case(s) || variant.wire_id().eq_ignore_ascii_case(s)
+        }) {
+            return Some(variant);
         }
+
+        None
     }
 }
 
@@ -143,7 +173,7 @@ impl PerplexityClient {
         })
     }
 
-    /// Quick search using the default Sonar model
+    /// Quick search using the default catalog-selected model.
     pub async fn search(&self, query: &str) -> Result<PerplexityResponse> {
         self.search_with_model(query, self.default_model).await
     }
@@ -196,21 +226,21 @@ impl PerplexityClient {
         }
     }
 
-    /// Deep research query - uses sonar-deep-research for comprehensive analysis
+    /// Deep research query using the catalog's best research variant.
     pub async fn deep_research(&self, query: &str) -> Result<PerplexityResponse> {
-        self.search_with_model(query, PerplexityModel::SonarDeepResearch)
+        self.search_with_model(query, PerplexityModel::DeepResearch)
             .await
     }
 
     /// Pro search - more thorough than standard search
     pub async fn search_pro(&self, query: &str) -> Result<PerplexityResponse> {
-        self.search_with_model(query, PerplexityModel::SonarPro)
+        self.search_with_model(query, PerplexityModel::Thorough)
             .await
     }
 
     /// Reasoning search - best for complex analytical questions
     pub async fn search_reasoning(&self, query: &str) -> Result<PerplexityResponse> {
-        self.search_with_model(query, PerplexityModel::SonarReasoning)
+        self.search_with_model(query, PerplexityModel::Reasoning)
             .await
     }
 
@@ -265,30 +295,33 @@ mod tests {
 
     #[test]
     fn test_perplexity_model_enum() {
-        assert_eq!(PerplexityModel::Sonar.as_str(), "sonar");
-        assert_eq!(PerplexityModel::SonarPro.as_str(), "sonar-pro");
+        let ids = [
+            PerplexityModel::Fast.as_str(),
+            PerplexityModel::Thorough.as_str(),
+            PerplexityModel::Reasoning.as_str(),
+            PerplexityModel::DeepResearch.as_str(),
+        ];
+        assert!(ids.iter().all(|id| !id.is_empty()));
+        let unique = ids.into_iter().collect::<std::collections::HashSet<_>>();
         assert_eq!(
-            PerplexityModel::SonarReasoning.as_str(),
-            "sonar-reasoning-pro"
-        );
-        assert_eq!(
-            PerplexityModel::SonarDeepResearch.as_str(),
-            "sonar-deep-research"
+            unique.len(),
+            4,
+            "every semantic variant needs a distinct catalog model"
         );
     }
 
     /// Every variant must name a live Perplexity search model in the shared
-    /// catalog. Without this the enum can outlive a retired Sonar ID and keep
+    /// catalog. Without this the enum can outlive a retired provider ID and keep
     /// putting it on the wire.
     #[test]
     fn variants_exist_in_catalog() {
         use crate::core::llm::models_config::config;
 
         for model in [
-            PerplexityModel::Sonar,
-            PerplexityModel::SonarPro,
-            PerplexityModel::SonarReasoning,
-            PerplexityModel::SonarDeepResearch,
+            PerplexityModel::Fast,
+            PerplexityModel::Thorough,
+            PerplexityModel::Reasoning,
+            PerplexityModel::DeepResearch,
         ] {
             let entry = config().models.get(model.as_str()).unwrap_or_else(|| {
                 panic!(
@@ -297,41 +330,38 @@ mod tests {
                 )
             });
             assert_eq!(entry.provider, "perplexity", "{model:?} changed provider");
-            assert_eq!(entry.model_type, "search", "{model:?} is not a search model");
+            assert_eq!(
+                entry.model_type, "search",
+                "{model:?} is not a search model"
+            );
             assert!(!model.wire_id().is_empty(), "{model:?} has no wire id");
         }
     }
 
     #[test]
     fn test_perplexity_model_from_str() {
+        let fast = PerplexityModel::Fast.as_str();
+        let pro = PerplexityModel::Thorough.as_str();
         assert_eq!(
-            PerplexityModel::from_str("sonar"),
-            Some(PerplexityModel::Sonar)
+            PerplexityModel::from_str(fast),
+            Some(PerplexityModel::Fast)
         );
         assert_eq!(
-            PerplexityModel::from_str("sonar-pro"),
-            Some(PerplexityModel::SonarPro)
+            PerplexityModel::from_str(pro),
+            Some(PerplexityModel::Thorough)
         );
         assert_eq!(
-            PerplexityModel::from_str("SONAR"),
-            Some(PerplexityModel::Sonar)
+            PerplexityModel::from_str(&fast.to_uppercase()),
+            Some(PerplexityModel::Fast)
         );
         // Legacy model mapping
-        assert_eq!(
-            PerplexityModel::from_str("pplx-70b-online"),
-            Some(PerplexityModel::Sonar)
-        );
-        assert_eq!(
-            PerplexityModel::from_str("pplx-7b-online"),
-            Some(PerplexityModel::Sonar)
-        );
         assert_eq!(PerplexityModel::from_str("unknown"), None);
     }
 
     #[test]
     fn test_perplexity_request_serialization() {
         let request = PerplexityRequest {
-            model: PerplexityModel::Sonar.as_str().to_string(),
+            model: PerplexityModel::Fast.as_str().to_string(),
             messages: vec![Message {
                 role: "user".to_string(),
                 content: "What is AI?".to_string(),
@@ -343,19 +373,19 @@ mod tests {
         };
 
         let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("sonar"));
+        assert!(json.contains(&request.model));
         assert!(json.contains("What is AI?"));
     }
 
     #[test]
     fn search_request_carries_the_domain_allowlist_and_clamps_it() {
         let request = PerplexityClient::search_request(
-            PerplexityModel::SonarPro,
+            PerplexityModel::Thorough,
             "how do I parse json in rust",
             vec!["github.com".to_string(), "docs.rs".to_string()],
         );
         assert_eq!(request.search_domain_filter, vec!["github.com", "docs.rs"]);
-        assert_eq!(request.model, PerplexityModel::SonarPro.wire_id());
+        assert_eq!(request.model, PerplexityModel::Thorough.wire_id());
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"search_domain_filter\""));
         assert!(json.contains("docs.rs"));
@@ -366,7 +396,7 @@ mod tests {
             .map(|i| format!("example{i}.com"))
             .collect();
         let clamped =
-            PerplexityClient::search_request(PerplexityModel::Sonar, "query", oversized.clone());
+            PerplexityClient::search_request(PerplexityModel::Fast, "query", oversized.clone());
         assert_eq!(
             clamped.search_domain_filter.len(),
             MAX_SEARCH_DOMAIN_FILTERS
@@ -381,7 +411,7 @@ mod tests {
     fn test_extract_content() {
         let response = PerplexityResponse {
             id: "test-id".to_string(),
-            model: "sonar".to_string(),
+            model: "fixture-search-model".to_string(),
             created: 1234567890,
             choices: vec![Choice {
                 index: 0,
@@ -408,6 +438,6 @@ mod tests {
 
     #[test]
     fn test_default_model() {
-        assert_eq!(PerplexityModel::default(), PerplexityModel::Sonar);
+        assert_eq!(PerplexityModel::default(), PerplexityModel::Fast);
     }
 }

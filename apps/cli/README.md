@@ -15,7 +15,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v1.7.1 │ claude-sonnet-5 │ anthropic │  main │ 4% ctx
+ AGI Workforce v1.7.1 │ catalog-selected-model │ provider │ main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -108,14 +108,14 @@ network, 5xx, or stream-disconnect, the next model takes over — provider
 auto-switched, banner flashed, JSON event emitted.
 
 ```bash
-agi -m claude-opus-5,gpt-5.6-terra,llama3.1:8b "refactor main.rs"
+agi -m "<primary-model>,<fallback-model>,<local-model>" "refactor main.rs"
 ```
 
 Pair with `--demo` to see the rotation fire deterministically:
 
 ```bash
-agi --demo --json-events exec -m claude-sonnet-5,gpt-5.6-terra "hi"
-# → {"event":"fallback_triggered","from":"claude-sonnet-5","to":"gpt-5.6-terra","reason":"api_rate_limit"}
+agi --demo --json-events exec -m "<primary-model>,<fallback-model>" "hi"
+# → {"event":"fallback_triggered","from":"<primary-model>","to":"<fallback-model>","reason":"api_rate_limit"}
 ```
 
 ### 4. Session replay / fork
@@ -200,10 +200,10 @@ override system, privacy, approval, or tool-safety policy.
 
 ```
 agi --demo --json-events exec \
-  -m claude-sonnet-5,gpt-5.6-terra "refactor main.rs"
+  -m "<primary-model>,<fallback-model>" "refactor main.rs"
 # 1. spawning + ready_for_prompt events
 # 2. demo synthesizes 429
-# 3. ↘ Falling back: claude-sonnet-5 → gpt-5.6-terra (api_rate_limit)
+# 3. ↘ Falling back: <primary-model> → <fallback-model> (api_rate_limit)
 # 4. fallback_triggered JSON event
 # 5. fresh model answers
 # 6. turn_usage + finished events

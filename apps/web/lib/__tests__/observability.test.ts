@@ -97,7 +97,7 @@ describe('redactAttributes', () => {
     const out = redactAttributes({
       'gen_ai.usage.input_tokens': 1200,
       'gen_ai.usage.output_tokens': 40,
-      'gen_ai.request.model': 'claude-sonnet-5',
+      'gen_ai.request.model': 'fixture-model',
       'gen_ai.request.access_token': 'sk-ant-EXAMPLE-abcdefghijklmnop',
       'http.request.header.authorization': 'Bearer abcdefghijklmnop',
       api_key: 'whatever',
@@ -109,7 +109,7 @@ describe('redactAttributes', () => {
 
     expect(out['gen_ai.usage.input_tokens']).toBe(1200);
     expect(out['gen_ai.usage.output_tokens']).toBe(40);
-    expect(out['gen_ai.request.model']).toBe('claude-sonnet-5');
+    expect(out['gen_ai.request.model']).toBe('fixture-model');
     for (const key of [
       'gen_ai.request.access_token',
       'http.request.header.authorization',

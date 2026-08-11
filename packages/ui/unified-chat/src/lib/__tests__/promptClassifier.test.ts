@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { classifyPrompt } from '../promptClassifier';
+import { requireCatalogModel } from '../../test/modelCatalogFixtures';
+
+const imageModel = requireCatalogModel(
+  (model) => model.capabilities.imageGen,
+  'an image-generation model',
+);
 
 describe('classifyPrompt', () => {
   // -------------------------------------------------------------------------
@@ -38,8 +44,8 @@ describe('classifyPrompt', () => {
     expect(r.task).toBe('image_generation');
   });
 
-  it('detects image generation — GPT Image reference', () => {
-    const r = classifyPrompt('use GPT Image to make a picture of a robot');
+  it('detects a current catalog image-model reference', () => {
+    const r = classifyPrompt(`use ${imageModel.name}`);
     expect(r.task).toBe('image_generation');
   });
 
@@ -171,7 +177,7 @@ describe('classifyPrompt', () => {
     const longPrompt = 'word '.repeat(2500); // ≈ 12500 chars ≈ 3125 tokens
     const r = classifyPrompt(longPrompt);
     expect(r.task).toBe('long_context');
-    expect(r.slot).toBe('vision_premium'); // Gemini 3.1 Pro for long context
+    expect(r.slot).toBe('vision_premium'); // Catalog policy owns the backing model.
   });
 
   // -------------------------------------------------------------------------

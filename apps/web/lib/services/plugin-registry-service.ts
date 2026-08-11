@@ -61,6 +61,7 @@ interface PluginRegistryRow {
   publisher_url: string | null;
   source: string;
   status: string;
+  web_installable: boolean;
   declared_skills: unknown;
   required_connectors: unknown;
   capabilities: unknown;
@@ -197,9 +198,9 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
   }
 
   const distribution = normalizeDistribution(row);
-  if (row.status === 'published' && distribution === null) {
+  if (row.status === 'published' && distribution === null && row.web_installable !== true) {
     throw new PluginRegistryDataError(
-      `Registry row ${row.id} claims published but carries no manifest URL`,
+      `Registry row ${row.id} claims published but carries neither a manifest URL nor an embedded Web pack`,
     );
   }
 
@@ -219,6 +220,7 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
     },
     source: row.source,
     status: row.status,
+    webInstallable: row.web_installable === true,
     declaredSkills: normalizeStringList(row.declared_skills),
     requiredConnectors: normalizeStringList(row.required_connectors),
     capabilities: normalizeCapabilities(row.capabilities),

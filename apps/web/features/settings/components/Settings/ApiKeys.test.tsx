@@ -3,23 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiKeysManager } from './ApiKeys';
 
-const createMutate = vi.fn();
-const deleteMutate = vi.fn();
+const { createMutate, deleteMutate, mockApiKeysQuery } = vi.hoisted(() => ({
+  createMutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  mockApiKeysQuery: vi.fn(),
+}));
 
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({
-  useAPIKeys: () => ({
-    data: [
-      {
-        id: 'key-1',
-        name: 'CLI',
-        key_prefix: '0123456789abcdef',
-        scopes: ['inference:write'],
-        created_at: '2026-07-30T00:00:00.000Z',
-        last_used_at: null,
-      },
-    ],
-    isLoading: false,
-  }),
+  useAPIKeys: () => mockApiKeysQuery(),
   useCreateAPIKey: () => ({ mutate: createMutate, isPending: false }),
   useDeleteAPIKey: () => ({ mutate: deleteMutate, isPending: false }),
 }));
@@ -27,6 +18,22 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
 describe('ApiKeysManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockApiKeysQuery.mockReturnValue({
+      data: [
+        {
+          id: 'key-1',
+          name: 'CLI',
+          key_prefix: '0123456789abcdef',
+          scopes: ['inference:write'],
+          created_at: '2026-07-30T00:00:00.000Z',
+          last_used_at: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
   });
 
   it('shows persisted scopes and submits the selected least-privilege contract', async () => {
@@ -70,5 +77,24 @@ describe('ApiKeysManager', () => {
       expect(screen.getByRole('button', { name: 'Generate Key' })).toBeDisabled(),
     );
     expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows an honest retry state instead of an empty key list after a load failure', async () => {
+    const refetch = vi.fn();
+    mockApiKeysQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+      error: new Error('API keys took too long to load. Please try again.'),
+      refetch,
+    });
+
+    render(<ApiKeysManager />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('API keys took too long to load');
+    expect(screen.queryByText('No API keys yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Key' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledOnce();
   });
 });

@@ -47,10 +47,36 @@ export interface ModelCapabilities {
   /**
    * Whether this model supports prompt caching (any form: explicit breakpoints
    * for Anthropic, automatic prefix caching for OpenAI/DeepSeek, or implicit
-   * context caching for Gemini 2.5+/3.x). Set to true only on models where
+   * implicit context caching for compatible provider models). Set to true only on models where
    * cache-read discounts are confirmed available from official provider docs.
    */
   caching?: boolean;
+}
+
+/** One provider-supported video output tuple from the canonical catalog. */
+export interface VideoGenerationOutputSize {
+  resolution: string;
+  aspectRatio: string;
+  width: number;
+  height: number;
+}
+
+/** Provider-published formula for video-token-priced generation. */
+export interface VideoTokenPricingFormula {
+  unit: 'video_tokens';
+  framesPerSecond: number;
+  pixelsPerToken: number;
+  usdPerToken: number;
+  usdPerTokenWithoutAudio?: number;
+}
+
+/** Complete executable request envelope for one catalog video model. */
+export interface VideoGenerationMetadata {
+  durationSecs: number[];
+  outputSizes: VideoGenerationOutputSize[];
+  supportsAudio: boolean;
+  supportsSeed?: boolean;
+  pricing?: VideoTokenPricingFormula;
 }
 
 /** Model type categories. */
@@ -121,7 +147,7 @@ export interface ReasoningRequestPaths {
   api: 'chat' | 'responses' | 'messages' | 'gen';
   /** Path for the effort level string (e.g. reasoning_effort, output_config.effort). */
   effortPath?: string | null;
-  /** Responses-API effort path when it differs from the chat path (GPT-5.6). */
+  /** Responses-API effort path when it differs from the chat path. */
   responsesEffortPath?: string | null;
   /** Path for the on/off toggle (e.g. enable_thinking, thinking.type). */
   togglePath?: string | null;
@@ -137,8 +163,8 @@ export interface ReasoningBudget {
 }
 
 /**
- * GPT-5.6 Ultra (multi-agent) surface. RESPONSES-API-ONLY, beta-gated. Inert until
- * the model flips to availability:"live" AND a Responses request path is added.
+ * Provider ultra multi-agent surface. Responses-API-only and beta-gated; inert
+ * until its catalog model is live and a compatible request path is available.
  */
 export interface ReasoningUltraMode {
   enabled: boolean;
@@ -171,13 +197,13 @@ export interface ModelReasoning {
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
   /**
-   * GPT-5.6 Ultra multi-agent (Responses API only). Object form carries the exact
-   * params; inert this wave (5.6 is coming_soon and the web route uses chat/completions).
+   * Provider ultra multi-agent mode. Object form carries the exact Responses API
+   * parameters; catalog availability and the request adapter decide executability.
    */
   ultraMode?: ReasoningUltraMode | boolean;
-  /** GPT-5.6 Pro mode (reasoning.mode:"pro", Responses-only). Inert this wave. */
+  /** Provider pro reasoning mode (Responses-only when authored). */
   proMode?: { param: string; value: string; endpoint: 'responses' };
-  /** GPT-5.6 persistent reasoning (reasoning.context, Responses-only). Inert this wave. */
+  /** Provider persistent-reasoning metadata (Responses-only when authored). */
   persistentReasoning?: {
     param: string;
     values: string[];
@@ -240,6 +266,21 @@ export interface EffectiveModelPricing {
   cached_write_1h?: number | undefined;
 }
 
+/**
+ * One provider-published price band selected from the total input tokens in a
+ * single request. A band applies only when `inputTokens > thresholdTokens`.
+ * Models with multiple bands author them in ascending threshold order; the
+ * resolver still selects the greatest qualifying threshold defensively.
+ */
+export interface InputTokenPricingTier {
+  thresholdTokens: number;
+  inputCost: number;
+  outputCost: number;
+  cached_input?: number;
+  cached_write?: number;
+  cached_write_1h?: number;
+}
+
 /** Pricing-carrying subset of {@link ModelMetadata} that the resolver needs. */
 export type PricedModel = Pick<
   ModelMetadata,
@@ -249,6 +290,10 @@ export type PricedModel = Pick<
   | 'cached_write'
   | 'cached_write_1h'
   | 'pricingSchedule'
+  | 'promo_expires_at'
+  | 'post_promo_prices'
+  | 'inputTokenPricingTiers'
+  | 'longContext'
 >;
 
 function toIsoDay(asOf: Date): string | null {
@@ -301,17 +346,129 @@ export function resolveEffectiveModelPricing(
   };
 }
 
+/**
+ * Resolve dated pricing, then a legacy post-promo override, then a provider's
+ * input-length tier. This is the complete shared pricing composition used by
+ * billing, routing estimates, embeddings, and cache analytics.
+ *
+ * `inputTokens` is the provider-reported/request-estimated total input before
+ * cache partitioning. Thresholds are strict: a tier documented as “above N”
+ * starts at N + 1, while exactly N keeps the base rate.
+ */
+export function resolveEffectiveModelPricingForInputTokens(
+  model: PricedModel,
+  asOf: Date,
+  inputTokens: number,
+): EffectiveModelPricing {
+  const dated = resolveEffectiveModelPricing(model, asOf);
+  const postPromo =
+    model.post_promo_prices && isModelPromoExpired(model, asOf)
+      ? model.post_promo_prices
+      : undefined;
+  return applyInputTokenPricingTiers(
+    model,
+    {
+      inputCost: postPromo?.input ?? dated.inputCost,
+      outputCost: postPromo?.output ?? dated.outputCost,
+      cached_input: postPromo?.cached_input ?? dated.cached_input,
+      cached_write: postPromo?.cached_write ?? dated.cached_write,
+      cached_write_1h: postPromo?.cached_write_1h ?? dated.cached_write_1h,
+    },
+    inputTokens,
+  );
+}
+
+/** True once a model's promotional-price timestamp has been reached. */
+export function isModelPromoExpired(
+  model: Pick<ModelMetadata, 'promo_expires_at'>,
+  asOf: Date,
+): boolean {
+  if (!model.promo_expires_at) return false;
+  const cutoff = Date.parse(model.promo_expires_at);
+  const asOfTime = asOf?.getTime?.();
+  return (
+    !Number.isNaN(cutoff) &&
+    typeof asOfTime === 'number' &&
+    !Number.isNaN(asOfTime) &&
+    asOfTime >= cutoff
+  );
+}
+
+/** Apply the greatest qualifying input-length tier after other price layers resolve. */
+export function applyInputTokenPricingTiers(
+  model: Pick<ModelMetadata, 'inputTokenPricingTiers' | 'longContext'>,
+  base: EffectiveModelPricing,
+  inputTokens: number,
+): EffectiveModelPricing {
+  if (!Number.isFinite(inputTokens)) {
+    return base;
+  }
+
+  // `longContext` is a read-only compatibility path for generated catalogs
+  // predating the ordered array contract. An authored array is authoritative,
+  // including an empty one supplied by an invalid external caller; never merge
+  // the legacy singleton into an array and accidentally create a second SSOT.
+  const tiers = Array.isArray(model.inputTokenPricingTiers)
+    ? model.inputTokenPricingTiers
+    : model.longContext
+      ? [model.longContext]
+      : [];
+  let tier: InputTokenPricingTier | undefined;
+  for (const candidate of tiers) {
+    if (
+      Number.isFinite(candidate.thresholdTokens) &&
+      inputTokens > candidate.thresholdTokens &&
+      (tier === undefined || candidate.thresholdTokens > tier.thresholdTokens)
+    ) {
+      tier = candidate;
+    }
+  }
+  if (!tier) return base;
+
+  return {
+    inputCost: tier.inputCost,
+    outputCost: tier.outputCost,
+    cached_input: tier.cached_input ?? base.cached_input,
+    cached_write: tier.cached_write ?? base.cached_write,
+    cached_write_1h: tier.cached_write_1h ?? base.cached_write_1h,
+  };
+}
+
+/**
+ * @deprecated Compatibility alias for callers compiled against the former
+ * singleton name. New code must call {@link applyInputTokenPricingTiers}.
+ */
+export function applyLongContextPricing(
+  model: Pick<ModelMetadata, 'inputTokenPricingTiers' | 'longContext'>,
+  base: EffectiveModelPricing,
+  inputTokens: number,
+): EffectiveModelPricing {
+  return applyInputTokenPricingTiers(model, base, inputTokens);
+}
+
 /** Full model metadata entry as defined in models.json. */
 export interface ModelMetadata {
   id: string;
-  /** Optional API-specific model ID (e.g., "mistral-medium-2508"). */
+  /** Optional provider-wire model ID when it differs from the canonical ID. */
   apiModelId?: string;
+  /**
+   * OpenRouter's catalog-owned wire slug for this model. Routing policy still
+   * decides whether it is the primary route or a failover; consumers must not
+   * maintain a second model-to-slug table.
+   */
+  openRouterSlug?: string;
   name: string;
   provider: Provider;
   modelType: ModelType;
   /** Provider-supported input modalities for specialized multimodal models. */
   inputModalities?: Array<'text' | 'image' | 'audio' | 'video' | 'pdf'>;
-  contextWindow: number;
+  /**
+   * Provider-published token context window. Omitted when tokens are not the
+   * provider contract for this model (for example, media APIs bounded by
+   * prompt characters and output duration) or when no current source proves a
+   * value. Consumers must not manufacture a token limit for those models.
+   */
+  contextWindow?: number;
   /** Maximum output tokens the model can generate per request. */
   maxOutputTokens?: number;
   /** Cost per million input tokens (USD). */
@@ -344,16 +501,25 @@ export interface ModelMetadata {
    * route dispatch to the correct backend purely from catalog data — adding a
    * new image model on an existing backend is a models.curation.json edit, no
    * code change. Only `modelType: 'image'` models set this.
-   *   - 'gemini'    → Gemini `:generateContent` (responseModalities IMAGE)
+   *   - 'gemini'    → Gemini Interactions API
    *   - 'imagen'    → Imagen `:predict`
    *   - 'openai'    → OpenAI Images API
    *   - 'stability' → Stability v2beta Stable Image
    */
   imageApi?: 'gemini' | 'imagen' | 'openai' | 'stability';
+  /**
+   * Provider-required generated-image MIME type for this catalog model.
+   * Model-specific because current provider endpoints do not accept the same
+   * output formats. Routes must read this value instead of inferring it from a
+   * model id or silently relabeling returned bytes.
+   */
+  imageOutputMimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
   /** Per-second cost (USD) for video-generation models (non-token pricing). */
   videoPerSecondCost?: number;
   /** Resolution-specific per-second video price when the provider varies pricing by output size. */
-  videoPerSecondCostByResolution?: Partial<Record<'720p' | '1080p' | '4k', number>>;
+  videoPerSecondCostByResolution?: Partial<Record<'480p' | '720p' | '1080p' | '4k', number>>;
+  /** Catalog-owned video request capabilities and non-flat pricing formula. */
+  videoGeneration?: VideoGenerationMetadata;
   /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
   pricingNote?: string;
   /**
@@ -429,9 +595,9 @@ export interface ModelMetadata {
   expectedLiveDate?: string;
   /** INERT authored tier policy (future GA wave). `tierAllowedModels` stays the SSOT. */
   tierPolicy?: ModelTierPolicy;
-  /** GPT-5.6 capability hint (Sol 6 / Terra 4 / Luna 3) from the OpenAI compare page. */
+  /** Provider-published reasoning capability rating for display and comparison. */
   reasoningDots?: number;
-  /** GPT-5.6 programmatic-tool-calling surface (Responses-only, inert this wave). */
+  /** Provider programmatic-tool-calling surface. */
   toolCalling?: {
     programmatic?: {
       toolType: string;
@@ -442,24 +608,17 @@ export interface ModelMetadata {
       endpoint: 'responses';
     };
   };
-  /** GPT-5.6 image-input detail levels (chat + responses). */
+  /** Provider-supported image-input detail levels. */
   imageInput?: { detailValues: string[] };
-  /** GPT-5.6 supported endpoints. */
+  /** Provider-supported inference endpoints. */
   endpoints?: string[];
   /** Model knowledge cutoff date (ISO). */
   knowledgeCutoff?: string;
-  /**
-   * INERT long-context price tier (GPT-5.6, Addendum D). 5.6-only additive
-   * sub-block; the AT-GA metering wave applies a per-request context-length split.
-   * Nothing reads it this wave.
-   */
-  longContext?: {
-    inputCost: number;
-    cached_input?: number;
-    cached_write?: number;
-    outputCost: number;
-  };
-  /** GPT-5.6 prompt-cache policy. */
+  /** Ordered provider-published request-input pricing bands. */
+  inputTokenPricingTiers?: InputTokenPricingTier[];
+  /** @deprecated Read compatibility for catalogs generated before ordered tiers. */
+  longContext?: InputTokenPricingTier;
+  /** Provider prompt-cache policy. */
   cachePolicy?: {
     writeMultiplier: number;
     readDiscount: number;
@@ -597,7 +756,7 @@ export interface PickerModelView {
   id: string;
   name: string;
   provider: Provider | string;
-  contextWindow: number;
+  contextWindow?: number;
   maxOutput: number;
   supportsVision: boolean;
   supportsThinking: boolean;
@@ -679,6 +838,26 @@ export function getAutoRoutingProfiles(): AutoRoutingProfileView[] {
       },
     ];
   });
+}
+
+/**
+ * Registry-owned default Auto selection.
+ *
+ * Consumers must not repeat the policy alias as a string literal: the routing
+ * policy owns that identity and can replace it without requiring edits across
+ * every surface and wire contract.
+ */
+export function getDefaultAutoRoutingProfile(): AutoRoutingProfileView {
+  const policy = modelRegistry.policies.auto as unknown as { defaultAlias: string };
+  const profile = getAutoRoutingProfiles().find(
+    (candidate) => candidate.id === policy.defaultAlias,
+  );
+  if (!profile) {
+    throw new Error(
+      `Auto routing default "${policy.defaultAlias}" is not a selectable registry profile`,
+    );
+  }
+  return profile;
 }
 
 /** True only for canonical Auto routing-profile identifiers, never provider models. */
@@ -1308,8 +1487,8 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
     }
     // Provider-match: a slot's declared provider must equal the model's actual
     // provider in models.json. Otherwise the routing slot silently points at the
-    // wrong vendor (e.g. modelId 'gpt-5.6-terra' but provider 'google'), which the
-    // modelId-only check above would miss. Fail loudly at import, like the rest.
+    // wrong vendor, which the modelId-only check above would miss. Fail loudly
+    // at import, like the rest.
     if (slot.provider && meta.provider && slot.provider !== meta.provider) {
       throw new Error(
         `SLOT_REGISTRY slot "${slot.slot}" declares provider "${slot.provider}" but model ` +
@@ -1600,9 +1779,10 @@ export function canAccessModelForSubscriptionTier(
 
     // Both conditions are load-bearing, and this mirrors FREE_TRIAL_MODELS
     // (apps/web/lib/free-trial-config.ts) exactly. `tierPolicy.minTier` alone is
-    // NOT sufficient: `sonar` carries minTier 'free' while sitting outside every
-    // selectable roster, so checking the field on its own would sell Free a model
-    // no roster offers. Keep these two in lockstep with free-trial-config.ts.
+    // NOT sufficient: a search-only catalog entry can carry minTier 'free' while
+    // sitting outside every selectable roster, so checking the field alone could
+    // sell Free a model no roster offers. Keep these in lockstep with
+    // free-trial-config.ts.
     return (
       getAllowedModelsForTier('economy').includes(canonicalModelId) &&
       getModelMetadataById(canonicalModelId)?.tierPolicy?.minTier === 'free'
@@ -1634,6 +1814,130 @@ export function getModelAvailability(model: ModelMetadata): ModelAvailability {
 /** True when a model is live (selectable + routable). */
 export function isModelLive(model: ModelMetadata): boolean {
   return getModelAvailability(model) === 'live';
+}
+
+export type ExecutableImageModel = ModelMetadata & {
+  modelType: 'image';
+  imageApi: NonNullable<ModelMetadata['imageApi']>;
+};
+
+const GENERATED_IMAGE_MIME_TYPES = new Set<NonNullable<ModelMetadata['imageOutputMimeType']>>([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+/**
+ * Canonical execution contract for a selectable generated-image model.
+ *
+ * Keep adapters, availability handshakes, and pickers on this single predicate
+ * so a catalog edit cannot advertise a model that the generation route must
+ * reject. Gemini's Interactions API additionally needs an explicit output MIME
+ * contract because returned bytes are validated and persisted under that type.
+ */
+export function isExecutableImageModel(
+  model: ModelMetadata | null | undefined,
+): model is ExecutableImageModel {
+  return Boolean(
+    model &&
+    model.modelType === 'image' &&
+    model.capabilities?.imageGen === true &&
+    model.deprecated !== true &&
+    model.status !== 'deprecated' &&
+    isModelLive(model) &&
+    model.imageApi &&
+    (model.imageApi !== 'gemini' ||
+      (model.imageOutputMimeType && GENERATED_IMAGE_MIME_TYPES.has(model.imageOutputMimeType))),
+  );
+}
+
+export type ExecutableVideoModel = ModelMetadata & {
+  modelType: 'video';
+};
+
+/**
+ * True only when a live video model carries either the current request formula
+ * or the legacy per-second pricing contract. This preserves existing Google
+ * execution while video records migrate incrementally to exact tuple metadata.
+ * Provider credentials and durable storage remain deployment checks.
+ */
+export function isExecutableVideoModel(
+  model: ModelMetadata | null | undefined,
+): model is ExecutableVideoModel {
+  return Boolean(
+    model &&
+    model.modelType === 'video' &&
+    model.capabilities?.videoGen === true &&
+    model.deprecated !== true &&
+    model.status !== 'deprecated' &&
+    isModelLive(model) &&
+    ((model.videoGeneration?.durationSecs.length ?? 0) > 0 ||
+      model.videoPerSecondCost !== undefined ||
+      Object.keys(model.videoPerSecondCostByResolution ?? {}).length > 0),
+  );
+}
+
+/** Resolve the exact provider pixel tuple; resolution alone is not a price. */
+export function resolveVideoGenerationOutputSize(
+  model: Pick<ModelMetadata, 'videoGeneration'>,
+  resolution: string,
+  aspectRatio: string,
+): VideoGenerationOutputSize | null {
+  return (
+    model.videoGeneration?.outputSizes.find(
+      (candidate) => candidate.resolution === resolution && candidate.aspectRatio === aspectRatio,
+    ) ?? null
+  );
+}
+
+/**
+ * Compute a whole-cent reservation from the provider-published video-token
+ * formula and the exact catalog pixel tuple. Returning null means the request
+ * tuple or a usable price is absent; callers must fail closed before egress.
+ */
+export function calculateCatalogVideoCostCents(input: {
+  model: Pick<ModelMetadata, 'videoGeneration'>;
+  resolution: string;
+  aspectRatio: string;
+  durationSecs: number;
+  generateAudio: boolean;
+}): number | null {
+  const video = input.model.videoGeneration;
+  const formula = video?.pricing;
+  const output = resolveVideoGenerationOutputSize(input.model, input.resolution, input.aspectRatio);
+  if (
+    !video ||
+    !formula ||
+    !output ||
+    !video.durationSecs.includes(input.durationSecs) ||
+    (input.generateAudio && !video.supportsAudio)
+  ) {
+    return null;
+  }
+  const usdPerToken = input.generateAudio
+    ? formula.usdPerToken
+    : (formula.usdPerTokenWithoutAudio ?? formula.usdPerToken);
+  const values = [
+    output.width,
+    output.height,
+    input.durationSecs,
+    formula.framesPerSecond,
+    formula.pixelsPerToken,
+    usdPerToken,
+  ];
+  if (
+    !values.every((value) => Number.isFinite(value) && value > 0) ||
+    !Number.isInteger(output.width) ||
+    !Number.isInteger(output.height) ||
+    !Number.isInteger(formula.framesPerSecond) ||
+    !Number.isInteger(formula.pixelsPerToken)
+  ) {
+    return null;
+  }
+  const videoTokens =
+    (output.width * output.height * input.durationSecs * formula.framesPerSecond) /
+    formula.pixelsPerToken;
+  return Math.ceil(Number((videoTokens * usdPerToken * 100).toFixed(8)));
 }
 
 /**
@@ -1836,7 +2140,10 @@ export function getEconomyFallbackModels(): RuntimeFallbackModel[] {
     .sort(
       (left, right) =>
         left.inputCost + left.outputCost - (right.inputCost + right.outputCost) ||
-        right.contextWindow - left.contextWindow ||
+        // An unpublished token window is not zero; zero is used only as a
+        // deterministic sort sentinel so unknown limits rank behind proven
+        // limits without manufacturing catalog metadata.
+        (right.contextWindow ?? 0) - (left.contextWindow ?? 0) ||
         left.name.localeCompare(right.name),
     )
     .map((model) => ({
@@ -1957,8 +2264,7 @@ export function resolveAutoModeModel(
  *
  * Each kind maps to a tier-aware `RoutingSlot` lookup using the same
  * `TIER_POLICIES` registry the auto-router consults. Use this helper instead
- * of hardcoding model IDs (`'gpt-5.6-terra'`, `'claude-sonnet-5'`, etc.) at
- * call sites — those literals trip the no-hardcoded-model-ids ESLint rule.
+ * of hardcoding concrete model IDs at call sites.
  *
  * @see resolveAutoModeModel for the legacy auto-mode picker.
  */
@@ -2114,7 +2420,7 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
       id: model.id,
       name: model.name,
       provider: model.provider,
-      contextWindow: model.contextWindow,
+      ...(model.contextWindow !== undefined ? { contextWindow: model.contextWindow } : {}),
       maxOutput: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       supportsVision: model.capabilities.vision,
       supportsThinking: model.capabilities.thinking,
@@ -2193,7 +2499,7 @@ export function getModelContextLimits(modelIds?: string[]): Record<string, numbe
 
   for (const modelId of ids) {
     const metadata = getModelMetadataById(modelId);
-    if (!metadata) {
+    if (!metadata || metadata.contextWindow === undefined) {
       continue;
     }
     entries.push([metadata.id, metadata.contextWindow]);

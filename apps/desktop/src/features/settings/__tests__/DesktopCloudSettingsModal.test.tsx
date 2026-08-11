@@ -144,6 +144,27 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     await waitFor(() => expect(mocks.listCloudSkills).toHaveBeenCalledTimes(1));
   });
 
+  it('projects authenticated Cloud skill downloads into the shared Desktop directory', async () => {
+    mocks.listCloudSkills.mockResolvedValue([
+      {
+        name: 'fixture-reviewed-skill',
+        description: 'Reviewed fixture instructions.',
+        source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
+      },
+    ]);
+
+    render(<DesktopCloudSettingsModal open onClose={vi.fn()} initialTab="skills" />);
+    await waitFor(() => expect(mocks.listCloudSkills).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      const adapter = latestSettingsProps().adapter as SettingsDataAdapter;
+      expect(adapter.skills?.[0]?.downloadHref).toMatch(
+        /\/api\/skills\/fixture-reviewed-skill\/download$/,
+      );
+    });
+  });
+
   it('ignores a directory response that finishes after Settings closes', async () => {
     let resolveConnectors: ((value: { connectors: []; available: [] }) => void) | undefined;
     mocks.listConnectors.mockReturnValue(

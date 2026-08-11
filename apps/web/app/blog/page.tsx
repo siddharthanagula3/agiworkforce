@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema, collectionPageSchema } from '@/lib/seo/structured-data';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
@@ -14,20 +12,6 @@ export const metadata = buildMetadata({
 export default function BlogPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={[
-          collectionPageSchema({
-            name: 'AGI Blog',
-            description:
-              'Engineering deep-dives, security postures, and design notes from the AGI team.',
-            path: '/blog',
-          }),
-          breadcrumbSchema([
-            { name: 'Home', path: '/' },
-            { name: 'Blog', path: '/blog' },
-          ]),
-        ]}
-      />
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">

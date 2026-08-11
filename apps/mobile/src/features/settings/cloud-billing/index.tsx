@@ -18,7 +18,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CreditCard, ExternalLink, FileText, Check } from 'lucide-react-native';
+import {
+  CreditCard,
+  ExternalLink,
+  FileText,
+  Check,
+  RefreshCw,
+  ShoppingBag,
+} from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
@@ -32,10 +39,14 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import {
+  MAX_TOP_UP_AMOUNT_USD,
+  MIN_TOP_UP_AMOUNT_USD,
+  TOP_UP_UNITS_PER_USD,
   canUseBillingPlanCapability,
   getBillingPlanPricing,
   getNextUpgradeTier,
   isEntitledSubscriptionStatus,
+  topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
@@ -45,6 +56,7 @@ import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottom
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { getSubscriptionOwnerGuard } from '@/src/features/billing/subscriptionSource';
+import { useMobileIap } from '@/src/features/billing/useMobileIap';
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -54,6 +66,16 @@ const FREE_FEATURES = [
   'Analyze text and images',
   'Search the web',
 ];
+
+function requireTopUpUnits(amountUsd: number): number {
+  const units = topUpUnitsForUsd(amountUsd);
+  if (units === null) {
+    throw new Error('The canonical minimum top-up amount must resolve to a valid unit grant.');
+  }
+  return units;
+}
+
+const MINIMUM_TOP_UP_UNITS = requireTopUpUnits(MIN_TOP_UP_AMOUNT_USD);
 
 function PlanBadge() {
   const colors = useThemeColors();
@@ -86,6 +108,9 @@ export default function CloudBillingScreen() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
+  const nativeIap = useMobileIap({
+    enabled: isClerkLoaded && isClerkSignedIn && isCloudModeActive,
+  });
 
   // guardedFetch blocks every our-cloud call (including this screen's own
   // tier refresh) while chat is set to Local — see CloudSyncBlockedBanner's
@@ -109,6 +134,28 @@ export default function CloudBillingScreen() {
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
   const subscriptionGuard = getSubscriptionOwnerGuard(billingSource, billingStatus);
+  const isActiveStripePlan = billingSource === 'stripe' && !isFreeTier && isEntitled;
+  const nativeSubscriptionSource =
+    nativeIap.catalog?.platform === 'ios'
+      ? 'apple'
+      : nativeIap.catalog?.platform === 'android'
+        ? 'google'
+        : null;
+  const canBuyNativeSubscription =
+    nativeIap.catalog?.enabled === true &&
+    !isWorkspacePlan &&
+    (!subscriptionGuard.blocked || billingSource === nativeSubscriptionSource);
+  const canBuyNativeTopUp =
+    nativeIap.catalog?.enabled === true && !isFreeTier && isEntitled && !isWorkspacePlan;
+  const paywallRecoveryAction = isFreeTier
+    ? 'subscribe'
+    : isEntitled
+      ? 'upgrade'
+      : 'manage_billing';
+  const paywallUnavailableMessage =
+    paywallRecoveryAction === 'manage_billing'
+      ? "Billing management isn't available in the app yet. Please try again later."
+      : "Plan changes aren't available in the app yet. Check back soon.";
 
   const showSubscriptionOwnerGuard = useCallback(() => {
     const buttons: Array<{
@@ -130,18 +177,34 @@ export default function CloudBillingScreen() {
     );
   }, [subscriptionGuard]);
 
-  // Mobile has no store purchase path. Existing entitled subscriptions are
-  // managed at their recorded owner; free/inactive accounts get the same honest
-  // informational paywall used by chat.
   const handleUpgrade = useCallback(() => {
+    if (canBuyNativeSubscription) {
+      Alert.alert(
+        'Choose a plan below',
+        'The App Store or Google Play confirmation will show the exact amount before you approve it.',
+      );
+      return;
+    }
     if (subscriptionGuard.blocked) {
       showSubscriptionOwnerGuard();
       return;
     }
     paywallSheetRef.current?.expand();
-  }, [showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
+  }, [canBuyNativeSubscription, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
   const handleManageBilling = useCallback(async () => {
+    // Preserve the subscription-owner boundary for recovery as well as plan
+    // changes. An inactive App Store / Play Store subscription cannot be
+    // repaired in AGI's Stripe portal, and sending it there risks a duplicate
+    // purchase while the recorded store subscription still exists.
+    // Stripe is AGI's own recorded Web billing owner, so its authenticated
+    // portal is the correct recovery. Every other recorded owner must remain
+    // at its own management surface (or fail closed when no verified listing
+    // URL exists).
+    if (subscriptionGuard.blocked && billingSource !== 'stripe') {
+      showSubscriptionOwnerGuard();
+      return;
+    }
     if (FEATURES.billing) {
       setPortalLoading(true);
       try {
@@ -157,7 +220,7 @@ export default function CloudBillingScreen() {
     // No mobile billing-management path yet; keep the user inside the honest
     // informational sheet.
     paywallSheetRef.current?.expand();
-  }, []);
+  }, [billingSource, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
   const handleSignIn = useCallback(() => {
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
@@ -304,6 +367,147 @@ export default function CloudBillingScreen() {
         </View>
       </View>
 
+      {isActiveStripePlan && (
+        <>
+          <SettingsInfo
+            title="How plan upgrades are charged"
+            body="For this Web-billed plan, a same-cadence upgrade shows the exact prorated charge for the rest of your current billing period before you confirm. Your renewal date stays the same, and your existing usage does not reset."
+            icon={CreditCard}
+          />
+          <SettingsInfo
+            title="Usage top-ups"
+            body={`${TOP_UP_UNITS_PER_USD} units for every $1 of configured product value. The minimum top-up is $${MIN_TOP_UP_AMOUNT_USD} (${MINIMUM_TOP_UP_UNITS.toLocaleString('en-US')} units), and the ordinary self-serve maximum is $${MAX_TOP_UP_AMOUNT_USD}. The native store shows the actual localized price and applicable tax before approval. Top-ups do not change your plan or renewal date, and unused purchased balance carries across renewals for up to 12 months.`}
+            icon={CreditCard}
+          />
+        </>
+      )}
+
+      {nativeIap.loading ? (
+        <SettingsInfo
+          title="Loading native purchases"
+          body="Connecting securely to the App Store or Google Play."
+          icon={ShoppingBag}
+        />
+      ) : nativeIap.catalog?.enabled ? (
+        <>
+          <SettingsInfo
+            title="App Store and Google Play billing"
+            body="The native store confirmation shows the localized price and the exact charge before you approve. Subscription upgrades use the store's plan-change and proration rules; AGI grants access only after the signed store transaction is verified."
+            icon={ShoppingBag}
+          />
+
+          {canBuyNativeSubscription ? (
+            <SettingsGroup>
+              {nativeIap.catalog.products
+                .filter((product) => product.kind === 'subscription')
+                .map((product, index, products) => {
+                  const storeProduct = nativeIap.storeProducts.get(product.productId);
+                  const pricing = getBillingPlanPricing(product.planTier);
+                  const busy = nativeIap.purchasingKey === product.key;
+                  return (
+                    <SettingsRow
+                      key={product.key}
+                      label={`${pricing.label} · ${product.interval}`}
+                      value={
+                        busy ? 'Opening store…' : (storeProduct?.displayPrice ?? 'Unavailable')
+                      }
+                      icon={CreditCard}
+                      onPress={
+                        storeProduct && !nativeIap.purchasingKey && !nativeIap.restoring
+                          ? () => void nativeIap.purchase(product.key)
+                          : undefined
+                      }
+                      isLast={index === products.length - 1}
+                    />
+                  );
+                })}
+            </SettingsGroup>
+          ) : subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource ? (
+            <SettingsInfo
+              title="Subscription managed elsewhere"
+              body={`Your plan is managed through ${subscriptionGuard.sourceLabel}. Native subscription choices stay disabled to prevent a second recurring charge. Top-ups remain available below when eligible.`}
+              icon={CreditCard}
+            />
+          ) : null}
+
+          {canBuyNativeTopUp ? (
+            <>
+              <SettingsInfo
+                title="Native usage top-ups"
+                body={`${TOP_UP_UNITS_PER_USD} units per $1 of configured product value, with a $${MIN_TOP_UP_AMOUNT_USD} minimum. The store shows the actual localized price before purchase. Top-ups are consumable, do not change your renewal date, and are granted only once after server verification.`}
+                icon={ShoppingBag}
+              />
+              <SettingsGroup>
+                {nativeIap.catalog.products
+                  .filter((product) => product.kind === 'top_up')
+                  .map((product, index, products) => {
+                    const storeProduct = nativeIap.storeProducts.get(product.productId);
+                    const busy = nativeIap.purchasingKey === product.key;
+                    return (
+                      <SettingsRow
+                        key={product.key}
+                        label={`${product.units.toLocaleString('en-US')} units`}
+                        value={
+                          busy ? 'Opening store…' : (storeProduct?.displayPrice ?? 'Unavailable')
+                        }
+                        icon={ShoppingBag}
+                        onPress={
+                          storeProduct && !nativeIap.purchasingKey && !nativeIap.restoring
+                            ? () => void nativeIap.purchase(product.key)
+                            : undefined
+                        }
+                        isLast={index === products.length - 1}
+                      />
+                    );
+                  })}
+              </SettingsGroup>
+            </>
+          ) : null}
+
+          <SettingsGroup>
+            <SettingsRow
+              label={nativeIap.restoring ? 'Restoring purchases…' : 'Restore purchases'}
+              value="Subscriptions and unfinished purchases"
+              icon={RefreshCw}
+              onPress={
+                nativeIap.connected && !nativeIap.restoring && !nativeIap.purchasingKey
+                  ? () => void nativeIap.restore()
+                  : undefined
+              }
+              isLast
+            />
+          </SettingsGroup>
+
+          {nativeIap.error ? (
+            <SettingsInfo
+              title="Native purchase needs attention"
+              body={nativeIap.error}
+              icon={CreditCard}
+            />
+          ) : nativeIap.lastResult ? (
+            <SettingsInfo
+              title="Purchase verified"
+              body={
+                nativeIap.lastResult.kind === 'top_up'
+                  ? `${(nativeIap.lastResult.unitsGranted ?? 0).toLocaleString('en-US')} units were added to your account.`
+                  : 'Your subscription was verified and your plan has been refreshed.'
+              }
+              icon={Check}
+            />
+          ) : null}
+        </>
+      ) : (
+        <SettingsInfo
+          title="Native purchases are not configured"
+          body={
+            nativeIap.error ??
+            nativeIap.catalog?.unavailableReason ??
+            'Register the App Store and Google Play products for this build before purchases can be offered.'
+          }
+          icon={ShoppingBag}
+        />
+      )}
+
       {/* Invoices */}
       <SettingsGroup>
         <SettingsRow
@@ -324,6 +528,13 @@ export default function CloudBillingScreen() {
           ref={paywallSheetRef}
           feature="general_upgrade"
           requiredTier={nextUpgradeTier}
+          recoveryAction={paywallRecoveryAction}
+          onPrimaryAction={
+            paywallRecoveryAction === 'manage_billing' && FEATURES.billing
+              ? handleManageBilling
+              : undefined
+          }
+          primaryActionUnavailableMessage={paywallUnavailableMessage}
           onDismiss={() => paywallSheetRef.current?.close()}
         />
       ) : null}

@@ -7,6 +7,8 @@ import {
   useSettingsStore,
 } from '../settingsStore';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 // Mock Tauri invoke
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -216,8 +218,8 @@ describe('settingsStore', () => {
   it('should set default model for ollama provider', () => {
     const { setDefaultModel } = useSettingsStore.getState();
 
-    setDefaultModel('ollama', 'llama3');
-    expect(useSettingsStore.getState().llmConfig.defaultModels.ollama).toBe('llama3');
+    setDefaultModel('ollama', 'fixture-local-model');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.ollama).toBe('fixture-local-model');
   });
 
   it('should add favorite model', () => {
@@ -650,7 +652,10 @@ describe('settingsStore migrate() boundaries (H16)', () => {
 
     it('resets favoriteModels to empty array', () => {
       const old = {
-        llmConfig: { favoriteModels: ['gpt-5.6-sol', 'claude-sonnet-5'], defaultModels: {} },
+        llmConfig: {
+          favoriteModels: [FIXTURE_MODEL_ID, 'fixture-secondary-settings-model'],
+          defaultModels: {},
+        },
       };
       const result = migrateSettings(old, 1);
       expect(result.llmConfig?.favoriteModels).toEqual([]);
@@ -661,8 +666,8 @@ describe('settingsStore migrate() boundaries (H16)', () => {
         llmConfig: {
           defaultModels: {},
           taskRouting: {
-            code: { provider: 'openai', model: 'gpt-5.6-sol' },
-            chat: { provider: 'anthropic', model: 'claude-sonnet-5' },
+            code: { provider: 'openai', model: FIXTURE_MODEL_ID },
+            chat: { provider: 'anthropic', model: 'fixture-anthropic-settings-model' },
           },
         },
       };
@@ -743,7 +748,7 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       const v1State = {
         llmConfig: {
           defaultProvider: 'openai',
-          defaultModels: { openai: 'gpt-5.6-sol' },
+          defaultModels: { openai: FIXTURE_MODEL_ID },
         },
       };
       const result = migrateSettings(v1State, 1);

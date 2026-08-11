@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
 vi.mock('@/lib/services/schedule-service', () => ({
   ScheduleConflictError: class ScheduleConflictError extends Error {},
   ScheduleLimitError: class ScheduleLimitError extends Error {},
@@ -21,6 +22,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   ScheduleLimitError,
   ScheduleValidationError,
@@ -32,12 +34,14 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { GET, POST } from '@/app/api/schedules/route';
 
 const db = { query: vi.fn() };
+const quotaDb = { query: vi.fn() };
 const schedule = { id: 'task-1', userId: 'user-1', scheduleType: 'cron' };
 
 describe('/api/schedules', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getUserScopedDb).mockResolvedValue({ db, userId: 'user-1' } as never);
+    vi.mocked(getNeonDb).mockReturnValue(quotaDb as never);
     vi.mocked(listSchedules).mockResolvedValue([schedule] as never);
     vi.mocked(createSchedule).mockResolvedValue(schedule as never);
     vi.mocked(assertScheduleQuota).mockResolvedValue(undefined);
@@ -77,7 +81,7 @@ describe('/api/schedules', () => {
       }),
     );
     expect(response.status).toBe(201);
-    expect(assertScheduleQuota).toHaveBeenCalledWith(db, 'user-1', 'pro');
+    expect(assertScheduleQuota).toHaveBeenCalledWith(quotaDb, 'user-1', 'pro');
     expect(createSchedule).toHaveBeenCalledWith(db, 'user-1', body);
   });
 

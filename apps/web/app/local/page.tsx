@@ -23,8 +23,8 @@ export default function LocalPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Local Mode</p>
           <h1 id="agi-local-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Your hardware.</span>
-            <span className="agi-fl-h1-line">Your data.</span>
+            <span className="agi-fl-h1-line">Your hardware.</span>{' '}
+            <span className="agi-fl-h1-line">Your data.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">Free forever.</em>
             </span>

@@ -28,7 +28,7 @@
  *   RouteLLM paper: https://arxiv.org/abs/2406.18665
  */
 
-import type { RoutingSlot } from '@agiworkforce/types';
+import { listCanonicalModels, type ModelCapabilities, type RoutingSlot } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Task taxonomy (mirrors NVIDIA 11-category classifier + extras)
@@ -80,6 +80,36 @@ function matchesAny(text: string, patterns: RegExp[]): string | null {
   return null;
 }
 
+type MediaGenerationCapability = Extract<keyof ModelCapabilities, 'imageGen' | 'videoGen'>;
+
+const MEDIA_MODEL_TERMS: Record<MediaGenerationCapability, readonly string[]> = {
+  imageGen: listCanonicalModels()
+    .filter((model) => model.capabilities.imageGen)
+    .flatMap((model) => [model.id, model.name])
+    .sort((left, right) => right.length - left.length),
+  videoGen: listCanonicalModels()
+    .filter((model) => model.capabilities.videoGen)
+    .flatMap((model) => [model.id, model.name])
+    .sort((left, right) => right.length - left.length),
+};
+
+/** Match current media-model references without pinning the classifier to a roster. */
+function matchCatalogMediaModel(
+  text: string,
+  capability: MediaGenerationCapability,
+): string | null {
+  const normalized = text.toLowerCase();
+  for (const term of MEDIA_MODEL_TERMS[capability]) {
+    const index = normalized.indexOf(term.toLowerCase());
+    if (index === -1) continue;
+    const left = normalized[index - 1];
+    const right = normalized[index + term.length];
+    if ((left && /[a-z0-9]/i.test(left)) || (right && /[a-z0-9]/i.test(right))) continue;
+    return text.slice(index, index + term.length);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Pattern banks — ordered from most-specific to least-specific
 // ---------------------------------------------------------------------------
@@ -109,8 +139,6 @@ const IMAGE_GEN: RegExp[] = [
   /\billustrat(e|ion)\b/i,
   /\b(ai |digital )?artwork\b/i,
   /\bimage model\b/i,
-  /\bflux\b/i,
-  /\bstable diffusion\b/i,
   /\bimage gen(erat(e|ion))?\b/i,
   /\bai (art|photo|picture|image)\b/i,
   /\bphotorealistic\b/i,
@@ -123,7 +151,6 @@ const VIDEO_GEN: RegExp[] = [
   /\bmake (a |an )?clip\b/i,
   /\bvideo (generation|gen)\b/i,
   /\bvideo model\b/i,
-  /\bveo\b/i,
 ];
 
 const DEEP_RESEARCH: RegExp[] = [
@@ -290,7 +317,7 @@ export function classifyPrompt(
   }
 
   // 2. Image generation
-  if ((match = matchesAny(content, IMAGE_GEN))) {
+  if ((match = matchesAny(content, IMAGE_GEN) ?? matchCatalogMediaModel(content, 'imageGen'))) {
     signals.push(`image-gen keyword: "${match}"`);
     return {
       task: 'image_generation',
@@ -301,7 +328,7 @@ export function classifyPrompt(
   }
 
   // 3. Video generation
-  if ((match = matchesAny(content, VIDEO_GEN))) {
+  if ((match = matchesAny(content, VIDEO_GEN) ?? matchCatalogMediaModel(content, 'videoGen'))) {
     signals.push(`video-gen keyword: "${match}"`);
     return {
       task: 'video_generation',

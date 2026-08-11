@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 
 import { QWEN_DEFAULT_BASE_URL } from '../base-url';
+
+const QWEN_DEFAULT_MODEL_ID = requireProviderDefaultModel('qwen');
 
 describe('QWEN_DEFAULT_BASE_URL', () => {
   it('defaults to DashScope compatible-mode, not the native generation API', () => {
@@ -12,7 +15,7 @@ describe('QWEN_DEFAULT_BASE_URL', () => {
     const detected = detectOpenAICompletionsCompat({
       provider: 'qwen',
       baseUrl: QWEN_DEFAULT_BASE_URL,
-      id: 'qwen-3.7-plus',
+      id: QWEN_DEFAULT_MODEL_ID,
     });
     expect(detected.capabilities.endpointClass).toBe('modelstudio-native');
     // modelstudio-native gets native streaming-usage compat.

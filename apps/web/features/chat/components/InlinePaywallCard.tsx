@@ -22,7 +22,6 @@ import { memo } from 'react';
 import {
   Video,
   Brain,
-  Zap,
   Monitor,
   Search,
   Image as ImageIcon,
@@ -62,6 +61,7 @@ export type { PaywallFeature };
 
 export type UserTier = BillingPlanTier;
 export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
+export type PaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
 
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
@@ -82,6 +82,8 @@ export interface InlinePaywallCardProps {
    * never synthesised, so the card cannot invent a reset time.
    */
   resetLabel?: string;
+  /** Server refusal recovery: upgrade, subscribe, repair billing, or inspect usage/reset. */
+  recoveryAction?: PaywallRecoveryAction;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
@@ -126,8 +128,6 @@ const FeatureIcon = memo(function FeatureIcon({ feature, className }: FeatureIco
     <Video className={iconClass} aria-hidden="true" />
   ) : feature === 'opus_5' ? (
     <Brain className={iconClass} aria-hidden="true" />
-  ) : feature === 'gpt_5_5' ? (
-    <Zap className={iconClass} aria-hidden="true" />
   ) : feature === 'computer_use' ? (
     <Monitor className={iconClass} aria-hidden="true" />
   ) : feature === 'deep_research' ? (
@@ -166,17 +166,19 @@ interface CtaButtonsProps {
   requiredTier: RequiredTier;
   /** GOV-20 — false renders dismiss only. */
   showUpgradeCta: boolean;
+  recoveryAction: PaywallRecoveryAction;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
 
 /**
- * Upgrade and dismiss CTAs. The upgrade action opens the page-level Cloud
- * waitlist modal instead of navigating away from the chat.
+ * Recovery and dismiss CTAs. The page owns the exact checkout/Settings
+ * destination so the card remains a pure transcript renderer.
  */
 const CtaButtons = memo(function CtaButtons({
   requiredTier,
   showUpgradeCta,
+  recoveryAction,
   onUpgrade,
   onDismiss,
 }: CtaButtonsProps) {
@@ -184,7 +186,13 @@ const CtaButtons = memo(function CtaButtons({
     <div className="flex flex-wrap gap-2">
       {showUpgradeCta ? (
         <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
-          Upgrade to {getBillingPlanPricing(requiredTier).label}
+          {recoveryAction === 'manage_billing'
+            ? 'Manage billing'
+            : recoveryAction === 'view_usage'
+              ? 'View usage'
+              : recoveryAction === 'subscribe'
+                ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}`
+                : `Upgrade to ${getBillingPlanPricing(requiredTier).label}`}
         </Button>
       ) : null}
 
@@ -208,13 +216,20 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   showUpgradeCta = true,
   suggestStandardModel = false,
   resetLabel = EMPTY_REASON,
+  recoveryAction = 'upgrade',
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
   // GOV-20: a refusal upgrading cannot fix must not be headlined "Upgrade to…".
-  const headline = showUpgradeCta
-    ? `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`
-    : paywallLimitHeadline(feature);
+  const headline = !showUpgradeCta
+    ? paywallLimitHeadline(feature)
+    : recoveryAction === 'manage_billing'
+      ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
+      : recoveryAction === 'view_usage'
+        ? paywallLimitHeadline(feature)
+        : recoveryAction === 'subscribe'
+          ? `Subscribe to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`
+          : `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`;
 
   return (
     <Card
@@ -233,8 +248,12 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
             className="ml-3 text-base font-semibold leading-snug"
           >
             {headline}
-            {/* GOV-20: no upgrade offered means no upgrade tier to advertise. */}
-            {showUpgradeCta ? <TierBadge tier={requiredTier} /> : null}
+            {/* Non-plan recovery must not advertise a tier badge. */}
+            {showUpgradeCta &&
+            recoveryAction !== 'manage_billing' &&
+            recoveryAction !== 'view_usage' ? (
+              <TierBadge tier={requiredTier} />
+            ) : null}
           </CardTitle>
         </div>
       </CardHeader>
@@ -257,6 +276,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
         <CtaButtons
           requiredTier={requiredTier}
           showUpgradeCta={showUpgradeCta}
+          recoveryAction={recoveryAction}
           onUpgrade={onUpgrade}
           onDismiss={onDismiss}
         />

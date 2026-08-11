@@ -6,6 +6,9 @@
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '@/test-utils/modelFixtures';
+
+const mockSelectedModelId = SYNTHETIC_LOCAL_MODEL_ID;
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -130,7 +133,7 @@ jest.mock('@/stores/settingsStore', () => ({
 
 jest.mock('@/src/features/model-picker/store', () => ({
   useModelStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ selectedModel: 'llama-3.2-1b' }),
+    sel({ selectedModel: mockSelectedModelId }),
 }));
 
 jest.mock('@/src/features/model-picker/service', () => ({

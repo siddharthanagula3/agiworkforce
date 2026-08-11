@@ -227,9 +227,9 @@ for (const file of [
 }
 
 // A bare readdirSync here THREW on any clean checkout and took the whole
-// `check:llm-operability` chain with it. That chain is 40 guards joined by
+// `check:llm-operability` chain with it. That chain is 41 guards joined by
 // `&&`, and this is the first command in it, so the ENOENT meant none of the
-// other 39 ever ran in CI — while the same command passed on a developer
+// other 40 ever ran in CI — while the same command passed on a developer
 // machine, where an untracked local `.agents/skills/` happened to exist.
 //
 // The directory is legitimately absent: `5b14585dd` removed the vendored

@@ -170,10 +170,9 @@ export const missionSchema = z.object({
 // BILLING SCHEMAS
 // ===================================
 
-// STB-7: `tokenPackPurchaseSchema` was removed alongside
-// features/billing/services/token-pack-purchase.ts. Token packs / credit
-// top-ups are a retired product path ("no top-ups, ever"); the schema had zero
-// consumers and described a purchase no surface can initiate.
+// `tokenPackPurchaseSchema` remains retired. Managed-usage top-ups now use the
+// canonical whole-dollar contract in @agiworkforce/types and the authenticated
+// `/api/billing/top-up` Checkout route; do not revive the old token-pack SKU.
 
 export const subscriptionSchema = z.object({
   plan: z.enum(['free', 'pro', 'max']),

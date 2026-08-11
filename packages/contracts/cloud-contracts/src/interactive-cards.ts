@@ -23,8 +23,10 @@ import {
   INTERACTIVE_CARD_SCHEMA_VERSION,
   ITINERARY_MAX_STOPS,
   ITINERARY_NOTE_MAX_LENGTH,
+  MAP_SEARCH_QUERY_MAX_LENGTH,
   isKnownInteractiveCardKind,
   type InteractiveCard,
+  type MapSearchAction,
 } from '@agiworkforce/types';
 
 /**
@@ -359,6 +361,69 @@ export const ItineraryCardBodySchema = z
   });
 
 // ---------------------------------------------------------------------------
+// map-search.v1
+// ---------------------------------------------------------------------------
+
+const MapSearchActionSchema = z
+  .object({
+    provider: z.enum(['google_maps', 'openstreetmap']),
+    label: z.string().min(1).max(80),
+    url: HttpsUrlSchema,
+  })
+  .strict();
+
+/**
+ * One canonical allowlist for both contract parsing and host-side openers.
+ * Exact origins reject lookalike hosts, credentials, alternate ports, and
+ * downgrade attempts; exact paths prevent a valid provider origin from being
+ * repurposed into an arbitrary outbound link.
+ */
+export function isAllowedMapSearchProviderUrl(
+  value: string,
+  provider?: MapSearchAction['provider'],
+): boolean {
+  try {
+    const url = new URL(value);
+    const google =
+      (!provider || provider === 'google_maps') &&
+      url.origin === 'https://www.google.com' &&
+      url.pathname === '/maps/search/' &&
+      url.searchParams.get('api') === '1' &&
+      Boolean(url.searchParams.get('query'));
+    const openStreetMap =
+      (!provider || provider === 'openstreetmap') &&
+      url.origin === 'https://www.openstreetmap.org' &&
+      url.pathname === '/search' &&
+      Boolean(url.searchParams.get('query'));
+    return google || openStreetMap;
+  } catch {
+    return false;
+  }
+}
+
+export const MapSearchCardBodySchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    query: z.string().min(1).max(MAP_SEARCH_QUERY_MAX_LENGTH),
+    actions: z.array(MapSearchActionSchema).min(1).max(2),
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    if (new Set(body.actions.map((action) => action.provider)).size !== body.actions.length) {
+      ctx.addIssue({ code: 'custom', path: ['actions'], message: 'duplicate map provider' });
+    }
+    for (const [index, action] of body.actions.entries()) {
+      if (!isAllowedMapSearchProviderUrl(action.url, action.provider)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actions', index, 'url'],
+          message: 'map provider URL mismatch',
+        });
+      }
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // The single dispatch point every surface calls
 // ---------------------------------------------------------------------------
 
@@ -391,7 +456,9 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
   const parsed =
     kind === 'clarify.v1'
       ? ClarifyCardBodySchema.safeParse(rawBody)
-      : ItineraryCardBodySchema.safeParse(rawBody);
+      : kind === 'itinerary.v1'
+        ? ItineraryCardBodySchema.safeParse(rawBody)
+        : MapSearchCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;

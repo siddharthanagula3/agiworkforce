@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: vi.fn((db: DatabaseAdapter) => db),
+}));
+
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+
 import {
   ScheduleConflictError,
   ScheduleNotFoundError,
   ScheduleValidationError,
   claimDueScheduleRuns,
+  countSchedules,
   createSchedule,
   createManualScheduleRun,
   deleteSchedule,
@@ -40,6 +47,10 @@ function database(
 const claim: ClaimedScheduleRun = {
   runId: 'run-1',
   scheduledFor: '2026-07-15T12:00:00.000Z',
+  scope: {
+    userId: 'user-1',
+    organizationId: '11111111-1111-4111-8111-111111111111',
+  },
   task: {
     id: 'task-1',
     userId: 'user-1',
@@ -71,6 +82,7 @@ const claim: ClaimedScheduleRun = {
 const taskRow = {
   id: 'task-1',
   user_id: 'user-1',
+  organization_id: '11111111-1111-4111-8111-111111111111',
   name: 'Daily briefing',
   description: null,
   schedule_type: 'cron',
@@ -116,6 +128,17 @@ function runRow(status: 'success' | 'failed' | 'timeout' | 'cancelled', error: s
 afterEach(() => vi.useRealTimers());
 
 describe('schedule service persistence', () => {
+  it('counts an account quota across workspaces with an explicit owner predicate', async () => {
+    const query = vi.fn().mockResolvedValue([{ count: '7' }]);
+
+    await expect(countSchedules(database(query), 'user-1')).resolves.toBe(7);
+
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('where user_id = $1');
+    expect(sql).not.toContain('organization_id');
+    expect(params).toEqual(['user-1']);
+  });
+
   it('lists only the owner schedules with bounded pagination', async () => {
     const query = vi.fn().mockResolvedValue([taskRow]);
 
@@ -400,9 +423,17 @@ describe('schedule service persistence', () => {
   });
 
   it('claims due work atomically with row locking and occurrence idempotency', async () => {
-    const query = vi.fn().mockResolvedValue([]);
+    const query = vi.fn().mockResolvedValue([
+      {
+        ...taskRow,
+        run_id: 'run-1',
+        run_started_at: '2026-07-15T12:00:00.000Z',
+        scheduled_for: '2026-07-15T12:00:00.000Z',
+        trigger_source: 'schedule',
+      },
+    ]);
 
-    await claimDueScheduleRuns(database(query), { limit: 7, leaseSeconds: 45 });
+    const claims = await claimDueScheduleRuns(database(query), { limit: 7, leaseSeconds: 45 });
 
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/for update skip locked/i);
@@ -413,6 +444,10 @@ describe('schedule service persistence', () => {
     expect(sql).toMatch(/is_enabled = true/i);
     expect(sql).toMatch(/status = 'active'/i);
     expect(params).toEqual([7, 45]);
+    expect(claims[0]?.scope).toEqual({
+      userId: 'user-1',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+    });
   });
 
   it('uses the canonical task_id schema and owner join for paginated run history', async () => {
@@ -635,14 +670,18 @@ describe('schedule run lifecycle', () => {
       .mockResolvedValueOnce([runRow('success')])
       .mockResolvedValueOnce([{ id: 'task-1' }]);
     const execute = vi.fn().mockResolvedValue({ text: 'Finished', model: 'model-1' });
+    const scopedDb = database(query);
 
-    const result = await processClaimedScheduleRun(database(query), claim, execute, {
+    const result = await processClaimedScheduleRun(scopedDb, claim, execute, {
       timeoutMs: 1000,
       now: () => new Date('2026-07-15T12:00:02.000Z'),
     });
 
     expect(result.status).toBe('success');
-    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(claim.task, expect.any(AbortSignal), 'run-1', {
+      ...claim.scope,
+      db: scopedDb,
+    });
   });
 
   it('records executor failures and still advances a recurring task', async () => {
@@ -744,6 +783,7 @@ describe('schedule run lifecycle', () => {
 
 describe('due-schedule batch isolation', () => {
   it('keeps sweeping after one claim fails to finalize', async () => {
+    vi.mocked(createClaimedUserScopedDb).mockClear();
     // processClaimedScheduleRun finalizes its own executor failures, so the only
     // way it throws is finalization itself failing — an unparseable stored
     // timing, or the database rejecting the write. Before the guard in
@@ -791,6 +831,8 @@ describe('due-schedule batch isolation', () => {
     // and finalized (two failed attempts on run-1, then run-1's own success).
     expect(finalizeCalls).toBe(3);
     expect(executor).toHaveBeenCalledTimes(2);
+    expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(1, db, claim.scope);
+    expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(2, db, claim.scope);
     expect(summary.claimed).toBe(2);
   });
 });

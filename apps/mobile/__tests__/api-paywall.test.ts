@@ -69,6 +69,10 @@ jest.mock('expo-file-system/legacy', () => ({
 // ---------------------------------------------------------------------------
 
 import { api, ApiPaywallError, resetApiAccountState } from '../services/api';
+import {
+  paywallActivityErrorFromApiError,
+  paywallErrorStateFromApiError,
+} from '../src/features/chat/utils/paywallRecovery';
 import { waitFor } from '@testing-library/react-native';
 import {
   clearAuthSession,
@@ -341,6 +345,86 @@ describe('non-429 errors pass through', () => {
 
     const result = await api.get<{ tier: string }>('/api/auth/me');
     expect(result.tier).toBe('basic');
+  });
+});
+
+describe('403 plan-upgrade feature classification', () => {
+  const planUpgradeBody = {
+    error: {
+      code: 'plan_upgrade_required',
+      message: 'Upgrade required',
+      required_plans: ['max_15x'],
+    },
+  };
+
+  it('classifies the video generation route as video_generation', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, planUpgradeBody));
+
+    const error = await api.post('/api/media/video/generate', {}).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiPaywallError);
+    expect((error as ApiPaywallError).feature).toBe('video_generation');
+    expect((error as ApiPaywallError).recoveryAction).toBe('upgrade');
+  });
+
+  it('classifies the image generation route as image_generation', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, planUpgradeBody));
+
+    const error = await api.post('/api/media/image/generate', {}).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiPaywallError);
+    expect((error as ApiPaywallError).feature).toBe('image_generation');
+  });
+
+  it('does not mislabel an unrelated plan-upgrade response as image generation', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, planUpgradeBody));
+
+    const error = await api.post('/api/some-future-paid-capability', {}).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiPaywallError);
+    expect((error as ApiPaywallError).feature).toBe('paid_capability');
+  });
+});
+
+describe('403 subscription feature classification', () => {
+  it.each(['subscription_required', 'subscription_inactive'] as const)(
+    'turns image-generation %s into an actionable paywall error',
+    async (code) => {
+      const message =
+        code === 'subscription_required'
+          ? 'No active subscription found. Please subscribe to use image generation.'
+          : 'Your subscription is past_due. Please update your payment method.';
+      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        makeResponse(403, {
+          error: { code, type: 'invalid_request_error', message },
+        }),
+      );
+
+      const error = await api.post('/api/media/image/generate', {}).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ApiPaywallError);
+      expect(error).toMatchObject({
+        code,
+        feature: 'image_generation',
+        requiredTier: 'pro',
+        reason: message,
+        recoveryAction: code === 'subscription_required' ? 'subscribe' : 'manage_billing',
+      });
+      expect(paywallErrorStateFromApiError(error as ApiPaywallError)).toMatchObject({
+        code,
+        recoveryAction: code === 'subscription_required' ? 'subscribe' : 'manage_billing',
+      });
+      expect(paywallActivityErrorFromApiError(error as ApiPaywallError)).toBe(message);
+    },
+  );
+
+  it('never tells an inactive subscriber to upgrade when the server omits a reason', () => {
+    const error = new ApiPaywallError('image_generation', 'pro', '', 'subscription_inactive');
+
+    expect(paywallActivityErrorFromApiError(error)).toBe(
+      'Your subscription is inactive. Update billing to continue.',
+    );
+    expect(paywallActivityErrorFromApiError(error)).not.toMatch(/upgrade/i);
   });
 });
 

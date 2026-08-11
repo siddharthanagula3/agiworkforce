@@ -57,16 +57,77 @@ vi.mock('../sections/ReflectSection', () => ({
 function stubFetch({
   connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
   installations = [] as Array<{ installation_id: number; created_at?: string }>,
-  skills = [] as Array<{ name: string; description: string; source: string }>,
+  skills = [] as Array<{
+    name: string;
+    description: string;
+    source: string;
+    lifecycle?: 'included' | 'draft';
+    downloadable?: boolean;
+  }>,
+  plugins = [
+    {
+      id: 'github-automation',
+      name: 'GitHub Automation',
+      description: 'Pull request and issue workflows.',
+      status: 'preview' as const,
+      webInstallable: false,
+      publisher: { name: 'AGI' },
+      declaredSkills: ['Code Review'],
+      distribution: null,
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    },
+  ],
+  pluginFailuresBeforeSuccess = 0,
   available = [] as string[],
+  connectorFailuresBeforeSuccess = 0,
+  skillFailuresBeforeSuccess = 0,
 } = {}) {
+  let connectorRequests = 0;
+  let skillRequests = 0;
+  let pluginCatalogRequests = 0;
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/api/skills')) {
-      return { ok: true, json: async () => ({ skills }) } as Response;
+      const shouldFail = skillRequests < skillFailuresBeforeSuccess;
+      skillRequests += 1;
+      return {
+        ok: !shouldFail,
+        status: shouldFail ? 503 : 200,
+        json: async () => ({
+          skills: skills.map((skill) => ({
+            ...skill,
+            lifecycle: skill.lifecycle ?? 'included',
+            downloadable: skill.downloadable ?? false,
+          })),
+        }),
+      } as Response;
+    }
+    if (url.includes('/api/plugins/installations')) {
+      return { ok: true, json: async () => ({ installations: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins')) {
+      const shouldFail = pluginCatalogRequests < pluginFailuresBeforeSuccess;
+      pluginCatalogRequests += 1;
+      return {
+        ok: !shouldFail,
+        status: shouldFail ? 503 : 200,
+        json: async () => ({ entries: plugins, total: plugins.length }),
+      } as Response;
     }
     if (url.includes('/api/github/installations')) {
       return { ok: true, json: async () => ({ installations }) } as Response;
+    }
+    if (url.includes('/api/connectors/custom')) {
+      return { ok: true, json: async () => ({ connectors: [] }) } as Response;
+    }
+    if (url === '/api/connectors') {
+      const shouldFail = connectorRequests < connectorFailuresBeforeSuccess;
+      connectorRequests += 1;
+      return {
+        ok: !shouldFail,
+        status: shouldFail ? 503 : 200,
+        json: async () => ({ connectors, available }),
+      } as Response;
     }
     if (url.includes('/api/connectors')) {
       return { ok: true, json: async () => ({ connectors, available }) } as Response;
@@ -131,6 +192,25 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     );
   });
 
+  it('shows a connector loading failure and retries instead of pretending the directory is empty', async () => {
+    stubFetch({ connectorFailuresBeforeSuccess: 1 });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    expect(
+      await screen.findByText(
+        'Connectors could not be loaded. Check your connection and try again.',
+      ),
+    ).toBeTruthy();
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Connect your first tool')).toBeTruthy();
+    expect(
+      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
   it('persists custom connectors and their optional bearer token through the real custom MCP endpoint', async () => {
     const fetchMock = stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
@@ -177,7 +257,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
         {
           name: 'release-notes',
           description: 'Draft release notes from verified changes.',
-          source: 'builtin',
+          source: 'bundled',
+          downloadable: true,
         },
       ],
     });
@@ -191,11 +272,59 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
     expect(await screen.findByText('/release-notes')).toBeTruthy();
+    expect(screen.getByText('Included')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Download release-notes SKILL.md' })).toBeTruthy();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
-    expect(screen.getByText('GitHub Automation')).toBeTruthy();
-    expect(screen.getAllByText('Catalogue preview').length).toBeGreaterThan(0);
+    expect(await screen.findByText('GitHub Automation')).toBeTruthy();
+    expect(screen.getAllByText('Coming later').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
+  });
+
+  it('shows a skills loading failure and retries instead of presenting an empty environment', async () => {
+    stubFetch({
+      skillFailuresBeforeSuccess: 1,
+      skills: [
+        {
+          name: 'fixture-reviewed-skill',
+          description: 'A reviewed fixture skill.',
+          source: 'bundled',
+        },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+
+    expect(
+      await screen.findByText('Skills could not be loaded. Check your connection and try again.'),
+    ).toBeTruthy();
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('fixture-reviewed-skill')).toBeTruthy();
+    expect(
+      screen.queryByText('Skills could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  it('shows a plugin loading failure and retries instead of presenting a fake directory', async () => {
+    stubFetch({ pluginFailuresBeforeSuccess: 1 });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="plugins" />);
+
+    expect(
+      await screen.findByText('Plugins could not be loaded. Check your connection and try again.'),
+    ).toBeTruthy();
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText(/No plugins installed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
+    expect(await screen.findByText('GitHub Automation')).toBeTruthy();
+    expect(
+      screen.queryByText('Plugins could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: /install/i })).toBeNull();
   });
 
   it('renders the account-backed Time and focus section from the shared settings nav', () => {

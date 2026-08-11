@@ -7,8 +7,8 @@
  * layer with `provider: 'xai'` so the compat detector returns
  * `endpointClass: 'xai-native'` defaults (no `service_tier`, no Responses API).
  *
- * Differentiator: Grok 4.3 Fast supports up to 2M-token context and Grok 4.3
- * exposes `reasoning_content` deltas — both surfaced via the existing OpenAI
+ * The current catalog-selected xAI family exposes large-context variants and
+ * `reasoning_content` deltas — both surfaced via the existing OpenAI
  * `translateOpenAIStream` (which already maps `reasoning_content` →
  * `thinking-delta`).
  *

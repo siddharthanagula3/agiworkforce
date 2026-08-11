@@ -94,7 +94,7 @@ corpus), 29-partial, and everything Phase 3+.
    behind the existing model router with per-run cost budgets; findings enter
    the same verify → dedupe → rank → policy pipeline (schema already
    enforces the corroboration rule).
-4. **Evaluation corpus** (`docs/guardian/evaluation/`): seeded mutations +
+4. **Evaluation corpus** (a proposed future directory under docs/guardian): seeded mutations +
    historical defects; precision/recall tracking gates any promotion from
    shadow mode.
 5. **Scanner expansion**: enable gitleaks/osv-scanner adapters with exact

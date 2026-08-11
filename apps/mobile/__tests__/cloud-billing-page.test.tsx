@@ -35,8 +35,9 @@ jest.mock('@gorhom/bottom-sheet', () => {
   return { __esModule: true, default: mockBottomSheet };
 });
 
+const mockPaywallBottomSheet = jest.fn(() => null);
 jest.mock('@/src/features/chat/components/PaywallBottomSheet', () => ({
-  PaywallBottomSheet: () => null,
+  PaywallBottomSheet: (props: Record<string, unknown>) => mockPaywallBottomSheet(props),
 }));
 
 jest.mock('@/src/ui/theme', () => {
@@ -59,7 +60,14 @@ jest.mock('@/components/ui/AgiMark', () => {
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return { CreditCard: Icon, ExternalLink: Icon, FileText: Icon, Check: Icon };
+  return {
+    CreditCard: Icon,
+    ExternalLink: Icon,
+    FileText: Icon,
+    Check: Icon,
+    RefreshCw: Icon,
+    ShoppingBag: Icon,
+  };
 });
 
 jest.mock('@/src/features/settings/common', () => {
@@ -68,7 +76,12 @@ jest.mock('@/src/features/settings/common', () => {
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => (
       <RN.View>{children}</RN.View>
     ),
-    SettingsInfo: () => <RN.View />,
+    SettingsInfo: ({ title, body }: { title: string; body: string }) => (
+      <RN.View>
+        <RN.Text>{title}</RN.Text>
+        <RN.Text>{body}</RN.Text>
+      </RN.View>
+    ),
     SettingsGroup: ({ children }: { children: React.ReactNode }) => <RN.View>{children}</RN.View>,
     SettingsRow: ({ label, onPress }: { label: string; onPress?: () => void }) => (
       <RN.Pressable accessibilityLabel={label} onPress={onPress}>
@@ -127,6 +140,7 @@ jest.mock('@/src/features/auth/store', () => ({
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
+import { fetchPortalSessionUrl } from '../src/features/billing/service';
 
 describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
@@ -144,6 +158,71 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
       isClerkLoaded: true,
       isClerkSignedIn: true,
     });
+  });
+
+  it('keeps free-plan recovery honest instead of routing Billing back to itself', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    render(<CloudBillingScreen />);
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0];
+    expect(props).toMatchObject({
+      recoveryAction: 'subscribe',
+      onPrimaryAction: undefined,
+      primaryActionUnavailableMessage:
+        "Plan changes aren't available in the app yet. Check back soon.",
+    });
+  });
+
+  it('gives an inactive subscriber a real portal action when billing management is enabled', async () => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'pro',
+      billingStatus: 'past_due',
+      billingSource: 'stripe',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    render(<CloudBillingScreen />);
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0];
+    expect(props?.recoveryAction).toBe('manage_billing');
+    expect(props?.onPrimaryAction).toEqual(expect.any(Function));
+
+    await act(async () => {
+      await (props?.onPrimaryAction as () => Promise<void>)();
+    });
+    expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/portal');
+  });
+
+  it('keeps inactive store-owned recovery at the recorded owner instead of opening Stripe', async () => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'pro',
+      billingStatus: 'past_due',
+      billingSource: 'apple',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    render(<CloudBillingScreen />);
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0];
+    expect(props?.recoveryAction).toBe('manage_billing');
+    expect(props?.onPrimaryAction).toEqual(expect.any(Function));
+
+    await act(async () => {
+      await (props?.onPrimaryAction as () => Promise<void>)();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Subscription managed elsewhere',
+      expect.stringContaining('another platform'),
+      expect.any(Array),
+    );
+    expect(fetchPortalSessionUrl).not.toHaveBeenCalled();
+    expect(openExternalUrl).not.toHaveBeenCalledWith('https://example.com/portal');
   });
 
   it('does not expose or fetch billing state while signed out', () => {
@@ -221,10 +300,10 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     });
     useChatAppModeStore.setState({ appMode: 'cloud' });
 
-    const { getByText } = render(<CloudBillingScreen />);
+    const { getAllByText, getByText } = render(<CloudBillingScreen />);
 
     expect(getByText('Pro plan')).toBeTruthy();
-    expect(getByText(/Canceled/i)).toBeTruthy();
+    expect(getAllByText(/Canceled/i).length).toBeGreaterThan(0);
   });
 
   it('does not advertise a billing-management action while mobile billing is disabled', () => {
@@ -306,6 +385,46 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     }>;
     buttons.find((button) => button.text === 'Manage on web')?.onPress?.();
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
+  });
+
+  it('shows exact Web proration and founder-set top-up terms for an active Stripe plan', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(getByText('How plan upgrades are charged')).toBeTruthy();
+    expect(
+      getByText(/exact prorated charge for the rest of your current billing period/i),
+    ).toBeTruthy();
+    expect(getByText('Usage top-ups')).toBeTruthy();
+    expect(getByText(/50 units for every \$1/i)).toBeTruthy();
+    expect(getByText(/minimum top-up is \$10 \(500 units\)/i)).toBeTruthy();
+    expect(getByText(/ordinary self-serve maximum is \$100/i)).toBeTruthy();
+    expect(
+      getByText(/native store shows the actual localized price and applicable tax/i),
+    ).toBeTruthy();
+    expect(queryByText(/buy 500 units/i)).toBeNull();
+  });
+
+  it('does not advertise Web top-ups to a plan that is not actively billed by Stripe', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'apple',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { queryByText } = render(<CloudBillingScreen />);
+
+    expect(queryByText('How plan upgrades are charged')).toBeNull();
+    expect(queryByText('Usage top-ups')).toBeNull();
   });
 
   // CRIT-007: this screen used to tell the user "You purchased this

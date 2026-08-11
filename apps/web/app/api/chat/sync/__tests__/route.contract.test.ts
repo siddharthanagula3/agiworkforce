@@ -36,6 +36,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',
+    organizationId: '11111111-1111-4111-8111-111111111111',
   })),
 }));
 
@@ -44,6 +45,8 @@ import { GET, POST } from '../route';
 const CONV_ID = '018f6f2a-0000-7000-8000-000000000001';
 const MSG_ID = '018f6f2a-0000-7000-8000-000000000002';
 const ART_ID = '018f6f2a-0000-7000-8000-000000000003';
+const PROJECT_ID = '018f6f2a-0000-7000-8000-000000000004';
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const conversationRow = {
   id: CONV_ID,
@@ -220,6 +223,48 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('46');
+  });
+
+  it('accepts a project only after proving owner and exact active workspace', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: PROJECT_ID }])
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: CONV_ID, server_version: '45', current: null },
+      ]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          { id: CONV_ID, title: 'Scoped project chat', projectId: PROJECT_ID, baseVersion: '0' },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const [validationSql, validationParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(validationSql).toContain('user_id = $1');
+    expect(validationSql).toContain('organization_id is not distinct from $2::uuid');
+    expect(validationParams).toEqual(['user_contract_1', ORGANIZATION_ID, [PROJECT_ID]]);
+    const [mutationSql, mutationParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+    expect(mutationSql).toContain('project.organization_id is not distinct from $3::uuid');
+    expect(mutationParams).toEqual(['user_contract_1', expect.any(String), ORGANIZATION_ID]);
+  });
+
+  it('rejects a project outside the active workspace before mutating conversations', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          { id: CONV_ID, title: 'Foreign project chat', projectId: PROJECT_ID, baseVersion: '0' },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   it('uses the server revision as the compare-and-swap guard for message updates', async () => {

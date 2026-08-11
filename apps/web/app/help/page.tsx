@@ -21,7 +21,7 @@ export default function HelpPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Help</p>
           <h1 id="agi-help-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Get unstuck,</span>
+            <span className="agi-fl-h1-line">Get unstuck,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">fast.</em>
             </span>

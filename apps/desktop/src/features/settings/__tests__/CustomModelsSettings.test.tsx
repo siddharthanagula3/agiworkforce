@@ -53,11 +53,11 @@ global.fetch = mockFetch;
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const SAMPLE_MODEL: CustomModelConfig = {
-  id: 'groq/llama-3.3-70b-versatile-abc123',
-  displayName: 'Groq Llama 3.3 70B',
+  id: 'fixture-provider/fixture-custom-model-abc123',
+  displayName: 'Fixture custom model',
   provider: 'Groq',
   baseUrl: 'https://api.groq.com/openai/v1',
-  modelId: 'llama-3.3-70b-versatile',
+  modelId: 'fixture-custom-model',
   apiKeyRef: 'stored',
   contextWindow: 32768,
   supportsStreaming: true,
@@ -100,7 +100,7 @@ describe('CustomModelsSettings', () => {
 
     it('displays the model display name', () => {
       render(<CustomModelsSettings />);
-      expect(screen.getByText('Groq Llama 3.3 70B')).toBeInTheDocument();
+      expect(screen.getByText('Fixture custom model')).toBeInTheDocument();
     });
 
     it('displays the provider badge', () => {

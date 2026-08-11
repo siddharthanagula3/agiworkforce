@@ -1,13 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import {
   listSharedLinks,
   revokeSharedLink,
   type SharedLinkSummary,
 } from '../services/conversation-data-service';
 import { PublishedArtifactsSection } from './PublishedArtifactsSection';
+import { SettingsSectionLink } from '../components/SettingsSectionLink';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@agiworkforce/ui';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -30,6 +40,7 @@ export function SharedLinksSection() {
   const [shares, setShares] = useState<SharedLinkSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionToken, setActionToken] = useState<string | null>(null);
+  const [shareToRevoke, setShareToRevoke] = useState<SharedLinkSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -68,12 +79,6 @@ export function SharedLinksSection() {
   };
 
   const handleRevoke = async (share: SharedLinkSummary) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(`Revoke the shared link for “${share.title}”?`)
-    ) {
-      return;
-    }
     setActionToken(share.token);
     setError(null);
     setNotice(null);
@@ -81,6 +86,7 @@ export function SharedLinksSection() {
       await revokeSharedLink(share.token);
       setShares((current) => current.filter(({ token }) => token !== share.token));
       setNotice(`Revoked the link for “${share.title}”.`);
+      setShareToRevoke(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Failed to revoke shared link');
     } finally {
@@ -91,12 +97,12 @@ export function SharedLinksSection() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <Link
-          href="/settings/privacy"
+        <SettingsSectionLink
+          section="privacy"
           style={{ color: 'var(--text-3)', fontSize: 12, textDecoration: 'none' }}
         >
           ← Privacy
-        </Link>
+        </SettingsSectionLink>
         <h1
           style={{
             fontFamily: 'var(--serif)',
@@ -201,7 +207,7 @@ export function SharedLinksSection() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleRevoke(share)}
+                    onClick={() => setShareToRevoke(share)}
                     disabled={busy}
                     style={{
                       ...actionButtonStyle,
@@ -217,6 +223,37 @@ export function SharedLinksSection() {
           })
         )}
       </section>
+
+      <AlertDialog
+        open={shareToRevoke !== null}
+        onOpenChange={(open) => {
+          if (!open && actionToken === null) setShareToRevoke(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke this public link?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {shareToRevoke
+                ? `Anyone using the link for “${shareToRevoke.title}” will immediately lose access. This cannot be undone.`
+                : 'Anyone using this link will immediately lose access.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionToken !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!shareToRevoke || actionToken !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (shareToRevoke) void handleRevoke(shareToRevoke);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {actionToken ? 'Revoking…' : 'Revoke link'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* CAP-015 slice 4: the other thing a user can make public from chat.
           Kept on this screen so "what of mine is public?" has one answer

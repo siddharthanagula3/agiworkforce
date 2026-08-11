@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { StreamChunk } from '@agiworkforce/types';
+import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
 import {
   translateOpenAIStream,
   type OpenAIChatCompletionChunk,
 } from '@agiworkforce/providers-openai';
 
 import { withMoonshotCacheUsageNormalization } from '../cache-usage';
+
+const MOONSHOT_DEFAULT_MODEL_ID = requireProviderDefaultModel('moonshot');
 
 async function* fromArray<T>(items: T[]): AsyncIterable<T> {
   for (const i of items) yield i;
@@ -22,7 +24,7 @@ function baseChunk(overrides: Partial<OpenAIChatCompletionChunk>): OpenAIChatCom
     id: 'chatcmpl-1',
     object: 'chat.completion.chunk',
     created: 0,
-    model: 'kimi-k3',
+    model: MOONSHOT_DEFAULT_MODEL_ID,
     choices: [{ index: 0, delta: {}, finish_reason: null }],
     ...overrides,
   };

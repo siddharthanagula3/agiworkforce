@@ -11,7 +11,7 @@ use std::time::Duration;
 /// Represents an Ollama model with its metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OllamaModel {
-    /// The model name (e.g., "llama3.2:latest")
+    /// The provider-reported model name
     pub name: String,
     /// Size of the model in bytes
     pub size: u64,
@@ -34,7 +34,7 @@ pub struct OllamaModelDetails {
     /// Quantization level (e.g., "Q4_0", "Q8_0")
     #[serde(default)]
     pub quantization_level: String,
-    /// Model family (e.g., "llama", "mistral")
+    /// Provider-reported model family
     #[serde(default)]
     pub family: String,
     /// Model families this model belongs to
@@ -203,7 +203,7 @@ pub async fn ollama_list_models(base_url: Option<String>) -> Result<Vec<OllamaMo
 /// Get detailed information about a specific Ollama model
 ///
 /// # Arguments
-/// * `model_name` - The name of the model to get details for (e.g., "llama3.2:latest")
+/// * `model_name` - The provider-reported name of an installed model
 ///
 /// # Returns
 /// - `Ok(OllamaModel)` with the model details
@@ -224,7 +224,7 @@ pub async fn ollama_get_model_info(
 /// Pull a model from Ollama and wait for the download to complete.
 ///
 /// # Arguments
-/// * `model_name` - The name of the model to pull (e.g., "llama3.2", "mistral:7b")
+/// * `model_name` - The user-selected model name to pull
 ///
 /// # Returns
 /// - `Ok(())` when the model is ready
@@ -332,22 +332,22 @@ mod tests {
     #[test]
     fn test_ollama_model_serialization() {
         let model = OllamaModel {
-            name: "llama3.2:latest".to_string(),
+            name: "fixture-local-model:current".to_string(),
             size: 4_000_000_000,
             modified_at: "2024-01-15T10:30:00Z".to_string(),
             digest: "abc123".to_string(),
             details: OllamaModelDetails {
                 parameter_size: "7B".to_string(),
                 quantization_level: "Q4_0".to_string(),
-                family: "llama".to_string(),
-                families: vec!["llama".to_string()],
+                family: "fixture-family".to_string(),
+                families: vec!["fixture-family".to_string()],
                 parent_model: String::new(),
                 format: "gguf".to_string(),
             },
         };
 
         let json = serde_json::to_string(&model).unwrap();
-        assert!(json.contains("llama3.2:latest"));
+        assert!(json.contains("fixture-local-model:current"));
         assert!(json.contains("7B"));
     }
 }

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
@@ -111,6 +112,9 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'feature_flags', column: 'user_id' },
   // Usage + billing
   { table: 'usage_events', column: 'user_id' },
+  // Terminal video jobs before their RESTRICTed managed-usage parent. Active
+  // jobs block the entire erasure before bytes/rows are touched (see below).
+  { table: 'video_generation_jobs', column: 'user_id' },
   { table: 'managed_usage_requests', column: 'user_id' },
   { table: 'credit_transactions', column: 'user_id' },
   { table: 'token_credits', column: 'user_id' },
@@ -230,6 +234,8 @@ export interface EraseUserAccountOptions {
    * outlives the identity-provider delete that follows.
    */
   retainProfile?: boolean;
+  /** `data` preserves the auth/profile account and never schedules account purge. */
+  scope?: 'account' | 'data';
 }
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -239,6 +245,164 @@ function isSchemaAbsent(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = (error as Record<string, unknown>)['code'];
   return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
+}
+
+async function releaseDataVideoErasureFence(userId: string, fenceToken: string): Promise<void> {
+  try {
+    await getNeonDb().execute(
+      `update public.profiles
+          set video_generation_erasure_fence_token = null,
+              video_generation_erasure_fence_expires_at = null
+        where id = $1
+          and video_generation_erasure_fence_token = $2`,
+      [userId, fenceToken],
+    );
+  } catch (error) {
+    logger.error({ userId, error }, 'Could not release the data-only video erasure fence');
+  }
+}
+
+async function sealAndCheckVideoJobsForErasure(
+  userId: string,
+  scope: 'account' | 'data',
+): Promise<{
+  blocked: boolean;
+  error?: string;
+  dataFenceToken?: string;
+}> {
+  const db = getNeonDb();
+  let provisioned = false;
+  try {
+    const schema = await db.query<{ provisioned: boolean }>(
+      `select to_regclass('public.video_generation_jobs') is not null as provisioned`,
+    );
+    provisioned = schema[0]?.provisioned === true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Could not inspect durable video erasure schema');
+    return { blocked: true, error: message };
+  }
+  if (!provisioned) return { blocked: false };
+
+  let dataFenceToken: string | undefined;
+  try {
+    // This update takes the same profile-row lock that durable job creation
+    // holds with FOR UPDATE, then leaves a committed deletion fence. A job
+    // that won first commits before this returns and is observed below; every
+    // later creation sees the flags and is rejected in its transaction.
+    const fenced =
+      scope === 'account'
+        ? await db.query<{ id: string }>(
+            `update public.profiles
+                set deletion_requested_at = coalesce(deletion_requested_at, now()),
+                    deletion_scheduled_for = coalesce(deletion_scheduled_for, now())
+              where id = $1
+                and (
+                  video_generation_admission_token is null
+                  or video_generation_admission_expires_at <= now()
+                )
+                and (
+                  video_generation_erasure_fence_token is null
+                  or video_generation_erasure_fence_expires_at <= now()
+                )
+            returning id`,
+            [userId],
+          )
+        : await (async () => {
+            dataFenceToken = randomUUID();
+            return db.query<{ id: string }>(
+              `update public.profiles
+                  set video_generation_erasure_fence_token = $2,
+                      video_generation_erasure_fence_expires_at = now() + interval '1 hour'
+                where id = $1
+                  and deletion_scheduled_for is null
+                  and (
+                    video_generation_admission_token is null
+                    or video_generation_admission_expires_at <= now()
+                  )
+                  and (
+                    video_generation_erasure_fence_token is null
+                    or video_generation_erasure_fence_expires_at <= now()
+                  )
+              returning id`,
+              [userId, dataFenceToken],
+            );
+          })();
+    if (!fenced[0]) {
+      return {
+        blocked: true,
+        error:
+          scope === 'account'
+            ? 'The profile deletion fence matched no account row.'
+            : 'The data-erasure fence could not be acquired without changing account-deletion state.',
+      };
+    }
+
+    const rows = await db.query<{ has_blocking: boolean }>(
+      `select (
+         exists (
+           select 1
+             from public.video_generation_jobs
+            where user_id = $1
+              and (
+                status in ('submitting', 'queued', 'processing')
+                or incident_alert_status in ('pending', 'exhausted')
+              )
+         )
+         or exists (
+           select 1
+             from public.managed_usage_requests request_row
+           where request_row.user_id = $1
+              and request_row.idempotency_key like 'agi.media.%.video.%'
+              and (
+                request_row.status in ('reserving', 'reserved', 'provider_started')
+                or request_row.final_settlement_status = 'pending'
+              )
+         )
+         or exists (
+           select 1
+             from public.credit_settlement_jobs settlement
+            where settlement.user_id = $1
+              and settlement.status = 'pending'
+              and settlement.metadata->>'type' = 'managed_usage_finalization'
+              and settlement.metadata #>> '{usage,operation}' = 'video'
+         )
+         or exists (
+           select 1
+             from public.credit_settlement_jobs settlement
+            where settlement.user_id = $1
+              and settlement.status = 'terminal'
+              and settlement.metadata->>'type' = 'managed_usage_finalization'
+              and settlement.metadata #>> '{usage,operation}' = 'video'
+              and (
+                settlement.video_incident_alert_status is null
+                or settlement.video_incident_alert_status in ('pending', 'exhausted')
+              )
+              and (
+                settlement.metadata #>> '{usage,jobId}' is null
+                or not exists (
+                  select 1
+                    from public.video_generation_jobs alert_job
+                   where alert_job.id::text = settlement.metadata #>> '{usage,jobId}'
+                     and alert_job.incident_alert_status = 'delivered'
+                )
+              )
+         )
+       ) as has_blocking`,
+      [userId],
+    );
+    const blocked = rows[0]?.has_blocking === true;
+    if (blocked && dataFenceToken) {
+      await releaseDataVideoErasureFence(userId, dataFenceToken);
+      dataFenceToken = undefined;
+    }
+    return { blocked, ...(dataFenceToken ? { dataFenceToken } : {}) };
+  } catch (error) {
+    if (dataFenceToken) await releaseDataVideoErasureFence(userId, dataFenceToken);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Could not prove video jobs terminal before erasure');
+    return { blocked: true, error: message };
+  }
 }
 
 /**
@@ -395,102 +559,135 @@ export async function eraseUserAccountData(
   options: EraseUserAccountOptions = {},
 ): Promise<AccountErasureReport> {
   const db = getNeonDb();
-  const media = await eraseUserMedia(userId);
-  const knowledge = await eraseUserKnowledgeObjects(userId);
-  const avatar = await eraseUserAvatarObject(userId);
-  const tables: AccountErasureReport['tables'] = {};
-  const anonymized: AccountErasureReport['anonymized'] = {};
+  const videoGate = await sealAndCheckVideoJobsForErasure(userId, options.scope ?? 'account');
+  if (videoGate.blocked) {
+    // Provider identity, reconciliation ownership, and its billing reservation
+    // must stay together until the bounded Workflow reaches a terminal state.
+    // Deleting any media/object first would make the later retry incomplete.
+    return {
+      userId,
+      mediaObjectsDeleted: 0,
+      mediaObjectsFailed: 0,
+      mediaRowsDeleted: 0,
+      knowledgeObjectsDeleted: 0,
+      knowledgeObjectsFailed: 0,
+      avatarObjectsDeleted: 0,
+      avatarObjectsFailed: 0,
+      tables: {
+        video_generation_jobs: {
+          deleted: false,
+          retainedForRetry: true,
+          ...(videoGate.error ? { error: videoGate.error } : {}),
+        },
+        [PROFILE_TABLE]: { deleted: false, retainedForRetry: true },
+      },
+      anonymized: {},
+      complete: false,
+      profileRetained: true,
+    };
+  }
+  try {
+    const media = await eraseUserMedia(userId);
+    const knowledge = await eraseUserKnowledgeObjects(userId);
+    const avatar = await eraseUserAvatarObject(userId);
+    const tables: AccountErasureReport['tables'] = {};
+    const anonymized: AccountErasureReport['anonymized'] = {};
 
-  for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
-    try {
-      // Identifiers come from the hardcoded ANONYMIZED_USER_COLUMNS constant
-      // above; the only user-controlled value is bound as $1.
-      await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [
-        userId,
-      ]);
-      anonymized[table] = { updated: true };
-    } catch (error) {
-      if (isSchemaAbsent(error)) {
-        anonymized[table] = { updated: false, skipped: true };
+    for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
+      try {
+        // Identifiers come from the hardcoded ANONYMIZED_USER_COLUMNS constant
+        // above; the only user-controlled value is bound as $1.
+        await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [
+          userId,
+        ]);
+        anonymized[table] = { updated: true };
+      } catch (error) {
+        if (isSchemaAbsent(error)) {
+          anonymized[table] = { updated: false, skipped: true };
+          continue;
+        }
+        anonymized[table] = {
+          updated: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        logger.error({ userId, table, error }, 'Account erasure failed to anonymize table');
+      }
+    }
+
+    for (const { table, column } of USER_SCOPED_TABLES) {
+      if (table === PROFILE_TABLE) continue;
+      // A knowledge object we could not delete keeps its row: `storage_uri` is
+      // the only pointer to it, and the rows cascade from user_projects.
+      if (table === 'user_projects' && knowledge.failed > 0) {
+        tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
-      anonymized[table] = {
-        updated: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-      logger.error({ userId, table, error }, 'Account erasure failed to anonymize table');
-    }
-  }
-
-  for (const { table, column } of USER_SCOPED_TABLES) {
-    if (table === PROFILE_TABLE) continue;
-    // A knowledge object we could not delete keeps its row: `storage_uri` is
-    // the only pointer to it, and the rows cascade from user_projects.
-    if (table === 'user_projects' && knowledge.failed > 0) {
-      tables[table] = { deleted: false, retainedForRetry: true };
-      continue;
-    }
-    try {
-      // Identifiers come from the hardcoded USER_SCOPED_TABLES constant above;
-      // the only user-controlled value is bound as $1.
-      await db.execute(`delete from public.${table} where ${column} = $1`, [userId]);
-      tables[table] = { deleted: true };
-    } catch (error) {
-      if (isSchemaAbsent(error)) {
-        tables[table] = { deleted: false, skipped: true };
-        continue;
-      }
-      tables[table] = {
-        deleted: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-      logger.error({ userId, table, error }, 'Account erasure failed for table');
-    }
-  }
-
-  const dataDisposed =
-    media.mediaObjectsFailed === 0 &&
-    knowledge.failed === 0 &&
-    avatar.failed === 0 &&
-    Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
-    Object.values(anonymized).every((result) => result.updated || result.skipped === true);
-
-  let complete = dataDisposed;
-  let profileRetained = true;
-  if (dataDisposed && !options.retainProfile) {
-    try {
-      await eraseProfileRow(userId);
-      tables[PROFILE_TABLE] = { deleted: true };
-      profileRetained = false;
-    } catch (error) {
-      if (isSchemaAbsent(error)) {
-        tables[PROFILE_TABLE] = { deleted: false, skipped: true };
-        profileRetained = false;
-      } else {
-        complete = false;
-        tables[PROFILE_TABLE] = {
+      try {
+        // Identifiers come from the hardcoded USER_SCOPED_TABLES constant above;
+        // the only user-controlled value is bound as $1.
+        await db.execute(`delete from public.${table} where ${column} = $1`, [userId]);
+        tables[table] = { deleted: true };
+      } catch (error) {
+        if (isSchemaAbsent(error)) {
+          tables[table] = { deleted: false, skipped: true };
+          continue;
+        }
+        tables[table] = {
           deleted: false,
           error: error instanceof Error ? error.message : String(error),
         };
-        logger.error({ userId, error }, 'Account erasure failed to delete the profile row');
+        logger.error({ userId, table, error }, 'Account erasure failed for table');
       }
     }
-  } else {
-    tables[PROFILE_TABLE] = { deleted: false, retainedForRetry: true };
-  }
 
-  return {
-    userId,
-    ...media,
-    knowledgeObjectsDeleted: knowledge.deleted,
-    knowledgeObjectsFailed: knowledge.failed,
-    avatarObjectsDeleted: avatar.deleted,
-    avatarObjectsFailed: avatar.failed,
-    tables,
-    anonymized,
-    complete,
-    profileRetained,
-  };
+    const dataDisposed =
+      media.mediaObjectsFailed === 0 &&
+      knowledge.failed === 0 &&
+      avatar.failed === 0 &&
+      Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
+      Object.values(anonymized).every((result) => result.updated || result.skipped === true);
+
+    let complete = dataDisposed;
+    let profileRetained = true;
+    if (dataDisposed && !options.retainProfile) {
+      try {
+        await eraseProfileRow(userId);
+        tables[PROFILE_TABLE] = { deleted: true };
+        profileRetained = false;
+      } catch (error) {
+        if (isSchemaAbsent(error)) {
+          tables[PROFILE_TABLE] = { deleted: false, skipped: true };
+          profileRetained = false;
+        } else {
+          complete = false;
+          tables[PROFILE_TABLE] = {
+            deleted: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          logger.error({ userId, error }, 'Account erasure failed to delete the profile row');
+        }
+      }
+    } else {
+      tables[PROFILE_TABLE] = { deleted: false, retainedForRetry: true };
+    }
+
+    return {
+      userId,
+      ...media,
+      knowledgeObjectsDeleted: knowledge.deleted,
+      knowledgeObjectsFailed: knowledge.failed,
+      avatarObjectsDeleted: avatar.deleted,
+      avatarObjectsFailed: avatar.failed,
+      tables,
+      anonymized,
+      complete,
+      profileRetained,
+    };
+  } finally {
+    if (videoGate.dataFenceToken) {
+      await releaseDataVideoErasureFence(userId, videoGate.dataFenceToken);
+    }
+  }
 }
 
 /**

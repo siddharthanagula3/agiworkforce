@@ -19,9 +19,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { LibraryListResponseSchema } from '@agiworkforce/cloud-contracts';
 
-const { mockGetClerkAuthUser, mockQuery } = vi.hoisted(() => ({
+const { mockGetClerkAuthUser, mockQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockQuery: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -38,6 +39,10 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mockQuery }),
+}));
+
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 
 import { GET } from '../route';
@@ -78,6 +83,7 @@ describe('GET /api/library', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-owner' });
+    mockResolveActiveOrganizationId.mockResolvedValue(null);
     mockQuery.mockResolvedValue([]);
   });
 
@@ -88,13 +94,15 @@ describe('GET /api/library', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
-  it('scopes the listing to the authenticated user', async () => {
+  it('scopes Personal listing to the authenticated user and null organization', async () => {
     mockQuery.mockResolvedValue([makeRow()]);
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('where user_id = $1 and deleted_at is null');
-    expect(params[0]).toBe('user-owner');
+    expect(sql).toContain('where user_id = $1');
+    expect(sql).toContain('organization_id is not distinct from $2::uuid');
+    expect(sql).toContain('deleted_at is null');
+    expect(params.slice(0, 2)).toEqual(['user-owner', null]);
     const body = await parsedBody(res);
     expect(body.items).toHaveLength(1);
     expect(body.items[0]).toMatchObject({
@@ -105,6 +113,18 @@ describe('GET /api/library', () => {
       previewable: true,
       origin: 'generated',
     });
+  });
+
+  it('scopes organization listing to the server-resolved active membership', async () => {
+    const organizationId = '33333333-3333-4333-8333-333333333333';
+    mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('organization_id is not distinct from $2::uuid');
+    expect(params.slice(0, 2)).toEqual(['user-owner', organizationId]);
   });
 
   it('lists the recently-deleted bin (30-day window) when deleted=true', async () => {
@@ -121,9 +141,9 @@ describe('GET /api/library', () => {
     const res = await GET(makeRequest('?kind=image&surface=artifact'));
     expect(res.status).toBe(200);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('and kind = $2');
-    expect(sql).toContain("coalesce(metadata->>'surface', 'file') = $3");
-    expect(params).toEqual(['user-owner', 'image', 'artifact', 25, 0]);
+    expect(sql).toContain('and kind = $3');
+    expect(sql).toContain("coalesce(metadata->>'surface', 'file') = $4");
+    expect(params).toEqual(['user-owner', null, 'image', 'artifact', 25, 0]);
   });
 
   it('derives the uploaded/generated origin filter from metadata.origin', async () => {
@@ -140,9 +160,9 @@ describe('GET /api/library', () => {
   it('searches filename and prompt with ILIKE and escapes wildcards', async () => {
     await GET(makeRequest(`?q=${encodeURIComponent('100%_report')}`));
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("coalesce(metadata->>'filename', '') ilike $2");
-    expect(sql).toContain("coalesce(prompt, '') ilike $2");
-    expect(params[1]).toBe('%100\\%\\_report%');
+    expect(sql).toContain("coalesce(metadata->>'filename', '') ilike $3");
+    expect(sql).toContain("coalesce(prompt, '') ilike $3");
+    expect(params[2]).toBe('%100\\%\\_report%');
   });
 
   it('maps legacy rows (empty metadata) to the documented fallbacks', async () => {
@@ -173,8 +193,8 @@ describe('GET /api/library', () => {
     mockQuery.mockResolvedValue([makeRow(), makeRow(), makeRow()]);
     const res = await GET(makeRequest('?limit=2&offset=4'));
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('limit $2 offset $3');
-    expect(params).toEqual(['user-owner', 3, 4]); // probe = limit + 1
+    expect(sql).toContain('limit $3 offset $4');
+    expect(params).toEqual(['user-owner', null, 3, 4]); // probe = limit + 1
     const body = await parsedBody(res);
     expect(body.items).toHaveLength(2);
     expect(body.has_more).toBe(true);

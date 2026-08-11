@@ -126,10 +126,39 @@ interface ErasureFixture {
   knowledgeRows?: Array<{ storage_uri: string | null }>;
   avatarUrl?: string | null;
   failStatementMatching?: string;
+  activeVideoJobs?: boolean;
+  pendingVideoIncident?: boolean;
+  pendingVideoSettlement?: boolean;
+  videoGateError?: Error;
+  missingProfileFence?: boolean;
+  liveDataFence?: boolean;
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes("to_regclass('public.video_generation_jobs')")) {
+      return [{ provisioned: true }];
+    }
+    if (sql.includes('update public.profiles') && sql.includes('deletion_requested_at')) {
+      return fixture.missingProfileFence || fixture.liveDataFence ? [] : [{ id: 'user-1' }];
+    }
+    if (
+      sql.includes('update public.profiles') &&
+      sql.includes('video_generation_erasure_fence_token')
+    ) {
+      return fixture.missingProfileFence ? [] : [{ id: 'user-1' }];
+    }
+    if (sql.includes('from public.video_generation_jobs')) {
+      if (fixture.videoGateError) throw fixture.videoGateError;
+      return [
+        {
+          has_blocking:
+            (fixture.activeVideoJobs ?? false) ||
+            (fixture.pendingVideoIncident ?? false) ||
+            (fixture.pendingVideoSettlement ?? false),
+        },
+      ];
+    }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
     if (sql.includes('project_knowledge_files')) return fixture.knowledgeRows ?? [];
     if (sql.includes('avatar_url')) return [{ avatar_url: fixture.avatarUrl ?? null }];
@@ -233,6 +262,155 @@ describe('eraseUserAccountData', () => {
       ).toBe(true);
     }
     expect(statements.at(-1)).toContain('delete from public.profiles');
+  });
+
+  it('touches no bytes, jobs, billing, or profile while a provider video is active', async () => {
+    primeDb({ activeVideoJobs: true, mediaRows: [{ id: 'asset-1', storage_pathname: 'video' }] });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(report.tables['video_generation_jobs']).toEqual({
+      deleted: false,
+      retainedForRetry: true,
+    });
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('never converts a data-only erasure blocked by video into an account purge', async () => {
+    primeDb({ activeVideoJobs: true });
+
+    const report = await eraseUserAccountData('user-1', {
+      retainProfile: true,
+      scope: 'data',
+    });
+
+    expect(report.complete).toBe(false);
+    const queries = mocks.query.mock.calls.map((call) => String(call[0]));
+    expect(queries.some((sql) => /set deletion_scheduled_for/iu.test(sql))).toBe(false);
+    expect(queries.some((sql) => sql.includes('video_generation_erasure_fence_expires_at'))).toBe(
+      true,
+    );
+    expect(
+      executedStatements().some(
+        (sql) =>
+          sql.includes('video_generation_erasure_fence_token = null') &&
+          !sql.includes('deletion_scheduled_for'),
+      ),
+    ).toBe(true);
+  });
+
+  it('fails closed without deleting anything when active-video state cannot be proved', async () => {
+    primeDb({ videoGateError: new Error('Neon unavailable') });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.tables['video_generation_jobs']?.error).toContain('Neon unavailable');
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the profile deletion fence matches no row', async () => {
+    primeDb({ missingProfileFence: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.tables['video_generation_jobs']?.error).toContain('matched no account row');
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('retains a terminal video incident until its owed human alert is delivered', async () => {
+    primeDb({ pendingVideoIncident: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.tables['video_generation_jobs']?.retainedForRetry).toBe(true);
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing while a video final credit settlement is still pending', async () => {
+    primeDb({ pendingVideoSettlement: true });
+
+    const accountReport = await eraseUserAccountData('user-1');
+    expect(accountReport.complete).toBe(false);
+    expect(mocks.execute).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    primeDb({ pendingVideoSettlement: true });
+    const dataReport = await eraseUserAccountData('user-1', {
+      retainProfile: true,
+      scope: 'data',
+    });
+    expect(dataReport.complete).toBe(false);
+    const nonFenceStatements = executedStatements().filter(
+      (sql) => !sql.includes('video_generation_erasure_fence_token = null'),
+    );
+    expect(nonFenceStatements).toEqual([]);
+    expect(
+      executedStatements().every((sql) =>
+        sql.includes('video_generation_erasure_fence_token = null'),
+      ),
+    ).toBe(true);
+
+    const blockerSql = mocks.query.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(blockerSql).toMatch(/final_settlement_status = 'pending'/i);
+    expect(blockerSql).toMatch(
+      /credit_settlement_jobs[\s\S]*settlement\.status = 'pending'[\s\S]*\{usage,operation\}' = 'video'/i,
+    );
+  });
+
+  it('does not let account erasure race a live data-only erasure fence', async () => {
+    primeDb({ liveDataFence: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    const accountFenceSql = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('set deletion_requested_at'));
+    expect(accountFenceSql).toMatch(
+      /video_generation_erasure_fence_token is null[\s\S]*video_generation_erasure_fence_expires_at <= now\(\)/i,
+    );
+  });
+
+  it('commits the profile deletion fence before checking active jobs or media', async () => {
+    primeDb({ activeVideoJobs: true });
+
+    await eraseUserAccountData('user-1');
+
+    const queries = mocks.query.mock.calls.map((call) => String(call[0]));
+    const fenceIndex = queries.findIndex(
+      (sql) => sql.includes('update public.profiles') && sql.includes('deletion_requested_at'),
+    );
+    const activeIndex = queries.findIndex((sql) =>
+      sql.includes('from public.video_generation_jobs'),
+    );
+    expect(fenceIndex).toBeGreaterThanOrEqual(0);
+    expect(fenceIndex).toBeLessThan(activeIndex);
+  });
+
+  it('deletes terminal video rows before their managed-usage parent', async () => {
+    primeDb({ activeVideoJobs: false });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(true);
+    const statements = executedStatements();
+    const videoIndex = statements.findIndex((sql) =>
+      sql.includes('delete from public.video_generation_jobs'),
+    );
+    const managedIndex = statements.findIndex((sql) =>
+      sql.includes('delete from public.managed_usage_requests'),
+    );
+    expect(videoIndex).toBeGreaterThanOrEqual(0);
+    expect(videoIndex).toBeLessThan(managedIndex);
   });
 
   it('keeps the profiles retry pointer when a table delete fails', async () => {

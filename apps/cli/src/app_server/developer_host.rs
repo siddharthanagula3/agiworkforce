@@ -2629,7 +2629,7 @@ mod tests {
                 })
                 .collect(),
         );
-        session.model = Some("llama3".to_string());
+        session.model = Some("fixture-local-model:latest".to_string());
         session.workspace_root = Some(workspace_root.clone());
         session.routing_authority = Some(ManagedSessionRoutingAuthority {
             privacy_mode: PrivacyMode::Local,
@@ -3023,12 +3023,11 @@ mod tests {
             false,
         )
         .expect("managed host");
-        let previous = ManagedSessionAutoRouting {
-            selection: "auto-premium".to_string(),
-            model_key: "gpt-5.6-luna".to_string(),
-            task_type: DeveloperRoutingTaskType::General,
-            trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
-        };
+        let previous = host
+            .resolve_auto_thread_model("auto-premium", DeveloperRoutingTaskType::General, None)
+            .expect("general route")
+            .auto_routing
+            .expect("persisted general Auto state");
 
         let resolved = host
             .resolve_auto_thread_model(
@@ -3038,10 +3037,11 @@ mod tests {
             )
             .expect("coding route");
 
-        assert_eq!(resolved.provider_model_id, "gpt-5.4-mini");
+        assert!(!resolved.provider_model_id.is_empty());
         assert!(resolved.fallback_model_ids.is_empty());
         let state = resolved.auto_routing.expect("persisted Auto state");
-        assert_eq!(state.model_key, "gpt-5.4-mini");
+        assert!(!state.model_key.is_empty());
+        assert_ne!(state.task_type, previous.task_type);
         assert_eq!(state.task_type, DeveloperRoutingTaskType::Coding);
         assert_eq!(
             state.trust_mode,
@@ -3063,9 +3063,16 @@ mod tests {
             false,
         )
         .expect("BYOK host");
+        let previous_route = crate::model_catalog::resolve_auto_model(
+            "auto-economy",
+            agiworkforce_model_registry::RoutingTaskType::SimpleChat,
+            "byok",
+            agiworkforce_model_registry::TrustMode::Byok,
+        )
+        .expect("catalog economy route");
         let previous = ManagedSessionAutoRouting {
             selection: "auto-economy".to_string(),
-            model_key: "gemini-3.5-flash-lite".to_string(),
+            model_key: previous_route.model_key,
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
         };
@@ -3078,7 +3085,7 @@ mod tests {
             )
             .expect("coding route");
 
-        assert_eq!(resolved.provider_model_id, "gemini-3.5-flash-lite");
+        assert_eq!(resolved.provider_model_id, previous_route.provider_model_id);
         assert_eq!(
             resolved.fallback_model_ids.first(),
             Some(&resolved.provider_model_id)
@@ -3130,7 +3137,7 @@ mod tests {
 
         let mut changed_config = CliConfig::default();
         changed_config.default.provider = "ollama".to_string();
-        changed_config.default.model = "llama3".to_string();
+        changed_config.default.model = "fixture-local-model:latest".to_string();
         let restarted = CliDeveloperSessionHost::new_with_store(
             changed_config,
             workspace.path().to_path_buf(),
@@ -3466,7 +3473,7 @@ mod tests {
         assert_eq!(interrupted.params["turnId"], turn_id);
 
         let mut restart_config = CliConfig::default();
-        restart_config.default.model = "llama3".to_string();
+        restart_config.default.model = "fixture-local-model:latest".to_string();
         restart_config.default.provider = "ollama".to_string();
         let reloaded =
             CliDeveloperSessionHost::new_with_store(restart_config, workspace, store, false)

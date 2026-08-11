@@ -4,11 +4,12 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
+  type ManagedMediaImageAspectRatio,
   type ManagedMediaImageOperation,
   type ManagedMediaImageProvider,
 } from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
-import { getMediaAssetById } from '@/lib/server/media-assets';
+import { getMediaAssetById, isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -22,8 +23,11 @@ import {
   canUseBillingPlanCapability,
   getModelMetadataById,
   getModelsForProvider,
+  isExecutableImageModel,
+  type ExecutableImageModel,
   type ModelMetadata,
 } from '@agiworkforce/types';
+import { parseRetryAfter } from '@agiworkforce/provider-runtime';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
   aiGeneratedHeaders,
@@ -33,12 +37,12 @@ import {
 import {
   authenticatedMediaUrl,
   deleteStoredMedia,
-  isMediaStorageConfigured,
+  isImageStorageConfigured,
   storeMedia,
   bytesFromBase64,
   bytesFromUrl,
 } from '@/lib/server/media-storage';
-import { insertMediaAsset } from '@/lib/server/media-assets';
+import { insertMediaAssetsAtomically } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   ManagedUsageRequestError,
@@ -73,6 +77,7 @@ type ImageProvider = ManagedMediaImageProvider;
 interface GeneratedImage {
   url?: string;
   b64_json?: string;
+  contentType?: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
 interface ImageGenerationResponse {
@@ -80,13 +85,18 @@ interface ImageGenerationResponse {
   images: GeneratedImage[];
   provider: ImageProvider;
   model: string;
+  /** Canonical catalog identity used for billing, persistence, and retries. */
+  catalog_model?: string;
   latency_ms: number;
   error?: string;
+  /** Bounded provider/gateway Retry-After projected for an explicit user retry. */
+  retry_after_seconds?: number;
   /**
    * PER-4: true when every returned image is backed by durable storage and
-   * addressed by an authenticated `/api/files/{id}` URL. False only when this
-   * deployment has no object storage configured, in which case `images` carry
-   * inline `b64_json` that must never be persisted into a chat message.
+   * addressed by an authenticated `/api/files/{id}` URL. False is permitted
+   * only in non-production test harnesses that deliberately disable storage;
+   * those `images` carry inline `b64_json` that must never be persisted into a
+   * chat message.
    */
   persisted?: boolean;
   /**
@@ -106,23 +116,123 @@ const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
 const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> = {
   openai: OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY.high,
   google: 3,
-  stability: 8,
+  // Kept only for backward-compatible request parsing. There is no wired
+  // Stability image adapter or selectable catalog model.
+  stability: 0,
 };
 
-function resolveRequestedCatalogModel(
-  models: readonly ModelMetadata[],
+type ImageApi = NonNullable<ModelMetadata['imageApi']>;
+
+const MAX_IMAGE_RETRY_AFTER_SECONDS = 5 * 60;
+
+class ImageProviderHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+    this.name = 'ImageProviderHttpError';
+  }
+}
+
+function boundedImageRetryAfterSeconds(response: Response): number | undefined {
+  if (response.status !== 429) return undefined;
+  const retryAfterSeconds = parseRetryAfter(response.headers);
+  if (retryAfterSeconds === undefined) return undefined;
+  return Math.min(retryAfterSeconds, MAX_IMAGE_RETRY_AFTER_SECONDS);
+}
+
+async function throwImageProviderHttpError(response: Response, fallback: string): Promise<never> {
+  const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const errorObj = errorData['error'] as Record<string, unknown> | undefined;
+  const message = (errorObj?.['message'] as string) || fallback;
+  throw new ImageProviderHttpError(
+    message,
+    response.status,
+    boundedImageRetryAfterSeconds(response),
+  );
+}
+
+/**
+ * Provider-published exact ratios for each wired adapter. This is the server
+ * authority: the client picker is only presentation and every request is
+ * checked again after catalog resolution but before usage reservation.
+ */
+const IMAGE_ASPECT_RATIOS_BY_API: Record<ImageApi, ReadonlySet<ManagedMediaImageAspectRatio>> = {
+  gemini: new Set([
+    '1:1',
+    '1:4',
+    '1:8',
+    '2:3',
+    '3:2',
+    '3:4',
+    '4:1',
+    '4:3',
+    '4:5',
+    '5:4',
+    '8:1',
+    '9:16',
+    '16:9',
+    '21:9',
+  ]),
+  imagen: new Set(['1:1', '3:4', '4:3', '9:16', '16:9']),
+  // This adapter currently sends the enumerated Images API dimensions only.
+  // Fail closed on arbitrary ratios until their exact dimension mapping is
+  // verified and represented rather than pretending 3:4 is 2:3.
+  openai: new Set(['1:1', '2:3', '3:2']),
+  stability: new Set(['1:1', '2:3', '3:2', '4:5', '5:4', '9:16', '16:9', '21:9', '9:21']),
+};
+
+function legacyAspectRatioForSize(size: string, imageApi: ImageApi): ManagedMediaImageAspectRatio {
+  const [width = 1024, height = 1024] = size.split('x').map(Number);
+  if (width === height) return '1:1';
+
+  if (imageApi === 'openai') return width > height ? '3:2' : '2:3';
+  if (imageApi === 'gemini' || imageApi === 'imagen') return width > height ? '16:9' : '9:16';
+
+  const ratio = Math.max(width, height) / Math.min(width, height);
+  if (width > height) {
+    if (ratio >= 1.7) return '16:9';
+    if (ratio >= 1.4) return '3:2';
+    return '5:4';
+  }
+  if (ratio >= 1.7) return '9:16';
+  if (ratio >= 1.4) return '2:3';
+  return '4:5';
+}
+
+function resolveProviderImageAspectRatio(
+  model: ExecutableImageModel,
+  explicitAspectRatio: ManagedMediaImageAspectRatio | undefined,
+  legacySize: string,
+): ManagedMediaImageAspectRatio | null {
+  if (!explicitAspectRatio) return legacyAspectRatioForSize(legacySize, model.imageApi);
+  return IMAGE_ASPECT_RATIOS_BY_API[model.imageApi].has(explicitAspectRatio)
+    ? explicitAspectRatio
+    : null;
+}
+
+function openAIImageSizeForAspectRatio(aspectRatio: ManagedMediaImageAspectRatio): string {
+  if (aspectRatio === '2:3') return '1024x1536';
+  if (aspectRatio === '3:2') return '1536x1024';
+  return '1024x1024';
+}
+
+function resolveRequestedCatalogModel<T extends ModelMetadata>(
+  models: readonly T[],
   requestedModelId?: string,
-): ModelMetadata | undefined {
+): T | undefined {
   if (!requestedModelId) return undefined;
   const canonicalModelId = getModelMetadataById(requestedModelId)?.id;
   return canonicalModelId ? models.find((model) => model.id === canonicalModelId) : undefined;
 }
 
-function resolveGoogleImageModel(requestedModelId?: string) {
+function resolveGoogleImageModel(requestedModelId?: string): ExecutableImageModel | null {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
     modelTypes: ['image'],
-  });
+  }).filter(isExecutableImageModel);
 
   // Honour the user's explicit model choice when it's a valid Google image model.
   const requested = resolveRequestedCatalogModel(googleImageModels, requestedModelId);
@@ -136,11 +246,11 @@ function resolveGoogleImageModel(requestedModelId?: string) {
   );
 }
 
-function resolveOpenAIImageModel(requestedModelId?: string) {
+function resolveOpenAIImageModel(requestedModelId?: string): ExecutableImageModel | null {
   const openaiImageModels = getModelsForProvider('openai', {
     includeDeprecated: false,
     modelTypes: ['image'],
-  });
+  }).filter(isExecutableImageModel);
 
   // Honour the user's explicit model choice when it's a valid OpenAI image model.
   const requested = resolveRequestedCatalogModel(openaiImageModels, requestedModelId);
@@ -156,29 +266,39 @@ function resolveOpenAIImageModel(requestedModelId?: string) {
   );
 }
 
-function resolveStabilityImageModel(requestedModelId?: string) {
-  const stabilityImageModels = getModelsForProvider('managed_cloud', {
-    includeDeprecated: false,
-    modelTypes: ['image'],
-  }).filter((model) => model.imageApi === 'stability');
-
-  const requested = resolveRequestedCatalogModel(stabilityImageModels, requestedModelId);
-  return requested ?? stabilityImageModels[0] ?? null;
-}
-
 function resolveImageCatalogModel(
   provider: ImageProvider,
   requestedModelId?: string,
-): ModelMetadata | null {
+): ExecutableImageModel | null {
   const selected =
     provider === 'openai'
       ? resolveOpenAIImageModel(requestedModelId)
       : provider === 'google'
         ? resolveGoogleImageModel(requestedModelId)
-        : resolveStabilityImageModel(requestedModelId);
+        : null;
   if (!selected) return null;
   if (!requestedModelId) return selected;
   return getModelMetadataById(requestedModelId)?.id === selected.id ? selected : null;
+}
+
+/**
+ * Translate the catalog's image adapter metadata to this route's provider
+ * vocabulary. Only adapters implemented by this route are admitted; merely
+ * adding a future catalog record cannot reactivate a removed provider path.
+ */
+function resolveImageProviderFromCatalogModel(modelId: string): ImageProvider | null {
+  const model = getModelMetadataById(modelId);
+  if (!isExecutableImageModel(model)) return null;
+
+  switch (model.imageApi) {
+    case 'gemini':
+    case 'imagen':
+      return 'google';
+    case 'openai':
+      return 'openai';
+    default:
+      return null;
+  }
 }
 
 function managedUsageErrorResponse(
@@ -215,13 +335,6 @@ function estimateImageCostCents(
     }
   }
 
-  if (provider === 'stability') {
-    const perImageUsd = resolveStabilityImageModel(requestedModelId)?.imagePerImageCost;
-    if (typeof perImageUsd === 'number' && perImageUsd > 0) {
-      return Math.ceil(perImageUsd * 100) * imageCount;
-    }
-  }
-
   return FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER[provider] * imageCount;
 }
 
@@ -234,8 +347,8 @@ function estimateImageCostCents(
  * A deployment that sets only `GEMINI_API_KEY` — which is the common case, and
  * this one — therefore had working Gemini CHAT but a silently unavailable
  * Gemini IMAGE path: `getDefaultProvider` skipped Google and fell through to
- * OpenAI/Stability, so `gemini-3.1-flash-image` (the catalog's
- * `image_generation` slot model) never actually served a request.
+ * another provider, so the catalog's image-generation routing-slot model never
+ * actually served a request.
  *
  * Keep this list in sync with `PROVIDER_API_KEY_ENV_KEYS.google`.
  */
@@ -259,9 +372,6 @@ function getDefaultProvider(): ImageProvider {
   if (getOptionalEnv('OPENAI_API_KEY')) {
     return 'openai';
   }
-  if (getOptionalEnv('STABILITY_API_KEY')) {
-    return 'stability';
-  }
   throw new Error('No image generation API keys configured');
 }
 
@@ -282,7 +392,7 @@ function getApiKey(provider: ImageProvider): string {
       return key;
     }
     case 'stability':
-      return requireEnv('STABILITY_API_KEY');
+      throw new Error('The Stability image adapter is not supported');
   }
 }
 
@@ -296,7 +406,7 @@ function isProviderAvailable(provider: ImageProvider): boolean {
     case 'google':
       return !!getGoogleApiKey();
     case 'stability':
-      return !!getOptionalEnv('STABILITY_API_KEY');
+      return false;
   }
 }
 
@@ -344,7 +454,7 @@ async function resolveImageRefBytes(
 
 async function generateWithOpenAIImage(
   prompt: string,
-  size: string,
+  aspectRatio: ManagedMediaImageAspectRatio,
   quality: string,
   n: number,
   requestedModelId?: string,
@@ -361,8 +471,7 @@ async function generateWithOpenAIImage(
     throw new Error('No active OpenAI image model is configured in the catalog');
   }
   const model = catalogModel.apiModelId ?? catalogModel.id;
-  const validSizes = ['1024x1024', '1536x1024', '1024x1536', 'auto'];
-  const imageSize = validSizes.includes(size) ? size : '1024x1024';
+  const imageSize = openAIImageSizeForAspectRatio(aspectRatio);
   const imageQuality = quality === 'hd' ? 'high' : 'medium';
 
   // An edit sends the ORIGINAL PIXELS to the provider's edits endpoint. The
@@ -397,11 +506,9 @@ async function generateWithOpenAIImage(
     });
 
     if (!editResponse.ok) {
-      const errorData = (await editResponse.json().catch(() => ({}))) as Record<string, unknown>;
-      const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-      throw new Error(
-        (errorObj?.['message'] as string) ||
-          `OpenAI image edit API error: ${editResponse.status} ${editResponse.statusText}`,
+      await throwImageProviderHttpError(
+        editResponse,
+        `OpenAI image edit API error: ${editResponse.status} ${editResponse.statusText}`,
       );
     }
 
@@ -434,12 +541,10 @@ async function generateWithOpenAIImage(
   });
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-    const errorMessage =
-      (errorObj?.['message'] as string) ||
-      `OpenAI image API error: ${response.status} ${response.statusText}`;
-    throw new Error(errorMessage);
+    await throwImageProviderHttpError(
+      response,
+      `OpenAI image API error: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
@@ -459,42 +564,27 @@ async function generateWithOpenAIImage(
  */
 async function generateWithImagen(
   prompt: string,
-  size: string,
+  aspectRatio: ManagedMediaImageAspectRatio,
   _style: string | undefined,
   n: number,
+  catalogModel: ExecutableImageModel,
   negativePrompt?: string,
-  requestedModelId?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('google');
-  const catalogModel = resolveGoogleImageModel(requestedModelId);
-  if (!catalogModel) {
-    throw new Error('No active Google image model is configured in the catalog');
-  }
   const model = catalogModel.apiModelId ?? catalogModel.id;
 
-  // Parse size to aspect ratio - validate exactly 2 positive integer parts
-  const sizeParts = size.split('x').map(Number);
-  if (sizeParts.length !== 2 || sizeParts.some((n) => !Number.isFinite(n) || n <= 0)) {
-    throw new Error(`Invalid size format: "${size}". Expected format: WxH (e.g. 1024x1024)`);
-  }
-  const width = sizeParts[0] ?? 1024;
-  const height = sizeParts[1] ?? 1024;
-  let aspectRatio = '1:1';
-  if (width > height) {
-    aspectRatio = '16:9';
-  } else if (height > width) {
-    aspectRatio = '9:16';
-  }
-
   // Google has two distinct image APIs with different request/response shapes:
-  //   - imageApi 'gemini' → `:generateContent` with responseModalities; bytes in
-  //     candidates[].content.parts[].inlineData.
+  //   - imageApi 'gemini' → the Interactions API; bytes in output_image.data.
   //   - imageApi 'imagen' → `:predict`; bytes in predictions[].bytesBase64Encoded.
   // Dispatch on the catalog's declarative imageApi field (no id pattern), so a new
   // Google image model only needs its imageApi set in
   // packages/ai/model-registry/catalog/models.curation.json.
   if (catalogModel.imageApi === 'gemini') {
-    return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n);
+    const outputMimeType = catalogModel.imageOutputMimeType;
+    if (!outputMimeType) {
+      throw new Error('The selected Gemini image model has no catalog output MIME contract');
+    }
+    return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n, outputMimeType);
   }
 
   const response = await fetch(
@@ -522,12 +612,10 @@ async function generateWithImagen(
   );
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-    const errorMessage =
-      (errorObj?.['message'] as string) ||
-      `Imagen API error: ${response.status} ${response.statusText}`;
-    throw new Error(errorMessage);
+    await throwImageProviderHttpError(
+      response,
+      `Imagen API error: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data = (await response.json()) as { predictions?: Array<{ bytesBase64Encoded?: string }> };
@@ -548,9 +636,11 @@ async function generateWithImagen(
 }
 
 /**
- * Generate an image with a Gemini image model (e.g. gemini-3.1-flash-image-preview,
- * gemini-2.5-flash-image) via the `:generateContent` endpoint. Gemini image models
- * return bytes inline (candidates[].content.parts[].inlineData), not via predict.
+ * Generate an image with a Gemini image model through Google's current
+ * Interactions API. The raw REST response carries image blocks inside
+ * `steps[].content[]`; `output_image` is an SDK convenience field and is not
+ * guaranteed on REST responses. Accept both representations, but only accept
+ * inline bytes with the MIME type promised by the canonical model catalog.
  * See https://ai.google.dev/gemini-api/docs/image-generation
  */
 async function generateWithGeminiImage(
@@ -558,172 +648,209 @@ async function generateWithGeminiImage(
   model: string,
   prompt: string,
   aspectRatio: string,
-  n: number,
+  _n: number,
+  outputMimeType: NonNullable<ModelMetadata['imageOutputMimeType']>,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseModalities: ['TEXT', 'IMAGE'],
-          imageConfig: { aspectRatio },
-        },
-      }),
-      signal: AbortSignal.timeout(55_000),
+  const response = await fetch(providerApiUrl('google', 'interactions'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
-  );
+    body: JSON.stringify({
+      model,
+      input: prompt,
+      response_format: {
+        type: 'image',
+        mime_type: outputMimeType,
+        // Google's current v1beta image guide omits the optional delivery
+        // field, and a live request proved this model rejects an explicit
+        // `inline` value. Omission still returns inline bytes; the response
+        // parser below fails closed if a provider ever returns only a URI.
+        aspect_ratio: aspectRatio,
+        image_size: '1K',
+      },
+    }),
+    signal: AbortSignal.timeout(55_000),
+  });
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-    const errorMessage =
-      (errorObj?.['message'] as string) ||
-      `Gemini image API error: ${response.status} ${response.statusText}`;
-    throw new Error(errorMessage);
+    await throwImageProviderHttpError(
+      response,
+      `Gemini image API error: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data = (await response.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
-    }>;
+    output_image?: unknown;
+    steps?: unknown;
   };
 
-  const images: GeneratedImage[] = [];
-  for (const candidate of data.candidates ?? []) {
-    for (const part of candidate.content?.parts ?? []) {
-      const b64 = part.inlineData?.data;
-      if (b64) {
-        images.push({ b64_json: b64 });
-        if (images.length >= Math.min(n, 4)) break;
+  const candidates: unknown[] = [data.output_image];
+  if (Array.isArray(data.steps)) {
+    for (const step of data.steps) {
+      if (
+        step &&
+        typeof step === 'object' &&
+        (step as { type?: unknown }).type === 'model_output' &&
+        Array.isArray((step as { content?: unknown }).content)
+      ) {
+        candidates.push(...((step as { content: unknown[] }).content ?? []));
       }
     }
   }
 
-  if (images.length === 0) {
+  const imagesByDigest = new Map<string, GeneratedImage>();
+  let sawUriImage = false;
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const image = candidate as {
+      type?: unknown;
+      mime_type?: unknown;
+      data?: unknown;
+      uri?: unknown;
+    };
+    const isImageBlock = image.type === undefined || image.type === 'image';
+    if (!isImageBlock) continue;
+    if (image.mime_type !== outputMimeType) {
+      throw new Error('Gemini image API returned an image outside the catalog MIME contract');
+    }
+    if (typeof image.uri === 'string' && image.uri.length > 0) sawUriImage = true;
+    if (typeof image.data !== 'string' || image.data.length === 0) continue;
+
+    // Node's Buffer decoder silently discards malformed base64 characters.
+    // Require canonical RFC 4648 bytes and verify the declared image magic
+    // before storage/billing so arbitrary provider text can never become an
+    // authenticated image asset.
+    if (
+      image.data.length % 4 !== 0 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(image.data)
+    ) {
+      throw new Error('Gemini image API returned malformed base64 image data');
+    }
+    const bytes = Buffer.from(image.data, 'base64');
+    const canonicalBase64 = bytes.toString('base64');
+    if (canonicalBase64 !== image.data || !hasValidGeneratedImageStructure(bytes, outputMimeType)) {
+      throw new Error(
+        'Gemini image API returned bytes that do not match the catalog MIME contract',
+      );
+    }
+
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    imagesByDigest.set(digest, { b64_json: image.data, contentType: outputMimeType });
+  }
+
+  if (imagesByDigest.size === 0) {
+    if (sawUriImage) {
+      throw new Error(
+        'Gemini image API returned a URI without inline image bytes; URI delivery is not supported',
+      );
+    }
     throw new Error('Gemini image API returned no image data (response may have been text-only)');
   }
+  if (imagesByDigest.size !== 1) {
+    throw new Error('Gemini image API returned more than the single requested image');
+  }
 
-  return { images, model };
+  return { images: [...imagesByDigest.values()], model };
 }
 
-/**
- * Generate image using Stability AI Stable Image Core (v2beta)
- * Endpoint: POST https://api.stability.ai/v2beta/stable-image/generate/core
- *
- * The v2beta API uses multipart/form-data and returns binary image data.
- *
- * Valid aspect_ratio values: 16:9, 1:1, 21:9, 2:3, 3:2, 4:5, 5:4, 9:16, 9:21
- */
-async function generateWithStability(
-  prompt: string,
-  size: string,
-  style: string | undefined,
-  n: number,
-  negativePrompt?: string,
-  requestedModelId?: string,
-): Promise<{ images: GeneratedImage[]; model: string }> {
-  const apiKey = getApiKey('stability');
-  const catalogModel = resolveStabilityImageModel(requestedModelId);
-  if (!catalogModel) {
-    throw new Error('No active Stability image model is configured in the catalog');
+const MAX_INLINE_GENERATED_IMAGE_BYTES = 25 * 1024 * 1024;
+
+function hasValidJpegStructure(bytes: Buffer): boolean {
+  if (
+    bytes.length < 12 ||
+    bytes[0] !== 0xff ||
+    bytes[1] !== 0xd8 ||
+    bytes[bytes.length - 2] !== 0xff ||
+    bytes[bytes.length - 1] !== 0xd9
+  ) {
+    return false;
   }
 
-  // Map size to closest supported aspect_ratio
-  const sizeParts = size.split('x').map(Number);
-  const sWidth = sizeParts[0] ?? 1024;
-  const sHeight = sizeParts[1] ?? 1024;
-  let aspectRatio = '1:1';
-  if (sWidth > sHeight) {
-    // landscape
-    const ratio = sWidth / sHeight;
-    if (ratio >= 1.7) {
-      aspectRatio = '16:9';
-    } else if (ratio >= 1.4) {
-      aspectRatio = '3:2';
-    } else if (ratio >= 1.2) {
-      aspectRatio = '5:4';
-    } else {
-      aspectRatio = '4:5';
+  let offset = 2;
+  let sawFrame = false;
+  while (offset < bytes.length - 2) {
+    if (bytes[offset] !== 0xff) return false;
+    while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+    const marker = bytes[offset++];
+    if (marker === undefined || marker === 0x00 || marker === 0xd8 || marker === 0xd9) return false;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (offset + 2 > bytes.length) return false;
+    const segmentLength = bytes.readUInt16BE(offset);
+    if (segmentLength < 2 || offset + segmentLength > bytes.length) return false;
+
+    const isStartOfFrame =
+      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isStartOfFrame) {
+      if (segmentLength < 8) return false;
+      const height = bytes.readUInt16BE(offset + 3);
+      const width = bytes.readUInt16BE(offset + 5);
+      if (width === 0 || height === 0) return false;
+      sawFrame = true;
     }
-  } else if (sHeight > sWidth) {
-    // portrait
-    const ratio = sHeight / sWidth;
-    if (ratio >= 1.7) {
-      aspectRatio = '9:16';
-    } else if (ratio >= 1.4) {
-      aspectRatio = '2:3';
-    } else if (ratio >= 1.2) {
-      aspectRatio = '4:5';
-    } else {
-      aspectRatio = '5:4';
+
+    if (marker === 0xda) {
+      // Entropy-coded bytes follow the SOS segment and finish at the final EOI.
+      return sawFrame && offset + segmentLength < bytes.length - 2;
     }
+    offset += segmentLength;
   }
+  return false;
+}
 
-  // Map style to Stability style preset
-  const stylePresetMap: Record<string, string> = {
-    cinematic: 'cinematic',
-    anime: 'anime',
-    'digital-art': 'digital-art',
-    photographic: 'photographic',
-    natural: 'photographic',
-    vivid: 'enhance',
-  };
-  const stylePreset = style ? stylePresetMap[style] : undefined;
+function hasValidPngStructure(bytes: Buffer): boolean {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (bytes.length < 45 || !bytes.subarray(0, 8).equals(signature)) return false;
 
-  // The v2beta API uses multipart/form-data and returns binary or base64
-  // We request base64 via Accept: application/json
-  const images: GeneratedImage[] = [];
-  const requestCount = Math.min(n, 4);
-
-  for (let i = 0; i < requestCount; i++) {
-    const formData = new FormData();
-    formData.append('prompt', prompt);
-    formData.append('aspect_ratio', aspectRatio);
-    formData.append('output_format', 'png');
-    if (negativePrompt) {
-      formData.append('negative_prompt', negativePrompt);
+  let offset = 8;
+  let sawHeader = false;
+  let sawImageData = false;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.subarray(offset + 4, offset + 8).toString('ascii');
+    const end = offset + 12 + length;
+    if (end > bytes.length) return false;
+    if (!sawHeader) {
+      if (type !== 'IHDR' || length !== 13) return false;
+      if (bytes.readUInt32BE(offset + 8) === 0 || bytes.readUInt32BE(offset + 12) === 0)
+        return false;
+      sawHeader = true;
     }
-    if (stylePreset) {
-      formData.append('style_preset', stylePreset);
-    }
-
-    const response = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        // Accept application/json to get base64-encoded image back
-        Accept: 'application/json',
-      },
-      body: formData,
-      signal: AbortSignal.timeout(55_000),
-    });
-
-    if (!response.ok) {
-      // v2beta returns JSON errors
-      const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      const errorMessage =
-        (errorData['message'] as string) ||
-        (errorData['errors'] as string[] | undefined)?.[0] ||
-        `Stability API error: ${response.status} ${response.statusText}`;
-      throw new Error(errorMessage);
-    }
-
-    const data = (await response.json()) as { image?: string; finish_reason?: string };
-    if (data.image) {
-      images.push({ b64_json: data.image });
-    }
+    if (type === 'IDAT' && length > 0) sawImageData = true;
+    if (type === 'IEND') return length === 0 && end === bytes.length && sawHeader && sawImageData;
+    offset = end;
   }
+  return false;
+}
 
-  return {
-    images,
-    model: catalogModel.apiModelId ?? catalogModel.id,
-  };
+function hasValidWebpStructure(bytes: Buffer): boolean {
+  if (
+    bytes.length < 20 ||
+    bytes.subarray(0, 4).toString('ascii') !== 'RIFF' ||
+    bytes.subarray(8, 12).toString('ascii') !== 'WEBP' ||
+    bytes.readUInt32LE(4) !== bytes.length - 8
+  ) {
+    return false;
+  }
+  const chunkType = bytes.subarray(12, 16).toString('ascii');
+  const chunkLength = bytes.readUInt32LE(16);
+  const paddedLength = chunkLength + (chunkLength % 2);
+  return (
+    ['VP8 ', 'VP8L', 'VP8X'].includes(chunkType) &&
+    chunkLength > 0 &&
+    20 + paddedLength <= bytes.length
+  );
+}
+
+function hasValidGeneratedImageStructure(
+  bytes: Buffer,
+  mimeType: NonNullable<ModelMetadata['imageOutputMimeType']>,
+): boolean {
+  if (bytes.length === 0 || bytes.length > MAX_INLINE_GENERATED_IMAGE_BYTES) return false;
+  if (mimeType === 'image/jpeg') return hasValidJpegStructure(bytes);
+  if (mimeType === 'image/png') return hasValidPngStructure(bytes);
+  return hasValidWebpStructure(bytes);
 }
 
 /**
@@ -885,8 +1012,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const {
     prompt,
+    conversation_id: conversationId,
     provider: requestedProvider,
     model: requestedModel,
+    aspect_ratio: requestedAspectRatio,
     size,
     style,
     quality,
@@ -898,15 +1027,60 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     transparent_background,
   } = validationResult.data;
 
+  // Mobile sends a catalog model without duplicating provider state. Resolve
+  // that model's actual media adapter before considering the deployment
+  // default, and reject an explicit provider that contradicts the catalog.
+  const catalogProvider = requestedModel
+    ? resolveImageProviderFromCatalogModel(requestedModel)
+    : null;
+  if (requestedModel && !catalogProvider) {
+    return NextResponse.json(
+      {
+        error: {
+          message: 'The requested model is not a supported image generation model.',
+          type: 'invalid_request_error',
+          code: 'model_unavailable',
+        },
+      },
+      {
+        status: 400,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
+  if (requestedProvider && catalogProvider && requestedProvider !== catalogProvider) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `The requested image model is not served by the ${requestedProvider} provider.`,
+          type: 'invalid_request_error',
+          code: 'provider_model_mismatch',
+        },
+      },
+      {
+        status: 400,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
   // Determine provider
   let provider: ImageProvider;
   try {
-    if (requestedProvider) {
-      if (!isProviderAvailable(requestedProvider)) {
+    const selectedProvider = requestedProvider ?? catalogProvider;
+    if (selectedProvider) {
+      if (!isProviderAvailable(selectedProvider)) {
         return NextResponse.json(
           {
             error: {
-              message: `The ${requestedProvider} provider is not configured. Please try a different provider.`,
+              message: `The ${selectedProvider} provider is not configured. Please try a different provider.`,
               type: 'invalid_request_error',
               code: 'provider_unavailable',
             },
@@ -920,7 +1094,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
           },
         );
       }
-      provider = requestedProvider;
+      provider = selectedProvider;
     } else {
       provider = getDefaultProvider();
     }
@@ -963,9 +1137,141 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // Google's Interactions image endpoint returns one output_image per
+  // interaction. Do not pretend that its provider supports the shared n=2..4
+  // contract: reject before reserving credits or starting provider work.
+  if (catalogModel.imageApi === 'gemini' && n !== 1) {
+    return NextResponse.json(
+      {
+        error: {
+          message: 'The requested Google image model supports one image per request.',
+          type: 'invalid_request_error',
+          code: 'unsupported_image_count',
+          param: 'n',
+          max_images: 1,
+        },
+      },
+      {
+        status: 400,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
+  if (catalogModel.imageApi === 'gemini' && !catalogModel.imageOutputMimeType) {
+    logger.error(
+      { provider, model: catalogModel.id },
+      'Gemini image model is missing its catalog output MIME contract',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message: 'The requested image model is not fully configured for this deployment.',
+          type: 'server_error',
+          code: 'image_model_contract_unavailable',
+        },
+      },
+      {
+        status: 503,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
+  const providerAspectRatio = resolveProviderImageAspectRatio(
+    catalogModel,
+    requestedAspectRatio,
+    size,
+  );
+  if (!providerAspectRatio) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `Aspect ratio ${requestedAspectRatio} is not supported by the requested image model.`,
+          type: 'invalid_request_error',
+          code: 'unsupported_aspect_ratio',
+          param: 'aspect_ratio',
+          supported_aspect_ratios: [...IMAGE_ASPECT_RATIOS_BY_API[catalogModel.imageApi]],
+        },
+      },
+      {
+        status: 400,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
+  // A production generation is only successful when its bytes can survive a
+  // reload behind the authenticated media route. Fail before reserving usage
+  // or contacting the provider when that durable delivery path is absent.
+  // Local development remains usable through media-storage's owner-scoped
+  // filesystem fallback, which makes this check return true without R2.
+  const storageConfigured = isImageStorageConfigured();
+  let mediaCatalogConfigured = false;
+  try {
+    mediaCatalogConfigured = await isMediaAssetStoreReady();
+  } catch (error) {
+    logger.error(
+      { error, userId, provider, model: catalogModel.id },
+      'Image generation unavailable because media catalog readiness could not be verified',
+    );
+  }
+  if (!mediaCatalogConfigured) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Image generation is temporarily unavailable because generated images cannot be cataloged. Please try again later.',
+          type: 'server_error',
+          code: 'media_catalog_unavailable',
+        },
+      },
+      {
+        status: 503,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+  if (process.env.NODE_ENV === 'production' && !storageConfigured) {
+    logger.error(
+      { userId, provider, model: catalogModel.id },
+      'Image generation unavailable because durable media storage is not configured',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Image generation is temporarily unavailable because generated images cannot be saved. Please try again later.',
+          type: 'server_error',
+          code: 'media_storage_unavailable',
+        },
+      },
+      {
+        status: 503,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
   const estimatedCostCents = estimateImageCostCents(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: 'web' | 'mobile' | 'desktop';
+  let organizationId: string | null;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
     const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
@@ -978,8 +1284,25 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     }
     sourceSurface = mediaIdentity.surface;
     const scoped = await getUserScopedDb(request);
+    organizationId = scoped.organizationId;
     if (scoped.userId !== userId) {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
+    }
+    if (conversationId) {
+      const [ownedConversation] = await scoped.db.query<{ id: string }>(
+        `select id
+           from public.web_conversations
+          where id = $1 and user_id = $2
+          limit 1`,
+        [conversationId, userId],
+      );
+      if (!ownedConversation) {
+        throw new ManagedUsageRequestError(
+          'The conversation was not found for this account.',
+          404,
+          'conversation_not_found',
+        );
+      }
     }
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
@@ -1013,6 +1336,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         provider,
         prompt: prompt.substring(0, 100),
         size,
+        aspectRatio: providerAspectRatio,
         style,
         n,
       },
@@ -1054,7 +1378,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       case 'openai':
         result = await generateWithOpenAIImage(
           prompt,
-          size,
+          providerAspectRatio,
           quality,
           n,
           catalogModel.id,
@@ -1062,18 +1386,21 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         );
         break;
       case 'google':
-        result = await generateWithImagen(prompt, size, style, n, negative_prompt, catalogModel.id);
-        break;
-      case 'stability':
-        result = await generateWithStability(
+        result = await generateWithImagen(
           prompt,
-          size,
+          providerAspectRatio,
           style,
           n,
+          catalogModel,
           negative_prompt,
-          catalogModel.id,
         );
         break;
+      case 'stability':
+        throw new Error('The Stability image adapter is not supported');
+    }
+
+    if (result.images.length === 0) {
+      throw new Error(`${provider} image provider returned no usable image output`);
     }
 
     logger.info(
@@ -1121,11 +1448,15 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Image generation failed',
     );
 
+    const providerHttpError = error instanceof ImageProviderHttpError ? error : null;
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
 
     // Provide user-friendly messages for common failure patterns
     let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
-    if (errorMessage.includes('content policy') || errorMessage.includes('safety')) {
+    if (providerHttpError?.status === 429) {
+      friendlyMessage =
+        'The image generation service is temporarily busy. Use Try again after the wait shown below.';
+    } else if (errorMessage.includes('content policy') || errorMessage.includes('safety')) {
       friendlyMessage =
         'Your prompt was flagged by our content safety filters. Please try a different prompt.';
     } else if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
@@ -1140,7 +1471,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       errorMessage.includes('TimeoutError')
     ) {
       friendlyMessage =
-        'The image generation request timed out. Please try again - image generation can take up to 30 seconds.';
+        'The image provider did not respond before the request deadline. Please try again.';
     }
 
     return NextResponse.json(
@@ -1151,12 +1482,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         provider,
         model: 'unknown',
         latency_ms: Date.now() - startTime,
+        ...(providerHttpError?.retryAfterSeconds !== undefined
+          ? { retry_after_seconds: providerHttpError.retryAfterSeconds }
+          : {}),
       } satisfies ImageGenerationResponse,
       {
-        status: 422,
+        status: providerHttpError?.status === 429 ? 429 : 422,
         headers: {
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
+          ...(providerHttpError?.retryAfterSeconds !== undefined
+            ? { 'Retry-After': String(providerHttpError.retryAfterSeconds) }
+            : {}),
         },
       },
     );
@@ -1177,7 +1514,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     return buildAiGeneratedProvenance({
       kind: 'image',
       provider,
-      model: result.model,
+      model: catalogModel.id,
       generatedAt,
       ...(hash ? { contentHashSha256: hash } : {}),
     });
@@ -1197,21 +1534,28 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   //      went into `metadata.imageUrl`, the write blew the body cap and the
   //      message was never saved: the reported "Couldn't save this response".
   //
-  // Now: persistence is mandatory whenever storage is configured, a partial
-  // failure rolls back its own R2 object, and a failure refunds the reservation
-  // and returns an actionable error instead of an unsaveable payload.
+  // Now: persistence is mandatory whenever storage is configured. Every
+  // object is staged first, then ALL media rows commit in one transaction. A
+  // partial storage or catalog failure removes every staged object before the
+  // reservation is refunded, so the Library can never expose an uncharged
+  // sibling from a failed multi-image request.
   // -------------------------------------------------------------------------
-  const storageConfigured = isMediaStorageConfigured();
   const persistenceFailures: string[] = [];
 
   if (storageConfigured) {
-    const outcomes = await Promise.all(
+    type StagedImage = {
+      idx: number;
+      pathname: string;
+      byteSize: number;
+      contentType: string;
+    };
+    const stagedOutcomes = await Promise.all(
       result.images.map(
-        async (img, idx): Promise<{ idx: number; url?: string; error?: string }> => {
+        async (img, idx): Promise<{ staged?: StagedImage; idx: number; error?: string }> => {
           let storedPathname: string | null = null;
           try {
             let bytes: Buffer | null = null;
-            let contentType = 'image/png';
+            let contentType: string = img.contentType ?? 'image/png';
             if (img.b64_json) {
               bytes = bytesFromBase64(img.b64_json);
             } else if (img.url) {
@@ -1232,7 +1576,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
               provenance[idx] = buildAiGeneratedProvenance({
                 kind: 'image',
                 provider,
-                model: result.model,
+                model: catalogModel.id,
                 generatedAt,
                 contentHashSha256: createHash('sha256').update(bytes).digest('hex'),
               });
@@ -1240,47 +1584,15 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
             const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
             storedPathname = stored.pathname;
-
-            // PER-26: store the object KEY, not a permanent public URL. The
-            // authenticated `/api/files/{id}` route reads bytes by
-            // `storage_pathname` and enforces ownership + `deleted_at`; a public
-            // R2 URL bypasses both, never expires and is never revoked. Storing
-            // the key is the convention `objectKeyFromStorageUri` already
-            // documents for private-resource paths.
-            const assetId = await insertMediaAsset({
-              userId,
-              kind: 'image',
-              mimeType: contentType,
-              byteSize: stored.byteSize,
-              storageUrl: stored.pathname,
-              storagePathname: stored.pathname,
-              prompt,
-              provider,
-              model: result.model,
-              sourceSurface: 'web',
-              // The Article 50(2) claim travels with the asset row so it
-              // outlives this response: `/api/files/[id]` reads it back and
-              // re-emits it as `x-agi-ai-generated`/`x-agi-ai-provenance` on
-              // every later fetch of the bytes. (The Library LISTING endpoints
-              // do not surface it — `listMediaAssets` never selects metadata
-              // and `/api/library` projects it away — so the marker rides the
-              // bytes, not the catalog row.)
-              metadata: { aiAct: provenance[idx] },
-            });
-
-            if (!assetId) {
-              // No catalog row means the bytes are unreachable and undeletable.
-              // Roll the object back rather than leaving an orphan behind.
-              await deleteStoredMedia(stored.pathname).catch((cleanupError: unknown) => {
-                logger.error(
-                  { err: cleanupError, userId, pathname: stored.pathname },
-                  'Orphaned generated image could not be removed from storage',
-                );
-              });
-              return { idx, error: 'media catalog is unavailable (media_assets not migrated)' };
-            }
-
-            return { idx, url: authenticatedMediaUrl(assetId) };
+            return {
+              idx,
+              staged: {
+                idx,
+                pathname: stored.pathname,
+                byteSize: stored.byteSize,
+                contentType,
+              },
+            };
           } catch (err) {
             if (storedPathname) {
               await deleteStoredMedia(storedPathname).catch(() => undefined);
@@ -1291,12 +1603,71 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       ),
     );
 
-    for (const outcome of outcomes) {
-      if (outcome.url) {
-        result.images[outcome.idx] = { url: outcome.url };
+    const stagedImages: StagedImage[] = [];
+    for (const outcome of stagedOutcomes) {
+      if (outcome.staged) {
+        stagedImages.push(outcome.staged);
       } else {
         persistenceFailures.push(`image ${outcome.idx}: ${outcome.error ?? 'unknown error'}`);
       }
+    }
+
+    if (persistenceFailures.length === 0) {
+      try {
+        // PER-26: store object KEYS, not permanent public URLs. The
+        // authenticated `/api/files/{id}` route enforces ownership and
+        // deletion. `insertMediaAssetsAtomically` makes the whole requested
+        // batch visible together or not at all.
+        const assetIds = await insertMediaAssetsAtomically(
+          stagedImages.map((staged) => ({
+            userId,
+            organizationId,
+            kind: 'image',
+            mimeType: staged.contentType,
+            byteSize: staged.byteSize,
+            storageUrl: staged.pathname,
+            storagePathname: staged.pathname,
+            prompt,
+            provider,
+            model: catalogModel.id,
+            sourceSurface,
+            conversationId,
+            // The Article 50(2) claim travels with each asset row so it
+            // survives chat reload, Library access, and authenticated download.
+            metadata: { aiAct: provenance[staged.idx] },
+          })),
+        );
+        if (!assetIds || assetIds.length !== stagedImages.length) {
+          persistenceFailures.push('media catalog is unavailable for the generated image batch');
+        } else {
+          stagedImages.forEach((staged, position) => {
+            result.images[staged.idx] = { url: authenticatedMediaUrl(assetIds[position]!) };
+          });
+        }
+      } catch (error) {
+        persistenceFailures.push(
+          error instanceof Error ? error.message : 'generated image catalog transaction failed',
+        );
+      }
+    }
+
+    if (persistenceFailures.length > 0) {
+      const cleanupResults = await Promise.allSettled(
+        stagedImages.map((staged) => deleteStoredMedia(staged.pathname)),
+      );
+      cleanupResults.forEach((cleanup, index) => {
+        if (cleanup.status === 'rejected') {
+          logger.error(
+            {
+              err: cleanup.reason,
+              userId,
+              pathname: stagedImages[index]?.pathname,
+              event: 'generated_image_batch_object_cleanup_failed',
+            },
+            'Generated image batch object cleanup failed after catalog rollback',
+          );
+        }
+      });
     }
   }
 
@@ -1369,14 +1740,17 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const response: ImageGenerationResponse = {
     success: true,
-    images: result.images,
+    images: result.images.map(({ url, b64_json }) => ({
+      ...(url ? { url } : {}),
+      ...(b64_json ? { b64_json } : {}),
+    })),
     provider,
     model: result.model,
+    catalog_model: catalogModel.id,
     latency_ms: Date.now() - startTime,
-    // When storage is unconfigured (dev branches without R2 credentials) the
-    // images come back as inline base64 and CANNOT be persisted into a chat
-    // message. The client must not turn that into a `data:` URL — see
-    // `useMediaGeneration`.
+    // A non-production test harness may deliberately disable every storage
+    // backend. Its inline base64 response CANNOT be persisted into chat. Local
+    // development itself uses the owner-scoped filesystem backend above.
     persisted: storageConfigured,
     provenance,
   };

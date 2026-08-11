@@ -20,7 +20,7 @@ export default function CommunityPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Community</p>
           <h1 id="agi-community-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Where to</span>
+            <span className="agi-fl-h1-line">Where to</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">find us.</em>
             </span>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import { getProviderDefaultModel, type ChatRequest, type StreamChunk } from '@agiworkforce/types';
 
 import {
   createOpenAIAdapter,
@@ -15,6 +15,8 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
 
 describe('OpenAI Responses adapter diagnostics', () => {
   it('reports the request ID and content-free request/stream structure from the real SDK path', async () => {
+    const model = getProviderDefaultModel('openai');
+    expect(model).not.toBeNull();
     const diagnostics: OpenAIResponsesDiagnostics[] = [];
     const requestBodies: unknown[] = [];
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -54,7 +56,7 @@ describe('OpenAI Responses adapter diagnostics', () => {
     };
     const adapter = createOpenAIAdapter(config);
     const request: ChatRequest = {
-      model: 'gpt-5.4-mini',
+      model: model!,
       messages: [{ role: 'user', content: 'Sensitive prompt.' }],
       tools: [
         {
@@ -72,7 +74,7 @@ describe('OpenAI Responses adapter diagnostics', () => {
 
     expect(requestBodies).toHaveLength(1);
     expect(requestBodies[0]).toMatchObject({
-      model: 'gpt-5.4-mini',
+      model,
       tool_choice: 'required',
       max_output_tokens: 8192,
       reasoning: { effort: 'low', summary: 'auto' },
@@ -92,7 +94,7 @@ describe('OpenAI Responses adapter diagnostics', () => {
       {
         requestId: 'req_safe_123',
         request: {
-          model: 'gpt-5.4-mini',
+          model,
           inputItemTypes: { message: 1 },
           inputContentTypes: {},
           toolTypes: { function: 1 },

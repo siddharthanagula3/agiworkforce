@@ -18,6 +18,9 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
   getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
@@ -68,8 +71,9 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     const [sql, params] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('set deleted_at = null');
     expect(sql).toContain('user_id = $2');
+    expect(sql).toContain('organization_id is not distinct from $3');
     expect(sql).toContain('deleted_at is not null');
-    expect(params).toEqual([CONVERSATION_ID, 'user-1']);
+    expect(params).toEqual([CONVERSATION_ID, 'user-1', null]);
   });
 
   it('returns the restored conversation so the caller can put it back in the sidebar', async () => {

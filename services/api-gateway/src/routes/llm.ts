@@ -350,7 +350,7 @@ export function parseFallbackPlanHeader(
  * and its first argument delta is still charged rather than fully refunded.
  *
  * This undercounts providers that bill hidden reasoning the stream never
- * carries (OpenAI o-series / GPT-5 reasoning tokens): those turns settle below
+ * carries (including provider reasoning tokens): those turns settle below
  * their true provider cost. It is a floor on what the turn cost, not a
  * reconstruction of the provider's own invoice.
  */

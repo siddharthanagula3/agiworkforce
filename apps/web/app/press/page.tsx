@@ -42,9 +42,9 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Available now',
-    // Versions come from SURFACE_STATUS ("Released · v1.2.0"), which is sourced
+    // Versions come from SURFACE_STATUS, which is sourced
     // from the release tags themselves, so this row cannot drift from them.
-    v: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop.toLowerCase()}, macOS and Linux · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
+    v: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop.toLowerCase()}, with installability verified per platform · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
   },
   {
     k: 'Built, not yet released',
@@ -107,7 +107,7 @@ export default function PressPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Press</p>
           <h1 id="agi-press-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Facts you can</span>
+            <span className="agi-fl-h1-line">Facts you can</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">publish without checking.</em>
             </span>

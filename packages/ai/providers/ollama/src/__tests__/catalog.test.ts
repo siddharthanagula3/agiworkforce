@@ -16,7 +16,7 @@ describe('fetchOllamaCatalog', () => {
                 size: 1,
                 digest: 'sha256:test',
                 details: {
-                  family: 'qwen3',
+                  family: 'fixture-family',
                   parameter_size: '9B',
                 },
               },

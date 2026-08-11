@@ -11,7 +11,24 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+
+function requireCatalogModelId(predicate: (model: ModelMetadata) => boolean): string {
+  const model = listCanonicalModels().find(predicate);
+  if (!model) throw new Error('Canonical tool-loop billing fixture is missing');
+  return model.id;
+}
+
+const FREE_QWEN_MODEL = requireCatalogModelId(
+  (model) => model.provider === 'qwen' && model.capabilities.tools,
+);
+const FREE_OPENAI_MODEL = requireCatalogModelId(
+  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'free',
+);
+const PAID_OPENAI_MODEL = requireCatalogModelId(
+  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'pro',
+);
 
 // buildToolLoopStream (tool-loop-anthropic.ts) is the table-driven adapter
 // dispatch every provider now goes through (task #34's tool-loop slice) --
@@ -71,23 +88,23 @@ function sseStreamFrom(lines: string[]): ReadableStream {
 function chunk(delta: Record<string, unknown>, finishReason: string | null = null): string {
   return `data: ${JSON.stringify({
     choices: [{ index: 0, delta, finish_reason: finishReason }],
-    model: 'test-model',
+    model: 'fixture-model',
   })}\n\n`;
 }
 
 function makeProcessed(conversationId?: string): ProcessedRequest {
   return {
     requestId: 'req-1',
-    chatRequest: { model: 'gpt-test', messages: [], stream: true } as never,
+    chatRequest: { model: 'fixture-model', messages: [], stream: true } as never,
     conversationId,
-    requestedModel: 'gpt-test',
+    requestedModel: 'fixture-model',
     provider: 'openai',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 1000,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'gpt-test',
+    originalModel: 'fixture-model',
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -96,7 +113,7 @@ function makeProcessed(conversationId?: string): ProcessedRequest {
     isFlagshipRequest: false,
     indicResult: undefined as never,
     llmRequest: {
-      model: 'gpt-test',
+      model: 'fixture-model',
       messages: [{ role: 'user', content: 'run print(1+1)' }],
       max_tokens: 1000,
       stream: true,
@@ -315,8 +332,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
   it('re-fits every Free provider turn against cumulative observed usage', async () => {
     const processed = makeProcessed();
     processed.provider = 'qwen';
-    processed.chatRequest.model = 'qwen-3.5-flash';
-    processed.llmRequest.model = 'qwen-3.5-flash';
+    processed.chatRequest.model = FREE_QWEN_MODEL;
+    processed.llmRequest.model = FREE_QWEN_MODEL;
     processed.llmRequest.max_tokens = 8_192;
     processed.maxTokens = 8_192;
     processed.freeTrial = {
@@ -385,8 +402,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
   it('stops a Free tool loop before a provider turn that cannot fit', async () => {
     const processed = makeProcessed();
-    processed.chatRequest.model = 'gpt-5.6-luna';
-    processed.llmRequest.model = 'gpt-5.6-luna';
+    processed.chatRequest.model = FREE_OPENAI_MODEL;
+    processed.llmRequest.model = FREE_OPENAI_MODEL;
     processed.llmRequest.max_tokens = 8_192;
     processed.maxTokens = 8_192;
     processed.freeTrial = {
@@ -434,8 +451,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     const order: string[] = [];
     const processed = makeProcessed();
     processed.provider = 'openai';
-    processed.chatRequest.model = 'gpt-5.6-terra';
-    processed.llmRequest.model = 'gpt-5.6-terra';
+    processed.chatRequest.model = PAID_OPENAI_MODEL;
+    processed.llmRequest.model = PAID_OPENAI_MODEL;
     processed.subscriptionTier = 'pro';
     processed.managedUsage = {
       db: {} as never,

@@ -177,6 +177,20 @@ function AuthenticatedDesktopLibrary({
       listPage: (params) =>
         authenticatedCloudFetch(request, `${CLOUD_API_BASE_URL}/api/library?${params.toString()}`),
       fetchAsset,
+      // Deletion is owner-scoped, bearer-authenticated, and recoverable from
+      // Recently deleted for the server's retention window.
+      deleteItem: (id) =>
+        authenticatedCloudFetch(
+          request,
+          `${CLOUD_API_BASE_URL}/api/media?id=${encodeURIComponent(id)}`,
+          { method: 'DELETE' },
+        ),
+      permanentlyDeleteItem: (id) =>
+        authenticatedCloudFetch(
+          request,
+          `${CLOUD_API_BASE_URL}/api/media?id=${encodeURIComponent(id)}&permanent=true`,
+          { method: 'DELETE' },
+        ),
       // The owner-scoped restore is both bearer-authenticated and
       // account-pinned at the final transport boundary.
       restoreItem: (id) =>

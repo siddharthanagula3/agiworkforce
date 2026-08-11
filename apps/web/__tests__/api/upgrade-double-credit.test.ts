@@ -69,13 +69,17 @@ const SUB_ROW = {
   stripe_price_id: 'price_pro_monthly',
 };
 
-function makeRequest(plan: 'max' | 'max_15x' | 'team' = 'max', country = 'US') {
+function makeRequest(
+  plan: 'max' | 'max_15x' | 'team' = 'max',
+  country = 'US',
+  billingInterval: 'monthly' | 'yearly' = 'monthly',
+) {
   return new NextRequest('http://localhost/api/upgrade', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-vercel-ip-country': country },
     body: JSON.stringify({
       plan,
-      billingInterval: 'monthly',
+      billingInterval,
       previewToken: 'signed-preview-token',
     }),
   });
@@ -93,7 +97,10 @@ function stripeSubscription(overrides: Record<string, unknown> = {}) {
           id: 'si_1',
           current_period_start: 1_700_000_000,
           current_period_end: 1_702_592_000,
-          price: { id: 'price_pro_monthly' },
+          price: {
+            id: 'price_pro_monthly',
+            recurring: { interval: 'month', interval_count: 1 },
+          },
         },
       ],
     },
@@ -134,7 +141,10 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
               id: 'si_1',
               current_period_start: 1_700_100_000,
               current_period_end: 1_702_692_000,
-              price: { id: 'price_max_monthly' },
+              price: {
+                id: 'price_max_monthly',
+                recurring: { interval: 'month', interval_count: 1 },
+              },
             },
           ],
         },
@@ -143,7 +153,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     );
   });
 
-  it('charges a full target cycle now with Stripe time credit and payment-safe activation', async () => {
+  it('charges only the remaining-period difference with payment-safe activation', async () => {
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(200);
@@ -154,7 +164,6 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
         // billing; it is 1 for the individual plans. objectContaining is
         // shallow, so this array is deep-compared and must carry it.
         items: [{ id: 'si_1', price: 'price_max_monthly', quantity: 1 }],
-        billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
@@ -164,6 +173,9 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).toMatchObject({
       proration_date: 1_700_000_000,
     });
+    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).not.toHaveProperty(
+      'billing_cycle_anchor',
+    );
     expect(stripeMocks.retrieveCustomer).not.toHaveBeenCalled();
     expect(stripeMocks.updateCustomer).not.toHaveBeenCalled();
     expect(dbMocks.execute).not.toHaveBeenCalledWith(
@@ -192,7 +204,10 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
               id: 'si_1',
               current_period_start: 1_700_100_000,
               current_period_end: 1_702_692_000,
-              price: { id: 'price_max_monthly_inr' },
+              price: {
+                id: 'price_max_monthly_inr',
+                recurring: { interval: 'month', interval_count: 1 },
+              },
             },
           ],
         },

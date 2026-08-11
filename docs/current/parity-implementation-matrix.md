@@ -105,11 +105,21 @@ capability, no empty destination ships.
 (MS-2); the drawer gains a Connectors entry point (MS-22) and the Plugins
 matrix row scopes mobile out by decision, not omission.
 
+**Superseded 2026-08-09:** the founder now requires skills, plugins, and
+connectors to have explicit working outcomes on Web, Mobile, Desktop, CLI, and
+VS Code. Mobile may reuse a common discovery/settings shell, but it may no
+longer treat Plugins or Skills as out of scope merely because Connectors is
+present. The ordered release gate is: Max 15x image/video on Web/Mobile/both
+Desktop shells; tool loop + artifact rendering + web search on
+Web/Mobile/Desktop; then skills + plugins + connectors on all five named
+surfaces. Competitive behavior is measured against official ChatGPT releases
+from 2026-07-09 through 2026-08-09.
+
 **Also decided the same day:** the model picker stays in the "+" sheet and the
 stacked control row — it does NOT need to be persistently visible (founder
 reversed the earlier always-stack call the same evening; the composer keeps
-its compact single-line pill). `claude-sonnet-5` low/medium effort is
-catalog-correct (economy route, `3044350c5`) and the desktop tests follow the
+its compact single-line pill). Low/medium effort on the catalog-selected
+Anthropic balanced model is catalog-correct (economy route, `3044350c5`) and the desktop tests follow the
 catalog (resolved same day). Priority shifted the same evening: desktop Cloud
 mode parity with web, verified through the wdio e2e harness, outranks the
 remaining mobile P1/P2 queue.
@@ -495,19 +505,87 @@ Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extensi
 
 Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/contracts/types/src/enterprise`, `apps/web/db/neon`.
 
-## Competitor Deltas (verified 2026-07-09 — fold into rows on next full matrix pass)
+## Competitor Deltas (officially re-verified 2026-08-09)
 
-Both vendors shipped major releases on 2026-07-09. Full sourced report: session scratchpad `competitor-changelogs-2026-07.md` (regenerate from the URLs below if absent). Screenshots in `/Users/siddhartha/Desktop/reference` win for UI/IA; official docs win for feature existence/naming.
+This is the founder-requested ChatGPT snapshot from 2026-07-09 through the
+2026-08-09 cutoff. Feature existence and dates below come only from current
+official OpenAI material; they are acceptance inputs, not claims that AGI has
+already reached parity.
 
-- **ChatGPT Work (2026-07-09):** third agent mode beside Chat/Codex — goal in, hours of autonomous cross-connector work, finished docs/sheets/slides/"Sites" out. No matrix row exists; nearest AGI analog is the Cowork/dispatch surface. https://help.openai.com/en/articles/20001275-chatgpt-work-and-codex
-- **Codex merged into one ChatGPT desktop app** (Chat + Work + Codex modes, all plans): reword any "standalone Codex app" parity target — the one-app-multi-mode shape now matches AGI's own single-window philosophy. Old `developers.openai.com/codex/app/features` 308-redirects to `learn.chatgpt.com/docs/features`.
-- **GPT-5.6 GA (Sol/Terra/Luna tiers)** replacing mini/nano naming. `models.json` tops out at gpt-5.5 — exact API IDs pending primary-source verification before any catalog change (SSOT rule).
-- **ChatGPT Atlas browser sunsetting** into desktop app + Chrome extension (shutdown date UNVERIFIED, press-only).
-- **Claude in Chrome GA (2026-07-01):** all paid plans, multi-tab group control, native-app navigation, saved-prompt shortcuts — raises the Chrome-extension parity bar above the old "preview" target.
-- **Claude Cowork on web + mobile (2026-07-07, Max first):** async agent, cross-device review — both vendors converged on this shape; affects Dispatch/Cowork rows.
-- **Claude Trusted Devices (2026-06-25):** remote control of Claude Code sessions from another device — no matrix row; relevant to AGI remote-control product spec.
-- **Claude usage-recap personalization (2026-07-09):** monthly "reflect on how you use Claude" — no ChatGPT equivalent, no matrix row.
-- Ledger-link rot: `docs.anthropic.com/en/docs/claude-code/*` soft-redirects to `platform.claude.com` (links resolve with an extra hop). ChatGPT release-notes pages 403 direct fetches — verify via cached search or alternate official hosts and mark UNVERIFIED when only cache-sourced.
+- **2026-07-09 — ChatGPT Work:** long-running work can research, use connected
+  apps and files, create finished documents/spreadsheets/presentations/reports/
+  Sites, show progress, accept steering, request approval, and run scheduled or
+  monitored tasks. AGI acceptance: one resumable Work run and result contract
+  across Web/Mobile/Desktop, with durable progress, approvals, artifacts, and
+  schedules. https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+- **2026-07-09 — Plugin Directory:** plugins replace the App Directory and may
+  package skills, apps, and app templates; installation and invocation remain
+  subject to workspace roles and underlying app permissions. AGI acceptance:
+  the Skills/Plugins/Connectors gate in this matrix needs real discovery,
+  install/configure, permission, invocation, and result paths rather than
+  preview-only listings. https://help.openai.com/en/articles/20001256-plugins-in-chatgpt-and-codex
+- **2026-07-09 — OpenAI flagship model-family update:** the flagship tier began rolling out in eligible paid ChatGPT
+  plans; official product documentation also distinguishes the family tiers by
+  product and plan. The canonical AGI registry now contains verified IDs, but
+  presence in the registry is not routing or entitlement proof. AGI acceptance:
+  every exposed option must be live, plan-correct, and reach its declared
+  harness. https://help.openai.com/en/articles/20001354
+- **2026-07-09 to 2026-08-09 — Atlas retirement:** OpenAI moved the target for
+  browser-agent work to ChatGPT Desktop and its Chrome extension, including
+  multiple tabs, downloads, navigation, and authenticated sites. AGI acceptance:
+  Desktop and Chrome must share a permissioned browser runtime with download,
+  login, multi-tab, prompt-injection, audit, and local/cloud-boundary tests.
+  https://help.openai.com/en/articles/20001371
+- **2026-07-14 — cross-product search:** one entry point searches chats,
+  projects, images, and documents on Web/iOS/Android with content filters and
+  direct navigation. AGI acceptance: global search must cover the corresponding
+  authorized domains on Web/Mobile/Desktop and never cross Local, Managed, or
+  developer-session boundaries. https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+- **2026-07-15 — 5,000-character custom instructions:** AGI must verify the
+  shared profile/instructions contract, validation, persistence, sync, and
+  truncation behavior at this floor on Web/Mobile/Desktop.
+  https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+- **2026-07-16 — unified Desktop experience:** Chat/Work recents, Projects, and
+  Cloud Work continue across devices while Local conversations remain on the
+  computer; Codex stays a separate view. This directly reinforces AGI's
+  existing trust-boundary lock and requires Tauri and Electron parity for the
+  Managed experience without leaking Local state.
+  https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+- **2026-07-23 — Voice in Work and Codex on Desktop:** voice can start tasks,
+  check progress, answer agent questions, and coordinate work using the selected
+  experience's tools and permissions. AGI acceptance: voice orchestration needs
+  an explicit capability/permission path; dictation alone is not parity.
+  https://help.openai.com/en/articles/11391654-chatgpt-business-release-notes
+- **2026-07-23 — Health on Web and iOS:** the official release added a distinct,
+  consented health context backed by supported health records and Apple Health.
+  This remains a separate founder-approved Mobile gap; it must not be faked by
+  a generic connector or allowed to mix with ordinary chat memory.
+  https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+
+OpenAI material published after the cutoff is research input for the next
+snapshot, not a retroactive 2026-08-09 acceptance requirement. Cached snippets,
+press reports, and local screenshots may help locate evidence but cannot create
+a release claim.
+
+Cross-vendor findings from the preceding snapshot remain in the matrix instead
+of being erased by the OpenAI-focused refresh:
+
+- **Claude usage reflection (2026-07-09):** Anthropic's official announcement
+  describes a beta dashboard that summarizes usage patterns over selectable
+  time ranges and offers AI-fluency guidance. AGI still has no equivalent
+  product row; add a privacy-scoped usage-insights gap rather than treating
+  ordinary billing totals as parity.
+  https://www.anthropic.com/news/reflect-with-claude
+- **Remote developer-session control:** the preceding snapshot recorded a
+  trusted-device flow for controlling a developer session from another device.
+  The 2026-08-09 re-verification did not recover a current primary-source page,
+  so this remains an explicitly **UNVERIFIED** research item—not a release
+  claim and not a finding that may be silently deleted. It still maps to AGI's
+  remote-control threat model and approval/audit requirements.
+- **Documentation-link migration:** prior Anthropic developer links were
+  observed redirecting from the legacy docs host to the current platform docs
+  host. Link integrity remains an operational documentation check even when the
+  underlying feature comparison is unchanged.
 
 ## Required Research Ledger
 

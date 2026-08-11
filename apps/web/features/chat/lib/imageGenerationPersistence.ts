@@ -3,10 +3,30 @@ import {
   notifyPersistenceFailure,
   EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
 } from '@/lib/hooks/useChatStream';
+import { CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS } from '@shared/config/network';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 
 type AuthTokenProvider = () => Promise<string>;
 type UpdateMessageFn = (id: string, updates: Partial<Message>) => void;
+
+export type ImageMessagePersistenceResult =
+  | { ok: true; messageId: string }
+  | { ok: false; error: unknown };
+
+async function withImageMessagePersistenceDeadline<T>(
+  save: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const deadline = setTimeout(
+    () => controller.abort(new Error('Image transcript persistence timed out')),
+    CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS,
+  );
+  try {
+    return await save(controller.signal);
+  } finally {
+    clearTimeout(deadline);
+  }
+}
 
 /**
  * WEB-IMAGE-CHAT-PERSISTENCE-01: the composer's "Create image" flow
@@ -18,7 +38,7 @@ type UpdateMessageFn = (id: string, updates: Partial<Message>) => void;
  * `persist` middleware explicitly excludes `messages` from localStorage —
  * so the turn vanished on reload despite the image itself being safe.
  *
- * These two helpers persist those turns the same way useChatStream's
+ * These helpers persist those turns the same way useChatStream's
  * sendMessage persists every other turn (see saveMessageToDb), so a reload
  * rehydrates the same metadata MessageBubble already renders live
  * (`metadata.toolType === 'image-generation'` → <ImageGenerationCard>).
@@ -62,6 +82,7 @@ export function imageRegenerationPendingMetadata(
     imageGenPrompt: opts.prompt,
     imageGenAspect: opts.aspectRatio,
     ...(opts.modelId !== undefined ? { imageGenModel: opts.modelId } : {}),
+    imageRetryAt: undefined,
   });
 }
 
@@ -73,11 +94,12 @@ export function imageRegenerationPendingMetadata(
  */
 export function imageGenerationFailureMetadata(
   previous: MessageMetadata | undefined,
-  options: { paywall?: MessageMetadata['paywall'] } = {},
+  options: { paywall?: MessageMetadata['paywall']; retryAt?: string } = {},
 ): MessageMetadata {
   return mergeImageGenerationMetadata(previous, {
     toolType: 'image-generation',
     ...(options.paywall ? { paywall: options.paywall } : {}),
+    imageRetryAt: options.retryAt,
   });
 }
 
@@ -95,19 +117,21 @@ export async function persistImageGenerationUserMessage(params: {
   content: string;
   getAuthToken: AuthTokenProvider;
   updateMessage: UpdateMessageFn;
-}): Promise<void> {
+}): Promise<ImageMessagePersistenceResult> {
   const { conversationId, messageId, content, getAuthToken, updateMessage } = params;
   try {
-    const saved = await saveMessageToDb(
-      conversationId,
-      { id: messageId, role: 'user', content },
-      getAuthToken,
+    const saved = await withImageMessagePersistenceDeadline((signal) =>
+      saveMessageToDb(conversationId, { id: messageId, role: 'user', content }, getAuthToken, {
+        signal,
+      }),
     );
     if (saved?.id && saved.id !== messageId) {
       updateMessage(messageId, { id: saved.id });
     }
+    return { ok: true, messageId: saved.id };
   } catch (err) {
     notifyPersistenceFailure('user', err);
+    return { ok: false, error: err };
   }
 }
 
@@ -123,31 +147,53 @@ export async function persistImageGenerationAssistantMessage(params: {
   messageId: string;
   model: string | undefined;
   metadata: MessageMetadata;
+  /** Visible terminal failure copy; image/video-only success and refusal rows omit it. */
+  content?: string;
   getAuthToken: AuthTokenProvider;
   updateMessage: UpdateMessageFn;
-}): Promise<void> {
-  const { conversationId, messageId, model, metadata, getAuthToken, updateMessage } = params;
+}): Promise<ImageMessagePersistenceResult> {
+  const { conversationId, messageId, model, metadata, content, getAuthToken, updateMessage } =
+    params;
   try {
-    const saved = await saveMessageToDb(
-      conversationId,
-      {
-        id: messageId,
-        role: 'assistant',
-        // Image-only turn: content is intentionally empty. The DB schema
-        // rejects empty/whitespace content, so use the same zero-width
-        // placeholder useChatStream uses for tool-only turns (see
-        // EMPTY_ASSISTANT_CONTENT_PLACEHOLDER) rather than dropping the
-        // image card on save.
-        content: EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-        model,
-        metadata,
-      },
-      getAuthToken,
+    const saved = await withImageMessagePersistenceDeadline((signal) =>
+      saveMessageToDb(
+        conversationId,
+        {
+          id: messageId,
+          role: 'assistant',
+          // Media-only success and refusal turns intentionally render from
+          // metadata. The DB schema rejects empty/whitespace content, so use the
+          // same zero-width placeholder useChatStream uses for tool-only turns.
+          // Generic terminal failures carry their visible sentence instead.
+          content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          model,
+          metadata,
+        },
+        getAuthToken,
+        { signal },
+      ),
     );
     if (saved?.id && saved.id !== messageId) {
       updateMessage(messageId, { id: saved.id });
     }
+    return { ok: true, messageId: saved.id };
   } catch (err) {
     notifyPersistenceFailure('assistant', err);
+    return { ok: false, error: err };
   }
+}
+
+/**
+ * Convert the persistence mechanic's explicit result into control flow for a
+ * durability-sensitive action. Best-effort callers may inspect/ignore the
+ * result; paid image actions call this before crossing the provider boundary
+ * and after receiving an asset so neither failure can look successful.
+ */
+export function requireImageMessagePersistence(result: ImageMessagePersistenceResult): {
+  messageId: string;
+} {
+  if (result.ok) return { messageId: result.messageId };
+  throw result.error instanceof Error
+    ? result.error
+    : new Error('Image transcript persistence failed');
 }

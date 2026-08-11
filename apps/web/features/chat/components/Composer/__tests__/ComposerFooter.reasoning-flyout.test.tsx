@@ -1,72 +1,70 @@
 /**
  * ComposerFooter · reasoning/effort flyout (reasoning-effort-capability wave)
  *
- * Verifies the picker's effort flyout against the REAL component + REAL
- * models.json `reasoning` blocks (jsdom render — the compiled-component
- * verification path allowed when the signed-in dev handshake is not exercised).
- * Mirrors the current-roster verification points:
- *   (a) GPT-5.6 Sol shows its exact none/low/medium/high/xhigh/max ladder.
- *   (b) non-reasoning model (Sonar) shows NO effort control.
- *   (c) Anthropic Opus 5 shows low/medium/high/xhigh/max.
- *   (d) removed: Haiku 4.5 was the only catalog model without an effort
- *       ladder, and it was retired 2026-07-27. Every remaining model has
- *       one, so 'no reasoning control' has no model to demonstrate it.
- *   (e) Fable 5 reasoning is mandatory and cannot be switched off.
- *   (f) GPT-5.6 Sol is live/selectable, while a synthetic future preview is disabled.
+ * Verifies the real component against capability-shaped synthetic fixtures.
+ * Catalog-contract tests separately prove that live entries satisfy the same
+ * reasoning schema, while this UI test stays stable when a concrete model is
+ * replaced in the one canonical registry owner.
+ *   (a) Six-Level Fixture shows its exact none/low/medium/high/xhigh/max ladder.
+ *   (b) non-reasoning model (Non-Reasoning Fixture) shows NO effort control.
+ *   (c) Five-Level Fixture shows low/medium/high/xhigh/max.
+ *   (d) a non-reasoning fixture exposes no synthetic effort ladder.
+ *   (e) Always-On Fixture reasoning is mandatory and cannot be switched off.
+ *   (f) Six-Level Fixture is live/selectable, while a synthetic future preview is disabled.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 // Mutable selected model, controlled per-test.
-const sel = vi.hoisted(() => ({ id: 'gpt-5.6-sol' }));
+const sel = vi.hoisted(() => ({ id: 'fixture-six-level' }));
 
 const MODELS = vi.hoisted(() => [
   {
-    id: 'gpt-5.6-sol',
-    name: 'GPT-5.6 Sol',
+    id: 'fixture-six-level',
+    name: 'Six-Level Fixture',
     provider: 'OpenAI',
     providerKey: 'openai',
     description: 'Frontier',
   },
   {
-    id: 'claude-fable-5',
-    name: 'Claude Fable 5',
+    id: 'fixture-always-on',
+    name: 'Always-On Fixture',
     provider: 'Anthropic',
     providerKey: 'anthropic',
     description: 'Adaptive reasoning',
   },
   {
-    id: 'gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash-Lite',
+    id: 'fixture-four-level',
+    name: 'Four-Level Fixture',
     provider: 'Google',
     providerKey: 'google',
     description: 'Cheap',
   },
   {
-    id: 'sonar',
-    name: 'Sonar',
+    id: 'fixture-no-reasoning',
+    name: 'Non-Reasoning Fixture',
     provider: 'Perplexity',
     providerKey: 'perplexity',
     description: 'Search',
   },
   {
-    id: 'claude-opus-5',
-    name: 'Claude Opus 5',
+    id: 'fixture-five-level',
+    name: 'Five-Level Fixture',
     provider: 'Anthropic',
     providerKey: 'anthropic',
     description: 'Frontier',
   },
   {
-    id: 'claude-sonnet-5',
-    name: 'Claude 4.5 Haiku',
+    id: 'fixture-standard',
+    name: 'Standard Fixture',
     provider: 'Anthropic',
     providerKey: 'anthropic',
     description: 'Fast',
   },
   {
-    id: 'gemini-3.6-flash',
-    name: 'Gemini 3.6 Flash',
+    id: 'fixture-four-level-secondary',
+    name: 'Four-Level Secondary Fixture',
     provider: 'Google',
     providerKey: 'google',
     description: 'Fast',
@@ -81,6 +79,60 @@ const MODELS = vi.hoisted(() => [
     unavailableReason: 'GA announced 2026-07-09; 404 on our key.',
   },
 ]);
+
+const REASONING_BY_MODEL = vi.hoisted(
+  () =>
+    ({
+      'fixture-six-level': {
+        capable: true,
+        control: 'effort_levels',
+        supportedEfforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'medium',
+        canDisableThinking: true,
+      },
+      'fixture-always-on': {
+        capable: true,
+        control: 'always_on',
+        supportedEfforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        canDisableThinking: false,
+      },
+      'fixture-four-level': {
+        capable: true,
+        control: 'always_on',
+        supportedEfforts: ['minimal', 'low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        canDisableThinking: false,
+      },
+      'fixture-no-reasoning': {
+        capable: false,
+        control: 'none',
+        supportedEfforts: [],
+        canDisableThinking: false,
+      },
+      'fixture-five-level': {
+        capable: true,
+        control: 'effort_levels',
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'medium',
+        canDisableThinking: true,
+      },
+      'fixture-standard': {
+        capable: true,
+        control: 'effort_levels',
+        supportedEfforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        canDisableThinking: true,
+      },
+      'fixture-four-level-secondary': {
+        capable: true,
+        control: 'always_on',
+        supportedEfforts: ['minimal', 'low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        canDisableThinking: false,
+      },
+    }) as Record<string, Record<string, unknown>>,
+);
 
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -99,22 +151,27 @@ vi.mock('@shared/stores/web-auth-store', () => ({
     selector({ subscription: { tier: 'max' }, dailyUsage_cents: 0, dailyLimit_cents: 0 }),
 }));
 
-// REAL @/constants/llm reasoning data — only tier gating is stubbed so every live
-// model is selectable at max tier. getModelReasoning/getModelMetadata are the
-// genuine catalog readers, so the flyout is driven by real models.json data.
+// Keep the component's real configuration module, replacing only the catalog
+// lookup with capability fixtures and tier gates needed by this focused unit.
 vi.mock('@shared/config/llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shared/config/llm')>();
   return {
     ...actual,
+    getModelReasoning: (modelId: string) =>
+      REASONING_BY_MODEL[modelId] ?? {
+        capable: false,
+        control: 'none',
+        supportedEfforts: [],
+      },
     getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
-    getBestAutoModeForTier: () => 'gpt-5.6-sol',
+    getBestAutoModeForTier: () => 'fixture-six-level',
     isModelAllowedForTier: () => true,
   };
 });
 
 vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODELS: [],
-  FREE_TRIAL_MODEL: 'gemini-3.5-flash-lite',
+  FREE_TRIAL_MODEL: 'fixture-four-level',
 }));
 
 // Stateful thinking store: enabled so effort chips render for switch-gated models.
@@ -202,14 +259,14 @@ vi.mock('zustand/middleware', async () => {
 
 import { ComposerFooter } from '../ComposerFooter';
 
-describe('ComposerFooter · reasoning/effort flyout (real component + real catalog)', () => {
+describe('ComposerFooter · reasoning/effort flyout', () => {
   beforeEach(() => {
     thinking.enabled = true;
     thinking.effort = 'medium';
   });
 
-  it('(a) GPT-5.6 Sol exposes its six exact levels through one compact slider', () => {
-    sel.id = 'gpt-5.6-sol';
+  it('(a) Six-Level Fixture exposes its six exact levels through one compact slider', () => {
+    sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
     expect(slider).toHaveAttribute('min', '0');
@@ -219,15 +276,15 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(screen.queryByRole('button', { name: 'Reasoning effort High' })).not.toBeInTheDocument();
   });
 
-  it('(b) non-reasoning Sonar shows NO effort control', () => {
-    sel.id = 'sonar';
+  it('(b) non-reasoning Non-Reasoning Fixture shows NO effort control', () => {
+    sel.id = 'fixture-no-reasoning';
     render(<ComposerFooter />);
     expect(screen.queryByRole('group', { name: /reasoning effort/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('slider', { name: /reasoning effort/i })).not.toBeInTheDocument();
   });
 
-  it('Gemini 3.5 Flash-Lite exposes its catalog-backed minimal/low/medium/high slider', () => {
-    sel.id = 'gemini-3.5-flash-lite';
+  it('Four-Level Fixture exposes its catalog-backed minimal/low/medium/high slider', () => {
+    sel.id = 'fixture-four-level';
     thinking.effort = 'low';
     render(<ComposerFooter />);
 
@@ -237,14 +294,14 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(screen.getByText('Always on for this model')).toBeInTheDocument();
   });
 
-  it('(c) Anthropic Opus 5 exposes five catalog levels through the slider', () => {
-    sel.id = 'claude-opus-5';
+  it('(c) Five-Level Fixture exposes five catalog levels through the slider', () => {
+    sel.id = 'fixture-five-level';
     render(<ComposerFooter />);
     expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '4');
   });
 
-  it('(a2) Gemini 3.6 Flash exposes its exact minimal/low/medium/high slider', () => {
-    sel.id = 'gemini-3.6-flash';
+  it('(a2) Four-Level Secondary Fixture exposes its exact minimal/low/medium/high slider', () => {
+    sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'minimal';
     render(<ComposerFooter />);
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
@@ -253,7 +310,7 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
   });
 
   it('places the effort slider before the model list and updates by discrete catalog index', () => {
-    sel.id = 'gemini-3.6-flash';
+    sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'medium';
     render(<ComposerFooter />);
 
@@ -267,8 +324,8 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(thinking.effort).toBe('high');
   });
 
-  it('(e) Fable 5 shows mandatory reasoning without an off switch', () => {
-    sel.id = 'claude-fable-5';
+  it('(e) Always-On Fixture shows mandatory reasoning without an off switch', () => {
+    sel.id = 'fixture-always-on';
     thinking.enabled = false;
     render(<ComposerFooter />);
 
@@ -277,18 +334,18 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(screen.queryByLabelText('Toggle extended thinking')).not.toBeInTheDocument();
   });
 
-  it('(f) GPT-5.6 Sol is live, selected, and has no stale availability badge', () => {
-    sel.id = 'gpt-5.6-sol';
+  it('(f) Six-Level Fixture is live, selected, and has no stale availability badge', () => {
+    sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
 
-    const row = screen.getByRole('button', { name: 'GPT-5.6 Sol' });
+    const row = screen.getByRole('button', { name: 'Six-Level Fixture' });
     expect(row).not.toBeDisabled();
     expect(row).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
   it('keeps a synthetic future preview non-selectable and non-focusable', () => {
-    sel.id = 'gpt-5.6-sol';
+    sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
     // coming_soon rows live in the "More models" group — expand it.
     fireEvent.click(screen.getByRole('button', { name: /more models/i }));

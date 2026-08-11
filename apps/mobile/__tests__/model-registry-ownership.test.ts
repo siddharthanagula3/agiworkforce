@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { getDefaultModel, getModelsForRole } from '@agiworkforce/local-llm';
 
 describe('mobile model registry ownership', () => {
   it('does not maintain an app-owned fallback local model record', () => {
@@ -9,7 +10,7 @@ describe('mobile model registry ownership', () => {
     );
 
     expect(source).not.toContain('FALLBACK_LOCAL_MODEL');
-    expect(source).not.toContain("id: 'qwen3-4b-instruct-2507'");
+    expect(source).not.toContain(`id: '${getDefaultModel().id}'`);
   });
 
   it('does not hardcode a local benchmark model outside the local model catalog', () => {
@@ -18,7 +19,7 @@ describe('mobile model registry ownership', () => {
       'utf8',
     );
 
-    expect(source).not.toContain("'qwen3-4b-instruct-2507'");
+    expect(source).not.toContain(`'${getDefaultModel().id}'`);
   });
 
   it('derives tier-one system model ids from the shared local model catalog', () => {
@@ -27,8 +28,9 @@ describe('mobile model registry ownership', () => {
       '../src/features/model-picker/installStore.ts',
     ]) {
       const source = fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8');
-      expect(source).not.toContain("'apple-foundation-models'");
-      expect(source).not.toContain("'gemini-nano-aicore'");
+      for (const model of getModelsForRole('system-multimodal')) {
+        expect(source).not.toContain(`'${model.id}'`);
+      }
     }
   });
 });

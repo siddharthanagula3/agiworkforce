@@ -67,23 +67,28 @@ beforeEach(() => {
   mockAndroidModule.isThermallyThrottled.mockReset();
 });
 
-// System-tier model IDs (OS-resident, not downloaded) — at least one must exist.
-const SYSTEM_TIER_IDS = ['apple-foundation-models', 'gemini-nano-aicore'];
+const SYNTHETIC_UNKNOWN_MODEL_ID = 'fixture-unknown-local-model';
 
 describe('local-llm: catalog', () => {
   it('returns all shippable models including at least one system-tier entry', () => {
-    const { getShippableModels, getModelsForRole, getModelById, detectCapabilities } =
+    const { getDefaultModel, getLiteModeModel, getModelsForRole, getShippableModels } =
       getLocalLlm();
 
     const models = getShippableModels();
     expect(models.length).toBeGreaterThanOrEqual(4);
     const ids = models.map((m: { id: string }) => m.id);
-    // At least one system-tier model (platform-dependent) must be present
-    expect(SYSTEM_TIER_IDS.some((id: string) => ids.includes(id))).toBe(true);
-    // Standard downloadable models must be present
-    expect(ids).toContain('qwen3-4b-instruct-2507');
-    expect(ids).toContain('llama-3.2-1b-instruct-spinquant');
-    expect(ids).not.toContain('qwen2.5-vl-3b-instruct');
+    const systemModels = getModelsForRole('system-multimodal').filter((model) => model.shipsInV1);
+    const liteModel = getLiteModeModel();
+    const hiddenVisionModel = getModelsForRole('premium-vision-pack').find(
+      (model) => !model.shipsInV1,
+    );
+
+    expect(systemModels.some((model) => ids.includes(model.id))).toBe(true);
+    expect(ids).toContain(getDefaultModel().id);
+    expect(liteModel).toBeDefined();
+    expect(ids).toContain(liteModel?.id);
+    expect(hiddenVisionModel).toBeDefined();
+    expect(ids).not.toContain(hiddenVisionModel?.id);
   });
 
   it('all catalog entries have a license field', () => {
@@ -108,16 +113,17 @@ describe('local-llm: catalog', () => {
   });
 
   it('download models have non-zero fileSizeBytes and executorch/llama-rn runtime support', () => {
-    const { getModelById } = getLocalLlm();
+    const { getDefaultModel, getLiteModeModel, getModelById } = getLocalLlm();
 
-    const qwen = getModelById('qwen3-4b-instruct-2507');
-    expect(qwen).toBeDefined();
-    expect(qwen.fileSizeBytes).toBeGreaterThan(0);
-    expect(qwen.supportedRuntimes).toContain('executorch');
-    const llama = getModelById('llama-3.2-1b-instruct-spinquant');
-    expect(llama).toBeDefined();
-    expect(llama.fileSizeBytes).toBeGreaterThan(0);
-    expect(llama.supportedRuntimes).toContain('executorch');
+    const liteModel = getLiteModeModel();
+    expect(liteModel).toBeDefined();
+    for (const catalogModel of [getDefaultModel(), liteModel]) {
+      if (!catalogModel) continue;
+      const resolvedModel = getModelById(catalogModel.id);
+      expect(resolvedModel).toBeDefined();
+      expect(resolvedModel?.fileSizeBytes).toBeGreaterThan(0);
+      expect(resolvedModel?.supportedRuntimes).toContain('executorch');
+    }
   });
 
   it('getModelsForRole(system-multimodal) returns system-tier entries', () => {
@@ -137,7 +143,7 @@ describe('local-llm: catalog', () => {
 
   it('returns undefined for unknown model id', () => {
     const { getModelById } = getLocalLlm();
-    expect(getModelById('totally-fake-model')).toBeUndefined();
+    expect(getModelById(SYNTHETIC_UNKNOWN_MODEL_ID)).toBeUndefined();
   });
 });
 

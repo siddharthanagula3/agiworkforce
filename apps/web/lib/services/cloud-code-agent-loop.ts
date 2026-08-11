@@ -22,6 +22,12 @@ import {
   classifyCommandRisk,
   cloudCodeAgentToolDefs,
 } from './cloud-code-agent-tools';
+import {
+  accumulateObservedProviderUsage,
+  createObservedProviderUsage,
+  type ObservedProviderUsage,
+  type ProviderUsageObservation,
+} from './managed-usage-accounting-service';
 
 /**
  * Cloud Code agent turn — the bounded model↔tool loop.
@@ -211,16 +217,21 @@ interface DrainedTurn {
    * emitted a `usage` chunk. Previously the `default: break` below swallowed
    * it, which is why the turn could not be billed at what it actually cost.
    */
-  usage?: CloudCodeTurnUsage;
+  usage?: CloudCodeProviderCallUsage;
 }
 
 /** Token usage accumulated across every provider call in a turn. */
-export interface CloudCodeTurnUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-}
+export type CloudCodeTurnUsage = ObservedProviderUsage;
+
+type CloudCodeProviderCallUsage = Pick<
+  ProviderUsageObservation,
+  | 'inputTokens'
+  | 'outputTokens'
+  | 'cacheReadTokens'
+  | 'cacheWriteTokens'
+  | 'cacheWrite1hTokens'
+  | 'reasoningTokens'
+>;
 
 /**
  * Collect one assistant turn from the provider stream. Tool arguments arrive as
@@ -229,7 +240,7 @@ export interface CloudCodeTurnUsage {
  */
 export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Promise<DrainedTurn> {
   let text = '';
-  let usage: CloudCodeTurnUsage | undefined;
+  let usage: CloudCodeProviderCallUsage | undefined;
   const names = new Map<string, string>();
   const buffers = new Map<string, string>();
   const completed: string[] = [];
@@ -258,6 +269,8 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
           outputTokens: chunk.outputTokens ?? 0,
           cacheReadTokens: chunk.cacheReadTokens ?? 0,
           cacheWriteTokens: chunk.cacheWriteTokens ?? 0,
+          cacheWrite1hTokens: chunk.cacheWrite1hTokens ?? 0,
+          reasoningTokens: chunk.reasoningTokens ?? 0,
         };
         break;
       default:
@@ -352,12 +365,7 @@ export async function runCloudCodeAgentTurn(
   // Accumulates across EVERY provider call in the turn. A multi-step turn makes
   // many calls, so per-call usage must be summed rather than taken from the
   // last one.
-  const usage: CloudCodeTurnUsage = {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-  };
+  const usage = createObservedProviderUsage();
 
   while (stepsUsed < maxSteps) {
     if (input.signal.aborted) {
@@ -395,10 +403,10 @@ export async function runCloudCodeAgentTurn(
     }
 
     if (drained.usage) {
-      usage.inputTokens += drained.usage.inputTokens;
-      usage.outputTokens += drained.usage.outputTokens;
-      usage.cacheReadTokens += drained.usage.cacheReadTokens;
-      usage.cacheWriteTokens += drained.usage.cacheWriteTokens;
+      accumulateObservedProviderUsage(usage, drained.usage, {
+        provider: input.adapter.id,
+        model: input.model,
+      });
     }
 
     if (drained.text) {

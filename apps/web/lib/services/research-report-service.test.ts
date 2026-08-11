@@ -34,7 +34,7 @@ const ROW = {
   sources_consulted: '7',
   duration_ms: '45000',
   error: null,
-  model: 'gemini-3.6-flash',
+  model: 'fixture-model',
   provider: 'google',
   created_at: '2026-08-05T10:00:00.000Z',
   updated_at: '2026-08-05T10:00:45.000Z',
@@ -74,7 +74,7 @@ function input(overrides: Partial<SaveResearchReportInput> = {}): SaveResearchRe
     status: 'completed',
     sourcesConsulted: 7,
     durationMs: 45_000,
-    model: 'gemini-3.6-flash',
+    model: 'fixture-model',
     provider: 'google',
     ...overrides,
   };

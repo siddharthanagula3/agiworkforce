@@ -248,7 +248,7 @@ export default function TrustPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Trust</p>
           <h1 id="agi-trust-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Claims with dates,</span>
+            <span className="agi-fl-h1-line">Claims with dates,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">and the ones we cannot make.</em>
             </span>

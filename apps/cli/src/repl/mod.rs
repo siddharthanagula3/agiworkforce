@@ -609,10 +609,10 @@ pub async fn run_repl(
     }
 
     output::print_session_cost(
-        &session.model,
         session.total_input_tokens,
         session.total_output_tokens,
         session.turn_count,
+        session.cost_ledger.total_usd,
     );
 
     Ok(())
@@ -647,7 +647,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             if turn.via_subscription {
                 output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
             } else {
-                output::print_cost(&session.model, turn.input_tokens, turn.output_tokens);
+                output::print_recorded_cost(turn.input_tokens, turn.output_tokens, turn.cost_usd);
             }
         }
         Err(e) => {

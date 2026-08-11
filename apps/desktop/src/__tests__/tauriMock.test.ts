@@ -77,7 +77,7 @@ describe('LLM provider/model commands in tauri-mock', () => {
     const invoke = await getRealInvoke();
     const result = await invoke<{ content: string; model: string }>('llm_send_message', {
       messages: [{ role: 'user', content: 'Hello from test' }],
-      model: 'claude-sonnet-5',
+      model: 'fixture-tauri-message-model',
     });
     expect(result).toBeDefined();
     expect(typeof result.content).toBe('string');

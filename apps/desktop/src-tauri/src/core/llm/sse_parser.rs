@@ -477,7 +477,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
             }
 
             // ── OpenAI Responses API fallback ───────────────────────────
-            // The Responses API (used by o3, o4-mini, gpt-4.1) emits different
+            // The Responses API emits different
             // event types than Chat Completions.  Only activate when the Chat
             // Completions `choices` block above did not produce content.
             if content.is_empty() {
@@ -794,7 +794,7 @@ mod stream_tests {
 
     #[test]
     fn test_parse_openai_sse_extracts_streaming_tool_calls() {
-        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc123","type":"function","function":{"name":"document_create_pdf","arguments":"{\"title\":\"Q4 Plan\""}}]},"finish_reason":null}],"model":"gpt-5"}"#;
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc123","type":"function","function":{"name":"document_create_pdf","arguments":"{\"title\":\"Q4 Plan\""}}]},"finish_reason":null}],"model":"fixture-response-model"}"#;
 
         let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
 
@@ -805,7 +805,7 @@ mod stream_tests {
         assert_eq!(tool_calls[0].id, "call_abc123");
         assert_eq!(tool_calls[0].name, "document_create_pdf");
         assert!(tool_calls[0].arguments.contains("\"title\":\"Q4 Plan\""));
-        assert_eq!(chunk.model.as_deref(), Some("gpt-5"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-response-model"));
         assert_eq!(chunk.finish_reason, None);
         assert!(!chunk.done);
     }
@@ -827,12 +827,13 @@ mod stream_tests {
 
     #[test]
     fn test_parse_openai_sse_accepts_data_prefix_without_space() {
-        let event = r#"data:{"choices":[{"delta":{"content":"hello"}}],"model":"gpt-5"}"#;
+        let event =
+            r#"data:{"choices":[{"delta":{"content":"hello"}}],"model":"fixture-response-model"}"#;
 
         let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
 
         assert_eq!(chunk.content, "hello");
-        assert_eq!(chunk.model.as_deref(), Some("gpt-5"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-response-model"));
         assert!(chunk.tool_calls.is_none());
     }
 

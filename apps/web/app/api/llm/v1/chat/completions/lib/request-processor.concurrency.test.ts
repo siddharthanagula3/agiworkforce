@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getDefaultModelFor } from '@agiworkforce/types';
+
+const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
 /**
  * PERF: the managed preflight is what a user waits through before the first
@@ -104,7 +107,7 @@ function chatRequest(key: string, body: Record<string, unknown>, testUser?: stri
       ...(testUser ? { 'x-test-user': testUser } : {}),
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
+      model: FREE_CHAT_MODEL,
       messages: [{ role: 'user', content: 'Hello there' }],
       stream: false,
       ...body,

@@ -140,7 +140,10 @@ export async function buildToolLoopStream(
     signal ?? new AbortController().signal,
     adapterProvider.mapError,
   );
-  return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink);
+  return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink, {
+    provider,
+    model: stepRequest.model,
+  });
 }
 
 /**
@@ -181,6 +184,7 @@ export function chunksToOpenAiSse(
   // assembler's structured capture just before the stream closes — the wire
   // bytes emitted are byte-identical whether or not a sink is passed.
   sink?: ToolLoopStepSink,
+  pricing?: { provider: string; model: string },
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
@@ -198,7 +202,7 @@ export function chunksToOpenAiSse(
   const commitUsage = () => {
     if (usageCommitted || !sawUsage || !sink?.usage) return;
     usageCommitted = true;
-    accumulateObservedProviderUsage(sink.usage, streamUsage);
+    accumulateObservedProviderUsage(sink.usage, streamUsage, pricing);
   };
 
   return new ReadableStream<Uint8Array>({

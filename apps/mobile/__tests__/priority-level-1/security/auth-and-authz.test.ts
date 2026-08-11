@@ -10,6 +10,7 @@
  * switching) fails the build.
  */
 import { guardProviderSwitch, mapBillingPlanToUIPlan } from '@/src/features/model-picker/tierGuard';
+import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
 
 describe('L1 Security - Auth & Authorization', () => {
   test('SECURITY: free/local/byok tiers cannot switch providers mid-thread', () => {
@@ -48,8 +49,10 @@ describe('L1 Security - Auth & Authorization', () => {
   });
 
   test('SECURITY: same-provider and new-thread switches need no privilege', () => {
+    const autoSelection = getDefaultAutoRoutingProfile().id;
+
     expect(guardProviderSwitch(null, 'anthropic', 'free')).toBe('allow');
     expect(guardProviderSwitch('openai', 'openai', 'free')).toBe('allow');
-    expect(guardProviderSwitch('auto-best', 'anthropic', 'free')).toBe('allow');
+    expect(guardProviderSwitch(autoSelection, 'anthropic', 'free')).toBe('allow');
   });
 });

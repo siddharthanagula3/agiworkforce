@@ -112,14 +112,14 @@ describe('Mobile ProjectHeader', () => {
         lastUsedAt: '2026-05-20T00:00:00Z',
       }),
       lastUsedRelativeLabel: '2h ago',
-      defaultModelLabel: 'Claude Sonnet 4.6',
+      defaultModelLabel: 'Fixture Project Model',
     });
     const { getByTestId, getByText } = render(<ProjectHeader presentation={presentation} />);
     expect(getByTestId('project-header-meta-row')).toBeTruthy();
     expect(getByText('4 files')).toBeTruthy();
     expect(getByText('3 members')).toBeTruthy();
     expect(getByText('Last used 2h ago')).toBeTruthy();
-    expect(getByText('Default model: Claude Sonnet 4.6')).toBeTruthy();
+    expect(getByText('Default model: Fixture Project Model')).toBeTruthy();
   });
 
   it('omits the meta row when no counts / model / last-used are provided', () => {

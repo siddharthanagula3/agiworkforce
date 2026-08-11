@@ -1,16 +1,5 @@
-/**
- * MiniMax, Qwen and Zhipu are served through OpenRouter until direct accounts
- * are worth opening (founder decision 2026-07-27). Moonshot and xAI stay
- * direct. MuleRouter is gone.
- *
- * The failure this guards is the two halves disagreeing. Routing has to move
- * the provider *and* the wire model id together — redirect only the provider
- * and OpenRouter receives `glm-5.2`, an id it does not publish; redirect only
- * the id and DashScope receives `z-ai/glm-5.2`, which it does not either.
- * Both fail at request time, from config that reads fine.
- */
-
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   canFailoverToOpenRouter,
   failoverMappedModelIds,
@@ -22,10 +11,35 @@ import {
 
 const ENV_KEYS = ['OPENROUTER_API_KEY', 'AGI_OPENROUTER_ROUTED_PROVIDERS'] as const;
 const saved: Record<string, string | undefined> = {};
+const ROUTED_PROVIDERS = new Set(['minimax', 'qwen', 'zhipu']);
+const DIRECT_FAILOVER_PROVIDERS = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'deepseek',
+  'xai',
+  'moonshot',
+  'perplexity',
+]);
+const NON_CHAT_MODEL_TYPES = new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']);
+
+function providerApiModelId(model: ModelMetadata): string {
+  return model.apiModelId ?? model.id;
+}
+
+function isChatModel(model: ModelMetadata): boolean {
+  return !NON_CHAT_MODEL_TYPES.has(model.modelType);
+}
+
+function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): ModelMetadata {
+  const model = listCanonicalModels().find(predicate);
+  if (!model) throw new Error('Canonical OpenRouter routing fixture is missing');
+  return model;
+}
 
 beforeEach(() => {
   for (const key of ENV_KEYS) saved[key] = process.env[key];
-  process.env['OPENROUTER_API_KEY'] = 'sk-or-test';
+  process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
   delete process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'];
 });
 
@@ -37,166 +51,112 @@ afterEach(() => {
 });
 
 describe('aggregator routing', () => {
-  it.each(['minimax', 'qwen', 'zhipu'])('routes %s through OpenRouter', (provider) => {
+  it.each([...ROUTED_PROVIDERS])('routes %s through OpenRouter', (provider) => {
     expect(isRoutedViaOpenRouter(provider)).toBe(true);
   });
 
-  it.each(['moonshot', 'xai', 'anthropic', 'openai', 'google', 'deepseek', 'perplexity'])(
-    'leaves %s direct',
-    (provider) => {
-      expect(isRoutedViaOpenRouter(provider)).toBe(false);
-    },
-  );
+  it.each([...DIRECT_FAILOVER_PROVIDERS])('leaves %s direct', (provider) => {
+    expect(isRoutedViaOpenRouter(provider)).toBe(false);
+  });
 
   it('does not route when there is no OpenRouter key', () => {
-    // Otherwise a provider that merely lacks a key is swapped for another that
-    // also lacks one, and the user sees an OpenRouter auth error naming a
-    // provider they never selected.
     delete process.env['OPENROUTER_API_KEY'];
-    for (const provider of ['minimax', 'qwen', 'zhipu']) {
+    for (const provider of ROUTED_PROVIDERS) {
       expect(isRoutedViaOpenRouter(provider)).toBe(false);
     }
   });
 
   it('honours an env override, including turning routing off entirely', () => {
-    process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'] = 'qwen';
-    expect(isRoutedViaOpenRouter('qwen')).toBe(true);
-    expect(isRoutedViaOpenRouter('zhipu')).toBe(false);
+    const [enabledProvider, disabledProvider] = [...ROUTED_PROVIDERS];
+    if (!enabledProvider || !disabledProvider)
+      throw new Error('Routed provider fixtures are missing');
 
-    // The reversal path: one env change sends everything direct again.
+    process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'] = enabledProvider;
+    expect(isRoutedViaOpenRouter(enabledProvider)).toBe(true);
+    expect(isRoutedViaOpenRouter(disabledProvider)).toBe(false);
+
     process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'] = '';
-    for (const provider of ['minimax', 'qwen', 'zhipu']) {
+    for (const provider of ROUTED_PROVIDERS) {
       expect(isRoutedViaOpenRouter(provider)).toBe(false);
     }
   });
 
-  it.each([
-    ['qwen3.5-flash', 'qwen/qwen3.5-flash-02-23'],
-    ['qwen3.7-plus', 'qwen/qwen3.7-plus'],
-    ['glm-5.2', 'z-ai/glm-5.2'],
-    ['MiniMax-M3', 'minimax/minimax-m3'],
-  ])('maps %s to the slug OpenRouter publishes', (apiModelId, slug) => {
-    expect(openRouterSlugFor(apiModelId)).toBe(slug);
-  });
-
-  it('has no slug for an unmapped model, rather than inventing one', () => {
-    // A new Qwen model added to the catalog must fail as unconfigured, not be
-    // sent to OpenRouter under a guessed id.
-    expect(openRouterSlugFor('qwen9.9-imaginary')).toBeUndefined();
-  });
-
-  it('maps every catalog model belonging to a routed provider', async () => {
-    // The check that keeps this honest over time: add a Qwen/GLM/MiniMax model
-    // to models.json without a slug here and this fails, instead of the model
-    // shipping and 404ing on first use.
-    const { default: catalog } = await import('@agiworkforce/types/models.json', {
-      with: { type: 'json' },
-    });
-    const routed = new Set(['minimax', 'qwen', 'zhipu']);
-    const models = Object.values(
-      (catalog as { models: Record<string, { provider: string; apiModelId?: string; id: string }> })
-        .models,
+  it('reads routed wire slugs from the canonical catalog', () => {
+    const model = requireCatalogModel(
+      (candidate) => ROUTED_PROVIDERS.has(candidate.provider) && !!candidate.openRouterSlug,
     );
-    const missing = models
-      .filter((m) => routed.has(m.provider))
-      .map((m) => m.apiModelId ?? m.id)
-      .filter((id) => openRouterSlugFor(id) === undefined);
-
-    expect(
-      missing,
-      `unmapped models for OpenRouter-routed providers: ${missing.join(', ')}`,
-    ).toEqual([]);
+    expect(openRouterSlugFor(providerApiModelId(model))).toBe(model.openRouterSlug);
   });
 
-  it('maps nothing that is not in the catalog', () => {
-    // Guards the reverse drift: a slug left behind after a model is retired.
-    expect(mappedModelIds().length).toBeGreaterThan(0);
+  it('has no slug for an unregistered model rather than inventing one', () => {
+    expect(openRouterSlugFor('fixture-unregistered-model')).toBeUndefined();
+  });
+
+  it('requires a catalog-owned slug for every model belonging to a routed provider', () => {
+    const routedModels = listCanonicalModels().filter((model) =>
+      ROUTED_PROVIDERS.has(model.provider),
+    );
+    const missing = routedModels.filter((model) => !model.openRouterSlug).map(providerApiModelId);
+
+    expect(missing, `catalog models missing an OpenRouter slug: ${missing.join(', ')}`).toEqual([]);
+    expect(new Set(mappedModelIds())).toEqual(new Set(routedModels.map(providerApiModelId)));
   });
 });
 
 describe('OpenRouter failover routes', () => {
-  const saved = process.env['OPENROUTER_API_KEY'];
-  beforeEach(() => {
-    process.env['OPENROUTER_API_KEY'] = 'sk-or-test';
-  });
-  afterEach(() => {
-    if (saved === undefined) delete process.env['OPENROUTER_API_KEY'];
-    else process.env['OPENROUTER_API_KEY'] = saved;
+  it('offers the catalog-owned failover route for a directly called provider', () => {
+    const model = requireCatalogModel(
+      (candidate) =>
+        DIRECT_FAILOVER_PROVIDERS.has(candidate.provider) &&
+        isChatModel(candidate) &&
+        !!candidate.openRouterSlug,
+    );
+    const apiModelId = providerApiModelId(model);
+
+    expect(canFailoverToOpenRouter(model.provider, apiModelId)).toBe(true);
+    expect(openRouterFailoverSlugFor(apiModelId)).toBe(model.openRouterSlug);
   });
 
-  it('offers a failover route for a direct provider', () => {
-    expect(canFailoverToOpenRouter('anthropic', 'claude-sonnet-5')).toBe(true);
-    expect(openRouterFailoverSlugFor('claude-sonnet-5')).toBe('anthropic/claude-sonnet-5');
-  });
-
-  it('offers none when already on OpenRouter', () => {
-    // Retrying the same wire would just fail again.
-    expect(canFailoverToOpenRouter('openrouter', 'claude-sonnet-5')).toBe(false);
-    expect(canFailoverToOpenRouter('open_router', 'claude-sonnet-5')).toBe(false);
+  it.each(['openrouter', 'open_router'])('offers none when already on %s', (provider) => {
+    const model = requireCatalogModel(
+      (candidate) =>
+        DIRECT_FAILOVER_PROVIDERS.has(candidate.provider) &&
+        isChatModel(candidate) &&
+        !!candidate.openRouterSlug,
+    );
+    expect(canFailoverToOpenRouter(provider, providerApiModelId(model))).toBe(false);
   });
 
   it('offers none without a key', () => {
+    const model = requireCatalogModel(
+      (candidate) =>
+        DIRECT_FAILOVER_PROVIDERS.has(candidate.provider) &&
+        isChatModel(candidate) &&
+        !!candidate.openRouterSlug,
+    );
     delete process.env['OPENROUTER_API_KEY'];
-    expect(canFailoverToOpenRouter('anthropic', 'claude-sonnet-5')).toBe(false);
+    expect(canFailoverToOpenRouter(model.provider, providerApiModelId(model))).toBe(false);
   });
 
-  it('covers every chat model of every directly-called provider', async () => {
-    // The guard that matters over time: add a chat model for a direct provider
-    // and this fails unless it also has a failover route, rather than that
-    // model silently being the one with no safety net during an outage.
-    const { default: catalog } = await import('@agiworkforce/types/models.json', {
-      with: { type: 'json' },
-    });
-    const direct = new Set([
-      'anthropic',
-      'openai',
-      'google',
-      'deepseek',
-      'xai',
-      'moonshot',
-      'perplexity',
-    ]);
-    const NON_CHAT = new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']);
-    const models = Object.values(
-      (
-        catalog as {
-          models: Record<
-            string,
-            { provider: string; apiModelId?: string; id: string; modelType?: string }
-          >;
-        }
-      ).models,
+  it('requires a catalog-owned failover slug for every direct-provider chat model', () => {
+    const directChatModels = listCanonicalModels().filter(
+      (model) => DIRECT_FAILOVER_PROVIDERS.has(model.provider) && isChatModel(model),
     );
-    const missing = models
-      .filter((m) => direct.has(m.provider) && !NON_CHAT.has(m.modelType ?? ''))
-      .map((m) => m.apiModelId ?? m.id)
-      .filter((id) => openRouterFailoverSlugFor(id) === undefined);
+    const missing = directChatModels
+      .filter((model) => !model.openRouterSlug)
+      .map(providerApiModelId);
 
-    expect(missing, `chat models with no OpenRouter failover route: ${missing.join(', ')}`).toEqual(
+    expect(missing, `catalog chat models missing a failover slug: ${missing.join(', ')}`).toEqual(
       [],
     );
-  });
-
-  it('has no slug for a model the catalog no longer contains', async () => {
-    // The reverse of the coverage check. Retiring a model leaves its slug
-    // behind, and a stale entry is invisible until someone routes to a model
-    // that no longer exists. This is what catches it.
-    const { default: catalog } = await import('@agiworkforce/types/models.json', {
-      with: { type: 'json' },
-    });
-    const known = new Set(
-      Object.values(
-        (catalog as { models: Record<string, { apiModelId?: string; id: string }> }).models,
-      ).map((m) => m.apiModelId ?? m.id),
+    expect(new Set(failoverMappedModelIds())).toEqual(
+      new Set(directChatModels.map(providerApiModelId)),
     );
-    const stale = [...mappedModelIds(), ...failoverMappedModelIds()].filter((id) => !known.has(id));
-    expect(stale, `slugs for models not in models.json: ${stale.join(', ')}`).toEqual([]);
   });
 
-  it('never maps a model to both a permanent route and a failover route', () => {
-    // A model already served through OpenRouter has nowhere to fail over to;
-    // listing it in both maps would mean "retry the wire that just failed".
-    const both = mappedModelIds().filter((id) => openRouterFailoverSlugFor(id) !== undefined);
-    expect(both, `models in both routing maps: ${both.join(', ')}`).toEqual([]);
+  it('never classifies one model as both a permanent route and a failover route', () => {
+    const failoverIds = new Set(failoverMappedModelIds());
+    const both = mappedModelIds().filter((id) => failoverIds.has(id));
+    expect(both).toEqual([]);
   });
 });

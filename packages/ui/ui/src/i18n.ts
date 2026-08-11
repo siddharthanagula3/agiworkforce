@@ -42,19 +42,11 @@
  *   the same physical copy this file resolves (the root-hoisted 17.0.7).
  *   Same module, same `I18nContext`, same default instance — so `hasInstance`
  *   is true and the key lookup runs.
- * - Web: NO. `apps/web/package.json` pins `react-i18next@^17.0.1` /
- *   `i18next@^26.0.2`, which the lockfile resolves to 17.0.1 / 26.0.2 in
- *   `apps/web/node_modules`, while this package (having no link of its own)
- *   resolves the root-hoisted 17.0.7 / 26.1.0. Two physical copies means two
- *   module-scoped `I18nContext`s and two default-instance registries, so the
- *   instance `apps/web/app/providers.tsx` mounts is invisible here.
- *   `hasInstance` is permanently false on web and every string below renders
- *   its English argument no matter what locale the user picked. react-i18next
- *   logs its own `NO_I18NEXT_INSTANCE` warning when that happens.
- *
- *   Fixing that is a lockfile dedupe in `apps/web` (its `^17.0.1` range
- *   already admits 17.0.7), not a change in this file — it belongs to the web
- *   i18n adoption item, ExecutionPlan #73. Until then, treat web as English.
+ * - Web: yes. The web host and shared UI packages intentionally resolve the
+ *   same `react-i18next` and `i18next` versions, so the provider mounted in
+ *   `apps/web/app/providers.tsx` is visible to shared components. Keep those
+ *   dependency ranges aligned: separate physical copies create separate
+ *   module-scoped contexts and make shared copy silently fall back to English.
  *
  * The other half of the gap is the corpus: most keys passed below do not yet
  * exist in `packages/ui/i18n/locales`, so even on desktop they resolve to the

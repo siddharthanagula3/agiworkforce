@@ -53,7 +53,7 @@ function runnerStub(overrides: Partial<CloudCodeToolRunner> = {}): CloudCodeTool
 }
 
 const baseInput = {
-  model: 'claude-sonnet-5',
+  model: 'fixture-model',
   goal: 'Fix the failing test',
   signal: new AbortController().signal,
 };
@@ -340,6 +340,8 @@ describe('cloud code turn usage accounting', () => {
       outputTokens: 250,
       cacheReadTokens: 40,
       cacheWriteTokens: 10,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
     });
   });
 
@@ -378,7 +380,7 @@ describe('cloud code turn usage accounting', () => {
 
     const result = await runCloudCodeAgentTurn({
       adapter,
-      model: 'claude-sonnet-4-5-20250929',
+      model: baseInput.model,
       goal: 'inspect the repo',
       runner,
       signal: new AbortController().signal,
@@ -388,6 +390,12 @@ describe('cloud code turn usage accounting', () => {
     expect(result.usage.outputTokens).toBe(100);
     expect(result.usage.cacheReadTokens).toBe(5);
     expect(result.usage.cacheWriteTokens).toBe(0);
+    expect(result.usage.providerCallObservations?.map((call) => call.inputTokens)).toEqual([
+      100, 300,
+    ]);
+    expect(
+      result.usage.providerCallObservations?.every((call) => call.costDollars !== undefined),
+    ).toBe(true);
   });
 
   it('still reports accumulated usage when the turn ends early', async () => {
@@ -402,7 +410,7 @@ describe('cloud code turn usage accounting', () => {
 
     const result = await runCloudCodeAgentTurn({
       adapter: adapterFor([[{ type: 'usage', inputTokens: 700, outputTokens: 0 } as StreamChunk]]),
-      model: 'claude-sonnet-4-5-20250929',
+      model: baseInput.model,
       goal: 'stop immediately',
       runner,
       signal: new AbortController().signal,

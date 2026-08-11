@@ -57,8 +57,8 @@ vi.mock('@shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     // Case (a): normal model — no requiresEnvironment
     {
-      id: 'gpt-5.6-sol',
-      name: 'GPT-5.6 Sol',
+      id: 'fixture-standard-model',
+      name: 'Standard Model',
       provider: 'OpenAI',
       providerKey: 'openai',
       description: 'Fast and capable',
@@ -100,8 +100,12 @@ vi.mock('@shared/config/llm', () => ({
   getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
   getBestAutoModeForTier: () => 'auto-premium',
   getModelMetadata: (id: string) => {
-    if (id === 'gpt-5.6-sol') {
-      return { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', capabilities: { thinking: true } };
+    if (id === 'fixture-standard-model') {
+      return {
+        id: 'fixture-standard-model',
+        name: 'Standard Model',
+        capabilities: { thinking: true },
+      };
     }
     if (id === 'hypothetical-e2b-model') {
       return {
@@ -125,7 +129,7 @@ vi.mock('@shared/config/llm', () => ({
 
 vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODELS: [],
-  FREE_TRIAL_MODEL: 'gemini-3.5-flash-lite',
+  FREE_TRIAL_MODEL: 'fixture-free-trial-model',
 }));
 
 vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
@@ -205,14 +209,14 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
   it('(a) normal model without requiresEnvironment is selectable — no env-lock indicator', () => {
     render(<ComposerFooter />);
 
-    // GPT-5.6 Sol is in the recommended section (no requiresEnvironment, passes env check).
+    // Standard Model is in the recommended section (no requiresEnvironment, passes env check).
     // Its row aria-label should be just the model name, with no lock indicator and
     // no aria-disabled attribute.
-    const gptRow = screen.getByRole('button', { name: 'GPT-5.6 Sol' });
+    const gptRow = screen.getByRole('button', { name: 'Standard Model' });
     expect(gptRow).toBeInTheDocument();
     expect(gptRow).not.toHaveAttribute('aria-disabled', 'true');
     // Confirm no "environment not available" text in the aria-label
-    expect(gptRow.getAttribute('aria-label')).toBe('GPT-5.6 Sol');
+    expect(gptRow.getAttribute('aria-label')).toBe('Standard Model');
   });
 
   it('(b) env-gated model is locked and carries the evaluateModelEnvironment reason', () => {

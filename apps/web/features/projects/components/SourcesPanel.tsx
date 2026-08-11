@@ -21,8 +21,11 @@ import { HardDrive, MessageSquare, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FilePreviewModal } from './FilePreviewModal';
 import { AddSourcesModal } from './AddSourcesModal';
-import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
-import { getCsrfToken } from '@/lib/client/csrf';
+import {
+  listProjectKnowledgeFiles,
+  removeProjectKnowledgeFile,
+  uploadProjectKnowledgeFile,
+} from '../services/project-knowledge-upload';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -73,12 +76,10 @@ export function SourcesPanel({ projectId }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge-files`)
-      .then((r) => r.json())
-      .then((data: unknown) => {
+    listProjectKnowledgeFiles(projectId)
+      .then((loadedFiles) => {
         if (cancelled) return;
-        const body = data as { files?: ProjectKnowledgeFile[] };
-        setFiles(body.files ?? []);
+        setFiles(loadedFiles);
         setLoadState('loaded');
       })
       .catch(() => {
@@ -97,12 +98,7 @@ export function SourcesPanel({ projectId }: Props) {
     const previous = files;
     setFiles((current) => current.filter((f) => f.id !== file.id));
     try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
-        { method: 'DELETE', headers: { 'x-csrf-token': csrfToken }, credentials: 'include' },
-      );
-      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      await removeProjectKnowledgeFile(projectId, file.id);
     } catch {
       setFiles(previous);
       toast.error(`Couldn't remove ${file.fileName}. Try again.`);
@@ -126,6 +122,7 @@ export function SourcesPanel({ projectId }: Props) {
         status: 'error',
         message: err instanceof Error ? err.message : 'Upload failed.',
       });
+      throw err;
     }
   }
 
@@ -535,8 +532,8 @@ export function SourcesPanel({ projectId }: Props) {
       <AddSourcesModal
         open={addSourcesOpen}
         onClose={() => setAddSourcesOpen(false)}
-        onUploadFile={(file) => void handleUpload(file)}
-        onUploadText={(text, title) => void handleUploadText(text, title)}
+        onUploadFile={handleUpload}
+        onUploadText={handleUploadText}
         isUploading={isUploading}
         accept={ALLOWED_ATTACHMENT_ACCEPT}
       />

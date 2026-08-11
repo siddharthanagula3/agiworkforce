@@ -66,8 +66,8 @@ const mockFinalizeManagedUsageRequest = finalizeManagedUsageRequest as ReturnTyp
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-test-001',
-    chatRequest: { model: 'claude-opus-5', messages: [], stream: false } as any,
-    requestedModel: 'claude-opus-5',
+    chatRequest: { model: 'fixture-model', messages: [], stream: false } as any,
+    requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 100,
     quotaWarningHeader: null,
@@ -112,7 +112,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -132,7 +132,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -173,7 +173,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -192,7 +192,7 @@ describe('buildNonStreamResponse golden fixture', () => {
       id: expect.stringMatching(/^chatcmpl-\d+-FIXEDTOKEN$/),
       object: 'chat.completion',
       created: expect.any(Number),
-      model: 'claude-opus-5',
+      model: 'fixture-model',
       choices: [
         {
           index: 0,
@@ -212,7 +212,7 @@ describe('buildNonStreamResponse golden fixture', () => {
         routing: {
           task_type: 'general',
           task_confidence: 0.9,
-          resolved_model: 'claude-opus-5',
+          resolved_model: 'fixture-model',
           slot: null,
           quota_warning: null,
         },
@@ -227,7 +227,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -255,7 +255,7 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: 'fixture-model',
       usage: expect.objectContaining({
         promptTokens: 100,
         completionTokens: 20,
@@ -275,7 +275,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'Cats are mammals [1].',
         finishReason: 'stop',
         promptTokens: 50,
@@ -314,7 +314,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'hi',
         finishReason: 'stop',
         promptTokens: 5,
@@ -335,7 +335,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: '',
         finishReason: 'tool_calls',
         promptTokens: 30,
@@ -369,7 +369,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'hi',
         promptTokens: 1,
         completionTokens: 1,
@@ -403,7 +403,7 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'hi',
         promptTokens: 11,
         completionTokens: 3,
@@ -433,7 +433,7 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-opus-5',
+        model: 'fixture-model',
         content: 'hi',
         promptTokens: 1,
         completionTokens: 1,
@@ -454,7 +454,7 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'claude-sonnet-5',
+        model: 'fixture-rotated-model',
         content: 'hi',
         promptTokens: 1,
         completionTokens: 1,

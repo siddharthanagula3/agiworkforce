@@ -1097,7 +1097,7 @@ mod tests {
         )
         .with_metrics(80, 0.2);
         message_b.provider = Some("google".to_string());
-        message_b.model = Some("gemini-1.5-flash".to_string());
+        message_b.model = Some("fixture-database-model".to_string());
         create_message(&conn, &message_b).unwrap();
 
         let all_timeseries = list_cost_timeseries(&conn, 7, None, None, test_user_id).unwrap();

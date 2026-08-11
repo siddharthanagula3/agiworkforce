@@ -108,47 +108,26 @@ pub trait TextToSpeech: Send + Sync {
     fn provider_name(&self) -> &'static str;
 }
 
-/// Default ElevenLabs voice model.
+/// Default OpenAI voice model, selected from the canonical catalog.
 ///
-/// `eleven_monolingual_v1` used to be the default here. It was deprecated and
-/// REMOVED upstream on 2026-07-09, so every barge-in playback that did not
-/// carry an explicit `model_id` was calling a model that no longer exists.
-///
-/// Flash v2.5 is ElevenLabs' recommendation for real-time voice agents (~75ms),
-/// which is what this module is — spoken replies that must stop inside 200ms
-/// when the user talks over them. `eleven_multilingual_v2` is the higher-quality
-/// alternative and is the one to switch to if narration ever outranks latency.
-/// Verified 2026-07-28 against elevenlabs.io/docs/overview/models.
-const ELEVENLABS_DEFAULT_MODEL: &str = "eleven_flash_v2_5";
-
-/// Default OpenAI voice model.
-///
-/// Was `tts-1` (November 2023). `gpt-4o-mini-tts` costs $0.60/1M input text
-/// tokens + $12/1M output audio tokens against tts-1's flat $15/1M characters.
-/// Default snapshot `gpt-4o-mini-tts-2025-12-15`; the unversioned id tracks it.
-///
-/// This model carries a Deprecated badge on OpenAI's catalog listing and is
-/// still the right choice, which needs explaining. It is the ONLY model served
-/// on `/v1/audio/speech` — `gpt-audio-1.5`'s model page lists that endpoint as
-/// "Not supported", the deprecations table names no successor, and no shutdown
-/// date is published. OpenAI is steering speech generation toward audio-native
-/// chat and realtime, neither of which is a drop-in for a REST speech call.
-/// So there is no newer member of this family to move to; when one appears, or
-/// when a shutdown date is published, this path should move to ElevenLabs or
-/// local Piper rather than wait. Verified 2026-07-28 against
-/// developers.openai.com/api/docs/models and .../guides/text-to-speech.
-///
-/// Not *resolved* from the model catalog because speech synthesis has no
-/// routing slot — `routing-policies.json` defines `voice_transcription` and
-/// `voice_rewrite` and nothing for speech out — and the catalog carries no
-/// ElevenLabs provider at all, so only half this decision could come from
-/// there. Adding a speech slot is tracked as a follow-up.
-///
-/// It is still *checked* against the catalog: `openai_default_is_a_canonical_
-/// registry_model` below fails if this id stops being an OpenAI key in the
-/// generated registry, so the constant cannot drift into a model the rest of
-/// the product does not know about.
-const OPENAI_DEFAULT_TTS_MODEL: &str = "gpt-4o-mini-tts";
+/// Speech synthesis has no task-routing slot, so the catalog's active balanced
+/// `tts` entry is the maintained default. Returning its provider wire ID keeps
+/// `/v1/audio/speech` correct even when the internal catalog key differs.
+pub(crate) fn openai_default_tts_model() -> &'static str {
+    let entry = crate::core::llm::models_config::get_all_model_entries()
+        .values()
+        .filter(|entry| entry.provider == "openai" && entry.model_type == "tts")
+        .min_by_key(|entry| {
+            (
+                entry.deprecated == Some(true),
+                entry.quality_tier.as_str() != "balanced",
+                entry.id.as_str(),
+            )
+        });
+    entry
+        .map(|entry| entry.api_model_id.as_deref().unwrap_or(&entry.id))
+        .unwrap_or("")
+}
 
 /// ElevenLabs TTS implementation
 pub struct ElevenLabsTts {
@@ -178,11 +157,17 @@ impl ElevenLabsTts {
             .unwrap_or("21m00Tcm4TlvDq8ikWAM") // Default: Rachel
     }
 
-    fn model_id(&self) -> &str {
+    fn model_id(&self) -> Result<&str> {
         self.config
             .model_id
             .as_deref()
-            .unwrap_or(ELEVENLABS_DEFAULT_MODEL)
+            .filter(|model_id| !model_id.trim().is_empty())
+            .ok_or_else(|| {
+                Error::Config(
+                    "ElevenLabs model is required because the canonical catalog has no provider entry"
+                        .into(),
+                )
+            })
     }
 }
 
@@ -191,12 +176,13 @@ impl TextToSpeech for ElevenLabsTts {
     async fn synthesize(&self, text: &str) -> Result<AudioOutput> {
         let api_key = self.api_key()?;
         let voice_id = self.voice_id();
+        let model_id = self.model_id()?;
 
         let url = format!("https://api.elevenlabs.io/v1/text-to-speech/{}", voice_id);
 
         let payload = serde_json::json!({
             "text": text,
-            "model_id": self.model_id(),
+            "model_id": model_id,
             "voice_settings": {
                 "stability": 0.5,
                 "similarity_boost": 0.75
@@ -293,10 +279,10 @@ impl OpenAiTts {
     }
 
     fn model(&self) -> &str {
-        self.config
-            .model_id
-            .as_deref()
-            .unwrap_or(OPENAI_DEFAULT_TTS_MODEL)
+        match self.config.model_id.as_deref() {
+            Some(model_id) => model_id,
+            None => openai_default_tts_model(),
+        }
     }
 }
 
@@ -715,81 +701,50 @@ mod tests {
         assert!(config.model_id.is_none());
     }
 
-    /// A default that names a retired model turns every un-configured voice
-    /// reply into an upstream 4xx, and nothing else in the suite would notice:
-    /// `TtsConfig::default()` leaves `model_id` as `None`, so the fallback IS
-    /// the shipped behaviour for anyone who never opened voice settings.
-    /// `eleven_monolingual_v1` reached that state on 2026-07-09.
     #[test]
-    fn tts_defaults_are_not_retired_models() {
-        const RETIRED: &[&str] = &[
-            "eleven_monolingual_v1",
-            "eleven_multilingual_v1",
-            "eleven_turbo_v2",
-            "eleven_turbo_v2_5",
-            "tts-1",
-            "tts-1-hd",
-            "whisper-1",
-            // Pinning the snapshot instead of the unversioned alias is the other
-            // way to end up on a dead model: this one shut down 2026-07-23 while
-            // bare `gpt-4o-mini-tts` rolled forward to -2025-12-15.
-            "gpt-4o-mini-tts-2025-03-20",
-            "gpt-4o-mini-transcribe-2025-03-20",
-        ];
-        for id in RETIRED {
-            assert_ne!(
-                ELEVENLABS_DEFAULT_MODEL, *id,
-                "ElevenLabs default is a retired model: {id}"
-            );
-            assert_ne!(
-                OPENAI_DEFAULT_TTS_MODEL, *id,
-                "OpenAI TTS default is a retired model: {id}"
-            );
-        }
+    fn unconfigured_elevenlabs_model_fails_closed() {
+        let eleven = ElevenLabsTts::new(TtsConfig {
+            provider: TtsProvider::ElevenLabs,
+            api_key: Some("fixture-key".into()),
+            voice_id: None,
+            model_id: None,
+        });
+        assert!(eleven.model_id().is_err());
     }
 
     /// The retired-list check above only catches ids someone remembered to add
     /// to it. This one catches the general case for the provider the catalog
-    /// actually covers: `OPENAI_DEFAULT_TTS_MODEL` must still be a canonical
-    /// OpenAI model key in the generated registry. If the id is renamed, or
-    /// dropped from `models.json` when OpenAI finally retires the family, this
-    /// fails instead of shipping a desktop default that no other surface —
-    /// pricing, capability checks, the licence page — has ever heard of.
+    /// actually covers: the selected default must still be a canonical OpenAI
+    /// TTS model. A catalog replacement is picked up without editing this file.
     ///
-    /// ElevenLabs is deliberately not asserted: the catalog carries no
-    /// ElevenLabs provider, so there is nothing to check against. See the
-    /// comment on `ELEVENLABS_DEFAULT_MODEL`.
     #[test]
     fn openai_default_is_a_canonical_registry_model() {
-        let keys = agiworkforce_model_registry::model_keys_for_provider("openai")
-            .expect("generated model registry must load")
-            .expect("the canonical registry must carry an openai provider");
-        assert!(
-            keys.iter().any(|key| key == OPENAI_DEFAULT_TTS_MODEL),
-            "OPENAI_DEFAULT_TTS_MODEL ({OPENAI_DEFAULT_TTS_MODEL}) is not an openai key in the \
-             canonical model registry; openai keys are {keys:?}"
-        );
+        let catalog_id =
+            crate::core::llm::models_config::get_canonicalized_id(openai_default_tts_model());
+        let entry = crate::core::llm::models_config::get_all_model_entries()
+            .get(&catalog_id)
+            .expect("the catalog must expose a balanced OpenAI TTS model");
+        assert_eq!(entry.provider, "openai");
+        assert_eq!(entry.model_type, "tts");
     }
 
-    /// The defaults have to survive the config plumbing, not just exist as
-    /// constants — this is the path a user with no voice settings takes.
     #[test]
-    fn unconfigured_providers_fall_back_to_the_current_models() {
+    fn configured_non_catalog_provider_and_catalog_default_survive_plumbing() {
         let eleven = ElevenLabsTts::new(TtsConfig {
             provider: TtsProvider::ElevenLabs,
-            api_key: Some("test".into()),
+            api_key: Some("fixture-key".into()),
             voice_id: None,
-            model_id: None,
+            model_id: Some("fixture-elevenlabs-tts".into()),
         });
-        assert_eq!(eleven.model_id(), ELEVENLABS_DEFAULT_MODEL);
+        assert_eq!(eleven.model_id().unwrap(), "fixture-elevenlabs-tts");
 
         let openai = OpenAiTts::new(TtsConfig {
             provider: TtsProvider::OpenAi,
-            api_key: Some("test".into()),
+            api_key: Some("fixture-key".into()),
             voice_id: None,
             model_id: None,
         });
-        assert_eq!(openai.model(), OPENAI_DEFAULT_TTS_MODEL);
+        assert_eq!(openai.model(), openai_default_tts_model());
     }
 
     #[test]
@@ -843,7 +798,10 @@ mod tests {
     #[test]
     fn system_tts_platform_support_matches_the_implemented_speak_arm() {
         if SystemTts::platform_supported() {
-            assert!(cfg!(target_os = "macos"), "only macOS implements speak_sync");
+            assert!(
+                cfg!(target_os = "macos"),
+                "only macOS implements speak_sync"
+            );
             return;
         }
 

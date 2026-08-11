@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { Switch } from '@agiworkforce/ui';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
+import { SettingsSectionLink } from '../components/SettingsSectionLink';
 
 type CapabilitiesSettings = {
   memory: boolean;
@@ -130,6 +130,7 @@ export function CapabilitiesSection() {
           // AUDIT-FIX PAR-32: while the stored value is unknown the control
           // must not be presented as an editable reflection of it.
           <Switch
+            aria-label="Memory"
             checked={settings.memory}
             disabled={loadError !== null}
             onCheckedChange={(value) => setBoolean('memory', value)}
@@ -140,6 +141,7 @@ export function CapabilitiesSection() {
           'Generate from past chats',
           'Use conversation history to generate better responses',
           <Switch
+            aria-label="Generate from past chats"
             checked={settings.generateFromHistory}
             disabled={loadError !== null || !settings.memory}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
@@ -150,6 +152,7 @@ export function CapabilitiesSection() {
           'Allow memory generation from tool-assisted chats',
           'Create memories from chats that use tools, connectors, code, or web search',
           <Switch
+            aria-label="Allow memory generation from tool-assisted chats"
             checked={settings.allowToolAssistedGeneration}
             disabled={loadError !== null || !settings.memory}
             onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
@@ -157,12 +160,12 @@ export function CapabilitiesSection() {
         )}
 
         <div className="flex flex-col items-start gap-3">
-          <Link
-            href="/settings/memory"
+          <SettingsSectionLink
+            section="memory"
             className="text-xs text-[var(--chat-accent-primary)] hover:underline"
           >
             View and manage memory
-          </Link>
+          </SettingsSectionLink>
           {/*
             The "Import memory from other AI providers" row was removed: the web
             import flow is a placeholder (no working provider import endpoint), so
@@ -174,9 +177,12 @@ export function CapabilitiesSection() {
 
       <p className="text-xs text-muted-foreground">
         Skills have moved to{' '}
-        <Link href="/skills" className="text-[var(--chat-accent-primary)] hover:underline">
+        <SettingsSectionLink
+          section="skills"
+          className="text-[var(--chat-accent-primary)] hover:underline"
+        >
           Customize → Skills
-        </Link>
+        </SettingsSectionLink>
         .
       </p>
     </div>

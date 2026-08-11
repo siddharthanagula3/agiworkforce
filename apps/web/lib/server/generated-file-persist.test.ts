@@ -21,6 +21,8 @@ import {
 } from './generated-file-persist';
 
 describe('persistGeneratedFileBytes', () => {
+  const organizationId = '11111111-1111-4111-8111-111111111111';
+
   beforeEach(() => {
     configured = true;
     storeMedia.mockReset().mockImplementation(async (p: { data: Buffer }) => ({
@@ -38,6 +40,7 @@ describe('persistGeneratedFileBytes', () => {
 
     const outcome = await persistGeneratedFileBytes({
       userId: 'user_1',
+      organizationId,
       data,
       mimeType: 'text/csv',
       filename: 'table.csv',
@@ -62,6 +65,7 @@ describe('persistGeneratedFileBytes', () => {
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user_1',
+        organizationId,
         provider: 'e2b',
         metadata: expect.objectContaining({
           filename: 'table.csv',
@@ -75,9 +79,51 @@ describe('persistGeneratedFileBytes', () => {
     );
   });
 
+  it('keeps admitted organization provenance across an async storage completion', async () => {
+    const admittedOrganizationId = '11111111-1111-4111-8111-111111111111';
+    const laterOrganizationId = '22222222-2222-4222-8222-222222222222';
+    let finishStorage!: (value: {
+      url: string;
+      pathname: string;
+      byteSize: number;
+      contentType: string;
+    }) => void;
+    storeMedia.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishStorage = resolve;
+        }),
+    );
+    const params = {
+      userId: 'user_1',
+      organizationId: admittedOrganizationId,
+      data: Buffer.from('async result'),
+      mimeType: 'text/plain',
+      filename: 'result.txt',
+      provider: 'e2b',
+      origin: 'e2b-execution',
+    };
+
+    const completion = persistGeneratedFileBytes(params);
+    expect(storeMedia).toHaveBeenCalledOnce();
+    params.organizationId = laterOrganizationId;
+    finishStorage({
+      url: 'https://media.example.com/media/file/u/result.txt',
+      pathname: 'media/file/u/result.txt',
+      byteSize: params.data.byteLength,
+      contentType: params.mimeType,
+    });
+    await expect(completion).resolves.toMatchObject({ ok: true });
+
+    expect(insertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: admittedOrganizationId }),
+    );
+  });
+
   it('classifies artifact outputs on both the wire and the catalog metadata', async () => {
     const outcome = await persistGeneratedFileBytes({
       userId: 'user_1',
+      organizationId: null,
       data: Buffer.from('<html><body>hi</body></html>', 'utf8'),
       mimeType: 'text/html',
       filename: 'page.html',
@@ -99,6 +145,7 @@ describe('persistGeneratedFileBytes', () => {
     insertMediaAsset.mockResolvedValue(null);
     const outcome = await persistGeneratedFileBytes({
       userId: 'u',
+      organizationId: null,
       data: Buffer.from('x'),
       mimeType: 'image/png',
       filename: 'chart.png',
@@ -113,6 +160,7 @@ describe('persistGeneratedFileBytes', () => {
   it('rejects oversized payloads with a typed reason (no storage call)', async () => {
     const outcome = await persistGeneratedFileBytes({
       userId: 'u',
+      organizationId: null,
       data: Buffer.alloc(MAX_GENERATED_FILE_BYTES + 1),
       mimeType: 'application/pdf',
       filename: 'huge.pdf',
@@ -127,6 +175,7 @@ describe('persistGeneratedFileBytes', () => {
     configured = false;
     const outcome = await persistGeneratedFileBytes({
       userId: 'u',
+      organizationId: null,
       data: Buffer.from('x'),
       mimeType: 'text/plain',
       filename: 'a.txt',
@@ -141,6 +190,7 @@ describe('persistGeneratedFileBytes', () => {
     storeMedia.mockRejectedValue(new Error('r2 down'));
     const outcome = await persistGeneratedFileBytes({
       userId: 'u',
+      organizationId: null,
       data: Buffer.from('x'),
       mimeType: 'text/plain',
       filename: 'a.txt',

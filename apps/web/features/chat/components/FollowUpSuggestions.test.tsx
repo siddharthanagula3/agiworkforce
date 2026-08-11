@@ -174,6 +174,19 @@ describe('deriveFollowUps() · topic patterns', () => {
     expect(texts).toContain('How can I optimize this query?');
   });
 
+  it('keeps map-result URLs from producing database or API suggestions', () => {
+    const result = deriveFollowUps(
+      '[Millennium Park, Chicago](https://www.google.com/maps/search/?api=1&query=Millennium+Park+Chicago)',
+      0,
+    );
+
+    expect(result.map((followUp) => followUp.text)).toEqual([
+      'What are the best things to do nearby?',
+      'How do I get there?',
+      'What should I know before visiting?',
+    ]);
+  });
+
   it('matches DevOps/deployment pattern', () => {
     const result = deriveFollowUps(
       'Deploy this docker container using kubernetes and a ci/cd pipeline with terraform infrastructure.',
@@ -199,6 +212,22 @@ describe('deriveFollowUps() · topic patterns', () => {
     );
     const texts = result.map((f) => f.text);
     expect(texts).toContain('What edge cases should I add tests for?');
+  });
+
+  it('does not treat a project recall test as software testing or machine learning', () => {
+    const result = deriveFollowUps(
+      'The project serves as an investor demo recall test to store and retrieve specific launch details.',
+      0,
+    );
+    const texts = result.map((followUp) => followUp.text);
+
+    expect(texts).not.toContain('What edge cases should I add tests for?');
+    expect(texts).not.toContain('How can I reduce overfitting?');
+    expect(texts).toEqual([
+      'Can you give an example?',
+      'What are the next steps?',
+      'How can I apply this?',
+    ]);
   });
 
   it('matches API/REST pattern', () => {

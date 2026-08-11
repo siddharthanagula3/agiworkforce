@@ -157,8 +157,8 @@ const BUDGETS = [
   },
   {
     file: 'apps/web/lib/server/provider-endpoints.ts',
-    max: 2,
-    why: "Web's single declaration of managed-provider API roots for direct fetch call sites.",
+    max: 4,
+    why: "Web's single declaration of managed-provider API roots for direct fetch call sites, including authenticated OpenRouter media jobs.",
   },
   {
     file: 'apps/web/lib/egress-policy.ts',
@@ -284,12 +284,6 @@ const BUDGETS = [
     max: 3,
     residue: true,
     why: 'HARD-005 follow-up — Google/Stability image hosts need declarations of their own.',
-  },
-  {
-    file: 'apps/web/app/api/media/video/generate/route.ts',
-    max: 1,
-    residue: true,
-    why: 'HARD-005 follow-up — Google video host needs a declaration of its own.',
   },
   {
     file: 'apps/web/app/api/media/video/status/route.ts',

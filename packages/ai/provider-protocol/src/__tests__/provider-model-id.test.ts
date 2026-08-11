@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { listCanonicalModels } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  listCanonicalModels,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
 import { toProviderApiModelId } from '../provider-model-id';
 
 describe('toProviderApiModelId', () => {
-  it('keeps the Opus 5 canonical product and provider ID stable', () => {
-    expect(toProviderApiModelId('claude-opus-5')).toBe('claude-opus-5');
+  it('keeps a canonical product and provider ID aligned', () => {
+    const modelId = requireProviderDefaultModel('anthropic');
+    const providerModelId = getModelMetadataById(modelId)?.apiModelId ?? modelId;
+    expect(toProviderApiModelId(modelId)).toBe(providerModelId);
   });
 
   it('derives every provider wire ID from the canonical model registry', () => {
@@ -17,6 +23,6 @@ describe('toProviderApiModelId', () => {
   });
 
   it('passes an unknown model through without inventing an ID', () => {
-    expect(toProviderApiModelId('vendor-future-model')).toBe('vendor-future-model');
+    expect(toProviderApiModelId('fixture-vendor-future-model')).toBe('fixture-vendor-future-model');
   });
 });

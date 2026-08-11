@@ -66,6 +66,10 @@ export interface SettingsSkill {
   description: string;
   source: string;
   tab: 'prompts' | 'agents';
+  /** Honest catalog lifecycle. Draft entries are visible but not executable. */
+  statusLabel?: string;
+  /** Authenticated first-party source download. Absence means no download is offered. */
+  downloadHref?: string;
 }
 
 export interface SettingsPlugin {
@@ -73,6 +77,14 @@ export interface SettingsPlugin {
   name: string;
   description: string;
   enabled: boolean;
+  /** Whether this user has durably installed the plugin. */
+  installed?: boolean;
+  /** Whether this surface has a real install path for the catalog entry. */
+  installable?: boolean;
+  /** One mutation is in flight for this plugin. */
+  mutating?: boolean;
+  /** Row-scoped mutation failure. */
+  error?: string;
   /** Vendor/org name. Optional — only render when real data exists. */
   author?: string;
   /** Count of skills bundled by the plugin. Optional — real data only. */
@@ -145,8 +157,13 @@ export interface SettingsDataAdapter {
 
   plugins?: SettingsPlugin[];
   pluginsLoading?: boolean;
+  pluginsError?: string | null;
+  retryPlugins?: () => Promise<void> | void;
   /** Discoverable plugins, kept separate from the installed `plugins` list. */
   pluginCatalog?: SettingsPlugin[];
+  installPlugin?: (id: string) => Promise<void> | void;
+  setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
+  removePlugin?: (id: string) => Promise<void> | void;
   /**
    * Plugin "Add" capabilities. Each item in the Plugins pane's Add dropdown
    * renders ONLY when its callback is supplied (surfaces without a real

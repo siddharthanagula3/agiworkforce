@@ -29,17 +29,18 @@ describe('desktop media model options', () => {
       IMAGE_PROVIDER_OPTIONS.map((option) => [option.id, option]),
     );
 
-    // Google's image line is the gemini-image family since the imagen-4
-    // retirement (2026-07-20); with a single live model the lite slot dedups away.
-    expect(getModelMetadataById(byAdapter['google_imagen']!.model)?.imageApi).toBe('gemini');
-    if (byAdapter['google_imagen_lite']) {
-      expect(getModelMetadataById(byAdapter['google_imagen_lite'].model)?.imageApi).toBe('gemini');
+    // Google's image line comes from the active catalog family; with a single
+    // live model the lite slot deduplicates away.
+    expect(getModelMetadataById(byAdapter['google_balanced']!.model)?.imageApi).toBe('gemini');
+    if (byAdapter['google_fast']) {
+      expect(getModelMetadataById(byAdapter['google_fast'].model)?.imageApi).toBe('gemini');
     }
-    expect(getModelMetadataById(byAdapter['dalle']!.model)?.imageApi).toBe('openai');
-    const stabilityModel = getModelMetadataById(byAdapter['stable_diffusion']!.model);
-    expect(stabilityModel?.imageApi).toBe('stability');
-    expect(stabilityModel?.apiModelId).toBe('stable-image-core');
-    expect(stabilityModel?.imagePerImageCost).toBe(0.03);
+    expect(getModelMetadataById(byAdapter['openai']!.model)?.imageApi).toBe('openai');
+    expect(
+      IMAGE_PROVIDER_OPTIONS.some(
+        (option) => getModelMetadataById(option.model)?.imageApi === 'stability',
+      ),
+    ).toBe(false);
   });
 
   it('derives the video model and label from the canonical routing slot', () => {

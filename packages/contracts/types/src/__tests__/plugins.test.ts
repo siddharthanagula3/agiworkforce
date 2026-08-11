@@ -31,6 +31,7 @@ function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntr
     publisher: { id: 'agi', name: 'AGI', kind: 'first-party', url: null },
     source: 'builtin',
     status: 'preview',
+    webInstallable: false,
     declaredSkills: ['Code Review'],
     requiredConnectors: ['github'],
     capabilities: ['mcp'],

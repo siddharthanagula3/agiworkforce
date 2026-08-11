@@ -10,12 +10,9 @@
  *      (defaultModel + modelPresets per provider + all alias/canonical keys)
  *      — EXIT 0 with WARNs (advisory only, non-blocking).
  *
- * Regex scope (versioned IDs only — bare shorthand prefixes like `claude-opus`
- * in CLI example strings are intentionally excluded):
- *   claude-[a-z0-9]+([-./][a-z0-9]+)+
- *   gpt-[0-9]+([-./][a-z0-9]+)+
- *   gemini-[a-z0-9]+([-./][a-z0-9]+)+
- *   llama-[0-9]+([-./][a-z0-9]+)+
+ * Regex scope is provider-neutral: model-shaped, versioned identifiers are
+ * compared with the catalog. The repository-wide literal guard separately
+ * covers versioned display names and retired family spellings.
  *
  * Exit codes:
  *   0  clean (or advisory-only warnings)
@@ -35,9 +32,9 @@ const WEB_DIR = join(ROOT, 'apps/web');
 const catalog = JSON.parse(readFileSync(MODELS_JSON, 'utf8'));
 
 /**
- * Normalize a model ID for comparison: convert dashes between version
- * segments to dots so `claude-opus-4-7` and `claude-opus-4.7` compare equal.
- * Strategy: replace `-` only between digit sequences (e.g. `-4-7` → `.4.7`).
+ * Normalize a model ID for comparison by converting dashes between numeric
+ * version segments to dots. This accepts equivalent provider spellings without
+ * embedding a concrete model identifier in the guard.
  */
 function normalize(id) {
   return id.replace(/(?<=\d)-(?=\d)/g, '.');
@@ -48,9 +45,10 @@ function normalize(id) {
 // as backend migration inputs, never as current public model names.
 const validIdsRaw = new Set();
 
-// models section (primary definitions)
-for (const key of Object.keys(catalog.models ?? {})) {
+// models section (primary definitions and provider wire identifiers)
+for (const [key, model] of Object.entries(catalog.models ?? {})) {
   validIdsRaw.add(key);
+  if (model.apiModelId) validIdsRaw.add(model.apiModelId);
 }
 
 // providers: defaultModel, taskRouting values, canonicalization targets
@@ -85,6 +83,9 @@ for (const presets of Object.values(catalog.modelPresets ?? {})) {
   }
 }
 const marketingSafeNormalized = new Set([...marketingSafeRaw].map(normalize));
+const modelFamilyPrefixes = [...validIdsRaw]
+  .map((id) => id.toLowerCase().match(/^(.+?)(?=\d)/)?.[1])
+  .filter(Boolean);
 
 // ─── 2. Collect target files ───────────────────────────────────────────────
 
@@ -120,27 +121,8 @@ const targetFiles = [...new Set([...ANCHOR_FILES, ...marketingPathFiles])];
 // ─── 3. Regex patterns (versioned only — require at least one separator+digit) ──
 
 const MODEL_REGEXES = [
-  // claude-<word>-<version-segment>  e.g. claude-opus-4.7 / claude-haiku-4-5
-  /claude-[a-z][a-z0-9]*(?:[-./][a-z0-9]+)+/g,
-  // gpt-<digit>...  e.g. gpt-5.5 / gpt-5.4-mini
-  /gpt-[0-9]+(?:[-./][a-z0-9]+)+/g,
-  // gemini-<word|digit>...  e.g. gemini-3.1-pro-preview
-  /gemini-[a-z0-9]+(?:[-./][a-z0-9]+)+/g,
-  // llama-<digit>...  e.g. llama-3.3-70b
-  /llama-[0-9]+(?:[-./][a-z0-9]+)+/g,
+  /\b[a-z][a-z0-9]*(?:[-./][a-z0-9]+)*[-./][0-9][a-z0-9]*(?:[-./][a-z0-9]+)*\b/gi,
 ];
-
-// "Bare versioned name" patterns: 'Claude Opus 4', 'GPT 5.5', etc.
-// Matches Title-case word + optional word + integer/float version inside quotes.
-const BARE_NAME_RE = /['"`]((?:Claude|GPT|Gemini|Llama)\s+\w+\s+\d+(?:\.\d+)?)['"`]/g;
-
-// Build display-name allow-list from modelPresets labels.
-const allowedDisplayNames = new Set();
-for (const presets of Object.values(catalog.modelPresets ?? {})) {
-  for (const p of presets) {
-    if (p.label) allowedDisplayNames.add(p.label);
-  }
-}
 
 // ─── 4. Scan ──────────────────────────────────────────────────────────────
 
@@ -176,6 +158,7 @@ for (const file of targetFiles) {
       while ((m = re.exec(line)) !== null) {
         const raw = m[0];
         const norm = normalize(raw);
+        if (!modelFamilyPrefixes.some((prefix) => raw.toLowerCase().startsWith(prefix))) continue;
 
         if (!validNormalized.has(norm)) {
           console.error(`  PHANTOM  ${rel}:${lineNum}  "${raw}"  (not in models.json catalog)`);
@@ -186,19 +169,6 @@ for (const file of targetFiles) {
           );
           staleCount++;
         }
-      }
-    }
-
-    // --- Check bare versioned display names ---
-    BARE_NAME_RE.lastIndex = 0;
-    let bm;
-    while ((bm = BARE_NAME_RE.exec(line)) !== null) {
-      const displayName = bm[1];
-      if (!allowedDisplayNames.has(displayName)) {
-        console.error(
-          `  PHANTOM  ${rel}:${lineNum}  bare name "${displayName}"  (not in any modelPresets label)`,
-        );
-        phantomCount++;
       }
     }
   });

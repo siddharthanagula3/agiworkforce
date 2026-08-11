@@ -131,10 +131,10 @@ pub(super) async fn handle_slash_command(
                 stats.tool_calls_count,
             );
             output::print_session_cost(
-                &session.model,
                 session.total_input_tokens,
                 session.total_output_tokens,
                 session.turn_count,
+                session.cost_ledger.total_usd,
             );
         }
         "/save" => {
@@ -692,7 +692,7 @@ mod tests {
     #[tokio::test]
     async fn byok_handoff_returns_an_exact_review_buffer_with_provider_label() {
         let mut session = crate::agent::AgentSession::new(
-            "llama3",
+            "fixture-local-model:latest",
             &crate::context::SystemContext {
                 cwd: "/tmp".to_string(),
                 git_branch: None,

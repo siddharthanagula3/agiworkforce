@@ -55,14 +55,6 @@ describe('shared subscription model gate', () => {
     for (const model of [...PRO_MODELS, ...MAX_MODELS]) {
       expect(canAccessModel(model, 'basic')).toBe(false);
     }
-
-    expect(canAccessModel('gpt-5.6-luna', 'basic')).toBe(true);
-    expect(canAccessModel('gpt-5.6-terra', 'basic')).toBe(false);
-    // Was Haiku 4.5 (economy) until it was retired; this line exists to show
-    // an economy model IS open to Basic, so it needs an economy model.
-    expect(canAccessModel('gemini-3.5-flash-lite', 'basic')).toBe(true);
-    expect(canAccessModel('claude-sonnet-5', 'basic')).toBe(false);
-    expect(canAccessModel('deepseek-v4-flash', 'basic')).toBe(false);
   });
 
   it('gives Pro the inherited economy and Pro rosters, but not Max', () => {

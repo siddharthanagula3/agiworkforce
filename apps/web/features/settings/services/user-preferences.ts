@@ -866,15 +866,18 @@ class SettingsService {
   /**
    * Get user API keys via GET /api/settings/api-keys.
    */
-  async getAPIKeys(): Promise<{ data: APIKey[]; error?: string }> {
+  async getAPIKeys(signal?: AbortSignal): Promise<{ data: APIKey[]; error?: string }> {
     try {
       const token = await getAuthToken();
       if (!token) {
         return { data: [], error: 'User not authenticated' };
       }
 
+      signal?.throwIfAborted();
+
       const res = await fetch('/api/settings/api-keys', {
         headers: { Authorization: `Bearer ${token}` },
+        signal,
       });
 
       if (!res.ok) {

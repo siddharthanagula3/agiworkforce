@@ -6,6 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   ScheduleConflictError,
   ScheduleLimitError,
@@ -82,7 +83,10 @@ async function handleCreateSchedule(request: NextRequest) {
     // `reserveManagedUsageRequest`. A rate limit bounds how fast schedules can
     // be CREATED; only this plan ceiling bounds how many can exist and fire.
     const subscription = await SubscriptionService.getSubscription(db, userId);
-    await assertScheduleQuota(db, userId, subscription?.plan_tier);
+    // Plan ceilings are per account, not per active workspace. The request DB
+    // intentionally sees only Personal or one Team scope, so use a privileged
+    // count with an explicit owner predicate before the RLS-scoped insert.
+    await assertScheduleQuota(getNeonDb(), userId, subscription?.plan_tier);
 
     const schedule = await createSchedule(db, userId, body as unknown as ScheduleInput);
     return NextResponse.json({ schedule }, { status: 201 });

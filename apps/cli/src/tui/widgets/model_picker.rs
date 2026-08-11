@@ -8,8 +8,8 @@
 //! │───────────────────────────────────────────────────────────────────────────│
 //! │Bring your own key · your own provider keys                                │
 //! │  Anthropic                                                                │
-//! │  ● claude-sonnet                 Balanced      200K ctx                   │
-//! │    claude-sonnet-5               Balanced      200K ctx                   │
+//! │  ● catalog-selected-model        Balanced      200K ctx                   │
+//! │    another-catalog-model         Balanced      200K ctx                   │
 //! │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                                │
 //! └───────────────────────────────────────────────────────────────────────────┘
 //! ```
@@ -275,7 +275,7 @@ impl ModelPickerState {
     /// MODEL must actually support reasoning (catalog `supports_reasoning`, from
     /// the SSOT `capabilities.thinking`) AND its provider must expose an effort
     /// knob. Gating on the provider alone wrongly showed the control for
-    /// non-reasoning models such as claude-sonnet-5.
+    /// non-reasoning models in an effort-capable provider family.
     pub fn show_effort_bar(&self) -> bool {
         let model_reasons = self.selected_model().is_some_and(|m| m.supports_reasoning);
         let provider_has_effort = self
@@ -817,9 +817,9 @@ mod tests {
         // Mirrors the live path: catalog models + OpenRouter models (as
         // openrouter_models::load_cached_models() produces, provider="openrouter").
         let models = vec![
-            model("claude-opus-5", "anthropic"),
-            model("qwen/qwen3-max", "openrouter"),
-            model("openai/gpt-4o-mini", "openrouter"),
+            model("fixture-anthropic-model", "anthropic"),
+            model("fixture-openrouter-model-a", "openrouter"),
+            model("fixture-openrouter-model", "openrouter"),
         ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
@@ -846,16 +846,16 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert!(openrouter_models.contains(&"qwen/qwen3-max"));
-        assert!(openrouter_models.contains(&"openai/gpt-4o-mini"));
+        assert!(openrouter_models.contains(&"fixture-openrouter-model-a"));
+        assert!(openrouter_models.contains(&"fixture-openrouter-model"));
     }
 
     #[test]
     fn rebuild_groups_by_access_mode_local_first() {
         let models = vec![
-            model("claude-x", "anthropic"), // BYOK
-            model("llama-3", "ollama"),     // Local
-            model("agi-1", "agi-cloud"),    // Cloud
+            model("fixture-anthropic-model", "anthropic"), // BYOK
+            model("fixture-local-model", "ollama"),        // Local
+            model("fixture-cloud-model", "agi-cloud"),     // Cloud
         ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
@@ -874,7 +874,7 @@ mod tests {
 
     #[test]
     fn cloud_selection_preserves_managed_provider_identity() {
-        let models = vec![model("managed-model", "agi-cloud")];
+        let models = vec![model("fixture-managed-model", "agi-cloud")];
         let mut state = ModelPickerState::default();
         state.open(&models, "");
 
@@ -892,13 +892,13 @@ mod tests {
                 provider_id: ProviderId::AGICloud,
                 ref model_id,
                 ..
-            } if model_id == "managed-model"
+            } if model_id == "fixture-managed-model"
         ));
     }
 
     #[test]
     fn empty_access_mode_is_skipped() {
-        let models = vec![model("claude-x", "anthropic")];
+        let models = vec![model("fixture-anthropic-model", "anthropic")];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
         assert_eq!(mode_headers(&state), vec![AccessMode::Byok]);
@@ -919,37 +919,9 @@ mod tests {
     ///     Existing catalog behavior: all models pass through rebuild_rows() unchanged.
     #[test]
     fn env_gate_none_models_unaffected() {
-        let models = vec![model("claude-x", "anthropic"), model("gpt-y", "openai")];
-        let mut state = ModelPickerState::default();
-        state.rebuild_rows(&models);
-
-        let model_ids: Vec<&str> = state
-            .rows
-            .iter()
-            .filter_map(|r| match r {
-                PickerRow::ModelRow { model, .. } => Some(model.id.as_str()),
-                _ => None,
-            })
-            .collect();
-
-        assert!(
-            model_ids.contains(&"claude-x"),
-            "None-gated model claude-x must appear in picker"
-        );
-        assert!(
-            model_ids.contains(&"gpt-y"),
-            "None-gated model gpt-y must appear in picker"
-        );
-    }
-
-    /// (b) A model with `requires_environment = Some("e2b")` is filtered out
-    ///     when `environment_available` returns false (Phase A stub).
-    ///     A sibling model on the same provider without the gate must still appear.
-    #[test]
-    fn env_gate_e2b_model_filtered_when_unavailable() {
         let models = vec![
-            model("claude-normal", "anthropic"), // no env gate — must appear
-            model_env_gated("claude-e2b", "anthropic", "e2b"), // e2b gate — must be hidden
+            model("fixture-anthropic-model", "anthropic"),
+            model("fixture-picker-model", "openai"),
         ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
@@ -964,12 +936,43 @@ mod tests {
             .collect();
 
         assert!(
-            model_ids.contains(&"claude-normal"),
-            "Ungated model claude-normal must appear in picker even when sibling is gated"
+            model_ids.contains(&"fixture-anthropic-model"),
+            "None-gated fixture model must appear in picker"
         );
         assert!(
-            !model_ids.contains(&"claude-e2b"),
-            "e2b-gated model claude-e2b must be hidden in Phase A (env unavailable)"
+            model_ids.contains(&"fixture-picker-model"),
+            "None-gated model fixture-picker-model must appear in picker"
+        );
+    }
+
+    /// (b) A model with `requires_environment = Some("e2b")` is filtered out
+    ///     when `environment_available` returns false (Phase A stub).
+    ///     A sibling model on the same provider without the gate must still appear.
+    #[test]
+    fn env_gate_e2b_model_filtered_when_unavailable() {
+        let models = vec![
+            model("fixture-ungated-model", "anthropic"), // no env gate — must appear
+            model_env_gated("fixture-e2b-model", "anthropic", "e2b"), // e2b gate — must be hidden
+        ];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        let model_ids: Vec<&str> = state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::ModelRow { model, .. } => Some(model.id.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            model_ids.contains(&"fixture-ungated-model"),
+            "Ungated fixture model must appear in picker even when sibling is gated"
+        );
+        assert!(
+            !model_ids.contains(&"fixture-e2b-model"),
+            "e2b-gated fixture model must be hidden in Phase A (env unavailable)"
         );
     }
 
@@ -982,7 +985,10 @@ mod tests {
     /// tier is read from the user's real cache and a test cannot set it.
     #[test]
     fn local_and_byok_rows_are_never_tier_locked() {
-        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let models = vec![
+            model("fixture-local-model", "ollama"),
+            model("fixture-anthropic-model", "anthropic"),
+        ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
 
@@ -1008,7 +1014,10 @@ mod tests {
         // Every model supplied must still be present as a row: the gate
         // annotates, it does not filter. Removal could empty the picker when no
         // local runtime is discovered.
-        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let models = vec![
+            model("fixture-local-model", "ollama"),
+            model("fixture-anthropic-model", "anthropic"),
+        ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
 
@@ -1021,8 +1030,8 @@ mod tests {
             })
             .collect();
 
-        assert!(model_ids.contains(&"llama-3"));
-        assert!(model_ids.contains(&"claude-x"));
+        assert!(model_ids.contains(&"fixture-local-model"));
+        assert!(model_ids.contains(&"fixture-anthropic-model"));
         assert!(
             !state.selectable_indices().is_empty(),
             "picker must never be empty — locked rows stay selectable"
@@ -1087,7 +1096,10 @@ mod tests {
 
     #[test]
     fn headers_are_not_selectable_and_cursor_lands_on_models() {
-        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let models = vec![
+            model("fixture-local-model", "ollama"),
+            model("fixture-anthropic-model", "anthropic"),
+        ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
 

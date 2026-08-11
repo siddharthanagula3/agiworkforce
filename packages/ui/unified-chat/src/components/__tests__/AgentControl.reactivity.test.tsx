@@ -3,6 +3,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentControl } from '../AgentControl';
 import { useAgentControlStore } from '../../stores/agentControlStore';
+import { requireCatalogModel } from '../../test/modelCatalogFixtures';
+
+const effortModel = requireCatalogModel(
+  (model) =>
+    Boolean(model.reasoning?.supportedEfforts?.includes('medium')) &&
+    Boolean(model.reasoning?.supportedEfforts?.includes('high')),
+  'a model with medium and high reasoning efforts',
+);
+const constrainedEffortModel = requireCatalogModel(
+  (model) =>
+    model.reasoning?.supportedEfforts?.length === 4 &&
+    model.reasoning.supportedEfforts.includes('medium'),
+  'a model with a four-step reasoning effort ladder',
+);
 
 describe('AgentControl reactive state', () => {
   beforeEach(() => {
@@ -21,7 +35,7 @@ describe('AgentControl reactive state', () => {
 
   it('updates the mode chip when the conversation override changes', () => {
     render(
-      <AgentControl conversationId="conversation-1" projectId={null} modelId="gpt-5.6-luna" />,
+      <AgentControl conversationId="conversation-1" projectId={null} modelId={effortModel.id} />,
     );
     expect(screen.getByRole('button', { name: 'Agent mode: Ask before edits' })).toBeTruthy();
 
@@ -32,7 +46,7 @@ describe('AgentControl reactive state', () => {
 
   it('updates the compact effort slider when the conversation override changes', () => {
     render(
-      <AgentControl conversationId="conversation-1" projectId={null} modelId="gpt-5.6-luna" />,
+      <AgentControl conversationId="conversation-1" projectId={null} modelId={effortModel.id} />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Reasoning effort' }));
     expect(
@@ -46,30 +60,31 @@ describe('AgentControl reactive state', () => {
     ).toBe('High');
   });
 
-  // Removed with Haiku 4.5 (retired 2026-07-27). It was the only catalog
-  // model without an effort ladder, so 'hides the effort control' has no
-  // model left to demonstrate it. Restore when one exists again.
+  // The current catalog has no model without an effort ladder, so there is no
+  // entry that can demonstrate the hidden-control state. Restore the test when
+  // that capability shape exists again.
 
-  it('shows only Gemini Flash-Lite provider-supported effort levels', () => {
+  it('uses only the selected model’s catalog-supported effort levels', () => {
     render(
       <AgentControl
         conversationId="conversation-1"
         projectId={null}
-        modelId="gemini-3.5-flash-lite"
+        modelId={constrainedEffortModel.id}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Reasoning effort' }));
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
     expect(slider.getAttribute('aria-valuemin')).toBe('0');
-    expect(slider.getAttribute('aria-valuemax')).toBe('3');
+    expect(slider.getAttribute('aria-valuemax')).toBe(
+      String(constrainedEffortModel.reasoning!.supportedEfforts!.length - 1),
+    );
     expect(slider.getAttribute('aria-valuetext')).toBe('Medium');
-    expect(screen.queryByRole('button', { name: /^Minimal / })).toBeNull();
   });
 
   it('requires explicit confirmation before bypassing tool permissions', () => {
     render(
-      <AgentControl conversationId="conversation-1" projectId={null} modelId="gpt-5.6-luna" />,
+      <AgentControl conversationId="conversation-1" projectId={null} modelId={effortModel.id} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Agent mode: Ask before edits' }));

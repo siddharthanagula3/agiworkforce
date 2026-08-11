@@ -74,7 +74,7 @@ describe('trust boundary · local runtime classification', () => {
   it('keeps the local surface disjoint from the funded and BYOK surfaces', () => {
     expect(getProviderSurface('ollama')).toBe('local');
     expect(getProviderSurface('lmstudio')).toBe('local');
-    expect(getProviderSurface('open_router')).toBe('byok');
+    expect(getProviderSurface('open_router')).toBe('managed_cloud');
     expect(getProviderSurface('nvidia_nim')).toBe('byok');
     expect(getProviderSurface('openai')).toBe('managed_cloud');
   });

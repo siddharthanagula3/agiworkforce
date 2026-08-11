@@ -201,9 +201,9 @@ describe('ChatInput draft ownership', () => {
     expect(textarea.value).toBe('');
   });
 
-  // Removed with Haiku 4.5 (retired 2026-07-27). It was the only catalog
-  // model without an effort ladder, so 'hides the effort control' has no
-  // model left to demonstrate it. Restore when one exists again.
+  // The current catalog has no model without an effort ladder, so there is no
+  // entry that can demonstrate the hidden-control state. Restore the test when
+  // that capability shape exists again.
 
   it('sends an attachment-only turn instead of enabling a silent no-op', () => {
     const onSend = vi.fn();

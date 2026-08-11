@@ -153,7 +153,7 @@ mod tests {
             name: "AGI WS Test".into(),
             version: "1.4.0".into(),
             capabilities: vec!["code".into()],
-            supported_models: vec!["claude-opus-5".into()],
+            supported_models: vec!["fixture-a2a-model".into()],
             endpoint: "ws://127.0.0.1:7893".into(),
             auth_required: false,
             metadata: std::collections::HashMap::new(),

@@ -44,6 +44,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useScheduleStore, type Schedule } from '../src/features/schedules/store';
 import { useTierStore } from '../src/features/billing/store';
+import { DEFAULT_AUTO_MODE_ID } from '../lib/models';
 
 describe('Create schedule template handoff', () => {
   beforeEach(() => {
@@ -92,7 +93,7 @@ describe('Create schedule template handoff', () => {
       id: 'schedule-1',
       name: 'Existing schedule',
       prompt: 'Keep the saved prompt.',
-      model: 'auto',
+      model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'daily',
       scheduledAt: null,
       timeOfDay: '10:00',

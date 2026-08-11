@@ -26,6 +26,42 @@ mod tests {
     };
     use agiworkforce_model_registry::TrustMode;
 
+    fn openai_model(task: TaskType) -> &'static str {
+        Provider::OpenAI.get_model_for_task(task)
+    }
+
+    fn provider_model(provider: Provider) -> &'static str {
+        crate::core::llm::models_config::get_default_model(&provider)
+    }
+
+    fn perplexity_search_model(quality_tier: &str) -> &'static str {
+        crate::core::llm::models_config::get_model_by_type_and_tier(
+            &Provider::Perplexity,
+            "search",
+            quality_tier,
+        )
+        .expect("catalog must include the requested Perplexity search tier")
+    }
+
+    fn assert_catalog_models_resolve_to_provider(router: &LLMRouter, provider: Provider) {
+        let models: Vec<_> = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| entry.provider == provider.as_string())
+            .collect();
+        assert!(
+            !models.is_empty(),
+            "catalog must contain {provider:?} models"
+        );
+        for entry in models {
+            assert_eq!(
+                router.infer_provider_from_model(&entry.id),
+                Some(provider),
+                "{} must resolve through its catalog provider",
+                entry.id
+            );
+        }
+    }
+
     // ------------------------------------------------------------------
     // MockProvider -- a zero-cost stub that satisfies `has_provider` checks
     // without requiring API keys or network access.
@@ -152,7 +188,7 @@ mod tests {
         let request = LLMRequest::default();
         let preferences = RouterPreferences {
             provider: Some(Provider::OpenAI),
-            model: Some("gpt-5.6-sol".to_string()),
+            model: Some(openai_model(TaskType::ComplexReasoning).to_string()),
             trust_mode: Some(TrustMode::Local),
             ..Default::default()
         };
@@ -355,7 +391,10 @@ mod tests {
             Some(Provider::Perplexity)
         );
         assert_eq!(Provider::from_string("pplx"), Some(Provider::Perplexity));
-        assert_eq!(Provider::from_string("sonar"), Some(Provider::Perplexity));
+        assert_eq!(
+            Provider::from_string(perplexity_search_model("fast")),
+            Some(Provider::Perplexity)
+        );
     }
 
     #[test]
@@ -470,16 +509,15 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // Provider::default_model — all variants return non-empty strings
+    // Provider::default_model — catalog-backed providers resolve a model
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_provider_default_model_all_non_empty() {
+    fn test_cloud_provider_default_models_are_non_empty() {
         let providers = [
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::Google,
-            Provider::Ollama,
             Provider::Perplexity,
             Provider::XAI,
             Provider::DeepSeek,
@@ -500,11 +538,14 @@ mod tests {
 
     #[test]
     fn test_provider_default_model_spot_checks() {
-        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.6-sol");
-        assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-5");
-        assert_eq!(Provider::Google.default_model(), "gemini-3.6-flash");
-        assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
-        assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
+        for provider in [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::Google,
+            Provider::DeepSeek,
+        ] {
+            assert_eq!(provider.default_model(), provider_model(provider));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -520,7 +561,12 @@ mod tests {
     #[test]
     fn test_get_model_for_task_openai_complex_reasoning() {
         let model = Provider::OpenAI.get_model_for_task(TaskType::ComplexReasoning);
-        assert_eq!(model, "gpt-5.6-sol");
+        let expected = crate::core::llm::models_config::config()
+            .providers
+            .get("openai")
+            .and_then(|provider| provider.task_routing.as_ref())
+            .and_then(|routing| routing.complex_reasoning.as_deref());
+        assert_eq!(Some(model), expected);
     }
 
     #[test]
@@ -534,12 +580,12 @@ mod tests {
     #[test]
     fn test_get_model_for_task_anthropic_complex_reasoning() {
         let model = Provider::Anthropic.get_model_for_task(TaskType::ComplexReasoning);
-        // Fable 5 is the registry's anthropic complex-reasoning route
-        // (catalog taskRouting.complex_reasoning, verified 2026-07-15).
-        assert!(
-            model.contains("fable"),
-            "Anthropic ComplexReasoning should use Fable, got: {}",
-            model
+        assert_eq!(
+            model,
+            crate::core::llm::models_config::get_task_model(
+                &Provider::Anthropic,
+                "complex_reasoning"
+            )
         );
     }
 
@@ -547,17 +593,18 @@ mod tests {
     fn test_get_model_for_task_deepseek_code_generation() {
         let model = Provider::DeepSeek.get_model_for_task(TaskType::CodeGeneration);
         assert!(!model.is_empty());
-        // DeepSeek's code-generation task routes to V4 Flash (the new default after V4 launch).
-        assert_eq!(model, "deepseek-v4-flash");
+        assert_eq!(
+            model,
+            crate::core::llm::models_config::get_task_model(&Provider::DeepSeek, "code_generation")
+        );
     }
 
     #[test]
-    fn test_get_model_for_task_all_providers_return_non_empty() {
+    fn test_get_model_for_task_returns_non_empty_for_cloud_providers() {
         let providers = [
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::Google,
-            Provider::Ollama,
             Provider::Perplexity,
             Provider::XAI,
             Provider::DeepSeek,
@@ -731,7 +778,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-luna");
+        assert_eq!(suggestion.model, openai_model(TaskType::FastCompletion));
     }
 
     // ------------------------------------------------------------------
@@ -747,12 +794,17 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_infer_provider_claude_model_prefix() {
+    fn test_infer_provider_anthropic_catalog_model() {
         // The infer_provider_from_model helper is private but its effect is observable:
         // when selected_model="claude-..." and provider not registered, falls to legacy routing.
         // We check that the returned provider is sane (not panicking).
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-sonnet-5"));
+        let ctx = intelligent_context(
+            "pro",
+            Some("coding"),
+            Some("chat"),
+            Some(provider_model(Provider::Anthropic)),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         // Without Anthropic registered, falls to legacy and may return a different provider.
         // At minimum it must not panic and must return a non-empty model.
@@ -760,51 +812,66 @@ mod tests {
     }
 
     #[test]
-    fn test_infer_provider_gpt_model_prefix() {
+    fn test_infer_provider_openai_catalog_model() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.6-sol"));
+        let ctx = intelligent_context(
+            "pro",
+            Some("chat"),
+            Some("chat"),
+            Some(openai_model(TaskType::ComplexReasoning)),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
 
     #[test]
-    fn test_infer_provider_gemini_model_prefix() {
+    fn test_infer_provider_google_catalog_model() {
         let router = LLMRouter::new();
         let ctx = intelligent_context(
             "basic",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3.6-flash"),
+            Some(provider_model(Provider::Google)),
         );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
 
     #[test]
-    fn test_infer_provider_deepseek_model_prefix() {
+    fn test_infer_provider_deepseek_catalog_model() {
         let router = LLMRouter::new();
         let ctx = intelligent_context(
             "basic",
             Some("coding"),
             Some("chat"),
-            Some("deepseek-v4-flash"),
+            Some(provider_model(Provider::DeepSeek)),
         );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
 
     #[test]
-    fn test_infer_provider_grok_model_prefix() {
+    fn test_infer_provider_xai_catalog_model() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.5"));
+        let ctx = intelligent_context(
+            "basic",
+            Some("reasoning"),
+            Some("chat"),
+            Some(provider_model(Provider::XAI)),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
 
     #[test]
-    fn test_infer_provider_sonar_model_prefix() {
+    fn test_infer_provider_perplexity_catalog_model() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("search"), Some("search"), Some("sonar-pro"));
+        let ctx = intelligent_context(
+            "pro",
+            Some("search"),
+            Some("search"),
+            Some(perplexity_search_model("balanced")),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -815,179 +882,94 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_infer_provider_openai_gpt_models() {
+    fn test_infer_provider_uses_catalog_for_every_openai_model() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("gpt-5.6-sol"),
-            Provider::OpenAI
-        );
-        assert_eq!(
-            router.infer_provider_from_model("gpt-5.6-luna"),
-            Provider::OpenAI
-        );
-        assert_eq!(
-            router.infer_provider_from_model("GPT-5.4"),
-            Provider::OpenAI
-        );
-    }
-
-    #[test]
-    fn test_infer_provider_openai_reasoning_models() {
-        let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("o1-preview"),
-            Provider::OpenAI
-        );
-        assert_eq!(router.infer_provider_from_model("o3"), Provider::OpenAI);
-        assert_eq!(
-            router.infer_provider_from_model("o3-mini"),
-            Provider::OpenAI
-        );
-    }
-
-    #[test]
-    fn test_infer_provider_openai_non_chat_models() {
-        let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("gpt-image-2"),
-            Provider::OpenAI
-        );
-        assert_eq!(
-            router.infer_provider_from_model("gpt-4o-mini-tts"),
-            Provider::OpenAI
-        );
-        assert_eq!(
-            router.infer_provider_from_model("gpt-4o-transcribe"),
-            Provider::OpenAI
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::OpenAI);
     }
 
     #[test]
     fn test_infer_provider_anthropic_models() {
         let router = LLMRouter::new();
+        assert_catalog_models_resolve_to_provider(&router, Provider::Anthropic);
+        let uppercase = provider_model(Provider::Anthropic).to_uppercase();
         assert_eq!(
-            router.infer_provider_from_model("claude-sonnet-5"),
-            Provider::Anthropic
-        );
-        assert_eq!(
-            router.infer_provider_from_model("claude-opus-5"),
-            Provider::Anthropic
-        );
-        assert_eq!(
-            router.infer_provider_from_model("claude-sonnet-5"),
-            Provider::Anthropic
-        );
-        // Case insensitive
-        assert_eq!(
-            router.infer_provider_from_model("Claude-Sonnet-4-5"),
-            Provider::Anthropic
+            router.infer_provider_from_model(&uppercase),
+            Some(Provider::Anthropic)
         );
     }
 
     #[test]
     fn test_infer_provider_google_models() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("gemini-3.1-pro-preview"),
-            Provider::Google
-        );
-        assert_eq!(
-            router.infer_provider_from_model("gemini-3.6-flash"),
-            Provider::Google
-        );
-        assert_eq!(
-            router.infer_provider_from_model("gemini-3.1-flash-image"),
-            Provider::Google
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::Google);
     }
 
     #[test]
     fn test_infer_provider_deepseek_models() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("deepseek-v4-flash"),
-            Provider::DeepSeek
-        );
-        assert_eq!(
-            router.infer_provider_from_model("deepseek-reasoner"),
-            Provider::DeepSeek
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::DeepSeek);
     }
 
     #[test]
     fn test_infer_provider_xai_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("grok-4.5"), Provider::XAI);
-        assert_eq!(router.infer_provider_from_model("grok-4.5"), Provider::XAI);
-        assert_eq!(router.infer_provider_from_model("GROK-4"), Provider::XAI);
+        assert_catalog_models_resolve_to_provider(&router, Provider::XAI);
     }
 
     #[test]
     fn test_infer_provider_perplexity_models() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("sonar"),
-            Provider::Perplexity
-        );
-        assert_eq!(
-            router.infer_provider_from_model("sonar-deep-research"),
-            Provider::Perplexity
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::Perplexity);
     }
 
     #[test]
     fn test_infer_provider_qwen_models() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("qwen-3.7-plus"),
-            Provider::Qwen
-        );
-        assert_eq!(
-            router.infer_provider_from_model("qwen3-coder"),
-            Provider::Qwen
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::Qwen);
     }
 
     #[test]
     fn test_infer_provider_moonshot_models() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("kimi-k3"),
-            Provider::Moonshot
-        );
-        assert_eq!(
-            router.infer_provider_from_model("moonshot-v1"),
-            Provider::Moonshot
-        );
+        assert_catalog_models_resolve_to_provider(&router, Provider::Moonshot);
     }
 
     #[test]
     fn test_infer_provider_zhipu_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("glm-5.2"), Provider::Zhipu);
+        assert_catalog_models_resolve_to_provider(&router, Provider::Zhipu);
     }
 
     #[test]
-    fn test_infer_provider_flux_to_managed_cloud() {
+    fn test_infer_provider_rejects_uncataloged_media_model() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("flux-2-pro"),
-            Provider::ManagedCloud
+            router.infer_provider_from_model("fixture-uncataloged-media-model"),
+            None
         );
     }
 
     #[test]
-    fn test_infer_provider_unknown_defaults_to_managed_cloud() {
+    fn test_infer_provider_unknown_fails_closed() {
         let router = LLMRouter::new();
-        assert_eq!(
-            router.infer_provider_from_model("some-unknown-model"),
-            Provider::ManagedCloud
+        assert_eq!(router.infer_provider_from_model("some-unknown-model"), None);
+        assert_eq!(router.infer_provider_from_model("my-fine-tuned-llm"), None);
+        assert_eq!(router.infer_provider_from_model(""), None);
+    }
+
+    #[test]
+    fn intelligent_routing_refuses_an_unknown_selected_model() {
+        let router = LLMRouter::new();
+        let unknown = "fixture-retired-selected-model";
+        let context = intelligent_context("basic", Some("chat"), Some("chat"), Some(unknown));
+        let suggestion = router.suggest_for_context(&context);
+        assert_ne!(suggestion.model, unknown);
+        assert!(
+            crate::core::llm::models_config::config()
+                .models
+                .contains_key(&suggestion.model),
+            "fallback must remain catalog-addressable"
         );
-        assert_eq!(
-            router.infer_provider_from_model("my-fine-tuned-llm"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(router.infer_provider_from_model(""), Provider::ManagedCloud);
     }
 
     // ------------------------------------------------------------------
@@ -1007,7 +989,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-luna");
+        assert_eq!(suggestion.model, openai_model(TaskType::FastCompletion));
     }
 
     #[test]
@@ -1051,7 +1033,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-5");
+        assert_eq!(suggestion.model, provider_model(Provider::Anthropic));
     }
 
     #[test]
@@ -1169,7 +1151,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-luna");
+        assert_eq!(suggestion.model, openai_model(TaskType::FastCompletion));
     }
 
     #[test]
@@ -1184,7 +1166,10 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-terra");
+        assert_eq!(
+            suggestion.model,
+            crate::core::llm::models_config::get_task_model(&Provider::OpenAI, "chat")
+        );
     }
 
     #[test]
@@ -1198,7 +1183,7 @@ mod tests {
             "basic",
         );
         let suggestion = router.suggest_for_context(&context);
-        // basic + writing/research -> Google (Gemini Pro, Complex task)
+        // basic + writing/research -> Google catalog slot (Complex task)
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(
             suggestion.model,
@@ -1211,71 +1196,62 @@ mod tests {
     #[test]
     fn test_intelligent_routing_selected_model_priority() {
         let router = router_with_all_providers();
-        let context =
-            intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-opus-5"));
+        let selected = provider_model(Provider::Anthropic);
+        let context = intelligent_context("pro", Some("coding"), Some("chat"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        // The dashed apiModelId alias canonicalizes to the catalog id.
-        assert_eq!(suggestion.model, "claude-opus-5");
+        assert_eq!(suggestion.model, selected);
     }
 
     #[test]
     fn test_intelligent_routing_infer_openai_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.6-sol"));
+        let selected = openai_model(TaskType::ComplexReasoning);
+        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-sol");
+        assert_eq!(suggestion.model, selected);
     }
 
     #[test]
     fn test_intelligent_routing_infer_google_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context(
-            "basic",
-            Some("multimodal"),
-            Some("chat"),
-            Some("gemini-3.6-flash"),
-        );
+        let selected = provider_model(Provider::Google);
+        let context =
+            intelligent_context("basic", Some("multimodal"), Some("chat"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.6-flash");
+        assert_eq!(suggestion.model, selected);
     }
 
     #[test]
     fn test_intelligent_routing_infer_deepseek_provider() {
         let router = router_with_all_providers();
-        // Current DeepSeek chat routing uses the catalog default directly.
-        let context = intelligent_context(
-            "basic",
-            Some("coding"),
-            Some("chat"),
-            Some("deepseek-v4-flash"),
-        );
+        let selected = provider_model(Provider::DeepSeek);
+        let context = intelligent_context("basic", Some("coding"), Some("chat"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v4-flash");
+        assert_eq!(suggestion.model, selected);
     }
 
     #[test]
     fn test_intelligent_routing_infer_perplexity_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context("pro", Some("search"), Some("search"), Some("sonar"));
+        let selected = perplexity_search_model("fast");
+        let context = intelligent_context("pro", Some("search"), Some("search"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
-        assert_eq!(suggestion.model, "sonar");
+        assert_eq!(suggestion.model, selected);
     }
 
     #[test]
     fn test_intelligent_routing_infer_xai_provider() {
         let router = router_with_all_providers();
-        // grok-4.5 is the current xAI catalog flagship; the grok- prefix
-        // resolves to the XAI provider.
-        let context =
-            intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.5"));
+        let selected = provider_model(Provider::XAI);
+        let context = intelligent_context("basic", Some("reasoning"), Some("chat"), Some(selected));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4.5");
+        assert_eq!(suggestion.model, selected);
     }
 
     // --- Intelligent routing: intent_type-based (no selected_model) ---
@@ -1286,7 +1262,7 @@ mod tests {
         let context = intelligent_context("basic", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-luna");
+        assert_eq!(suggestion.model, openai_model(TaskType::FastCompletion));
     }
 
     #[test]
@@ -1295,7 +1271,7 @@ mod tests {
         let context = intelligent_context("pro", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-5");
+        assert_eq!(suggestion.model, provider_model(Provider::Anthropic));
     }
 
     #[test]
@@ -1304,7 +1280,7 @@ mod tests {
         let context = intelligent_context("pro", Some("search"), Some("search"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
-        assert_eq!(suggestion.model, "sonar");
+        assert_eq!(suggestion.model, perplexity_search_model("fast"));
     }
 
     #[test]
@@ -1313,7 +1289,7 @@ mod tests {
         let context = intelligent_context("pro", Some("deep-research"), Some("search"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
-        assert_eq!(suggestion.model, "sonar-deep-research");
+        assert_eq!(suggestion.model, perplexity_search_model("best"));
     }
 
     #[test]
@@ -1334,7 +1310,7 @@ mod tests {
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.6-sol");
+        assert_eq!(suggestion.model, openai_model(TaskType::ComplexReasoning));
     }
 
     #[test]
@@ -1355,7 +1331,7 @@ mod tests {
         let context = intelligent_context("pro", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-5");
+        assert_eq!(suggestion.model, provider_model(Provider::Anthropic));
     }
 
     #[test]
@@ -1431,12 +1407,17 @@ mod tests {
     }
 
     #[test]
-    fn test_intelligent_routing_unknown_model_defaults_to_managed_cloud() {
+    fn test_intelligent_routing_unknown_media_model_fails_closed() {
         let router = router_with_all_providers();
-        let context =
-            intelligent_context("pro", Some("image-gen"), Some("image"), Some("flux-2-pro"));
+        let unknown = "fixture-uncataloged-image-model";
+        let context = intelligent_context("pro", Some("image-gen"), Some("image"), Some(unknown));
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::ManagedCloud);
-        assert_eq!(suggestion.model, "flux-2-pro");
+        assert_ne!(suggestion.model, unknown);
+        assert!(
+            crate::core::llm::models_config::config()
+                .models
+                .contains_key(&suggestion.model),
+            "fallback must remain catalog-addressable"
+        );
     }
 }

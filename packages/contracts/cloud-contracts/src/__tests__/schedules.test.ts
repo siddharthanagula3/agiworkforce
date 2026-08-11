@@ -6,6 +6,7 @@ import {
   managedCloudSchedulePath,
   managedCloudScheduleRunsPath,
 } from '../schedules';
+import { MANAGED_CLOUD_DEFAULT_MODEL_SELECTION } from '../conversations';
 
 const schedule = {
   id: 'schedule-1',
@@ -24,7 +25,7 @@ const schedule = {
   actionType: 'agent',
   actionConfig: null,
   prompt: 'Summarize my priorities.',
-  model: 'auto-balanced',
+  model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   status: 'active',
   lastExecutedAt: '2026-07-17T14:00:00.000Z',
   nextExecutionAt: '2026-07-18T14:00:00.000Z',
@@ -65,7 +66,7 @@ describe('managed cloud schedule wire contracts', () => {
       startedAt: '2026-07-17T14:00:00.000Z',
       completedAt: '2026-07-17T14:00:40.000Z',
       durationMs: 40_000,
-      result: { text: 'Partial result', model: 'auto-balanced' },
+      result: { text: 'Partial result', model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION },
       error: 'Execution timed out',
       idempotencyKey: 'request-12345678',
       leaseExpiresAt: null,
@@ -103,7 +104,7 @@ describe('managed cloud schedules client', () => {
         name: 'Morning brief',
         description: null,
         prompt: 'Summarize my priorities.',
-        model: 'auto-balanced',
+        model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
         recurrence: 'weekly',
         cronExpression: null,
         scheduledAt: null,

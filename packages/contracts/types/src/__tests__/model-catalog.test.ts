@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
 import {
+  applyInputTokenPricingTiers,
+  applyLongContextPricing,
   canAccessModelForSubscriptionTier,
   canAccessManualModelSelection,
   evaluateModelEnvironment,
   MODEL_ENVIRONMENTS,
   getCoreManualModelOptions,
   getAutoRoutingProfiles,
+  getDefaultAutoRoutingProfile,
   getAllowedModelsForTier,
   getDefaultModelFor,
   getManagedCloudProviderIds,
@@ -17,6 +20,7 @@ import {
   getModelIdsForProvider,
   getModelMetadataById,
   isAutoModeModelId,
+  isExecutableImageModel,
   getModelVariantPartner,
   getPickerModelTier,
   getPickerModels,
@@ -35,8 +39,22 @@ import {
   requireProviderDefaultModel,
   resolveAutoModeModel,
   resolveEffectiveModelPricing,
+  resolveEffectiveModelPricingForInputTokens,
   SLOT_REGISTRY,
 } from '../model-catalog';
+
+describe('isExecutableImageModel', () => {
+  it('requires the catalog MIME contract for every live Gemini image model', () => {
+    const liveGeminiImage = listCanonicalModels().find(
+      (model) => model.modelType === 'image' && model.imageApi === 'gemini',
+    );
+    expect(liveGeminiImage).toBeDefined();
+    expect(isExecutableImageModel(liveGeminiImage!)).toBe(true);
+    expect(isExecutableImageModel({ ...liveGeminiImage!, imageOutputMimeType: undefined })).toBe(
+      false,
+    );
+  });
+});
 
 describe('resolveEffectiveModelPricing', () => {
   /**
@@ -124,18 +142,173 @@ describe('resolveEffectiveModelPricing', () => {
     expect(resolveEffectiveModelPricing(scheduled, new Date(Number.NaN)).inputCost).toBe(3);
   });
 
-  /**
-   * Founder pin, Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
-   * 2026-08-05): Sonnet 5 bills users the founder-selected standard $3/$15 per
-   * MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date. A
-   * provider's introductory window is a provider-cost fact for the registry's
-   * verificationLog, never a product price — so the shipped model carries no
-   * schedule and the resolver must return the same rates on any date.
-   */
-  it('resolves identical Sonnet 5 rates on every date — no shipped schedule', () => {
-    const sonnet = getModelMetadataById('claude-sonnet-5');
-    expect(sonnet).not.toBeNull();
-    expect(sonnet?.pricingSchedule).toBeUndefined();
+  it('uses strict thresholds and the greatest qualifying input-token pricing tier', () => {
+    const tiered = {
+      inputCost: 1,
+      outputCost: 4,
+      cached_input: 0.1,
+      cached_write: 1.25,
+      cached_write_1h: 2,
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 10,
+          inputCost: 2,
+          outputCost: 6,
+          cached_input: 0.2,
+          cached_write: 2.5,
+        },
+        {
+          thresholdTokens: 20,
+          inputCost: 3,
+          outputCost: 9,
+          cached_input: 0.3,
+          cached_write: 3.75,
+          cached_write_1h: 6,
+        },
+      ],
+    };
+    const asOf = new Date('2030-01-01T00:00:00Z');
+
+    expect(resolveEffectiveModelPricingForInputTokens(tiered, asOf, 10)).toEqual({
+      inputCost: 1,
+      outputCost: 4,
+      cached_input: 0.1,
+      cached_write: 1.25,
+      cached_write_1h: 2,
+    });
+    expect(resolveEffectiveModelPricingForInputTokens(tiered, asOf, 11)).toEqual({
+      inputCost: 2,
+      outputCost: 6,
+      cached_input: 0.2,
+      cached_write: 2.5,
+      cached_write_1h: 2,
+    });
+    expect(resolveEffectiveModelPricingForInputTokens(tiered, asOf, 20)).toEqual({
+      inputCost: 2,
+      outputCost: 6,
+      cached_input: 0.2,
+      cached_write: 2.5,
+      cached_write_1h: 2,
+    });
+    expect(resolveEffectiveModelPricingForInputTokens(tiered, asOf, 21)).toEqual({
+      inputCost: 3,
+      outputCost: 9,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: 6,
+    });
+  });
+
+  it('composes dated, post-promo, and input-tier rates in that order', () => {
+    const composed = {
+      inputCost: 1,
+      outputCost: 4,
+      cached_input: 0.1,
+      cached_write: 1.25,
+      pricingSchedule: [
+        {
+          effectiveFrom: '2030-01-01',
+          inputCost: 2,
+          outputCost: 8,
+          cached_input: 0.2,
+          cached_write: 2.5,
+        },
+      ],
+      promo_expires_at: '2030-06-01T00:00:00.000Z',
+      post_promo_prices: {
+        input: 3,
+        output: 12,
+        cached_input: 0.3,
+        cached_write: 3.75,
+      },
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 10,
+          inputCost: 5,
+          outputCost: 20,
+          cached_input: 0.5,
+          cached_write: 6.25,
+        },
+      ],
+    };
+
+    expect(
+      resolveEffectiveModelPricingForInputTokens(
+        composed,
+        new Date('2030-05-31T23:59:59.999Z'),
+        10,
+      ),
+    ).toMatchObject({ inputCost: 2, outputCost: 8, cached_input: 0.2, cached_write: 2.5 });
+    expect(
+      resolveEffectiveModelPricingForInputTokens(
+        composed,
+        new Date('2030-06-01T00:00:00.000Z'),
+        10,
+      ),
+    ).toMatchObject({ inputCost: 3, outputCost: 12, cached_input: 0.3, cached_write: 3.75 });
+    expect(
+      resolveEffectiveModelPricingForInputTokens(
+        composed,
+        new Date('2030-06-01T00:00:00.000Z'),
+        11,
+      ),
+    ).toMatchObject({ inputCost: 5, outputCost: 20, cached_input: 0.5, cached_write: 6.25 });
+  });
+
+  it('applies ordered tiers after a dated or promotional base has resolved', () => {
+    const tiered = {
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 10,
+          inputCost: 20,
+          outputCost: 60,
+          cached_input: 2,
+          cached_write: 25,
+        },
+      ],
+    };
+    const alreadyResolvedBase = {
+      inputCost: 7,
+      outputCost: 21,
+      cached_input: 0.7,
+      cached_write: 8.75,
+      cached_write_1h: 14,
+    };
+
+    expect(applyInputTokenPricingTiers(tiered, alreadyResolvedBase, 10)).toEqual(
+      alreadyResolvedBase,
+    );
+    expect(applyInputTokenPricingTiers(tiered, alreadyResolvedBase, 11)).toEqual({
+      inputCost: 20,
+      outputCost: 60,
+      cached_input: 2,
+      cached_write: 25,
+      cached_write_1h: 14,
+    });
+  });
+
+  it('keeps the legacy singleton as read compatibility only when no array exists', () => {
+    const legacy = {
+      longContext: { thresholdTokens: 10, inputCost: 2, outputCost: 6 },
+    };
+    const base = { inputCost: 1, outputCost: 4 };
+
+    expect(applyLongContextPricing(legacy, base, 11)).toEqual({
+      inputCost: 2,
+      outputCost: 6,
+      cached_input: undefined,
+      cached_write: undefined,
+      cached_write_1h: undefined,
+    });
+    expect(
+      applyInputTokenPricingTiers({ ...legacy, inputTokenPricingTiers: [] }, base, 11),
+    ).toEqual(base);
+  });
+
+  it('resolves the catalog-owned Anthropic default rates identically on every date', () => {
+    const defaultModel = getModelMetadataById(requireProviderDefaultModel('anthropic'));
+    expect(defaultModel).not.toBeNull();
+    expect(defaultModel?.pricingSchedule).toBeUndefined();
 
     const standard = {
       inputCost: 3,
@@ -145,7 +318,9 @@ describe('resolveEffectiveModelPricing', () => {
       cached_write_1h: 6,
     };
     for (const day of ['2020-01-01', '2026-08-15', '2026-09-15', '2099-12-31']) {
-      expect(resolveEffectiveModelPricing(sonnet!, new Date(`${day}T00:00:00Z`))).toEqual(standard);
+      expect(resolveEffectiveModelPricing(defaultModel!, new Date(`${day}T00:00:00Z`))).toEqual(
+        standard,
+      );
     }
   });
 });
@@ -161,9 +336,8 @@ describe('model catalog helpers', () => {
     )['embedding_default'];
     const model = getModelMetadataById(embeddingSlot?.modelKey);
 
-    expect(embeddingSlot?.modelKey).toBe('gemini-embedding-2');
+    expect(embeddingSlot?.modelKey).toBe(model?.id);
     expect(model).toMatchObject({
-      id: 'gemini-embedding-2',
       provider: 'google',
       modelType: 'embedding',
       contextWindow: 8192,
@@ -200,7 +374,9 @@ describe('model catalog helpers', () => {
     expect(models.every((model) => ['economy', 'balanced', 'premium'].includes(model.tier))).toBe(
       true,
     );
-    expect(models.every((model) => model.contextWindow > 0)).toBe(true);
+    expect(
+      models.every((model) => model.contextWindow !== undefined && model.contextWindow > 0),
+    ).toBe(true);
   });
 
   it('keeps specialized media, voice, and embedding models out of manual chat options', () => {
@@ -214,7 +390,12 @@ describe('model catalog helpers', () => {
         return model !== null && chatModelTypes.has(model.modelType);
       }),
     ).toBe(true);
-    expect(options.some((option) => option.id === 'gemini-embedding-2')).toBe(false);
+    const specializedModelIds = new Set(
+      listCanonicalModels()
+        .filter((model) => !chatModelTypes.has(model.modelType))
+        .map((model) => model.id),
+    );
+    expect(options.every((option) => !specializedModelIds.has(option.id))).toBe(true);
   });
 
   it('derives Mobile Cloud picker rows from the canonical runtime profile', () => {
@@ -241,7 +422,9 @@ describe('model catalog helpers', () => {
   it('derives Desktop Cloud picker rows after the DCL-4 runtime cutover', () => {
     const models = getPickerModelsForRuntimeProfile('desktop/cloud-chat');
     expect(models.length).toBeGreaterThan(0);
-    expect(models.map((model) => model.id)).toContain('gpt-5.6-luna');
+    expect(models.map((model) => model.id)).toContain(
+      modelsCatalog.providers['openai']?.taskRouting?.fast_completion,
+    );
   });
 
   it('returns no selectable rows for an unknown runtime profile', () => {
@@ -254,32 +437,35 @@ describe('model catalog helpers', () => {
     const maxModels = getModelsForTierAndSurface('max', 'mobile/cloud-chat');
     const maxPlusModels = getModelsForTierAndSurface('max_plus', 'mobile/cloud-chat');
 
-    expect(basicModels.map((model) => model.id)).toContain('gpt-5.6-luna');
-    expect(basicModels.map((model) => model.id)).not.toContain('gpt-5.6-terra');
-    expect(basicModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
-    expect(basicModels.map((model) => model.id)).not.toContain('deepseek-v4-flash');
-    expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.7-plus');
-    expect(basicModels.map((model) => model.id)).toContain('qwen-3.5-flash');
-    expect(basicModels.map((model) => model.id)).not.toContain('glm-5.2');
-    expect(basicModels.map((model) => model.id)).not.toContain('sonar');
-    expect(proModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
-    expect(getAllowedModelsForTier('pro_additions')).toEqual(
-      expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'glm-5.2']),
-    );
+    const economyIds = new Set(getAllowedModelsForTier('economy'));
+    const proAdditionIds = new Set(getAllowedModelsForTier('pro_additions'));
+    const basicIds = new Set(basicModels.map((model) => model.id));
+    const proIds = new Set(proModels.map((model) => model.id));
+    expect(economyIds.size).toBeGreaterThan(0);
+    expect(proAdditionIds.size).toBeGreaterThan(0);
+    expect([...economyIds].every((id) => basicIds.has(id))).toBe(true);
+    expect([...proAdditionIds].some((id) => !basicIds.has(id))).toBe(true);
+    expect([...economyIds].every((id) => proIds.has(id))).toBe(true);
     expect(maxPlusModels).toEqual(maxModels);
-    expect(
+    const desktopBasicIds = new Set(
       getModelsForTierAndSurface('basic', 'desktop/cloud-chat').map((model) => model.id),
-    ).toEqual(expect.arrayContaining(['gpt-5.6-luna', 'gemini-3.5-flash-lite']));
+    );
+    expect([...economyIds].every((id) => desktopBasicIds.has(id))).toBe(true);
     expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
   });
 
   it('keeps Basic on the economy roster while preserving higher-tier inheritance', () => {
-    expect(canAccessModelForSubscriptionTier('gpt-5.6-luna', 'basic')).toBe(true);
-    expect(canAccessModelForSubscriptionTier('gpt-5.6-terra', 'basic')).toBe(false);
-    expect(canAccessModelForSubscriptionTier('gemini-3.5-flash-lite', 'basic')).toBe(true);
-    expect(canAccessModelForSubscriptionTier('deepseek-v4-flash', 'basic')).toBe(false);
-    expect(canAccessModelForSubscriptionTier('gemini-3.5-flash-lite', 'pro')).toBe(true);
-    expect(canAccessModelForSubscriptionTier('claude-opus-5', 'max_plus')).toBe(true);
+    for (const modelId of getAllowedModelsForTier('economy')) {
+      expect(canAccessModelForSubscriptionTier(modelId, 'basic')).toBe(true);
+      expect(canAccessModelForSubscriptionTier(modelId, 'pro')).toBe(true);
+    }
+    for (const modelId of getAllowedModelsForTier('pro_additions')) {
+      expect(canAccessModelForSubscriptionTier(modelId, 'basic')).toBe(false);
+      expect(canAccessModelForSubscriptionTier(modelId, 'pro')).toBe(true);
+    }
+    for (const modelId of getAllowedModelsForTier('flagship_additions')) {
+      expect(canAccessModelForSubscriptionTier(modelId, 'max_plus')).toBe(true);
+    }
   });
 
   it('derives the single selectable Auto from routing policy', () => {
@@ -291,21 +477,42 @@ describe('model catalog helpers', () => {
     expect(profiles.map((profile) => profile.profile)).toEqual(['balanced']);
     expect(profiles.every((profile) => profile.label.trim().length > 0)).toBe(true);
     expect(profiles.every((profile) => profile.description.trim().length > 0)).toBe(true);
+    expect(getDefaultAutoRoutingProfile()).toEqual(profiles[0]);
   });
 
   it('builds context limit and cost maps from canonical ids', () => {
-    const aliasId = normalizeModelId('claude-sonnet-5');
+    const anthropicModel = requireProviderDefaultModel('anthropic');
+    const aliasId = normalizeModelId(anthropicModel);
     const openaiModel = requireProviderDefaultModel('openai');
-    const contextLimits = getModelContextLimits([openaiModel, 'claude-sonnet-5']);
-    const costRates = getModelCostRates([openaiModel, 'claude-sonnet-5']);
+    const contextLimits = getModelContextLimits([openaiModel, anthropicModel]);
+    const costRates = getModelCostRates([openaiModel, anthropicModel]);
 
-    expect(aliasId).toBe('claude-sonnet-5');
+    expect(aliasId).toBe(anthropicModel);
     // Canonicalization removed: unknown IDs pass through as-is (no legacy redirect).
-    expect(normalizeModelId('gpt-5.4-codex-medium')).toBe('gpt-5.4-codex-medium');
+    const unknownModelId = 'fixture-removed-model';
+    expect(normalizeModelId(unknownModelId)).toBe(unknownModelId);
     expect(contextLimits[openaiModel]).toBeGreaterThan(0);
-    expect(contextLimits['claude-sonnet-5']).toBeGreaterThan(0);
+    expect(contextLimits[anthropicModel]).toBeGreaterThan(0);
     expect(costRates[openaiModel]).toMatchObject({ provider: 'openai' });
-    expect(costRates['claude-sonnet-5']).toMatchObject({ provider: 'anthropic' });
+    expect(costRates[anthropicModel]).toMatchObject({ provider: 'anthropic' });
+  });
+
+  it('omits an unproven token context for character-bounded video APIs', () => {
+    const runwayModelId = getModelIdsForProvider('runway', { modelTypes: ['video'] })[0];
+    const runway = getModelMetadataById(runwayModelId);
+    const runwayProviderModel = getProviderModelCatalog('runway').find(
+      (model) => model.id === runwayModelId,
+    );
+
+    expect(runway).toMatchObject({
+      modelType: 'video',
+      availability: 'unavailable',
+    });
+    expect(runway?.contextWindow).toBeUndefined();
+    expect(runwayProviderModel).toBeDefined();
+    expect(getModelContextLimits([runwayProviderModel!.id])).toEqual({});
+    expect(runwayProviderModel).toBeDefined();
+    expect(runwayProviderModel).not.toHaveProperty('contextWindow');
   });
 
   it('derives provider model lists from the canonical catalog', () => {
@@ -315,7 +522,7 @@ describe('model catalog helpers', () => {
 
     expect(anthropicIds).toContain(requireProviderDefaultModel('anthropic'));
     expect(anthropicIds.length).toBeGreaterThan(1);
-    expect(anthropicIds).not.toContain('claude-3-haiku-20240307');
+    expect(anthropicIds).not.toContain('fixture-retired-model');
   });
 
   it('projects provider adapter catalogs from the generated provider index', () => {
@@ -324,13 +531,15 @@ describe('model catalog helpers', () => {
 
     expect(openaiCatalog.map((model) => model.id)).toEqual(expectedKeys);
     expect(openaiCatalog.every((model) => model.provider === 'openai')).toBe(true);
-    // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the
-    // official pricing page: $0.20/M in, $1.20/M out.
-    expect(openaiCatalog.find((model) => model.id === 'gpt-5.6-luna')).toMatchObject({
-      contextWindow: 1_050_000,
-      maxOutputTokens: 128_000,
-      inputCostPerMillion: 0.2,
-      outputCostPerMillion: 1.2,
+    const fastModel = getModelMetadataById(
+      modelsCatalog.providers['openai']?.taskRouting?.fast_completion,
+    );
+    expect(fastModel).not.toBeNull();
+    expect(openaiCatalog.find((model) => model.id === fastModel!.id)).toMatchObject({
+      contextWindow: fastModel!.contextWindow,
+      maxOutputTokens: fastModel!.maxOutputTokens,
+      inputCostPerMillion: fastModel!.inputCost,
+      outputCostPerMillion: fastModel!.outputCost,
       capabilities: { streaming: true, tools: true, vision: true },
     });
     expect(getProviderModelCatalog('not-a-provider')).toEqual([]);
@@ -369,66 +578,70 @@ describe('model catalog helpers', () => {
   });
 
   it('detects providers and resolves auto modes from shared routing defaults', () => {
+    const anthropicDefault = requireProviderDefaultModel('anthropic');
+    const explicitModel = getRoutingSlotModel('general_balanced_pro');
+    const workhorse = getRoutingSlotModel('workhorse_general');
     expect(isAutoModeModelId('auto')).toBe(true);
     expect(isAutoModeModelId('AUTO-BALANCED')).toBe(false);
-    expect(isAutoModeModelId('gpt-5.6-terra')).toBe(false);
+    expect(isAutoModeModelId(explicitModel)).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
-    expect(detectProviderFromModelId('claude-sonnet-5')).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.5-flash-lite');
+    expect(detectProviderFromModelId(anthropicDefault)).toBe('anthropic');
+    expect(resolveAutoModeModel('auto-economy', 'free')).toBe(workhorse);
     // Basic/hobby clamp every Auto alias to the economy routing profile.
-    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe('gemini-3.5-flash-lite');
-    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.6-terra');
+    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe(workhorse);
+    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe(explicitModel);
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
       modelRegistry.policies.auto.slots.flagship_general.modelKey,
     );
-    expect(resolveAutoModeModel('auto-premium', 'free')).toBe('gemini-3.5-flash-lite');
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.5-flash-lite');
+    expect(resolveAutoModeModel('auto-premium', 'free')).toBe(workhorse);
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe(workhorse);
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
-    // Variant partners must resolve to a real catalog model (no dangling partner),
-    // without pinning the specific partner id.
-    expect(getModelMetadataById(getModelVariantPartner('deepseek-v4-flash'))).not.toBeNull();
-    expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-5'))).not.toBeNull();
-    expect(getProviderProbeModel('openai')).toBe('gpt-5.6-luna');
-    expect(getProviderProbeModel('anthropic')).toBe('claude-sonnet-5');
+    const modelsWithPartners = listCanonicalModels().filter((model) => model.variantPartner);
+    expect(modelsWithPartners.length).toBeGreaterThan(0);
+    for (const model of modelsWithPartners) {
+      expect(getModelMetadataById(getModelVariantPartner(model.id))).not.toBeNull();
+    }
+
+    for (const provider of ['openai', 'anthropic'] as const) {
+      const probeId = getProviderProbeModel(provider);
+      expect(getModelMetadataById(probeId)?.provider).toBe(provider);
+    }
 
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
-    expect(fallbackIds.indexOf('gemini-3.5-flash-lite')).toBeGreaterThanOrEqual(0);
-    expect(fallbackIds).toContain('gpt-5.6-luna');
-    expect(fallbackIds).not.toContain('gpt-5.6-terra');
+    expect(fallbackIds.length).toBeGreaterThan(0);
+    expect(fallbackIds.every((id) => getAllowedModelsForTier('economy').includes(id))).toBe(true);
 
     const coreOptions = getCoreManualModelOptions();
-    expect(coreOptions.some((entry) => entry.id === requireProviderDefaultModel('openai'))).toBe(
-      true,
-    );
-    // gpt-5.4-codex was a phantom (never a real OpenAI model) — it may be a
-    // migration alias, but must stay absent from picker options.
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(false);
-    expect(coreOptions.some((entry) => entry.id === 'qwen-3.7-plus')).toBe(true);
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-sol')).toBe(true);
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-terra')).toBe(true);
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-luna')).toBe(true);
-    // Catalog carries only the latest generation per family (founder policy
-    // 2026-07-20): removed compatibility models must not resurface in pickers.
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
-    expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
+    const optionIds = new Set(coreOptions.map((entry) => entry.id));
+    expect(optionIds.has(requireProviderDefaultModel('openai'))).toBe(true);
+    expect(coreOptions.some((entry) => entry.id === 'fixture-removed-model')).toBe(false);
+    expect(
+      coreOptions.every((entry) => getModelMetadataById(entry.id)?.availability !== 'unavailable'),
+    ).toBe(true);
   });
 
-  it('legacy removed aliases are not in catalog (canonicalization removed for fresh start)', () => {
-    // Canonicalization was removed — unknown aliases return null from getModelMetadataById.
-    // gpt-5.6-luna is the current fast OpenAI model; older nano generations were
-    // removed from the catalog (founder policy 2026-07-20).
-    expect(getModelMetadataById('gpt-5.6-luna')?.id).toBe('gpt-5.6-luna');
-    expect(getModelMetadataById('gpt-5.4-nano')).toBeNull();
-    expect(getModelMetadataById('gpt-5-nano')).toBeNull();
-    expect(normalizeModelId('gpt-5.4-codex-high')).toBe('gpt-5.4-codex-high');
+  it('unknown aliases are not in catalog (canonicalization removed for fresh start)', () => {
+    // Unknown aliases return null from getModelMetadataById and are preserved by
+    // normalizeModelId so callers can fail closed without an invented redirect.
+    const unknownModelId = 'fixture-removed-model';
+    const currentModelId = modelsCatalog.providers['openai']?.taskRouting?.fast_completion;
+    expect(getModelMetadataById(currentModelId)?.id).toBe(currentModelId);
+    expect(getModelMetadataById(unknownModelId)).toBeNull();
+    expect(normalizeModelId(unknownModelId)).toBe(unknownModelId);
   });
 
   it('classifies provider surfaces and managed cloud provider visibility', () => {
+    const managedVideoProvider = listCanonicalModels().find(
+      (model) =>
+        model.modelType === 'video' && model.videoGeneration?.pricing?.unit === 'video_tokens',
+    )?.provider;
+    expect(managedVideoProvider).toBeDefined();
+
     expect(getProviderSurface('openai')).toBe('managed_cloud');
     expect(getProviderSurface('managed_cloud')).toBe('managed_cloud');
-    expect(getProviderSurface('open_router')).toBe('byok');
+    expect(getProviderSurface(managedVideoProvider!)).toBe('managed_cloud');
     expect(getProviderSurface('nvidia_nim')).toBe('byok');
     expect(getProviderSurface('ollama')).toBe('local');
     expect(getProviderSurface('groq')).toBe('managed_cloud');
@@ -444,14 +657,22 @@ describe('model catalog helpers', () => {
   });
 
   it('defines tier policy and slot routing from one shared source', () => {
-    expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.5-flash-lite');
-    expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.6-terra');
-    expect(getRoutingSlotModel('coding_fast')).toBe('gpt-5.4-mini');
+    for (const slot of [
+      'general_fast',
+      'general_balanced',
+      'search_fast',
+      'search_premium',
+      'computer_use',
+    ] as const) {
+      expect(getRoutingSlotModel(slot)).toBe(modelRegistry.policies.auto.slots[slot].modelKey);
+    }
+    const codingFastModel = getRoutingSlotModel('coding_fast');
+    expect(getAllowedModelsForTier('economy')).toContain(codingFastModel);
+    expect(getModelMetadataById(codingFastModel)).toMatchObject({
+      tierPolicy: { minTier: 'free' },
+      capabilities: { tools: true, codeExecution: true },
+    });
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
-    expect(getRoutingSlotModel('search_fast')).toBe('gemini-3.5-flash-lite');
-    expect(getRoutingSlotModel('search_premium')).toBe('gemini-3.6-flash');
-    expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-5');
-
     expect(canAccessManualModelSelection('free')).toBe(false);
     // Pro now exposes the manual picker behind the Advanced-mode toggle per
     // Basic/hobby carry pro's policy (2026-07-16 ladder): manual picker on.
@@ -518,38 +739,52 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   describe('explicit model selection is respected (not re-routed by task)', () => {
     it('concrete model + coding taskType returns the SAME model, not the coding slot', () => {
       // Regression: the task-aware path ignored the input model and returned the
-      // task slot model, silently swapping an explicit pick (gpt-5.6-terra ->
-      // Claude) and re-routing to a provider the user never chose.
-      expect(resolveAutoModeModel('gpt-5.6-terra', 'pro', 'coding')).toBe('gpt-5.6-terra');
+      // task slot model, silently swapping an explicit pick and re-routing to a
+      // provider the user never chose.
+      const explicitModel = getRoutingSlotModel('general_balanced_pro');
+      expect(resolveAutoModeModel(explicitModel, 'pro', 'coding')).toBe(explicitModel);
     });
     it('concrete model + reasoning taskType returns the SAME model', () => {
-      expect(resolveAutoModeModel('gpt-5.6-terra', 'pro', 'reasoning')).toBe('gpt-5.6-terra');
+      const explicitModel = getRoutingSlotModel('general_balanced_pro');
+      expect(resolveAutoModeModel(explicitModel, 'pro', 'reasoning')).toBe(explicitModel);
     });
     it('auto alias still task-routes (control — task routing only applies to auto-*)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-5');
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe(
+        getRoutingSlotModel('coding_premium_pro'),
+      );
     });
   });
 
   describe('Pro tier task-aware routing', () => {
-    it('coding task → coding_premium_pro slot (Sonnet 5)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-5');
-    });
-    it('reasoning task → reasoning_premium_pro slot (Qwen 3.7 Plus)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('qwen-3.7-plus');
-    });
-    it('multimodal task → multimodal_pro slot (Gemini 3.6 Flash)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe('gemini-3.6-flash');
-    });
-    it('long_context task → long_context_pro slot (Gemini 3.1 Pro)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
-        'gemini-3.1-pro-preview',
+    it('coding task → coding_premium_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe(
+        getRoutingSlotModel('coding_premium_pro'),
       );
     });
-    it('general task → general_balanced_pro slot (GPT-5.6 Terra)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'general')).toBe('gpt-5.6-terra');
+    it('reasoning task → reasoning_premium_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe(
+        getRoutingSlotModel('reasoning_premium_pro'),
+      );
+    });
+    it('multimodal task → multimodal_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe(
+        getRoutingSlotModel('multimodal_pro'),
+      );
+    });
+    it('long_context task → long_context_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
+        getRoutingSlotModel('long_context_pro'),
+      );
+    });
+    it('general task → general_balanced_pro slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'general')).toBe(
+        getRoutingSlotModel('general_balanced_pro'),
+      );
     });
     it('simple_chat task → general_balanced_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'simple_chat')).toBe('gpt-5.6-terra');
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'simple_chat')).toBe(
+        getRoutingSlotModel('general_balanced_pro'),
+      );
     });
     it('creative_writing → canonical balanced creative slot', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'creative_writing')).toBe(
@@ -562,7 +797,9 @@ describe('resolveAutoModeModel — task-aware routing', () => {
       );
     });
     it('agentic → general_balanced_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'agentic')).toBe('gpt-5.6-terra');
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'agentic')).toBe(
+        getRoutingSlotModel('general_balanced_pro'),
+      );
     });
     it('image_generation → shared image_generation slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'pro', 'image_generation');
@@ -581,11 +818,11 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('reasoning → economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('qwen-3.5-flash');
+      expect(result).toBe(getRoutingSlotModel('reasoning_economy'));
     });
-    it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
+    it('multimodal → workhorse_general', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
-      expect(result).toBe('gemini-3.5-flash-lite');
+      expect(result).toBe(getRoutingSlotModel('workhorse_general'));
     });
   });
 
@@ -596,11 +833,11 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('reasoning → uses the allowed economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('qwen-3.5-flash');
+      expect(result).toBe(getRoutingSlotModel('reasoning_economy'));
     });
     it('image_generation → falls back to workhorse_general (no media on free)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
-      expect(result).toBe('gemini-3.5-flash-lite');
+      expect(result).toBe(getRoutingSlotModel('workhorse_general'));
     });
   });
 
@@ -633,32 +870,35 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   });
 
   describe('US-only routing toggle (Pro+/Max only)', () => {
-    it('Max reasoning + usOnly=true skips Qwen', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'reasoning')).toBe('qwen-3.7-plus');
-      // With usOnly: skips Moonshot/DeepSeek/Zhipu/MiniMax/Qwen.
+    it('Max reasoning + usOnly=true skips every excluded provider', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'max', 'reasoning')).toBe(
+        getRoutingSlotModel('reasoning_premium_pro'),
+      );
       const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', {
         usOnly: true,
       });
-      expect(result).not.toBe('qwen-3.7-plus');
-      expect(result).not.toBe('deepseek-v4-flash');
-      expect(result).not.toBe('glm-4.7');
+      const resultProvider = getModelMetadataById(result)?.provider;
+      expect(resultProvider).toBeDefined();
+      expect(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders).not.toContain(
+        resultProvider,
+      );
     });
 
-    it('Max reasoning + usOnly=true also skips Qwen', () => {
+    it('Max reasoning + usOnly=true does not return the excluded default route', () => {
       const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', { usOnly: true });
-      expect(result).not.toBe('qwen-3.7-plus');
+      expect(result).not.toBe(getRoutingSlotModel('reasoning_premium_pro'));
     });
 
     it('Pro tier ignores usOnly flag (toggle gated by usOnlyRoutingAvailable)', () => {
       // Pro tier policy does not set usOnlyRoutingAvailable, so the flag is
-      // ignored and reasoning still routes to Qwen 3.7 Plus.
+      // ignored and reasoning still uses the normal Pro route.
       const result = resolveAutoModeModel('auto-balanced', 'pro', 'reasoning', { usOnly: true });
-      expect(result).toBe('qwen-3.7-plus');
+      expect(result).toBe(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning'));
     });
 
     it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning', { usOnly: true });
-      expect(result).toBe('qwen-3.5-flash');
+      expect(result).toBe(resolveAutoModeModel('auto-balanced', 'free', 'reasoning'));
     });
 
     it('Max balanced coding with usOnly=true stays on the balanced Anthropic slot', () => {
@@ -705,17 +945,17 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('pro', 'chat')).toBe(getRoutingSlotModel('general_balanced_pro'));
   });
 
-  it('pro reasoning resolves to reasoning_premium_pro (Qwen 3.7 Plus)', () => {
+  it('pro reasoning resolves to reasoning_premium_pro', () => {
     expect(getDefaultModelFor('pro', 'reasoning')).toBe(
       getRoutingSlotModel('reasoning_premium_pro'),
     );
   });
 
-  it('pro computer-use resolves to computer_use slot (Sonnet 5) — premium slot is Pro+ only', () => {
+  it('pro computer-use resolves to the standard computer_use slot', () => {
     expect(getDefaultModelFor('pro', 'computer-use')).toBe(getRoutingSlotModel('computer_use'));
   });
 
-  it('max computer-use resolves to computer_use_premium (Opus 5)', () => {
+  it('max computer-use resolves to computer_use_premium', () => {
     expect(getDefaultModelFor('max', 'computer-use')).toBe(
       getRoutingSlotModel('computer_use_premium'),
     );
@@ -756,60 +996,21 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// R26: groq + mistral provider removal — retired IDs redirect via canonicalization
-// ---------------------------------------------------------------------------
-describe('R26 provider removal — retired groq/mistral/open_router IDs redirect to fallback models', () => {
-  it('groq-llama-3.3-70b (groq provider removed) canonicalizes to the Gemini fallback', () => {
-    const meta = getModelMetadataById('groq-llama-3.3-70b');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.5-flash-lite');
-    expect(meta?.provider).toBe('google');
-  });
-
-  it('groq-llama-3.1-8b canonicalizes to the same Gemini fallback', () => {
-    const meta = getModelMetadataById('groq-llama-3.1-8b');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.5-flash-lite');
-  });
-
-  it('mistral-large-3 (mistral provider removed) canonicalizes to the Claude Sonnet 5 fallback', () => {
-    const meta = getModelMetadataById('mistral-large-3');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('claude-sonnet-5');
-  });
-
-  it('mistral-small-4 canonicalizes to the Claude Sonnet 5 fallback', () => {
-    const meta = getModelMetadataById('mistral-small-4');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('claude-sonnet-5');
-  });
-
-  it('codestral-2508 canonicalizes to the Claude Sonnet 5 fallback; the bare pre-rename id stays gone', () => {
-    const meta = getModelMetadataById('codestral-2508');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('claude-sonnet-5');
-    // The bare pre-rename id has no canonicalization entry and was never aliased.
-    expect(getModelMetadataById('codestral-2')).toBeNull();
-  });
-
-  it('the retired OpenRouter free Nemotron 120B slug canonicalizes to the Gemini fallback', () => {
-    // The older 49B Llama-Nemotron free slug was retired with no redirect and stays null.
-    const correct = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
-    const retired = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
-    expect(correct).not.toBeNull();
-    expect(correct?.id).toBe('gemini-3.5-flash-lite');
-    expect(retired).toBeNull();
-  });
-
-  it('the retired OpenRouter free Gemma-4 slug canonicalizes to the Gemini fallback', () => {
-    const meta = getModelMetadataById('google/gemma-4-26b-a4b-it:free');
-    expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.5-flash-lite');
+describe('provider-owned model canonicalization', () => {
+  it('resolves every authored compatibility alias to its catalog target', () => {
+    const aliases = Object.values(modelsCatalog.providers).flatMap((provider) =>
+      Object.entries(provider.canonicalization ?? {}),
+    );
+    expect(aliases.length).toBeGreaterThan(0);
+    for (const [alias, target] of aliases) {
+      const expectedId = normalizeModelId(target);
+      expect(expectedId, `missing canonical target for ${alias}`).not.toBeNull();
+      expect(getModelMetadataById(alias)?.id).toBe(expectedId);
+    }
   });
 
   it('unknown model ID returns null gracefully (no throw)', () => {
-    expect(getModelMetadataById('fake-model-that-does-not-exist')).toBeNull();
+    expect(getModelMetadataById('fixture-model-that-does-not-exist')).toBeNull();
     expect(getModelMetadataById(null)).toBeNull();
     expect(getModelMetadataById(undefined)).toBeNull();
   });
@@ -877,12 +1078,14 @@ describe('model env-gating (requiresEnvironment)', () => {
     // models had `search: false` in the catalog even though
     // apps/web/lib/llm-providers/anthropic.ts has full wire-format support for
     // Anthropic's server-managed web_search tool — making that code path
-    // permanently dead for every Claude model. Assert the fix stays in place.
+    // permanently dead for every model on that provider. Assert the fix stays in place.
     it('every current-generation Anthropic model advertises search support', () => {
-      for (const modelId of ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5']) {
-        const metadata = getModelMetadataById(modelId);
-        expect(metadata, `missing catalog entry for ${modelId}`).not.toBeNull();
-        expect(metadata!.capabilities.search, `${modelId} capabilities.search`).toBe(true);
+      const anthropicModels = listCanonicalModels().filter(
+        (model) => model.provider === 'anthropic' && model.availability !== 'unavailable',
+      );
+      expect(anthropicModels.length).toBeGreaterThan(0);
+      for (const metadata of anthropicModels) {
+        expect(metadata.capabilities.search, `${metadata.id} capabilities.search`).toBe(true);
       }
     });
   });

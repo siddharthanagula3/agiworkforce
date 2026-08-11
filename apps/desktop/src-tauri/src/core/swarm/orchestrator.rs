@@ -3,7 +3,7 @@
 //! Implements the hub-and-spoke communication model where the orchestrator
 //! acts as the central hub coordinating up to 100 concurrent sub-agents.
 //!
-//! Following Kimi K2.5's architecture:
+//! Architecture:
 //! - Trainable orchestrator with frozen sub-agents
 //! - Dynamic agent instantiation based on task requirements
 //! - Critical path optimization for minimum execution time

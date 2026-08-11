@@ -71,6 +71,33 @@ describe('sendSupportEmail', () => {
     expect(body.from).toBe('support@agiworkforce.com');
   });
 
+  it('sends the same stable idempotency header on the built-in retry', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+        text: async () => 'upstream unavailable',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'msg-1' }),
+        text: async () => '',
+      });
+
+    await expect(
+      sendSupportEmail({ ...input(), idempotencyKey: 'video-billing:job-1' }),
+    ).resolves.toEqual({ delivered: true, providerMessageId: 'msg-1' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      expect((call[1] as { headers: Record<string, string> }).headers['idempotency-key']).toBe(
+        'video-billing:job-1',
+      );
+    }
+  });
+
   it('omits reply_to rather than sending a junk address', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

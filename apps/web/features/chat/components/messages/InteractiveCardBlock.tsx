@@ -17,6 +17,7 @@
  */
 
 import { memo } from 'react';
+import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
 import {
   resolveInteractiveCardRenderer,
   type InteractiveCard,
@@ -24,19 +25,26 @@ import {
 } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
+import { MapSearchCard } from './cards/MapSearchCard';
 
 /**
  * Kind-specific renderers.
  *
- * `clarify.v1` registered in slice 2 (2026-08-06). `itinerary.v1` still has no
- * renderer and no producer, so it keeps falling back — an entry here with no
- * producer would be untested code pretending to be shipped.
+ * `clarify.v1` and the identity-neutral `map-search.v1` have live producers.
+ * `itinerary.v1` still has no resolver-backed producer, so it keeps falling
+ * back rather than pretending model-authored place names are verified places.
  */
 const WEB_CARD_REGISTRY: InteractiveCardRegistry<React.ReactNode> = {
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
   ),
+  'map-search.v1': ({ body, ctx }) => <MapSearchCard body={body} ctx={ctx} />,
 };
+
+function openMapSearchProviderUrl(value: string): void {
+  if (!isAllowedMapSearchProviderUrl(value)) return;
+  window.open(new URL(value).toString(), '_blank', 'noopener,noreferrer');
+}
 
 interface InteractiveCardBlockProps {
   cards: readonly InteractiveCard[];
@@ -65,7 +73,7 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
         )({
           card,
           body: card.body,
-          ctx: { canRespond: false },
+          ctx: { canRespond: false, onOpenUrl: openMapSearchProviderUrl },
         })}
       </>
     );

@@ -1,15 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { requireAutoMode } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
+const AUTO_MODEL_ID = requireAutoMode().id;
 const mockLoadConversations = jest.fn();
 const mockCreateConversation = jest.fn(async () => 'conv-1');
 const mockSendMessage = jest.fn();
 const mockBeginImageGeneration = jest.fn(() => 'assistant-msg-1');
 const mockCompleteImageGeneration = jest.fn();
 const mockFailImageGeneration = jest.fn();
-let mockChatInputOnSend: ((text: string) => void) | undefined;
+let mockChatInputOnSend: ((text: string) => void | boolean | Promise<void | boolean>) | undefined;
 let mockChatFeatures = { imageGen: true };
 const mockCloudAccountStorage = new Map<string, string>();
 let mockChatInputDraftProvenance:
@@ -17,6 +19,7 @@ let mockChatInputDraftProvenance:
   | { scope: 'cloud'; ownerId: string }
   | undefined;
 let mockChatInputOnOpenCompare: (() => void) | undefined;
+let mockChatInputSelectedSkillName: string | undefined;
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -74,6 +77,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
         onSend?: (text: string) => void;
         draftProvenance?: { scope: 'local' } | { scope: 'cloud'; ownerId: string };
         onOpenCompare?: () => void;
+        selectedSkillName?: string;
       },
       ref: React.Ref<unknown>,
     ) {
@@ -81,6 +85,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       mockChatInputOnSend = props.onSend;
       mockChatInputDraftProvenance = props.draftProvenance;
       mockChatInputOnOpenCompare = props.onOpenCompare;
+      mockChatInputSelectedSkillName = props.selectedSkillName;
       return <View testID="chat-input" />;
     }),
   };
@@ -176,6 +181,13 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import { useMobileSkillSelectionStore } from '../src/features/skills/selectionStore';
+import {
+  clearPostAuthIntent,
+  CLOUD_CHAT_POST_AUTH_INTENT,
+  peekPostAuthIntent,
+  POST_AUTH_INTENT_PARAM,
+} from '../src/features/auth/services/postAuthIntent';
 
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
@@ -184,11 +196,13 @@ describe('Chat tab mode toggle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCloudAccountStorage.clear();
+    clearPostAuthIntent();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('mobile-image-test-user');
     mockChatInputOnSend = undefined;
     mockChatInputDraftProvenance = undefined;
     mockChatInputOnOpenCompare = undefined;
+    mockChatInputSelectedSkillName = undefined;
     mockChatFeatures = { imageGen: true };
     useChatAppModeStore.setState({ appMode: 'local' });
     useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
@@ -197,6 +211,7 @@ describe('Chat tab mode toggle', () => {
       isClerkSignedIn: true,
       clerkUserId: 'mobile-image-test-user',
     });
+    useMobileSkillSelectionStore.setState({ selection: null });
     useModelStore.setState({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
@@ -259,6 +274,46 @@ describe('Chat tab mode toggle', () => {
     });
   });
 
+  it('sends an owner-bound selected Skill once and clears it only after acceptance', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useMobileSkillSelectionStore.getState().selectSkill({
+      ownerId: 'mobile-image-test-user',
+      name: 'fixture-review-skill',
+    });
+    mockSendMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _text: string,
+        _model: string,
+        _attachments: unknown,
+        options?: { onAccepted?: () => void },
+      ) => {
+        options?.onAccepted?.();
+        return true;
+      },
+    );
+
+    render(<ChatTabScreen />);
+
+    expect(mockChatInputSelectedSkillName).toBe('fixture-review-skill');
+    await act(async () => {
+      await mockChatInputOnSend?.('Review this fixture');
+    });
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'conv-1',
+      'Review this fixture',
+      expect.any(String),
+      undefined,
+      expect.objectContaining({
+        skillName: 'fixture-review-skill',
+        onAccepted: expect.any(Function),
+      }),
+    );
+    expect(useMobileSkillSelectionStore.getState().selection).toBeNull();
+  });
+
   // SIX-23: /compare streams both panes through the managed-cloud gateway.
   // Offering it in Local Mode dead-ended in guardedFetch's refusal, so the
   // composer must not receive an onOpenCompare handler outside Cloud.
@@ -292,12 +347,12 @@ describe('Chat tab mode toggle', () => {
       inviteCode: undefined,
       cloudUnlockedAt: new Date().toISOString(),
     });
-    useModelStore.setState({ selectedModel: 'auto-balanced', selectedProvider: 'local' });
+    useModelStore.setState({ selectedModel: AUTO_MODEL_ID, selectedProvider: 'local' });
 
     render(<ChatTabScreen />);
 
     await waitFor(() => {
-      expect(useModelStore.getState().selectedModel).toBe('auto-balanced');
+      expect(useModelStore.getState().selectedModel).toBe(AUTO_MODEL_ID);
     });
   });
 
@@ -321,9 +376,13 @@ describe('Chat tab mode toggle', () => {
     fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(auth)/login',
+        params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+      });
     });
 
+    expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
     expect(useChatAppModeStore.getState().appMode).toBe('local');

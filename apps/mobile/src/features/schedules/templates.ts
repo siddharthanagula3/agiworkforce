@@ -1,4 +1,5 @@
 import type { Schedule } from './store';
+import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
 export interface ScheduleTemplate {
   id: string;
@@ -24,7 +25,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
       name: 'Daily focus',
       prompt:
         'Create a concise plan for today with three priorities, one risk to watch, and the first concrete action. If there is not enough context, provide a short fill-in template instead of inventing details.',
-      model: 'auto',
+      model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'daily',
       timeOfDay: '09:00',
     },
@@ -38,7 +39,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
       name: 'Monday kickoff',
       prompt:
         'Create a weekly kickoff worksheet with one desired outcome, the five most useful steps, likely blockers, and a clear definition of done. Mark any missing context as a question for me.',
-      model: 'auto',
+      model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'weekly',
       daysOfWeek: [1],
       timeOfDay: '09:00',
@@ -53,7 +54,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
       name: 'Weekly reflection',
       prompt:
         'Guide me through a concise weekly reflection: what moved forward, what stalled, what I learned, and the single improvement to try next week. Use questions when the task has no supporting context.',
-      model: 'auto',
+      model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'weekly',
       daysOfWeek: [5],
       timeOfDay: '16:00',
@@ -68,7 +69,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
       name: 'Monthly review',
       prompt:
         'Prepare a monthly review worksheet covering outcomes, unfinished work, lessons, risks, and three priorities for next month. Clearly label any section that needs information from me.',
-      model: 'auto',
+      model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'monthly',
       dayOfMonth: 1,
       timeOfDay: '09:00',

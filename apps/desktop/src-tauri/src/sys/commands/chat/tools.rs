@@ -465,7 +465,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     },
                     "provider": {
                         "type": "string",
-                        "description": "Optional provider (e.g. dalle3, imagen, sdxl)"
+                        "description": "Optional catalog-backed image provider"
                     },
                     "size": {
                         "type": "string",

@@ -11,7 +11,6 @@
  * is added below, the page must already exist.
  */
 
-import Link from 'next/link';
 import {
   BookOpen,
   Bug,
@@ -22,6 +21,7 @@ import {
   Scale,
   Signal,
 } from 'lucide-react';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 interface HelpLink {
   href: string;
@@ -88,7 +88,7 @@ export function HelpSection() {
       <ul className="flex flex-col gap-2">
         {HELP_LINKS.map(({ href, label, description, icon: Icon }) => (
           <li key={href}>
-            <Link
+            <SettingsPageLink
               href={href}
               className="flex items-start gap-3 rounded-[var(--radius-lg)] border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3 transition-colors hover:border-[var(--text-3)]"
             >
@@ -101,7 +101,7 @@ export function HelpSection() {
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-3)]"
                 aria-hidden="true"
               />
-            </Link>
+            </SettingsPageLink>
           </li>
         ))}
       </ul>

@@ -61,6 +61,31 @@ describe('WebChatPage message projection', () => {
     expect(projected.metadata?.['tokensUsed']).toBeUndefined();
     expect(projected.metadata?.['inputTokens']).toBeUndefined();
   });
+
+  it('preserves persisted media recovery metadata when a second client hydrates the transcript', () => {
+    const message: Message = {
+      id: 'video-refusal',
+      role: 'assistant',
+      content: '\u200b',
+      createdAt: '2026-08-09T12:00:00.000Z',
+      metadata: {
+        toolType: 'video-generation',
+        paywall: {
+          feature: 'video_generation',
+          requiredTier: 'max_15x',
+          reason: 'Video generation requires Max 15x.',
+          recoveryAction: 'upgrade',
+          showUpgradeCta: true,
+          showResetTime: false,
+          suggestStandardModel: false,
+        },
+      },
+    };
+
+    expect(toChatMessage(message, 'conversation-id').metadata?.['paywall']).toEqual(
+      message.metadata?.paywall,
+    );
+  });
 });
 
 describe('WebChatPage account identity', () => {

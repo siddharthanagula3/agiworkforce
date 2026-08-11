@@ -76,5 +76,13 @@
   "pageTitle": "料金",
   "freeLocalByok": "ローカルモデルと自分の API キーは常に無料",
   "seatTotal_one": "{{count}} シート · {{total}}/月",
-  "seatTotal_other": "{{count}} シート · {{total}}/月"
+  "seatTotal_other": "{{count}} シート · {{total}}/月",
+  "perSeatPrice": "{{price}}/シート/月",
+  "perSeatPriceAnnual": "{{price}}/シート/年",
+  "seatTotalAnnual_one": "{{count}} シート · {{total}}/年",
+  "seatTotalAnnual_other": "{{count}} シート · {{total}}/年",
+  "seatCadenceMonthly_one": "{{count}} シート · 月払い",
+  "seatCadenceMonthly_other": "{{count}} シート · 月払い",
+  "seatCadenceAnnual_one": "{{count}} シート · 年払い",
+  "seatCadenceAnnual_other": "{{count}} シート · 年払い"
 }

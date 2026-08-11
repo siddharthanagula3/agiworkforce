@@ -57,7 +57,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
+import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
   getMessageStreamErrorMessage,
@@ -1021,7 +1021,7 @@ export const MessageBubble = memo(function MessageBubble({
       {isAssistant && (
         <FileExportButton
           content={message.content}
-          title={message.model ? `${message.model} response` : undefined}
+          title={message.model ? `${getDisplayName(message.model)} response` : undefined}
           visible={showExportSheet}
           onClose={handleCloseExport}
         />

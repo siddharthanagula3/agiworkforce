@@ -5,3 +5,4 @@ export {
   type ManagedSkillSource,
   type ManagedSkillSummary,
 } from './service';
+export { useMobileSkillSelectionStore, type MobileSkillSelection } from './selectionStore';

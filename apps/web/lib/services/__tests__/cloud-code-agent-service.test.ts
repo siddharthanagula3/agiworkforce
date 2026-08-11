@@ -25,10 +25,14 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   return { ...actual, getCloudCodeSession: vi.fn() };
 });
 
-import { SLOT_REGISTRY } from '@agiworkforce/types';
+import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { getCloudCodeSession } from '@/lib/services/cloud-code-session-service';
 import { runCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-loop';
+import {
+  accumulateObservedProviderUsage,
+  createObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 import {
   finalizeManagedUsageRequest,
   reserveManagedUsageProviderStep,
@@ -47,13 +51,16 @@ const FLAT_RESERVATION_CENTS = 25;
  */
 const FLAGSHIP_MODEL = SLOT_REGISTRY.flagship_coding.modelId;
 const STANDARD_MODEL = SLOT_REGISTRY.coding_balanced.modelId;
+const TIERED_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
+  );
+  const firstTier = candidate?.inputTokenPricingTiers?.[0];
+  if (!candidate || !firstTier) throw new Error('Expected a catalog tiered-pricing fixture');
+  return { ...candidate, firstTier };
+})();
 
-const NO_USAGE: CloudCodeTurnUsage = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-};
+const NO_USAGE: CloudCodeTurnUsage = createObservedProviderUsage();
 
 function usage(partial: Partial<CloudCodeTurnUsage>): CloudCodeTurnUsage {
   return { ...NO_USAGE, ...partial };
@@ -144,6 +151,31 @@ describe('Cloud Code turn settlement uses measured tokens', () => {
     const cheap = settledCostCents();
     await runTurn({ turnUsage: usage({ inputTokens: 900_000, outputTokens: 90_000 }) });
     expect(settledCostCents()).toBeGreaterThan(cheap);
+  });
+
+  it('keeps two subthreshold provider steps separate from one tiered request', async () => {
+    const threshold = TIERED_MODEL.firstTier.thresholdTokens;
+    const subthresholdTokens = Math.floor(threshold * 0.75);
+    const twoCalls = createObservedProviderUsage();
+    for (let call = 0; call < 2; call += 1) {
+      accumulateObservedProviderUsage(
+        twoCalls,
+        { inputTokens: subthresholdTokens, outputTokens: 0 },
+        { provider: TIERED_MODEL.provider, model: TIERED_MODEL.id },
+      );
+    }
+    await runTurn({ model: TIERED_MODEL.id, turnUsage: twoCalls });
+    const twoCallCost = settledCostCents();
+
+    const oneLongCall = createObservedProviderUsage();
+    accumulateObservedProviderUsage(
+      oneLongCall,
+      { inputTokens: subthresholdTokens * 2, outputTokens: 0 },
+      { provider: TIERED_MODEL.provider, model: TIERED_MODEL.id },
+    );
+    await runTurn({ model: TIERED_MODEL.id, turnUsage: oneLongCall });
+
+    expect(settledCostCents()).toBeGreaterThan(twoCallCost);
   });
 
   it('bills cache reads and writes the provider reported', async () => {

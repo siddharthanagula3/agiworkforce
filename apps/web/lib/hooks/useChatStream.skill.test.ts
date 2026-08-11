@@ -78,7 +78,9 @@ describe('useChatStream managed server selections', () => {
       .getState()
       .messages.find((message) => message.role === 'assistant');
     expect(assistant?.metadata?.tools).toBeUndefined();
-    expect(assistant?.metadata?.agentActivity).toBeUndefined();
+    expect(
+      assistant?.metadata?.agentActivity?.entries.filter((entry) => entry.kind === 'tool') ?? [],
+    ).toEqual([]);
   });
 
   it('sends only the logical Office creation flag', async () => {

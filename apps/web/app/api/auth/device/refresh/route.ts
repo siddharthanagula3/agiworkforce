@@ -15,6 +15,7 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { issueDeveloperToken } from '@/lib/server/developer-token';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +33,8 @@ interface RefreshTokenRow {
   revoked_at: string | null;
   owner_missing: boolean;
   owner_deletion_scheduled_for: string | null;
+  owner_terms_version: string | null;
+  owner_terms_accepted_at: string | null;
 }
 
 type RotationResult =
@@ -41,7 +44,7 @@ type RotationResult =
       accessExpiresIn: number;
       refreshToken: string;
     }
-  | { kind: 'invalid' | 'expired' | 'replayed' | 'erased' };
+  | { kind: 'invalid' | 'expired' | 'replayed' | 'erased' | 'terms_required' };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
@@ -67,7 +70,9 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       // FOR UPDATE OF t: the nullable side of an outer join cannot be locked.
       `SELECT t.id, t.family_id, t.user_id, t.user_email, t.expires_at, t.used_at, t.revoked_at,
               p.id IS NULL AS owner_missing,
-              p.deletion_scheduled_for AS owner_deletion_scheduled_for
+              p.deletion_scheduled_for AS owner_deletion_scheduled_for,
+              p.terms_version AS owner_terms_version,
+              p.terms_accepted_at AS owner_terms_accepted_at
          FROM device_refresh_tokens t
          LEFT JOIN profiles p ON p.id = t.user_id
         WHERE t.token_hash = $1
@@ -109,6 +114,19 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       return { kind: 'expired' };
     }
 
+    // Device sessions outlive browser sessions. Revoke the family when the
+    // durable account record does not name the exact live policy revision, so
+    // an already-linked Desktop/CLI cannot bypass a newly published clickwrap.
+    if (current.owner_terms_version !== CURRENT_TERMS_VERSION || !current.owner_terms_accepted_at) {
+      await tx.execute(
+        `UPDATE device_refresh_tokens
+            SET revoked_at = COALESCE(revoked_at, $2)
+          WHERE family_id = $1`,
+        [current.family_id, nowIso],
+      );
+      return { kind: 'terms_required' };
+    }
+
     const nextCredential = createDeviceRefreshCredential();
     const { accessToken, expiresIn } = issueDeveloperToken({
       userId: current.user_id,
@@ -146,6 +164,14 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       refreshToken: nextCredential.token,
     };
   });
+
+  if (result.kind === 'terms_required') {
+    logger.warn({ reason: result.kind }, 'Device refresh requires current terms acceptance');
+    return NextResponse.json(
+      { error: 'terms_acceptance_required' },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
 
   if (result.kind !== 'rotated') {
     logger.warn({ reason: result.kind }, 'Device refresh credential rejected');

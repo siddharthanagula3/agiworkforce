@@ -7,8 +7,11 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 import { createQwenAdapter } from '../index';
+
+const QWEN_DEFAULT_MODEL_ID = requireProviderDefaultModel('qwen');
 
 describe('createQwenAdapter', () => {
   it('returns adapter with id="qwen" and label="Qwen"', () => {
@@ -84,7 +87,7 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
   async function drain(adapter: ReturnType<typeof createQwenAdapter>) {
     const chunks: Array<{ type: string; reason?: string }> = [];
     for await (const chunk of adapter.stream(
-      { model: 'qwen-3.7-plus', messages: [{ role: 'user', content: 'hi' }] } as never,
+      { model: QWEN_DEFAULT_MODEL_ID, messages: [{ role: 'user', content: 'hi' }] } as never,
       new AbortController().signal,
     )) {
       chunks.push(chunk as { type: string; reason?: string });

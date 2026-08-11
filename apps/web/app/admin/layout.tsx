@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { assertAccountActive } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +11,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const { userId } = await auth();
 
   if (!userId) {
-    redirect('/login?redirectTo=/admin');
+    return redirect('/login?redirectTo=/admin');
   }
+
+  await requireCurrentTermsAcceptance(userId, '/admin');
 
   // Verify the authenticated user has admin or owner role via Clerk publicMetadata.
   // This matches the check in the API routes (security/route.ts verifyAdminAccess).

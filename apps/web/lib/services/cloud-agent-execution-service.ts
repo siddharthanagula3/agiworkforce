@@ -4,6 +4,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
+import type {
+  ObservedProviderUsage,
+  ProviderUsageObservation,
+} from '@/lib/services/managed-usage-accounting-service';
 
 const OperationKindSchema = z.enum(['provider', 'tool']);
 const RetrySafetySchema = z.enum(['safe', 'unsafe']);
@@ -14,15 +18,7 @@ export type CloudAgentOperationKind = z.infer<typeof OperationKindSchema>;
 export type CloudAgentRetrySafety = z.infer<typeof RetrySafetySchema>;
 export type CloudAgentExecutionStatus = z.infer<typeof OperationStatusSchema>;
 
-export interface CloudAgentExecutionUsage {
-  providerCalls: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  cacheWrite1hTokens: number;
-  reasoningTokens: number;
-}
+export type CloudAgentExecutionUsage = ObservedProviderUsage;
 
 interface CloudAgentExecutionOperationRow extends Record<string, unknown> {
   id: string;
@@ -342,7 +338,37 @@ interface CloudAgentExecutionUsageRow extends Record<string, unknown> {
   cache_write_tokens: number | string;
   cache_write_1h_tokens: number | string;
   reasoning_tokens: number | string;
+  provider_usage_receipts: unknown;
 }
+
+const ProviderUsageObservationSchema = z
+  .object({
+    inputTokens: z.number().nonnegative(),
+    outputTokens: z.number().nonnegative(),
+    cacheReadTokens: z.number().nonnegative(),
+    cacheWriteTokens: z.number().nonnegative(),
+    cacheWrite1hTokens: z.number().nonnegative(),
+    reasoningTokens: z.number().nonnegative(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    costDollars: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+
+const ProviderUsageReceiptSchema = z
+  .object({
+    inputTokens: z.number().nonnegative().default(0),
+    outputTokens: z.number().nonnegative().default(0),
+    cacheReadTokens: z.number().nonnegative().default(0),
+    cacheWriteTokens: z.number().nonnegative().default(0),
+    cacheWrite1hTokens: z.number().nonnegative().default(0),
+    reasoningTokens: z.number().nonnegative().default(0),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    providerCostDollars: z.number().finite().nonnegative().optional(),
+    providerCallObservations: z.array(ProviderUsageObservationSchema).optional(),
+  })
+  .passthrough();
 
 /**
  * Rebuild billable usage from completed provider receipts instead of process
@@ -367,7 +393,9 @@ export async function getCloudAgentExecutionUsage(
               then (usage->>'cacheWrite1hTokens')::bigint else 0 end), 0)::bigint
               as cache_write_1h_tokens,
             coalesce(sum(case when jsonb_typeof(usage->'reasoningTokens') = 'number'
-              then (usage->>'reasoningTokens')::bigint else 0 end), 0)::bigint as reasoning_tokens
+              then (usage->>'reasoningTokens')::bigint else 0 end), 0)::bigint as reasoning_tokens,
+            coalesce(jsonb_agg(usage order by created_at, operation_key), '[]'::jsonb)
+              as provider_usage_receipts
        from public.cloud_agent_execution_operations
       where run_id = $1 and user_id = $2
         and operation_kind = 'provider' and status = 'completed'
@@ -377,6 +405,28 @@ export async function getCloudAgentExecutionUsage(
   const row = rows[0];
   if (!row) throw new CloudAgentExecutionConflictError('Cloud agent execution usage unavailable');
   const counter = z.coerce.number().int().nonnegative().safe();
+  const receipts = z.array(ProviderUsageReceiptSchema).parse(row.provider_usage_receipts);
+  const providerCallObservations: ProviderUsageObservation[] = receipts.flatMap((receipt) => {
+    if (receipt.providerCallObservations?.length) return receipt.providerCallObservations;
+    return [
+      {
+        inputTokens: receipt.inputTokens,
+        outputTokens: receipt.outputTokens,
+        cacheReadTokens: receipt.cacheReadTokens,
+        cacheWriteTokens: receipt.cacheWriteTokens,
+        cacheWrite1hTokens: receipt.cacheWrite1hTokens,
+        reasoningTokens: receipt.reasoningTokens,
+        ...(receipt.provider ? { provider: receipt.provider } : {}),
+        ...(receipt.model ? { model: receipt.model } : {}),
+        ...(receipt.providerCostDollars !== undefined
+          ? { costDollars: receipt.providerCostDollars }
+          : {}),
+      },
+    ];
+  });
+  const recordedCosts = receipts
+    .map((receipt) => receipt.providerCostDollars)
+    .filter((cost): cost is number => cost !== undefined);
   return {
     providerCalls: counter.parse(row.provider_calls),
     inputTokens: counter.parse(row.input_tokens),
@@ -385,5 +435,9 @@ export async function getCloudAgentExecutionUsage(
     cacheWriteTokens: counter.parse(row.cache_write_tokens),
     cacheWrite1hTokens: counter.parse(row.cache_write_1h_tokens),
     reasoningTokens: counter.parse(row.reasoning_tokens),
+    ...(providerCallObservations.length > 0 ? { providerCallObservations } : {}),
+    ...(recordedCosts.length > 0
+      ? { providerCostDollars: recordedCosts.reduce((total, cost) => total + cost, 0) }
+      : {}),
   };
 }

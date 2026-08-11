@@ -6,6 +6,16 @@ import {
   unpublishArtifact,
   type PublishedArtifactSummary,
 } from '../services/conversation-data-service';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@agiworkforce/ui';
 
 /**
  * Published artifacts management (CAP-015 slice 4).
@@ -51,6 +61,9 @@ export function PublishedArtifactsSection() {
   const [artifacts, setArtifacts] = useState<PublishedArtifactSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionToken, setActionToken] = useState<string | null>(null);
+  const [artifactToUnpublish, setArtifactToUnpublish] = useState<PublishedArtifactSummary | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -90,9 +103,6 @@ export function PublishedArtifactsSection() {
 
   const handleUnpublish = async (artifact: PublishedArtifactSummary) => {
     const label = artifact.title || artifact.artifactId;
-    if (typeof window !== 'undefined' && !window.confirm(`Unpublish “${label}”?`)) {
-      return;
-    }
     setActionToken(artifact.token);
     setError(null);
     setNotice(null);
@@ -100,6 +110,7 @@ export function PublishedArtifactsSection() {
       await unpublishArtifact(artifact.token);
       setArtifacts((current) => current.filter(({ token }) => token !== artifact.token));
       setNotice(`Unpublished “${label}”. The link no longer works.`);
+      setArtifactToUnpublish(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Failed to unpublish artifact');
     } finally {
@@ -127,14 +138,6 @@ export function PublishedArtifactsSection() {
         </p>
       </div>
 
-      {error ? (
-        <div role="alert" style={{ color: 'var(--chat-accent-primary, #c8892a)', fontSize: 13 }}>
-          {error}{' '}
-          <button type="button" onClick={() => void load()} style={actionButtonStyle}>
-            Retry
-          </button>
-        </div>
-      ) : null}
       {notice ? (
         <div role="status" style={{ color: 'var(--text-2)', fontSize: 13 }}>
           {notice}
@@ -154,6 +157,13 @@ export function PublishedArtifactsSection() {
           <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
             Loading published artifacts…
           </p>
+        ) : error ? (
+          <div role="alert" style={{ padding: 20, color: 'var(--text-2)', fontSize: 13 }}>
+            {error}{' '}
+            <button type="button" onClick={() => void load()} style={actionButtonStyle}>
+              Retry
+            </button>
+          </div>
         ) : artifacts.length === 0 ? (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
@@ -218,7 +228,7 @@ export function PublishedArtifactsSection() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleUnpublish(artifact)}
+                    onClick={() => setArtifactToUnpublish(artifact)}
                     disabled={busy}
                     style={{
                       ...actionButtonStyle,
@@ -234,6 +244,37 @@ export function PublishedArtifactsSection() {
           })
         )}
       </section>
+
+      <AlertDialog
+        open={artifactToUnpublish !== null}
+        onOpenChange={(open) => {
+          if (!open && actionToken === null) setArtifactToUnpublish(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unpublish this artifact?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {artifactToUnpublish
+                ? `Anyone using the link for “${artifactToUnpublish.title || artifactToUnpublish.artifactId}” will immediately lose access. This cannot be undone.`
+                : 'Anyone using this link will immediately lose access.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionToken !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!artifactToUnpublish || actionToken !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (artifactToUnpublish) void handleUnpublish(artifactToUnpublish);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {actionToken ? 'Unpublishing…' : 'Unpublish artifact'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

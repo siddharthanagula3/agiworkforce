@@ -6,6 +6,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+const CHAT_MODEL = requireProviderDefaultModel('openai');
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
@@ -39,6 +42,10 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
+
 // Import after mocks
 import { GET, POST } from '@/app/api/chat/conversations/route';
 
@@ -55,7 +62,7 @@ describe('Chat Conversations API', () => {
     {
       id: 'conv-2',
       title: 'Test Conversation 2',
-      model: 'gpt-5.6-sol',
+      model: CHAT_MODEL,
       project_id: 'proj-1',
       created_at: '2026-01-24T00:00:00Z',
       updated_at: '2026-01-24T00:00:00Z',
@@ -157,9 +164,9 @@ describe('Chat Conversations API', () => {
         expect(mockQuery).toHaveBeenNthCalledWith(
           2,
           expect.stringMatching(
-            /where user_id = \$1[\s\S]*deleted_at is null[\s\S]*is_temporary = false/,
+            /where user_id = \$1[\s\S]*organization_id is not distinct from \$2[\s\S]*deleted_at is null[\s\S]*is_temporary = false/,
           ),
-          ['user-123'],
+          ['user-123', null],
         );
       });
 
@@ -188,8 +195,10 @@ describe('Chat Conversations API', () => {
 
         expect(response.status).toBe(200);
         expect(mockQuery).toHaveBeenCalledWith(
-          expect.stringMatching(/user_id = \$1[\s\S]*project_id = \$2/),
-          ['user-123', 'proj-1', 26, 0],
+          expect.stringMatching(
+            /user_id = \$1[\s\S]*organization_id is not distinct from \$2[\s\S]*project_id = \$3/,
+          ),
+          ['user-123', null, 'proj-1', 26, 0],
         );
       });
 
@@ -218,7 +227,7 @@ describe('Chat Conversations API', () => {
         await GET(request);
 
         expect(mockQuery).toHaveBeenCalledWith(
-          expect.stringContaining('limit $2'),
+          expect.stringContaining('limit $3'),
           expect.arrayContaining([expect.any(String), 51]),
         );
       });
@@ -276,7 +285,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should create conversation with specific model', async () => {
-        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.6-sol' };
+        const newConv = { id: 'new-conv', title: 'New conversation', model: CHAT_MODEL };
         mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
@@ -285,14 +294,14 @@ describe('Chat Conversations API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-5.6-sol' }),
+          body: JSON.stringify({ model: CHAT_MODEL }),
         });
         const response = await POST(request);
 
         expect(response.status).toBe(201);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_conversations'),
-          expect.arrayContaining(['gpt-5.6-sol']),
+          expect.arrayContaining([CHAT_MODEL]),
         );
       });
 

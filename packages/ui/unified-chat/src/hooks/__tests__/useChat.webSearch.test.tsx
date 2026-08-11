@@ -1,42 +1,71 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { classifyTaskLocally } from '@agiworkforce/routing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatRuntime } from '../../lib/runtime';
 import type { ModelInfo } from '../../lib/types';
+import { createChatModelInfo } from '../../lib/modelInfo';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTierStore } from '../../stores/tierStore';
+import { requireRoutableCatalogModel } from '../../test/modelCatalogFixtures';
 import { useChat } from '../useChat';
 
-const searchableModel: ModelInfo = {
-  id: 'claude-sonnet-5',
-  name: 'Claude Sonnet 5',
-  provider: 'anthropic',
-  tier: 'standard',
-  supportsThinking: true,
-  supportsVision: true,
-  supportsTools: true,
-  contextWindow: 1_000_000,
-  isLocal: false,
-  isByok: false,
+const searchPrompt = 'What changed today?';
+const byokPrompt = 'Explain this provider function';
+const searchTaskType = classifyTaskLocally(searchPrompt, []).type;
+const managedRoute = {
+  taskType: searchTaskType,
+  subscriptionTier: 'pro',
+  trustMode: 'managed_cloud' as const,
+  runtimeProfileId: 'web/cloud-chat',
+};
+const byokRoute = {
+  taskType: classifyTaskLocally(byokPrompt, []).type,
+  subscriptionTier: 'byok',
+  trustMode: 'byok' as const,
+  runtimeProfileId: 'desktop/byok-chat',
 };
 
-const genericOnlyModel: ModelInfo = {
-  id: 'qwen-3.5-flash',
-  name: 'Qwen 3.5 Flash',
-  provider: 'qwen',
-  tier: 'fast',
-  supportsThinking: true,
-  supportsVision: true,
-  supportsTools: true,
-  contextWindow: 1_000_000,
-  isLocal: false,
-  isByok: false,
-};
+function catalogModelInfo(
+  metadata: ReturnType<typeof requireRoutableCatalogModel>,
+  isByok = false,
+): ModelInfo {
+  return createChatModelInfo({
+    id: metadata.id,
+    name: 'stale fixture label',
+    provider: metadata.provider,
+    isLocal: false,
+    isByok,
+  });
+}
+
+const searchableModel = catalogModelInfo(
+  requireRoutableCatalogModel(
+    (model) => model.capabilities.search && model.capabilities.tools,
+    managedRoute,
+    'a managed model with native search',
+  ),
+);
+const genericOnlyModel = catalogModelInfo(
+  requireRoutableCatalogModel(
+    (model) => !model.capabilities.search && model.capabilities.tools,
+    managedRoute,
+    'a managed tools-capable model without native search',
+  ),
+);
+const byokSearchableModel = catalogModelInfo(
+  requireRoutableCatalogModel(
+    (model) => model.capabilities.search && model.capabilities.tools,
+    byokRoute,
+    'a BYOK model with native search',
+  ),
+  true,
+);
 
 const localModel: ModelInfo = {
-  id: 'llama-local',
-  name: 'Llama Local',
+  id: 'fixture-local-model',
+  name: 'Local Model Fixture',
   provider: 'ollama',
   tier: 'standard',
   supportsThinking: false,
@@ -135,12 +164,12 @@ describe('useChat — automatic Web search request clamp', () => {
       }),
     );
 
-    act(() => result.current.sendMessage('What changed today?'));
+    act(() => result.current.sendMessage(searchPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-search',
-      'What changed today?',
+      searchPrompt,
       expect.objectContaining({ webSearch: true }),
     );
   });
@@ -154,13 +183,13 @@ describe('useChat — automatic Web search request clamp', () => {
       }),
     );
 
-    act(() => result.current.sendMessage('What changed today?'));
+    act(() => result.current.sendMessage(searchPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-search',
-      'What changed today?',
-      expect.objectContaining({ provider: 'qwen', webSearch: false }),
+      searchPrompt,
+      expect.objectContaining({ provider: genericOnlyModel.provider, webSearch: false }),
     );
   });
 
@@ -180,15 +209,15 @@ describe('useChat — automatic Web search request clamp', () => {
       'conv-search',
       'Find the latest local package notes',
       expect.objectContaining({
-        model: 'llama-local',
-        provider: 'ollama',
+        model: localModel.id,
+        provider: localModel.provider,
         webSearch: true,
       }),
     );
   });
 
   it('keeps BYOK search on the explicit provider without changing to Managed Cloud', async () => {
-    seedDesktopConversation('byok', { ...searchableModel, isByok: true });
+    seedDesktopConversation('byok', byokSearchableModel);
     const sendMessage = vi.fn(async () => {});
     const { result } = renderHook(() =>
       useChat(makeNativeDesktopRuntime(sendMessage), {
@@ -196,15 +225,15 @@ describe('useChat — automatic Web search request clamp', () => {
       }),
     );
 
-    act(() => result.current.sendMessage('Explain this provider function'));
+    act(() => result.current.sendMessage(byokPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-search',
-      'Explain this provider function',
+      byokPrompt,
       expect.objectContaining({
-        model: 'claude-sonnet-5',
-        provider: 'anthropic',
+        model: byokSearchableModel.id,
+        provider: byokSearchableModel.provider,
         webSearch: true,
       }),
     );

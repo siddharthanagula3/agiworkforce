@@ -29,6 +29,12 @@ import {
 } from '../utils/api';
 import { streamFromProvider } from '../integrations/providerStreamClient';
 import { Config } from '../platform/config';
+import { requireCatalogModel, requireCatalogModelOutside } from './catalogModelFixtures';
+
+const PROVIDER_STREAM_SUPPORTED = new Set(['anthropic', 'openai', 'ollama', 'google']);
+const OPENAI_MODEL = requireCatalogModel('openai').id;
+const ANTHROPIC_MODEL = requireCatalogModel('anthropic').id;
+const UNSUPPORTED_PROVIDER_MODEL = requireCatalogModelOutside(PROVIDER_STREAM_SUPPORTED).id;
 
 describe('streamChatCompletionViaProvider', () => {
   let ctx: InstanceType<typeof ExtensionContext>;
@@ -53,7 +59,7 @@ describe('streamChatCompletionViaProvider', () => {
       secrets,
       [{ role: 'user', content: 'explain this diagnostic' }],
       new CancellationTokenSource().token,
-      'gpt-5.6-sol',
+      OPENAI_MODEL,
     );
 
     expect(result).toBe('wired');
@@ -68,7 +74,7 @@ describe('streamChatCompletionViaProvider', () => {
         [{ role: 'user', content: 'hi' }],
         { onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
         cts.token,
-        'claude-opus-5',
+        ANTHROPIC_MODEL,
       ),
     ).rejects.toThrow(/sign in to agi cloud/i);
   });
@@ -82,7 +88,7 @@ describe('streamChatCompletionViaProvider', () => {
         [{ role: 'user', content: 'hi' }],
         { onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
         cts.token,
-        'grok-4.5', // xai — not in the anthropic/openai/ollama/google allowlist
+        UNSUPPORTED_PROVIDER_MODEL,
       ),
     ).rejects.toThrow(/does not yet support/i);
   });
@@ -104,7 +110,7 @@ describe('streamChatCompletionViaProvider', () => {
       [{ role: 'user', content: 'hi' }],
       { onToken, onDone, onError: vi.fn() },
       cts.token,
-      'claude-opus-5',
+      ANTHROPIC_MODEL,
     );
 
     expect(onToken).toHaveBeenNthCalledWith(1, 'Hello');
@@ -138,7 +144,7 @@ describe('streamChatCompletionViaProvider', () => {
         onToolUseEnd,
       },
       cts.token,
-      'claude-opus-5',
+      ANTHROPIC_MODEL,
     );
 
     expect(onToolUseStart).toHaveBeenCalledWith('t1', 'search');
@@ -161,7 +167,7 @@ describe('streamChatCompletionViaProvider', () => {
       [{ role: 'user', content: 'hi' }],
       { onToken: vi.fn(), onDone, onError },
       cts.token,
-      'claude-opus-5',
+      ANTHROPIC_MODEL,
     );
 
     expect(onError).toHaveBeenCalledWith(expect.any(AgiWorkforceApiError));
@@ -186,7 +192,7 @@ describe('streamChatCompletionViaProvider', () => {
         [{ role: 'user', content: 'fix this code' }],
         { onToken, onDone, onError: vi.fn() },
         cts.token,
-        'claude-opus-5',
+        ANTHROPIC_MODEL,
       ),
     ).rejects.toMatchObject({ code: 'CANCELLED' });
 

@@ -16,12 +16,14 @@ import {
   guardProviderSwitch,
   mapBillingPlanToUIPlan,
 } from '../src/features/model-picker/tierGuard';
+import { requireAutoMode } from '../test-utils/modelFixtures';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type Tier = Parameters<typeof guardProviderSwitch>[2];
+const AUTO_MODEL_ID = requireAutoMode().id;
 
 // ---------------------------------------------------------------------------
 // mapBillingPlanToUIPlan — exhaustive coverage
@@ -78,13 +80,11 @@ describe('guardProviderSwitch — allow cases', () => {
   });
 
   it('allows switch when current provider is an auto-mode id', () => {
-    expect(guardProviderSwitch('auto-balanced', 'openai', 'free')).toBe('allow');
-    expect(guardProviderSwitch('auto-economy', 'anthropic', 'free')).toBe('allow');
+    expect(guardProviderSwitch(AUTO_MODEL_ID, 'openai', 'free')).toBe('allow');
   });
 
   it('allows switch when target provider is an auto-mode id', () => {
-    expect(guardProviderSwitch('anthropic', 'auto-premium', 'free')).toBe('allow');
-    expect(guardProviderSwitch('openai', 'auto-balanced', 'free')).toBe('allow');
+    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'free')).toBe('allow');
   });
 
   it('allows cross-provider switch for max tier', () => {
@@ -143,21 +143,23 @@ describe('guardProviderSwitch — edge cases and stress tests', () => {
     );
   });
 
-  it('is case-sensitive for auto-mode prefix (capital A does not match)', () => {
-    expect(guardProviderSwitch('Auto-balanced', 'openai', 'free')).toBe('upgrade-required');
+  it('rejects a case-mutated Auto id instead of treating prefixes as admission', () => {
+    expect(guardProviderSwitch(AUTO_MODEL_ID.toUpperCase(), 'openai', 'free')).toBe(
+      'upgrade-required',
+    );
   });
 
-  it('allows auto-mode to auto-mode switch at any tier (both are auto-prefixed)', () => {
-    expect(guardProviderSwitch('auto-balanced', 'auto-premium', 'free')).toBe('allow');
+  it('allows the canonical auto-mode to remain selected at any tier', () => {
+    expect(guardProviderSwitch(AUTO_MODEL_ID, AUTO_MODEL_ID, 'free')).toBe('allow');
   });
 
   it('auto-mode to real provider: free tier still blocked', () => {
-    expect(guardProviderSwitch('auto-balanced', 'anthropic', 'free')).toBe('allow');
+    expect(guardProviderSwitch(AUTO_MODEL_ID, 'anthropic', 'free')).toBe('allow');
   });
 
   it('real provider to auto-mode: always allow regardless of tier', () => {
-    expect(guardProviderSwitch('anthropic', 'auto-balanced', 'free')).toBe('allow');
-    expect(guardProviderSwitch('anthropic', 'auto-premium', 'byok')).toBe('allow');
+    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'free')).toBe('allow');
+    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'byok')).toBe('allow');
   });
 
   it('null currentProvider + any tier always allows (new thread)', () => {

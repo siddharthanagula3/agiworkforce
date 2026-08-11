@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   auth: vi.fn(),
+  withRateLimit: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -15,13 +16,17 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
+}));
 
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from './terms';
+import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms, recordTermsAcceptance } from './terms';
 import { POST as acceptTerms } from '@/app/api/terms/accept/route';
 
-function acceptRequest(body: unknown = { surface: 'web-signup' }): NextRequest {
+function acceptRequest(
+  body: unknown = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms },
+): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/terms/accept', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -88,6 +93,35 @@ describe('recordTermsAcceptance', () => {
       /neither written nor found/,
     );
   });
+
+  it.each([
+    ['missing', [], false],
+    [
+      'outdated',
+      [
+        {
+          terms_version: '1970-01-01',
+          terms_accepted_at: '2026-08-01T09:00:00.000Z',
+          terms_accepted_surface: 'web-signup',
+        },
+      ],
+      false,
+    ],
+    [
+      'current',
+      [
+        {
+          terms_version: CURRENT_TERMS_VERSION,
+          terms_accepted_at: '2026-08-01T09:00:00.000Z',
+          terms_accepted_surface: 'web-signup',
+        },
+      ],
+      true,
+    ],
+  ] as const)('identifies a %s durable acceptance', async (_label, rows, expected) => {
+    mocks.query.mockResolvedValueOnce(rows);
+    await expect(hasAcceptedCurrentTerms('user_123')).resolves.toBe(expected);
+  });
 });
 
 describe('POST /api/terms/accept', () => {
@@ -114,6 +148,29 @@ describe('POST /api/terms/accept', () => {
       acceptedAt: '2026-08-08T10:00:00.000Z',
     });
     expect((mocks.query.mock.calls[0] as [string, unknown[]])[1]?.[0]).toBe('user_abc');
+    expect(mocks.withRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('records login acceptance on the distinct login surface', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+    mocks.query.mockResolvedValueOnce([
+      {
+        terms_version: CURRENT_TERMS_VERSION,
+        terms_accepted_at: '2026-08-08T10:00:00.000Z',
+        terms_accepted_surface: 'web-login',
+      },
+    ]);
+
+    const response = await acceptTerms(
+      acceptRequest({ surface: 'web-login', version: POLICY_LAST_UPDATED.terms }),
+    );
+
+    expect(response.status).toBe(200);
+    expect((mocks.query.mock.calls[0] as [string, unknown[]])[1]).toEqual([
+      'user_abc',
+      CURRENT_TERMS_VERSION,
+      'web-login',
+    ]);
   });
 
   it('refuses to attribute an acceptance to nobody', async () => {
@@ -128,9 +185,26 @@ describe('POST /api/terms/accept', () => {
   it('rejects a surface the clickwrap never collected', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_abc' });
 
-    const response = await acceptTerms(acceptRequest({ surface: 'somewhere-else' }));
+    const response = await acceptTerms(
+      acceptRequest({ surface: 'somewhere-else', version: POLICY_LAST_UPDATED.terms }),
+    );
 
     expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('returns the current revision when the displayed policy became stale', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+
+    const response = await acceptTerms(
+      acceptRequest({ surface: 'web-login', version: '1970-01-01' }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'TERMS_VERSION_OUTDATED' },
+      currentVersion: CURRENT_TERMS_VERSION,
+    });
     expect(mocks.query).not.toHaveBeenCalled();
   });
 });

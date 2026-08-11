@@ -6,6 +6,17 @@ use crate::data::db::repository;
 
 use super::{AppDatabase, ConversationStats};
 
+/// Full provider-request cost is owned by the assistant message. User/system
+/// rows may carry preflight input estimates for per-message diagnostics, but
+/// summing them with the assistant's full request cost double-counts input.
+pub(super) fn total_request_cost(messages: &[Message]) -> f64 {
+    messages
+        .iter()
+        .filter(|message| message.role == MessageRole::Assistant)
+        .filter_map(|message| message.cost)
+        .sum()
+}
+
 /// Compute conversation statistics (message count, total tokens, total cost)
 /// from the database for the given conversation.
 pub(super) fn compute_conversation_stats(
@@ -30,7 +41,7 @@ pub(super) fn compute_conversation_stats(
         total_tokens: messages.iter().filter_map(|message| message.tokens).sum(),
         total_input_tokens,
         total_output_tokens,
-        total_cost: messages.iter().filter_map(|message| message.cost).sum(),
+        total_cost: total_request_cost(&messages),
     })
 }
 
@@ -156,6 +167,33 @@ mod tests {
         (db_inner, app_db)
     }
 
+    #[test]
+    fn conversation_cost_counts_each_full_request_once() {
+        let user = Message::new(
+            1,
+            "fixture-user".to_string(),
+            MessageRole::User,
+            "hi".to_string(),
+        )
+        .with_metrics(100, 0.25);
+        let assistant = Message::new(
+            1,
+            "fixture-user".to_string(),
+            MessageRole::Assistant,
+            "hello".to_string(),
+        )
+        .with_metrics(50, 0.75);
+        let system = Message::new(
+            1,
+            "fixture-user".to_string(),
+            MessageRole::System,
+            "context".to_string(),
+        )
+        .with_metrics(10, 0.10);
+
+        assert!((total_request_cost(&[user, assistant, system]) - 0.75).abs() < f64::EPSILON);
+    }
+
     /// (needs_push, cloud_id) of the most recent message in a conversation — the
     /// real sync state a save leaves behind (replaces the old dead spawn counter).
     fn latest_message_sync_state(db: &AppDatabase, conv_id: i64) -> (i64, Option<String>) {
@@ -187,7 +225,7 @@ mod tests {
             Some(10),
             Some(0.001),
             Some("openai"),
-            "gpt-4",
+            "fixture-primary-model",
             false, // cloud_sync_enabled = false
         )
         .expect("save should succeed");
@@ -222,7 +260,7 @@ mod tests {
             None,
             None,
             None,
-            "gpt-4",
+            "fixture-primary-model",
             true, // cloud_sync_enabled = true
         )
         .expect("save should succeed");
@@ -254,7 +292,14 @@ mod tests {
         drop(conn);
 
         save_assistant_message(
-            &db, conv_id, "u3", "synced", None, None, None, "gpt-4",
+            &db,
+            conv_id,
+            "u3",
+            "synced",
+            None,
+            None,
+            None,
+            "fixture-primary-model",
             true, // cloud_sync_enabled = true
         )
         .expect("save should succeed");

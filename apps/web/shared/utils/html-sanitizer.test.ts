@@ -577,7 +577,7 @@ describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', (
   });
 
   it('addEventListener slider (full doc): input event updates the DOM', () => {
-    // This is the exact pattern from the bug report (Claude Haiku color picker).
+    // This is the exact slider pattern from the original color-picker bug report.
     const sliderDoc = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Color Picker</title></head>

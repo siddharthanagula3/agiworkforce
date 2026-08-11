@@ -70,7 +70,7 @@ export function MarketingLanding() {
                 'Artifacts workbench',
                 'Scheduled work with AGI Work',
               ],
-              platforms: 'macOS · Linux',
+              platforms: 'Linux x64 assets · installer verification pending',
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Local' },
@@ -301,10 +301,10 @@ export function MarketingLanding() {
         <FinalCta
           eyebrow="Start now"
           title="Start where you work."
-          body="AGI Web runs in the browser today. Desktop and the CLI are released for Local and BYOK work — no platform bill, and nothing leaves your machine unless you route it there."
+          body="AGI Web runs in the browser today. The CLI is released for Local and BYOK work; Desktop Linux assets are published, with installer availability verified live before download."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: 'Check Desktop availability' },
             { href: '/cli', label: 'Install the CLI' },
           ]}
         />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react
 import { toast } from 'sonner';
 import { Loader2, Terminal as TerminalIcon, X } from 'lucide-react';
 import { updateCloudConversationTitle } from '@/api/cloudApi';
+import { listCloudSkills } from '@/api/cloudSkills';
 import {
   ChatInterface,
   CapabilityProvider,
@@ -246,11 +247,35 @@ export function DesktopShellV3({
   const cloudSessionEpoch = useUnifiedAuthStore((state) => state.cloudSessionEpoch);
   const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const isManagedCloud = privacyMode === 'managed';
+  const [managedSkills, setManagedSkills] = useState<ChatInterfaceProps['skills']>([]);
   const cloudVoice = useCloudVoiceController(isManagedCloud);
   const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
   const composerSendShortcut = useSettingsStore(
     (state) => state.chatPreferences.sendShortcut ?? 'enter',
   );
+
+  useEffect(() => {
+    if (!isManagedCloud || !hasCloudAccountSession) {
+      setManagedSkills([]);
+      return;
+    }
+    let cancelled = false;
+    listCloudSkills()
+      .then((catalog) => {
+        if (cancelled) return;
+        setManagedSkills(
+          catalog
+            .filter((skill) => skill.lifecycle === 'included')
+            .map((skill) => ({ id: skill.name, name: skill.name, category: skill.source })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setManagedSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudAccountId, cloudSessionEpoch, hasCloudAccountSession, isManagedCloud]);
 
   // Cloud folder flow: picking a folder opens the consent sheet rather than
   // scoping the session. Approved files are injected into the composer as an
@@ -713,7 +738,11 @@ export function DesktopShellV3({
                 manageTheme={false}
                 enableShortcuts={true}
                 hostBridge={hostBridge}
-                onModelSelectorClick={onModelSelectorClick}
+                // The shared selector labels this callback "Manage API Keys" /
+                // "Open Models & Keys". Managed Cloud has no user-owned key
+                // surface, so exposing it there is a misleading link to the
+                // unrelated Capabilities section.
+                onModelSelectorClick={isManagedCloud ? undefined : onModelSelectorClick}
                 // Managed Cloud model availability is server-authoritative.
                 // An empty catalog is an error/empty state, never permission to
                 // resurrect the shared component's static fallback roster.
@@ -744,6 +773,7 @@ export function DesktopShellV3({
                     onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
                   />
                 }
+                skills={managedSkills}
                 composerSendShortcut={composerSendShortcut}
                 onNavigateView={handleNavigateView}
                 sidebarSlot={null}

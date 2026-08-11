@@ -1633,8 +1633,7 @@ impl ToolRegistry {
                     name: "provider".to_string(),
                     parameter_type: ParameterType::String,
                     required: false,
-                    description: "Provider to use: 'openai', 'imagen', 'sdxl' (default: auto)"
-                        .to_string(),
+                    description: "Catalog-backed image provider to use (default: auto)".to_string(),
                     default: Some(serde_json::Value::String("auto".to_string())),
                 },
                 ToolParameter {

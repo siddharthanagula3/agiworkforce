@@ -22,6 +22,7 @@ import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import {
+  assertSameCheckoutBillingInterval,
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
@@ -41,8 +42,8 @@ function getStripe(): Stripe {
  * Stripe would charge NOW (prorated) plus the going-forward recurring amount, so
  * the client can show a "you'll be charged $X today, then $Y/interval" confirmation
  * before the actual charge. Mirrors the setup of app/api/upgrade/route.ts exactly
- * (same tier order, same subscription lookup, same `always_invoice` +
- * `billing_cycle_anchor: now`) but calls `invoices.createPreview` — it NEVER
+ * (same tier order, same subscription lookup, same `always_invoice` and exact
+ * `proration_date`) but calls `invoices.createPreview` — it NEVER
  * mutates the subscription or charges the card.
  */
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
@@ -152,6 +153,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   let customerId: string | null = null;
   let subscriptionCurrency = 'usd';
   let currentSeats = 1;
+  let currentPriceRecurring: Stripe.Price.Recurring | null = null;
   try {
     const resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
@@ -205,6 +207,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     }
     stripeItemId = stripeSub.items.data[0]?.id ?? null;
     currentSeats = currentSeatsFromStripeItem(stripeSub.items.data[0]?.quantity);
+    currentPriceRecurring = stripeSub.items.data[0]?.price.recurring ?? null;
     customerId =
       typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
     subscriptionCurrency = stripeSub.currency;
@@ -213,6 +216,15 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
+
+  try {
+    assertSameCheckoutBillingInterval(currentPriceRecurring, billingInterval);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Billing cadence could not be verified';
+    if (message.startsWith('Mid-cycle upgrades')) throw createError.validation(message);
+    throw createError.internal(message);
+  }
 
   const planChange = classifyPlanChange({
     currentTier,
@@ -248,7 +260,10 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         // proration for the seats it already had.
         items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
         proration_behavior: 'always_invoice',
-        billing_cycle_anchor: 'now',
+        // Preserve the existing renewal date. Setting the anchor to `now`
+        // starts a new full cycle and invoices the full target plan minus an
+        // unused-time credit; that is materially more than the requested
+        // remaining-period price difference.
         // Pin the calculation instant into the signed preview token. The apply
         // endpoint reuses this exact second so Stripe cannot charge a value
         // different from the amount the user confirmed.

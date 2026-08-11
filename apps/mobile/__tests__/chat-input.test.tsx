@@ -15,12 +15,22 @@
 import React from 'react';
 import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
+import { getModelMetadataById } from '@agiworkforce/types';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
 // ---------------------------------------------------------------------------
 
-let mockSelectedModel = 'claude-sonnet-5';
+const mockCapabilityModelId = requireMobileCloudModel((model) => {
+  const metadata = getModelMetadataById(model.id);
+  return (
+    metadata?.capabilities.research === true &&
+    metadata.capabilities.search === true &&
+    metadata.capabilities.codeExecution === true
+  );
+}, 'Mobile Cloud model with research, search, and code execution').id;
+let mockSelectedModel = mockCapabilityModelId;
 let mockAppMode: 'local' | 'cloud' = 'local';
 let mockIsClerkSignedIn = false;
 let mockChatFeatures = {
@@ -229,10 +239,7 @@ jest.mock('../src/features/billing/store', () => ({
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
-  getShortDisplayName: (id: string) => {
-    if (id === 'claude-sonnet-5') return 'Claude Sonnet 5';
-    return id;
-  },
+  getShortDisplayName: (id: string) => (id === mockSelectedModel ? 'Fixture Model' : id),
 }));
 
 jest.mock('../stores/settingsStore', () => ({
@@ -329,7 +336,7 @@ describe('ChatInput', () => {
     capturedOverlayCancel = undefined;
     capturedRecordingStart = undefined;
     capturedAttachmentPreviewProps = undefined;
-    mockSelectedModel = 'claude-sonnet-5';
+    mockSelectedModel = mockCapabilityModelId;
     mockAppMode = 'local';
     mockIsClerkSignedIn = false;
     mockChatFeatures = {
@@ -583,7 +590,7 @@ describe('ChatInput', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
 
       const input = getByLabelText('Message input');
-      expect(input.props.placeholder).toBe('Reply to Claude Sonnet 5...');
+      expect(input.props.placeholder).toBe('Reply to Fixture Model...');
     });
 
     it('shows stop button instead of send during streaming', () => {
@@ -972,9 +979,9 @@ describe('ChatInput', () => {
 
       const label = getByTestId('chat.composer.model');
       // The display name, never the wire id.
-      expect(within(label).getByText('Claude Sonnet 5')).toBeTruthy();
-      expect(queryByText('claude-sonnet-5')).toBeNull();
-      expect(label.props.accessibilityLabel).toContain('Model: Claude Sonnet 5');
+      expect(within(label).getByText('Fixture Model')).toBeTruthy();
+      expect(queryByText('fixture-cloud-model')).toBeNull();
+      expect(label.props.accessibilityLabel).toContain('Model: Fixture Model');
 
       fireEvent.press(label);
       expect(onOpenModelPicker).toHaveBeenCalledTimes(1);

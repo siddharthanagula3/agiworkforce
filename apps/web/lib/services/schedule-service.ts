@@ -12,6 +12,10 @@ import {
   isAutoModeModelId,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  createClaimedUserScopedDb,
+  type ClaimedUserScope,
+} from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import {
   assertDeliverableCadence,
@@ -98,6 +102,7 @@ export interface ClaimedScheduleRun {
   scheduledFor: string;
   triggerSource?: ScheduleTriggerSource;
   startedAt?: string;
+  scope: ClaimedUserScope;
   task: ScheduleTask;
 }
 
@@ -113,11 +118,13 @@ export type ScheduledTaskExecutor = (
   task: ScheduleTask,
   signal: AbortSignal,
   runId: string,
+  scope: ClaimedUserScope & { db: DatabaseAdapter },
 ) => Promise<ScheduledExecutionResult>;
 
 interface TaskRow extends Record<string, unknown> {
   id: string;
   user_id: string;
+  organization_id: string | null;
   name: string;
   description: string | null;
   schedule_type: string;
@@ -247,6 +254,7 @@ function mapClaim(row: ClaimRow): ClaimedScheduleRun {
     scheduledFor: row.scheduled_for,
     triggerSource: row.trigger_source,
     startedAt: row.run_started_at,
+    scope: { userId: row.user_id, organizationId: row.organization_id ?? null },
     task: mapScheduleTask(row),
   };
 }
@@ -433,7 +441,13 @@ function validateScheduleInput(
   });
 }
 
-/** Number of scheduled tasks `userId` currently owns. */
+/**
+ * Number of scheduled tasks `userId` owns across every workspace.
+ *
+ * Callers must provide a service-context adapter: an active-workspace RLS
+ * adapter would undercount Personal or other-Team rows and let workspace
+ * switching multiply an account-level plan ceiling.
+ */
 export async function countSchedules(db: DatabaseAdapter, userId: string): Promise<number> {
   const [row] = await db.query<{ count: string }>(
     `select count(*)::text as count from scheduled_tasks where user_id = $1`,
@@ -892,6 +906,10 @@ export async function createManualScheduleRun(
           scheduledFor: run.scheduledFor ?? run.startedAt,
           triggerSource: 'manual',
           startedAt: run.startedAt,
+          scope: {
+            userId: taskRow.user_id,
+            organizationId: taskRow.organization_id ?? null,
+          },
           task,
         },
         replay: true,
@@ -937,6 +955,10 @@ export async function createManualScheduleRun(
         scheduledFor: run.scheduledFor ?? run.startedAt,
         triggerSource: 'manual',
         startedAt: run.startedAt,
+        scope: {
+          userId: taskRow.user_id,
+          organizationId: taskRow.organization_id ?? null,
+        },
         task,
       },
       replay: false,
@@ -1133,7 +1155,13 @@ export async function processClaimedScheduleRun(
       signal.addEventListener('abort', onAbort, { once: true });
       removeAbortListener = () => signal.removeEventListener('abort', onAbort);
     });
-    const result = await Promise.race([execute(claim.task, signal, claim.runId), aborted]);
+    if (claim.scope.userId !== claim.task.userId) {
+      throw new Error('Scheduled claim owner does not match its task owner');
+    }
+    const result = await Promise.race([
+      execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
+      aborted,
+    ]);
     const run = await finalizeScheduleRun(db, claim, {
       status: 'success',
       result,
@@ -1206,13 +1234,14 @@ export async function processDueScheduleRuns(options: {
   // replaying an external provider side effect whose outcome is unknown.
   const expired = await findExpiredClaims(db, limit);
   await Promise.all(
-    expired.map((claim) =>
-      finalizeScheduleRun(db, claim, {
+    expired.map((claim) => {
+      const scopedDb = createClaimedUserScopedDb(db, claim.scope);
+      return finalizeScheduleRun(scopedDb, claim, {
         status: 'timeout',
         error: 'Worker lease expired before a terminal result was recorded',
         completedAt: new Date(),
-      }),
-    ),
+      });
+    }),
   );
 
   const claims = await claimDueScheduleRuns(db, {
@@ -1227,8 +1256,11 @@ export async function processDueScheduleRuns(options: {
       const claim = claims[index];
       if (!claim) continue;
       try {
+        const scopedDb = createClaimedUserScopedDb(db, claim.scope);
         results.push(
-          await processClaimedScheduleRun(db, claim, executor, { timeoutMs: options.timeoutMs }),
+          await processClaimedScheduleRun(scopedDb, claim, executor, {
+            timeoutMs: options.timeoutMs,
+          }),
         );
       } catch (error) {
         // processClaimedScheduleRun finalizes its own failures, so reaching here

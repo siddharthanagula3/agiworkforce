@@ -139,6 +139,18 @@ export default function TermsPage() {
             legally barred from disclosing.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Managed Cloud providers.</strong> To provide inference, we send prompts and
+            attached content to the provider serving the model you select and receive its response;
+            for routed models, the request passes through OpenRouter. Those third parties handle
+            that content under their applicable terms and data-use policies. Our statement that AGI
+            does not train AGI-owned models is not a promise about a third party&rsquo;s handling.
+            The current provider list is published at{' '}
+            <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
+              /subprocessors
+            </Link>
+            .
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
             <strong>Feedback.</strong> If you send us suggestions or feedback, we may use them
             without restriction or obligation to you. You are not required to send feedback.
           </p>

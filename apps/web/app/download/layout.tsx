@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Download AGI Desktop',
   description:
-    'Download the signed AGI Desktop AppImage for Linux x64. macOS and Windows installers are not yet published.',
+    'Check verified AGI Desktop installer availability for Linux x64, macOS, and Windows.',
   keywords: [
     'download AI app',
     'AGI download',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Download AGI Desktop',
     description:
-      'The signed Linux x64 AppImage is available through the stable release channel. macOS and Windows installers are not yet published.',
+      'Live release verification for AGI Desktop installers on Linux x64, macOS, and Windows.',
     type: 'website',
     url: 'https://agiworkforce.com/download',
     images: [
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Download AGI Desktop',
     description:
-      'Signed Linux x64 AppImage availability, with current macOS and Windows release status.',
+      'Verified Linux x64 installer availability, with current macOS and Windows release status.',
     images: ['/api/og'],
     creator: '@agiworkforce',
   },

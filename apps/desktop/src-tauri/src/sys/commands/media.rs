@@ -67,7 +67,7 @@ pub struct MediaVideoRequest {
     /// Video provider: "runway" or "veo3" (default: "runway")
     #[serde(default)]
     pub provider: Option<String>,
-    /// Input image URL for image-to-video models (required for gen4_turbo)
+    /// Input image URL for catalog models that support image-to-video generation.
     #[serde(default)]
     pub input_image_url: Option<String>,
 }
@@ -140,11 +140,10 @@ fn ensure_managed_media_boundary() -> Result<(), String> {
 
 // Compatibility normalization lives only at this privileged HTTP boundary.
 // Desktop presentation ids are never valid managed-cloud wire values.
-fn normalize_legacy_desktop_image_provider(provider: Option<&str>) -> Option<&str> {
+fn normalize_desktop_image_provider(provider: Option<&str>) -> Option<&str> {
     match provider {
-        Some("google_imagen") | Some("google_imagen_lite") => Some("google"),
-        Some("dalle") => Some("openai"),
-        Some("stable_diffusion") => Some("stability"),
+        Some("google_balanced") | Some("google_fast") => Some("google"),
+        Some("openai") => Some("openai"),
         other => other,
     }
 }
@@ -201,7 +200,7 @@ fn build_managed_media_image_payload(
     serde_json::to_value(ManagedMediaImagePayload {
         prompt: &request.prompt,
         negative_prompt: request.negative_prompt.as_deref(),
-        provider: normalize_legacy_desktop_image_provider(request.provider.as_deref()),
+        provider: normalize_desktop_image_provider(request.provider.as_deref()),
         model: request.model.as_deref(),
         size: normalize_legacy_desktop_image_size(request.size.as_deref()),
         style: request.style.as_deref(),
@@ -559,25 +558,14 @@ mod tests {
         assert_eq!(managed_media_denial_reason(true), None);
     }
 
-    // Regression test for a confirmed request-shape bug: media_generate_image
-    // previously forwarded the desktop UI's internal ImageProviderId straight
-    // through as the web API's `provider` field. None of the four options the
-    // UI offers ('google_imagen', 'google_imagen_lite', 'dalle',
-    // 'stable_diffusion') are in the shared managed-media provider contract,
-    // so every image generation request failed validation regardless of which
-    // provider was selected. The accepted wire values are owned by
-    // packages/contracts/cloud-contracts/src/managed-media.ts.
+    // Desktop presentation IDs are translated at the privileged cloud boundary.
+    // Accepted wire values remain owned by the shared managed-media contract.
     #[test]
     fn maps_every_desktop_image_provider_option_to_a_web_api_accepted_value() {
         const WEB_API_ACCEPTED: [&str; 3] = ["google", "openai", "stability"];
 
-        for desktop_id in [
-            "google_imagen",
-            "google_imagen_lite",
-            "dalle",
-            "stable_diffusion",
-        ] {
-            let mapped = normalize_legacy_desktop_image_provider(Some(desktop_id));
+        for desktop_id in ["google_balanced", "google_fast", "openai"] {
+            let mapped = normalize_desktop_image_provider(Some(desktop_id));
             assert!(
                 mapped.is_some_and(|m| WEB_API_ACCEPTED.contains(&m)),
                 "desktop provider id '{desktop_id}' mapped to {mapped:?}, \
@@ -589,20 +577,16 @@ mod tests {
     #[test]
     fn maps_each_desktop_image_provider_to_its_specific_expected_value() {
         assert_eq!(
-            normalize_legacy_desktop_image_provider(Some("google_imagen")),
+            normalize_desktop_image_provider(Some("google_balanced")),
             Some("google")
         );
         assert_eq!(
-            normalize_legacy_desktop_image_provider(Some("google_imagen_lite")),
+            normalize_desktop_image_provider(Some("google_fast")),
             Some("google")
         );
         assert_eq!(
-            normalize_legacy_desktop_image_provider(Some("dalle")),
+            normalize_desktop_image_provider(Some("openai")),
             Some("openai")
-        );
-        assert_eq!(
-            normalize_legacy_desktop_image_provider(Some("stable_diffusion")),
-            Some("stability")
         );
     }
 
@@ -612,10 +596,10 @@ mod tests {
         // `else { provider }` branch: an already-correct or future value
         // should not be silently mangled.
         assert_eq!(
-            normalize_legacy_desktop_image_provider(Some("google")),
+            normalize_desktop_image_provider(Some("google")),
             Some("google")
         );
-        assert_eq!(normalize_legacy_desktop_image_provider(None), None);
+        assert_eq!(normalize_desktop_image_provider(None), None);
     }
 
     #[test]
@@ -656,7 +640,7 @@ mod tests {
         let request = MediaImageRequest {
             prompt: image["prompt"].as_str().unwrap().to_string(),
             negative_prompt: image["negative_prompt"].as_str().map(str::to_string),
-            provider: Some("google_imagen".to_string()),
+            provider: Some("google_balanced".to_string()),
             model: image["model"].as_str().map(str::to_string),
             size: Some("large".to_string()),
             quality: Some("premium".to_string()),

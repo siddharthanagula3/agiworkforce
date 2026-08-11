@@ -28,11 +28,13 @@ import {
   extractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
-import { deleteObject, objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -63,7 +65,7 @@ async function purgeRejectedKnowledgeUpload(
   const objectKey = objectKeyFromStorageUri(storageUri);
   if (!objectKey) return;
   try {
-    await deleteObject(objectKey);
+    await deleteProjectKnowledgeObject(objectKey);
   } catch (deleteError) {
     // Loud: the bytes stay in the bucket until somebody removes them by hand.
     logger.error(
@@ -86,14 +88,19 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id: projectId } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   // Verify project ownership before listing files
   const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
-      where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and is_archived = false
+        and deleted_at is null
       limit 1`,
-    [projectId, userId],
+    [projectId, userId, organizationId],
   );
 
   if (!project) {
@@ -138,6 +145,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
 
   const db = getNeonDb();
   const { id: projectId } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let rawBody: unknown;
   try {
@@ -167,9 +175,13 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
-      where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and is_archived = false
+        and deleted_at is null
       limit 1`,
-    [projectId, userId],
+    [projectId, userId, organizationId],
   );
 
   if (!project) {
@@ -254,10 +266,13 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     try {
       const [usage] = await db.query<{ total: string | number | null }>(
         `select coalesce(sum(k.byte_count), 0) as total
-           from project_knowledge_files k
+          from project_knowledge_files k
            join user_projects p on p.id = k.project_id
-          where p.user_id = $1 and k.deleted_at is null and k.superseded_at is null`,
-        [userId],
+          where p.user_id = $1
+            and p.organization_id is not distinct from $2::uuid
+            and k.deleted_at is null
+            and k.superseded_at is null`,
+        [userId, organizationId],
       );
       usedBytes = Number(usage?.total ?? 0);
     } catch (error) {

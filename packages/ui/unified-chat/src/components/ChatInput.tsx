@@ -35,6 +35,7 @@ import { AgentControl } from './AgentControl';
 import { ThinkingControl } from './ThinkingControl';
 import { PlanModeToggle } from './ChatInputToolbar';
 import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
+import { SkillMentionPicker, type MentionSkill } from './SkillMentionPicker';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
@@ -128,6 +129,8 @@ export interface ChatInputProps {
     writingStyle?: WritingStyle,
     /** Present only when the host feeds `projectPicker` (workMode + projectId). */
     workScope?: ChatWorkScope,
+    /** Exact managed catalog name selected through the Skill mention picker. */
+    skillName?: string,
   ) => void;
   onStop: () => void;
   /**
@@ -139,7 +142,7 @@ export interface ChatInputProps {
    * are removed rather than fired alongside the internal handlers, which would
    * have double-driven the desktop host's legacy `toggle-voice-input` event.
    */
-  onModelSelectorClick: () => void;
+  onModelSelectorClick?: () => void;
   allowModelFallbackModels?: boolean;
   /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
   supportsAgentControl?: boolean;
@@ -233,6 +236,8 @@ export interface ChatInputProps {
   voiceInputController?: ComposerVoiceController;
   /** Host actions exposed through the package-owned slash-command registry. */
   slashCommandHost?: ChatInputSlashCommandHost;
+  /** Included skills the active runtime can execute. Draft skills must not be supplied. */
+  skills?: MentionSkill[];
 }
 
 export function ChatInput({
@@ -264,6 +269,7 @@ export function ChatInput({
   attachmentContextKey,
   voiceInputController,
   slashCommandHost,
+  skills = [],
 }: ChatInputProps) {
   const { t } = useUiTranslation('chat');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -290,6 +296,7 @@ export function ChatInput({
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [selectedSkill, setSelectedSkill] = useState<MentionSkill | null>(null);
 
   // Work-mode segmented toggle (Chat | AGI Work) — web ChatComposerNew parity.
   // 'agiwork' reveals the "Project or folder" chip row below the composer and
@@ -518,6 +525,25 @@ export function ChatInput({
     },
     [adjustHeight, conversationId, setDraftContent],
   );
+
+  const skillQueryMatch = /(?:^|\s)@([A-Za-z0-9_-]*)$/.exec(draftContent);
+  const skillQuery = skills.length > 0 ? (skillQueryMatch?.[1] ?? null) : null;
+
+  const handleSkillSelect = useCallback(
+    (skill: MentionSkill) => {
+      const match = /(?:^|\s)@[A-Za-z0-9_-]*$/.exec(draftContent);
+      if (match) {
+        setDraftContent(draftContent.slice(0, match.index).trimEnd(), conversationId);
+      }
+      setSelectedSkill(skill);
+      textareaRef.current?.focus();
+    },
+    [conversationId, draftContent, setDraftContent],
+  );
+
+  useEffect(() => {
+    setSelectedSkill(null);
+  }, [attachmentDestinationKey]);
 
   const slashQueryMatch = /^\/([A-Za-z0-9_-]*)$/.exec(draftContent);
   const slashQuery = slashQueryMatch?.[1]?.toLowerCase() ?? null;
@@ -766,13 +792,33 @@ export function ChatInput({
 
     const attachments = destinationAttachedFiles.length > 0 ? destinationAttachedFiles : undefined;
     const research = supportsResearch && researchEnabled;
-    if (projectPicker) {
-      // Hosts feeding the picker get the scope stamped into the send; the
-      // signature stays unchanged for hosts that don't (mobile).
-      onSend(content, agentMode, effort, attachments, research, activeStyle ?? undefined, {
-        workMode: canUseAgiWork ? workMode : 'chat',
-        projectId: activeProjectId,
-      });
+    const workScope = projectPicker
+      ? {
+          workMode: canUseAgiWork ? workMode : 'chat',
+          projectId: activeProjectId,
+        }
+      : undefined;
+    if (selectedSkill) {
+      onSend(
+        content,
+        agentMode,
+        effort,
+        attachments,
+        research,
+        activeStyle ?? undefined,
+        workScope,
+        selectedSkill.name,
+      );
+    } else if (projectPicker) {
+      onSend(
+        content,
+        agentMode,
+        effort,
+        attachments,
+        research,
+        activeStyle ?? undefined,
+        workScope,
+      );
     } else if (activeStyle) {
       onSend(content, agentMode, effort, attachments, research, activeStyle);
     } else {
@@ -784,6 +830,7 @@ export function ChatInput({
     attachedFilesRef.current = [];
     attachedFilesDestinationRef.current = null;
     setAttachmentError(null);
+    setSelectedSkill(null);
   }, [
     disabled,
     noModelSelected,
@@ -804,11 +851,13 @@ export function ChatInput({
     canUseAgiWork,
     workMode,
     activeProjectId,
+    selectedSkill,
     t,
   ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.defaultPrevented) return;
       if (slashMenuOpen) {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
@@ -875,6 +924,19 @@ export function ChatInput({
         onSelect={handleSlashSelect}
         onHover={setSlashSelectedIndex}
       />
+      {skillQuery !== null ? (
+        <SkillMentionPicker
+          query={skillQuery}
+          skills={skills}
+          onSelect={handleSkillSelect}
+          onClose={() => {
+            const match = /(?:^|\s)@[A-Za-z0-9_-]*$/.exec(draftContent);
+            if (match) {
+              setDraftContent(draftContent.slice(0, match.index).trimEnd(), conversationId);
+            }
+          }}
+        />
+      ) : null}
       <div
         className={cn(
           'overflow-hidden border transition-colors',
@@ -900,6 +962,22 @@ export function ChatInput({
             {attachmentError}
           </div>
         )}
+
+        {selectedSkill ? (
+          <div className="px-3 pt-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)]/10 px-2 py-1 text-xs text-[var(--chat-accent-primary)]">
+              Skill: {selectedSkill.name}
+              <button
+                type="button"
+                onClick={() => setSelectedSkill(null)}
+                aria-label={`Remove ${selectedSkill.name} skill`}
+                className="rounded p-0.5 hover:bg-[var(--chat-accent-primary)]/10"
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </span>
+          </div>
+        ) : null}
 
         {/* Attached files preview — image thumbnails for image/*, text chip otherwise */}
         {attachedFiles.length > 0 && (

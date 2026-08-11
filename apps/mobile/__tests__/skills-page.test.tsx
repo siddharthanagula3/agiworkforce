@@ -44,8 +44,20 @@ jest.mock('lucide-react-native', () => {
 jest.mock('@/components/ui/button', () => {
   const { Pressable, Text } = require('react-native');
   return {
-    Button: ({ title, onPress }: { title: string; onPress: () => void }) => (
-      <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}>
+    Button: ({
+      title,
+      onPress,
+      accessibilityLabel,
+    }: {
+      title: string;
+      onPress: () => void;
+      accessibilityLabel?: string;
+    }) => (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? title}
+        onPress={onPress}
+      >
         <Text>{title}</Text>
       </Pressable>
     ),
@@ -108,6 +120,7 @@ jest.mock('@/src/features/skills/service', () => ({
 }));
 
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 
 describe('Mobile Skills screen', () => {
   beforeEach(() => {
@@ -123,13 +136,18 @@ describe('Mobile Skills screen', () => {
         name: 'Documents',
         description: 'Create and edit documents.',
         source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
       },
       {
         name: 'Release helper',
         description: 'Prepare a production handoff.',
         source: 'workspace',
+        lifecycle: 'draft',
+        downloadable: false,
       },
     ]);
+    useMobileSkillSelectionStore.setState({ selection: null });
   });
 
   it('renders the real catalog with source badges and filters across metadata', async () => {
@@ -138,13 +156,29 @@ describe('Mobile Skills screen', () => {
     expect(await screen.findByText('Documents')).toBeTruthy();
     expect(screen.getByText('Built in')).toBeTruthy();
     expect(screen.getByText('Workspace')).toBeTruthy();
-    expect(screen.getByLabelText('2 skills available')).toBeTruthy();
+    expect(screen.getByLabelText('Documents status: Included')).toBeTruthy();
+    expect(screen.getByLabelText('Release helper status: Coming later')).toBeTruthy();
+    expect(screen.getByLabelText('1 skill available')).toBeTruthy();
 
     fireEvent.changeText(screen.getByLabelText('Search skills'), 'production');
 
     expect(screen.queryByText('Documents')).toBeNull();
     expect(screen.getByText('Release helper')).toBeTruthy();
     expect(mockFetchManagedSkills).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands an included Skill to Cloud chat and never offers a draft', async () => {
+    const screen = render(<SkillsScreen />);
+
+    await screen.findByText('Documents');
+    fireEvent.press(screen.getByLabelText('Use Documents in chat'));
+
+    expect(useMobileSkillSelectionStore.getState().selection).toEqual({
+      ownerId: 'user-1',
+      name: 'Documents',
+    });
+    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
   });
 
   it('teaches the next step when the deployment has no Skills', async () => {

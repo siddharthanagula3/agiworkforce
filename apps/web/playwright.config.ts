@@ -38,8 +38,12 @@ export default defineConfig({
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env['CI'],
-  /* Retry on CI only */
-  retries: process.env['CI'] ? 2 : 0,
+  /*
+   * Retry ordinary CI flows, but never an explicitly authorized billed-media
+   * run: an assertion can fail after the provider accepted work, and a test
+   * retry would create a second operation/idempotency key and a second charge.
+   */
+  retries: process.env['RUN_LIVE_MEDIA_E2E'] === '1' ? 0 : process.env['CI'] ? 2 : 0,
   /* Opt out of parallel tests on CI. */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
