@@ -148,7 +148,7 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('happy path: inserts a pending row BEFORE the LLM fetch call', () => {
-    const fetchIdx = routeSource.indexOf('https://api.anthropic.com/v1/messages');
+    const fetchIdx = routeSource.indexOf("await fetch(providerApiUrl('anthropic', 'messages')");
     expect(fetchIdx).toBeGreaterThan(0);
     const beforeFetch = routeSource.slice(0, fetchIdx);
     // The pending insert must happen prior to the LLM call so concurrent

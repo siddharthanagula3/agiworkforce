@@ -44,7 +44,7 @@ vi.mock('@shared/lib/logger', () => ({
 
 // Stub @agiworkforce/types so the hooks module loads without full package resolution
 vi.mock('@agiworkforce/types', () => ({
-  requireProviderDefaultModel: vi.fn().mockReturnValue('gpt-4o'),
+  requireProviderDefaultModel: vi.fn().mockReturnValue('fixture-model'),
 }));
 
 // Stub settingsService (the inline fetch hooks call fetch directly, but

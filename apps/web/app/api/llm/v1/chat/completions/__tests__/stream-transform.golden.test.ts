@@ -47,8 +47,8 @@ import type { ProcessedRequest } from '../lib/request-processor';
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-test-001',
-    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as any,
-    requestedModel: 'claude-opus-5',
+    chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 0,
     quotaWarningHeader: null,
@@ -244,7 +244,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
     const events = parseDataLines(body);
 
     expect(events).toEqual([
-      { choices: [{ delta: { content: 'Let me search. ' }, index: 0 }], model: 'claude-opus-5' },
+      { choices: [{ delta: { content: 'Let me search. ' }, index: 0 }], model: 'fixture-model' },
       {
         choices: [
           {
@@ -254,7 +254,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
       {
         choices: [
@@ -268,11 +268,11 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
-      { choices: [{ delta: { content: '<thinking>' }, index: 0 }], model: 'claude-opus-5' },
-      { choices: [{ delta: { content: 'pondering...' }, index: 0 }], model: 'claude-opus-5' },
-      { choices: [{ delta: { content: '</thinking>' }, index: 0 }], model: 'claude-opus-5' },
+      { choices: [{ delta: { content: '<thinking>' }, index: 0 }], model: 'fixture-model' },
+      { choices: [{ delta: { content: 'pondering...' }, index: 0 }], model: 'fixture-model' },
+      { choices: [{ delta: { content: '</thinking>' }, index: 0 }], model: 'fixture-model' },
       {
         choices: [
           {
@@ -289,7 +289,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
       {
         choices: [
@@ -298,11 +298,11 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
       {
         choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
       '[DONE]',
     ]);
@@ -401,7 +401,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
       },
       {
         choices: [{ delta: { content: ' are mammals' }, index: 0 }],
-        model: 'claude-opus-5',
+        model: 'fixture-model',
       },
     ]);
   });
@@ -413,13 +413,13 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
       'data: ' +
         JSON.stringify({
           choices: [{ delta: { content: 'Hello' }, index: 0 }],
-          model: 'gpt-5.6-sol-upstream-id',
+          model: 'provider-upstream-model',
         }),
       '',
       'data: ' +
         JSON.stringify({
           choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-          model: 'gpt-5.6-sol-upstream-id',
+          model: 'provider-upstream-model',
           usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
         }),
       '',
@@ -431,8 +431,8 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
       upstream,
       makeProcessed({
         provider: 'openai',
-        requestedModel: 'gpt-5.6-sol',
-        chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as any,
+        requestedModel: 'fixture-openai-model',
+        chatRequest: { model: 'fixture-openai-model', messages: [], stream: true } as any,
       }),
       'user-003',
       'token-003',
@@ -442,10 +442,10 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
     const events = parseDataLines(body);
 
     expect(events).toEqual([
-      { choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'gpt-5.6-sol' },
+      { choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'fixture-openai-model' },
       {
         choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-        model: 'gpt-5.6-sol',
+        model: 'fixture-openai-model',
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       },
       '[DONE]',

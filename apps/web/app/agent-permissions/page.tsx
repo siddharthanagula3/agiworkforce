@@ -97,7 +97,7 @@ export default function AgentPermissionsPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Agent permissions</p>
           <h1 id="agi-perm-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">What the agent may do,</span>
+            <span className="agi-fl-h1-line">What the agent may do,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">and what it must ask.</em>
             </span>

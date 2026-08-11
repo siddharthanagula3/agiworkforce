@@ -83,8 +83,8 @@ enum Exception {
     /// only production effect is idle-timer reset, which both sides satisfy
     /// wherever the old side emitted one.
     KeepaliveRecount,
-    /// Old Gemini tool ids are `call_<uuid4>` (nondeterministic); new are
-    /// deterministic `gemini_<index>`. Both shapes are asserted exactly, then
+    /// Old provider tool ids are `call_<uuid4>` (nondeterministic); new are
+    /// deterministic `call_<index>`. Both shapes are asserted exactly, then
     /// canonicalized for comparison. Improvement: determinism.
     GeminiToolId,
     /// Old Ollama tool ids come from the payload (usually absent → filled by
@@ -564,13 +564,13 @@ fn canonicalize_tool_ids(name: &str, item: &mut Value, side: &str, fired: &mut F
                     tc["id"] = json!("<gemini-id>");
                     fired.fire(Exception::GeminiToolId);
                 }
-                "new" if id == format!("gemini_{index}") => {
+                "new" if id == format!("call_{index}") => {
                     tc["id"] = json!("<gemini-id>");
                     fired.fire(Exception::GeminiToolId);
                 }
                 _ => panic!(
                     "[{name}] {side} gemini tool id {id:?} has neither the old \
-                     call_<uuid> nor the new gemini_<index> shape"
+                     call_<uuid> nor the new deterministic call_<index> shape"
                 ),
             }
         }
@@ -1275,7 +1275,7 @@ fn canonicalize_outcome(name: &str, o: &mut Outcome, side: &str, fired: &mut Fir
         let id = tc["id"].as_str().unwrap_or("").to_string();
         let idx = tc["index"].as_u64().unwrap_or(0);
         if fired.allowed(Exception::GeminiToolId)
-            && (is_uuid_call_id(&id) || id == format!("gemini_{idx}"))
+            && (is_uuid_call_id(&id) || id == format!("call_{idx}"))
         {
             tc["id"] = json!("<gemini-id>");
         }

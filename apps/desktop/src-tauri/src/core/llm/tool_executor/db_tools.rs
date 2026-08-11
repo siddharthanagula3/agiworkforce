@@ -79,7 +79,13 @@ fn sql_identifier_tokens(query_upper: &str) -> Vec<String> {
 
     without_line
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .map(str::to_string)
@@ -939,7 +945,10 @@ mod sql_tokenizer_tests {
     #[test]
     fn a_trailing_from_resolves_to_nothing_so_callers_must_reject() {
         assert_eq!(table_after_keyword("SELECT * FROM", "FROM"), None);
-        assert_eq!(table_after_keyword("SELECT * FROM /* unterminated", "FROM"), None);
+        assert_eq!(
+            table_after_keyword("SELECT * FROM /* unterminated", "FROM"),
+            None
+        );
     }
 
     #[test]

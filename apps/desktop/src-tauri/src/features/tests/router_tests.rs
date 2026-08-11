@@ -128,7 +128,7 @@ mod sse_parser_tests {
 mod cost_calculator_tests {
 
     #[test]
-    fn test_openai_gpt4_cost() {
+    fn test_openai_fixture_cost() {
         let input_tokens = 1000;
         let output_tokens = 1000;
 
@@ -150,7 +150,7 @@ mod groq_sse_tests {
     /// Groq sends standard OpenAI-compatible SSE with an extra `x_groq` metadata field.
     #[test]
     fn test_groq_stream_start() {
-        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","created":1720000000,"model":"llama3-8b-8192","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","created":1720000000,"model":"fixture-groq-stream-model","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["object"], "chat.completion.chunk");
@@ -160,7 +160,7 @@ mod groq_sse_tests {
 
     #[test]
     fn test_groq_content_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","created":1720000000,"model":"llama3-8b-8192","choices":[{"delta":{"content":"Hello from Groq!"},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","created":1720000000,"model":"fixture-groq-stream-model","choices":[{"delta":{"content":"Hello from Groq!"},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["delta"]["content"], "Hello from Groq!");
@@ -169,7 +169,7 @@ mod groq_sse_tests {
 
     #[test]
     fn test_groq_tool_call_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","model":"llama3-groq-70b-tool-use-preview","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"get_weather","arguments":""}}]},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","model":"fixture-groq-tool-model","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"get_weather","arguments":""}}]},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         let tool_calls = &parsed["choices"][0]["delta"]["tool_calls"];
@@ -186,7 +186,7 @@ mod groq_sse_tests {
 
     #[test]
     fn test_groq_stream_end_finish_reason() {
-        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","model":"llama3-8b-8192","choices":[{"delta":{},"index":0,"finish_reason":"stop"}],"x_groq":{"id":"req_xyz","usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}}"#;
+        let sse = r#"data: {"id":"chatcmpl-groq-abc","object":"chat.completion.chunk","model":"fixture-groq-stream-model","choices":[{"delta":{},"index":0,"finish_reason":"stop"}],"x_groq":{"id":"req_xyz","usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
@@ -203,7 +203,7 @@ mod groq_sse_tests {
 
     #[test]
     fn test_groq_usage_in_final_chunk() {
-        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"llama3-8b-8192","choices":[{"delta":{},"finish_reason":"stop","index":0}],"x_groq":{"usage":{"prompt_tokens":5,"completion_tokens":15,"total_tokens":20}}}"#;
+        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"fixture-groq-stream-model","choices":[{"delta":{},"finish_reason":"stop","index":0}],"x_groq":{"usage":{"prompt_tokens":5,"completion_tokens":15,"total_tokens":20}}}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["x_groq"]["usage"]["total_tokens"], 20);
@@ -215,16 +215,16 @@ mod xai_sse_tests {
     /// xAI (Grok) uses the OpenAI-compatible SSE format.
     #[test]
     fn test_xai_stream_start() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","created":1720000000,"model":"grok-4.5","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","created":1720000000,"model":"fixture-xai-stream-model","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
-        assert_eq!(parsed["model"], "grok-4.5");
+        assert_eq!(parsed["model"], "fixture-xai-stream-model");
         assert_eq!(parsed["choices"][0]["delta"]["role"], "assistant");
     }
 
     #[test]
     fn test_xai_content_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.5","choices":[{"delta":{"content":"Grok answer here."},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"fixture-xai-stream-model","choices":[{"delta":{"content":"Grok answer here."},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(
@@ -235,7 +235,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_tool_call_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.5","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_grok_1","type":"function","function":{"name":"search_web","arguments":"{\"q\":"}}]},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"fixture-xai-stream-model","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xai_1","type":"function","function":{"name":"search_web","arguments":"{\"q\":"}}]},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         let tool_calls = &parsed["choices"][0]["delta"]["tool_calls"];
@@ -244,7 +244,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_stream_end_finish_reason() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.5","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"fixture-xai-stream-model","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
@@ -264,7 +264,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_usage_in_final_chunk() {
-        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"grok-4.5","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":8,"completion_tokens":25,"total_tokens":33}}"#;
+        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"fixture-xai-stream-model","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":8,"completion_tokens":25,"total_tokens":33}}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["usage"]["total_tokens"], 33);
@@ -277,16 +277,16 @@ mod deepseek_sse_tests {
     /// DeepSeek uses the OpenAI-compatible SSE format.
     #[test]
     fn test_deepseek_stream_start() {
-        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","created":1720000000,"model":"deepseek-chat","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","created":1720000000,"model":"fixture-chat-model","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
-        assert_eq!(parsed["model"], "deepseek-chat");
+        assert_eq!(parsed["model"], "fixture-chat-model");
         assert_eq!(parsed["choices"][0]["delta"]["role"], "assistant");
     }
 
     #[test]
     fn test_deepseek_content_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"delta":{"content":"DeepSeek response."},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"fixture-chat-model","choices":[{"delta":{"content":"DeepSeek response."},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(
@@ -297,7 +297,7 @@ mod deepseek_sse_tests {
 
     #[test]
     fn test_deepseek_tool_call_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ds_1","type":"function","function":{"name":"execute_code","arguments":""}}]},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"fixture-chat-model","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ds_1","type":"function","function":{"name":"execute_code","arguments":""}}]},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(
@@ -308,7 +308,7 @@ mod deepseek_sse_tests {
 
     #[test]
     fn test_deepseek_stream_end_finish_reason() {
-        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-ds-abc","object":"chat.completion.chunk","model":"fixture-chat-model","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
@@ -327,7 +327,7 @@ mod deepseek_sse_tests {
 
     #[test]
     fn test_deepseek_usage_in_final_chunk() {
-        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":12,"completion_tokens":30,"total_tokens":42}}"#;
+        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"fixture-chat-model","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":12,"completion_tokens":30,"total_tokens":42}}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["usage"]["total_tokens"], 42);
@@ -335,9 +335,9 @@ mod deepseek_sse_tests {
 
     #[test]
     fn test_deepseek_reasoner_thinking_field() {
-        // deepseek-r1 / deepseek-reasoner includes a `reasoning_content` field
+        // fixture-reasoning-model / fixture-reasoning-model includes a `reasoning_content` field
         // inside the delta for chain-of-thought output.
-        let sse = r#"data: {"id":"chatcmpl-ds-r1","object":"chat.completion.chunk","model":"deepseek-reasoner","choices":[{"delta":{"reasoning_content":"Let me think...","content":""},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-ds-r1","object":"chat.completion.chunk","model":"fixture-reasoning-model","choices":[{"delta":{"reasoning_content":"Let me think...","content":""},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(
@@ -348,7 +348,7 @@ mod deepseek_sse_tests {
 
     #[test]
     fn test_deepseek_length_finish_reason() {
-        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"delta":{},"index":0,"finish_reason":"length"}]}"#;
+        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"fixture-chat-model","choices":[{"delta":{},"index":0,"finish_reason":"length"}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["finish_reason"], "length");
@@ -361,7 +361,7 @@ mod request_formatting_tests {
     #[test]
     fn test_openai_request_format() {
         let request = serde_json::json!({
-            "model": "gpt-4",
+            "model": "fixture-primary-model",
             "messages": [
                 {"role": "user", "content": "Hello"}
             ],
@@ -369,7 +369,7 @@ mod request_formatting_tests {
             "temperature": 0.7
         });
 
-        assert_eq!(request["model"], "gpt-4");
+        assert_eq!(request["model"], "fixture-primary-model");
         assert!(request["stream"].as_bool().unwrap());
         assert_eq!(request["temperature"], 0.7);
     }

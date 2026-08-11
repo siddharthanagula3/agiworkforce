@@ -24,6 +24,7 @@ import {
   type RowComponentProps,
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import { formatUsageResetIn } from '@agiworkforce/types';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
@@ -32,6 +33,9 @@ import {
   InlinePaywallCard,
   normalizePaywallFeature,
   normalizeRequiredTier,
+  type PaywallRecoveryAction,
+  type RequiredTier,
+  type UserTier,
 } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
@@ -71,6 +75,8 @@ export interface ChatMessageListProps {
    * parent already holds a filtered slice.
    */
   messages: ChatMessage[];
+  /** Authenticated account tier used by persisted billing-recovery cards. */
+  currentTier?: UserTier;
   /**
    * AUDIT-FIX STR-20: which conversation these messages belong to. The
    * component's `userScrolledUp` flag is component state that was never reset
@@ -111,17 +117,25 @@ export interface ChatMessageListProps {
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
+  /** Resume polling an already-started durable video job; never starts one. */
+  onResumeVideo?: (messageId: string) => void;
+  /** Start a new video turn only after the prior durable task terminally failed. */
+  onRetryVideo?: (messageId: string) => void;
   /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
   /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
   isUserTyping?: boolean;
   className?: string;
   /**
-   * Called when the user clicks the Upgrade CTA on an inline paywall card.
-   * Receives the message ID of the paywall slot. The handler opens the
-   * upgrade plan dialog (real checkout) without navigating away from the chat.
+   * Called when the user clicks the recovery CTA on an inline paywall card.
+   * The persisted required tier is carried to the page so checkout can focus
+   * the exact plan instead of opening a generic comparison.
    */
-  onPaywallUpgrade?: (messageId: string) => void;
+  onPaywallUpgrade?: (
+    messageId: string,
+    requiredTier: RequiredTier,
+    recoveryAction: PaywallRecoveryAction,
+  ) => void;
   /**
    * Called when the user clicks "Try later" on an inline paywall card.
    * Receives the message ID so the parent can remove or hide the slot.
@@ -260,6 +274,7 @@ ScrollToBottomButton.displayName = 'ScrollToBottomButton';
 interface MessageGroupRowProps {
   group: MessageGroup;
   isLastGroup: boolean;
+  currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
   retryingResearchMessageId?: string | null;
@@ -272,13 +287,19 @@ interface MessageGroupRowProps {
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
   /** Called when a paywall Upgrade button is clicked. */
-  onPaywallUpgrade?: (messageId: string) => void;
+  onPaywallUpgrade?: (
+    messageId: string,
+    requiredTier: RequiredTier,
+    recoveryAction: PaywallRecoveryAction,
+  ) => void;
   /** Called when a paywall Try-later button is clicked. */
   onPaywallDismiss?: (messageId: string) => void;
   onRegenerateImage?: (
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
+  onResumeVideo?: (messageId: string) => void;
+  onRetryVideo?: (messageId: string) => void;
   speakingMessageId: string | null;
   isReadAloudSupported: boolean;
   onReadAloud: (messageId: string, content: string) => void;
@@ -286,6 +307,7 @@ interface MessageGroupRowProps {
 
 interface MessageRowProps {
   message: ChatMessage;
+  currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
   retryingResearchMessageId?: string | null;
@@ -297,12 +319,18 @@ interface MessageRowProps {
   isBranching: boolean;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
-  onPaywallUpgrade?: (messageId: string) => void;
+  onPaywallUpgrade?: (
+    messageId: string,
+    requiredTier: RequiredTier,
+    recoveryAction: PaywallRecoveryAction,
+  ) => void;
   onPaywallDismiss?: (messageId: string) => void;
   onRegenerateImage?: (
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
+  onResumeVideo?: (messageId: string) => void;
+  onRetryVideo?: (messageId: string) => void;
   speakingMessageId: string | null;
   isReadAloudSupported: boolean;
   onReadAloud: (messageId: string, content: string) => void;
@@ -422,6 +450,12 @@ function renderedMetadataEqual(
     prev?.computeSession === next?.computeSession &&
     prev?.imageUrl === next?.imageUrl &&
     prev?.videoUrl === next?.videoUrl &&
+    prev?.videoTaskId === next?.videoTaskId &&
+    prev?.videoStatus === next?.videoStatus &&
+    prev?.videoProvider === next?.videoProvider &&
+    prev?.videoModel === next?.videoModel &&
+    prev?.videoProgress === next?.videoProgress &&
+    prev?.videoError === next?.videoError &&
     prev?.model === next?.model &&
     prev?.tokensUsed === next?.tokensUsed &&
     toolEntriesEqual(prev?.tools, next?.tools)
@@ -531,18 +565,12 @@ function messageBubbleAttachments(message: ChatMessage) {
  */
 function paywallResetLabel(paywall: { showResetTime?: boolean; resetAt?: string }): string {
   if (!paywall.showResetTime || !paywall.resetAt) return '';
-  const target = Date.parse(paywall.resetAt);
-  if (Number.isNaN(target)) return '';
-  return `Capacity refreshes ${new Date(target).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })}.`;
+  return formatUsageResetIn(paywall.resetAt) ?? '';
 }
 
 const MessageRow = ({
   message,
+  currentTier,
   onRegenerate,
   onRetryResearch,
   retryingResearchMessageId,
@@ -557,12 +585,15 @@ const MessageRow = ({
   onPaywallUpgrade,
   onPaywallDismiss,
   onRegenerateImage,
+  onResumeVideo,
+  onRetryVideo,
   speakingMessageId,
   isReadAloudSupported,
   onReadAloud,
 }: MessageRowProps) => {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
+  const requiredTier = normalizeRequiredTier(paywall?.requiredTier ?? 'basic');
 
   // AUDIT-FIX BUG-27: one Date per message, derived only from persisted data.
   const timestamp = useMemo(
@@ -582,8 +613,8 @@ const MessageRow = ({
   const handleEdit = useCallback(() => onEdit?.(message.id), [onEdit, message.id]);
   const handleBranch = useCallback(() => onBranch?.(message.id), [onBranch, message.id]);
   const handlePaywallUpgrade = useCallback(
-    () => onPaywallUpgrade?.(message.id),
-    [onPaywallUpgrade, message.id],
+    () => onPaywallUpgrade?.(message.id, requiredTier, paywall?.recoveryAction ?? 'upgrade'),
+    [onPaywallUpgrade, message.id, paywall?.recoveryAction, requiredTier],
   );
   const handlePaywallDismiss = useCallback(
     () => onPaywallDismiss?.(message.id),
@@ -614,14 +645,15 @@ const MessageRow = ({
     return (
       <InlinePaywallCard
         feature={normalizePaywallFeature(paywall.feature)}
-        currentTier="free"
-        requiredTier={normalizeRequiredTier(paywall.requiredTier)}
+        currentTier={currentTier}
+        requiredTier={requiredTier}
         reason={paywall.reason}
         // GOV-20: the classifier's presentation flags. Absent on slots written
         // before GOV-20, where the old always-upgrade behaviour is correct.
         showUpgradeCta={paywall.showUpgradeCta ?? true}
         suggestStandardModel={paywall.suggestStandardModel ?? false}
         resetLabel={paywallResetLabel(paywall)}
+        recoveryAction={paywall.recoveryAction ?? 'upgrade'}
         onUpgrade={handlePaywallUpgrade}
         onDismiss={handlePaywallDismiss}
       />
@@ -656,6 +688,8 @@ const MessageRow = ({
       isBranching={isBranching}
       branchNavigation={branchNavigation}
       onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
+      onResumeVideo={onResumeVideo}
+      onRetryVideo={onRetryVideo}
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
       isReadingAloud={speakingMessageId === message.id}
       isReadAloudSupported={isReadAloudSupported}
@@ -667,6 +701,7 @@ const MessageGroupRow = memo(
   ({
     group,
     isLastGroup: _isLastGroup,
+    currentTier,
     onRegenerate,
     onRetryResearch,
     retryingResearchMessageId,
@@ -681,6 +716,8 @@ const MessageGroupRow = memo(
     onPaywallUpgrade,
     onPaywallDismiss,
     onRegenerateImage,
+    onResumeVideo,
+    onRetryVideo,
     speakingMessageId,
     isReadAloudSupported,
     onReadAloud,
@@ -693,6 +730,7 @@ const MessageGroupRow = memo(
           <MessageRow
             key={message.id}
             message={message}
+            currentTier={currentTier}
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
             retryingResearchMessageId={retryingResearchMessageId}
@@ -707,6 +745,8 @@ const MessageGroupRow = memo(
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
             onRegenerateImage={onRegenerateImage}
+            onResumeVideo={onResumeVideo}
+            onRetryVideo={onRetryVideo}
             speakingMessageId={speakingMessageId}
             isReadAloudSupported={isReadAloudSupported}
             onReadAloud={onReadAloud}
@@ -728,6 +768,7 @@ const MessageGroupRow = memo(
         return messageRenderEqual(prevMessage, nextMessage);
       }) &&
       prev.isLastGroup === next.isLastGroup &&
+      prev.currentTier === next.currentTier &&
       prev.onRegenerate === next.onRegenerate &&
       prev.onRetryResearch === next.onRetryResearch &&
       prev.retryingResearchMessageId === next.retryingResearchMessageId &&
@@ -742,6 +783,8 @@ const MessageGroupRow = memo(
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss &&
       prev.onRegenerateImage === next.onRegenerateImage &&
+      prev.onResumeVideo === next.onResumeVideo &&
+      prev.onRetryVideo === next.onRetryVideo &&
       prev.speakingMessageId === next.speakingMessageId &&
       prev.isReadAloudSupported === next.isReadAloudSupported &&
       prev.onReadAloud === next.onReadAloud
@@ -840,12 +883,29 @@ const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
  */
 function buildStreamAnnouncement(message: ChatMessage | undefined): string {
   if (!message || message.role !== 'assistant') return 'Response complete';
+  const activity = message.metadata?.['agentActivity'];
+  const activityStatus =
+    activity && typeof activity === 'object' && 'status' in activity
+      ? (activity as { status?: unknown }).status
+      : undefined;
+  if (activityStatus === 'cancelled') {
+    return message.content.trim()
+      ? 'Response cancelled. Partial response saved.'
+      : 'Response cancelled';
+  }
+  if (activityStatus === 'failed' || message.error) {
+    return 'Response failed';
+  }
+  if (message.metadata?.['finishReason'] === 'stopped') {
+    return 'Response cancelled. Partial response saved.';
+  }
   const text = message.content.trim();
   return text ? `Response complete. ${text}` : 'Response complete';
 }
 
 const ChatMessageListComponent = ({
   messages,
+  currentTier = 'free',
   conversationId = null,
   isLoading,
   onRegenerate,
@@ -861,6 +921,8 @@ const ChatMessageListComponent = ({
   onBranch,
   onSwitchBranch,
   onRegenerateImage,
+  onResumeVideo,
+  onRetryVideo,
   onSendMessage,
   isUserTyping = false,
   className,
@@ -1240,7 +1302,8 @@ const ChatMessageListComponent = ({
   );
 
   const handlePaywallUpgrade = useCallback(
-    (id: string) => onPaywallUpgrade?.(id),
+    (id: string, requiredTier: RequiredTier, recoveryAction: PaywallRecoveryAction) =>
+      onPaywallUpgrade?.(id, requiredTier, recoveryAction),
     [onPaywallUpgrade],
   );
 
@@ -1259,6 +1322,7 @@ const ChatMessageListComponent = ({
 
   const groupProps = useMemo<Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>>(
     () => ({
+      currentTier,
       onRegenerate: handleRegenerate,
       onRetryResearch,
       retryingResearchMessageId,
@@ -1273,6 +1337,8 @@ const ChatMessageListComponent = ({
       onPaywallUpgrade: handlePaywallUpgrade,
       onPaywallDismiss: handlePaywallDismiss,
       onRegenerateImage: onRegenerateImage ? handleRegenerateImage : undefined,
+      onResumeVideo,
+      onRetryVideo,
       speakingMessageId: isSpeaking ? speakingMessageId : null,
       isReadAloudSupported,
       onReadAloud: handleReadAloud,
@@ -1295,8 +1361,11 @@ const ChatMessageListComponent = ({
       onBranch,
       onPin,
       onRegenerateImage,
+      onResumeVideo,
+      onRetryVideo,
       onSwitchBranch,
       speakingMessageId,
+      currentTier,
     ],
   );
 
@@ -1488,6 +1557,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     // AUDIT-FIX STR-20: a conversation switch MUST re-render (it resets scroll
     // ownership); two transcripts of equal length would otherwise compare equal.
     prev.conversationId === next.conversationId &&
+    prev.currentTier === next.currentTier &&
     prev.messages.length === next.messages.length &&
     prev.isLoading === next.isLoading &&
     prev.isUserTyping === next.isUserTyping &&
@@ -1498,6 +1568,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onDelete === next.onDelete &&
     prev.onReact === next.onReact &&
     prev.onRegenerateImage === next.onRegenerateImage &&
+    prev.onResumeVideo === next.onResumeVideo &&
+    prev.onRetryVideo === next.onRetryVideo &&
     prev.onSendMessage === next.onSendMessage &&
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&

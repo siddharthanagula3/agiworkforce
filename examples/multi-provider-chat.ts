@@ -24,7 +24,12 @@
 import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
 import { createOpenAIAdapter } from '@agiworkforce/providers-openai';
 import { createOllamaAdapter } from '@agiworkforce/providers-ollama';
-import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+import {
+  getProviderDefaultModel,
+  type ChatRequest,
+  type ProviderAdapter,
+  type StreamChunk,
+} from '@agiworkforce/types';
 
 const ANSI_RESET = '\x1b[0m';
 const ANSI_DIM = '\x1b[2m';
@@ -41,6 +46,12 @@ interface DemoTarget {
   model: string;
 }
 
+function requireProviderDefault(provider: string): string {
+  const model = getProviderDefaultModel(provider);
+  if (!model) throw new Error(`No catalog default is configured for ${provider}`);
+  return model;
+}
+
 async function discoverTargets(): Promise<DemoTarget[]> {
   const targets: DemoTarget[] = [];
 
@@ -48,12 +59,7 @@ async function discoverTargets(): Promise<DemoTarget[]> {
     targets.push({
       label: 'anthropic',
       adapter: createAnthropicAdapter({ apiKey: process.env['ANTHROPIC_API_KEY'] }),
-      // Model ids are sent to the provider verbatim (see the adapter's
-      // translate step), so they must be ids the catalog still serves —
-      // packages/contracts/types/src/models.json. `claude-haiku-4.5` used to
-      // sit here and was retired from the catalog in f62274b63, which made this
-      // demo 404 for anyone who had an ANTHROPIC_API_KEY set.
-      model: 'claude-sonnet-5',
+      model: requireProviderDefault('anthropic'),
     });
   } else {
     console.error(`${ANSI_DIM}  skip anthropic: ANTHROPIC_API_KEY not set${ANSI_RESET}`);
@@ -66,7 +72,7 @@ async function discoverTargets(): Promise<DemoTarget[]> {
         apiKey: process.env['OPENAI_API_KEY'],
         skipDiscovery: true,
       }),
-      model: 'gpt-5.4-mini',
+      model: requireProviderDefault('openai'),
     });
   } else {
     console.error(`${ANSI_DIM}  skip openai: OPENAI_API_KEY not set${ANSI_RESET}`);

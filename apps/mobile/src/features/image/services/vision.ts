@@ -7,8 +7,8 @@
  *      on disk. This passes the real image into the model via `images` +
  *      `mmprojPath` (llama.rn `initMultimodal`). Effective vision is gated on the
  *      projector actually being present — never on a catalog flag alone (§8).
- *   2. Tier-2 ExecuTorch VLM (single .pte, projector embedded — e.g. LFM2-VL
- *      450M): used only when the model is actually installed
+ *   2. Tier-2 ExecuTorch VLM (single .pte, projector embedded): used only when
+ *      the model is actually installed
  *      (`effectiveTier2VisionIn`). The image rides `images` into tier-2's
  *      `mediaPath` plumbing; no mmproj pair exists on this tier.
  *   3. Native OCR over the image + local text-only LLM reasoning (fallback).
@@ -132,8 +132,8 @@ async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | 
     };
   }
 
-  // Pass 2: tier-2 ExecuTorch VLM (single .pte with embedded projector, e.g.
-  // LFM2-VL 450M). Effective vision requires the model to actually be
+  // Pass 2: tier-2 ExecuTorch VLM (single .pte with embedded projector).
+  // Effective vision requires the model to actually be
   // installed — the ExecuTorch module preset-caches the artifacts itself, so
   // the installed_models record (format 'pte', no local_path) is the install
   // evidence here.

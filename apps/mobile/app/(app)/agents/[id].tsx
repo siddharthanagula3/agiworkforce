@@ -25,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { AgentStatusBadge } from '@/src/features/agents/components/AgentStatusBadge';
 import { ToolTimeline } from '@/src/features/agents/components/ToolTimeline';
 import { useAgentStore } from '@/stores/agentStore';
+import { getDisplayName } from '@/src/features/model-picker/service';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -389,7 +390,7 @@ export default function AgentDetailScreen() {
                   {agent.name}
                 </Text>
                 <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                  {agent.model}
+                  {getDisplayName(agent.model)}
                 </Text>
               </View>
             </View>

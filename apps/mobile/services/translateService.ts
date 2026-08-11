@@ -4,7 +4,7 @@
  * Priority chain:
  *   iOS  : Apple Translate framework (iOS 17.4+, system, per-pair downloadable)
  *   Android: ML Kit on-device Translation (Google Play Services)
- *   Fallback: Qwen3-4B-Instruct-2507 via local LLM with a translation prompt
+ *   Fallback: catalog-selected local LLM with a translation prompt
  *
  * All paths are 100 % on-device — no network call for translation itself.
  * Language pair download (Apple Translate / ML Kit) is handled transparently.
@@ -22,7 +22,7 @@ export interface TranslateResult {
   sourceLanguage: string;
   targetLanguage: string;
   /** Which backend actually produced the translation. */
-  backend: 'apple_translate' | 'mlkit_translate' | 'qwen3_llm';
+  backend: 'apple_translate' | 'mlkit_translate' | 'local_llm';
   /** Whether the on-device language pair model is already cached. */
   pairCached: boolean;
 }
@@ -139,12 +139,12 @@ export async function translate(
         pairCached,
       };
     } catch {
-      // Native translation failed — fall through to Qwen3 LLM fallback
+      // Native translation failed — fall through to the local LLM fallback.
     }
   }
 
   // ------------------------------------------------------------------
-  // Fallback: Qwen3-4B-Instruct-2507 on-device LLM
+  // Fallback: catalog-selected on-device LLM.
   // ------------------------------------------------------------------
   const sourceLang =
     SUPPORTED_LANGUAGES.find((l) => l.code === sourceLanguage)?.label ?? sourceLanguage;
@@ -171,7 +171,7 @@ export async function translate(
     translatedText: result.text || tokens,
     sourceLanguage,
     targetLanguage,
-    backend: 'qwen3_llm',
+    backend: 'local_llm',
     pairCached: false,
   };
 }
@@ -186,7 +186,7 @@ export function translateBackendLabel(backend: TranslateResult['backend']): stri
       return 'Apple Translate · on-device · instant';
     case 'mlkit_translate':
       return 'ML Kit · on-device · instant';
-    case 'qwen3_llm':
-      return 'Qwen3-4B · on-device';
+    case 'local_llm':
+      return `${getDefaultModel().displayName} · on-device`;
   }
 }

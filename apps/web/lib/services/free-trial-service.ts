@@ -165,30 +165,28 @@ export function fitFreeTrialOutputBudget(input: {
   model: string;
   estimatedInputTokens: number;
   requestedMaxOutputTokens: number;
-  observedUsage?: TokenUsage;
+  /** Exact cost of earlier provider calls in this reservation. */
+  priorCostDollars?: number;
 }): FreeTrialBudgetResult {
-  const observed = input.observedUsage ?? {
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-  };
-  const promptTokens =
-    toNonNegativeInteger(observed.promptTokens) + toNonNegativeInteger(input.estimatedInputTokens);
-  const priorCompletionTokens = toNonNegativeInteger(observed.completionTokens);
+  const promptTokens = toNonNegativeInteger(input.estimatedInputTokens);
+  const priorCostDollars = Number.isFinite(input.priorCostDollars)
+    ? Math.max(0, input.priorCostDollars ?? 0)
+    : 0;
   const requestedMaxOutputTokens = toNonNegativeInteger(input.requestedMaxOutputTokens);
   if (requestedMaxOutputTokens === 0 || input.reservation.reservedMicrousd <= 0) {
     return { ok: false, code: 'budget_reached' };
   }
 
   const costFor = (nextOutputTokens: number): number =>
-    LLMCostCalculator.calculateCostMicrousd(input.provider, input.model, {
-      promptTokens,
-      completionTokens: priorCompletionTokens + nextOutputTokens,
-      totalTokens: promptTokens + priorCompletionTokens + nextOutputTokens,
-      cacheReadInputTokens: observed.cacheReadInputTokens,
-      cacheCreationInputTokens: observed.cacheCreationInputTokens,
-      cacheCreation1hInputTokens: observed.cacheCreation1hInputTokens,
-    });
+    Math.ceil(
+      (priorCostDollars +
+        LLMCostCalculator.calculateCostDollars(input.provider, input.model, {
+          promptTokens,
+          completionTokens: nextOutputTokens,
+          totalTokens: promptTokens + nextOutputTokens,
+        })) *
+        1_000_000,
+    );
 
   if (costFor(1) > input.reservation.reservedMicrousd) {
     return { ok: false, code: 'budget_reached' };
@@ -218,7 +216,7 @@ export function applyFreeTrialProviderBudget(input: {
     max_tokens: number;
     usePromptCache?: boolean;
   };
-  observedUsage?: TokenUsage;
+  priorCostDollars?: number;
 }): FreeTrialBudgetResult {
   const result = fitFreeTrialOutputBudget({
     reservation: input.reservation,
@@ -230,7 +228,7 @@ export function applyFreeTrialProviderBudget(input: {
       tools: input.request.tools,
     }),
     requestedMaxOutputTokens: input.request.max_tokens,
-    observedUsage: input.observedUsage,
+    priorCostDollars: input.priorCostDollars,
   });
   if (result.ok) {
     input.request.max_tokens = result.maxOutputTokens;
@@ -419,11 +417,14 @@ export async function settleFreeTrialRequest(params: {
   provider?: string;
   model?: string;
   usage?: TokenUsage;
+  /** Exact sum of already request-tiered provider costs. */
+  measuredCostDollars?: number;
 }): Promise<void> {
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const tokens = Math.max(0, Math.floor(usage.totalTokens));
-  const measuredCostMicrousd =
-    params.provider && params.model
+  const measuredCostMicrousd = Number.isFinite(params.measuredCostDollars)
+    ? Math.ceil(Math.max(0, params.measuredCostDollars ?? 0) * 1_000_000)
+    : params.provider && params.model
       ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
       : 0;
   const minimumCompletedChargeMicrousd =

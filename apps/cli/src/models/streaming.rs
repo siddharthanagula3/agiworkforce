@@ -289,8 +289,8 @@ async fn run_spec(
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
     // Resolve the (possibly dotted display) model id to the provider wire id
-    // (`apiModelId`) ONLY here, at the request boundary. This lets `-m
-    // claude-sonnet-5` (the id web/desktop/mobile use) work instead of 404ing;
+    // (`apiModelId`) ONLY here, at the request boundary. This lets a canonical
+    // catalog selection work even when its provider wire ID differs;
     // display/pricing/provider-inference keep the dotted id. Unknown ids
     // (local/Ollama/custom) fall through unchanged.
     let wire_model = crate::model_catalog::api_wire_id(model);
@@ -308,7 +308,7 @@ async fn run_spec(
         top_k: None,
         metadata: None,
         // The Effort picker used to be projected to an Anthropic thinking
-        // budget and nothing else, so o-series/GPT-5 and Gemini silently ran at
+        // budget and nothing else, so catalog reasoning models silently ran at
         // provider default no matter what the user chose. Each dialect reads
         // only its own field and ignores the others, so all three are passed.
         reasoning_effort: effort.map(|e| e.openai_effort_str()),
@@ -566,22 +566,39 @@ mod tests {
     };
 
     /// A configured temperature must not reach a model whose provider rejects
-    /// sampling parameters. Before this guard, `agiworkforce --temperature 0.3
-    /// -m claude-opus-5` put `temperature` in the Anthropic body and 400'd.
+    /// sampling parameters. Before this guard, selecting a flagged reasoning
+    /// model with `--temperature 0.3` put `temperature` in the body and 400'd.
     #[test]
     fn effective_temperature_drops_sampling_for_models_the_catalog_flags() {
+        let rejects_sampling = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| crate::model_catalog::model_rejects_sampling_parameters(&model.id))
+            .expect("catalog must contain a model that rejects sampling parameters");
         assert!(
-            crate::model_catalog::model_rejects_sampling_parameters("claude-opus-5"),
-            "models.json must still mark claude-opus-5 rejectsSamplingParameters"
+            crate::model_catalog::model_rejects_sampling_parameters(&rejects_sampling.id),
+            "selected catalog row must remain flagged rejectsSamplingParameters"
         );
-        assert_eq!(effective_temperature("claude-opus-5", Some(0.3)), None);
+        assert_eq!(effective_temperature(&rejects_sampling.id, Some(0.3)), None);
 
         // Everything else keeps the caller's value — the guard is a per-model
         // exclusion read from the catalog, not a blanket strip.
-        assert_eq!(effective_temperature("claude-sonnet-5", Some(0.3)), Some(0.3));
-        assert_eq!(effective_temperature("gemini-3.6-flash", Some(0.3)), Some(0.3));
-        assert_eq!(effective_temperature("ollama-local-thing", Some(0.9)), Some(0.9));
-        assert_eq!(effective_temperature("claude-opus-5", None), None);
+        for accepts_sampling in crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .filter(|model| !crate::model_catalog::model_rejects_sampling_parameters(&model.id))
+            .take(2)
+        {
+            assert_eq!(
+                effective_temperature(&accepts_sampling.id, Some(0.3)),
+                Some(0.3)
+            );
+        }
+        assert_eq!(
+            effective_temperature("fixture-local-model:latest", Some(0.9)),
+            Some(0.9)
+        );
+        assert_eq!(effective_temperature(&rejects_sampling.id, None), None);
     }
 
     #[tokio::test]
@@ -732,7 +749,7 @@ mod tests {
     fn map_api_preserves_status_and_provider_specific_text() {
         let llm = agiworkforce_llm::classify_error_response(
             "anthropic",
-            "claude-test",
+            "fixture-anthropic-model",
             529,
             None,
             "overloaded",
@@ -744,7 +761,7 @@ mod tests {
     #[test]
     fn map_context_overflow_matches_cli_variant() {
         let err = map_llm_error(LlmError::ContextOverflow {
-            model: "gpt-test".into(),
+            model: "fixture-stream-model".into(),
         });
         let cli = err.downcast_ref::<CliError>().expect("CliError");
         assert!(cli.is_context_overflow());

@@ -68,6 +68,7 @@ jest.mock('../lib/mmkv', () => ({
   storage: {
     getString: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
+    delete: jest.fn(),
   },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
@@ -122,52 +123,72 @@ jest.mock('expo-constants', () => ({
 
 const mockTier2LoadModel = jest.fn();
 const mockTier2Generate = jest.fn();
+const DEFAULT_MODEL_ID = 'fixture-default-local-model';
+const EXECUTORCH_PRESET_NAME = 'fixture-executorch-preset';
+const IOS_SYSTEM_MODEL_ID = 'fixture-ios-system-model';
+const ANDROID_SYSTEM_MODEL_ID = 'fixture-android-system-model';
 
-// The default catalog model has an executorchPreset — ensure tests see it.
-const QWEN3_MODEL_WITH_PRESET = {
-  id: 'qwen3-4b-instruct-2507',
-  displayName: 'AGI Standard',
-  family: 'qwen3',
-  paramCountB: 4.0,
-  fileSizeBytes: 2_147_483_648,
-  supportedRuntimes: ['executorch', 'llama-rn'],
-  contextWindow: 262_144,
-  capabilities: {
-    text: true,
-    visionIn: false,
-    audioIn: false,
-    toolCalls: true,
-    structuredOutput: true,
-  },
-  license: 'Apache-2.0',
-  role: 'default',
-  shipsInV1: true,
-  executorchPreset: {
-    modelName: 'qwen3-4b-quantized',
-    modelSource:
-      'https://huggingface.co/software-mansion/react-native-executorch-qwen-3/v0.8.0/qwen-3-4B/quantized/qwen3_4b_8da4w.pte',
-    tokenizerSource:
-      'https://huggingface.co/software-mansion/react-native-executorch-qwen-3/v0.8.0/tokenizer.json',
-    tokenizerConfigSource:
-      'https://huggingface.co/software-mansion/react-native-executorch-qwen-3/v0.8.0/tokenizer_config.json',
-  },
-};
+jest.mock('@agiworkforce/local-llm', () => {
+  // Define mock catalog rows inside the hoisted factory so no clean checkout
+  // depends on module-scope initialization order.
+  const defaultModelWithPreset = {
+    id: 'fixture-default-local-model',
+    displayName: 'AGI Standard',
+    family: 'fixture-family',
+    paramCountB: 4.0,
+    fileSizeBytes: 2_147_483_648,
+    supportedRuntimes: ['executorch', 'llama-rn'],
+    contextWindow: 262_144,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Apache-2.0',
+    role: 'default',
+    shipsInV1: true,
+    executorchPreset: {
+      modelName: 'fixture-executorch-preset',
+      modelSource: 'https://models.example/fixture-model.pte',
+      tokenizerSource: 'https://models.example/tokenizer.json',
+      tokenizerConfigSource: 'https://models.example/tokenizer-config.json',
+    },
+  };
+  const systemModels = [
+    {
+      ...defaultModelWithPreset,
+      id: 'fixture-ios-system-model',
+      supportedRuntimes: ['apple-foundation-models'],
+      role: 'system-multimodal',
+      executorchPreset: undefined,
+    },
+    {
+      ...defaultModelWithPreset,
+      id: 'fixture-android-system-model',
+      supportedRuntimes: ['aicore'],
+      role: 'system-multimodal',
+      executorchPreset: undefined,
+    },
+  ];
 
-jest.mock('@agiworkforce/local-llm', () => ({
-  detectCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 6144,
-    tier1Available: false,
-    tier1Runtime: null,
-    tier2Available: true,
-    tier3Available: true,
-    osVersion: '18.2',
-    thermalThrottled: false,
-  }),
-  getDefaultModel: jest.fn().mockReturnValue(QWEN3_MODEL_WITH_PRESET),
-  getShippableModels: jest.fn().mockReturnValue([QWEN3_MODEL_WITH_PRESET]),
-  tier2LoadModel: (...args: unknown[]) => mockTier2LoadModel(...args),
-  tier2Generate: (...args: unknown[]) => mockTier2Generate(...args),
-}));
+  return {
+    detectCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 6144,
+      tier1Available: false,
+      tier1Runtime: null,
+      tier2Available: true,
+      tier3Available: true,
+      osVersion: '18.2',
+      thermalThrottled: false,
+    }),
+    getDefaultModel: jest.fn().mockReturnValue(defaultModelWithPreset),
+    getShippableModels: jest.fn().mockReturnValue([defaultModelWithPreset, ...systemModels]),
+    tier2LoadModel: (...args: unknown[]) => mockTier2LoadModel(...args),
+    tier2Generate: (...args: unknown[]) => mockTier2Generate(...args),
+  };
+});
 
 // Mock recordInstalledModel so we don't need a real SQLite DB.
 const mockRecordInstalledModel = jest.fn().mockResolvedValue(undefined);
@@ -215,7 +236,7 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     await waitFor(() => {
       expect(mockTier2LoadModel).toHaveBeenCalledTimes(1);
       expect(mockTier2LoadModel).toHaveBeenCalledWith(
-        expect.objectContaining({ modelName: 'qwen3-4b-quantized' }),
+        expect.objectContaining({ modelName: EXECUTORCH_PRESET_NAME }),
         expect.any(Function),
       );
     });
@@ -292,7 +313,7 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     await waitFor(() => {
       expect(mockRecordInstalledModel).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 'qwen3-4b-instruct-2507',
+          id: DEFAULT_MODEL_ID,
           format: 'pte',
           local_path: null,
           runtime: 'local',
@@ -340,8 +361,9 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
   it('does NOT silently fall through to finishOnboarding when no preset and no downloadUrl', async () => {
     // Simulate a catalog entry that has neither executorchPreset nor downloadUrl
     const { getDefaultModel } = require('@agiworkforce/local-llm');
+    const currentDefaultModel = (getDefaultModel as jest.Mock)();
     (getDefaultModel as jest.Mock).mockReturnValue({
-      ...QWEN3_MODEL_WITH_PRESET,
+      ...currentDefaultModel,
       executorchPreset: undefined,
       downloadUrl: undefined,
       checksum: undefined,
@@ -365,24 +387,24 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
 });
 
 describe('Model picker — system-runtime-only models hidden', () => {
-  it('LOCAL_MODEL_LIST excludes apple-foundation-models', () => {
+  it('LOCAL_MODEL_LIST excludes the iOS system model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(
-      (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === 'apple-foundation-models'),
+      (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === IOS_SYSTEM_MODEL_ID),
     ).toBe(false);
   });
 
-  it('LOCAL_MODEL_LIST excludes gemini-nano-aicore', () => {
+  it('LOCAL_MODEL_LIST excludes the Android system model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(
-      (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === 'gemini-nano-aicore'),
+      (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === ANDROID_SYSTEM_MODEL_ID),
     ).toBe(false);
   });
 
-  it('LOCAL_MODEL_LIST includes the Qwen3-4B default model', () => {
+  it('LOCAL_MODEL_LIST includes the default model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
-    expect(
-      (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === 'qwen3-4b-instruct-2507'),
-    ).toBe(true);
+    expect((LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === DEFAULT_MODEL_ID)).toBe(
+      true,
+    );
   });
 });

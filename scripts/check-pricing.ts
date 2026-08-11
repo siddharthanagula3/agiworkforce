@@ -295,8 +295,7 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------------------
   // Promo-expiry watchdog. Independent of scrapers: scans the catalog itself
-  // and warns when a `promo_expires_at` is approaching. PRD V5 lock #24
-  // specifically watches DeepSeek V4-Pro's 2026-05-31T15:59:00Z cliff.
+  // and warns when any catalog-owned `promo_expires_at` is approaching.
   // ---------------------------------------------------------------------------
   const now = new Date();
   const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;

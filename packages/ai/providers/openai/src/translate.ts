@@ -316,7 +316,7 @@ export function translateChatRequest(
       effort: requested,
     });
     // OpenAI's /v1/chat/completions returns HTTP 400 when a request combines
-    // reasoning_effort with function tools (observed for GPT-5-series models) --
+    // reasoning_effort with function tools on current reasoning models --
     // apps/web/lib/llm-providers/openai.ts omits reasoning_effort whenever any tools are
     // present, computed on the same pre-strip hasTools above. Scoped to provider ===
     // 'openai' like the tool-stripping above: none of the compat providers' legacy files

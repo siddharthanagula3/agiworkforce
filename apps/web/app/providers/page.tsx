@@ -55,7 +55,7 @@ const PROVIDERS: ProviderEntry[] = [
   },
   {
     name: 'Perplexity',
-    models: 'Sonar family',
+    models: 'Perplexity search models',
     auth: formatProviderModeLabel('DirectByok'),
     providerKey: 'perplexity',
   },
@@ -123,7 +123,7 @@ export default function ProvidersPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Model choice · {MARKETING.providers.display} providers</p>
           <h1 id="agi-providers-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Every provider.</span>
+            <span className="agi-fl-h1-line">Every provider.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">One thread.</em>
             </span>
@@ -168,7 +168,8 @@ export default function ProvidersPage() {
           <p className="agi-fl-section-lede">
             Cloud providers run through BYOK on Desktop and CLI. Your keys, your billing, traffic
             straight to the provider. Local runtimes are free and work offline. Prices shown are
-            provider list rates per million tokens, read from the AGI model catalog.
+            base provider list rates per million tokens, read from the AGI model catalog.
+            Model-specific and input-length tiers may differ.
           </p>
           <div className="agi-providers-grid">
             {PROVIDERS.map((p) => {
@@ -180,7 +181,7 @@ export default function ProvidersPage() {
                   <div className="agi-provider-auth">{p.auth}</div>
                   {pricing && (
                     <div className="agi-provider-pricing">
-                      <span>{formatPrice(pricing.inputPerMillion)}/MTok in</span>
+                      <span>Base: {formatPrice(pricing.inputPerMillion)}/MTok in</span>
                       <span className="agi-provider-pricing-sep">&nbsp;·&nbsp;</span>
                       <span>{formatPrice(pricing.outputPerMillion)}/MTok out</span>
                     </div>

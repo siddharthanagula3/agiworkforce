@@ -14,4 +14,6 @@ RCT_EXTERN_METHOD(generate:(NSString *)prompt
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(cancel:(NSString *)requestId)
+
 @end

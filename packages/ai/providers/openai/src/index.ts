@@ -101,7 +101,7 @@ export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
   serviceTier?: 'auto' | 'default' | 'flex';
   /**
    * Use the Responses API (`/v1/responses`) instead of Chat Completions.
-   * Required for o-series and GPT-5.x server-side reasoning state. Default is
+   * Required for OpenAI models with server-side reasoning state. Default is
    * automatic for native OpenAI catalog-known chat/text models. Set `false`
    * to force Chat Completions for legacy callers and diagnostics.
    */

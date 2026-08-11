@@ -25,14 +25,19 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
-  LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
+  LLMCostCalculator: {
+    calculateCost: vi.fn(() => 7),
+    calculateCostDollars: vi.fn(() => 0.07),
+  },
 }));
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { runResearchLoop, READY_MARKER } from './research-loop';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
 const streamRequestMock = vi.mocked(buildToolLoopStream);
+const OPENAI_CHAT_MODEL = requireProviderDefaultModel('openai');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,14 +90,14 @@ function notesTurn(notes: string): ReadableStream {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-1',
-    requestedModel: 'gpt-5.6-terra',
+    requestedModel: OPENAI_CHAT_MODEL,
     provider: 'openai',
     estimatedCostCents: 2,
     quotaFeature: 'chat',
     isFlagshipRequest: false,
-    chatRequest: { model: 'gpt-5.6-terra' },
+    chatRequest: { model: OPENAI_CHAT_MODEL },
     llmRequest: {
-      model: 'gpt-5.6-terra',
+      model: OPENAI_CHAT_MODEL,
       messages: [{ role: 'user', content: 'research https://example.com/ in depth' }],
       max_tokens: 2048,
       tools: [{ type: 'web_search_preview' }, urlFetchToolDef()],

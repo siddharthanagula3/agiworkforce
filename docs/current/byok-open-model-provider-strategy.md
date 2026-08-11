@@ -84,27 +84,27 @@ Founder-excluded providers are not catalogue gaps or future targets. They must n
 
 ### P0 Model Families
 
-| Family          | Why it matters for AGI                                                                                                                                                                                                                       | Routes to support                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| OpenAI gpt-oss  | OpenAI's open-weight reasoning models, `gpt-oss-120b` and `gpt-oss-20b`, are Apache 2.0 open-weight models for local or hosted infrastructure; OpenAI says they are not served through OpenAI API or ChatGPT.                                | Local runtime, NVIDIA NIM, Groq, OpenRouter, Hugging Face providers.                                      |
-| Qwen            | Broad model family for chat, coding, reasoning, vision, and agentic workflows. Qwen3 includes dense and MoE models from 0.6B to 235B; Qwen3-Coder-Next targets coding agents.                                                                | Alibaba Model Studio direct, OpenRouter, NVIDIA NIM, Groq, and local runtime where weights are available. |
-| DeepSeek        | Strong cost/performance and reasoning models. Official DeepSeek API currently lists `deepseek-v4-flash` and `deepseek-v4-pro`, with 1M context, tool calls, JSON output, thinking/non-thinking modes, and OpenAI/Anthropic-format base URLs. | DeepSeek direct, OpenRouter, NVIDIA NIM, and local runtime where weights are available.                   |
-| Z.ai / GLM      | GLM-family models are important open-model/code/function-calling options when verified against current official documentation and live probes.                                                                                               | Z.ai direct, OpenRouter, NVIDIA NIM, and approved Hugging Face routes.                                    |
-| Mistral         | Mistral has open-weight and premier models across Large, Medium, Small, Devstral, Magistral, Codestral, Voxtral, and embeddings, with cloud/self-host routes.                                                                                | Mistral direct, Bedrock/Google Cloud/Snowflake where verified, NVIDIA NIM, OpenRouter, and local runtime. |
-| Meta Llama      | Still essential for open-model compatibility, local runtimes, enterprise self-hosting, and many hosted APIs.                                                                                                                                 | Local runtime, NVIDIA NIM, Groq, OpenRouter, Bedrock/Vertex where verified.                               |
-| Google Gemma    | Google says Gemma 4 is its most capable open model family, with 2B/4B/26B MoE/31B sizes and large adoption.                                                                                                                                  | Local runtime, approved Hugging Face routes, OpenRouter, and Google AI Studio/Vertex where available.     |
-| NVIDIA Nemotron | Key NVIDIA open/reasoning/safety model family, especially for NIM and enterprise/local deployment.                                                                                                                                           | NVIDIA NIM, OpenRouter, local/self-host NIM where available.                                              |
-| MiniMax         | Important hosted open-model family when exact active IDs and capabilities are verified.                                                                                                                                                      | NVIDIA NIM, OpenRouter, or direct provider only after API/docs verification.                              |
+| Family          | Why it matters for AGI                                                                                                                                                                                                                                                       | Routes to support                                                                                         |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| OpenAI gpt-oss  | OpenAI's open-weight reasoning models, `gpt-oss-120b` and `gpt-oss-20b`, are Apache 2.0 open-weight models for local or hosted infrastructure; OpenAI says they are not served through OpenAI API or ChatGPT.                                                                | Local runtime, NVIDIA NIM, Groq, OpenRouter, Hugging Face providers.                                      |
+| Qwen            | Broad model family for chat, coding, reasoning, vision, and agentic workflows. Qwen3 includes dense and MoE models from 0.6B to 235B; Qwen3-Coder-Next targets coding agents.                                                                                                | Alibaba Model Studio direct, OpenRouter, NVIDIA NIM, Groq, and local runtime where weights are available. |
+| DeepSeek        | Strong cost/performance and reasoning models. The official DeepSeek API currently lists fast and reasoning tiers with 1M context, tool calls, JSON output, thinking/non-thinking modes, and OpenAI/Anthropic-format base URLs. Exact model identifiers remain catalog-owned. | DeepSeek direct, OpenRouter, NVIDIA NIM, and local runtime where weights are available.                   |
+| Z.ai / GLM      | GLM-family models are important open-model/code/function-calling options when verified against current official documentation and live probes.                                                                                                                               | Z.ai direct, OpenRouter, NVIDIA NIM, and approved Hugging Face routes.                                    |
+| Mistral         | Mistral has open-weight and premier models across Large, Medium, Small, Devstral, Magistral, Codestral, Voxtral, and embeddings, with cloud/self-host routes.                                                                                                                | Mistral direct, Bedrock/Google Cloud/Snowflake where verified, NVIDIA NIM, OpenRouter, and local runtime. |
+| Meta Llama      | Still essential for open-model compatibility, local runtimes, enterprise self-hosting, and many hosted APIs.                                                                                                                                                                 | Local runtime, NVIDIA NIM, Groq, OpenRouter, Bedrock/Vertex where verified.                               |
+| Google Gemma    | Google's open model family remains important across multiple size classes and deployment targets.                                                                                                                                                                            | Local runtime, approved Hugging Face routes, OpenRouter, and Google AI Studio/Vertex where available.     |
+| NVIDIA Nemotron | Key NVIDIA open/reasoning/safety model family, especially for NIM and enterprise/local deployment.                                                                                                                                                                           | NVIDIA NIM, OpenRouter, local/self-host NIM where available.                                              |
+| MiniMax         | Important hosted open-model family when exact active IDs and capabilities are verified.                                                                                                                                                                                      | NVIDIA NIM, OpenRouter, or direct provider only after API/docs verification.                              |
 
 ### P1 Model Families
 
-| Family                                                     | Reason                                                                                                                        |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Microsoft Phi                                              | Useful small/local/edge models; not first choice for Claude/OpenAI parity but valuable for low-resource local mode.           |
-| IBM Granite                                                | Enterprise/open models useful for regulated customers and local/enterprise routes.                                            |
-| Liquid AI LFM                                              | Efficient open models showing up in hosted catalogs.                                                                          |
-| Falcon                                                     | Regional/open models; add if user demand or provider coverage justifies it.                                                   |
-| Wan / Flux / Stable Diffusion / Imagen / Veo / Sora routes | Not LLM chat, but needed for artifact/media parity through image/video providers. Keep separate from LLM chat model selector. |
+| Family                            | Reason                                                                                                                      |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Microsoft Phi                     | Useful small/local/edge models; not first choice for Claude/OpenAI parity but valuable for low-resource local mode.         |
+| IBM Granite                       | Enterprise/open models useful for regulated customers and local/enterprise routes.                                          |
+| Liquid AI LFM                     | Efficient open models showing up in hosted catalogs.                                                                        |
+| Falcon                            | Regional/open models; add if user demand or provider coverage justifies it.                                                 |
+| Image and video generation routes | Not LLM chat, but needed for artifact/media parity through media providers. Keep separate from the LLM chat model selector. |
 
 ## Desktop BYOK UX Requirements
 
@@ -206,7 +206,7 @@ Current popularity/quality signals from this research:
 - Third-party benchmarks are discovery inputs only; exact model admission still requires current official documentation and an implemented harness.
 - OpenRouter's rankings page is explicitly based on benchmarks and real usage data from millions of users.
 - Provider recommendations never override the founder exclusion list or the multimodal-input preference.
-- Google says Gemma has crossed 400M downloads and 100,000+ variants, and positions Gemma 4 as its most capable open model family.
+- Google reports broad adoption for its current open-model family; exact generations remain catalog-owned.
 
 ## AGI Product Implication
 
@@ -249,7 +249,7 @@ Official provider/model docs:
 - Mistral model families: https://mistral.ai/models
 - OpenAI open-weight gpt-oss help: https://help.openai.com/en/articles/11870455-openai-open-weight-models-gpt-oss
 - OpenAI open models: https://openai.com/open-models
-- Google Gemma 4 announcement: https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/
+- Google Gemma documentation: https://ai.google.dev/gemma
 - Qwen3 technical report: https://arxiv.org/abs/2505.09388
 - Qwen3-Coder-Next technical report: https://arxiv.org/abs/2603.00729
 - Hosted open-weight service measurement: https://arxiv.org/abs/2605.02821

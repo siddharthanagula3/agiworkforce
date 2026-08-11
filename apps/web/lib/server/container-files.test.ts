@@ -56,8 +56,9 @@ describe('persistGeneratedFile', () => {
     fetchSpy.mockResolvedValueOnce(fetchOk('pdf-bytes', 'application/pdf'));
     const result = await persistGeneratedFile({
       userId: 'user_1',
+      organizationId: null,
       ref: { provider: 'openai', filename: 'report.pdf', containerId: 'cntr_1', fileId: 'file_1' },
-      model: 'gpt-5.6-terra',
+      model: 'fixture-model',
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -99,6 +100,7 @@ describe('persistGeneratedFile', () => {
       .mockResolvedValueOnce(fetchOk('a,b\n1,2\n', 'text/csv'));
     const result = await persistGeneratedFile({
       userId: 'u',
+      organizationId: null,
       ref: { provider: 'anthropic', fileId: 'file_meta' },
     });
     expect(fetchSpy).toHaveBeenNthCalledWith(
@@ -116,6 +118,7 @@ describe('persistGeneratedFile', () => {
     fetchSpy.mockResolvedValueOnce(fetchOk('csv', 'text/csv'));
     await persistGeneratedFile({
       userId: 'u',
+      organizationId: null,
       ref: { provider: 'anthropic', filename: 'data.csv', fileId: 'file_a' },
     });
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -133,6 +136,7 @@ describe('persistGeneratedFile', () => {
     configured = false;
     const result = await persistGeneratedFile({
       userId: 'u',
+      organizationId: null,
       ref: { provider: 'openai', filename: 'x.pdf', containerId: 'c', fileId: 'f' },
     });
     expect(result).toBeNull();
@@ -143,6 +147,7 @@ describe('persistGeneratedFile', () => {
     fetchSpy.mockResolvedValueOnce({ ok: false, status: 500, headers: { get: () => null } });
     const result = await persistGeneratedFile({
       userId: 'u',
+      organizationId: null,
       ref: { provider: 'openai', filename: 'x.pdf', containerId: 'c', fileId: 'f' },
     });
     expect(result).toBeNull();
@@ -152,6 +157,7 @@ describe('persistGeneratedFile', () => {
   it('returns null for a ref without a fileId', async () => {
     const result = await persistGeneratedFile({
       userId: 'u',
+      organizationId: null,
       ref: { provider: 'openai', filename: 'x.pdf', containerId: 'c' },
     });
     expect(result).toBeNull();
@@ -181,6 +187,7 @@ describe('persistGeneratedFiles', () => {
       .mockResolvedValueOnce({ ok: false, status: 404, headers: { get: () => null } });
     const out = await persistGeneratedFiles({
       userId: 'u',
+      organizationId: null,
       refs: [
         { provider: 'openai', filename: 'a.pdf', containerId: 'c', fileId: 'f1' },
         { provider: 'openai', filename: 'b.pdf', containerId: 'c', fileId: 'f2' },

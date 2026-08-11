@@ -20,6 +20,7 @@ import {
   finalizeQASession,
 } from '../services/languageQA';
 import type { QAPrompt, QACategory } from '../services/languageQA';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 // ── 60-prompt suite ──────────────────────────────────────────────────────────
 
@@ -588,14 +589,14 @@ describe('QA session lifecycle', () => {
   });
 
   it('startQASession returns a session with the right modelId', () => {
-    const session = startQASession('qwen3-4b-instruct-2507');
-    expect(session.modelId).toBe('qwen3-4b-instruct-2507');
+    const session = startQASession(SYNTHETIC_LOCAL_MODEL_ID);
+    expect(session.modelId).toBe(SYNTHETIC_LOCAL_MODEL_ID);
     expect(session.results).toHaveLength(0);
     expect(typeof session.sessionId).toBe('string');
   });
 
   it('recordQAResult appends to active session', async () => {
-    startQASession('qwen3-4b-instruct-2507');
+    startQASession(SYNTHETIC_LOCAL_MODEL_ID);
     const output = await mockModelAdapter(QA_SUITE[0].prompt);
     recordQAResult({ promptId: QA_SUITE[0].id, modelOutput: output });
     const finished = finalizeQASession();
@@ -604,7 +605,7 @@ describe('QA session lifecycle', () => {
   });
 
   it('finalizeQASession sets completedAtMs', () => {
-    startQASession('qwen3-4b-instruct-2507');
+    startQASession(SYNTHETIC_LOCAL_MODEL_ID);
     const finished = finalizeQASession();
     expect(finished?.completedAtMs).toBeGreaterThan(0);
   });

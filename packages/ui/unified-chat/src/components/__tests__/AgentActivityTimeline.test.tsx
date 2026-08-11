@@ -243,6 +243,33 @@ describe('AgentActivityTimeline connector badges', () => {
     expect(badge?.getAttribute('data-badge-letter')).not.toBe('C');
     expect(badge?.getAttribute('data-badge-letter')).toBe('M');
   });
+
+  it('renders skill activity with a book glyph instead of an unknown badge', () => {
+    const skillActivity = activity({
+      status: 'completed',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:skill-1',
+          toolCallId: 'skill-1',
+          name: 'skill',
+          category: 'skill',
+          summary: 'Reading skill',
+          status: 'completed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_250,
+        },
+      ],
+    });
+
+    const { container } = render(
+      <AgentActivityTimeline activity={skillActivity} defaultExpanded />,
+    );
+
+    expect(screen.getAllByText('Reading skill').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-badge-kind="glyph"]')).not.toBeNull();
+    expect(container.querySelector('[data-badge-letter="?"]')).toBeNull();
+  });
 });
 
 // ─── Lazy authentication (inline Connect card) ────────────────────────────────

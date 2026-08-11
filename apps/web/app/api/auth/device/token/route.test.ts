@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   transaction: vi.fn(),
   issueDeveloperToken: vi.fn(),
+  hasAcceptedCurrentTerms: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -19,6 +20,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/developer-token', () => ({
   issueDeveloperToken: (...args: unknown[]) => mocks.issueDeveloperToken(...args),
+}));
+vi.mock('@/lib/server/terms', () => ({
+  hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -34,6 +38,7 @@ describe('POST /api/auth/device/token', () => {
       accessToken: 'device-access-token',
       expiresIn: 604800,
     });
+    mocks.hasAcceptedCurrentTerms.mockResolvedValue(true);
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
         query: (...args: unknown[]) => mocks.query(...args),
@@ -108,5 +113,31 @@ describe('POST /api/auth/device/token', () => {
     expect(response.status).toBe(403);
     expect(response.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
     await expect(response.json()).resolves.toEqual({ error: 'authorization_pending' });
+  });
+
+  it('does not issue a token when assent became stale after approval', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        status: 'approved',
+        user_id: 'user-1',
+        user_email: 'user@example.com',
+      },
+    ]);
+    mocks.hasAcceptedCurrentTerms.mockResolvedValue(false);
+
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://tauri.localhost' },
+        body: JSON.stringify({ device_code: '0a9ae561-8447-4ce4-afca-1c205d69bbad' }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'terms_acceptance_required' });
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });

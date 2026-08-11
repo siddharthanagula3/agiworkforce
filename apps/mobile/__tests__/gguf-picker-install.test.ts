@@ -2,7 +2,7 @@
  * Coverage for llama-rn GGUF rows in the model picker + install store:
  *  - the selectability predicate accepts rows with verified GGUF artifacts
  *    (base + mmproj) and still rejects rows without runnable artifacts;
- *  - shipsInV1:false rows (the current qwen3-vl vision pack) stay hidden from
+ *  - shipsInV1:false vision rows stay hidden from
  *    the production LOCAL_MODEL_LIST;
  *  - installStore.prepareModel routes preset-less GGUF rows through
  *    services/modelDownload with the mmproj fields and lands on 'ready' with
@@ -10,6 +10,7 @@
  */
 
 import type { OnDeviceModel } from '@agiworkforce/types';
+import { getModelsForRole } from '@agiworkforce/local-llm';
 import {
   isSelectableLocalCatalogModel,
   LOCAL_MODEL_LIST,
@@ -18,6 +19,7 @@ import {
 import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { downloadModel } from '@/services/modelDownload';
 import { getInstalledModel } from '@/storage/installedModels';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 jest.mock('@/services/modelDownload', () => ({
   downloadModel: jest.fn(),
@@ -47,12 +49,26 @@ jest.mock('@agiworkforce/local-llm', () => ({
 }));
 
 const HEX = 'a'.repeat(64);
+const VISION_CATALOG_MODEL = getModelsForRole('premium-vision-pack').find(
+  (model) =>
+    !model.shipsInV1 &&
+    model.format === 'gguf' &&
+    model.downloadUrl &&
+    model.checksum &&
+    model.mmprojUrl &&
+    model.mmprojChecksum &&
+    model.mmprojSizeBytes,
+);
+
+if (!VISION_CATALOG_MODEL) {
+  throw new Error('Local catalog has no hidden GGUF vision model with verified artifacts');
+}
 
 function ggufRow(overrides: Partial<OnDeviceModel> = {}): OnDeviceModel {
   return {
-    id: 'hypothetical-vl',
-    displayName: 'Hypothetical VL',
-    family: 'qwen3-vl',
+    id: SYNTHETIC_LOCAL_MODEL_ID,
+    displayName: 'Fixture Vision Model',
+    family: 'fixture-vision-family',
     paramCountB: 2,
     fileSizeBytes: 1_000,
     supportedRuntimes: ['llama-rn'],
@@ -101,7 +117,7 @@ describe('picker selectability for llama-rn GGUF rows', () => {
       checksum: undefined,
       supportedRuntimes: ['executorch'],
       executorchPreset: {
-        modelName: 'x',
+        modelName: 'fixture-executorch-preset',
         modelSource: 'https://e/resolve/m.pte',
         tokenizerSource: 'https://e/resolve/t.json',
         tokenizerConfigSource: 'https://e/resolve/tc.json',
@@ -110,27 +126,28 @@ describe('picker selectability for llama-rn GGUF rows', () => {
     expect(isSelectableLocalCatalogModel(row)).toBe(true);
   });
 
-  it('keeps the shipsInV1:false qwen3-vl pack hidden from the production list', () => {
-    expect(LOCAL_MODEL_LIST.some((m) => m.id === 'qwen3-vl-2b-instruct')).toBe(false);
+  it('keeps the catalog-owned shipsInV1:false vision pack hidden from the production list', () => {
+    expect(LOCAL_MODEL_LIST.some((model) => model.id === VISION_CATALOG_MODEL.id)).toBe(false);
   });
 });
 
 describe('installStore.prepareModel GGUF branch', () => {
   const visionModelDef: ModelDef = {
-    id: 'qwen3-vl-2b-instruct',
-    name: 'AGI Vision Pack',
+    id: VISION_CATALOG_MODEL.id,
+    name: VISION_CATALOG_MODEL.displayName,
     provider: 'local',
     providerLabel: 'On device',
-    contextWindow: 262_144,
+    contextWindow: VISION_CATALOG_MODEL.contextWindow,
     maxOutput: 8_192,
-    supportsVision: true,
+    supportsVision: VISION_CATALOG_MODEL.capabilities.visionIn,
     supportsThinking: false,
     tier: 'premium',
     surface: 'local',
     availability: 'download_required',
     runtimeLabel: 'llama.rn',
-    detailLabel: 'llama.rn - 1.0 GB - Vision',
-    fileSizeBytes: 1_107_409_952,
+    detailLabel: 'llama.rn - Vision',
+    fileSizeBytes: VISION_CATALOG_MODEL.fileSizeBytes,
+    license: VISION_CATALOG_MODEL.license,
   };
 
   beforeEach(() => {
@@ -154,18 +171,18 @@ describe('installStore.prepareModel GGUF branch', () => {
 
     expect(downloadModel).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelId: 'qwen3-vl-2b-instruct',
-        format: 'gguf',
-        downloadUrl: expect.stringContaining('Qwen3VL-2B-Instruct-Q4_K_M.gguf'),
-        checksum: '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae',
-        mmprojUrl: expect.stringContaining('mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf'),
-        mmprojChecksum: 'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82',
-        mmprojSizeBytes: 445_053_216,
+        modelId: VISION_CATALOG_MODEL.id,
+        format: VISION_CATALOG_MODEL.format,
+        downloadUrl: VISION_CATALOG_MODEL.downloadUrl,
+        checksum: VISION_CATALOG_MODEL.checksum,
+        mmprojUrl: VISION_CATALOG_MODEL.mmprojUrl,
+        mmprojChecksum: VISION_CATALOG_MODEL.mmprojChecksum,
+        mmprojSizeBytes: VISION_CATALOG_MODEL.mmprojSizeBytes,
       }),
     );
     const state = useModelInstallStore.getState();
-    expect(state.jobs['qwen3-vl-2b-instruct']).toEqual({ status: 'ready', progress: 1 });
-    expect(state.installedModelIds).toContain('qwen3-vl-2b-instruct');
+    expect(state.jobs[VISION_CATALOG_MODEL.id]).toEqual({ status: 'ready', progress: 1 });
+    expect(state.installedModelIds).toContain(VISION_CATALOG_MODEL.id);
   });
 
   it('surfaces download failures as failed jobs (same contract as ExecuTorch path)', async () => {
@@ -178,7 +195,7 @@ describe('installStore.prepareModel GGUF branch', () => {
     // …but the failed JOB carries a generic user-safe message by design — the
     // store deliberately never surfaces internal driver errors (e.g. sqlite
     // execAsync failures) to the UI (see installStore prepareModel catch).
-    expect(useModelInstallStore.getState().jobs['qwen3-vl-2b-instruct']).toEqual({
+    expect(useModelInstallStore.getState().jobs[VISION_CATALOG_MODEL.id]).toEqual({
       status: 'failed',
       progress: 0,
       error: 'Unable to prepare the model. Please try again.',

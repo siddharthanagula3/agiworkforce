@@ -6,6 +6,8 @@ import {
   tier3Release,
 } from '../tier3.js';
 import type { LlamaMessage } from '../multimodal.js';
+import { getDefaultModel } from '../catalog.js';
+import { requireGgufVisionModel } from './catalog-fixtures.js';
 
 describe('tier3 llama.rn adapter', () => {
   afterEach(async () => {
@@ -20,14 +22,14 @@ describe('tier3 llama.rn adapter', () => {
     }));
     _setLlamaModuleForTesting(initLlama);
 
-    await tier3Generate('/models/qwen3.gguf', {
+    await tier3Generate('/models/text.gguf', {
       prompt: 'Use a larger context',
-      modelId: 'qwen3-4b-instruct-2507',
+      modelId: getDefaultModel().id,
     });
 
     expect(initLlama).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: '/models/qwen3.gguf',
+        model: '/models/text.gguf',
         n_ctx: 8192,
       }),
     );
@@ -120,20 +122,20 @@ describe('tier3 llama.rn multimodal (vision) path', () => {
     const initLlama = vi.fn(async () => ({ completion, initMultimodal, release: vi.fn() }));
     _setLlamaModuleForTesting(initLlama);
 
-    const result = await tier3Generate('/models/qwen3-vl.gguf', {
-      modelId: 'qwen3-vl-2b-instruct',
+    const result = await tier3Generate('/models/vision.gguf', {
+      modelId: requireGgufVisionModel().id,
       prompt: 'What is in this photo?',
       images: ['file:///tmp/photo.jpg'],
-      mmprojPath: '/models/qwen3-vl.mmproj.gguf',
+      mmprojPath: '/models/vision.mmproj.gguf',
     });
 
     // ctx_shift disabled for multimodal so media token positions stay valid.
     expect(initLlama).toHaveBeenCalledWith(
-      expect.objectContaining({ model: '/models/qwen3-vl.gguf', ctx_shift: false }),
+      expect.objectContaining({ model: '/models/vision.gguf', ctx_shift: false }),
     );
     // mmproj projector attached via initMultimodal.
     expect(initMultimodal).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/models/qwen3-vl.mmproj.gguf' }),
+      expect.objectContaining({ path: '/models/vision.mmproj.gguf' }),
     );
     expect(tier3IsMultimodalReady()).toBe(true);
 
@@ -158,11 +160,11 @@ describe('tier3 llama.rn multimodal (vision) path', () => {
       vi.fn(async () => ({ completion, initMultimodal, release: vi.fn() })),
     );
 
-    await tier3Generate('/models/qwen3-vl.gguf', {
-      modelId: 'qwen3-vl-2b-instruct',
+    await tier3Generate('/models/vision.gguf', {
+      modelId: requireGgufVisionModel().id,
       prompt: 'Describe this',
       images: ['file:///tmp/photo.jpg'],
-      mmprojPath: '/models/qwen3-vl.mmproj.gguf',
+      mmprojPath: '/models/vision.mmproj.gguf',
     });
 
     expect(tier3IsMultimodalReady()).toBe(false);

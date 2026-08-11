@@ -7,6 +7,8 @@ import {
   toEmbeddingInputs,
 } from '../embeddings';
 
+const FIXTURE_MODEL_ID = 'fixture-embedding-model';
+
 /**
  * The embeddings request contract.
  *
@@ -31,7 +33,7 @@ describe('ManagedEmbeddingsRequestSchema — accepts', () => {
   it('an explicit model', () => {
     const result = ManagedEmbeddingsRequestSchema.safeParse({
       input: 'hello',
-      model: 'gemini-embedding-2',
+      model: FIXTURE_MODEL_ID,
     });
 
     expect(result.success).toBe(true);

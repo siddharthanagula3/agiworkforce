@@ -400,9 +400,9 @@ export class CreditService {
   }
 
   /**
-   * Carry paid usage into a replacement upgrade period without resetting any
-   * usage counter. Updating the existing account also preserves purchased
-   * top-ups, which are already included in credits_allocated_cents.
+   * Add the higher plan's allowance delta without resetting usage or purchased
+   * top-ups. The upgrade receipt makes this idempotent even when the renewal
+   * period stays unchanged and Stripe sends several events for one upgrade.
    */
   static async carryUsageIntoUpgradedPeriod(
     userId: string,
@@ -412,6 +412,12 @@ export class CreditService {
     allocationDeltaCents: number,
     db: DatabaseAdapter = getNeonDb(),
   ): Promise<string> {
+    const upgradeAllocationKey = [
+      subscriptionId,
+      periodStart.toISOString(),
+      periodEnd.toISOString(),
+      allocationDeltaCents,
+    ].join(':');
     const [row] = await db.query<{ account_id: string }>(
       `with current_account as (
          select id
@@ -428,18 +434,28 @@ export class CreditService {
              updated_at = now()
          from current_account
          where token_credits.id = current_account.id
-           and (token_credits.period_start, token_credits.period_end)
-             is distinct from ($3::timestamptz, $4::timestamptz)
+           and not exists (
+             select 1
+             from credit_transactions receipt
+             where receipt.user_id = $1
+               and receipt.credit_account_id = current_account.id
+               and receipt.transaction_type = 'adjustment'
+               and receipt.metadata->>'upgrade_allocation_key' = $6
+           )
          returning token_credits.id as account_id
+       ), logged as (
+         insert into credit_transactions (
+           user_id, credit_account_id, transaction_type, amount_cents, description, metadata
+         )
+         select $1, carried.account_id, 'adjustment', $5,
+                'paid plan upgrade allocation',
+                jsonb_build_object('upgrade_allocation_key', $6)
+         from carried
+         returning credit_account_id as account_id
        )
-       select account_id from carried
+       select account_id from logged
        union all
-       select id as account_id
-       from token_credits
-       where user_id = $1
-         and subscription_id = $2
-         and period_start = $3
-         and period_end = $4
+       select id as account_id from current_account
        limit 1`,
       [
         userId,
@@ -447,6 +463,7 @@ export class CreditService {
         periodStart.toISOString(),
         periodEnd.toISOString(),
         allocationDeltaCents,
+        upgradeAllocationKey,
       ],
     );
 

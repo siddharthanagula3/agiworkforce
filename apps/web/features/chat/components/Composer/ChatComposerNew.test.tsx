@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
+import {
+  ChatComposerNew,
+  IMAGE_MODELS,
+  VIDEO_MODELS,
+  type ComposerProjectPicker,
+} from './ChatComposerNew';
+import {
+  getModelMetadataById,
+  getModels,
+  isExecutableVideoModel,
+  isModelLive,
+} from '@agiworkforce/types';
 import { getSelectableModels, isAutoModeModelId } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
@@ -25,6 +36,12 @@ const chatComposerMocks = vi.hoisted(() => ({
   },
   openSettings: vi.fn(),
   routerPush: vi.fn(),
+  mediaAvailability: {
+    status: 'ready' as 'loading' | 'ready' | 'error',
+    error: null as string | null,
+    admissionFor: vi.fn(),
+    retry: vi.fn(),
+  },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -48,6 +65,10 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
   useSkillsList: () => ({
     ...chatComposerMocks.skillResult,
   }),
+}));
+
+vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
+  useMediaModelAvailability: () => chatComposerMocks.mediaAvailability,
 }));
 
 vi.mock('./DragDropOverlay', () => ({
@@ -106,6 +127,8 @@ describe('ChatComposerNew', () => {
   let originalSubscription: ReturnType<typeof useBillingStore.getState>['subscription'];
   let originalBillingInitialized: ReturnType<typeof useBillingStore.getState>['initialized'];
   let originalBillingLoading: ReturnType<typeof useBillingStore.getState>['isLoading'];
+  let originalBillingError: ReturnType<typeof useBillingStore.getState>['error'];
+  let originalRefreshUser: ReturnType<typeof useBillingStore.getState>['refreshUser'];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -118,11 +141,23 @@ describe('ChatComposerNew', () => {
     ];
     chatComposerMocks.skillResult.loading = false;
     chatComposerMocks.skillResult.error = null;
+    chatComposerMocks.mediaAvailability.status = 'ready';
+    chatComposerMocks.mediaAvailability.error = null;
+    chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+      model_id: modelId,
+      name: modelId,
+      kind: 'image',
+      provider: 'fixture',
+      state: 'enabled',
+    }));
+    chatComposerMocks.mediaAvailability.retry.mockReset();
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
     originalBillingInitialized = useBillingStore.getState().initialized;
     originalBillingLoading = useBillingStore.getState().isLoading;
+    originalBillingError = useBillingStore.getState().error;
+    originalRefreshUser = useBillingStore.getState().refreshUser;
     // AUDIT-FIX CMP-14: the Chat | AGI Work toggle is gated on the canonical
     // `agi_work` billing capability (PRO_TIERS) so the client agrees with
     // `request-processor.ts`. It used to be gated on `!isFreeTrial`, which left
@@ -143,6 +178,8 @@ describe('ChatComposerNew', () => {
       subscription: originalSubscription,
       initialized: originalBillingInitialized,
       isLoading: originalBillingLoading,
+      error: originalBillingError,
+      refreshUser: originalRefreshUser,
     });
     useChatStore.setState({ composerTogglesByConversation: {} });
     vi.unstubAllGlobals();
@@ -151,6 +188,24 @@ describe('ChatComposerNew', () => {
   it('renders the message textarea', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeInTheDocument();
+  });
+
+  it('keeps an empty first-paint composer compact when layout reports a stale large scrollHeight', () => {
+    const scrollHeight = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(240);
+    try {
+      render(<ChatComposerNew onSend={vi.fn()} />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      expect(textarea).toHaveStyle({
+        height: '52px',
+      });
+      expect(textarea.closest('.chat-composer-container')).toHaveClass('bg-[var(--chat-bg)]');
+      expect(textarea.closest('.chat-composer-container')).not.toHaveClass('bg-background/95');
+      expect(textarea.closest('#chat-composer')).toHaveClass('bg-[var(--chat-input-bg)]');
+    } finally {
+      scrollHeight.mockRestore();
+    }
   });
 
   it('keeps the control cluster on one line (flex-nowrap) so Send never drops to a 2nd row', () => {
@@ -286,7 +341,7 @@ describe('ChatComposerNew', () => {
 
     await waitFor(() => {
       expect(onSend).toHaveBeenCalledWith(
-        expect.stringContaining('review this route'),
+        'review this route',
         undefined,
         'backend-engineer',
         expect.objectContaining({
@@ -448,6 +503,7 @@ describe('ChatComposerNew', () => {
       featureFlags: null,
       initialized: false,
       isLoading: true,
+      error: null,
     });
     useChatStore.getState().setComposerToggles(
       {
@@ -460,7 +516,13 @@ describe('ChatComposerNew', () => {
       conversationId,
     );
 
-    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        onGenerateImage={vi.fn()}
+        conversationId={conversationId}
+      />,
+    );
 
     await waitFor(() => {
       expect(useChatStore.getState().getComposerToggles(conversationId)).toMatchObject({
@@ -471,6 +533,73 @@ describe('ChatComposerNew', () => {
         imageMode: true,
       });
     });
+  });
+
+  it('does not open a false media upgrade while account billing is still hydrating', async () => {
+    useBillingStore.setState({
+      subscription: null,
+      featureFlags: null,
+      initialized: false,
+      isLoading: true,
+      error: null,
+    });
+    const onUpgradeRequest = vi.fn();
+
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        onGenerateImage={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onUpgradeRequest={onUpgradeRequest}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    const imageButton = screen.getByText('Create image').closest('button')!;
+    const videoButton = screen.getByText('Create video').closest('button')!;
+    expect(imageButton).toHaveTextContent('Checking');
+    expect(videoButton).toHaveTextContent('Checking');
+    expect(imageButton).not.toHaveTextContent('Upgrade');
+    expect(videoButton).not.toHaveTextContent('Upgrade');
+
+    await userEvent.click(imageButton);
+    expect(onUpgradeRequest).not.toHaveBeenCalled();
+    expect(screen.getByText('Checking your plan…')).toBeVisible();
+  });
+
+  it('retries a failed account lookup instead of showing a false media upgrade', async () => {
+    const refreshUser = vi.fn().mockResolvedValue(undefined);
+    useBillingStore.setState({
+      subscription: null,
+      featureFlags: null,
+      initialized: true,
+      isLoading: false,
+      error: '/api/me returned 500',
+      refreshUser,
+    });
+    const onUpgradeRequest = vi.fn();
+
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        onGenerateImage={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onUpgradeRequest={onUpgradeRequest}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    const imageButton = screen.getByText('Create image').closest('button')!;
+    const videoButton = screen.getByText('Create video').closest('button')!;
+    expect(imageButton).toHaveTextContent('Retry');
+    expect(videoButton).toHaveTextContent('Retry');
+    expect(imageButton).not.toHaveTextContent('Upgrade');
+    expect(videoButton).not.toHaveTextContent('Upgrade');
+
+    await userEvent.click(imageButton);
+    expect(refreshUser).toHaveBeenCalledTimes(1);
+    expect(onUpgradeRequest).not.toHaveBeenCalled();
+    expect(screen.getByText("Couldn't verify your plan. Retrying…")).toBeVisible();
   });
 
   it('shows a non-numeric upgrade gate only after the server reports usage exhaustion', async () => {
@@ -752,6 +881,22 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: /create office files/i })).toBeEnabled();
   });
 
+  it('explains unavailable Deep Research without guessing provider families', () => {
+    const modelWithoutResearch = getSelectableModels().find(
+      (model) => model.capabilities.research !== true,
+    );
+    expect(modelWithoutResearch, 'catalog must expose a non-research model').toBeDefined();
+    useModelStore.getState().setSelectedModelId(modelWithoutResearch!.id);
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+    expect(screen.getByRole('button', { name: /deep research/i })).toHaveAttribute(
+      'title',
+      "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.",
+    );
+  });
+
   it('shows the enabled + menu option beside the menu button', () => {
     useModelStore.getState().setSelectedModelId('auto');
 
@@ -994,6 +1139,166 @@ describe('ChatComposerNew', () => {
       expect(onSendMock).not.toHaveBeenCalled();
     });
   });
+
+  describe('Create image model and aspect honesty', () => {
+    it('renders media actions only when the host owns their generation callbacks', () => {
+      const onSend = vi.fn();
+      const { rerender } = render(<ChatComposerNew onSend={onSend} />);
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      expect(screen.queryByText('Create image')).toBeNull();
+      expect(screen.queryByText('Create video')).toBeNull();
+
+      rerender(
+        <ChatComposerNew onSend={onSend} onGenerateImage={vi.fn()} onGenerateVideo={vi.fn()} />,
+      );
+      expect(screen.getByText('Create image')).toBeInTheDocument();
+      expect(screen.getByText('Create video')).toBeInTheDocument();
+    });
+
+    it('does not consume a typed /image prompt when this host has no image turn owner', async () => {
+      const onSend = vi.fn();
+      render(<ChatComposerNew onSend={onSend} />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+
+      await userEvent.type(textarea, '/image a lighthouse in a storm');
+      expect(screen.queryByText(/\/image runs on send/i)).toBeNull();
+      expect(screen.getByText('Image generation is not available from this chat.')).toBeVisible();
+      fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(textarea).toHaveValue('/image a lighthouse in a storm');
+    });
+
+    it('offers exact Google ratios and sends the selected 3:4 value unchanged', async () => {
+      const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
+      expect(googleModel).toBeDefined();
+      const onGenerateImage = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={onGenerateImage} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+      fireEvent.click(screen.getByRole('button', { name: googleModel!.label }));
+      fireEvent.click(screen.getByRole('button', { name: /select aspect ratio/i }));
+      expect(screen.getByRole('button', { name: /portrait 3:4/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /landscape 4:3/i })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /portrait 3:4/i }));
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'a studio portrait');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(onGenerateImage).toHaveBeenCalledWith('a studio portrait', {
+          aspectRatio: '3:4',
+          modelId: googleModel!.id,
+        });
+      });
+    });
+
+    it('removes unsupported ratios and resets a stale choice when OpenAI is selected', () => {
+      const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
+      const openAiModel = IMAGE_MODELS.find((model) => model.provider === 'openai');
+      expect(googleModel).toBeDefined();
+      expect(openAiModel).toBeDefined();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+      fireEvent.click(screen.getByRole('button', { name: googleModel!.label }));
+      fireEvent.click(screen.getByRole('button', { name: /select aspect ratio/i }));
+      fireEvent.click(screen.getByRole('button', { name: /portrait 3:4/i }));
+
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+      fireEvent.click(screen.getByRole('button', { name: openAiModel!.label }));
+
+      expect(screen.getByRole('button', { name: /select aspect ratio/i })).toHaveTextContent(
+        'Auto',
+      );
+      fireEvent.click(screen.getByRole('button', { name: /select aspect ratio/i }));
+      expect(screen.queryByRole('button', { name: /portrait 3:4/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /portrait 2:3/i })).toBeInTheDocument();
+    });
+
+    it('projects only live, nondeprecated, capability-backed media catalog entries', () => {
+      for (const imageModel of IMAGE_MODELS) {
+        const metadata = getModelMetadataById(imageModel.id);
+        expect(metadata).toBeDefined();
+        expect(metadata?.modelType).toBe('image');
+        expect(metadata?.capabilities.imageGen).toBe(true);
+        expect(metadata?.deprecated).not.toBe(true);
+        expect(metadata?.status).not.toBe('deprecated');
+        expect(metadata && isModelLive(metadata)).toBe(true);
+      }
+      for (const videoModel of VIDEO_MODELS) {
+        const metadata = getModelMetadataById(videoModel.id);
+        expect(metadata).toBeDefined();
+        expect(metadata?.modelType).toBe('video');
+        expect(metadata?.capabilities.videoGen).toBe(true);
+        expect(metadata?.deprecated).not.toBe(true);
+        expect(metadata?.status).not.toBe('deprecated');
+        expect(metadata && isModelLive(metadata)).toBe(true);
+      }
+    });
+
+    it('does not offer a catalog-live image model whose provider is not configured here', () => {
+      const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
+      const unavailableModel = IMAGE_MODELS.find((model) => model.provider === 'openai');
+      expect(googleModel).toBeDefined();
+      expect(unavailableModel).toBeDefined();
+      chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+        model_id: modelId,
+        name: modelId,
+        kind: 'image',
+        provider: modelId === unavailableModel!.id ? 'openai' : 'google',
+        state: modelId === unavailableModel!.id ? 'provider_not_configured' : 'enabled',
+      }));
+
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+
+      expect(screen.getByRole('button', { name: googleModel!.label })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: unavailableModel!.label })).toBeNull();
+    });
+
+    it('does not upsell an image entitlement when this deployment has no executable image path', () => {
+      useBillingStore.setState({
+        subscription: null,
+        initialized: true,
+        isLoading: false,
+        error: null,
+      });
+      chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+        model_id: modelId,
+        name: modelId,
+        kind: 'image',
+        provider: 'fixture',
+        state: 'storage_not_configured',
+      }));
+      const onUpgradeRequest = vi.fn();
+
+      render(
+        <ChatComposerNew
+          onSend={vi.fn()}
+          onGenerateImage={vi.fn()}
+          onUpgradeRequest={onUpgradeRequest}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+      const button = screen.getByText('Create image').closest('button')!;
+      expect(button).toHaveTextContent('Unavailable');
+      expect(button).not.toHaveTextContent('Upgrade');
+      fireEvent.click(button);
+
+      expect(onUpgradeRequest).not.toHaveBeenCalled();
+      expect(screen.getByText('This deployment is not ready for image generation.')).toBeVisible();
+    });
+  });
+
   /**
    * "Create video" was the one plus-menu entry that did not exist, even though
    * /api/media/video/generate, its billing entitlement, and MessageBubble's
@@ -1045,6 +1350,31 @@ describe('ChatComposerNew', () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
+    it('explains that the deployment is not ready when the durable video schema is absent', () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+        model_id: modelId,
+        name: modelId,
+        kind: 'video',
+        provider: 'google',
+        state: 'schema_not_configured',
+      }));
+
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+      const button = screen.getByText('Create video').closest('button')!;
+      expect(button).toHaveTextContent('Unavailable');
+      expect(button).toHaveAttribute('title', 'This deployment is not ready for video generation.');
+
+      fireEvent.click(button);
+
+      expect(screen.getByText('This deployment is not ready for video generation.')).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: /exit video generation mode/i }),
+      ).not.toBeInTheDocument();
+    });
+
     it('sends a non-entitled tier to the upgrade path instead of into video mode', () => {
       // Pro is entitled to image generation but NOT video (billing-catalog:
       // video_generation -> ['max_15x', 'enterprise']).
@@ -1089,13 +1419,13 @@ describe('ChatComposerNew', () => {
       expect(picker).not.toHaveTextContent(/no video model available/i);
     });
 
-    it('offers only catalog video models, and only from enabled providers', () => {
-      // Veo is the launch route; Runway is registered in the catalog but its
-      // provider is not enabled, so it must not appear as a selectable option.
-      expect(VIDEO_MODELS.length).toBeGreaterThan(0);
-      expect(VIDEO_MODELS.every((m) => m.provider === 'google')).toBe(true);
-      expect(VIDEO_MODELS.some((m) => /veo/i.test(m.label))).toBe(true);
-      expect(VIDEO_MODELS.some((m) => m.provider === 'runway')).toBe(false);
+    it('derives every executable video candidate from the catalog without a provider allowlist', () => {
+      const executableCatalogIds = getModels({ modelTypes: ['video'] })
+        .filter(isExecutableVideoModel)
+        .map((model) => model.id);
+
+      expect(executableCatalogIds.length).toBeGreaterThan(0);
+      expect(VIDEO_MODELS.map((model) => model.id)).toEqual(executableCatalogIds);
     });
 
     it('sends the picked video model to the generation handler', async () => {

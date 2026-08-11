@@ -51,6 +51,7 @@ const objectStore = new Map<string, { data: Buffer; contentType: string }>();
 interface AssetRow {
   id: string;
   userId: string;
+  organizationId: string | null;
   kind: string;
   mimeType: string;
   byteSize: number;
@@ -87,6 +88,7 @@ vi.mock('@/lib/server/media-assets', async () => {
   return {
     insertMediaAsset: async (p: {
       userId: string;
+      organizationId: string | null;
       kind: string;
       mimeType: string;
       byteSize?: number;
@@ -98,6 +100,7 @@ vi.mock('@/lib/server/media-assets', async () => {
       assetRows.set(id, {
         id,
         userId: p.userId,
+        organizationId: p.organizationId,
         kind: p.kind,
         mimeType: p.mimeType,
         byteSize: p.byteSize ?? 0,
@@ -108,7 +111,10 @@ vi.mock('@/lib/server/media-assets', async () => {
       });
       return id;
     },
-    getMediaAssetById: async (id: string) => assetRows.get(id) ?? null,
+    getActiveWorkspaceMediaAssetById: async (userId: string, id: string) => {
+      const row = assetRows.get(id);
+      return row?.userId === userId && row.organizationId === null ? row : null;
+    },
   };
 });
 
@@ -124,8 +130,8 @@ import type { StreamChunk } from '@agiworkforce/types';
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-genfile-001',
-    chatRequest: { model: 'claude-opus-5', messages: [], stream: true },
-    requestedModel: 'claude-opus-5',
+    chatRequest: { model: 'fixture-model', messages: [], stream: true },
+    requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 5,
     quotaWarningHeader: null,
@@ -327,7 +333,7 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
     expect(files[0]!.mime_type).toBe('image/png');
     expect(files[0]!.checksum_sha256).toBe(createHash('sha256').update(RECORDED_PNG).digest('hex'));
 
-    // Cross-user access to the persisted asset is forbidden (403).
+    // Foreign assets are indistinguishable from unknown ids (404).
     const { getClerkAuthUser } = await import('@/lib/api-auth');
     (getClerkAuthUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       userId: 'user-other',
@@ -337,7 +343,7 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
       new Request(`https://example.com/api/files/${id}`) as never,
       { params: Promise.resolve({ id }) } as never,
     );
-    expect(served.status).toBe(403);
+    expect(served.status).toBe(404);
   });
 
   it('surfaces an honest inline note (not silence) when the provider fetch fails', async () => {

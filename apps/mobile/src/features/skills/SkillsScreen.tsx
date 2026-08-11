@@ -24,6 +24,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
 import { fetchManagedSkills, type ManagedSkillSource, type ManagedSkillSummary } from './service';
+import { useMobileSkillSelectionStore } from './selectionStore';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -193,8 +194,15 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
   );
 }
 
-function SkillRow({ skill }: { skill: ManagedSkillSummary }) {
+function SkillRow({
+  skill,
+  onUse,
+}: {
+  skill: ManagedSkillSummary;
+  onUse: (skill: ManagedSkillSummary) => void;
+}) {
   const colors = useThemeColors();
+  const included = skill.lifecycle === 'included';
 
   return (
     <View
@@ -249,6 +257,34 @@ function SkillRow({ skill }: { skill: ManagedSkillSummary }) {
           <Text selectable style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
             {skill.description || 'No description provided.'}
           </Text>
+          <View
+            style={{
+              marginTop: 3,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <Text
+              accessibilityLabel={`${skill.name} status: ${included ? 'Included' : 'Coming later'}`}
+              style={{
+                color: included ? colors.textSecondary : colors.textMuted,
+                fontSize: 11,
+                fontWeight: '600',
+              }}
+            >
+              {included ? 'Included' : 'Coming later'}
+            </Text>
+            {included ? (
+              <Button
+                title="Use in chat"
+                accessibilityLabel={`Use ${skill.name} in chat`}
+                size="sm"
+                onPress={() => onUse(skill)}
+              />
+            ) : null}
+          </View>
         </View>
       </View>
     </View>
@@ -275,12 +311,12 @@ function CatalogIntro({ count }: { count: number }) {
           Managed Cloud catalog
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          These Skills are installed on the deployment and can be selected automatically when a
-          Cloud task needs them. Mobile browsing is read-only.
+          Choose an included Skill for your next AGI Cloud message. Draft entries are marked Coming
+          later; installing or changing Skills remains a host or admin action.
         </Text>
       </View>
       <Text
-        accessibilityLabel={`${count} skills available`}
+        accessibilityLabel={count === 1 ? '1 skill available' : `${count} skills available`}
         style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}
       >
         {count === 1 ? '1 SKILL AVAILABLE' : `${count} SKILLS AVAILABLE`}
@@ -461,6 +497,7 @@ export function SkillsScreen() {
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const selectSkill = useMobileSkillSelectionStore((state) => state.selectSkill);
 
   const [skills, setSkills] = useState<ManagedSkillSummary[]>([]);
   const [query, setQuery] = useState('');
@@ -484,6 +521,15 @@ export function SkillsScreen() {
     }
     setAppMode('cloud');
   }, [isClerkSignedIn, router, setAppMode]);
+
+  const handleUseSkill = useCallback(
+    (skill: ManagedSkillSummary) => {
+      if (!clerkUserId || skill.lifecycle !== 'included') return;
+      selectSkill({ ownerId: clerkUserId, name: skill.name });
+      router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+    },
+    [clerkUserId, router, selectSkill],
+  );
 
   const load = useCallback(
     async (reason: 'initial' | 'refresh', signal?: AbortSignal) => {
@@ -540,9 +586,16 @@ export function SkillsScreen() {
     );
   }, [query, skills]);
 
+  const availableSkillCount = useMemo(
+    () => skills.filter((skill) => skill.lifecycle === 'included').length,
+    [skills],
+  );
+
   const renderSkill = useCallback(
-    ({ item }: ListRenderItemInfo<ManagedSkillSummary>) => <SkillRow skill={item} />,
-    [],
+    ({ item }: ListRenderItemInfo<ManagedSkillSummary>) => (
+      <SkillRow skill={item} onUse={handleUseSkill} />
+    ),
+    [handleUseSkill],
   );
 
   if (!FEATURES.skills) return <FeatureUnavailable feature="Skills" />;
@@ -579,7 +632,7 @@ export function SkillsScreen() {
           }}
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
-              <CatalogIntro count={skills.length} />
+              <CatalogIntro count={availableSkillCount} />
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />
               ) : null}

@@ -117,7 +117,7 @@
   "inIndia": "India",
   "foreverLabel": "para siempre",
   "freeTierBody": "Un pequeño límite mensual gratuito para probar AGI Cloud con nuestros modelos económicos más rápidos, sin necesidad de tarjeta.",
-  "freeFeature1": "GPT-5.4 Mini, GPT-5.6 Luna y Gemini 3.5 Flash-Lite",
+  "freeFeature1": "Modelos rápidos actuales de OpenAI y Google",
   "freeFeature2": "No requiere tarjeta de crédito",
   "freeFeature3": "Mejora tu plan cuando lo necesites",
   "freeCta": "Empezar gratis",
@@ -174,6 +174,7 @@
   "checkoutFailed": "No se pudo iniciar el pago. Inténtalo de nuevo.",
   "perSeatPricingSub": "por licencia, al mes",
   "perSeatPrice": "{{price}}/licencia/mes",
+  "perSeatPriceAnnual": "{{price}}/licencia/año",
   "seatCountLabel": "Licencias",
   "changeSeatsCta": "Actualizar licencias",
   "audienceLabel": "Tipo de facturación",
@@ -188,5 +189,11 @@
   "heroLede": "Consulta los precios de los planes individuales, de equipo y enterprise.",
   "freeLocalByok": "Modelos locales y tus propias claves API, siempre gratis",
   "seatTotal_one": "{{count}} licencia · {{total}}/mes",
-  "seatTotal_other": "{{count}} licencias · {{total}}/mes"
+  "seatTotal_other": "{{count}} licencias · {{total}}/mes",
+  "seatTotalAnnual_one": "{{count}} licencia · {{total}}/año",
+  "seatTotalAnnual_other": "{{count}} licencias · {{total}}/año",
+  "seatCadenceMonthly_one": "{{count}} licencia · facturación mensual",
+  "seatCadenceMonthly_other": "{{count}} licencias · facturación mensual",
+  "seatCadenceAnnual_one": "{{count}} licencia · facturación anual",
+  "seatCadenceAnnual_other": "{{count}} licencias · facturación anual"
 }

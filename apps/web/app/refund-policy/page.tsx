@@ -39,8 +39,9 @@ export default function RefundPolicyPage() {
               <tr>
                 <td>Plan upgrades</td>
                 <td>
-                  Immediate upgrades use the credit shown by Stripe for unused subscription time.
-                  This is an invoice adjustment, not a reset or refund of already-consumed usage.
+                  Immediate upgrades preserve the renewal date and charge the exact prorated price
+                  difference Stripe previews for the time remaining in the current period. This is
+                  an invoice adjustment, not a reset or refund of already-consumed usage.
                 </td>
               </tr>
               <tr>

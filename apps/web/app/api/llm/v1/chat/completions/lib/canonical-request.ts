@@ -109,9 +109,9 @@ function splitTools(tools: unknown[] | undefined): {
  *
  * Normally the catalog's `apiModelId`. But MiniMax, Qwen and Zhipu are served
  * through OpenRouter for now, and OpenRouter publishes them under its own
- * namespace — `glm-5.2` is `z-ai/glm-5.2` there. `resolveProviderFromModel`
- * has already pointed the request at the OpenRouter adapter; without the
- * matching id it would arrive asking for a model OpenRouter does not have.
+ * namespace. `resolveProviderFromModel` has already pointed the request at the
+ * OpenRouter adapter; without the catalog-owned matching slug it would arrive
+ * asking for a model OpenRouter does not have.
  *
  * Keyed off `processed.provider` rather than re-deriving the routing decision,
  * so the id can never disagree with the adapter actually constructed.

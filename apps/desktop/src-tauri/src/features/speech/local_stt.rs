@@ -1,11 +1,16 @@
 //! Local Speech-to-Text using whisper.cpp via whisper-rs
 //!
-//! Provides offline transcription capability using OpenAI's Whisper models
-//! compiled as whisper.cpp. This serves as a fallback when cloud services
-//! are unavailable or when the user prefers local processing.
+//! Provides offline transcription capability using runtime-installed
+//! whisper.cpp artifacts. Download metadata is embedded from the canonical
+//! registry and can be replaced by a validated user manifest.
 
+use super::artifact_registry::{
+    safe_artifact_filename, validate_runtime_id, verify_sha256, whisper_descriptors,
+};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "local-whisper")]
@@ -15,70 +20,24 @@ use tokio::sync::RwLock;
 #[cfg(feature = "local-whisper")]
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-/// Whisper model size options with tradeoffs between speed and accuracy
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-#[derive(Default)]
-pub enum WhisperModelSize {
-    /// ~75MB, fastest, suitable for real-time on most hardware
-    Tiny,
-    /// ~150MB, good balance of speed and accuracy
-    #[default]
-    Base,
-    /// ~500MB, better accuracy for challenging audio
-    Small,
-    /// ~1.5GB, highest accuracy, requires more RAM
-    Medium,
-}
+/// Runtime identifier for a locally installed speech model.
+///
+/// The legacy type name is retained for IPC compatibility. It no longer
+/// encodes a fixed family or size enum: adding or replacing a local model only
+/// changes the runtime manifest or installed artifact, never this source file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(transparent)]
+pub struct WhisperModelSize(String);
 
 impl WhisperModelSize {
-    /// Returns the model filename for Hugging Face download
-    pub fn model_filename(&self) -> &'static str {
-        match self {
-            WhisperModelSize::Tiny => "ggml-tiny.bin",
-            WhisperModelSize::Base => "ggml-base.bin",
-            WhisperModelSize::Small => "ggml-small.bin",
-            WhisperModelSize::Medium => "ggml-medium.bin",
-        }
-    }
-
-    /// Returns the Hugging Face model URL
-    pub fn download_url(&self) -> String {
-        format!(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-            self.model_filename()
-        )
-    }
-
-    /// Approximate file size in bytes for progress estimation
-    pub fn approximate_size_bytes(&self) -> u64 {
-        match self {
-            WhisperModelSize::Tiny => 75_000_000,
-            WhisperModelSize::Base => 150_000_000,
-            WhisperModelSize::Small => 500_000_000,
-            WhisperModelSize::Medium => 1_500_000_000,
-        }
-    }
-
-    /// Human-readable description
-    pub fn description(&self) -> &'static str {
-        match self {
-            WhisperModelSize::Tiny => "Tiny (~75MB) - Fastest, basic accuracy",
-            WhisperModelSize::Base => "Base (~150MB) - Good balance of speed and accuracy",
-            WhisperModelSize::Small => "Small (~500MB) - Better accuracy",
-            WhisperModelSize::Medium => "Medium (~1.5GB) - Best accuracy, slower",
-        }
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
 impl std::fmt::Display for WhisperModelSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WhisperModelSize::Tiny => write!(f, "tiny"),
-            WhisperModelSize::Base => write!(f, "base"),
-            WhisperModelSize::Small => write!(f, "small"),
-            WhisperModelSize::Medium => write!(f, "medium"),
-        }
+        f.write_str(&self.0)
     }
 }
 
@@ -86,13 +45,8 @@ impl std::str::FromStr for WhisperModelSize {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.to_lowercase().as_str() {
-            "tiny" => Ok(WhisperModelSize::Tiny),
-            "base" => Ok(WhisperModelSize::Base),
-            "small" => Ok(WhisperModelSize::Small),
-            "medium" => Ok(WhisperModelSize::Medium),
-            _ => Err(anyhow!("Unknown Whisper model size: {}", s)),
-        }
+        validate_runtime_id(s)?;
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -144,8 +98,6 @@ pub struct TranscriptionConfig {
 pub struct WhisperLocal {
     /// Path to the model file
     model_path: PathBuf,
-    /// Model size
-    model_size: WhisperModelSize,
     /// Whisper context (lazy-loaded)
     #[cfg(feature = "local-whisper")]
     context: Arc<RwLock<Option<WhisperContext>>>,
@@ -157,7 +109,7 @@ impl WhisperLocal {
     /// Create a new WhisperLocal instance
     ///
     /// The model is not loaded until the first transcription request.
-    pub fn new(model_path: PathBuf, model_size: WhisperModelSize) -> Result<Self> {
+    pub fn new(model_path: PathBuf) -> Result<Self> {
         if !model_path.exists() {
             return Err(anyhow!(
                 "Whisper model not found at {:?}. Please download it first.",
@@ -167,7 +119,6 @@ impl WhisperLocal {
 
         Ok(Self {
             model_path,
-            model_size,
             #[cfg(feature = "local-whisper")]
             context: Arc::new(RwLock::new(None)),
             #[cfg(not(feature = "local-whisper"))]
@@ -176,10 +127,9 @@ impl WhisperLocal {
     }
 
     /// Create instance without verifying model exists (for deferred loading)
-    pub fn new_deferred(model_path: PathBuf, model_size: WhisperModelSize) -> Self {
+    pub fn new_deferred(model_path: PathBuf) -> Self {
         Self {
             model_path,
-            model_size,
             #[cfg(feature = "local-whisper")]
             context: Arc::new(RwLock::new(None)),
             #[cfg(not(feature = "local-whisper"))]
@@ -195,11 +145,6 @@ impl WhisperLocal {
     /// Get the model path
     pub fn model_path(&self) -> &PathBuf {
         &self.model_path
-    }
-
-    /// Get the model size
-    pub fn model_size(&self) -> WhisperModelSize {
-        self.model_size
     }
 
     /// Load the model into memory (if not already loaded)
@@ -377,14 +322,12 @@ impl WhisperLocal {
         ))
     }
 
-    /// Download a Whisper model to the specified directory
+    /// Download a catalog or runtime-configured local speech model.
     ///
-    /// # Arguments
-    /// * `size` - Model size to download
-    /// * `models_dir` - Directory to store the model
-    /// * `progress` - Progress callback with (bytes_downloaded, total_bytes)
+    /// Canonical metadata is embedded from the model registry. A user-owned
+    /// runtime manifest can override it, but cannot omit checksum validation.
     pub async fn download_model<F>(
-        size: WhisperModelSize,
+        model_id: WhisperModelSize,
         models_dir: PathBuf,
         progress: F,
     ) -> Result<PathBuf>
@@ -396,7 +339,17 @@ impl WhisperLocal {
             .await
             .context("Failed to create models directory")?;
 
-        let model_path = models_dir.join(size.model_filename());
+        let descriptor = whisper_descriptors(&models_dir)?
+            .into_iter()
+            .find(|entry| entry.id == model_id.as_str())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Local speech model '{}' is not present in the runtime manifest",
+                    model_id
+                )
+            })?;
+        let filename = safe_artifact_filename(&descriptor.filename)?;
+        let model_path = models_dir.join(filename);
 
         // Check if already downloaded
         if model_path.exists() {
@@ -404,12 +357,21 @@ impl WhisperLocal {
             return Ok(model_path);
         }
 
-        let url = size.download_url();
-        tracing::info!("Downloading Whisper {} model from {}", size, url);
+        let url = descriptor.download_url.as_deref().ok_or_else(|| {
+            anyhow!(
+                "Local speech model '{}' has no runtime download URL",
+                model_id
+            )
+        })?;
+        let expected_sha256 = descriptor
+            .sha256
+            .as_deref()
+            .ok_or_else(|| anyhow!("Local speech model '{}' has no verified checksum", model_id))?;
+        tracing::info!("Downloading local speech model {} from {}", model_id, url);
 
         let client = reqwest::Client::new();
         let response = client
-            .get(&url)
+            .get(url)
             .send()
             .await
             .context("Failed to start download")?;
@@ -423,7 +385,7 @@ impl WhisperLocal {
 
         let total_size = response
             .content_length()
-            .unwrap_or(size.approximate_size_bytes());
+            .unwrap_or(descriptor.approximate_size_bytes);
 
         // Download to temp file first, then rename (atomic)
         let temp_path = model_path.with_extension("bin.tmp");
@@ -433,6 +395,7 @@ impl WhisperLocal {
 
         let mut downloaded: u64 = 0;
         let mut stream = response.bytes_stream();
+        let mut hasher = Sha256::new();
 
         use futures_util::StreamExt;
         use tokio::io::AsyncWriteExt;
@@ -442,6 +405,7 @@ impl WhisperLocal {
             file.write_all(&chunk)
                 .await
                 .context("Failed to write to file")?;
+            hasher.update(&chunk);
 
             downloaded += chunk.len() as u64;
             progress(downloaded, total_size);
@@ -450,12 +414,18 @@ impl WhisperLocal {
         file.flush().await.context("Failed to flush file")?;
         drop(file);
 
+        let digest = hasher.finalize();
+        if let Err(error) = verify_sha256(&digest, expected_sha256) {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(error);
+        }
+
         // Rename temp file to final path
         tokio::fs::rename(&temp_path, &model_path)
             .await
             .context("Failed to rename temp file")?;
 
-        tracing::info!("Whisper model downloaded to {:?}", model_path);
+        tracing::info!("Local speech model downloaded to {:?}", model_path);
         Ok(model_path)
     }
 
@@ -465,33 +435,94 @@ impl WhisperLocal {
         Ok(home.join(".agiworkforce").join("models").join("whisper"))
     }
 
-    /// List available local models
-    pub async fn list_available_models(models_dir: &Path) -> Result<Vec<WhisperModelSize>> {
-        let mut available = Vec::new();
+    /// Discover runtime-configured and locally installed speech models.
+    pub fn discover_models(models_dir: &Path) -> Result<Vec<WhisperModelInfo>> {
+        let mut models = Vec::<WhisperModelInfo>::new();
+        let mut known_filenames = HashSet::new();
 
-        for size in [
-            WhisperModelSize::Tiny,
-            WhisperModelSize::Base,
-            WhisperModelSize::Small,
-            WhisperModelSize::Medium,
-        ] {
-            let path = models_dir.join(size.model_filename());
-            if path.exists() {
-                available.push(size);
+        for descriptor in whisper_descriptors(models_dir)? {
+            let filename = safe_artifact_filename(&descriptor.filename)?;
+            known_filenames.insert(filename.to_string());
+            let path = models_dir.join(filename);
+            let is_downloaded = path.is_file();
+            let actual_size = std::fs::metadata(&path)
+                .map(|metadata| metadata.len())
+                .unwrap_or(descriptor.approximate_size_bytes);
+            let description = if descriptor.description.trim().is_empty() {
+                "Runtime-configured local speech model".to_string()
+            } else {
+                descriptor.description
+            };
+            models.push(WhisperModelInfo {
+                size: descriptor.id.parse()?,
+                filename: descriptor.filename,
+                description,
+                approximate_size_mb: actual_size / 1_000_000,
+                is_downloaded,
+                path: is_downloaded.then_some(path),
+            });
+        }
+
+        if models_dir.is_dir() {
+            let mut entries = std::fs::read_dir(models_dir)
+                .context("Failed to inspect local speech model directory")?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                if !path.is_file()
+                    || path.extension().and_then(|value| value.to_str()) != Some("bin")
+                {
+                    continue;
+                }
+                let filename = match path.file_name().and_then(|value| value.to_str()) {
+                    Some(value) => value.to_string(),
+                    None => continue,
+                };
+                if known_filenames.contains(&filename) {
+                    continue;
+                }
+                let id: WhisperModelSize = path
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .ok_or_else(|| anyhow!("Local speech model filename is not valid UTF-8"))?
+                    .parse()?;
+                if models.iter().any(|model| model.size == id) {
+                    continue;
+                }
+                models.push(WhisperModelInfo {
+                    size: id,
+                    filename,
+                    description: "Runtime-discovered local speech model".to_string(),
+                    approximate_size_mb: entry
+                        .metadata()
+                        .map(|metadata| metadata.len() / 1_000_000)
+                        .unwrap_or(0),
+                    is_downloaded: true,
+                    path: Some(path),
+                });
             }
         }
 
-        Ok(available)
+        Ok(models)
     }
 
-    /// Delete a downloaded model
-    pub async fn delete_model(models_dir: &Path, size: WhisperModelSize) -> Result<()> {
-        let path = models_dir.join(size.model_filename());
-        if path.exists() {
+    /// Resolve an installed model identifier to its discovered artifact.
+    pub fn resolve_model_path(models_dir: &Path, model_id: &WhisperModelSize) -> Result<PathBuf> {
+        Self::discover_models(models_dir)?
+            .into_iter()
+            .find(|model| &model.size == model_id && model.is_downloaded)
+            .and_then(|model| model.path)
+            .ok_or_else(|| anyhow!("Local speech model '{}' is not installed", model_id))
+    }
+
+    /// Delete a downloaded model selected by its runtime identifier.
+    pub async fn delete_model(models_dir: &Path, model_id: &WhisperModelSize) -> Result<()> {
+        if let Ok(path) = Self::resolve_model_path(models_dir, model_id) {
             tokio::fs::remove_file(&path)
                 .await
                 .context("Failed to delete model file")?;
-            tracing::info!("Deleted Whisper {} model", size);
+            tracing::info!("Deleted local speech model {}", model_id);
         }
         Ok(())
     }
@@ -534,55 +565,54 @@ pub struct WhisperModelInfo {
     pub path: Option<PathBuf>,
 }
 
-impl WhisperModelInfo {
-    pub fn new(size: WhisperModelSize, models_dir: &Path) -> Self {
-        let path = models_dir.join(size.model_filename());
-        let is_downloaded = path.exists();
-
-        Self {
-            size,
-            filename: size.model_filename().to_string(),
-            description: size.description().to_string(),
-            approximate_size_mb: size.approximate_size_bytes() / 1_000_000,
-            is_downloaded,
-            path: if is_downloaded { Some(path) } else { None },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::speech::artifact_registry::RUNTIME_MANIFEST_FILENAME;
 
     #[test]
-    fn test_model_size_parsing() {
-        assert_eq!(
-            "tiny".parse::<WhisperModelSize>().unwrap(),
-            WhisperModelSize::Tiny
-        );
-        assert_eq!(
-            "base".parse::<WhisperModelSize>().unwrap(),
-            WhisperModelSize::Base
-        );
-        assert_eq!(
-            "small".parse::<WhisperModelSize>().unwrap(),
-            WhisperModelSize::Small
-        );
-        assert_eq!(
-            "medium".parse::<WhisperModelSize>().unwrap(),
-            WhisperModelSize::Medium
-        );
-        assert!("invalid".parse::<WhisperModelSize>().is_err());
+    fn runtime_model_identifier_is_transparent_and_validated() {
+        let id = "fixture-local-stt".parse::<WhisperModelSize>().unwrap();
+        assert_eq!(id.as_str(), "fixture-local-stt");
+        assert!("".parse::<WhisperModelSize>().is_err());
     }
 
     #[test]
-    fn test_model_urls() {
-        assert!(WhisperModelSize::Tiny
-            .download_url()
-            .contains("ggml-tiny.bin"));
-        assert!(WhisperModelSize::Medium
-            .download_url()
-            .contains("ggml-medium.bin"));
+    fn runtime_manifest_and_installed_artifacts_drive_discovery() {
+        let clean_dir = tempfile::tempdir().unwrap();
+        let canonical_count = WhisperLocal::discover_models(clean_dir.path())
+            .unwrap()
+            .len();
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp_dir.path().join(RUNTIME_MANIFEST_FILENAME),
+            serde_json::json!({
+                "models": [{
+                    "id": "fixture-catalog-stt",
+                    "filename": "fixture-catalog-stt.bin",
+                    "description": "Fixture speech model",
+                    "approximateSizeBytes": 2_000_000,
+                    "downloadUrl": "https://example.invalid/fixture.bin",
+                    "sha256": "0".repeat(64)
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("fixture-installed-stt.bin"),
+            b"fixture",
+        )
+        .unwrap();
+
+        let models = WhisperLocal::discover_models(temp_dir.path()).unwrap();
+        assert_eq!(models.len(), canonical_count + 2);
+        assert!(models
+            .iter()
+            .any(|model| { model.size.as_str() == "fixture-catalog-stt" && !model.is_downloaded }));
+        assert!(models.iter().any(|model| {
+            model.size.as_str() == "fixture-installed-stt" && model.is_downloaded
+        }));
     }
 
     #[test]
@@ -593,11 +623,48 @@ mod tests {
         assert!(path.ends_with("whisper"));
     }
 
-    #[tokio::test]
-    async fn test_model_info() {
-        let temp_dir = std::env::temp_dir().join("whisper_test");
-        let info = WhisperModelInfo::new(WhisperModelSize::Tiny, &temp_dir);
-        assert_eq!(info.size, WhisperModelSize::Tiny);
-        assert!(!info.is_downloaded);
+    #[test]
+    fn manifest_rejects_path_traversal() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp_dir.path().join(RUNTIME_MANIFEST_FILENAME),
+            serde_json::json!({
+                "models": [{
+                    "id": "fixture-escape-stt",
+                    "filename": "../fixture.bin",
+                    "downloadUrl": "https://example.invalid/fixture.bin",
+                    "sha256": "0".repeat(64)
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(WhisperLocal::discover_models(temp_dir.path()).is_err());
+    }
+
+    #[test]
+    fn clean_install_exposes_canonical_downloads() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let descriptors = whisper_descriptors(temp_dir.path()).unwrap();
+        let models = WhisperLocal::discover_models(temp_dir.path()).unwrap();
+        assert_eq!(models.len(), descriptors.len());
+        assert!(models.iter().all(|model| !model.is_downloaded));
+        assert!(descriptors
+            .iter()
+            .all(|entry| entry.download_url.is_some() && entry.sha256.is_some()));
+    }
+
+    #[test]
+    fn canonical_download_is_marked_installed_without_a_duplicate_discovery_id() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let descriptors = whisper_descriptors(temp_dir.path()).unwrap();
+        let selected = &descriptors[0];
+        std::fs::write(temp_dir.path().join(&selected.filename), b"fixture").unwrap();
+
+        let models = WhisperLocal::discover_models(temp_dir.path()).unwrap();
+        assert_eq!(models.len(), descriptors.len());
+        assert!(models
+            .iter()
+            .any(|model| model.size.as_str() == selected.id && model.is_downloaded));
     }
 }

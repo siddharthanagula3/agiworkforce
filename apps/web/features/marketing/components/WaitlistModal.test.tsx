@@ -8,11 +8,6 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
   joinPublicWaitlist: (...args: unknown[]) => mockJoinPublicWaitlist(...args),
 }));
 
-const mockPathname = vi.fn(() => '/');
-vi.mock('next/navigation', () => ({
-  usePathname: () => mockPathname(),
-}));
-
 describe('WaitlistModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,23 +18,19 @@ describe('WaitlistModal', () => {
     }
   });
 
-  it('does not auto-open when the demo kill-switch env flag is set', () => {
+  it('never interrupts a visitor with an automatic modal', () => {
     vi.useFakeTimers();
-    const prev = process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'];
-    process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] = '1';
     try {
       render(
         <WaitlistModalProvider>
           <span>app</span>
         </WaitlistModalProvider>,
       );
-      // Advance well past the 5s auto-prompt delay; the modal must stay closed.
       act(() => {
-        vi.advanceTimersByTime(10000);
+        vi.advanceTimersByTime(120_000);
       });
       expect(screen.queryByText(/request team & enterprise access/i)).not.toBeInTheDocument();
     } finally {
-      process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] = prev;
       vi.useRealTimers();
     }
   });
@@ -80,6 +71,20 @@ describe('WaitlistModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/you.re on the list/i)).toBeInTheDocument();
     });
+  });
+
+  it('closes from its visible close control', () => {
+    render(
+      <WaitlistModalProvider>
+        <WaitlistTrigger label="Team access" />
+      </WaitlistModalProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /team access/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close waitlist dialog/i }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('validates the email locally before calling the service', async () => {
@@ -143,36 +148,5 @@ describe('WaitlistModal', () => {
         referralSource: 'byok',
       });
     });
-  });
-
-  // Regression: the blocklist is default-OPEN — any route not named in it gets
-  // a marketing capture over the product. `/connect/[deviceType]` was missing,
-  // so the modal opened on top of the "Connect VS Code to AGI?" approval prompt
-  // and stole focus from the Deny/Approve decision. Reproduced in a real
-  // browser before this test was written.
-  it.each([
-    ['/connect/vscode', 'a device-pairing approval prompt'],
-    ['/share/abc123', 'a public share recipient'],
-    ['/shared/abc123', 'a public share recipient'],
-    ['/status', 'the status page during an incident'],
-    ['/tasks', 'a signed-in product surface'],
-    ['/chat/library', 'a signed-in product surface'],
-  ])('never auto-opens over %s (%s)', (pathname) => {
-    vi.useFakeTimers();
-    mockPathname.mockReturnValue(pathname);
-    try {
-      render(
-        <WaitlistModalProvider>
-          <span>app</span>
-        </WaitlistModalProvider>,
-      );
-      act(() => {
-        vi.advanceTimersByTime(120_000);
-      });
-      expect(screen.queryByRole('dialog')).toBeNull();
-    } finally {
-      mockPathname.mockReturnValue('/');
-      vi.useRealTimers();
-    }
   });
 });

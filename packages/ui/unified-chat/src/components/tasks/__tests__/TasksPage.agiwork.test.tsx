@@ -22,7 +22,7 @@ function makeRun(overrides: Partial<CloudAgentRun> = {}): CloudAgentRun {
     workMode: 'agiwork',
     state: 'completed',
     provider: 'openai',
-    model: 'gpt-5.6-sol',
+    model: 'fixture-task-model',
     lastEventSequence: 3,
     cancellationRequestedAt: null,
     completedAt: '2026-08-02T12:05:00.000Z',

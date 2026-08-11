@@ -219,7 +219,7 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
     ) {
         let git_cmd = lower.rsplit("__").next().unwrap_or("git").replace('_', " ");
         ("Git", truncate(&git_cmd, 30))
-    } else if contains_any(&lower, &["image_generate", "dalle", "generate_image"]) {
+    } else if contains_any(&lower, &["image_generate", "generate_image"]) {
         let prompt = args
             .get("prompt")
             .and_then(|v| v.as_str())

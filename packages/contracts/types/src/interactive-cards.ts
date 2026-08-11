@@ -51,7 +51,11 @@ export const INTERACTIVE_CARDS_MAX_PER_MESSAGE = 4;
 // Kind allowlist — this IS the security boundary
 // ---------------------------------------------------------------------------
 
-export const KNOWN_INTERACTIVE_CARD_KINDS = ['clarify.v1', 'itinerary.v1'] as const;
+export const KNOWN_INTERACTIVE_CARD_KINDS = [
+  'clarify.v1',
+  'itinerary.v1',
+  'map-search.v1',
+] as const;
 export type KnownInteractiveCardKind = (typeof KNOWN_INTERACTIVE_CARD_KINDS)[number];
 
 /**
@@ -357,6 +361,31 @@ export const ITINERARY_MAX_STOPS = 12;
 export const ITINERARY_NOTE_MAX_LENGTH = 240;
 
 // ---------------------------------------------------------------------------
+// map-search.v1
+// ---------------------------------------------------------------------------
+
+/**
+ * A deliberately identity-neutral map search. This is different from an
+ * itinerary: the model supplies a bounded search query and the server builds
+ * provider search URLs. It never claims that a place was resolved, never
+ * manufactures coordinates, and cannot be used to build turn-by-turn routes.
+ */
+export const MAP_SEARCH_QUERY_MAX_LENGTH = 300;
+
+export interface MapSearchAction {
+  provider: 'google_maps' | 'openstreetmap';
+  label: string;
+  /** Server-built HTTPS URL. The model never authors this field. */
+  url: string;
+}
+
+export interface MapSearchCardBody {
+  title: string;
+  query: string;
+  actions: MapSearchAction[];
+}
+
+// ---------------------------------------------------------------------------
 // The model-facing tool input — where the bug is made unrepresentable
 // ---------------------------------------------------------------------------
 
@@ -419,7 +448,12 @@ export const INTERACTIVE_CARD_IDENTITY_GUARD: _AssertNoIdentityInModelInput = tr
 
 export type KnownInteractiveCard =
   | (InteractiveCardCommon & { recognized: true; kind: 'clarify.v1'; body: ClarifyCardBody })
-  | (InteractiveCardCommon & { recognized: true; kind: 'itinerary.v1'; body: ItineraryCardBody });
+  | (InteractiveCardCommon & { recognized: true; kind: 'itinerary.v1'; body: ItineraryCardBody })
+  | (InteractiveCardCommon & {
+      recognized: true;
+      kind: 'map-search.v1';
+      body: MapSearchCardBody;
+    });
 
 /**
  * A card whose kind this build does not know, or whose body failed validation.

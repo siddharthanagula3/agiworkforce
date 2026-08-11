@@ -28,7 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@shared/ui/form';
-import { Plus, Key, Copy, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Key, Copy, Trash2, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   createApiKeySchema,
@@ -59,6 +59,8 @@ interface ApiKeysPanelProps {
   keyToDelete: string | null;
   isCreatePending: boolean;
   isLoading?: boolean;
+  loadError?: string | null;
+  onRetry?: () => void;
   onSetShowAPIKeyDialog: (open: boolean) => void;
   onSetKeyToDelete: (id: string | null) => void;
   onGenerateAPIKey: (data: CreateApiKeyFormData) => void;
@@ -75,6 +77,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   keyToDelete,
   isCreatePending,
   isLoading = false,
+  loadError = null,
+  onRetry,
   onSetShowAPIKeyDialog,
   onSetKeyToDelete,
   onGenerateAPIKey,
@@ -94,6 +98,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             onClick={() => onSetShowAPIKeyDialog(true)}
             className="bg-green-600 hover:bg-green-700"
             size="sm"
+            disabled={Boolean(loadError)}
           >
             <Plus className="mr-2 h-4 w-4" />
             New Key
@@ -106,6 +111,18 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading API keys...
+            </div>
+          ) : loadError ? (
+            <div className="space-y-3 py-6 text-center">
+              <p role="alert" className="text-sm text-destructive">
+                {loadError}
+              </p>
+              {onRetry ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              ) : null}
             </div>
           ) : apiKeys.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
@@ -322,7 +339,7 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
  * this wrapper owns the same real query/mutation contract for WebSettingsModal.
  */
 export function ApiKeysManager() {
-  const { data: apiKeys = [], isLoading } = useAPIKeys();
+  const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const apiKeyForm = useForm<CreateApiKeyFormData>({
@@ -374,6 +391,8 @@ export function ApiKeysManager() {
       keyToDelete={keyToDelete}
       isCreatePending={createMutation.isPending}
       isLoading={isLoading}
+      loadError={isError ? (error?.message ?? 'Unable to load API keys.') : null}
+      onRetry={() => void refetch()}
       onSetShowAPIKeyDialog={setDialogOpen}
       onSetKeyToDelete={setKeyToDelete}
       onGenerateAPIKey={generateAPIKey}

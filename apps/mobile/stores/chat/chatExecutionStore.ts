@@ -14,6 +14,11 @@ import { api, ApiPaywallError } from '@/services/api';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import {
+  paywallActivityErrorFromApiError,
+  paywallErrorStateFromApiError,
+  type PaywallErrorState,
+} from '@/src/features/chat/utils/paywallRecovery';
+import {
   cancelMobileCloudAgentRun,
   streamChat,
   streamToolApprovalResume,
@@ -47,7 +52,11 @@ import {
   markLocalModelRefUsed,
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
-import { isCloudManagedModelId, isSelectableModelId } from '@/src/features/model-picker/service';
+import {
+  DEFAULT_AUTO_MODE_ID,
+  isCloudManagedModelId,
+  isSelectableModelId,
+} from '@/src/features/model-picker/service';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -99,13 +108,6 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
-
-/** Paywall error state captured when the API returns a tier-cap paywall response. */
-export interface PaywallErrorState {
-  feature: string;
-  requiredTier: string;
-  reason: string;
-}
 
 export interface SendMessageOptions {
   mode?: ChatMode;
@@ -2031,7 +2033,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 agentActivity = finishAgentActivityLocally(agentActivity, {
                   status: 'failed',
                   completedAtMs: Date.now(),
-                  error: 'Usage limit reached. Upgrade to continue.',
+                  error: paywallActivityErrorFromApiError(error),
                 });
               }
               const updatedMsgs = msgs.map((m) =>
@@ -2062,11 +2064,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ...streamingFlags(),
                 streamingContent: '',
                 streamingReasoning: '',
-                paywallError: {
-                  feature: error.feature,
-                  requiredTier: error.requiredTier,
-                  reason: error.reason,
-                },
+                paywallError: paywallErrorStateFromApiError(error),
               });
               return;
             }
@@ -2167,7 +2165,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 { ...m, content: currentContent || '', isStreaming: false },
                 'failed',
                 Date.now(),
-                'Usage limit reached. Upgrade to continue.',
+                paywallActivityErrorFromApiError(caughtErr),
               )
             : m,
         );
@@ -2181,11 +2179,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...streamingFlags(),
           streamingContent: '',
           streamingReasoning: '',
-          paywallError: {
-            feature: caughtErr.feature,
-            requiredTier: caughtErr.requiredTier,
-            reason: caughtErr.reason,
-          },
+          paywallError: paywallErrorStateFromApiError(caughtErr),
         });
         return true;
       }
@@ -2905,7 +2899,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
     const userContent = userMsg.content;
-    const userModel = userMsg.model ?? assistantMsg?.model ?? 'auto';
+    const userModel = userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
@@ -2982,7 +2976,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const targetMsg = msgs[msgIndex];
     if (!targetMsg || targetMsg.role !== 'user') return;
 
-    const userModel = targetMsg.model ?? 'auto';
+    const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
 
     set({ isEditing: true });
 

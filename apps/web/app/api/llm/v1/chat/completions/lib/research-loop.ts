@@ -1056,10 +1056,17 @@ export async function* runResearchLoop(
             observedUsage.providerCalls === callsBefore &&
             (next.value.promptTokens > 0 || next.value.completionTokens > 0)
           ) {
-            accumulateObservedProviderUsage(observedUsage, {
-              inputTokens: next.value.promptTokens,
-              outputTokens: next.value.completionTokens,
-            });
+            accumulateObservedProviderUsage(
+              observedUsage,
+              {
+                inputTokens: next.value.promptTokens,
+                outputTokens: next.value.completionTokens,
+              },
+              {
+                provider: servingProcessed.provider,
+                model: servingProcessed.chatRequest.model,
+              },
+            );
           }
           return next.value;
         }

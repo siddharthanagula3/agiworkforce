@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-08
+Last updated: 2026-08-11
 
 Built by extracting all 211 findings from the five audit artifacts, verifying
 96 of them against the repository as it stands, and ordering the survivors by
@@ -22,6 +22,851 @@ synthesis was a single pass over both.
   Open the file before you believe the finding.
 - Record dismissals as explicitly as fixes, with the evidence that dismissed
   them, in `docs/agent-context/known-flaws.md`.
+
+## Gold Goal — current execution cycle
+
+This is the live product plan. The historical audit waves below remain evidence
+and a regression queue; they do not replace Website-first product validation.
+Only the next verified slice is expanded here so that the plan stays actionable.
+
+### G1. Restore a trustworthy shared model/media baseline
+
+- Status: DONE (2026-08-10)
+- Scope: canonical model metadata, model-literal guard, and obsolete image/media
+  wiring that can surface stale or unavailable choices in Website, Mobile, or
+  Electron.
+- Done when: `pnpm check:model-id-literals` is green, retired media adapters are
+  unreachable, and focused owner tests/typechecks pass.
+- Evidence: the repository-wide literal guard passed across 8,486 files;
+  obsolete image adapter choices were removed; Desktop TypeScript, native media
+  routing, prompt routing, and shared managed-media contracts verified clean.
+
+### G2. Website signed-in shell and chat real-use audit
+
+- Status: DONE (2026-08-11)
+- Flow: `/` → signed-in chat → primary composer and navigation controls → one
+  non-paid state transition, with DOM, console, network, and screenshot evidence.
+- Rule: fix the first reproducible unusual behavior before broadening the audit.
+- First repair: removed the unsolicited five-second enterprise waitlist capture
+  and gave the deliberate modal an explicit close action. Real browser proof on
+  `/` and `/teams`: no automatic dialog, Products opens, CTA opens the dialog,
+  Close removes it, and console errors remain empty.
+- Signed-in production proof: aligned Web and shared-UI i18n dependencies to one
+  React context, then removed the retired OpenAI economy model from the authored
+  catalog, generated mirrors, economy roster, automatic route, and failover map.
+  After production deployment `dpl_2Mc8Ms2HX6aMFGfbNYU5ouB1gUeN`, the live
+  model selector contains the three current OpenAI roles and no retired entry;
+  its warning/error console is empty. A stale isolated deployment had briefly
+  reintroduced the obsolete generated catalog, so future browser evidence must
+  identify the exact deployment under test.
+- Real chat proof on the same deployment: a cost-efficient managed model showed
+  `Generating response` in the Agent activity region before the provider result,
+  returned the requested exact text, and preserved both turns after a refresh;
+  the warning/error console remained empty.
+- Production media proof: the additive media schema was promoted, image writes
+  now carry their owning Web conversation, and stored output MIME/extension is
+  derived from validated bytes. One low-cost signed-in image request persisted
+  as asset `35994084-3d26-4115-97cf-247e445620a8`, survived chat and Library
+  refreshes, and was independently fetched from the private Cloudflare R2 bucket
+  as a valid 1024×1024 JFIF JPEG. The Browser warning/error console was empty.
+- Library repair: the shared Web/Electron Library now exposes the backend's
+  owner-scoped soft-delete lifecycle with confirmation, pending/error states,
+  a 30-day Recently-deleted bin, Restore, and an explicit double-confirmed
+  permanent erasure path that deletes provider-neutral stored bytes before its
+  database pointer. A signed-in localhost browser verified both confirmation
+  states, moved the disposable `haiku45-live.txt` asset into Recently deleted,
+  restored it, and verified both matching and no-result search states after the
+  request debounce. Reloading exposed an auth-hydration flash that briefly
+  claimed the account was `User` / `Free` with no conversations or files; the
+  shared Library transport and Web shell now render honest account, conversation,
+  and Library loading states until auth settles. A second signed-in reload showed
+  no false empty/account state, then restored the real account, conversations,
+  and asset grid. Production real-use verification had separately moved an older
+  image into the bin, restored it, and confirmed both it and the newly generated
+  evidence image remained in the live Library.
+
+### G3. Website capability slice
+
+- Status: IN_PROGRESS
+- Choose the highest-impact broken or dishonest capability found by G2 and make
+  its UI, persistence, server contract, and error recovery work end to end.
+- Validate the same shared contract on Mobile Cloud and Electron where that
+  capability is exposed; do not add surface-local model or provider routing.
+- Completed slice: catalog-driven image generation, durable chat/Library
+  persistence, validated private-object delivery, explicit user retry timing,
+  and shared Web/Electron Library deletion/restoration.
+- Attachment proof: a signed-in production chat uploaded a synthetic 142-byte
+  Markdown file, showed its Managed-cloud destination and remove control, sent
+  it with a low-cost catalog-selected model, returned the file's exact
+  verification token, and preserved the prompt, protected file link, and reply
+  after refresh. The warning/error console remained empty.
+- Run-code repair: the first production pass exposed a dishonest completed
+  action whose detail said the E2B environment was unavailable. The E2B account,
+  exact scoped runtime constructor, Max 15x entitlement, and quota were verified;
+  the production credential and compute-rate values were then found to contain
+  CLI-added trailing newlines. They were re-provisioned without newlines and the
+  deployment was rebuilt. Production conversation
+  `34f4a40e-e2d4-49b2-8a34-c17f8f7c2c6b` now shows a real persisted action trace
+  (`Running code`, `1.9s`, `Done`), returns `10541`, survives refresh, and maps to
+  a paused owner/conversation-scoped E2B sandbox. Browser warning/error logs were
+  empty.
+- Search/action repair: a real grounded search returned two persisted sources
+  but its completed `web_search` record was hidden because an empty canonical
+  activity envelope suppressed the fallback tool timeline. The shared
+  Web/Electron renderer now suppresses fallback tools only when canonical tool
+  entries actually exist. Production conversation
+  `355792b8-a11e-4d7a-9827-0761d2c35c75` now shows `Searched the web`, expands
+  to `Web search` with both sources and `Done`, and keeps the action plus
+  citations after refresh with an empty warning/error console. Production
+  deployment also made the Toolbar disablement durable and excluded local temp
+  archives/Desktop release packages from Vercel source uploads.
+- Map-search slice: the server now emits a catalog-neutral `map-search.v1`
+  interactive card only for an explicit map intent and a client that declares
+  the capability. Direct and durable runs validate, cap, persist, and rehydrate
+  the same card contract; reloads revalidate provider URLs against the exact
+  Google Maps/OpenStreetMap allowlist. The visible `Preparing map` action keeps
+  the reasoning/action state honest before the result card appears.
+- Project/AGI Work slice: the Projects composer now hands its full intent to
+  chat (attachments, selected skill/options, project identity, and stable turn
+  IDs). Clerk hydration and Strict Mode cannot consume it early, the user row is
+  durably saved before provider egress, and failed persistence makes zero model
+  calls. The destination acknowledges only after the stable-ID turn is safe, so
+  refresh/retry cannot buy a duplicate provider turn.
+  A signed-in localhost pass then exercised that exact handoff with the
+  cost-efficient Google route: it navigated into one stable conversation,
+  rendered live `Working…` activity, completed as `Prepared the response`, and
+  preserved the prompt, project-derived answer, project identity, and action
+  state after reload without a stuck Stop control. The same pass exposed
+  irrelevant software-testing follow-up pills because the phrase “project
+  recall test” matched broad testing and machine-learning heuristics; those
+  classifiers now require unambiguous testing/ML vocabulary, and the reloaded
+  conversation offers neutral contextual follow-ups instead.
+- Legal/auth slice: login and signup now place an explicit Terms agreement and
+  Privacy Policy acknowledgement in front of Clerk, then bind the current
+  revision to the authenticated account at a fail-closed completion checkpoint.
+  Protected Web and device-token paths re-check the current revision. Terms,
+  Privacy, Security, and Subprocessor pages were reconciled with the implemented
+  trust boundaries, including authenticated workspace-scoped file delivery and
+  the still-public underlying bucket for non-video objects.
+- Public hierarchy slice: Business now renders one visible H1, and every
+  split-line flagship hero inserts an explicit JSX word boundary so its visual
+  line break cannot collapse the accessible name. A source guard covers all
+  route pages; local browser checks confirmed exact names on Integrations,
+  Agents, Downloads, and Security with no framework errors or overflow.
+  The same pass removed route-local inline JSON-LD after App Router streamed it
+  out of hydration order. Root-level site schemas remain; Agents, FAQ, and
+  Buildathon now render without React hydration errors, and a source guard
+  keeps inline structured data out of route page siblings.
+- Workspace-isolation slice: chat sync validates project ownership plus the
+  exact active organisation both before and during mutation. Scheduled agents
+  carry the claimed user/organisation scope through RLS-bound usage accounting
+  and persistence, and schedule quota counting remains per-user across
+  workspaces rather than becoming a workspace-switch escape hatch.
+- Team slice: pricing is catalog-derived and variable by selected seat count
+  (`unit price × seats`) across the visible total, cadence copy, checkout body,
+  and upgrade preview. Team administration now evaluates the organization's
+  entitlement instead of the acting admin's personal plan; invitation acceptance
+  reports the persisted role; and a nonowner can leave while an owner can
+  atomically transfer ownership and leave. The live Team Stripe products/Price
+  IDs are still absent, so checkout remains honestly unavailable and the exact
+  founder prerequisite is recorded in `FoundersAssistance.md`. A signed-in
+  localhost pass also exposed that Settings survived App Router navigation and
+  visually covered Pricing after `Choose Team seats` changed the URL. External
+  page links now leave the global Settings layer through one shared navigation
+  boundary (while modified/new-tab clicks preserve the current dialog). The
+  repeated Team → Pricing flow rendered the destination with no Settings dialog,
+  selected Team & Enterprise automatically, showed the 2-seat minimum as $50 at
+  $25/seat/month, and recalculated three seats to $75 without a reload. Browser
+  output contained only Clerk's expected local development-key warning.
+- Skills/plugins slice: Web now discovers nine reviewed AGI-authored Agent
+  Skills from the canonical workspace catalog; seven are globally included,
+  one belongs to an installable first-party Web pack, and the skill creator
+  remains visibly draft-only. Settings can download every visible Included
+  canonical instruction file; plugin-owned bundles are downloadable only while
+  that plugin is enabled for the signed-in tenant. Chat rejects draft execution, and selected-skill
+  runs force exactly one real server-owned Skill load before returning to normal
+  tool choice and emit a persisted `Reading skill` action. A signed-in local browser
+  run loaded systematic debugging, returned the requested three checks, and
+  preserved the action after reload. A later no-egress pass reopened that
+  completed chat, expanded the persisted action to its 223ms `Done` detail,
+  hard reloaded, and confirmed that users still see the completed reasoning/action
+  status. Skills and Connectors now surface
+  authenticated-directory loading failures with explicit retry actions instead
+  of presenting an empty catalog. The Connectors Add menu now stays inside the
+  modal interaction layer, so Browse connectors and Add custom connector work
+  in the real UI instead of being swallowed by the dialog boundary. Mobile counts only executable included
+  skills as available. The bundled Desktop Cloud composer can select an
+  included skill with `@`, forwards its exact catalog name to the managed
+  runtime, and exposes the authenticated download action. Migration 109 adds
+  user-owned plugin installations with enable/disable/remove state while
+  keeping tool grants separate. The Research Pack is installable from the real
+  database-backed directory and exposes its literature-review skill only while
+  that pack is enabled. Assistant provenance now resolves
+  model identity through the generated catalog, so the completed message and
+  Auto-routing footer show the current product display name instead of a raw
+  provider transport ID; unknown Local/BYOK identifiers remain visible
+  verbatim. The signed-in localhost conversation was reloaded and retained both
+  `Reading skill` and the selected model's catalog display label, with no raw
+  transport ID in the rendered accessibility tree. The same audit found raw
+  IDs throughout Managed Cloud Tasks (including an unavailable historical
+  model); task rows, schedule cards/history, token details, and shared-session
+  headers now resolve current catalog names and label removed managed models as
+  unavailable. A localhost Tasks reload showed current catalog labels, the
+  unavailable fallback, and no current or retired transport IDs. Mobile now
+  applies the same distinction to Managed schedules/task receipts while local
+  companion agents retain truthful runtime-discovered identifiers; its focused
+  model-label, message, and schedule tests plus typecheck/lint/hygiene gates pass.
+  Native Desktop no longer renders an enable/disable switch that only changed
+  renderer state while every loaded skill remained executable; loaded rows are
+  now truthfully labeled Available until the privileged runtime owns persisted
+  execution admission. A later signed-in localhost pass found that the public
+  Research Pack detail page linked to the nonexistent `/settings/plugins` route.
+  Its primary action now enters the canonical `/apps` settings redirect and
+  opens the Plugins pane. The real database-backed Disable state survived a
+  hard reload, Enable restored the original account state, and no application
+  console error occurred. The installed-plugin table now uses a fixed layout so
+  lifecycle actions remain visible without horizontal scrolling inside the
+  desktop Settings dialog.
+- Marketing slice: signed-out `/` now enters the Clerk-aware proxy without a
+  root crash, the unsolicited waitlist auto-modal is removed, and the Projects
+  feature page no longer hydrates against a mismatched streamed JSON-LD node.
+- Appearance slice: the shared Website theme selector now exposes its group and
+  selected System/Light/Dark state to assistive technology instead of relying
+  on color alone. A signed-in localhost run switched to Light, reloaded the
+  persisted Millennium Park conversation with its action and map card intact,
+  then restored the founder's original System preference and verified it stayed
+  selected after a second reload. No provider or hosted deployment was used.
+  A later signed-out marketing audit exposed React 19.2's executable-script
+  warning from `next-themes` as a visible red Next.js issue badge. AGI now owns
+  the pre-hydration bootstrap through a CSP-compatible same-origin external
+  script and pins a minimal dependency patch that suppresses only the library's
+  duplicate inline tag. Fresh desktop and 390×844 pages had no issue badge or
+  application error, retained Light and Dark across reloads, and measured no
+  horizontal overflow; no hosted deployment or provider call was used.
+- Model-selector slice: the visible `Models` heading now names the selector
+  dialog instead of leaving an anonymous modal in the accessibility tree. A
+  signed-in localhost pass filtered the live catalog to Luna, exercised the
+  truthful mid-conversation prompt-cache cost warning, verified selection across
+  reload, and restored the original cost-efficient Gemini choice through the
+  same confirmation. At 390×844 the picker remains inside the viewport, search
+  and its no-results state remain usable, and the original choice stays selected.
+  The adjacent chat navigation drawer is now inert while visually closed and a
+  focused named modal while open; Escape dismisses it and restores the trigger.
+  No message or provider request was sent.
+  Local rendered checks at desktop/mobile widths and the production build are
+  clean; production verification follows the release-candidate deployment.
+- Settings slice: internal section links now use one in-modal navigation seam
+  rather than routing through `/settings/*` stubs. A signed-in localhost flow
+  verified Reflect → Capabilities → Memory and Privacy → Shared links → Privacy;
+  Memory saved across reload and was restored to its original off state after
+  the check. The Memory controls have accessible labels, and the only browser
+  warning was Clerk's expected development-key notice. A second real-use pass
+  saved a temporary account instruction, reloaded, and received the exact
+  instructed response from the selected cost-efficient Google model; the
+  instruction was then cleared and the empty state survived reload. The same
+  pass created a custom slash command, proved it persisted across reload,
+  appeared in the composer menu, expanded its `{{input}}` template, and removed
+  it again without a second model call.
+  Time and focus also survived a signed-in account round trip: the break reminder
+  saved at 30 minutes, reloaded correctly, and was restored to Off, while the
+  surface accurately labels its Website-only boundary and current timezone.
+  Notifications expose only the three channels with real senders; Reply ready
+  saved Off across reload and was restored On. That audit found and fixed a live
+  mismatch where the mounted chat page cached Reply ready until reload: successful
+  preference saves now update the active notifier immediately, with malformed or
+  unrelated namespace events ignored and failed saves unable to change runtime
+  behavior.
+  Account settings then exposed two indefinite loading states when the API-key
+  and Clerk-session dependencies stalled. Both reads now stop after the shared
+  fast-request deadline and present actionable Retry states; API-key failures no
+  longer impersonate an empty account, and New Key remains unavailable until the
+  existing list is known. The original signed-in browser reproduction was real;
+  focused Account/API-key regressions (7 tests), Web typecheck, ESLint, formatting,
+  and diff checks pass. A post-fix in-app reload was blocked by the browser URL
+  safety policy, so this slice does not claim a second live rendering proof.
+  The same localhost session verified the bundled Skills directory and a real
+  `/systematic-debugging` chat turn: selection appeared as an active composer
+  option, the server loaded the bundle, the completed `Reading skill` action and
+  response persisted across reload, and no tool was auto-granted. The directory
+  copy now describes the shipped bundles as portable instructions and explains
+  `/` and `@` selection instead of over-claiming specialist agents for every
+  domain.
+  Connector and plugin discovery was also exercised without registering or
+  mutating an external service: the empty Connector state offers the real
+  remote-MCP path, the directory labels unconfigured branded integrations as
+  `Coming soon` or `Not yet available on web`, and the Plugin pane accurately
+  offers one reviewed first-party Web pack while leaving the other registry
+  entries honestly marked `Coming later`; OAuth
+  registration is an explicit founder prerequisite rather than a fake local
+  success state. A fresh signed-in localhost pass also saved a temporary General
+  instruction, proved exact reload persistence, and restored the founder's
+  original empty value. The custom-connector form rejected an invalid endpoint
+  with an accessible HTTPS explanation and cancelled without creating state.
+  Deep Research now tells users to choose Auto or a capability-compatible model
+  instead of contradictorily recommending broad provider families while one of
+  those providers is already selected. The same pass switched to Auto, enabled
+  Deep Research, verified its visible active-option chip, then disabled it and
+  restored the founder's original model without sending a provider request. The
+  real attachment control reached the
+  native macOS picker; final file selection is `BLOCKED_BY_HUMAN` only while the
+  sleeping founder's Mac remains locked and can resume after unlock without any
+  Vercel build or provider request.
+  A fresh signed-in run repeated the executable path in conversation
+  `16c53dd2-edcb-42be-8649-6259fec8889c`: the `@systematic` picker selected the
+  included bundle, the live action changed from `Reading skill — Running` to a
+  persisted completed `Reading skill`, and the cost-efficient Google route
+  returned the requested first diagnostic step. A hard reload visually restored
+  both message bodies, the action, and the catalog model label with no stuck Stop
+  control. The Settings directory listed all eight catalog entries, kept
+  `skill-creator` visibly `Coming later`, and exposed authenticated downloads only
+  for the globally included bundles. A later real localhost pass installed the
+  Research Pack, disabled and re-enabled it, removed and reinstalled it, and
+  proved the literature-review skill disappeared and returned with execution
+  admission. A low-cost managed turn emitted live and persisted `Reading skill`
+  activity, produced the expected evidence synthesis, and survived hard reload.
+  The connector directory still labels unregistered services unavailable instead
+  of offering dead Connect controls.
+  The same browser pass found and repaired a privacy defect where one click on
+  Share immediately minted a public URL. Share now opens a disclosure dialog,
+  creates nothing until the user chooses a 1/7/30-day expiry and explicitly
+  confirms, and shows the exact read-only URL with copy/revoke controls. One
+  disposable 1-day link was created and revoked through that dialog; a second was
+  created and revoked through Settings → Shared links, proving the in-app
+  confirmation replaced the unreliable native prompt and the manager returned to
+  `No shared links`. The connected Neon database has now been reconciled through
+  the canonical migration ledger, including the plugin registry, published
+  artifacts, and durable video tables. The adjacent artifact manager now renders
+  its real empty state (`No published artifacts`) instead of simultaneously
+  showing an unexpected error and a false empty result. Historical managed messages whose catalog
+  model was removed now render `Unavailable model` rather than resurrecting the
+  retired raw identifier; the pinned rich-response conversation verified that
+  after reload.
+- Tasks/Schedules slice: a signed-in localhost pass opened a durable Chat task
+  and rendered its persisted `Reading skill` → `Completed` action, outputs, and
+  source-chat control. The initial desktop detail card looked blank because the
+  grid stretched its centered guidance to the full 2,022 px task-list height;
+  the shared Web/Electron panel now sizes to its own 420 px card, keeping a clear
+  icon, heading, and explanation in the first viewport. Schedules created a
+  disposable paused daily task with the catalog-selected cost-efficient Google
+  model, survived reload with the correct time zone/model/paused state, exposed
+  an honest empty run history, and deleted through its irreversible confirmation.
+  No scheduled run or provider request was started.
+- Search/history slice: the shared sidebar search used by Tasks, Schedules,
+  Library, and other non-chat routes now uses the canonical modal primitive
+  instead of a visual-only backdrop. It exposes a named `aria-modal` dialog,
+  traps focus, hides the background accessibility tree, restores focus on
+  dismissal, and keeps Escape/backdrop closing. A signed-in localhost pass
+  filtered real history for `Millennium Park`, opened the matching conversation,
+  and confirmed its persisted `Preparing map` action and validated map card after
+  reload; browser output contained only the expected Clerk development-key warning.
+  That reload also exposed a first-paint lie: the saved-chat route briefly showed
+  the new-chat greeting and `No conversations yet` before auth effects could mark
+  their requests busy. Route ownership now selects the existing transcript and
+  sidebar skeletons synchronously; a measured localhost reload moved through the
+  shell skeleton and conversation skeleton without either false empty state, then
+  restored the same map action/card.
+- Mobile-width Website slice: at 390×844 the signed-in chat drawer now moves
+  focus into navigation, traps Tab/Shift+Tab, makes the background inert, lets
+  nested account menus consume their own first Escape, and restores the drawer
+  trigger on dismissal. Opening Search closes the drawer instead of stacking
+  interaction layers, and its clear action has an accessible name. A real
+  `Millennium Park` history query reopened the persisted map conversation with
+  its `Preparing map` action and validated map card intact; the page and composer
+  had no horizontal overflow.
+- Cancellation/action-status slice: a signed-in localhost turn on the
+  catalog-selected cost-efficient Google route was stopped before any response
+  text arrived. The live region changed to `Response cancelled`, the visible
+  activity row changed to `Cancelled`, the Stop control disappeared, and the
+  composer recovered immediately. A hard reload of conversation
+  `0c137bde-39f3-4e76-9bc3-74a40d12d2c5` preserved the cancelled assistant row,
+  action state, catalog model label, and Regenerate control without replaying
+  the provider request. The shared activity finalizer now owns the truthful
+  local completion/cancellation/failure summary, and abort handling durably
+  upserts even an empty cancelled assistant row; focused Web and client-runtime
+  cancellation suites pass 106 tests.
+- Workspace-switching slice (PRODUCTION SCHEMA ACTIVE): Website
+  accounts now persist Personal or one exact membership-owned organization in
+  the existing cross-device settings document.
+  Every RLS-backed request re-resolves that choice through membership before
+  binding tenant scope; chat admission captures it for durable continuations,
+  and shared connectors re-prove membership before privileged catalog discovery
+  and again before credentialed execution. Project/connector sharing, Team
+  settings, creation, invitation acceptance, and leave use the same durable
+  selection rather than a first-membership fallback. Accepting an invitation
+  can add a second workspace, while an account may own only one; create/join/leave
+  update the selection atomically and reload clears tenant-owned client caches.
+  A subsequent adversarial pass found that migration 0073's owner shortcut and
+  several privileged chat/project/file routes still mixed the caller's own rows
+  across Personal and organization scopes. The local repair adds reversible
+  migration 0110 plus explicit privileged-route scoping: Personal and org chats,
+  projects, knowledge files, Library assets, search history/results, Reflect,
+  autotagging, and durable assistant writes now bind the server-resolved active
+  organization; creates and sync paths stamp that scope. Before promotion, a
+  zero-compute Neon recovery branch
+  `backup-pre-0110-20260811` (`br-small-unit-apchpoqv`) was created from the
+  production primary branch at parent LSN `0/A12D528`. Migration 0110 was then
+  applied through the canonical production migration runner and independently
+  verified at 110 applied / 0 pending / 0 drift. A rolled-back live schema
+  probe confirmed the intended defaults: conversations, projects, and schedules
+  resolve the request workspace; media assets require explicit captured
+  provenance; Personal and organization visibility remain distinct; and
+  organization writes still fail closed without membership.
+  A final adversarial pass also closed same-user cross-workspace mutation/read
+  seams in project conversation membership and counts, project-delete cleanup,
+  autotag batch/list reads, and full-search telemetry. Generated files, Office
+  files, provider container outputs, E2B harvests, images, and direct attachment
+  completion now carry the workspace captured at request admission through
+  asynchronous persistence; none re-resolve a later workspace selection. The
+  media table intentionally keeps no database default because its readiness
+  contract and durable writers require explicit provenance.
+  Both signed-in localhost shell variants (`/chat` and `/chat/library`) rendered
+  `Workspace → Personal` plus a working `Manage workspaces` action, and the Team
+  pane remained honest for the founder's no-membership Max account. No Stripe,
+  workspace, invitation, connector, model, or hosted-provider mutation was made.
+  Integrated content-boundary verification passes 30 files / 203 tests; the
+  final provenance repair adds 14 files / 171 focused passes plus 3 files / 38
+  upload/project passes. Migration/down guards, Web typecheck,
+  boundary/service-layer checks, targeted lint, formatting, diff checks, and the
+  repository model-literal guard are green. After production promotion,
+  signed-in localhost still shows `Workspace → Personal`; Team management
+  remains honest for the no-membership account; Library files and Delete
+  controls survive reload; Projects retains the existing Personal project; and
+  a persisted chat reloads at the same URL with its history and composer intact.
+  No org or external service state was created for browser proof. Vercel
+  build/deploy remains intentionally
+  paused because the Hobby team exhausted its included Fluid Active CPU; all
+  verification in this slice was local and incurred no hosted/provider usage.
+- Local-only release gate after the workspace repair: `pnpm typecheck:all`
+  passed all 48 runnable package tasks. `pnpm check:llm-operability` initially
+  found one real VS Code action-status styling defect (an undefined error-color
+  token); the webview now uses the canonical danger token, its 67 webview tests
+  and typecheck pass, and the complete operability gate subsequently passed.
+  No Vercel build, preview, deploy, or hosted smoke was attempted.
+
+### G4. Release evidence and next slice
+
+- Status: IN_PROGRESS
+- Record verified browser evidence, focused checks, remaining human/deployment
+  prerequisites, and the next smallest user-visible slice. Do not mark the Gold
+  Goal complete from builds or mocked tests.
+- Local release evidence (2026-08-11): the full Mobile Jest suite passed 317
+  suites / 2,840 tests; the Desktop renderer passed 275 files / 2,550 tests;
+  the native Desktop/Tauri library passed 4,786 tests with zero failures; and
+  the full CLI crate plus its integration targets passed. VS Code passed 875
+  extension and 63 webview tests; Chrome passed 1,470 tests and its unpacked
+  production build. A signed-in local browser also verified Skills, plugin and
+  connector discovery, the persisted `Reading skill` action trail, and a real
+  map-search turn whose validated card, Google Maps/OpenStreetMap links, and
+  `Preparing map` activity survived navigation and reload without a stuck Stop
+  control. The map tool loop now ends immediately after a successful map-only
+  result instead of buying redundant provider/tool steps. After
+  regenerating the shared contract indexes and correcting a dropped map-card
+  color declaration, `pnpm check:llm-operability` passes end to end.
+- Hosted release work is paused because the Vercel Hobby team has exhausted its
+  included Fluid Active CPU. Continue local-only verification and do not start
+  another remote build until free capacity resets; the cancelled unaliased
+  deployment was removed and production was never promoted.
+- Quota-safe local verification (2026-08-11): after the Fluid Active CPU alert,
+  no Vercel build, preview, deployment, or API command was issued. The latest
+  action-status/cancellation repair was validated through localhost, focused
+  Vitest suites, TypeScript typechecks, ESLint, Prettier, and diff checks only.
+- Local Code-page evidence is capability-honest: one shared readiness predicate
+  requires the execution flag, a non-empty sandbox credential, and priceable
+  compute before list, create, command, agent, or approval paths advertise
+  provisioning. When unavailable, both Create and Run are disabled even for a
+  previously ready session while readable history and cleanup remain usable.
+  The current development environment satisfies the gate and therefore shows
+  the real session form; it was inspected without creating a session or issuing
+  an E2B/provider request. Focused Code/E2B suites pass 66 tests with Web
+  typecheck and lint. No remote deployment/build/API command is allowed during
+  the quota pause; use localhost, focused tests, typechecks, and existing build
+  artifacts only.
+- Local Schedules/Tasks evidence (2026-08-11): the signed-in Schedules page
+  settled from an explicit loading state to an honest empty state. Its creation
+  dialog states the Managed Cloud, text-only, no-chat-memory, and no-tools
+  boundary; exposes the catalog-derived model list and IANA time zone; and
+  closes through Cancel without creating a schedule. The Tasks page restored
+  existing durable runs, opened a completed run in place, and showed the saved
+  `Reading skill → Completed` action plus the honest no-output state. No
+  schedule, provider request, E2B session, deployment, or hosted mutation was
+  created during this browser pass.
+- Local personalization evidence (2026-08-11): the signed-in Customize surface
+  saved a temporary exact-response instruction, and one controlled turn on the
+  catalog-selected cost-efficient Google route streamed the expected
+  `CUSTOMIZATION_CURRENT_OK` response. The turn finished without a stuck Stop
+  state and hard reload restored both prompt and response at the same
+  conversation URL. The founder's original instruction was then restored,
+  saved, and rehydrated from the profile after reload; the temporary instruction
+  was absent. The adjacent custom-command flow also created `/demo-verify`,
+  surfaced it by name and description in the real composer slash menu, expanded
+  its template into the unsent composer, and permanently removed it through the
+  explicit confirmation dialog. Hard reload restored the original empty command
+  state. No additional provider call or deployment was made.
+- Local Reflect evidence (2026-08-11): Reflect honestly blocked on the account's
+  original Memory-off state and linked directly to Capabilities. Memory was
+  enabled temporarily, saved, and used to build the real past-30-days recap
+  from account activity without model quota or message text in the browser. The
+  recap exposed and then verified a count-aware copy repair (`1 sampled
+conversation`, not `1 sampled conversations`). Memory was restored to off;
+  hard reload returned Reflect to its gated state and hid the recap. No provider
+  request or deployment was made.
+- Local media-menu evidence (2026-08-11): image mode, the bundled Skills
+  directory, and the Run code option work through the signed-in composer without
+  provider egress. The legacy Neon branch was first proven on disposable branch
+  `br-soft-cake-apk0tfbf`, backed up as `br-quiet-darkness-apqyudsr`, then
+  reconciled through the canonical ledger. Migrations 73–107 and the idempotent
+  `0108_profile_deletion_schedule_reconciliation.sql`, the additive Web plugin
+  installation migration, and active-workspace migration 0110 now leave
+  production at sequence 110 with zero pending migrations or checksum drift;
+  tenancy helpers, published artifacts, plugin
+  registry/installations, durable video jobs, and all six profile
+  deletion-readiness columns are present. The disposable proof branch was
+  deleted after verification, while the rollback backup remains. A signed-in
+  localhost reload now enables Create video, lists every catalog-executable
+  video candidate without a composer-local provider allowlist, and selects
+  the catalog-derived OpenRouter video model alongside both Google video
+  choices. A subsequent signed-in localhost run exercised the lower-cost
+  catalog-selected Google option through the real API. Two obsolete request
+  parameters were rejected before task creation and were removed; each failed
+  row finalized at zero actual user cost. The next request was accepted, but a
+  valid dotted Google operation resource was rejected by AGI's overly strict
+  path normalizer and therefore quarantined as `outcome_unknown`. AGI recorded
+  zero actual user credits, no provider success, and no client delivery, and a
+  hard reload preserved the exact incident without creating a sixth job. The
+  normalizer now accepts safe dotted resource segments while still rejecting
+  traversal, URL syntax, encoded separators, and arbitrary paths; the focused
+  provider/output and route suites pass 90 tests. No further provider request
+  was sent because the accepted operation's external billing outcome cannot be
+  proven from the discarded identity.
+- Local Library evidence (2026-08-11): per-item Delete opens a recoverable
+  30-day soft-delete confirmation, and Recently deleted exposes Restore and a
+  second permanent-delete confirmation. The retired
+  retired legacy-model HTML artifact was resolved to one exact owner-scoped
+  database row and one exact `agiworkforce-media` R2 object, then permanently
+  deleted from both; a signed-in browser refresh confirms the retired artifact
+  is gone. General local permanent deletion remains fail-closed until the local
+  Web runtime receives bucket-scoped R2 S3 credentials: it retains the database
+  pointer when object deletion cannot be authenticated rather than orphaning
+  bytes. The exact operator step is recorded in `FoundersAssistance.md`. A
+  second signed-in localhost pass soft-deleted and restored the clearly named
+  `haiku45-live.txt` QA artifact, then hard-reloaded to prove both the restored
+  row and its Delete action persisted. That pass also found three historical
+  image rows whose authenticated byte routes returned 404 while the cards said
+  `Ready`. The shared Website/Desktop Library now replaces broken thumbnails
+  with the kind icon, confirms 404/410 through the host-authenticated transport,
+  changes the row to `Failed`, disables Preview/Download, and leaves the safe
+  Delete action plus explicit stale-entry copy. Local media created from now on
+  lives under the gitignored `.agi-local-media` data directory rather than
+  disposable `.next` build output, so a normal local rebuild cannot erase its
+  bytes. The real browser shows no broken image elements and all three stale
+  rows are honestly identified; focused shared/Web tests pass 34 cases and both
+  typechecks are clean. A later live recovery pass found the empty Recently
+  deleted view reusing the main Library’s creation copy; the shared Website and
+  Electron view now labels the bin explicitly and explains the 30-day restore
+  window, with no irrelevant Start-a-chat action. No Vercel or provider request
+  was issued.
+- Local Settings-directory evidence (2026-08-11): Connector, Skill, and Plugin
+  catalog requests now keep explicit loading and failure states, preserve prior
+  verified data, and expose a user-triggered Retry instead of turning a 503 or
+  invalid response into a false empty catalog. A signed-in localhost browser
+  verified all reviewed Skills with Included/Coming later lifecycle labels and
+  authenticated downloads, the unavailable Connector catalog with honest
+  operator-registration copy, and the database-backed Plugin directory with
+  one genuinely enabled reviewed pack. Focused Web/shared-UI suites pass 38
+  tests and both typechecks are clean. This slice used localhost and mocked
+  failure responses only; it issued no Vercel command or external provider call.
+- Local composer/mobile-Settings evidence (2026-08-11): a signed-in localhost
+  pass opened the real attachment chooser, attached an 86-byte text file,
+  displayed its name, size, and explicit `Outbound destination: Managed`
+  boundary, enabled Send, then removed it and observed Send disable again. The
+  turn was deliberately not submitted, so no model/provider request was made.
+  The same pass at 390×844 exposed a horizontal scrollbar in General Settings:
+  fixed-width profile controls and the read-aloud voice row exceeded the modal
+  content width. Profile and preference rows now stack below the small-screen
+  breakpoint, controls shrink to the available width, and a browser recheck
+  measured document 390/390, dialog 280/280, and content 364/364 client/scroll
+  widths with no horizontal scrollbar. The focused General Settings suite passes
+  4 tests; Web typecheck, ESLint, Prettier, and scoped diff checks pass. The only
+  browser-console warning was Clerk's expected local development-key notice;
+  no Vercel command or external provider call was issued.
+- Local composer-surface evidence (2026-08-11): direct comparison against the
+  current ChatGPT Website confirmed its empty composer is a compact 52px line,
+  with one elevated input surface and no separately colored footer rectangle.
+  AGI's narrow first paint had accepted a stale 240px `scrollHeight`, while its
+  sticky wrapper and old Web-only elevation token produced the screenshot's
+  dark mismatch. Empty content now stays at 52px, the wrapper uses the chat
+  canvas token, and the pill uses the shared input-surface token. A signed-in
+  390×844 dark-mode pass showed a compact elevated composer on one uniform
+  canvas; desktop Light remained clean and the founder's System theme was
+  restored. The focused composer suite passes 68 tests, Web typecheck and
+  scoped diff checks pass, and no provider, Vercel, or hosted call was issued.
+- Local search/map-follow-up evidence (2026-08-11): the signed-in global Search
+  dialog exposed filters, cleared stale demo-only recent-search history, searched
+  the persisted account for `Millennium Park`, reported 7 results across 3
+  conversations and 4 messages, and opened the exact assistant message through
+  its highlight route. The conversation reloaded its completed map activity and
+  validated Google Maps/OpenStreetMap card, but the visible follow-up pills were
+  incorrectly about SQL indexes and data integrity because provider URLs contain
+  transport words such as `api` and `query`. Map/place detection now precedes
+  technical heuristics, so the same persisted result offers nearby activities,
+  directions, and visit guidance instead. Desktop and 390×844 browser passes
+  show the corrected pills; the narrow page measures 390/390 client/scroll width.
+  The focused follow-up suite passes 56 tests and Web typecheck, ESLint, Prettier,
+  and scoped diff checks pass. No follow-up was submitted, so the slice issued no
+  provider request, Vercel command, or remote build.
+- Local Sources-panel/header evidence (2026-08-11): the signed-in browser opened
+  Sources for both the persisted map result and a supplied-claims literature
+  synthesis. Each correctly showed the honest `No sources yet` state because
+  neither turn performed web research; the research conversation retained its
+  completed `Reading skill` activity. Opening the 360px research panel narrowed
+  the chat column enough that the absolutely centered conversation title drew
+  underneath Approvals. The title now participates in the header flex flow,
+  while the left and right action groups retain their width. At the same window
+  size the title ends exactly where Approvals begins instead of overlapping it;
+  at 390×844 every header control remains reachable, the title truncates, the
+  Sources panel becomes a clean full-screen view, close restores the chat, and
+  document width remains 390/390. The focused title-menu suite passes 7 tests;
+  Web typecheck, ESLint, Prettier, and scoped diff checks pass. No provider,
+  Vercel, or remote-build call was issued.
+- Local conversation-sharing evidence (2026-08-11): the signed-in research turn
+  created a real 7-day, two-message read-only snapshot from the responsive Share
+  dialog, displayed the no-sign-in privacy warning and absolute expiry, copied
+  the link with visible `Copied` feedback, and rendered the exact snapshot at
+  its localhost public route. Revocation disabled every competing action while
+  pending, returned the owner to the create state, and made the public token
+  unreadable immediately. Two temporary links used for the lifecycle/copy checks
+  were both revoked. A revoked or unknown share previously fell through to the
+  generic site-wide 404, while the expired screen also falsely claimed every
+  share lasted seven days despite selectable 1/7/30-day lifetimes. The dynamic
+  share segment now keeps 404 semantics but renders an intentional `Shared
+conversation unavailable` state covering expiry, revocation, and mistyped
+  links; the expiry state no longer claims one fixed duration. Desktop and
+  390×844 creation/success states and the post-revoke recipient state were
+  verified in the browser. Focused share suites pass 4 tests; Web typecheck,
+  ESLint, Prettier, and scoped diff checks pass. No model/provider, Vercel, or
+  remote-build call was issued.
+- Local artifacts/action/Tasks evidence (2026-08-11): a persisted HTML result
+  reopened as an inline artifact card and in the synced Artifacts workbench;
+  Preview/Source, version state, copy/download/publish controls, close/reopen,
+  and the 390x844 full-screen panel all remained reachable after reload. An
+  artifact-free media conversation settled to the honest `No artifacts yet`
+  state. A separate persisted map turn retained its expandable `Preparing map`
+  activity, 216 ms duration, `Done` state, and validated map card on desktop and
+  mobile without a new model call. Library then exercised the complete
+  two-step soft-delete flow on one stale image row, showed it in Recently
+  deleted, and restored it so the account was left unchanged. The same mobile
+  pass exposed that selecting a Task appeared to do nothing because its detail
+  panel was rendered after the entire 25-row list, more than 2,000 px below the
+  tapped row. Selected task details now open as a full-screen mobile overlay
+  while the desktop keeps its split sticky panel; the real browser shows the
+  durable `Reading skill` progress and source-chat action in both layouts.
+  Focused shared-UI tests, typecheck, lint, formatting, and scoped diff checks
+  pass. No provider, Vercel, or remote-build call was issued.
+- Local Project-settings evidence (2026-08-11): the signed-in project workspace
+  loaded its five persisted conversations, honest account-wide Memory boundary,
+  empty knowledge-file state, and real Duplicate/Export/Delete/Save actions.
+  Its Sources tab also reached the intentional empty state, opened the Add
+  sources chooser, and handed connector setup to the canonical Connectors
+  settings pane while preserving the selected project scope in the composer.
+  At 390x844 the footer required 465 px inside a 372 px dialog, clipping Export
+  and hiding Save completely. The shared project dialog now promotes Save to a
+  full-width primary mobile action, gives Duplicate and Export equal-width
+  secondary positions, and keeps Delete project reachable on its own row; the
+  dialog now measures 372/372 client/scroll width. Desktop retains the compact
+  single-row footer. The focused Project-settings suite passes 5 tests and Web
+  typecheck, ESLint, Prettier, and scoped diff checks pass. No mutation,
+  provider, Vercel, or remote-build call was issued.
+- Local Team/pricing evidence (2026-08-11): the signed-in Max 15x account's
+  Team settings accurately reports that no organization exists and routes the
+  founder to Team & Enterprise pricing instead of exposing unusable member
+  controls. The real pricing page opens with the required two seats and a $50
+  monthly total, updates to $75 for three seats, and clamps an attempted
+  one-seat value back to the two-seat minimum. The native Seats label is bound
+  to the number control, and the 390x844 page stays within its viewport. A
+  signed-out browser check then found `Get Team` discarded that configured
+  quote at login. The redirect now carries `seats=3` and the Team anchor through
+  authentication; loading that return target restores the $75 quote, and its
+  scroll offset keeps the Team heading and total below the sticky mobile header.
+  Billing loading states resolve to the account's active Max 15x renewal, saved payment
+  method, and two paid invoices. The founder-owned live Stripe Product/Price
+  permission remains documented in `FoundersAssistance.md`; the signed-out CTA
+  stopped at authentication, so no checkout session, provider call, Vercel
+  command, or remote build was created.
+- Local media-failure recovery evidence (2026-08-11): the signed-in browser
+  reopened a persisted five-attempt video incident, including provider
+  rejections and an outcome-unknown charge warning. Terminal media rows still
+  exposed the generic `Regenerate response` action, which would replay the
+  video prompt through ordinary text chat. Image/video rows now suppress that
+  generic action. Video failures render an explicit terminal-state card, and a
+  new paid `Try video again` action is admitted only when the durable transcript
+  carries a server-owned `videoRetryable: true` decision. Confirmed provider
+  failures and definite pre-job HTTP rejections receive that flag; ambiguous
+  outcome-unknown and legacy rows do not. The real historical incident now
+  instructs the user to resend instead of offering unsafe replay, while the
+  390x844 layout remains 390/390 client/scroll width. Focused message and
+  transcript suites pass 88 tests; Web typecheck, ESLint, Prettier, and scoped
+  diff checks pass. No retry was pressed and no provider, Vercel, or remote
+  build call was issued.
+- Local Skills/Plugins evidence (2026-08-11): the signed-in Skills directory
+  loaded the canonical included bundles, kept `skill-creator` visibly `Coming
+later`, exposed authenticated SKILL.md downloads for every Included bundle,
+  and the Plugin directory showed the installed/enabled Research Pack
+  separately from three honest `Coming later` entries. A later live pass caught
+  `literature-review` labeled Included without a Download action; the download
+  route now evaluates the user's enabled plugin set, so the action appears and
+  succeeds only while Research Pack owns that tenant-visible skill. Typing `@` in the real
+  composer exposed only executable skills. Selecting `systematic-debugging`
+  originally left `@systematic-debugging` inside the message while also showing
+  the selected-skill chip and active-option badge, so the picker token would be
+  sent as user content. Mention selection now consumes that query, preserves
+  surrounding user text, focuses the correct insertion point, and leaves Send
+  disabled until an actual prompt is entered. The corrected desktop and 390x844
+  composer show the skill state without horizontal overflow; the selection was
+  removed after verification. A final narrow-screen pass found the Settings
+  tables still hiding lifecycle/download actions behind a desktop-width grid.
+  Mobile Skills now keeps Skill plus Status/Download visible, Mobile Plugins
+  keeps Plugin plus Actions visible, and desktop restores every secondary
+  column. The browser fired a real authenticated SKILL.md download, reloaded the
+  Research Pack detail, and returned through its settings deep link; no plugin
+  lifecycle action was changed. Focused shared-UI and Web Settings suites pass
+  40 tests alongside the composer coverage; both typechecks, formatting, and
+  scoped diff checks pass. No message was sent and no provider, connector,
+  Vercel, or remote-build call was issued.
+- Local model-selector evidence (2026-08-11): the signed-in Website composer
+  opened the live catalog-derived selector, exposed only the current routed
+  OpenAI trio alongside the other available providers, switched from the
+  existing Google selection to Auto, and retained Auto across a hard reload.
+  Search narrowed the directory to the exact matching cost-efficient OpenAI
+  entry and its catalog capability badges. The original Google selection was
+  restored and also survived reload. At 390x844 the selector, search field, reasoning
+  control, and model list remained reachable with a 390/390 document width and
+  no horizontal overflow. No prompt was submitted and no provider, Vercel, or
+  remote-build call was issued.
+- Local project-source evidence (2026-08-11): the signed-in Project Sources
+  flow originally closed its text dialog before the presign/upload/register
+  transaction completed, so a quick reload could cancel the request while the
+  UI appeared to have accepted it. The modal now remains in a disabled Saving
+  state until durable registration succeeds, preserves the typed source and
+  exposes the exact failure when it does not, and the list path validates the
+  shared Cloud contract instead of treating an HTTP error as an empty project.
+  Project knowledge now uses a cloud-neutral storage seam: production remains
+  on Cloudflare R2, while development without R2 credentials receives a
+  signed, owner-bound, five-minute same-origin PUT authorization and persists
+  bytes under the existing gitignored `.agi-local-media` data root. The local
+  upload is content-type/byte-count checked, size-bounded, path-confined, and
+  disabled outside development. File-picker, drop, and text failures now remain
+  inside the open dialog with a visible error instead of disappearing behind its
+  overlay. A real browser added the source named Durable
+  local demo source.txt, waited for the dialog to close only after registration, hard
+  reloaded the project, and reopened the exact 97-byte text from the
+  authenticated source route. A second disposable source was created, removed,
+  and remained absent after reload while the retained source still loaded. That
+  same pass found the shared project context card repeating the page-owned folder
+  icon and title immediately below the hero. Hosts that already render identity
+  now use the card's compact shared variant, retaining provenance, trust, and
+  surface labels while the real Project page exposes only one project heading.
+  The reload also exposed a second model selector in the page bar showing Auto
+  while the send-owning composer showed the selected Google model; that control
+  was backed by a separate store and never owned the handoff request. It has
+  been removed, leaving one catalog-derived model control on the composer that
+  actually constructs the project turn.
+  Focused project/storage suites, Web typecheck,
+  ESLint, Prettier, and scoped diff checks pass; no Vercel, provider, or paid
+  service call was issued. Wrangler was used read-only to confirm the existing
+  authenticated account and `agiworkforce-media` bucket.
+- Website model-selection durability (2026-08-11): persisted selections are
+  validated against the current selectable catalog on every hydration, not only
+  during storage-version migrations, and stale or provider-mismatched values now
+  fail closed to the catalog default before request construction. An active
+  conversation's selection is now saved through the existing conversation
+  update path before the composer adopts it; the selector shows a disabled
+  saving state and retains the prior selection with a visible error when that
+  durable write fails. Reload restores the conversation-owned model instead of
+  treating the global default as authoritative. Deep-linked conversations older
+  than the first 50-row sidebar page are now upserted from their detail response,
+  and that active row survives a concurrent first-page refresh; regressions cover
+  both list-before-detail and detail-before-list response orders. Focused store,
+  composer, and conversation-hook coverage passes, as do Web typecheck, the
+  repository model-literal guard, and scoped lint/diff checks. No prompt,
+  provider, Vercel, or remote-build call was issued.
+- Mobile model-selection parity (2026-08-11): model changes now update the
+  Local or Cloud conversation store that owns the thread, and Cloud changes
+  enter the existing durable sync sidecar before the immediate update attempt.
+  Store hydration, conversation restore, and explicit dispatch all apply the
+  same catalog- and plan-derived access predicate, so a downgraded account
+  cannot restore or send a model the picker marks locked. Auto routing behavior
+  and schedule/retry defaults now resolve from canonical profile metadata rather
+  than consumer-owned alias strings; an explicit Mobile and shared Cloud-contract
+  sweep found no remaining authored Auto model identifiers outside registry
+  helpers. The conversation action itself rejects unknown, plan-locked, or
+  cross-boundary selections before mutating Local storage or the Cloud sync
+  sidecar. Focused Mobile, Cloud-contract, and model-catalog suites pass 221
+  tests; all three typechecks, Mobile lint/hygiene, contract ownership, the
+  repository model-literal guard, and scoped diff checks pass. No model,
+  provider, connector, Vercel, or remote-build call was issued.
+- Local Mobile Cloud-auth evidence (2026-08-11): both first-run onboarding and
+  the signed-out chat toggle previously sent the user to Clerk without any
+  readable post-auth intent, so a successful Cloud sign-in returned to the
+  Local default and could immediately advertise a model download the user had
+  explicitly declined. They now share one validated transient Cloud-chat intent.
+  The root Clerk bridge consumes it only after a stable signed-in owner and
+  Cloud entitlement exist, selects the catalog-derived tier default, activates
+  Cloud, and only then publishes the redirect signal. A restored/already-loaded
+  Clerk session applies the same pending intent from the login route's layout
+  phase before the passive auth guard can redirect and unmount it; the
+  regression mounts that guard timing directly and proves Cloud mode plus the
+  catalog-derived model survive. Default, malformed, dismissed, cancelled, and
+  signed-out paths clear the intent and remain Local.
+  Focused Mobile auth/onboarding/chat suites pass 75 tests; Mobile typecheck,
+  lint, hygiene, the model-literal guard, formatting, and scoped diff checks pass
+  without hosted or provider calls.
+- Shared Electron Skills parity evidence (2026-08-11): the bundled Cloud
+  renderer now loads the same managed catalog, filters draft entries before
+  composer admission, carries the selected skill through shared `ChatInput`,
+  `ChatInterface`, and `useChat`, and forwards only its exact name to both the
+  Cloud and Web runtimes. Desktop Cloud Settings projects the same lifecycle
+  labels and authenticated SKILL.md download URLs. Focused shared-chat and
+  Desktop runtime/settings suites pass 89 tests; both package typechecks and
+  the Desktop IPC registry check pass. No Desktop runtime was launched and no
+  model, connector, Vercel, or remote-build call was issued.
+- Local Electron auth evidence (2026-08-11): launching the existing bundled
+  cloud renderer with network egress blocked exposed three Local-mode claims and
+  a live `Use Local Mode` button even though Electron deliberately ships no
+  Local execution plane; clicking it stayed put and produced a rejection toast.
+  The shared Desktop sign-in shell now derives its copy, footer, and mode action
+  from the existing host capability. Electron presents only honest AGI Cloud
+  sign-in, while Tauri/native Desktop retains the real Local path. Focused auth
+  suites pass 29 tests, both renderer and Electron typechecks pass, and no
+  hosted/provider request was issued.
+- Local extension action-status evidence (2026-08-11): Chrome now gives every
+  agent step an explicit state-specific label and icon: only running spins,
+  completed uses a success mark, failed/cancelled use an error mark, and
+  paused/approval use a clock. VS Code now aggregates failed tool/progress
+  events into an error-colored `Completed with errors` footer; a terminal
+  stream error also finalizes and clears the active stack so the following
+  successful turn receives a separate clean `Done` stack. Chrome's full 1,476
+  tests and VS Code's 875 unit, 67 webview, and 6 real-host integration tests
+  pass, together with both builds/typechecks/lints. No provider, CLI runtime,
+  hosted service, or deployment call was issued. A signed installed-artifact
+  VS Code chat/approval/Stop-resume proof still depends on release credentials
+  and the shipped CLI binary.
+- Local Tauri model-settings evidence (2026-08-11): Managed Cloud no longer
+  advertises the Local/BYOK `Open Models & Keys` or `Manage API Keys` actions.
+  The optional callback is preserved through the real shared
+  `ChatInterface` → `ChatInput` → `ModelSelector` chain, while Local/BYOK keeps
+  the supplied callback and working action. An independent read-only verifier
+  confirmed the full owner path; the shared integration passes 2 tests, the
+  Desktop shell passes 28, both package typechecks pass, and the repository
+  model-ID guard passes across 8,549 files. No external call was issued.
+- Local distribution-page evidence (2026-08-11): GitHub release
+  `v-desktop-1.2.0` contains Linux x64 AppImage/deb/rpm assets but no matching
+  AppImage updater signature. The release API therefore correctly exposes no
+  download control. Static marketing copy no longer calls that incomplete asset
+  pair signed or installable: it distinguishes published Linux package assets
+  from a verified installer and defers platform availability to the live release
+  check. Local browser verification at 390×844 and 1280×800 showed the same
+  honest unavailable state with no horizontal overflow. The release was not
+  mutated while the founder was away.
 
 ## Already landed on open branches — do NOT redo
 
@@ -385,7 +1230,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/llm/cost_calculator.rs`, `apps/web/lib/cost-tracker.ts`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/lib/services/llm-cost-calculator.ts`, `services/api-gateway/src/services/managedUsageBilling.ts`
 - Verify: `cargo test -p agiworkforce-desktop cost_calculator && pnpm --filter @agiworkforce/web test cost-tracker` (new: identical fallback for "caching declared, no cache-read price"; the 1.25x/2.0x surcharge pair has one exported definition)
-- Evidence: `cost_calculator.rs:364–374` falls back to the full input rate; `apps/web/lib/cost-tracker.ts:110` falls back to 90% off — `minimax-m3` (`packages/ai/model-registry/catalog/models.curation.json:1933–1966`) hits this today ($0.30/M vs $0.03/M). `prompt-cache-helper.ts:84–118` hardcodes a flat `0.1` multiplier (deepseek family is actually 0.02x), live via `response-builder.ts:113`. Surcharge literals: `llm-cost-calculator.ts:241,244`; `cost-tracker.ts:129,135`; `managedUsageBilling.ts:225–226`.
+- Evidence: `cost_calculator.rs:364–374` falls back to the full input rate; `apps/web/lib/cost-tracker.ts:110` falls back to 90% off — the catalog's MiniMax caching-capable model (`packages/ai/model-registry/catalog/models.curation.json:1933–1966`) hits this today ($0.30/M vs $0.03/M). `prompt-cache-helper.ts:84–118` hardcodes a flat `0.1` multiplier (the DeepSeek family is actually 0.02x), live via `response-builder.ts:113`. Surcharge literals: `llm-cost-calculator.ts:241,244`; `cost-tracker.ts:129,135`; `managedUsageBilling.ts:225–226`.
 - ⚠ Serial with #20, #21.
 
 ### 34. Persisted-store key collisions and unwritten storage keys
@@ -591,7 +1436,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs`
 - Verify: `cargo test -p agiworkforce-desktop resolve_image_model` (new: every canonical ID passed in must resolve) and `pnpm check:model-catalog`
-- Evidence: `image_gen.rs:241–245, 371–375` pass `stable-diffusion-xl`, `imagen-4-fast`, `imagen-4`; `packages/contracts/types/src/models.json:45` records these as REMOVED 2026-07-20 (successors: `gemini-3.1-flash-image`, `stable-image-core`, `gpt-image-2`); `resolve_image_model()` (`image_gen.rs:10–18`) therefore always falls through to a literal wire ID.
+- Evidence: `image_gen.rs:241–245, 371–375` passed retired provider wire identifiers instead of resolving the live canonical image roster; the curation verification history compiled into `packages/contracts/types/src/models.json` records their removal, while the same catalog's image-generation capability rows identify the supported successors without duplicating their IDs here. `resolve_image_model()` (`image_gen.rs:10–18`) therefore always fell through to a literal wire ID.
 - ⚠ Serial with #55, #71.
 
 ### 55. Desktop/CLI hardcoded model IDs outside the catalog
@@ -601,7 +1446,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Severity: high
 - Writes: `apps/desktop/src-tauri/src/core/llm/llm_router.rs`, `apps/desktop/src-tauri/src/sys/commands/completion.rs`, `apps/desktop/src-tauri/src/core/llm/tool_executor/llm_tools.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src-tauri/src/sys/commands/voice.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/core/agi/executors/search_executor.rs`, `apps/cli/src/provider.rs`, `apps/cli/src/model_catalog.rs`, `apps/web/scripts/test-llm-keys.ts`
 - Verify: `cargo test -p agiworkforce-desktop && cargo test -p agiworkforce-cli --lib no_hardcoded_model_ids && pnpm check:model-catalog`
-- Evidence: `llm_router.rs:588–599` (only arms not calling `provider_task_model`); `completion.rs:385–406` (`glm-5.2` ×2 despite `models.json:331–345` exposing `fast_completion`); `llm_tools.rs:37` (bare `gpt-5.6-luna`); `models_config.rs:336–343` (fallback guarded only by `debug_assert!`, a no-op in release); `voice.rs:138` (`gpt-4o-transcribe`, second copy of `apps/cli/src/voice.rs:41`); `perplexity.rs:18–36` (four wire IDs duplicated, routed by `search_executor.rs:8,51–56,328`); `apps/cli/src/provider.rs:186–188` (exact-match Gemini IDs — add a catalog capability flag instead); `apps/cli/src/model_catalog.rs:1717,1838,1869` (extend the `no_hardcoded_model_ids_in_*` pattern to `voice.rs`); `apps/web/scripts/test-llm-keys.ts:29` (`claude-sonnet-5`).
+- Evidence: `llm_router.rs:588–599` contains the only arms not calling `provider_task_model`; `completion.rs:385–406` duplicates the Zhipu fast-completion model despite `models.json:331–345` exposing `fast_completion`; `llm_tools.rs:37` embeds the low-cost OpenAI routing model; `models_config.rs:336–343` guards its fallback only with `debug_assert!`, a no-op in release; `voice.rs:138` duplicates the catalog's OpenAI transcription model from `apps/cli/src/voice.rs:41`; `perplexity.rs:18–36` duplicates four provider wire IDs routed by `search_executor.rs:8,51–56,328`; `apps/cli/src/provider.rs:186–188` exact-matches Google model IDs instead of using a catalog capability flag; `apps/cli/src/model_catalog.rs:1717,1838,1869` shows where to extend the `no_hardcoded_model_ids_in_*` pattern to `voice.rs`; `apps/web/scripts/test-llm-keys.ts:29` embeds the Anthropic balanced-model ID.
 - ⚠ Serial with #54, #71, #72.
 
 ### 56. Max-token defaults ignore per-model registry capacity
@@ -657,7 +1502,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: BLOCKED (2026-08-09) — BLOCKED — needs writes outside the declared Writes set. The provider-URL duplication is real and nearly every cited site confirmed, but the canonical registry and its consumers cannot be changed independently.
 - Area: security
 - Severity: medium
-- Writes: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/video/generate/route.ts`, `apps/web/app/api/media/video/status/route.ts`, `apps/web/app/api/llm/v1/embeddings/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/web/scripts/test-llm-keys.ts`, `apps/web/lib/server/container-files.ts`, `apps/web/features/settings/components/CustomModelsSettings.tsx`, `apps/desktop/src/features/settings/CustomModelsSettings.tsx`, `apps/desktop/electron/config.ts`, `apps/desktop/vite.config.ts`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src/utils/security.ts`, `apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs`, apps/desktop/src-tauri/src/core/llm/web_search_config.rs (as reported by the audit; no such file in this tree), `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/voice.rs`
+- Writes: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/video/generate/route.ts`, `apps/web/app/api/media/video/status/route.ts`, `apps/web/app/api/llm/v1/embeddings/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/web/scripts/test-llm-keys.ts`, `apps/web/lib/server/container-files.ts`, `apps/desktop/src/features/settings/CustomModelsSettings.tsx`, `apps/desktop/electron/config.ts`, `apps/desktop/vite.config.ts`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src/utils/security.ts`, `apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs`, apps/desktop/src-tauri/src/core/llm/web_search_config.rs (as reported by the audit; no such file in this tree), `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/voice.rs`
 - Verify: `pnpm check:provider-contracts && cargo check --workspace`
 - Evidence: `generativelanguage.googleapis.com` retyped in 6 files (`image/generate/route.ts:487,550`, `video/generate/route.ts:324`, `video/status/route.ts:218`, `embeddings/route.ts:132`, `control-plane/status/route.ts:54`, `test-llm-keys.ts:38`); `container-files.ts:88,99,117`; identical preset tables in the two `CustomModelsSettings.tsx`; `electron/config.ts:69` + `vite.config.ts:164` + `tauri.conf.json:37` + dead `security.ts:495–507` duplicate `GATEWAY_BASE_URL` (`apps/desktop/src/api/config.ts:19` says every module should import from there); `conversation_summarizer.rs:669,733`, `perplexity.rs:120`, `veo3.rs:85`, `web_search_config.rs:72` bypass `default_base_url()` (`core/llm/providers/direct_api_provider.rs:386–413`); `provider_dispatch.rs:638` duplicates `apps/cli/src/models/mod.rs:98`; `apps/cli/src/voice.rs:887` = `apps/desktop/src-tauri/src/sys/commands/voice.rs:522`.
 - ⚠ Serial with #54, #55, #49, #50.
@@ -697,7 +1542,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Severity: medium
 - Writes: `apps/desktop/src/stores/chat/chatStore.ts`, `apps/desktop/src/features/chat/CommandPalette.tsx`, `apps/desktop/src/features/mcp/MCPBundleBrowser.tsx`, `apps/mobile/stores/chat/chatViewStore.ts`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/extension/src/webmcp.ts`, `apps/web/shared/lib/api.ts`, `apps/web/shared/lib/api-enhanced.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx`, `apps/web/features/schedules/components/SchedulesPage.tsx`, apps/desktop/e2e/fixtures/mock-data.ts (as reported by the audit; no such file in this tree)
 - Verify: `pnpm check:hardcoded-arrays && pnpm typecheck:all`
-- Evidence: 300 ms debounce independently chosen in 7 files (`chatStore.ts:170`, `CommandPalette.tsx:218`, `MCPBundleBrowser.tsx:651`, `chatViewStore.ts:251`, `LibraryView.tsx:175`, `GlobalSearchDialog.tsx:167`, `webmcp.ts:377`); 3-attempt retry defaults (`api.ts:31`, `api-enhanced.ts:115`, +2); page size 50 in 6 places with `SCHEDULE_PAGE_SIZE=50`/`RUN_PAGE_SIZE=20` duplicated verbatim across desktop and web; `mock-data.ts:221–267` asserts a standalone pricing table where 3 of 5 model IDs (`gpt-5.5`, `deepseek-chat`, `qwen-max`) don't exist in the catalog.
+- Evidence: 300 ms debounce independently chosen in 7 files (`chatStore.ts:170`, `CommandPalette.tsx:218`, `MCPBundleBrowser.tsx:651`, `chatViewStore.ts:251`, `LibraryView.tsx:175`, `GlobalSearchDialog.tsx:167`, `webmcp.ts:377`); 3-attempt retry defaults (`api.ts:31`, `api-enhanced.ts:115`, +2); page size 50 in 6 places with `SCHEDULE_PAGE_SIZE=50`/`RUN_PAGE_SIZE=20` duplicated verbatim across desktop and web; `mock-data.ts:221–267` asserted a standalone pricing table where 3 of 5 model IDs were absent from the catalog.
 
 ### 66. 20 desktop feature directories are unreachable from the shell
 
@@ -1007,7 +1852,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Severity: high
 - Writes: `packages/contracts/types/src/model-catalog.ts`, `apps/desktop/src-tauri/src/features/speech/tts.rs`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/desktop/src/services/managedCloudSettingsSync.ts`
 - Verify: `pnpm check:model-catalog && pnpm --filter @agiworkforce/mobile test cloudSettingsMapping`
-- Evidence: `model-catalog.ts:989, 1029–1030, 1980` defines only `voice_transcription` and `voice_rewrite` — no synthesis slot, so TTS model selection sits outside catalog governance (the acute `eleven_monolingual_v1` regression is fixed at `tts.rs:120` with a guard test at `:691–710`, the architectural gap is not); `apps/mobile/services/cloudSettingsMapping.ts:175,251` binds `language.locale` to TTS voice language while `apps/desktop/src/services/managedCloudSettingsSync.ts:465,509–512` binds the same synced key to `i18n.changeLanguage`, so each surface silently reconfigures the other every sync cycle.
+- Evidence: `model-catalog.ts:989, 1029–1030, 1980` defines only `voice_transcription` and `voice_rewrite` — no synthesis slot, so TTS model selection sits outside catalog governance (the acute retired-default regression is fixed in `tts.rs` with a guard test, but the architectural gap remains); `apps/mobile/services/cloudSettingsMapping.ts:175,251` binds `language.locale` to TTS voice language while `apps/desktop/src/services/managedCloudSettingsSync.ts:465,509–512` binds the same synced key to `i18n.changeLanguage`, so each surface silently reconfigures the other every sync cycle.
 
 ### 98. Shared UI hand-parses desktop's private storage to pick a trust label
 

@@ -416,26 +416,72 @@ describe('cloud agent run service', () => {
 
   describe('assistant text aggregation', () => {
     it('concatenates the journalled answer in sequence order with its replay cursor', async () => {
-      vi.mocked(db.query).mockResolvedValueOnce([{ text: 'Hello, world.', last_sequence: '41' }]);
+      vi.mocked(db.query).mockResolvedValueOnce([
+        { text: 'Hello, world.', last_sequence: '41', interactive_cards: [] },
+      ]);
 
       const result = await readCloudAgentRunAssistantText(db, {
         userId: 'user-1',
         runId: RUN_ROW.id,
       });
 
-      expect(result).toEqual({ text: 'Hello, world.', lastSequence: 41 });
+      expect(result).toEqual({ text: 'Hello, world.', lastSequence: 41, interactiveCards: [] });
       const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
       expect(sql).toMatch(/string_agg\(envelope->'event'->>'delta', '' order by sequence\)/i);
       expect(sql).toMatch(/envelope->'event'->>'type' = 'text-delta'/i);
+      expect(sql).toMatch(/cloud_agent_execution_operations/i);
+      expect(sql).toMatch(/result->'interactiveCard'/i);
       expect(params).toEqual([RUN_ROW.id, 'user-1']);
     });
 
     it('reports an empty answer and a null cursor for a run with no journalled events', async () => {
-      vi.mocked(db.query).mockResolvedValueOnce([{ text: '', last_sequence: -1 }]);
+      vi.mocked(db.query).mockResolvedValueOnce([
+        { text: '', last_sequence: -1, interactive_cards: [] },
+      ]);
 
       await expect(
         readCloudAgentRunAssistantText(db, { userId: 'user-1', runId: RUN_ROW.id }),
-      ).resolves.toEqual({ text: '', lastSequence: -1 });
+      ).resolves.toEqual({ text: '', lastSequence: -1, interactiveCards: [] });
+    });
+
+    it('salvages validated cards from durable tool receipts and drops malformed entries', async () => {
+      const card = {
+        schemaVersion: 1,
+        cardId: 'tool-map-fixture',
+        kind: 'map-search.v1',
+        createdAt: '2026-08-11T00:00:00.000Z',
+        fallback: { headline: 'Map search', text: 'Map search: coffee near Austin' },
+        producedBy: { toolCallId: 'tool-map-fixture', toolName: 'search_maps' },
+        body: {
+          title: 'Coffee near Austin',
+          query: 'coffee near Austin',
+          actions: [
+            {
+              provider: 'openstreetmap',
+              label: 'Open in OpenStreetMap',
+              url: 'https://www.openstreetmap.org/search?query=coffee%20near%20Austin',
+            },
+          ],
+        },
+      };
+      vi.mocked(db.query).mockResolvedValueOnce([
+        {
+          text: 'Choose a map.',
+          last_sequence: 7,
+          interactive_cards: [{ arbitrary: true }, card],
+        },
+      ]);
+
+      const result = await readCloudAgentRunAssistantText(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+      });
+
+      expect(result.interactiveCards).toHaveLength(1);
+      expect(result.interactiveCards[0]).toMatchObject({
+        cardId: 'tool-map-fixture',
+        recognized: true,
+      });
     });
   });
 

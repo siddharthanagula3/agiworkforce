@@ -412,6 +412,35 @@ function skillAuthorLabel(source: string): string {
   }
 }
 
+function SkillDownloadAction({
+  adapter,
+  skill,
+}: {
+  adapter?: SettingsDataAdapter;
+  skill: SettingsSkill;
+}) {
+  if (!skill.downloadHref) return null;
+  const className = cn('font-medium text-foreground underline underline-offset-2', FOCUS_RING);
+  const label = `Download ${skill.name} SKILL.md`;
+  if (adapter?.openHref) {
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={label}
+        onClick={() => void adapter.openHref?.(skill.downloadHref!)}
+      >
+        Download
+      </button>
+    );
+  }
+  return (
+    <a href={skill.downloadHref} download className={className} aria-label={label}>
+      Download
+    </a>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // DirectoryBrowse — the shared Directory-style browse view (claude.ai refs
 // 251-256) reached from the Connectors "Add > Browse connectors" item and the
@@ -459,6 +488,7 @@ function DirectoryBrowse({
   const skillsLoading = adapter?.skillsLoading ?? false;
   const skillsError = adapter?.skillsError;
   const pluginsLoading = adapter?.pluginsLoading ?? false;
+  const pluginsError = adapter?.pluginsError;
 
   // Only advertise directory categories implemented by the current surface.
   // An explicitly supplied empty plugin list is still a real plugin surface
@@ -772,9 +802,10 @@ function DirectoryBrowse({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-mono text-sm text-foreground">/{skill.name}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {skillAuthorLabel(skill.source)}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>{skill.statusLabel ?? skillAuthorLabel(skill.source)}</span>
+                    <SkillDownloadAction adapter={adapter} skill={skill} />
+                  </div>
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
                   {skill.description || 'No description.'}
@@ -795,6 +826,26 @@ function DirectoryBrowse({
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading plugins…
           </p>
+        ) : pluginsError ? (
+          <div
+            role="alert"
+            id="settings-directory-plugins"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          >
+            <p className="text-sm text-destructive">{pluginsError}</p>
+            {adapter?.retryPlugins ? (
+              <button
+                type="button"
+                className={cn(
+                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  FOCUS_RING,
+                )}
+                onClick={() => void adapter.retryPlugins?.()}
+              >
+                Try again
+              </button>
+            ) : null}
+          </div>
         ) : visiblePlugins.length === 0 ? (
           <p
             id="settings-directory-plugins"
@@ -820,16 +871,35 @@ function DirectoryBrowse({
                       <span className="text-[11px] text-muted-foreground">{plugin.author}</span>
                     )}
                   </div>
-                  <span
-                    className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                      plugin.enabled
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {plugin.enabled ? 'Enabled' : (plugin.statusLabel ?? 'Disabled')}
-                  </span>
+                  {plugin.mutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : plugin.installed ? (
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                        plugin.enabled
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {plugin.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  ) : plugin.installable && adapter?.installPlugin ? (
+                    <button
+                      type="button"
+                      onClick={() => void adapter.installPlugin?.(plugin.id)}
+                      className={cn(
+                        'shrink-0 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:bg-foreground/90',
+                        FOCUS_RING,
+                      )}
+                    >
+                      Install
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">
+                      {plugin.statusLabel ?? 'Unavailable'}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
                   {plugin.description || 'No description.'}
@@ -846,6 +916,41 @@ function DirectoryBrowse({
                     View details
                   </a>
                 )}
+                {plugin.installed && (
+                  <div className="flex items-center gap-3 pt-1 text-xs">
+                    {adapter?.setPluginEnabled ? (
+                      <button
+                        type="button"
+                        disabled={plugin.mutating}
+                        onClick={() => void adapter.setPluginEnabled?.(plugin.id, !plugin.enabled)}
+                        className={cn(
+                          'font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
+                          FOCUS_RING,
+                        )}
+                      >
+                        {plugin.enabled ? 'Disable' : 'Enable'}
+                      </button>
+                    ) : null}
+                    {adapter?.removePlugin ? (
+                      <button
+                        type="button"
+                        disabled={plugin.mutating}
+                        onClick={() => void adapter.removePlugin?.(plugin.id)}
+                        className={cn(
+                          'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
+                          FOCUS_RING,
+                        )}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+                {plugin.error ? (
+                  <p role="alert" className="text-[11px] text-destructive">
+                    {plugin.error}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
@@ -1273,6 +1378,7 @@ function ConnectorsPanel({
               ) : null}
               <Menu
                 align="end"
+                portalled={false}
                 trigger={({ toggle, open }) => (
                   <button
                     type="button"
@@ -1450,7 +1556,8 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       <div>
         <h2 className="text-base font-semibold text-foreground">Skills</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Quick-access prompts and specialist AI agents for every domain.
+          Included, portable instruction bundles for focused workflows. Select one in chat with / or
+          @, or download its SKILL.md.
         </p>
       </div>
 
@@ -1516,14 +1623,17 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       ) : (
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th scope="col" className="px-3 py-2 font-semibold">
+                <th scope="col" className="w-[64%] px-3 py-2 font-semibold sm:w-[66%]">
                   Skill
                 </th>
-                <th scope="col" className="px-3 py-2 font-semibold">
+                <th scope="col" className="hidden w-[14%] px-3 py-2 font-semibold sm:table-cell">
                   Author
+                </th>
+                <th scope="col" className="w-[36%] px-3 py-2 font-semibold sm:w-[20%]">
+                  Status
                 </th>
               </tr>
             </thead>
@@ -1543,8 +1653,14 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                  <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                     {skillAuthorLabel(skill.source)}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{skill.statusLabel ?? 'Available'}</span>
+                      <SkillDownloadAction adapter={adapter} skill={skill} />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1571,6 +1687,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [view, setView] = useState<'table' | 'browse'>('table');
   const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
+  const loadError = adapter?.pluginsError;
 
   const filtered = useMemo(() => {
     if (!search) return plugins;
@@ -1587,6 +1704,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const hasAuthor = plugins.some((p) => p.author);
   const hasSkillCount = plugins.some((p) => p.skillCount != null);
   const hasUpdatedAt = plugins.some((p) => p.updatedAt);
+  const hasActions = Boolean(adapter?.setPluginEnabled || adapter?.removePlugin);
 
   const addItems: { label: string; onSelect: () => void }[] = [
     ...(adapter?.onAddPluginMarketplace
@@ -1608,7 +1726,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       <div>
         <h2 className="text-base font-semibold text-foreground">Plugins</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Extend AGI with third-party plugins and community integrations.
+          Add reviewed skill packs now, with more community integrations coming later.
         </p>
       </div>
 
@@ -1681,36 +1799,63 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/40" />
           ))}
         </div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{loadError}</p>
+          {adapter?.retryPlugins ? (
+            <button
+              type="button"
+              onClick={() => void adapter.retryPlugins?.()}
+              className={cn(
+                'mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted',
+                FOCUS_RING,
+              )}
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center">
           <Puzzle className="mx-auto mb-3 h-8 w-8 text-muted-foreground opacity-30" />
           <p className="text-sm text-muted-foreground">
             {plugins.length === 0
-              ? 'No plugins installed. Plugins are available via the AGI CLI.'
+              ? 'No plugins installed. Browse the directory to add an available Web plugin.'
               : 'No plugins match your search.'}
           </p>
         </div>
       ) : (
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th scope="col" className="px-3 py-2 font-semibold">
+                <th
+                  scope="col"
+                  className={cn(
+                    'px-3 py-2 font-semibold sm:w-[42%]',
+                    hasActions ? 'w-[60%]' : 'w-full',
+                  )}
+                >
                   Plugin
                 </th>
                 {hasAuthor && (
-                  <th scope="col" className="px-3 py-2 font-semibold">
+                  <th scope="col" className="hidden w-[12%] px-3 py-2 font-semibold sm:table-cell">
                     Author
                   </th>
                 )}
                 {hasSkillCount && (
-                  <th scope="col" className="px-3 py-2 font-semibold">
+                  <th scope="col" className="hidden w-[10%] px-3 py-2 font-semibold sm:table-cell">
                     Skills
                   </th>
                 )}
                 {hasUpdatedAt && (
-                  <th scope="col" className="px-3 py-2 font-semibold">
+                  <th scope="col" className="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
                     Last updated
+                  </th>
+                )}
+                {hasActions && (
+                  <th scope="col" className="w-[40%] px-3 py-2 text-right font-semibold sm:w-[20%]">
+                    Actions
                   </th>
                 )}
               </tr>
@@ -1741,18 +1886,57 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     </div>
                   </td>
                   {hasAuthor && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                       {plugin.author ?? '-'}
                     </td>
                   )}
                   {hasSkillCount && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                       {plugin.skillCount ?? '-'}
                     </td>
                   )}
                   {hasUpdatedAt && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                       {plugin.updatedAt ? formatSettingsDate(plugin.updatedAt) : '-'}
+                    </td>
+                  )}
+                  {hasActions && (
+                    <td className="px-3 py-2.5">
+                      <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-xs">
+                        {adapter?.setPluginEnabled ? (
+                          <button
+                            type="button"
+                            disabled={plugin.mutating}
+                            onClick={() =>
+                              void adapter.setPluginEnabled?.(plugin.id, !plugin.enabled)
+                            }
+                            className={cn(
+                              'font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
+                              FOCUS_RING,
+                            )}
+                          >
+                            {plugin.enabled ? 'Disable' : 'Enable'}
+                          </button>
+                        ) : null}
+                        {adapter?.removePlugin ? (
+                          <button
+                            type="button"
+                            disabled={plugin.mutating}
+                            onClick={() => void adapter.removePlugin?.(plugin.id)}
+                            className={cn(
+                              'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
+                              FOCUS_RING,
+                            )}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                      {plugin.error ? (
+                        <p role="alert" className="mt-1 text-right text-[11px] text-destructive">
+                          {plugin.error}
+                        </p>
+                      ) : null}
                     </td>
                   )}
                 </tr>

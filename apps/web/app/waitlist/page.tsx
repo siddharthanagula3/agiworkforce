@@ -39,7 +39,7 @@ export default function WaitlistPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">AGI Cloud · public alpha</p>
           <h1 id="agi-waitlist-h1" className="agi-fl-h1" style={{ maxWidth: '16ch' }}>
-            <span className="agi-fl-h1-line">Managed compute,</span>
+            <span className="agi-fl-h1-line">Managed compute,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">open today.</em>
             </span>

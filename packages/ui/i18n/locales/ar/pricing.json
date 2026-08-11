@@ -76,5 +76,13 @@
   "pageTitle": "الأسعار",
   "freeLocalByok": "النماذج المحلية ومفاتيح API الخاصة بك، مجانية دائمًا",
   "seatTotal_one": "مقعد واحد · {{total}}/شهر",
-  "seatTotal_other": "{{count}} مقاعد · {{total}}/شهر"
+  "seatTotal_other": "{{count}} مقاعد · {{total}}/شهر",
+  "perSeatPrice": "{{price}}/مقعد/شهر",
+  "perSeatPriceAnnual": "{{price}}/مقعد/سنة",
+  "seatTotalAnnual_one": "مقعد واحد · {{total}}/سنة",
+  "seatTotalAnnual_other": "{{count}} مقاعد · {{total}}/سنة",
+  "seatCadenceMonthly_one": "مقعد واحد · فوترة شهرية",
+  "seatCadenceMonthly_other": "{{count}} مقاعد · فوترة شهرية",
+  "seatCadenceAnnual_one": "مقعد واحد · فوترة سنوية",
+  "seatCadenceAnnual_other": "{{count}} مقاعد · فوترة سنوية"
 }

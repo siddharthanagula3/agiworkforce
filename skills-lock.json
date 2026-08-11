@@ -6,9 +6,73 @@
     "The hashing algorithm is specified in packages/tools/skills/src/integrity.ts and reimplemented identically in apps/cli/src/skills.rs and scripts/verify-skills-lock.mjs.",
     "v1 of this file recorded computedHash values for ai-seo, programmatic-seo, remotion-best-practices, and seo-geo with no algorithm field. Those hashes are NOT reproducible: re-hashing the exact bundle bytes from d694f17b2 under agiskill-sha256-v1 yields different digests, and no generator for the v1 values exists anywhere in the repo. They were never verified against anything.",
     "Those four bundles were themselves deleted from .agents/skills in 5b14585dd, so their entries were also stale. They are dropped here rather than carried forward as unverifiable claims; git history retains the original values.",
-    "skills is empty because no skill under `roots` currently exists in the tree. Verification is not vacuous: adding any skill under a locked root fails CI until it is locked with declared provenance."
+    "The current bundles are original AGI Workforce instruction-only packages. Adding any skill under `roots` fails CI until it is locked with declared provenance."
   ],
   "roots": [".agents/skills"],
   "referenceTrees": ["packages/tools/skills/reference-bundles"],
-  "skills": {}
+  "skills": {
+    "code-review": {
+      "path": ".agents/skills/code-review",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:8826b9bfb55108c8be4b5a0610e2193548dc4ac4fb4ba4d20a2f3094727f8632"
+    },
+    "data-analysis": {
+      "path": ".agents/skills/data-analysis",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:9e3f0f9458d7e9ff812979166dd7a4e7b1c7b63ee258efcd1bcc6ad5913ab6f8"
+    },
+    "document-creation": {
+      "path": ".agents/skills/document-creation",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:81e3542b5e4a43d081456d03edebbce0010167480f3a95c53390cfc12f36d955"
+    },
+    "frontend-design-review": {
+      "path": ".agents/skills/frontend-design-review",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:00eb031c8a266fdacdb9c41f983df8cc450ab62dc093edc935211c454e2ffe9e"
+    },
+    "literature-review": {
+      "path": ".agents/skills/literature-review",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:1c14aa6fcbc26babdaee02a2aae846e5c8116896a5d1e355d5e28a8a8cfdfb37"
+    },
+    "presentation-creation": {
+      "path": ".agents/skills/presentation-creation",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:f078799049723b0c48326bd17251691932d2add8e164b487f5c75bbf325c9637"
+    },
+    "research-and-citations": {
+      "path": ".agents/skills/research-and-citations",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:eca343e67d70aefd2215b03435d8644090072f197d01626de058383494e4a243"
+    },
+    "skill-creator": {
+      "path": ".agents/skills/skill-creator",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "0.1.0-draft",
+      "computedHash": "sha256-tree-v1:075a30fe07641a1c9fb72c7aac5daa490bf2ed052ba0e4681fa22b11a68c4dfe"
+    },
+    "systematic-debugging": {
+      "path": ".agents/skills/systematic-debugging",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:adcfb280542bce507d8a0d8d4f49d0188f2cff3b6ab0201e177bf0ace0de0700"
+    }
+  }
 }

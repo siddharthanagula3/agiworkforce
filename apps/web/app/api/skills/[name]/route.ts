@@ -13,20 +13,25 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { findManagedSkillByName } from '@/lib/services/skill-catalog-service';
+import { getManagedSkillCatalogForPlugins } from '@/lib/services/skill-catalog-service';
+import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 export const runtime = 'nodejs';
 
 async function handleGetBody(request: NextRequest, context: { params: Promise<{ name: string }> }) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  await getClerkAuthUser(request);
+  const { userId } = await getClerkAuthUser(request);
   const { name } = await context.params;
   if (!name || name.length > 200) {
     throw createError.validation('skill name is required (1–200 chars)');
   }
-  const skill = await findManagedSkillByName(name);
-  if (skill === null) {
+  const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
+  const skill = (await getManagedSkillCatalogForPlugins(enabledPluginIds)).find(
+    (candidate) => candidate.name === name,
+  );
+  if (!skill) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
   return NextResponse.json({ body: skill.body });

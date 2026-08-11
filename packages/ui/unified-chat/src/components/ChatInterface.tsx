@@ -29,6 +29,7 @@ import {
   type ChatWorkScope,
   type ComposerVoiceController,
 } from './ChatInput';
+import type { MentionSkill } from './SkillMentionPicker';
 
 import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from './UsageWarningBanner';
@@ -330,6 +331,8 @@ export interface ChatInterfaceProps {
   onDismissUsageWarning?: () => void;
   /** Host-persisted composer submission shortcut. */
   composerSendShortcut?: 'enter' | 'mod-enter';
+  /** Included skills the active runtime can execute through `skillName`. */
+  skills?: MentionSkill[];
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
   /** Explicit host-owned bridge for conversation selection and persistence. */
@@ -413,6 +416,7 @@ export function ChatInterface({
   onUpgradeUsage,
   onDismissUsageWarning,
   composerSendShortcut,
+  skills = [],
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -591,6 +595,7 @@ export function ChatInterface({
       research?: boolean,
       writingStyle?: WritingStyle,
       workScope?: ChatWorkScope,
+      skillName?: string,
     ) => {
       sendMessage(
         content,
@@ -601,6 +606,8 @@ export function ChatInterface({
         writingStyle,
         workScope?.workMode,
         workScope?.projectId,
+        undefined,
+        skillName,
       );
     },
     [sendMessage],
@@ -620,10 +627,6 @@ export function ChatInterface({
   }, [externalSendRequest, handleSend, isStreaming]);
 
   const setActiveView = useUIStore((s) => s.setActiveView);
-
-  const handleModelSelectorClick = useCallback(() => {
-    onModelSelectorClickProp?.();
-  }, [onModelSelectorClickProp]);
 
   const handleSelectFolder = useCallback(() => {
     onSelectFolderProp?.();
@@ -922,7 +925,7 @@ export function ChatInterface({
               <ChatInput
                 onSend={handleSend}
                 onStop={stopGeneration}
-                onModelSelectorClick={handleModelSelectorClick}
+                onModelSelectorClick={onModelSelectorClickProp}
                 allowModelFallbackModels={allowModelFallbackModels}
                 supportsAgentControl={runtime?.supportsAgentControl !== false}
                 supportsReasoningEffort={
@@ -930,6 +933,7 @@ export function ChatInterface({
                 }
                 hostControls={composerHostControls}
                 sendShortcut={composerSendShortcut}
+                skills={skills}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 onRecordSkill={onRecordSkill}
                 currentFolderLabel={currentFolderLabel}

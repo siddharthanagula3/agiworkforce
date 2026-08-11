@@ -35,7 +35,9 @@ vi.mock('@agiworkforce/desktop-command-client', () => ({
     notificationSetSettings: vi.fn().mockResolvedValue(undefined),
   },
   models: {
-    llmGetOllamaModels: vi.fn().mockResolvedValue(['ministral-3:14b', 'tinyllama:latest']),
+    llmGetOllamaModels: vi
+      .fn()
+      .mockResolvedValue(['fixture-local-model:primary', 'fixture-local-model:secondary']),
   },
 }));
 
@@ -132,15 +134,15 @@ describe('SettingsPanel render stability', () => {
       if (command === 'ollama_list_models') {
         return [
           {
-            name: 'ministral-3:14b',
+            name: 'fixture-local-model:primary',
             size: 9_000_000_000,
             modified_at: '2026-07-23T00:00:00Z',
             digest: 'test-digest',
             details: {
               parameter_size: '14B',
               quantization_level: 'Q4_K_M',
-              family: 'ministral',
-              families: ['ministral'],
+              family: 'fixture-family',
+              families: ['fixture-family'],
               parent_model: '',
               format: 'gguf',
             },
@@ -200,7 +202,7 @@ describe('SettingsPanel render stability', () => {
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('ministral-3:14b')).toBeInTheDocument();
+      expect(screen.getByText('fixture-local-model:primary')).toBeInTheDocument();
     });
   });
 
@@ -208,12 +210,12 @@ describe('SettingsPanel render stability', () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
 
     const modelInput = await screen.findByRole('textbox', { name: 'Model to install' });
-    fireEvent.change(modelInput, { target: { value: 'smollm2:135m' } });
+    fireEvent.change(modelInput, { target: { value: 'fixture-local-model:install' } });
     fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('ollama_pull_model', {
-        modelName: 'smollm2:135m',
+        modelName: 'fixture-local-model:install',
         baseUrl: 'http://localhost:11434',
       });
     });
@@ -235,7 +237,7 @@ describe('SettingsPanel render stability', () => {
       if (command === 'ollama_list_models') {
         return [
           {
-            name: 'smollm2:135m',
+            name: 'fixture-local-model:installed',
             size: 270_000_000,
             modified_at: '2026-07-23T00:00:00Z',
             digest: 'test-digest',

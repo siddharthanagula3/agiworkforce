@@ -64,7 +64,7 @@ describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape',
   it('normalizes the alternate input_tokens_details.cached_tokens nesting', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        model: 'fixture-provider/fixture-model',
         choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
         usage: {
           prompt_tokens: 200,
@@ -83,7 +83,7 @@ describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape',
   it('leaves an already-nested prompt_tokens_details.cached_tokens untouched', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
-        model: 'openai/gpt-5.4',
+        model: 'openai/fixture-model',
         choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
         usage: {
           prompt_tokens: 200,
@@ -102,7 +102,7 @@ describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape',
   it('does not set cacheWriteTokens when no cache_creation_input_tokens was ever seen', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
-        model: 'openai/gpt-5.4',
+        model: 'openai/fixture-model',
         choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
         usage: { prompt_tokens: 200, completion_tokens: 10 },
       }),

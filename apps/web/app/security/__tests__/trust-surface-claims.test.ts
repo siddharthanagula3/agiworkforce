@@ -111,18 +111,24 @@ describe('trust surface — the honest-gap sections stay present', () => {
   it('/security publishes a coordinated-disclosure process, not just an address', () => {
     const source = read('security');
     expect(source).toContain('id="report"');
-    expect(source).toContain('mailto:contact@agiworkforce.com');
+    expect(source).toContain('contactMailto(CONTACT_SUBJECTS.security)');
     const lower = source.toLowerCase();
     expect(lower).toContain('safe harbour');
     expect(lower).toContain('in scope');
     expect(lower).toContain('out of scope');
   });
 
-  it('/security records the real row-level-security coverage rather than generalising', () => {
-    // 22 of 170 hosted API route files obtain a user-scoped (RLS-bound) handle;
-    // the rest enforce ownership in application code. Rounding this up is the
-    // specific defect the audit caught, so the number stays on the page.
-    expect(read('security')).toContain('22 of 170');
+  it('/security names row-level-security coverage without a stale route count', () => {
+    const source = read('security');
+    expect(source).toContain('The user-scoped client is used by chat and conversation sync');
+    expect(source).toContain('Other privileged routes must enforce authenticated ownership');
+    expect(source).not.toMatch(/\d+ of \d+ hosted API route files/);
+  });
+
+  it('/security does not claim an audit-log schedule that has no route owner', () => {
+    const source = read('security');
+    expect(source).toContain('no scheduled route invokes it today');
+    expect(source).not.toContain('a scheduled job purges old rows');
   });
 
   it('/trust carries dates, which is what its headline promises', () => {

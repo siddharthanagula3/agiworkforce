@@ -37,7 +37,7 @@ describe('legacy cloud chat send route', () => {
   it('retires unmetered provider execution in favor of the canonical completion loop', async () => {
     const response = await request(createApp())
       .post('/api/cloud-chat/send')
-      .send({ message: 'hello', model: 'gpt-5.4-nano' });
+      .send({ message: 'hello', model: 'fixture-model' });
 
     expect(response.status).toBe(410);
     expect(response.body).toEqual({

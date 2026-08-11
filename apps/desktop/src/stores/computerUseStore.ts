@@ -247,8 +247,7 @@ interface ComputerUseState {
       maxActions?: number;
       targetApplication?: string;
       successIndicators?: string[];
-      /** Stream 2: explicit catalog model id (e.g. `claude-opus-5`,
-       *  `gpt-5.6-sol`, `gemini-3.1-pro-preview`, `grok-4.5`). */
+      /** Stream 2: explicit model id resolved from the canonical catalog. */
       model?: string;
       /** Stream 2: explicit provider name override (`anthropic`, `openai`,
        *  `google`, `xai`). Resolved from `model` if omitted. */

@@ -1,10 +1,35 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { enableMapSet } from 'immer';
-import { getAllowedModelsForTier, getModelMetadata } from '../constants/llm';
+import { getAllModels, getAllowedModelsForTier, getModelMetadata } from '../constants/llm';
 import { useUnifiedAuthStore } from '../stores/auth';
 import { useModelStore } from '../stores/modelStore';
 import { useUIStore } from '../stores/ui';
+
+const FIXTURE_MODEL_ID = 'fixture-model';
+const SECOND_FIXTURE_MODEL_ID = 'fixture-model-secondary';
+const BASIC_MODEL_IDS = new Set(getAllowedModelsForTier('basic'));
+const OPENAI_MAX_ONLY_MODEL_ID = getAllowedModelsForTier('max').find(
+  (candidate) =>
+    getModelMetadata(candidate)?.provider === 'openai' && !BASIC_MODEL_IDS.has(candidate),
+);
+if (!OPENAI_MAX_ONLY_MODEL_ID) {
+  throw new Error('Desktop model tests require a catalog OpenAI model above the Basic tier');
+}
+const ANTHROPIC_MAX_MODEL_ID = getAllowedModelsForTier('max').find(
+  (candidate) => getModelMetadata(candidate)?.provider === 'anthropic',
+);
+if (!ANTHROPIC_MAX_MODEL_ID) {
+  throw new Error('Desktop model tests require a catalog Anthropic model for Max');
+}
+const CONTEXTLESS_MEDIA_MODEL_ID = getAllModels().find(
+  (model) =>
+    model.contextWindow === undefined &&
+    (model.capabilities.imageGen || model.capabilities.videoGen),
+)?.id;
+if (!CONTEXTLESS_MEDIA_MODEL_ID) {
+  throw new Error('Desktop context tests require a catalog media model without token context');
+}
 
 // Enable Immer MapSet plugin for stores that use Map/Set (e.g. toolStore.approvalTimeoutTimers)
 enableMapSet();
@@ -89,10 +114,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('claude-opus-5', 'anthropic');
+      await store.selectModel(ANTHROPIC_MAX_MODEL_ID, 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('claude-opus-5');
+      expect(state.recentModels).toContain(ANTHROPIC_MAX_MODEL_ID);
     });
 
     it('should handle selection errors gracefully', async () => {
@@ -117,7 +142,7 @@ describe('modelStore', () => {
       useUnifiedAuthStore.setState({ plan: 'basic' });
 
       const store = useModelStore.getState();
-      await store.selectModel('gpt-5.6-sol', 'openai');
+      await store.selectModel(OPENAI_MAX_ONLY_MODEL_ID, 'openai');
 
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
@@ -167,7 +192,7 @@ describe('modelStore', () => {
 
       useUIStore.setState({ mode: 'advanced' });
       useModelStore.setState({
-        selectedModel: 'gpt-5.6-sol',
+        selectedModel: OPENAI_MAX_ONLY_MODEL_ID,
         selectedProvider: 'openai',
       });
 
@@ -185,35 +210,39 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.toggleFavorite('gpt-5.6-sol');
+      store.toggleFavorite(FIXTURE_MODEL_ID);
 
       const state = useModelStore.getState();
-      expect(state.favorites).toContain('gpt-5.6-sol');
+      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
     });
 
     it('should remove a model from favorites if already favorited', async () => {
       const { useModelStore } = await import('../stores/modelStore');
-      useModelStore.setState({ favorites: ['gpt-5.6-sol', 'claude-opus-5'] });
+      useModelStore.setState({ favorites: [FIXTURE_MODEL_ID, SECOND_FIXTURE_MODEL_ID] });
 
       const store = useModelStore.getState();
-      store.toggleFavorite('gpt-5.6-sol');
+      store.toggleFavorite(FIXTURE_MODEL_ID);
 
       const state = useModelStore.getState();
-      expect(state.favorites).not.toContain('gpt-5.6-sol');
-      expect(state.favorites).toContain('claude-opus-5');
+      expect(state.favorites).not.toContain(FIXTURE_MODEL_ID);
+      expect(state.favorites).toContain(SECOND_FIXTURE_MODEL_ID);
     });
 
     it('should handle multiple favorites', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.toggleFavorite('gpt-5.6-sol');
-      store.toggleFavorite('claude-opus-5');
-      store.toggleFavorite('gemini-3.1-pro-preview');
+      store.toggleFavorite(FIXTURE_MODEL_ID);
+      store.toggleFavorite(SECOND_FIXTURE_MODEL_ID);
+      store.toggleFavorite('fixture-model-tertiary');
 
       const state = useModelStore.getState();
       expect(state.favorites).toHaveLength(3);
-      expect(state.favorites).toEqual(['gpt-5.6-sol', 'claude-opus-5', 'gemini-3.1-pro-preview']);
+      expect(state.favorites).toEqual([
+        FIXTURE_MODEL_ID,
+        SECOND_FIXTURE_MODEL_ID,
+        'fixture-model-tertiary',
+      ]);
     });
   });
 
@@ -246,12 +275,12 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.addToRecent('gpt-5.6-sol');
-      store.addToRecent('claude-opus-5');
+      store.addToRecent(FIXTURE_MODEL_ID);
+      store.addToRecent(SECOND_FIXTURE_MODEL_ID);
 
       const state = useModelStore.getState();
-      expect(state.recentModels[0]).toBe('claude-opus-5');
-      expect(state.recentModels[1]).toBe('gpt-5.6-sol');
+      expect(state.recentModels[0]).toBe(SECOND_FIXTURE_MODEL_ID);
+      expect(state.recentModels[1]).toBe(FIXTURE_MODEL_ID);
     });
 
     it('should move existing model to beginning if already in recent', async () => {
@@ -320,8 +349,13 @@ describe('modelStore', () => {
   describe('getAvailableModels', () => {
     it('should return models from backend', async () => {
       const mockModels = [
-        { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'openai', available: true },
-        { id: 'claude-opus-5', name: 'Claude Opus 5', provider: 'anthropic', available: true },
+        { id: FIXTURE_MODEL_ID, name: 'Fixture Model', provider: 'openai', available: true },
+        {
+          id: SECOND_FIXTURE_MODEL_ID,
+          name: 'Secondary Fixture Model',
+          provider: 'anthropic',
+          available: true,
+        },
       ];
 
       vi.mocked(invoke).mockResolvedValueOnce(mockModels);
@@ -332,7 +366,7 @@ describe('modelStore', () => {
       const result = await store.getAvailableModels();
 
       expect(result).toHaveLength(2);
-      expect(result[0]?.id).toBe('gpt-5.6-sol');
+      expect(result[0]?.id).toBe(FIXTURE_MODEL_ID);
     });
 
     it('should fallback to static models on error', async () => {
@@ -352,7 +386,7 @@ describe('modelStore', () => {
     it('should reset store to initial state', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       useModelStore.setState({
-        selectedModel: 'gpt-5.6-sol',
+        selectedModel: FIXTURE_MODEL_ID,
         selectedProvider: 'openai',
         favorites: ['model-a', 'model-b'],
         recentModels: ['model-c'],
@@ -404,14 +438,11 @@ describe('LLM Constants', () => {
       expect(allModels.length).toBeGreaterThan(0);
     });
 
-    it('should include only managed_cloud for subscription-only model', async () => {
+    it('mirrors the shared catalog instead of maintaining a provider-specific roster', async () => {
       const { getAllModels } = await import('../constants/llm');
+      const { getModels } = await import('@agiworkforce/types');
 
-      const allModels = getAllModels();
-      const providers = new Set(allModels.map((m) => m.provider));
-
-      // For subscription-only model, only managed_cloud has models
-      expect(providers.has('managed_cloud')).toBe(true);
+      expect(getAllModels().map((model) => model.id)).toEqual(getModels().map((model) => model.id));
     });
 
     it('should have valid model types', async () => {
@@ -480,6 +511,19 @@ describe('LLM Constants', () => {
       expect(MODEL_CONTEXT_WINDOWS['auto-economy']).toBeUndefined();
     });
 
+    it('omits media models whose provider does not publish a token context limit', async () => {
+      const { getModelContextWindow, MODEL_CONTEXT_WINDOWS } = await import('../constants/llm');
+      const { getContextUtilization, isWithinContextLimit } = await import('../utils/tokenCount');
+
+      expect(MODEL_CONTEXT_WINDOWS).not.toHaveProperty(CONTEXTLESS_MEDIA_MODEL_ID);
+      expect(() => getModelContextWindow(CONTEXTLESS_MEDIA_MODEL_ID)).toThrow(
+        'does not publish a token context window',
+      );
+      expect(getContextUtilization(100, CONTEXTLESS_MEDIA_MODEL_ID)).toBeNull();
+      expect(isWithinContextLimit(100, CONTEXTLESS_MEDIA_MODEL_ID)).toBe(false);
+      expect(Object.values(MODEL_CONTEXT_WINDOWS).every((value) => value > 0)).toBe(true);
+    });
+
     it('should have getModelContextWindow fallback', async () => {
       const { getModelContextWindow } = await import('../constants/llm');
 
@@ -524,8 +568,8 @@ describe('mediaGenerationStore', () => {
     it('should create an image job with running status', async () => {
       const mockResponse = {
         images: [{ url: 'https://example.com/image.png' }],
-        provider: 'dalle',
-        model: 'gpt-image-2',
+        provider: 'openai',
+        model: 'fixture-image-generation-model',
         created_at: Date.now(),
         cost_estimate: 0.04,
         latency_ms: 5000,
@@ -538,7 +582,7 @@ describe('mediaGenerationStore', () => {
 
       const resultPromise = store.generateImage({
         prompt: 'A beautiful sunset',
-        provider: 'dalle',
+        provider: 'openai',
       });
 
       // Check loading state immediately
@@ -562,7 +606,7 @@ describe('mediaGenerationStore', () => {
 
       const result = await store.generateImage({
         prompt: 'Test prompt',
-        provider: 'dalle',
+        provider: 'openai',
       });
 
       expect(result).toBeNull();
@@ -575,14 +619,14 @@ describe('mediaGenerationStore', () => {
     it('should track multiple image jobs', async () => {
       const mockResponse1 = {
         images: [{ url: 'https://example.com/image1.png' }],
-        provider: 'dalle',
+        provider: 'openai',
         created_at: Date.now(),
         latency_ms: 3000,
       };
 
       const mockResponse2 = {
         images: [{ url: 'https://example.com/image2.png' }],
-        provider: 'google_imagen',
+        provider: 'google',
         created_at: Date.now(),
         latency_ms: 4000,
       };
@@ -592,8 +636,8 @@ describe('mediaGenerationStore', () => {
       const { useMediaGenerationStore } = await import('../stores/mediaGenerationStore');
       const store = useMediaGenerationStore.getState();
 
-      await store.generateImage({ prompt: 'Image 1', provider: 'dalle' });
-      await store.generateImage({ prompt: 'Image 2', provider: 'google_imagen' });
+      await store.generateImage({ prompt: 'Image 1', provider: 'openai' });
+      await store.generateImage({ prompt: 'Image 2', provider: 'google_balanced' });
 
       const state = useMediaGenerationStore.getState();
       expect(state.imageJobs).toHaveLength(2);
@@ -675,7 +719,7 @@ describe('mediaGenerationStore', () => {
           {
             id: '1',
             prompt: 'test',
-            provider: 'dalle',
+            provider: 'openai',
             status: 'completed',
             createdAt: Date.now(),
             images: [],
@@ -685,7 +729,7 @@ describe('mediaGenerationStore', () => {
           {
             id: '2',
             prompt: 'test',
-            provider: 'veo-3.1',
+            provider: 'google',
             status: 'completed',
             createdAt: Date.now(),
           },
@@ -880,7 +924,7 @@ describe('unifiedChatStore - Extended Tests', () => {
         role: 'assistant',
         content: 'Hello! How can I help you?',
         metadata: {
-          model: 'gpt-5.6-sol',
+          model: FIXTURE_MODEL_ID,
           provider: 'openai',
           tokenCount: 50,
           cost: 0.001,
@@ -888,7 +932,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       });
 
       const state = useUnifiedChatStore.getState();
-      expect(state.messages[0]?.metadata?.model).toBe('gpt-5.6-sol');
+      expect(state.messages[0]?.metadata?.model).toBe(FIXTURE_MODEL_ID);
       expect(state.messages[0]?.metadata?.provider).toBe('openai');
     });
 
@@ -918,7 +962,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.addMessage({
         role: 'assistant',
         content: 'Test',
-        metadata: { model: 'gpt-5.6-sol', tokenCount: 10 },
+        metadata: { model: FIXTURE_MODEL_ID, tokenCount: 10 },
       });
 
       const state = useUnifiedChatStore.getState();
@@ -927,7 +971,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.updateMessage(messageId!, { metadata: { cost: 0.01 } });
 
       const updatedState = useUnifiedChatStore.getState();
-      expect(updatedState.messages[0]?.metadata?.model).toBe('gpt-5.6-sol');
+      expect(updatedState.messages[0]?.metadata?.model).toBe(FIXTURE_MODEL_ID);
       expect(updatedState.messages[0]?.metadata?.tokenCount).toBe(10);
       expect(updatedState.messages[0]?.metadata?.cost).toBe(0.01);
     });

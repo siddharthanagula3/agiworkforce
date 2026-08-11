@@ -55,11 +55,11 @@ vi.mock('stripe', () => ({
 
 import { POST } from './route';
 
-function makeRequest() {
+function makeRequest(billingInterval: 'monthly' | 'yearly' = 'monthly') {
   return new NextRequest('https://agiworkforce.com/api/upgrade/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan: 'max_15x', billingInterval: 'monthly' }),
+    body: JSON.stringify({ plan: 'max_15x', billingInterval }),
   });
 }
 
@@ -74,7 +74,10 @@ function makeStripeSubscription() {
       data: [
         {
           id: 'si_123',
-          price: { id: 'price_max_monthly' },
+          price: {
+            id: 'price_max_monthly',
+            recurring: { interval: 'month', interval_count: 1 },
+          },
         },
       ],
     },
@@ -144,13 +147,12 @@ describe('POST /api/upgrade/preview', () => {
       expect.stringContaining('stripe_subscription_id'),
       expect.arrayContaining(['sub_live123', 'cus_123', 'user_123']),
     );
-    expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subscription_details: expect.objectContaining({
-          billing_cycle_anchor: 'now',
-        }),
-      }),
-    );
+    const subscriptionDetails =
+      stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details;
+    expect(subscriptionDetails).toMatchObject({
+      proration_behavior: 'always_invoice',
+    });
+    expect(subscriptionDetails).not.toHaveProperty('billing_cycle_anchor');
     expect(
       stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details?.proration_date,
     ).toEqual(expect.any(Number));
@@ -233,18 +235,27 @@ describe('POST /api/upgrade/preview', () => {
         currency: 'usd',
         metadata: { user_id: 'user_123', plan_tier: 'team' },
         items: {
-          data: [{ id: 'si_123', price: { id: 'price_team_usd' }, quantity }],
+          data: [
+            {
+              id: 'si_123',
+              price: {
+                id: 'price_team_usd',
+                recurring: { interval: 'month', interval_count: 1 },
+              },
+              quantity,
+            },
+          ],
         },
       };
     }
 
-    function teamRequest(seats?: number) {
+    function teamRequest(seats?: number, billingInterval: 'monthly' | 'yearly' = 'monthly') {
       return new NextRequest('https://agiworkforce.com/api/upgrade/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan: 'team',
-          billingInterval: 'monthly',
+          billingInterval,
           ...(seats === undefined ? {} : { seats }),
         }),
       });
@@ -295,6 +306,16 @@ describe('POST /api/upgrade/preview', () => {
         recurringAmountCents: 24_000,
         seats: 12,
       });
+    });
+
+    it('refuses a cadence change because Stripe would reset the renewal date', async () => {
+      const response = await POST(teamRequest(12, 'yearly'));
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: expect.stringMatching(/keep your current monthly billing cadence/i) },
+      });
+      expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
     });
 
     it('refuses a seat reduction rather than issuing an unscoped credit', async () => {

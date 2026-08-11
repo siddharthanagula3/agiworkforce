@@ -42,6 +42,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import type { ProcessedRequest } from './request-processor';
@@ -75,7 +76,7 @@ function loadServerKeys(): void {
   }
 }
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = requireProviderDefaultModel('anthropic');
 
 const PROMPT =
   'Fetch https://example.com/ with the url_fetch tool and quote the page heading ' +

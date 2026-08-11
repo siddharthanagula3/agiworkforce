@@ -1,7 +1,7 @@
 /**
  * selector → tier2 dispatch: catalog model wiring test.
  *
- * Validates that the default catalog model (qwen3-4b-instruct-2507) has an
+ * Validates that the default catalog model has an
  * executorchPreset, and that tier2Generate produces a real streamed response
  * when LLMModule is injected via _setLLMModuleForTesting.
  *
@@ -60,25 +60,29 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('catalog model has executorchPreset (prerequisite for tier2 dispatch)', () => {
-  it('qwen3-4b-instruct-2507 has a valid executorchPreset', () => {
+  it('the default model has a valid executorchPreset', () => {
     const model = getDefaultModel();
+    const preset = model.executorchPreset!;
     expect(model.executorchPreset).toBeDefined();
-    expect(model.executorchPreset?.modelName).toBe('qwen3-4b-quantized');
+    expect(preset.modelName).toBeTruthy();
     expect(model.executorchPreset?.modelSource).toContain('huggingface.co');
     expect(model.executorchPreset?.tokenizerSource).toContain('huggingface.co');
     expect(model.executorchPreset?.tokenizerConfigSource).toContain('huggingface.co');
   });
 
-  it('llama-3.2-1b-instruct-spinquant has a valid executorchPreset', () => {
+  it('the lite-mode model has a valid executorchPreset', () => {
     const model = getLiteModeModel();
     expect(model).toBeDefined();
     expect(model!.executorchPreset).toBeDefined();
-    expect(model!.executorchPreset?.modelName).toBe('llama-3.2-1b-spinquant');
+    expect(model!.executorchPreset?.modelName).toBeTruthy();
+    expect(model!.executorchPreset?.modelName).not.toBe(
+      getDefaultModel().executorchPreset?.modelName,
+    );
   });
 });
 
 describe('tier2Generate with mocked LLMModule produces a real offline response', () => {
-  it('returns streamed tokens and full text for the qwen3 preset', async () => {
+  it('returns streamed tokens and full text for the catalog default preset', async () => {
     const model = getDefaultModel();
     const preset = model.executorchPreset!;
     const receivedTokens: string[] = [];
@@ -91,8 +95,8 @@ describe('tier2Generate with mocked LLMModule produces a real offline response',
     // LLMModule.fromModelName was called with the correct preset fields
     expect(mockFromModelName).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelName: 'qwen3-4b-quantized',
-        modelSource: expect.stringContaining('qwen3_4b_8da4w.pte'),
+        modelName: preset.modelName,
+        modelSource: preset.modelSource,
       }),
       undefined,
     );

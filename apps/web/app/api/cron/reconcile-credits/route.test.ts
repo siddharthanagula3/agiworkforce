@@ -9,6 +9,12 @@ vi.mock('@/lib/services/credit-service', () => ({
     processPendingSettlements: vi.fn(),
   },
 }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({ query: vi.fn() })),
+}));
+vi.mock('@/lib/services/video-incident-alert-service', () => ({
+  deliverDueVideoIncidentAlerts: vi.fn(),
+}));
 vi.mock('@/lib/support/handoff/config', () => ({
   getHandoffConfig: vi.fn(() => ({ fallbackEmail: 'ops@agiworkforce.com' })),
 }));
@@ -17,11 +23,13 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
 }));
 
 import { CreditService } from '@/lib/services/credit-service';
+import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 import { GET } from './route';
 
 const processPending = vi.mocked(CreditService.processPendingSettlements);
 const sendEmail = vi.mocked(sendSupportEmail);
+const deliverVideoAlerts = vi.mocked(deliverDueVideoIncidentAlerts);
 
 function cronRequest(secret?: string): Request {
   return new Request('https://agiworkforce.com/api/cron/reconcile-credits', {
@@ -40,6 +48,7 @@ describe('GET /api/cron/reconcile-credits', () => {
       terminal: 0,
     });
     sendEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg_1' });
+    deliverVideoAlerts.mockResolvedValue({ found: 0, delivered: 0, pending: 0, exhausted: 0 });
   });
 
   afterEach(() => {
@@ -122,5 +131,52 @@ describe('GET /api/cron/reconcile-credits', () => {
     processPending.mockRejectedValueOnce(new Error('database unavailable'));
     const response = await GET(cronRequest('cron-secret') as never);
     expect(response.status).toBe(500);
+    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything(), 20);
+  });
+
+  it('still drains video incident alerts when the generic credit queue is unhealthy', async () => {
+    processPending.mockRejectedValueOnce(new Error('credit queue unavailable'));
+    deliverVideoAlerts.mockResolvedValueOnce({
+      found: 1,
+      delivered: 1,
+      pending: 0,
+      exhausted: 0,
+    });
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(500);
+    expect(deliverVideoAlerts).toHaveBeenCalledOnce();
+  });
+
+  it('retries video incident alerts even when no credit settlement changed this run', async () => {
+    deliverVideoAlerts.mockResolvedValue({ found: 1, delivered: 1, pending: 0, exhausted: 0 });
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(200);
+    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything(), 20);
+  });
+
+  it('fails observably while a video incident alert remains undelivered', async () => {
+    deliverVideoAlerts.mockResolvedValue({ found: 1, delivered: 0, pending: 1, exhausted: 0 });
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: 'video_incident_alert_pending',
+    });
+  });
+
+  it('fails observably without retrying an exhausted video incident alert forever', async () => {
+    deliverVideoAlerts.mockResolvedValue({ found: 1, delivered: 0, pending: 0, exhausted: 1 });
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: 'video_incident_alert_exhausted',
+    });
   });
 });

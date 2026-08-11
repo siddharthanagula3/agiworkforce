@@ -6,6 +6,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+const CHAT_MODEL = requireProviderDefaultModel('openai');
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
@@ -37,6 +40,10 @@ vi.mock('@/lib/server/neon-chat', () => ({
   getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
   requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
   normalizeMessageMetadata: (v: unknown) => v,
+}));
+
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
 // Mock CreditService
@@ -79,7 +86,7 @@ describe('Chat Messages API', () => {
     conversation_id: 'conv-1',
     role: 'assistant',
     content: 'Hello! How can I help you?',
-    model: 'gpt-5.6-sol',
+    model: CHAT_MODEL,
     provider: 'openai',
     input_tokens: 10,
     output_tokens: 8,
@@ -113,7 +120,7 @@ describe('Chat Messages API', () => {
         Promise.resolve({
           choices: [{ message: { content: 'Hello! How can I help you?' } }],
           usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 },
-          model: 'gpt-5.6-sol',
+          model: CHAT_MODEL,
           provider: 'openai',
           cost_cents: 0.001,
         }),
@@ -210,10 +217,11 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        // Verify user_id is included in the conversation ownership query
-        expect(mockQuery).toHaveBeenCalledWith(
-          expect.stringContaining('user_id'),
-          expect.arrayContaining(['user-123']),
+        // The child write is admitted only through the exact active-workspace parent.
+        expect(mockQuery).toHaveBeenNthCalledWith(
+          1,
+          expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
+          ['conv-1', 'user-123', null],
         );
       });
 
@@ -276,7 +284,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.6-sol', skipLlm: true }),
+          body: JSON.stringify({ content: 'Hello', model: CHAT_MODEL, skipLlm: true }),
         });
         await POST(request, mockContext);
 
@@ -400,7 +408,7 @@ describe('Chat Messages API', () => {
           body: JSON.stringify({
             content: 'I can help!',
             role: 'assistant',
-            model: 'gpt-5.6-sol',
+            model: CHAT_MODEL,
             skipLlm: true,
           }),
         });
@@ -412,7 +420,7 @@ describe('Chat Messages API', () => {
         // Verify the insert includes the model parameter
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_messages'),
-          expect.arrayContaining(['gpt-5.6-sol']),
+          expect.arrayContaining([CHAT_MODEL]),
         );
       });
     });

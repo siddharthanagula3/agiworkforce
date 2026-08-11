@@ -31,7 +31,7 @@ pub(super) fn process_multimodal_attachments(
                 }
             } else {
                 warn!(
-                    "[Chat] Model '{}' may not support vision - image attachments will be skipped. Consider using a vision-capable model like GPT-4, Claude 3+, or Gemini.",
+                    "[Chat] Model '{}' is not cataloged as vision-capable, so image attachments will be skipped. Choose a model whose catalog capabilities include vision.",
                     model
                 );
                 None

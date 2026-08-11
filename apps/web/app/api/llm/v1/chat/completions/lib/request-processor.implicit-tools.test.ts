@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BillingPlanTier, RoutingTaskType } from '@agiworkforce/types';
+import {
+  getRoutingSlotModel,
+  type BillingPlanTier,
+  type RoutingTaskType,
+} from '@agiworkforce/types';
 
 import * as requestProcessor from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
@@ -46,7 +50,7 @@ function resolveToolAwareTaskType(): ResolveToolAwareTaskType {
 
 function request(overrides: Partial<ChatCompletionRequest> = {}): ChatCompletionRequest {
   return requestProcessor.ChatCompletionRequestSchema.parse({
-    model: 'gemini-3.6-flash',
+    model: getRoutingSlotModel('coding_fast'),
     messages: [{ role: 'user', content: 'Hello' }],
     stream: true,
     ...overrides,
@@ -79,7 +83,7 @@ describe('implicit managed-tool intent', () => {
   });
 
   it('offers metered code execution to Free normal chat without unlocking AGI Work', () => {
-    const chatRequest = request({ model: 'gpt-5.4-mini' });
+    const chatRequest = request({ model: getRoutingSlotModel('coding_fast') });
 
     applyImplicitManagedToolIntent()(chatRequest, {
       prompt: 'Execute this code and give me the result.',

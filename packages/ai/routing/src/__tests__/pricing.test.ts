@@ -4,6 +4,7 @@ import realCatalog from '@agiworkforce/types/models.json';
 
 import {
   effectiveInputPrice,
+  effectiveModelPricing,
   effectiveOutputPrice,
   ESTIMATE_INFLATION,
   isDeprecated,
@@ -49,6 +50,34 @@ const FIXTURE: Catalog = {
       outputCost: 1,
       promo_expires_at: '2026-06-01T00:00:00Z',
       post_promo_prices: { input: 2, output: 4 },
+    },
+    // Ordered tiers deliberately coexist with a promo so both composition and
+    // greatest-qualifying-threshold behavior are observable.
+    'fx-long': {
+      id: 'fx-long',
+      provider: 'fixture',
+      inputCost: 1,
+      outputCost: 4,
+      cached_input: 0.1,
+      cached_write: 1.25,
+      promo_expires_at: '2026-06-01T00:00:00Z',
+      post_promo_prices: { input: 3, output: 9, cached_input: 0.3, cached_write: 3.75 },
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 10,
+          inputCost: 20,
+          outputCost: 60,
+          cached_input: 2,
+          cached_write: 25,
+        },
+        {
+          thresholdTokens: 20,
+          inputCost: 30,
+          outputCost: 90,
+          cached_input: 3,
+          cached_write: 37.5,
+        },
+      ],
     },
     // Dated-deprecation model: sunsets 2026-06-15.
     'fx-sunset': {
@@ -105,6 +134,39 @@ describe('isPromoExpired + effective prices (logic)', () => {
     expect(effectiveInputPrice('fx-flat', AFTER, FIXTURE)).toBe(3);
     expect(effectiveOutputPrice('fx-flat', AFTER, FIXTURE)).toBe(15);
     expect(effectiveInputPrice('does-not-exist', AFTER, FIXTURE)).toBe(0);
+  });
+});
+
+describe('effectiveModelPricing input-length composition', () => {
+  it('uses the dated/promo base at a threshold and the greatest tier above it', () => {
+    expect(effectiveModelPricing('fx-long', 10, AFTER, FIXTURE)).toEqual({
+      inputCost: 3,
+      outputCost: 9,
+      cached_input: 0.3,
+      cached_write: 3.75,
+      cached_write_1h: undefined,
+    });
+    expect(effectiveModelPricing('fx-long', 11, AFTER, FIXTURE)).toEqual({
+      inputCost: 20,
+      outputCost: 60,
+      cached_input: 2,
+      cached_write: 25,
+      cached_write_1h: undefined,
+    });
+    expect(effectiveModelPricing('fx-long', 20, AFTER, FIXTURE)).toEqual({
+      inputCost: 20,
+      outputCost: 60,
+      cached_input: 2,
+      cached_write: 25,
+      cached_write_1h: undefined,
+    });
+    expect(effectiveModelPricing('fx-long', 21, AFTER, FIXTURE)).toEqual({
+      inputCost: 30,
+      outputCost: 90,
+      cached_input: 3,
+      cached_write: 37.5,
+      cached_write_1h: undefined,
+    });
   });
 });
 

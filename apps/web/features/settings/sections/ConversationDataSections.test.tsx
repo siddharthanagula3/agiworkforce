@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   bulkAction: vi.fn(),
   listShares: vi.fn(),
   revokeShare: vi.fn(),
+  listPublished: vi.fn(),
+  unpublish: vi.fn(),
   routerReplace: vi.fn(),
 }));
 
@@ -26,6 +28,8 @@ vi.mock('../services/conversation-data-service', () => ({
   applyBulkConversationAction: (...args: unknown[]) => mocks.bulkAction(...args),
   listSharedLinks: (...args: unknown[]) => mocks.listShares(...args),
   revokeSharedLink: (...args: unknown[]) => mocks.revokeShare(...args),
+  listPublishedArtifacts: (...args: unknown[]) => mocks.listPublished(...args),
+  unpublishArtifact: (...args: unknown[]) => mocks.unpublish(...args),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -43,7 +47,8 @@ vi.mock('@/lib/sentry-shared', () => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
 }));
 
@@ -80,6 +85,8 @@ describe('Web conversation data settings', () => {
     mocks.bulkAction.mockResolvedValue(1);
     mocks.listShares.mockResolvedValue([]);
     mocks.revokeShare.mockResolvedValue(undefined);
+    mocks.listPublished.mockResolvedValue([]);
+    mocks.unpublish.mockResolvedValue(undefined);
     useChatStore.setState({
       conversations: [storeConversation],
       activeConversationId: null,
@@ -135,6 +142,10 @@ describe('Web conversation data settings', () => {
       'https://agiworkforce.com/share/share-token',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+
+    expect(mocks.revokeShare).not.toHaveBeenCalled();
+    expect(window.confirm).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
     await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token'));
     expect(screen.getByText('No shared links')).toBeInTheDocument();

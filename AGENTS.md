@@ -11,7 +11,7 @@ This is THE entry point for every AI coding agent (Claude, Codex, Cursor, Gemini
 These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-context`.
 
 - Verify current facts from repo files, official docs, web search, or configured plugins/MCP before changing fast-moving APIs, model IDs, pricing, App Store rules, provider terms, framework behavior, or release claims.
-- Read model IDs from `packages/contracts/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data.
+- Read model IDs from `packages/contracts/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data. Concrete catalog or provider model IDs may appear only in canonical model-registry sources and generated mirrors; production code, tests, fixtures, snapshots, comments, and docs must derive them from the catalog, routing slots, or capability queries. Synthetic test IDs must be obviously non-provider fixtures. Replacing a model must not require editing consumers.
 - Next.js 16 uses `proxy.ts` and an exported `proxy` function. Do not rename it back to `middleware.ts`.
 - Local, BYOK, and Managed Cloud are separate trust boundaries.
 - Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.

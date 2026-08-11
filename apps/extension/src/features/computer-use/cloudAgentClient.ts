@@ -12,7 +12,7 @@
  *
  * MODEL:
  *   Read from the canonical catalog's computer_use routing slot (SLOT_REGISTRY).
- *   Value at time of writing: "claude-sonnet-5" (vision + function-calling capable).
+ *   The current vision + function-calling model is resolved from the catalog.
  *   Not hardcoded here — the catalog value is embedded at build time via the
  *   COMPUTER_USE_MODEL constant exported below so callers can log or override it.
  *

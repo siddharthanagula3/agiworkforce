@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { ChatMessage, MessageRouting } from '../lib/types';
+import { getModelPresentationLabel } from '../lib/modelInfo';
 
 export interface ProvenanceFooterProps {
   message: Pick<
@@ -29,18 +30,19 @@ function formatRelativeTime(iso: string): string | null {
 }
 
 /**
- * Compact metadata row rendered below assistant messages: model id, provider,
+ * Compact metadata row rendered below assistant messages: catalog model name, provider,
  * tool-call count, citation count, relative timestamp.
  *
  * When `message.routing.source === 'auto'`, an additional trace row renders
  * (`Auto routed: <task> -> <model> · Why? "<reason>"`) followed by a
- * "Pin to <pinModel>" button that invokes `onPinModel`. The model id is never
- * hardcoded here; it flows from the router payload on the message.
+ * "Pin to <pinModel>" button that invokes `onPinModel`. Model identity is
+ * catalog-derived from the router payload on the message.
  */
 export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps) {
   const parts = useMemo(() => {
     const out: string[] = [];
-    if (message.model) out.push(message.model);
+    const modelLabel = getModelPresentationLabel(message.model);
+    if (modelLabel) out.push(modelLabel);
     if (message.provider && message.provider !== message.model) {
       out.push(String(message.provider));
     }
@@ -85,7 +87,7 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
         >
           <span>
             Auto routed{routing.task ? `: ${routing.task}` : ''}
-            {message.model ? ` → ${message.model}` : ''}
+            {message.model ? ` → ${getModelPresentationLabel(message.model)}` : ''}
           </span>
           {routing.reason && (
             <>
@@ -104,7 +106,7 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
               }}
               data-component="provenance-pin-button"
             >
-              Pin to {routing.pinModel}
+              Pin to {getModelPresentationLabel(routing.pinModel)}
             </button>
           )}
         </div>

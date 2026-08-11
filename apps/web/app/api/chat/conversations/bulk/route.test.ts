@@ -13,6 +13,9 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
   getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/e2b/runtime', () => ({
@@ -59,7 +62,7 @@ describe('POST /api/chat/conversations/bulk', () => {
     expect(sql).toContain('where user_id = $1');
     expect(sql).toContain('deleted_at is null');
     expect(sql).toContain('archived = false');
-    expect(params).toEqual(['user-1']);
+    expect(params).toEqual(['user-1', null]);
     expect(mocks.killSession).not.toHaveBeenCalled();
   });
 

@@ -31,7 +31,10 @@
 
 import 'server-only';
 
-import { getModelMetadataById, resolveEffectiveModelPricing } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  resolveEffectiveModelPricingForInputTokens,
+} from '@agiworkforce/types';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import { resolveCacheRates } from '@/lib/services/llm-cost-calculator';
 
@@ -97,7 +100,14 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
     return 0;
   }
 
-  const effective = resolveEffectiveModelPricing(meta, asOf);
+  const rawInputTokens = usage.inputTokens ?? 0;
+  const cacheRead = usage.cacheReadInputTokens ?? 0;
+  const cacheCreationTotal = usage.cacheCreationInputTokens ?? 0;
+  const isAnthropic = meta.provider === 'anthropic';
+  const tierInputTokens = isAnthropic
+    ? rawInputTokens + cacheRead + cacheCreationTotal
+    : rawInputTokens;
+  const effective = resolveEffectiveModelPricingForInputTokens(meta, asOf, tierInputTokens);
   const inputPerM = effective.inputCost ?? 0;
   const outputPerM = effective.outputCost ?? 0;
 
@@ -110,7 +120,6 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
   // Anthropic's response only breaks cacheCreationInputTokens down into
   // cacheCreation1hInputTokens when a request mixes 5m/1h TTLs; the remainder
   // is billed at the 5m rate. See anthropic.ts's stable-prefix 1h upgrade.
-  const isAnthropic = meta.provider === 'anthropic';
   const {
     read: cacheReadPerM,
     write5m: cacheCreationPerM,
@@ -126,13 +135,10 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
     cacheTokensDisjointFromInput: isAnthropic,
   });
 
-  const rawInputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
   // Reasoning tokens are billed at the same rate as output tokens.
   // Reference: codex-cli TokenUsage.reasoning_output_tokens · counted at output rate.
   const reasoningTokens = usage.reasoningOutputTokens ?? 0;
-  const cacheRead = usage.cacheReadInputTokens ?? 0;
-  const cacheCreationTotal = usage.cacheCreationInputTokens ?? 0;
   const cacheCreation1h = Math.min(
     cacheCreationTotal,
     Math.max(0, usage.cacheCreation1hInputTokens ?? 0),

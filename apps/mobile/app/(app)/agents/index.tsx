@@ -32,6 +32,7 @@ import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -535,7 +536,9 @@ function TaskCard({
             <Text style={{ color: presentation.color, fontSize: 12, fontWeight: '600' }}>
               {presentation.label}
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>· {run.model}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              · {getManagedDisplayName(run.model)}
+            </Text>
           </View>
         </View>
         {onPress ? <ChevronRight size={18} color={colors.textMuted} /> : null}

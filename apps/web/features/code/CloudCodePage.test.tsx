@@ -98,6 +98,30 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('does not offer command execution for readable history when managed compute is unavailable', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: false,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [session],
+      })),
+    });
+    const user = userEvent.setup();
+
+    render(<CloudCodePage api={api} />);
+
+    const commandInput = await screen.findByRole('textbox', { name: 'Terminal command' });
+    expect(commandInput).toBeDisabled();
+    await user.type(commandInput, 'pwd');
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+    expect(api.run).not.toHaveBeenCalled();
+  });
+
   it('reports an unapplied storage migration without pretending a session can start', async () => {
     const api = createApi({
       list: vi.fn(async () => ({

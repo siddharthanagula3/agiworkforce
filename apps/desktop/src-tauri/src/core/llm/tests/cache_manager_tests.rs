@@ -119,14 +119,14 @@ mod tests {
         let messages = vec![make_msg("user", "test")];
         let key1 = CacheManager::compute_cache_key(
             crate::core::llm::Provider::OpenAI,
-            "gpt-4",
+            "fixture-primary-model",
             &messages,
             Some(0.7),
             Some(1024),
         );
         let key2 = CacheManager::compute_cache_key(
             crate::core::llm::Provider::OpenAI,
-            "gpt-4",
+            "fixture-primary-model",
             &messages,
             Some(0.7),
             Some(1024),
@@ -139,14 +139,14 @@ mod tests {
         let messages = vec![make_msg("user", "test")];
         let key_openai = CacheManager::compute_cache_key(
             crate::core::llm::Provider::OpenAI,
-            "gpt-4",
+            "fixture-primary-model",
             &messages,
             None,
             None,
         );
         let key_anthropic = CacheManager::compute_cache_key(
             crate::core::llm::Provider::Anthropic,
-            "gpt-4",
+            "fixture-primary-model",
             &messages,
             None,
             None,

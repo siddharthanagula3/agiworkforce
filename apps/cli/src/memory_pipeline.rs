@@ -862,8 +862,8 @@ mod tests {
     #[test]
     fn test_resolve_fast_model_with_override() {
         let mut config = CliConfig::default();
-        config.default.fast_model = Some("claude-sonnet-5".to_string());
-        assert_eq!(resolve_fast_model(&config), "claude-sonnet-5");
+        config.default.fast_model = Some("fixture-fast-model".to_string());
+        assert_eq!(resolve_fast_model(&config), "fixture-fast-model");
     }
 
     #[test]

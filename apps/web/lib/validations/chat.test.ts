@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { isExecutableImageModel, listCanonicalModels } from '@agiworkforce/types';
 import { CreateConversationSchema, CreateMessageSchema } from './chat';
+
+const IMAGE_MODEL = listCanonicalModels().find(isExecutableImageModel)?.id;
+if (!IMAGE_MODEL) throw new Error('Canonical image model fixture is missing');
 
 describe('chat model validation', () => {
   it('accepts an image model for an assistant image-generation message', () => {
@@ -7,7 +11,7 @@ describe('chat model validation', () => {
       id: '00000000-0000-4000-8000-000000000001',
       role: 'assistant',
       content: '\u200B',
-      model: 'gpt-image-2',
+      model: IMAGE_MODEL,
       metadata: {
         toolType: 'image-generation',
         imageUrl: '/api/files/00000000-0000-4000-8000-000000000002',
@@ -22,7 +26,7 @@ describe('chat model validation', () => {
     expect(
       CreateConversationSchema.safeParse({
         title: 'Image chat',
-        model: 'gpt-image-2',
+        model: IMAGE_MODEL,
       }).success,
     ).toBe(false);
   });

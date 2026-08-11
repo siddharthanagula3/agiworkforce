@@ -883,7 +883,12 @@ impl PlaywrightBridge {
         // Do not report the browser closed while its DevTools port is still
         // answering: the next launch would attach to the dying instance and
         // strand the process it just spawned.
-        if stopped && !self.endpoint().wait_for_shutdown(CLOSE_SHUTDOWN_TIMEOUT).await {
+        if stopped
+            && !self
+                .endpoint()
+                .wait_for_shutdown(CLOSE_SHUTDOWN_TIMEOUT)
+                .await
+        {
             tracing::warn!(
                 "Browser {} was killed but Chrome DevTools is still answering on port {}. A relaunch may attach to the previous instance.",
                 id,
@@ -1452,9 +1457,12 @@ mod tests {
         );
 
         // No install path matches, so it has to fall through to PATH.
-        let from_path =
-            resolve_browser_executable(std::slice::from_ref(&missing), &[path_name], "test browser")
-                .unwrap();
+        let from_path = resolve_browser_executable(
+            std::slice::from_ref(&missing),
+            &[path_name],
+            "test browser",
+        )
+        .unwrap();
         assert!(std::path::Path::new(&from_path).is_file());
     }
 
@@ -1468,8 +1476,14 @@ mod tests {
         .expect_err("must not resolve a browser that is not installed");
 
         let message = error.to_string();
-        assert!(message.contains("/definitely/not/installed/chrome"), "{message}");
-        assert!(message.contains("definitely-not-a-real-browser-binary"), "{message}");
+        assert!(
+            message.contains("/definitely/not/installed/chrome"),
+            "{message}"
+        );
+        assert!(
+            message.contains("definitely-not-a-real-browser-binary"),
+            "{message}"
+        );
         assert!(message.contains(BROWSER_EXECUTABLE_ENV), "{message}");
     }
 
@@ -1560,9 +1574,7 @@ mod tests {
         let profile_arg = args
             .iter()
             .find(|arg| arg.starts_with("--user-data-dir="))
-            .unwrap_or_else(|| {
-                panic!("launch args must pin a profile directory, got: {args:?}")
-            });
+            .unwrap_or_else(|| panic!("launch args must pin a profile directory, got: {args:?}"));
         assert!(
             profile_arg.contains("agiworkforce"),
             "automation profile must live under the app data directory, got: {profile_arg}"
@@ -1607,7 +1619,10 @@ mod tests {
         } else {
             (
                 "/bin/sh".to_string(),
-                vec!["-c".to_string(), "echo browser-said-no 1>&2; exit 3".to_string()],
+                vec![
+                    "-c".to_string(),
+                    "echo browser-said-no 1>&2; exit 3".to_string(),
+                ],
             )
         };
 
@@ -1680,7 +1695,9 @@ mod tests {
 
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { continue };
-                let Ok(peek) = stream.try_clone() else { continue };
+                let Ok(peek) = stream.try_clone() else {
+                    continue;
+                };
                 let mut reader = BufReader::new(peek);
 
                 // Read the request head so the client is not left writing into
@@ -1730,7 +1747,10 @@ mod tests {
             .await
             .expect("a running DevTools endpoint must be adopted, not relaunched");
 
-        assert_eq!(handle.ws_endpoint, "ws://127.0.0.1:1/devtools/browser/adopted");
+        assert_eq!(
+            handle.ws_endpoint,
+            "ws://127.0.0.1:1/devtools/browser/adopted"
+        );
 
         let processes = bridge.browser_processes.lock().await;
         assert!(

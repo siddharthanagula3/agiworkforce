@@ -25,7 +25,7 @@ interface ModelSelectorButtonProps {
  *
  * Both references keep the answering model readable and one tap from being
  * changed: Claude renders "Opus 5 High" — display name plus reasoning effort as
- * a muted suffix (IMG_0730) — and ChatGPT renders "5.6 Sol Light" beside the mic
+ * a muted suffix (IMG_0730) — and ChatGPT renders its model and effort beside the mic
  * (IMG_0689). Neither draws a chip: no icon, no chevron, no filled pill. This
  * was previously a 150pt icon+chevron chip that was exported and mounted
  * nowhere while the composer's `onOpenModelPicker` prop sat unused, so the model

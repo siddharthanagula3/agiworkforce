@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Switch } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -16,6 +15,7 @@ import {
   applyBulkConversationAction,
   type BulkConversationAction,
 } from '../services/conversation-data-service';
+import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 
 const NAMESPACE = 'privacy';
 
@@ -351,9 +351,12 @@ export function PrivacySection() {
         >
           AGI believes in transparent data practices. Learn how your information is protected when
           using AGI products and visit our{' '}
-          <Link href="/privacy" style={{ color: 'var(--text-1)', textDecoration: 'underline' }}>
+          <SettingsPageLink
+            href="/privacy"
+            style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+          >
             Privacy Policy
-          </Link>{' '}
+          </SettingsPageLink>{' '}
           for more details.
         </div>
 
@@ -368,12 +371,12 @@ export function PrivacySection() {
             no training opt-in, because that data path does not exist. Managed Cloud requests are
             routed to the hosted provider serving the model you selected, and provider-side handling
             is governed by that provider&rsquo;s terms &mdash; the current list is at{' '}
-            <Link
+            <SettingsPageLink
               href="/subprocessors"
               style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
             >
               /subprocessors
-            </Link>
+            </SettingsPageLink>
             .
           </p>
         </ExpandableSection>
@@ -498,8 +501,8 @@ export function PrivacySection() {
               Review and revoke links created from Web conversations.
             </div>
           </div>
-          <Link
-            href="/settings/shared-links"
+          <SettingsSectionLink
+            section="shared-links"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',
@@ -510,7 +513,7 @@ export function PrivacySection() {
             }}
           >
             Manage
-          </Link>
+          </SettingsSectionLink>
         </div>
 
         <div
@@ -531,8 +534,8 @@ export function PrivacySection() {
               Restore archived chats or permanently delete them.
             </div>
           </div>
-          <Link
-            href="/settings/archived"
+          <SettingsSectionLink
+            section="archived"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',
@@ -543,7 +546,7 @@ export function PrivacySection() {
             }}
           >
             Manage
-          </Link>
+          </SettingsSectionLink>
         </div>
 
         <div
@@ -564,8 +567,8 @@ export function PrivacySection() {
               Put back a chat you deleted by mistake.
             </div>
           </div>
-          <Link
-            href="/settings/deleted-chats"
+          <SettingsSectionLink
+            section="deleted-chats"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',
@@ -576,7 +579,7 @@ export function PrivacySection() {
             }}
           >
             Manage
-          </Link>
+          </SettingsSectionLink>
         </div>
 
         <div
@@ -730,8 +733,8 @@ export function PrivacySection() {
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
             Memory preferences
           </div>
-          <Link
-            href="/settings/memory"
+          <SettingsSectionLink
+            section="memory"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',
@@ -742,7 +745,7 @@ export function PrivacySection() {
             }}
           >
             Manage
-          </Link>
+          </SettingsSectionLink>
         </div>
       </section>
 

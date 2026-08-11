@@ -4,8 +4,17 @@
 //! This serves as a fallback when cloud services are unavailable or when
 //! the user prefers local processing for privacy.
 
+use super::artifact_registry::{
+    piper_binary_descriptor, piper_voice_descriptors, safe_artifact_filename, validate_runtime_id,
+    verify_sha256, PiperVoiceDescriptor,
+};
+use super::piper_bundle::{
+    extract_archive, promote_bundle, validate_bundle_layout, versioned_bundle_paths,
+};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
@@ -38,7 +47,7 @@ impl std::fmt::Display for PiperQuality {
 /// Information about an available Piper voice
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceInfo {
-    /// Unique voice identifier (e.g., "en_US-lessac-medium")
+    /// Runtime-provided unique voice identifier
     pub id: String,
     /// Human-readable name
     pub name: String,
@@ -97,110 +106,190 @@ pub struct SynthesisResult {
     pub duration_seconds: f32,
 }
 
-/// Popular Piper voice definitions for easy downloading
+/// Runtime Piper voice definitions.
+///
+/// The legacy public name is retained for IPC compatibility. Voice identities
+/// come from the embedded registry, optional user overrides, or installed
+/// artifacts discovered on disk.
 pub struct PiperVoiceDefinitions;
 
 impl PiperVoiceDefinitions {
-    /// Get a list of popular voices that can be downloaded
-    pub fn popular_voices() -> Vec<VoiceInfo> {
-        vec![
-            VoiceInfo {
-                id: "en_US-lessac-medium".to_string(),
-                name: "Lessac (US English)".to_string(),
-                language: "en_US".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("High-quality US English voice, natural sounding".to_string()),
-            },
-            VoiceInfo {
-                id: "en_US-amy-medium".to_string(),
-                name: "Amy (US English)".to_string(),
-                language: "en_US".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("Female US English voice".to_string()),
-            },
-            VoiceInfo {
-                id: "en_GB-alan-medium".to_string(),
-                name: "Alan (British English)".to_string(),
-                language: "en_GB".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("Male British English voice".to_string()),
-            },
-            VoiceInfo {
-                id: "en_US-ryan-medium".to_string(),
-                name: "Ryan (US English)".to_string(),
-                language: "en_US".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("Male US English voice".to_string()),
-            },
-            VoiceInfo {
-                id: "de_DE-thorsten-medium".to_string(),
-                name: "Thorsten (German)".to_string(),
-                language: "de_DE".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("German male voice".to_string()),
-            },
-            VoiceInfo {
-                id: "es_ES-carlfm-medium".to_string(),
-                name: "Carlfm (Spanish)".to_string(),
-                language: "es_ES".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("Spanish male voice".to_string()),
-            },
-            VoiceInfo {
-                id: "fr_FR-siwis-medium".to_string(),
-                name: "Siwis (French)".to_string(),
-                language: "fr_FR".to_string(),
-                quality: PiperQuality::Medium,
-                is_downloaded: false,
-                model_path: None,
-                sample_rate: 22050,
-                size_mb: 63,
-                description: Some("French voice".to_string()),
-            },
-        ]
+    pub fn discover(models_dir: &Path) -> Result<Vec<VoiceInfo>> {
+        let mut voices = Vec::<VoiceInfo>::new();
+        let mut known_filenames = HashSet::new();
+
+        for descriptor in piper_voice_descriptors(models_dir)? {
+            let model_filename = safe_artifact_filename(&descriptor.model_filename)?;
+            known_filenames.insert(model_filename.to_string());
+            let config_filename = safe_artifact_filename(&descriptor.config_filename)?;
+            let model_path = models_dir.join(model_filename);
+            let config_path = models_dir.join(config_filename);
+            let installed_sample_rate = read_runtime_voice_metadata(&config_path)
+                .sample_rate
+                .filter(|sample_rate| *sample_rate > 0);
+            let is_downloaded = model_path.is_file() && installed_sample_rate.is_some();
+            let actual_size = std::fs::metadata(&model_path)
+                .map(|metadata| metadata.len())
+                .unwrap_or(descriptor.size_bytes);
+            voices.push(VoiceInfo {
+                id: descriptor.id.clone(),
+                name: nonempty_or(&descriptor.name, &descriptor.id),
+                language: nonempty_or(&descriptor.language, "unknown"),
+                quality: parse_quality(&descriptor.quality)?,
+                is_downloaded,
+                model_path: is_downloaded.then_some(model_path),
+                sample_rate: installed_sample_rate.unwrap_or(descriptor.sample_rate),
+                size_mb: actual_size / 1_000_000,
+                description: descriptor.description,
+            });
+        }
+
+        if models_dir.is_dir() {
+            let mut entries = std::fs::read_dir(models_dir)
+                .context("Failed to inspect local voice directory")?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                if !path.is_file()
+                    || path.extension().and_then(|value| value.to_str()) != Some("onnx")
+                {
+                    continue;
+                }
+                let id = match path.file_stem().and_then(|value| value.to_str()) {
+                    Some(value) => value.to_string(),
+                    None => continue,
+                };
+                let filename = match path.file_name().and_then(|value| value.to_str()) {
+                    Some(value) => value.to_string(),
+                    None => continue,
+                };
+                if known_filenames.contains(&filename) {
+                    continue;
+                }
+                validate_runtime_id(&id)?;
+                if voices.iter().any(|voice| voice.id == id) {
+                    continue;
+                }
+                let config_path = path.with_extension("onnx.json");
+                if !config_path.is_file() {
+                    continue;
+                }
+                let metadata = read_runtime_voice_metadata(&config_path);
+                let Some(sample_rate) = metadata.sample_rate.filter(|sample_rate| *sample_rate > 0)
+                else {
+                    continue;
+                };
+                voices.push(VoiceInfo {
+                    id: id.clone(),
+                    name: metadata.name.unwrap_or_else(|| id.replace(['-', '_'], " ")),
+                    language: metadata.language.unwrap_or_else(|| "unknown".to_string()),
+                    quality: metadata.quality.unwrap_or_default(),
+                    is_downloaded: true,
+                    model_path: Some(path),
+                    sample_rate,
+                    size_mb: entry
+                        .metadata()
+                        .map(|value| value.len() / 1_000_000)
+                        .unwrap_or(0),
+                    description: metadata.description,
+                });
+            }
+        }
+
+        Ok(voices)
     }
 
-    /// Get download URL for a voice
-    pub fn download_url(voice_id: &str) -> String {
-        // Piper voices are hosted on Hugging Face
-        format!(
-            "https://huggingface.co/rhasspy/piper-voices/resolve/main/{}/{}.onnx",
-            voice_id.replace('-', "/").split('/').next().unwrap_or("en"),
-            voice_id
-        )
+    fn descriptor(models_dir: &Path, voice_id: &str) -> Result<PiperVoiceDescriptor> {
+        piper_voice_descriptors(models_dir)?
+            .into_iter()
+            .find(|entry| entry.id == voice_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Local voice '{}' is not present in the runtime manifest",
+                    voice_id
+                )
+            })
     }
 
-    /// Get download URL for voice config JSON
-    pub fn config_url(voice_id: &str) -> String {
-        format!(
-            "https://huggingface.co/rhasspy/piper-voices/resolve/main/{}/{}.onnx.json",
-            voice_id.replace('-', "/").split('/').next().unwrap_or("en"),
-            voice_id
-        )
+    fn artifact_paths(models_dir: &Path, voice_id: &str) -> Result<(PathBuf, PathBuf)> {
+        if let Ok(descriptor) = Self::descriptor(models_dir, voice_id) {
+            return Ok((
+                models_dir.join(safe_artifact_filename(&descriptor.model_filename)?),
+                models_dir.join(safe_artifact_filename(&descriptor.config_filename)?),
+            ));
+        }
+        let model_path = Self::discover(models_dir)?
+            .into_iter()
+            .find(|voice| voice.id == voice_id && voice.is_downloaded)
+            .and_then(|voice| voice.model_path)
+            .ok_or_else(|| anyhow!("Local voice '{}' is not installed", voice_id))?;
+        let config_path = model_path.with_extension("onnx.json");
+        Ok((model_path, config_path))
+    }
+}
+
+#[derive(Default)]
+struct RuntimeVoiceMetadata {
+    name: Option<String>,
+    language: Option<String>,
+    quality: Option<PiperQuality>,
+    sample_rate: Option<u32>,
+    description: Option<String>,
+}
+
+fn read_runtime_voice_metadata(config_path: &Path) -> RuntimeVoiceMetadata {
+    let Ok(content) = std::fs::read_to_string(config_path) else {
+        return RuntimeVoiceMetadata::default();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return RuntimeVoiceMetadata::default();
+    };
+    let quality = value
+        .get("quality")
+        .and_then(|entry| entry.as_str())
+        .and_then(|entry| match entry {
+            "low" => Some(PiperQuality::Low),
+            "medium" => Some(PiperQuality::Medium),
+            "high" => Some(PiperQuality::High),
+            _ => None,
+        });
+    RuntimeVoiceMetadata {
+        name: value
+            .get("name")
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string),
+        language: value
+            .pointer("/language/code")
+            .or_else(|| value.get("language"))
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string),
+        quality,
+        sample_rate: value
+            .pointer("/audio/sample_rate")
+            .and_then(|entry| entry.as_u64())
+            .map(|entry| entry as u32),
+        description: value
+            .get("description")
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string),
+    }
+}
+
+fn nonempty_or(value: &str, fallback: &str) -> String {
+    if value.trim().is_empty() {
+        fallback.to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn parse_quality(value: &str) -> Result<PiperQuality> {
+    match value {
+        "" | "medium" => Ok(PiperQuality::Medium),
+        "low" => Ok(PiperQuality::Low),
+        "high" => Ok(PiperQuality::High),
+        _ => Err(anyhow!("Invalid local voice quality")),
     }
 }
 
@@ -223,11 +312,12 @@ impl PiperLocal {
     ///
     /// # Arguments
     /// * `models_dir` - Directory containing Piper voice models
-    /// * `voice_id` - Voice identifier to use (e.g., "en_US-lessac-medium")
+    /// * `voice_id` - Runtime-discovered voice identifier to use
     pub fn new(models_dir: PathBuf, voice_id: &str) -> Result<Self> {
+        validate_runtime_id(voice_id)?;
         let piper_path = Self::find_piper_binary()?;
-        let model_path = models_dir.join(format!("{}.onnx", voice_id));
-        let config_path = models_dir.join(format!("{}.onnx.json", voice_id));
+        let (model_path, config_path) =
+            PiperVoiceDefinitions::artifact_paths(&models_dir, voice_id)?;
 
         if !model_path.exists() {
             return Err(anyhow!(
@@ -237,11 +327,11 @@ impl PiperLocal {
         }
 
         // Try to read sample rate from config
-        let sample_rate = if config_path.exists() {
-            Self::read_sample_rate(&config_path).unwrap_or(22050)
-        } else {
-            22050
-        };
+        let sample_rate = Self::read_sample_rate(&config_path)
+            .context("Local voice config must declare an audio sample rate")?;
+        if sample_rate == 0 {
+            return Err(anyhow!("Local voice sample rate must be greater than zero"));
+        }
 
         Ok(Self {
             piper_path,
@@ -252,22 +342,14 @@ impl PiperLocal {
         })
     }
 
-    /// Create instance without verifying model exists (for deferred loading)
-    pub fn new_deferred(models_dir: PathBuf, voice_id: &str) -> Self {
-        let piper_path = Self::find_piper_binary().unwrap_or_else(|_| PathBuf::from("piper"));
-        let model_path = models_dir.join(format!("{}.onnx", voice_id));
-
-        Self {
-            piper_path,
-            models_dir,
-            voice_id: voice_id.to_string(),
-            model_path,
-            sample_rate: 22050,
-        }
-    }
-
     /// Find the Piper binary on the system
     fn find_piper_binary() -> Result<PathBuf> {
+        if let Ok(bin_dir) = Self::default_bin_dir() {
+            if let Some(path) = Self::managed_piper_binary(&bin_dir)? {
+                return Ok(path);
+            }
+        }
+
         #[cfg(windows)]
         {
             // On Windows the binary is piper.exe
@@ -335,6 +417,30 @@ impl PiperLocal {
         }
     }
 
+    pub(crate) fn managed_piper_binary(bin_dir: &Path) -> Result<Option<PathBuf>> {
+        let descriptor =
+            match piper_binary_descriptor(bin_dir, std::env::consts::OS, std::env::consts::ARCH) {
+                Ok(descriptor) => descriptor,
+                Err(_) => return Ok(None),
+            };
+        let paths = versioned_bundle_paths(
+            bin_dir,
+            &descriptor.id,
+            &descriptor.sha256,
+            &descriptor.executable_path,
+        )?;
+        if !paths.root.exists() {
+            return Ok(None);
+        }
+        validate_bundle_layout(
+            &paths.root,
+            &descriptor.executable_path,
+            &descriptor.required_files,
+            &descriptor.required_directories,
+        )
+        .map(Some)
+    }
+
     /// Read sample rate from voice config JSON
     fn read_sample_rate(config_path: &PathBuf) -> Result<u32> {
         let content = std::fs::read_to_string(config_path)?;
@@ -353,6 +459,10 @@ impl PiperLocal {
     /// Check if Piper binary is available
     pub fn is_piper_available(&self) -> bool {
         self.piper_path.exists()
+    }
+
+    pub(crate) fn binary_available() -> bool {
+        Self::find_piper_binary().is_ok()
     }
 
     /// Get the voice ID
@@ -450,53 +560,7 @@ impl PiperLocal {
 
     /// List available voices in the models directory
     pub fn list_available_voices(&self) -> Vec<VoiceInfo> {
-        let mut voices = Vec::new();
-
-        if let Ok(entries) = std::fs::read_dir(&self.models_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().map(|e| e == "onnx").unwrap_or(false) {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        let voice_id = stem.to_string();
-
-                        // Try to parse language and quality from voice ID
-                        let parts: Vec<&str> = voice_id.split('-').collect();
-                        let language = parts.first().unwrap_or(&"unknown").to_string();
-                        let quality = parts
-                            .last()
-                            .map(|q| match *q {
-                                "low" => PiperQuality::Low,
-                                "high" => PiperQuality::High,
-                                _ => PiperQuality::Medium,
-                            })
-                            .unwrap_or(PiperQuality::Medium);
-
-                        let config_path = self.models_dir.join(format!("{}.onnx.json", voice_id));
-                        let sample_rate = if config_path.exists() {
-                            Self::read_sample_rate(&config_path).unwrap_or(22050)
-                        } else {
-                            22050
-                        };
-
-                        voices.push(VoiceInfo {
-                            id: voice_id.clone(),
-                            name: voice_id.replace(['-', '_'], " "),
-                            language,
-                            quality,
-                            is_downloaded: true,
-                            model_path: Some(path.clone()),
-                            sample_rate,
-                            size_mb: std::fs::metadata(&path)
-                                .map(|m| m.len() / 1_000_000)
-                                .unwrap_or(0),
-                            description: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        voices
+        PiperVoiceDefinitions::discover(&self.models_dir).unwrap_or_default()
     }
 
     /// Download a voice model
@@ -518,8 +582,10 @@ impl PiperLocal {
             .await
             .context("Failed to create models directory")?;
 
-        let model_path = models_dir.join(format!("{}.onnx", voice_id));
-        let config_path = models_dir.join(format!("{}.onnx.json", voice_id));
+        validate_runtime_id(voice_id)?;
+        let descriptor = PiperVoiceDefinitions::descriptor(&models_dir, voice_id)?;
+        let model_path = models_dir.join(safe_artifact_filename(&descriptor.model_filename)?);
+        let config_path = models_dir.join(safe_artifact_filename(&descriptor.config_filename)?);
 
         // Check if already downloaded
         if model_path.exists() && config_path.exists() {
@@ -529,18 +595,49 @@ impl PiperLocal {
 
         let client = reqwest::Client::new();
 
-        // Download model file
-        let model_url = PiperVoiceDefinitions::download_url(voice_id);
-        tracing::info!("Downloading Piper voice {} from {}", voice_id, model_url);
-
-        Self::download_file(&client, &model_url, &model_path, &progress).await?;
-
-        // Download config file
-        let config_url = PiperVoiceDefinitions::config_url(voice_id);
+        // Install the config first and the model last. Discovery keys off the
+        // model file, so an interrupted two-file download never advertises an
+        // unusable voice as installed.
+        let config_url = descriptor
+            .config_url
+            .as_deref()
+            .ok_or_else(|| anyhow!("Local voice '{}' has no runtime config URL", voice_id))?;
+        let config_sha256 = descriptor
+            .config_sha256
+            .as_deref()
+            .ok_or_else(|| anyhow!("Local voice '{}' has no verified config checksum", voice_id))?;
         tracing::info!("Downloading Piper voice config from {}", config_url);
 
         // Config is small, no progress needed
-        Self::download_file(&client, &config_url, &config_path, |_, _| {}).await?;
+        Self::download_file(
+            &client,
+            config_url,
+            config_sha256,
+            0,
+            &config_path,
+            |_, _| {},
+        )
+        .await?;
+
+        let model_url = descriptor
+            .model_url
+            .as_deref()
+            .ok_or_else(|| anyhow!("Local voice '{}' has no runtime model URL", voice_id))?;
+        let model_sha256 = descriptor
+            .model_sha256
+            .as_deref()
+            .ok_or_else(|| anyhow!("Local voice '{}' has no verified model checksum", voice_id))?;
+        tracing::info!("Downloading Piper voice {} from {}", voice_id, model_url);
+
+        Self::download_file(
+            &client,
+            model_url,
+            model_sha256,
+            descriptor.size_bytes,
+            &model_path,
+            &progress,
+        )
+        .await?;
 
         tracing::info!("Piper voice downloaded to {:?}", model_path);
         Ok(model_path)
@@ -550,6 +647,8 @@ impl PiperLocal {
     async fn download_file<F>(
         client: &reqwest::Client,
         url: &str,
+        expected_sha256: &str,
+        approximate_size_bytes: u64,
         path: &PathBuf,
         progress: F,
     ) -> Result<()>
@@ -566,7 +665,7 @@ impl PiperLocal {
             return Err(anyhow!("Failed to download: HTTP {}", response.status()));
         }
 
-        let total_size = response.content_length().unwrap_or(0);
+        let total_size = response.content_length().unwrap_or(approximate_size_bytes);
 
         let temp_path = path.with_extension("tmp");
         let mut file = tokio::fs::File::create(&temp_path)
@@ -575,6 +674,7 @@ impl PiperLocal {
 
         let mut downloaded: u64 = 0;
         let mut stream = response.bytes_stream();
+        let mut hasher = Sha256::new();
 
         use futures_util::StreamExt;
         use tokio::io::AsyncWriteExt;
@@ -584,6 +684,7 @@ impl PiperLocal {
             file.write_all(&chunk)
                 .await
                 .context("Failed to write to file")?;
+            hasher.update(&chunk);
 
             downloaded += chunk.len() as u64;
             progress(downloaded, total_size);
@@ -591,6 +692,12 @@ impl PiperLocal {
 
         file.flush().await.context("Failed to flush file")?;
         drop(file);
+
+        let digest = hasher.finalize();
+        if let Err(error) = verify_sha256(&digest, expected_sha256) {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(error);
+        }
 
         // Rename temp file to final path
         tokio::fs::rename(&temp_path, path)
@@ -609,150 +716,77 @@ impl PiperLocal {
             .await
             .context("Failed to create bin directory")?;
 
-        #[cfg(target_os = "windows")]
-        let piper_path = bin_dir.join("piper.exe");
-        #[cfg(not(target_os = "windows"))]
-        let piper_path = bin_dir.join("piper");
-
-        if piper_path.exists() {
-            tracing::info!("Piper binary already exists at {:?}", piper_path);
-            return Ok(piper_path);
+        let descriptor =
+            piper_binary_descriptor(&bin_dir, std::env::consts::OS, std::env::consts::ARCH)?;
+        if let Some(installed) = Self::managed_piper_binary(&bin_dir)? {
+            tracing::info!("Piper bundle already exists at {:?}", installed);
+            return Ok(installed);
         }
 
-        // Determine platform-specific URL
-        let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+        let bundle_paths = versioned_bundle_paths(
+            &bin_dir,
+            &descriptor.id,
+            &descriptor.sha256,
+            &descriptor.executable_path,
+        )?;
+        tokio::fs::create_dir_all(&bundle_paths.parent)
+            .await
+            .context("Failed to create Piper bundle directory")?;
+        let working_dir = tempfile::Builder::new()
+            .prefix("piper-install-")
+            .tempdir_in(&bundle_paths.parent)
+            .context("Failed to create Piper installation directory")?;
 
-        let download_url = match (os, arch) {
-            ("macos", "aarch64") => {
-                "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz"
-            }
-            ("macos", "x86_64") => {
-                "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz"
-            }
-            ("linux", "x86_64") => {
-                "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
-            }
-            ("linux", "aarch64") => {
-                "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz"
-            }
-            ("windows", "x86_64") => {
-                "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Unsupported platform: {} {}. Please install Piper manually.",
-                    os,
-                    arch
-                ));
-            }
-        };
-
-        tracing::info!("Downloading Piper from {}", download_url);
+        tracing::info!("Downloading Piper from {}", descriptor.download_url);
 
         let client = reqwest::Client::new();
-        let response = client
-            .get(download_url)
-            .send()
-            .await
-            .context("Failed to start Piper download")?;
+        let temp_archive = working_dir.path().join(format!(
+            "{}.download",
+            safe_artifact_filename(&descriptor.archive_filename)?
+        ));
+        Self::download_file(
+            &client,
+            &descriptor.download_url,
+            &descriptor.sha256,
+            descriptor.approximate_size_bytes,
+            &temp_archive,
+            progress,
+        )
+        .await?;
 
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to download Piper: HTTP {}",
-                response.status()
-            ));
-        }
-
-        let total_size = response.content_length().unwrap_or(50_000_000); // ~50MB estimate
-        let temp_archive = bin_dir.join("piper_download.tmp");
-
-        let mut file = tokio::fs::File::create(&temp_archive)
-            .await
-            .context("Failed to create temp file")?;
-
-        let mut downloaded: u64 = 0;
-        let mut stream = response.bytes_stream();
-
-        use futures_util::StreamExt;
-        use tokio::io::AsyncWriteExt;
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.context("Error reading download stream")?;
-            file.write_all(&chunk)
-                .await
-                .context("Failed to write to file")?;
-
-            downloaded += chunk.len() as u64;
-            progress(downloaded, total_size);
-        }
-
-        file.flush().await?;
-        drop(file);
-
-        // Extract the archive
-        tracing::info!("Extracting Piper archive");
-
-        if download_url.ends_with(".tar.gz") {
-            // Extract tar.gz
-            let tar_gz = std::fs::File::open(&temp_archive)?;
-            let tar = flate2::read::GzDecoder::new(tar_gz);
-            let mut archive = tar::Archive::new(tar);
-
-            for entry in archive.entries()? {
-                let mut entry = entry?;
-                let path = entry.path()?;
-
-                // Look for the piper binary
-                if path.file_name().map(|n| n == "piper").unwrap_or(false) {
-                    let mut piper_file = std::fs::File::create(&piper_path)?;
-                    std::io::copy(&mut entry, &mut piper_file)?;
-
-                    // Make executable
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        std::fs::set_permissions(
-                            &piper_path,
-                            std::fs::Permissions::from_mode(0o755),
-                        )?;
-                    }
-
-                    break;
-                }
+        tracing::info!("Extracting verified Piper bundle");
+        let staging_root = working_dir.path().join("staging");
+        let archive_format = descriptor.archive_format.clone();
+        let executable_path = descriptor.executable_path.clone();
+        let required_files = descriptor.required_files.clone();
+        let required_directories = descriptor.required_directories.clone();
+        let final_root = bundle_paths.root.clone();
+        let executable_relative = bundle_paths.executable_relative.clone();
+        let installed = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
+            extract_archive(&temp_archive, &archive_format, &staging_root)?;
+            validate_bundle_layout(
+                &staging_root,
+                &executable_path,
+                &required_files,
+                &required_directories,
+            )?;
+            match promote_bundle(&staging_root, &final_root, &executable_relative) {
+                Ok(path) => Ok(path),
+                Err(error) if final_root.exists() => validate_bundle_layout(
+                    &final_root,
+                    &executable_path,
+                    &required_files,
+                    &required_directories,
+                )
+                .with_context(|| format!("{error:#}")),
+                Err(error) => Err(error),
             }
-        } else if download_url.ends_with(".zip") {
-            // Extract zip (Windows)
-            let file = std::fs::File::open(&temp_archive)?;
-            let mut archive = zip::ZipArchive::new(file)?;
+        })
+        .await
+        .context("Piper bundle installation task failed")??;
 
-            for i in 0..archive.len() {
-                let mut file = archive.by_index(i)?;
-                let outpath = match file.enclosed_name() {
-                    Some(path) => path.to_owned(),
-                    None => continue,
-                };
-
-                if outpath
-                    .file_name()
-                    .map(|n| n == "piper.exe")
-                    .unwrap_or(false)
-                {
-                    let mut piper_file = std::fs::File::create(&piper_path)?;
-                    std::io::copy(&mut file, &mut piper_file)?;
-                    break;
-                }
-            }
-        }
-
-        // Cleanup temp file
-        tokio::fs::remove_file(&temp_archive).await.ok();
-
-        if !piper_path.exists() {
-            return Err(anyhow!("Failed to extract Piper binary from archive"));
-        }
-
-        tracing::info!("Piper installed to {:?}", piper_path);
-        Ok(piper_path)
+        tracing::info!("Piper installed to {:?}", installed);
+        Ok(installed)
     }
 
     /// Get the default models directory
@@ -769,8 +803,9 @@ impl PiperLocal {
 
     /// Delete a downloaded voice
     pub async fn delete_voice(models_dir: &Path, voice_id: &str) -> Result<()> {
-        let model_path = models_dir.join(format!("{}.onnx", voice_id));
-        let config_path = models_dir.join(format!("{}.onnx.json", voice_id));
+        validate_runtime_id(voice_id)?;
+        let (model_path, config_path) =
+            PiperVoiceDefinitions::artifact_paths(models_dir, voice_id)?;
 
         if model_path.exists() {
             tokio::fs::remove_file(&model_path)
@@ -792,21 +827,130 @@ impl PiperLocal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::speech::artifact_registry::RUNTIME_MANIFEST_FILENAME;
 
     #[test]
-    fn test_voice_definitions() {
-        let voices = PiperVoiceDefinitions::popular_voices();
-        assert!(!voices.is_empty());
+    fn runtime_manifest_and_installed_artifacts_drive_voice_discovery() {
+        let clean_dir = tempfile::tempdir().unwrap();
+        let canonical_count = PiperVoiceDefinitions::discover(clean_dir.path())
+            .unwrap()
+            .len();
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp_dir.path().join(RUNTIME_MANIFEST_FILENAME),
+            serde_json::json!({
+                "voices": [{
+                    "id": "fixture-catalog-voice",
+                    "modelFilename": "fixture-catalog-voice.onnx",
+                    "configFilename": "fixture-catalog-voice.onnx.json",
+                    "modelUrl": "https://example.invalid/fixture.onnx",
+                    "configUrl": "https://example.invalid/fixture.json",
+                    "modelSha256": "0".repeat(64),
+                    "configSha256": "0".repeat(64),
+                    "name": "Fixture voice",
+                    "language": "fixture",
+                    "quality": "medium",
+                    "sampleRate": 24_000,
+                    "sizeBytes": 2_000_000
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("fixture-installed-voice.onnx"),
+            b"fixture",
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("fixture-installed-voice.onnx.json"),
+            serde_json::json!({ "audio": { "sample_rate": 24_000 } }).to_string(),
+        )
+        .unwrap();
 
-        let lessac = voices.iter().find(|v| v.id == "en_US-lessac-medium");
-        assert!(lessac.is_some());
+        let voices = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        assert_eq!(voices.len(), canonical_count + 2);
+        assert!(voices
+            .iter()
+            .any(|voice| voice.id == "fixture-catalog-voice" && !voice.is_downloaded));
+        assert!(voices
+            .iter()
+            .any(|voice| voice.id == "fixture-installed-voice" && voice.is_downloaded));
     }
 
     #[test]
-    fn test_download_urls() {
-        let url = PiperVoiceDefinitions::download_url("en_US-lessac-medium");
-        assert!(url.contains("piper-voices"));
-        assert!(url.ends_with(".onnx"));
+    fn runtime_manifest_rejects_path_traversal() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp_dir.path().join(RUNTIME_MANIFEST_FILENAME),
+            serde_json::json!({
+                "voices": [{
+                    "id": "fixture-escape-voice",
+                    "modelFilename": "../fixture.onnx",
+                    "configFilename": "fixture.json",
+                    "name": "Fixture",
+                    "language": "fixture"
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(PiperVoiceDefinitions::discover(temp_dir.path()).is_err());
+    }
+
+    #[test]
+    fn clean_install_exposes_only_verified_canonical_voice_downloads() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let descriptors = piper_voice_descriptors(temp_dir.path()).unwrap();
+        let voices = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        assert_eq!(voices.len(), descriptors.len());
+        assert!(voices.iter().all(|voice| !voice.is_downloaded));
+        assert!(descriptors.iter().all(|entry| {
+            entry.model_url.is_some()
+                && entry.config_url.is_some()
+                && entry.model_sha256.is_some()
+                && entry.config_sha256.is_some()
+        }));
+    }
+
+    #[test]
+    fn canonical_voice_is_installed_only_when_model_and_config_are_present() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let descriptors = piper_voice_descriptors(temp_dir.path()).unwrap();
+        let selected = &descriptors[0];
+        std::fs::write(temp_dir.path().join(&selected.model_filename), b"fixture").unwrap();
+
+        let incomplete = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        assert_eq!(incomplete.len(), descriptors.len());
+        assert!(incomplete
+            .iter()
+            .any(|voice| voice.id == selected.id && !voice.is_downloaded));
+
+        std::fs::write(
+            temp_dir.path().join(&selected.config_filename),
+            serde_json::json!({ "audio": { "sample_rate": selected.sample_rate } }).to_string(),
+        )
+        .unwrap();
+        let complete = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        assert!(complete
+            .iter()
+            .any(|voice| voice.id == selected.id && voice.is_downloaded));
+    }
+
+    #[test]
+    fn orphan_custom_model_is_not_advertised_or_selectable() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let baseline = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        let orphan_id = "fixture-orphan-voice";
+        std::fs::write(
+            temp_dir.path().join(format!("{orphan_id}.onnx")),
+            b"fixture",
+        )
+        .unwrap();
+
+        let discovered = PiperVoiceDefinitions::discover(temp_dir.path()).unwrap();
+        assert_eq!(discovered.len(), baseline.len());
+        assert!(!discovered.iter().any(|voice| voice.id == orphan_id));
     }
 
     #[test]

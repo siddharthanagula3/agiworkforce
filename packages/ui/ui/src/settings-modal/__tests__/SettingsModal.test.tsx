@@ -75,7 +75,15 @@ const adapter: SettingsDataAdapter = {
       source: 'personal',
       tab: 'prompts',
     },
-    { id: 'docx', name: 'docx', description: 'Word documents', source: 'bundled', tab: 'prompts' },
+    {
+      id: 'docx',
+      name: 'docx',
+      description: 'Word documents',
+      source: 'bundled',
+      tab: 'prompts',
+      statusLabel: 'Included',
+      downloadHref: '/api/skills/docx/download',
+    },
   ],
   plugins: [],
   pluginCatalog: [
@@ -124,6 +132,61 @@ describe('SettingsModal nav (web IA)', () => {
     expect(dialog.className).toContain('md:flex-row');
     expect(nav.className).toContain('md:w-[220px]');
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeTruthy();
+  });
+
+  it('keeps the Skills lifecycle and download controls visible on narrow screens', () => {
+    renderModal({ activeSection: 'skills' });
+
+    expect(screen.getByRole('columnheader', { name: 'Author' }).className).toContain('hidden');
+    expect(screen.getByRole('columnheader', { name: 'Author' }).className).toContain(
+      'sm:table-cell',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Status' }).className).toContain('w-[36%]');
+    expect(screen.getByRole('link', { name: 'Download docx SKILL.md' })).toBeTruthy();
+    expect(screen.getByText('Included')).toBeTruthy();
+  });
+
+  it('hides secondary Plugin metadata below sm while preserving lifecycle actions', () => {
+    renderModal(
+      { activeSection: 'plugins' },
+      {
+        plugins: [
+          {
+            id: 'research-pack',
+            name: 'Research Pack',
+            description: 'A reviewed research workflow.',
+            enabled: true,
+            author: 'AGI',
+            skillCount: 1,
+            updatedAt: '2026-08-01T00:00:00.000Z',
+          },
+        ],
+        setPluginEnabled: vi.fn(),
+        removePlugin: vi.fn(),
+      },
+    );
+
+    for (const heading of ['Author', 'Skills', 'Last updated']) {
+      const column = screen.getByRole('columnheader', { name: heading });
+      expect(column.className).toContain('hidden');
+      expect(column.className).toContain('sm:table-cell');
+    }
+    expect(screen.getByRole('columnheader', { name: 'Actions' }).className).toContain('w-[40%]');
+    expect(screen.getByText('Research Pack')).toBeTruthy();
+    expect(screen.getByText('Enabled')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Disable' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+  });
+
+  it('finds the real General personalization surface from custom-instructions language', () => {
+    renderModal();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
+      target: { value: 'custom instructions' },
+    });
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'General' })).toBeTruthy();
+    expect(within(nav).queryByText('No matches.')).toBeNull();
   });
 
   it('renders Skills, Connectors, and Plugins as plain nav items with NO group headings', () => {
@@ -326,6 +389,8 @@ describe('Connectors pane (table)', () => {
   it('Add dropdown offers Browse connectors and Add custom connector', () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.contains(screen.getByRole('menu'))).toBe(true);
     expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Add custom connector' })).toBeTruthy();
   });
@@ -452,6 +517,11 @@ describe('Connectors pane (table)', () => {
 describe('Skills pane (table)', () => {
   it('renders a Skill/Author table with honest author labels and a Browse button', () => {
     renderModal({ activeSection: 'skills' });
+    expect(
+      screen.getByText(
+        'Included, portable instruction bundles for focused workflows. Select one in chat with / or @, or download its SKILL.md.',
+      ),
+    ).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Skill' })).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Author' })).toBeTruthy();
     expect(screen.getByText('humanizer')).toBeTruthy();
@@ -464,13 +534,25 @@ describe('Skills pane (table)', () => {
     expect(screen.getByText('Browse directory')).toBeTruthy();
     expect(screen.getByText('/humanizer')).toBeTruthy();
   });
+
+  it('delegates skill downloads to the native host when it owns external navigation', () => {
+    const openHref = vi.fn();
+    renderModal({ activeSection: 'skills' }, { openHref });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download docx SKILL.md' }));
+
+    expect(openHref).toHaveBeenCalledWith('/api/skills/docx/download');
+    expect(screen.queryByRole('link', { name: 'Download docx SKILL.md' })).toBeNull();
+  });
 });
 
 describe('Plugins pane (table)', () => {
   it('shows the honest empty state and no Add dropdown when no capabilities exist', () => {
     renderModal({ activeSection: 'plugins' });
     expect(
-      screen.getByText('No plugins installed. Plugins are available via the AGI CLI.'),
+      screen.getByText(
+        'No plugins installed. Browse the directory to add an available Web plugin.',
+      ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Add$/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Browse' })).toBeTruthy();
@@ -500,6 +582,7 @@ describe('Plugins pane (table)', () => {
     expect(screen.getByRole('columnheader', { name: 'Skills' })).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Last updated' })).toBeTruthy();
     expect(screen.getByText('Docs Pack')).toBeTruthy();
+    expect(screen.getByRole('table').className).toContain('table-fixed');
 
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     expect(screen.getByRole('menuitem', { name: 'Add marketplace' })).toBeTruthy();

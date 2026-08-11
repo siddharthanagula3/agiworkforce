@@ -63,7 +63,17 @@ export interface ManagedCloudModel {
   maxOutput: number;
 }
 
-function buildManagedCloudModel(model: PickerModelView): ManagedCloudModel {
+type ChatPickerModel = PickerModelView & { contextWindow: number };
+
+function hasPublishedTokenContext(model: PickerModelView): model is ChatPickerModel {
+  return (
+    typeof model.contextWindow === 'number' &&
+    Number.isFinite(model.contextWindow) &&
+    model.contextWindow > 0
+  );
+}
+
+function buildManagedCloudModel(model: ChatPickerModel): ManagedCloudModel {
   const category: ManagedCloudModel['category'] =
     model.tier === 'economy' ? 'instant' : model.tier === 'premium' ? 'thinking' : 'latest';
   return {
@@ -86,7 +96,9 @@ function buildManagedCloudModel(model: PickerModelView): ManagedCloudModel {
 export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
   return getModelsForTierAndSurface(tier, 'desktop/cloud-chat', {
     modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
-  }).map(buildManagedCloudModel);
+  })
+    .filter(hasPublishedTokenContext)
+    .map(buildManagedCloudModel);
 }
 
 export interface ProviderStatus {
@@ -234,8 +246,8 @@ interface ModelState {
   deleteOllamaModel: (modelName: string) => Promise<void>;
 
   /**
-   * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
-   * E.g. claude-sonnet-5 ↔ claude-opus-5, gemini-3.5-flash-lite ↔ gemini-3.1-pro-preview.
+   * Cycle the currently selected model to its catalog-declared
+   * thinking/reasoning counterpart, or back.
    * Shows a toast with the result.
    */
   cycleModelVariant: () => void;

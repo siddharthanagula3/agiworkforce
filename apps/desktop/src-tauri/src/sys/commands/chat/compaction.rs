@@ -112,6 +112,12 @@ pub(super) async fn compact_context(
         .iter()
         .rev()
         .find_map(|message| message.model.as_deref());
+    let context_window = resolve_context_window(conversation_model).ok_or_else(|| {
+        format!(
+            "Context compaction is unavailable for {} because the catalog does not define a token context window.",
+            conversation_model.unwrap_or("this model")
+        )
+    })?;
     let config = CompactionConfig {
         keep_recent: match focus.as_deref() {
             Some("errors") | Some("debug") => 15,
@@ -120,7 +126,7 @@ pub(super) async fn compact_context(
         },
         min_messages: 10,
         summary_focus: focus.clone(),
-        ..CompactionConfig::for_context_window(resolve_context_window(conversation_model))
+        ..CompactionConfig::for_context_window(context_window)
     };
 
     let compactor = ContextCompactor::new(config);
@@ -365,6 +371,11 @@ mod tests {
     async fn compact_context_budgets_against_the_conversation_model_window() {
         let db = test_db();
         let user_id = "test-user";
+        let wide_model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| entry.context_window.is_some())
+            .max_by_key(|entry| entry.context_window)
+            .expect("catalog must include a prompt-consuming model");
         let conversation_id = {
             let conn = db.connection().expect("db connection");
             crate::data::db::repository::create_conversation(
@@ -393,8 +404,8 @@ mod tests {
                 )
                 .with_metrics(10_000, 0.01)
                 .with_source(
-                    Some("anthropic".to_string()),
-                    Some("claude-opus-5".to_string()),
+                    Some(wide_model.provider.clone()),
+                    Some(wide_model.id.clone()),
                 );
                 crate::data::db::repository::create_message(&conn, &message)
                     .expect("create message");

@@ -61,6 +61,10 @@ describe('managed Skill request contract', () => {
         function: expect.objectContaining({ name: 'skill' }),
       }),
     ]);
+    expect(request.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'skill' },
+    });
 
     const promptMaterials = collectManagedPromptMaterials(request);
     expect(promptMaterials).toEqual(

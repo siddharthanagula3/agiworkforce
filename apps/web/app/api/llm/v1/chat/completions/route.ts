@@ -82,7 +82,7 @@ export const maxDuration = 300;
  * are journaled durably either way.
  *
  * Transport: a turn that holds a managed-usage reservation starts on the Vercel
- * Workflow transport (`AGI_DURABLE_INITIAL_TURNS`, on by default) so the run
+ * Workflow transport when explicitly enabled (`AGI_DURABLE_INITIAL_TURNS`) so the run
  * outlives the request that started it — the client can disconnect and later
  * reattach through the run journal, and its approvals stay claimable from any
  * surface. Free-trial turns and a workflow that fails to start use the
@@ -427,7 +427,7 @@ async function dispatchChatCompletions(
     // is unchanged (no new event types) and an unconfigured/empty environment
     // behaves exactly as before.
     // Per-model tools gate (WEB-TOOLS-MODEL-CAP-GATE-01): a model whose registry
-    // capability `tools` is false (e.g. the Perplexity `sonar` search models) cannot
+    // capability `tools` is false (for example, a search-native model) cannot
     // do function calling. Shipping MCP / connector tool definitions to it makes the
     // provider reject the whole request. Skip tool loading for such models so they
     // fall through to the standard single-turn path — search-native models still
@@ -456,6 +456,7 @@ async function dispatchChatCompletions(
           loadUserConnectorToolCatalog(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
             planTier: processed.subscriptionTier,
+            organizationId: processed.organizationId,
             isToolDenied: connectorPermissions.isConnectorToolDenied,
           }),
         ])
@@ -554,7 +555,9 @@ async function dispatchChatCompletions(
       // executor is bound to the authenticated userId (only meaningful when the
       // user actually connected connectors; a no-op otherwise).
       const connectorExecutor =
-        connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined;
+        connectorTools.length > 0
+          ? makeUserConnectorExecutor(userId, processed.organizationId)
+          : undefined;
       const toolLoopUsage = createObservedProviderUsage();
       let approvalCheckpointSaved = false;
       // AUDIT-FIX SYS-21: the tool loop can now rotate to a managed-failover

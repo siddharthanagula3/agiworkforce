@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
@@ -58,6 +58,7 @@ const storageMocks = vi.hoisted(() => ({
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
   isMediaStorageConfigured: storageMocks.configured,
+  isImageStorageConfigured: storageMocks.configured,
   storeMedia: storageMocks.store,
   deleteStoredMedia: storageMocks.del,
   authenticatedMediaUrl: storageMocks.url,
@@ -66,11 +67,18 @@ vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
 
 const assetMocks = vi.hoisted(() => ({
   insert: vi.fn(async (_params: { metadata?: { aiAct?: unknown } }) => 'asset-1'),
+  insertMany: vi.fn(async (_params: Array<{ model?: string; metadata?: { aiAct?: unknown } }>) => [
+    'asset-1',
+  ]),
   byId: vi.fn(),
+  ready: vi.fn(async () => true),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: assetMocks.insert,
+  insertMediaAssetsAtomically: assetMocks.insertMany,
   getMediaAssetById: assetMocks.byId,
+  getActiveWorkspaceMediaAssetById: assetMocks.byId,
+  isMediaAssetStoreReady: assetMocks.ready,
 }));
 
 const managedUsageMocks = vi.hoisted(() => ({
@@ -104,19 +112,23 @@ import {
 
 const BASE_URL = 'http://localhost/api/media/image/generate';
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const PRO_SUBSCRIPTION = { status: 'active', plan_tier: 'pro' };
 
 /** 1x1 transparent PNG, so the hash assertion is over real image bytes. */
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-function authedRequest(body: unknown): NextRequest {
+function authedRequest(
+  body: unknown,
+  idempotencyKey = 'agi.media.web.image.operation-123',
+): NextRequest {
   return new NextRequest(BASE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer valid-test-token',
-      'Idempotency-Key': 'agi.media.web.image.operation-123',
+      'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(body),
   });
@@ -127,7 +139,11 @@ describe('Article 50(2) — generated image provenance', () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: TEST_USER.userId });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: {},
+      userId: TEST_USER.userId,
+      organizationId: ORGANIZATION_ID,
+    });
     managedUsageMocks.reserve.mockImplementation(async (input: Record<string, unknown>) => ({
       ...input,
       leaseToken: 'lease-image',
@@ -135,15 +151,38 @@ describe('Article 50(2) — generated image provenance', () => {
     storageMocks.configured.mockReturnValue(true);
     storageMocks.store.mockResolvedValue({ pathname: 'users/u/img.png', byteSize: 12 });
     assetMocks.insert.mockResolvedValue('asset-1');
+    assetMocks.insertMany.mockResolvedValue(['asset-1']);
 
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     delete process.env['GOOGLE_API_KEY'];
-    delete process.env['STABILITY_API_KEY'];
 
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ data: [{ b64_json: PNG_B64 }] }),
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('fails closed before reservation or provider egress when production storage is unavailable', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    storageMocks.configured.mockReturnValue(false);
+
+    const response = await POST(authedRequest({ prompt: 'a cat' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toMatchObject({
+      type: 'server_error',
+      code: 'media_storage_unavailable',
+    });
+    expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+    expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+    expect(rlsMocks.getUserScopedDb).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('returns a machine-readable claim for every generated image', async () => {
@@ -155,6 +194,7 @@ describe('Article 50(2) — generated image provenance', () => {
     expect(hasAiGeneratedProvenance(body.provenance[0])).toBe(true);
     expect(body.provenance[0].kind).toBe('image');
     expect(body.provenance[0].provider).toBe('openai');
+    expect(body.provenance[0].model).toBe(body.catalog_model);
   });
 
   it('binds the claim to the image bytes, not to their transport encoding', async () => {
@@ -172,12 +212,74 @@ describe('Article 50(2) — generated image provenance', () => {
   });
 
   it('writes the claim onto the asset row', async () => {
-    await POST(authedRequest({ prompt: 'a cat' }));
+    const response = await POST(authedRequest({ prompt: 'a cat' }));
+    const body = await response.json();
 
-    expect(assetMocks.insert).toHaveBeenCalledTimes(1);
-    const written = assetMocks.insert.mock.calls[0]?.[0];
+    expect(assetMocks.insertMany).toHaveBeenCalledTimes(1);
+    const written = assetMocks.insertMany.mock.calls[0]?.[0]?.[0];
     expect(hasAiGeneratedProvenance(written?.metadata?.aiAct)).toBe(true);
+    expect(written?.model).toBe(body.catalog_model);
+    expect((written?.metadata?.aiAct as { model?: string } | undefined)?.model).toBe(
+      body.catalog_model,
+    );
   });
+
+  it('removes every staged sibling and refunds when a multi-image batch cannot persist', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
+    });
+    storageMocks.store
+      .mockResolvedValueOnce({ pathname: 'users/u/first.png', byteSize: 12 })
+      .mockRejectedValueOnce(new Error('second object write failed'));
+
+    const response = await POST(authedRequest({ prompt: 'two cats', n: 2 }));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({ success: false, images: [], persisted: false });
+    expect(assetMocks.insertMany).not.toHaveBeenCalled();
+    expect(storageMocks.del).toHaveBeenCalledWith('users/u/first.png');
+    expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+    );
+  });
+
+  it('rolls back all staged objects when the atomic media catalog transaction fails', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
+    });
+    storageMocks.store
+      .mockResolvedValueOnce({ pathname: 'users/u/first.png', byteSize: 12 })
+      .mockResolvedValueOnce({ pathname: 'users/u/second.png', byteSize: 12 });
+    assetMocks.insertMany.mockRejectedValueOnce(new Error('catalog transaction rolled back'));
+
+    const response = await POST(authedRequest({ prompt: 'two cats', n: 2 }));
+
+    expect(response.status).toBe(502);
+    expect(storageMocks.del).toHaveBeenCalledWith('users/u/first.png');
+    expect(storageMocks.del).toHaveBeenCalledWith('users/u/second.png');
+    expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+    );
+  });
+
+  it.each(['web', 'mobile', 'desktop'] as const)(
+    'persists the %s source surface parsed from the managed-media identity',
+    async (sourceSurface) => {
+      await POST(
+        authedRequest(
+          { prompt: `a cat sent from ${sourceSurface}` },
+          `agi.media.${sourceSurface}.image.operation-123`,
+        ),
+      );
+
+      expect(assetMocks.insertMany).toHaveBeenCalledWith([
+        expect.objectContaining({ sourceSurface }),
+      ]);
+    },
+  );
 
   it('binds the claim to the bytes when the provider returns a URL instead of base64', async () => {
     // OpenAI's response shape is either `b64_json` or `url`; the url shape only
@@ -200,7 +302,7 @@ describe('Article 50(2) — generated image provenance', () => {
 
     const expected = createHash('sha256').update(Buffer.from(PNG_B64, 'base64')).digest('hex');
     expect(body.provenance[0].content_hash_sha256).toBe(expected);
-    const written = assetMocks.insert.mock.calls[0]?.[0];
+    const written = assetMocks.insertMany.mock.calls[0]?.[0]?.[0];
     expect(
       (written?.metadata?.aiAct as { content_hash_sha256?: string })?.content_hash_sha256,
     ).toBe(expected);
@@ -262,13 +364,18 @@ describe('Article 50(2) — the mark survives to the download', () => {
     // Round trip: generate, take the exact metadata blob handed to
     // insertMediaAsset, hand it back as the stored row.
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: TEST_USER.userId });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: {},
+      userId: TEST_USER.userId,
+      organizationId: ORGANIZATION_ID,
+    });
     managedUsageMocks.reserve.mockImplementation(async (input: Record<string, unknown>) => ({
       ...input,
       leaseToken: 'lease-image',
     }));
     storageMocks.store.mockResolvedValue({ pathname: 'users/u/img.png', byteSize: 12 });
     assetMocks.insert.mockResolvedValue(ASSET_ID);
+    assetMocks.insertMany.mockResolvedValue([ASSET_ID]);
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     mockFetch.mockResolvedValue({
       ok: true,
@@ -276,7 +383,13 @@ describe('Article 50(2) — the mark survives to the download', () => {
     });
 
     await POST(authedRequest({ prompt: 'a cat' }));
-    const persisted = assetMocks.insert.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(assetMocks.insertMany.mock.calls[0]?.[0]?.[0]).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+    });
+    const persisted = assetMocks.insertMany.mock.calls[0]?.[0]?.[0]?.metadata as Record<
+      string,
+      unknown
+    >;
     assetMocks.byId.mockResolvedValue(storedRow(persisted));
 
     const response = await GET_FILE(...fileRequest());

@@ -12,6 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Chrome storage shim — hoisted before module imports
@@ -211,9 +212,7 @@ describe('constants', () => {
   it('FREE_TRIAL_MODEL is a non-empty string read from models.json', () => {
     expect(typeof FREE_TRIAL_MODEL).toBe('string');
     expect(FREE_TRIAL_MODEL.length).toBeGreaterThan(0);
-    // Must not be a hardcoded sentinel — should contain known economy model name fragments
-    // (gemini, gpt-mini, flash, etc.)
-    expect(FREE_TRIAL_MODEL).toMatch(/flash|mini|lite|haiku|turbo|economy/i);
+    expect(FREE_TRIAL_MODEL).toBe(getRoutingSlotModel('general_fast'));
   });
 
   it('FREE_TRIAL_ENDPOINT points at agiworkforce.com web app (not api.agiworkforce.com)', () => {

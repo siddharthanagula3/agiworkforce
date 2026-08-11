@@ -37,7 +37,13 @@ const FREE_MODEL_IDS = new Set(FREE_TRIAL_MODELS);
 
 function toModelRecord(model: PickerModelView): OpenAiCompatibleModel | null {
   const tier = getMinimumRequiredTier(model.id);
-  if (!tier) {
+  const contextWindow = model.contextWindow;
+  if (
+    !tier ||
+    typeof contextWindow !== 'number' ||
+    !Number.isFinite(contextWindow) ||
+    contextWindow <= 0
+  ) {
     return null;
   }
 
@@ -50,7 +56,7 @@ function toModelRecord(model: PickerModelView): OpenAiCompatibleModel | null {
     root: model.id,
     parent: null,
     tier,
-    context_window: model.contextWindow,
+    context_window: contextWindow,
     max_output: model.maxOutput,
   };
 }

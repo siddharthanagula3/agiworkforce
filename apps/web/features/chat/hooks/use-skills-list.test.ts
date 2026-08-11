@@ -27,4 +27,38 @@ describe('useSkillsList', () => {
     expect(result.current.skills).toEqual([]);
     expect(result.current.error).toBe('Invalid skills response');
   });
+
+  it('offers included skills to chat and keeps draft directory entries non-executable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            skills: [
+              {
+                name: 'code-review',
+                description: 'Review code.',
+                source: 'bundled',
+                lifecycle: 'included',
+                downloadable: true,
+              },
+              {
+                name: 'skill-creator',
+                description: 'Draft skills.',
+                source: 'bundled',
+                lifecycle: 'draft',
+                downloadable: false,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const { result } = renderHook(() => useSkillsList());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.skills.map((skill) => skill.name)).toEqual(['code-review']);
+  });
 });

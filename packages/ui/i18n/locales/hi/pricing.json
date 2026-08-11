@@ -76,5 +76,13 @@
   "pageTitle": "मूल्य निर्धारण",
   "freeLocalByok": "लोकल मॉडल और आपकी अपनी API कुंजियाँ, हमेशा मुफ़्त",
   "seatTotal_one": "{{count}} सीट · {{total}}/माह",
-  "seatTotal_other": "{{count}} सीटें · {{total}}/माह"
+  "seatTotal_other": "{{count}} सीटें · {{total}}/माह",
+  "perSeatPrice": "{{price}}/सीट/माह",
+  "perSeatPriceAnnual": "{{price}}/सीट/वर्ष",
+  "seatTotalAnnual_one": "{{count}} सीट · {{total}}/वर्ष",
+  "seatTotalAnnual_other": "{{count}} सीटें · {{total}}/वर्ष",
+  "seatCadenceMonthly_one": "{{count}} सीट · मासिक बिलिंग",
+  "seatCadenceMonthly_other": "{{count}} सीटें · मासिक बिलिंग",
+  "seatCadenceAnnual_one": "{{count}} सीट · वार्षिक बिलिंग",
+  "seatCadenceAnnual_other": "{{count}} सीटें · वार्षिक बिलिंग"
 }

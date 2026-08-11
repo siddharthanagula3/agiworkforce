@@ -77,7 +77,7 @@ type TierNum = 1 | 2 | 3;
 
 function tier1FetchingNote(caps: DeviceCapabilities): string | null {
   if (caps.tier1Status === 'downloadable' || caps.tier1Status === 'downloading') {
-    return 'AICore is fetching Gemini Nano in the background — this device will move to Tier 1 automatically once it finishes.';
+    return 'AICore is fetching its on-device model in the background — this device will move to Tier 1 automatically once it finishes.';
   }
   return null;
 }
@@ -95,7 +95,7 @@ function tierLabel(caps: DeviceCapabilities): {
       description:
         caps.tier1Runtime === 'foundation_models'
           ? 'Apple Foundation Models — OS-resident, fastest, lowest energy'
-          : 'Google AICore (Gemini Nano) — OS-resident',
+          : 'Google on-device AI — AICore, current generation is Gemma-based',
       fetchingNote: null,
     };
   }
@@ -678,13 +678,17 @@ export default function PerformanceScreen() {
                   {activeLocalModel.displayName}
                 </Text>
                 <Text style={{ fontSize: 12, color: c.textMuted }}>
-                  {(activeLocalModel.fileSizeBytes / 1_073_741_824).toFixed(1)} GB
+                  {activeLocalModel.fileSizeBytes === 0
+                    ? 'System managed'
+                    : `${(activeLocalModel.fileSizeBytes / 1_073_741_824).toFixed(1)} GB`}
                 </Text>
               </View>
               <Text style={{ fontSize: 12, color: c.textMuted, marginBottom: 12 }}>
                 {activeLocalModel.supportedRuntimes.map(backendDisplayName).join(' · ')}
                 {' · '}
-                {activeLocalModel.paramCountB}B params
+                {activeLocalModel.paramCountB > 0
+                  ? `${activeLocalModel.paramCountB}B params`
+                  : 'Device-managed model'}
               </Text>
 
               <View style={{ flexDirection: 'row', gap: 8 }}>

@@ -58,6 +58,8 @@ import { retrieveMemoryContext } from '../src/features/memory/store';
 import { buildPersonalContextBlocks } from '../src/features/memory/services/personalContext';
 import { consolidateFactsFromTurn } from '../src/features/memory/services/consolidation';
 
+const LOCAL_MODEL_ID = 'fixture-local-model';
+
 function resetStore() {
   useChatStore.setState({
     conversations: [
@@ -68,7 +70,7 @@ function resetStore() {
         createdAt: '2026-05-21T09:00:00.000Z',
         messageCount: 2,
         pinned: false,
-        model: 'llama-local',
+        model: LOCAL_MODEL_ID,
         provider: 'local',
         executionMode: 'local',
       },
@@ -82,7 +84,7 @@ function resetStore() {
           role: 'user',
           content: 'Local-only prompt',
           createdAt: '2026-05-21T09:58:00.000Z',
-          model: 'llama-local',
+          model: LOCAL_MODEL_ID,
         },
         {
           id: 'msg-answer',
@@ -90,7 +92,7 @@ function resetStore() {
           role: 'assistant',
           content: 'Local-only answer',
           createdAt: '2026-05-21T09:59:00.000Z',
-          model: 'llama-local',
+          model: LOCAL_MODEL_ID,
         },
       ],
     },
@@ -121,7 +123,7 @@ describe('mobile local conversation forks', () => {
   it('creates only a local copy fork and does not create a legacy remote handoff payload', async () => {
     const forkId = await useChatStore.getState().forkConversation('local-conv', {
       title: 'Local copy',
-      model: 'llama-local',
+      model: LOCAL_MODEL_ID,
     });
 
     const forkMessages = useChatStore.getState().messages[forkId] ?? [];
@@ -138,7 +140,7 @@ describe('mobile local conversation forks', () => {
 
     const forkId = await useChatStore.getState().forkConversation('local-conv', {
       title: 'Still local',
-      model: 'llama-local',
+      model: LOCAL_MODEL_ID,
     });
 
     const fork = useChatStore
@@ -146,7 +148,7 @@ describe('mobile local conversation forks', () => {
       .conversations.find((conversation) => conversation.id === forkId);
     expect(fork).toMatchObject({
       title: 'Still local',
-      model: 'llama-local',
+      model: LOCAL_MODEL_ID,
       provider: 'local',
       executionMode: 'local',
     });
@@ -210,7 +212,7 @@ describe('mobile local conversation forks', () => {
       messages: { ...state.messages, 'cloud-conv': [] },
     }));
 
-    await useChatStore.getState().sendMessage('cloud-conv', 'Use my local memory', 'llama-local');
+    await useChatStore.getState().sendMessage('cloud-conv', 'Use my local memory', LOCAL_MODEL_ID);
 
     expect(useChatStore.getState().error).toBe(
       'This is an AGI Cloud chat. Start a separate Local Mode chat to use local models.',

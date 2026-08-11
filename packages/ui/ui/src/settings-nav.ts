@@ -279,7 +279,12 @@ export interface SettingsNavGroupResolved {
 export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
   {
     items: [
-      { key: 'general', label: 'General', icon: Settings2 },
+      {
+        key: 'general',
+        label: 'General',
+        icon: Settings2,
+        keywords: ['profile', 'name', 'personalization', 'custom instructions', 'instructions'],
+      },
       { key: 'account', label: 'Account', icon: UserRound },
       { key: 'team', label: 'Team', icon: Users },
       { key: 'privacy', label: 'Privacy', icon: Shield },

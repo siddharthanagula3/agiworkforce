@@ -3116,6 +3116,9 @@
   color: var(--agi-ink-quiet);
   margin: 0;
 }
+[data-design='agi'] #pricing-team-title {
+  scroll-margin-top: 6rem;
+}
 [data-design='agi'] .agi-tier-price {
   display: flex;
   flex-wrap: wrap;

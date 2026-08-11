@@ -3,7 +3,13 @@
 import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
 import { CalendarClock, History, Pencil, Play, Trash2 } from 'lucide-react';
 import type { ScheduleTask } from '../types';
-import { DAYS_OF_WEEK, formatDateTime, recurrenceLabel, taskRecurrence } from '../types';
+import {
+  DAYS_OF_WEEK,
+  formatDateTime,
+  recurrenceLabel,
+  scheduleModelLabel,
+  taskRecurrence,
+} from '../types';
 import { ScheduleRunHistory, type ScheduleHistoryState } from './ScheduleRunHistory';
 
 export type ScheduleOperation = 'toggle' | 'run' | 'delete' | null;
@@ -145,9 +151,7 @@ export function ScheduleCard({
               </div>
               <div className="min-w-0">
                 <dt className="font-medium text-foreground/70">Model</dt>
-                <dd className="break-words font-mono" translate="no">
-                  {schedule.model ?? 'auto'}
-                </dd>
+                <dd className="break-words">{scheduleModelLabel(schedule.model)}</dd>
               </div>
             </dl>
 

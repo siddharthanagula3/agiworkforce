@@ -147,6 +147,24 @@ describe('GeneratedFileCard', () => {
     expect(img?.getAttribute('src')).toBe('https://example.invalid/preview.png');
   });
 
+  it('falls back to the kind icon and reports an inline thumbnail error', () => {
+    const onPreviewError = vi.fn();
+    render(
+      <GeneratedFileCard
+        presentation={basePresentation({ previewUri: '/api/files/fixture-image' })}
+        onPreview={vi.fn()}
+        onPreviewError={onPreviewError}
+      />,
+    );
+
+    fireEvent.error(screen.getByAltText(/preview$/i));
+
+    expect(onPreviewError).toHaveBeenCalledTimes(1);
+    expect(screen.queryByAltText(/preview$/i)).toBeNull();
+    expect(screen.getByText(/preview unavailable/i)).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+  });
+
   it('jumps to the source session via onOpenSourceSession', () => {
     const onOpenSourceSession = vi.fn();
     render(

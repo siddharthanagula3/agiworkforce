@@ -387,6 +387,52 @@ describe('ChatMessageList rendering', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Response complete. all done');
     });
   });
+
+  it('announces cancellation instead of a successful completion', async () => {
+    const streaming = [
+      makeMessage({ id: 'u1', role: 'user', content: 'start a long response' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: '', isStreaming: true }),
+    ];
+    const { rerender } = render(<ChatMessageList messages={streaming} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Generating response');
+    });
+
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={[
+            makeMessage({ id: 'u1', role: 'user', content: 'start a long response' }),
+            makeMessage({
+              id: 'a1',
+              role: 'assistant',
+              content: '',
+              isStreaming: false,
+              metadata: {
+                agentActivity: {
+                  schemaVersion: 1,
+                  sessionId: 'conv-1',
+                  turnId: 'a1',
+                  lastSequence: -1,
+                  status: 'cancelled',
+                  startedAtMs: 1,
+                  updatedAtMs: 2,
+                  completedAtMs: 2,
+                  entries: [],
+                },
+              },
+            }),
+          ]}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Response cancelled');
+      expect(screen.getByRole('status')).not.toHaveTextContent('Response complete');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -394,6 +440,66 @@ describe('ChatMessageList rendering', () => {
 // ---------------------------------------------------------------------------
 
 describe('ChatMessageList actions', () => {
+  it('forwards the persisted billing recovery action instead of treating every refusal as upgrade', () => {
+    const onPaywallUpgrade = vi.fn();
+    const messages = [
+      makeMessage({
+        id: 'inactive-subscription',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'video_generation',
+            requiredTier: 'max_15x',
+            reason: 'Your subscription is past_due. Please update your payment method.',
+            recoveryAction: 'manage_billing',
+          },
+        },
+      }),
+    ];
+
+    render(<ChatMessageList messages={messages} onPaywallUpgrade={onPaywallUpgrade} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
+
+    expect(onPaywallUpgrade).toHaveBeenCalledWith(
+      'inactive-subscription',
+      'max_15x',
+      'manage_billing',
+    );
+  });
+
+  it('carries the exact persisted tier and account-aware usage destination', () => {
+    const onPaywallUpgrade = vi.fn();
+    const messages = [
+      makeMessage({
+        id: 'max-usage-exhausted',
+        role: 'assistant',
+        content: '\u200b',
+        metadata: {
+          paywall: {
+            feature: 'token_cap',
+            requiredTier: 'max_15x',
+            reason: 'Your Max 15x usage for this billing period is used up.',
+            recoveryAction: 'view_usage',
+            showUpgradeCta: true,
+          },
+        },
+      }),
+    ];
+
+    render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="max_15x"
+        onPaywallUpgrade={onPaywallUpgrade}
+      />,
+    );
+    expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'View usage' }));
+
+    expect(onPaywallUpgrade).toHaveBeenCalledWith('max-usage-exhausted', 'max_15x', 'view_usage');
+  });
+
   it('calls onDelete with correct messageId', () => {
     const onDelete = vi.fn();
     const messages = [makeMessage({ id: 'msg-1', role: 'assistant', content: 'text' })];

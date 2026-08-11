@@ -94,30 +94,58 @@ async function handleDeleteUserData(request: NextRequest) {
       'User requested GDPR data deletion',
     );
 
-    // Attempt the delete_user_data stored procedure first
+    // The legacy SECURITY DEFINER procedure predates video admission, managed
+    // usage reservations, and the incident outbox. Once the durable video
+    // schema exists, always use the canonical fenced erasure path below. This
+    // avoids a destructive check-then-delete window before a job row exists.
+    let durableVideoSchemaProvisioned = true;
+    try {
+      const schema = await db.query<{ provisioned: boolean }>(
+        `select to_regclass('public.video_generation_jobs') is not null as provisioned`,
+      );
+      durableVideoSchemaProvisioned = schema[0]?.provisioned === true;
+    } catch (error) {
+      // Erasure must fail closed when the lifecycle owner cannot be inspected.
+      logger.error(
+        { userId, error },
+        'Could not inspect durable video schema; bypassing legacy GDPR function',
+      );
+    }
+
+    // Attempt the legacy delete_user_data stored procedure only before the
+    // durable video migration is provisioned.
     let rpcSucceeded = false;
     let rpcData: unknown = null;
 
-    try {
-      const rows = await db.query<Record<string, unknown>>('select * from delete_user_data($1)', [
-        userId,
-      ]);
-      rpcData = rows[0] ?? null;
-      rpcSucceeded = true;
-    } catch (err: unknown) {
-      const pgErr = err as { code?: string; message?: string };
-      // 42883 = undefined_function in native Postgres
-      const isMissingFn =
-        pgErr.code === '42883' ||
-        pgErr.message?.includes('function') ||
-        pgErr.message?.includes('does not exist');
+    if (!durableVideoSchemaProvisioned) {
+      try {
+        const rows = await db.query<Record<string, unknown>>('select * from delete_user_data($1)', [
+          userId,
+        ]);
+        rpcData = rows[0] ?? null;
+        rpcSucceeded =
+          (rpcData as Record<string, unknown> | null | undefined)?.['success'] === true;
+        if (!rpcSucceeded) {
+          logger.warn(
+            { userId, result: rpcData },
+            'Legacy GDPR function declined erasure; using canonical lifecycle-safe path',
+          );
+        }
+      } catch (err: unknown) {
+        const pgErr = err as { code?: string; message?: string };
+        // 42883 = undefined_function in native Postgres
+        const isMissingFn =
+          pgErr.code === '42883' ||
+          pgErr.message?.includes('function') ||
+          pgErr.message?.includes('does not exist');
 
-      if (!isMissingFn) {
-        logger.error({ err, userId }, 'Failed to delete user data via RPC');
-        throw createError.internal('Failed to delete user data', pgErr.message ?? String(err));
+        if (!isMissingFn) {
+          logger.error({ err, userId }, 'Failed to delete user data via RPC');
+          throw createError.internal('Failed to delete user data', pgErr.message ?? String(err));
+        }
+
+        logger.warn({ userId }, 'delete_user_data function not found, using fallback');
       }
-
-      logger.warn({ userId }, 'delete_user_data function not found, using fallback');
     }
 
     if (rpcSucceeded) {
@@ -157,7 +185,13 @@ async function handleDeleteUserData(request: NextRequest) {
 
     // Fallback: manual deletion in FK-safe order using parameterized SQL,
     // including the stored media BYTES (PER-24/PER-25).
-    const erasure = await eraseUserAccountData(userId);
+    // This endpoint erases application data but explicitly preserves the auth
+    // account. Use the separate expiring video fence; the account-purge flags
+    // belong only to DELETE /api/user/delete-account.
+    const erasure = await eraseUserAccountData(userId, {
+      retainProfile: true,
+      scope: 'data',
+    });
 
     logger.info({ userId, erasure }, 'Completed fallback data deletion');
 

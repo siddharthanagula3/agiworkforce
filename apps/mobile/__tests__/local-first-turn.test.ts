@@ -8,9 +8,9 @@
  * creates on a clean install):
  *   1. onboarding calls tier2LoadModel(preset) → react-native-executorch downloads model
  *   2. onboarding calls recordInstalledModel({format:'pte', local_path:null})
- *   3. chat calls resolveLocalModelRef('qwen3-4b-instruct-2507')
+ *   3. chat calls resolveLocalModelRef(defaultModel.id)
  *      → finds the 'pte' record (no local_path) → returns {installed:true}
- *   4. chat calls localGenerate(undefined, {modelId:'qwen3-4b-instruct-2507', ...})
+ *   4. chat calls localGenerate(undefined, {modelId:defaultModel.id, ...})
  *      → selector sees tier2Available + preset → tier2Generate → LLMModule
  *
  * This test exercises the full path from step 2 onward so the "download a
@@ -29,40 +29,34 @@
 // Mocks — must be before imports
 // ---------------------------------------------------------------------------
 
-// Mock installed_models storage to simulate post-onboarding state:
-// qwen3-4b-instruct-2507 registered with format:'pte' and no local_path.
+// Mock installed_models storage to simulate the catalog default registered with
+// format:'pte' and no local_path.
 // This is exactly what onboarding writes after tier2LoadModel resolves.
-jest.mock('../storage/installedModels', () => ({
-  listInstalledModels: jest.fn().mockResolvedValue([
-    {
-      id: 'qwen3-4b-instruct-2507',
-      display_name: 'AGI Standard',
-      runtime: 'local',
-      format: 'pte',
-      size_bytes: 2_147_483_648,
-      sha256: null,
-      local_path: null,
-      installed_at: 1_700_000_000_000,
-      last_used_at: null,
-      capabilities: null,
-    },
-  ]),
-  getInstalledModel: jest.fn().mockResolvedValue({
-    id: 'qwen3-4b-instruct-2507',
-    display_name: 'AGI Standard',
+jest.mock('../storage/installedModels', () => {
+  const defaultModel = (
+    jest.requireActual('@agiworkforce/local-llm') as typeof import('@agiworkforce/local-llm')
+  ).getDefaultModel();
+  const installedDefaultModel = {
+    id: defaultModel.id,
+    display_name: defaultModel.displayName,
     runtime: 'local',
     format: 'pte',
-    size_bytes: 2_147_483_648,
+    size_bytes: defaultModel.fileSizeBytes,
     sha256: null,
     local_path: null,
     installed_at: 1_700_000_000_000,
     last_used_at: null,
     capabilities: null,
-  }),
-  markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
-  recordInstalledModel: jest.fn().mockResolvedValue(undefined),
-  insertInstalledModel: jest.fn().mockResolvedValue(undefined),
-}));
+  };
+
+  return {
+    listInstalledModels: jest.fn().mockResolvedValue([installedDefaultModel]),
+    getInstalledModel: jest.fn().mockResolvedValue(installedDefaultModel),
+    markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
+    recordInstalledModel: jest.fn().mockResolvedValue(undefined),
+    insertInstalledModel: jest.fn().mockResolvedValue(undefined),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock LLMModule returned by fromModelName (injected via _setLLMModuleForTesting)
@@ -152,8 +146,10 @@ jest.mock('@agiworkforce/local-llm', () => {
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { tier2Release, _setLLMModuleForTesting } from '@agiworkforce/local-llm';
+import { tier2Release, _setLLMModuleForTesting, getDefaultModel } from '@agiworkforce/local-llm';
 import { resolveLocalModelRef } from '../src/features/model-picker/localModelRuntime';
+
+const DEFAULT_LOCAL_MODEL = getDefaultModel();
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -174,15 +170,15 @@ describe('first offline turn: recordInstalledModel(pte) → resolveLocalModelRef
   });
 
   it('resolveLocalModelRef accepts a pte-format installed model with no local_path', async () => {
-    const ref = await resolveLocalModelRef('qwen3-4b-instruct-2507');
-    expect(ref.modelId).toBe('qwen3-4b-instruct-2507');
+    const ref = await resolveLocalModelRef(DEFAULT_LOCAL_MODEL.id);
+    expect(ref.modelId).toBe(DEFAULT_LOCAL_MODEL.id);
     expect(ref.installed).toBe(true);
     // No local_path — tier2 loads from the preset URLs, not a file path.
     expect(ref.modelPath).toBeUndefined();
   });
 
   it('resolveLocalModelRef does NOT throw "not downloaded yet" for a pte record', async () => {
-    await expect(resolveLocalModelRef('qwen3-4b-instruct-2507')).resolves.toBeDefined();
+    await expect(resolveLocalModelRef(DEFAULT_LOCAL_MODEL.id)).resolves.toBeDefined();
   });
 });
 
@@ -227,9 +223,9 @@ describe('first offline turn: tier2Generate produces real tokens via LLMModule s
 
     expect(mockFromModelName).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelName: 'qwen3-4b-quantized',
-        modelSource: expect.stringContaining('qwen3_4b_8da4w.pte'),
-        tokenizerSource: expect.stringContaining('tokenizer.json'),
+        modelName: preset.modelName,
+        modelSource: preset.modelSource,
+        tokenizerSource: preset.tokenizerSource,
       }),
       undefined,
     );

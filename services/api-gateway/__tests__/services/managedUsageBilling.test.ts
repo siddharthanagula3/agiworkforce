@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { BILLING_PLAN_CAPABILITY_TIERS } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_CAPABILITY_TIERS,
+  getModelMetadataById,
+  getRoutingSlotModel,
+  listCanonicalModels,
+  modelsCatalog,
+  resolveEffectiveModelPricing,
+  resolveEffectiveModelPricingForInputTokens,
+} from '@agiworkforce/types';
 
 import {
   calculateManagedUsageCostCents,
@@ -41,11 +49,230 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       { effectiveFrom: '2030-04-01' },
     ],
   };
+  const noWriteFixture = {
+    id: 'fixture-no-cache-write',
+    provider: 'openai',
+    inputCost: 0.75,
+    outputCost: 4.5,
+    cached_input: 0.075,
+  };
+  const tieredFixture = {
+    id: 'fixture-tiered-pricing',
+    provider: 'openai',
+    inputCost: 1,
+    outputCost: 4,
+    cached_input: 0.1,
+    cached_write: 1.25,
+    inputTokenPricingTiers: [
+      {
+        thresholdTokens: 100_000,
+        inputCost: 2,
+        outputCost: 6,
+        cached_input: 0.2,
+        cached_write: 2.5,
+      },
+      {
+        thresholdTokens: 200_000,
+        inputCost: 3,
+        outputCost: 8,
+        cached_input: 0.3,
+        cached_write: 3.75,
+      },
+    ],
+  };
+  const disjointTieredFixture = {
+    id: 'fixture-disjoint-tiered-pricing',
+    provider: 'anthropic',
+    inputCost: 1,
+    outputCost: 4,
+    cached_input: 0.1,
+    cached_write: 1.25,
+    inputTokenPricingTiers: [
+      {
+        thresholdTokens: 100_000,
+        inputCost: 2,
+        outputCost: 6,
+        cached_input: 0.2,
+        cached_write: 2.5,
+      },
+    ],
+  };
   return {
     ...actual,
     getModelMetadataById: (id: string) =>
-      id === fixture.id ? fixture : actual.getModelMetadataById(id),
+      id === fixture.id
+        ? fixture
+        : id === noWriteFixture.id
+          ? noWriteFixture
+          : id === tieredFixture.id
+            ? tieredFixture
+            : id === disjointTieredFixture.id
+              ? disjointTieredFixture
+              : actual.getModelMetadataById(id),
   };
+});
+
+function requireCatalogMultiBandModel() {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      (candidate.inputTokenPricingTiers?.length ?? 0) > 1 &&
+      typeof candidate.cached_input === 'number' &&
+      typeof candidate.cached_write === 'number' &&
+      candidate.inputTokenPricingTiers!.every(
+        (tier) => typeof tier.cached_input === 'number' && typeof tier.cached_write === 'number',
+      ),
+  );
+  if (!model?.inputTokenPricingTiers) {
+    throw new Error('Canonical multi-band billing fixture is missing');
+  }
+  return model;
+}
+
+const FLAGSHIP_MODEL = getRoutingSlotModel('flagship_coding');
+const STANDARD_ANTHROPIC_MODEL = (() => {
+  const model = modelsCatalog.tierAllowedModels.pro_additions
+    .map((modelId) => getModelMetadataById(modelId))
+    .find((candidate) => candidate?.provider === 'anthropic');
+  if (!model) throw new Error('Canonical Anthropic Pro fixture is missing');
+  return model.id;
+})();
+const OPENAI_TIERED_CACHE_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      candidate.provider === 'openai' &&
+      (candidate.inputTokenPricingTiers?.length ?? 0) > 0 &&
+      typeof candidate.cached_write === 'number',
+  );
+  if (!model?.inputTokenPricingTiers) {
+    throw new Error('Canonical OpenAI tiered-cache fixture is missing');
+  }
+  return model;
+})();
+const UNPRICED_REACHABLE_CACHE_MODEL = (() => {
+  const model = modelsCatalog.tierAllowedModels.flagship_additions
+    .map((modelId) => getModelMetadataById(modelId))
+    .find(
+      (candidate) =>
+        candidate &&
+        typeof candidate.inputCost === 'number' &&
+        candidate.cached_input === undefined,
+    );
+  if (!model) throw new Error('Canonical reachable unpriced-cache fixture is missing');
+  return model;
+})();
+
+const toLedgerCents = (dollars: number) =>
+  dollars > 0 ? Math.max(1, Math.ceil(dollars * 100)) : 0;
+
+describe('managed usage input-length pricing tiers', () => {
+  const model = 'fixture-tiered-pricing';
+  const date = new Date('2030-01-01T00:00:00Z');
+
+  it('uses strict thresholds and the greatest qualifying tier', () => {
+    expect(
+      calculateManagedUsageCostCents(model, { inputTokens: 100_000, outputTokens: 100_000 }, date),
+    ).toBe(50);
+    expect(
+      calculateManagedUsageCostCents(model, { inputTokens: 100_001, outputTokens: 100_000 }, date),
+    ).toBe(81);
+    expect(
+      calculateManagedUsageCostCents(model, { inputTokens: 200_001, outputTokens: 100_000 }, date),
+    ).toBe(141);
+  });
+
+  it('bills every generated-catalog input, output, cache-read, and cache-write band', () => {
+    const candidate = requireCatalogMultiBandModel();
+    const tiers = candidate.inputTokenPricingTiers!;
+    const base = resolveEffectiveModelPricing(candidate, date);
+
+    tiers.forEach((tier, index) => {
+      const preceding = index === 0 ? base : tiers[index - 1]!;
+      const threshold = tier.thresholdTokens;
+      const above = threshold + 1;
+
+      expect(
+        calculateManagedUsageCostCents(
+          candidate.id,
+          { inputTokens: threshold, outputTokens: 0 },
+          date,
+        ),
+      ).toBe(toLedgerCents((threshold / 1_000_000) * preceding.inputCost));
+      expect(
+        calculateManagedUsageCostCents(candidate.id, { inputTokens: above, outputTokens: 0 }, date),
+      ).toBe(toLedgerCents((above / 1_000_000) * tier.inputCost));
+      expect(
+        calculateManagedUsageCostCents(
+          candidate.id,
+          { inputTokens: above, outputTokens: 1_000_000 },
+          date,
+        ),
+      ).toBe(toLedgerCents((above / 1_000_000) * tier.inputCost + tier.outputCost));
+      expect(
+        calculateManagedUsageCostCents(
+          candidate.id,
+          { inputTokens: above, outputTokens: 0, cacheReadTokens: above },
+          date,
+        ),
+      ).toBe(toLedgerCents((above / 1_000_000) * tier.cached_input!));
+      expect(
+        calculateManagedUsageCostCents(
+          candidate.id,
+          { inputTokens: above, outputTokens: 0, cacheWriteTokens: above },
+          date,
+        ),
+      ).toBe(toLedgerCents((above / 1_000_000) * tier.cached_write!));
+    });
+  });
+
+  it('selects the tier from total disjoint input, including cache reads and writes', () => {
+    const disjointModel = 'fixture-disjoint-tiered-pricing';
+    expect(
+      calculateManagedUsageCostCents(
+        disjointModel,
+        { inputTokens: 60_000, outputTokens: 0, cacheReadTokens: 25_000, cacheWriteTokens: 15_000 },
+        date,
+      ),
+    ).toBe(9);
+    expect(
+      calculateManagedUsageCostCents(
+        disjointModel,
+        { inputTokens: 60_000, outputTokens: 0, cacheReadTokens: 25_000, cacheWriteTokens: 15_001 },
+        date,
+      ),
+    ).toBe(17);
+  });
+
+  it('uses the same strict threshold for preflight reservation estimates', () => {
+    const candidate = requireCatalogMultiBandModel();
+    const threshold = candidate.inputTokenPricingTiers![0]!.thresholdTokens;
+    // Mirrors the gateway's conservative 3.5 characters/token estimator:
+    // JSON string quotes add two characters and each message adds four tokens.
+    const contentAtThreshold = 'x'.repeat((threshold - 4) * 3.5 - 2);
+    const atThreshold = {
+      model: candidate.id,
+      messages: [{ role: 'user', content: contentAtThreshold }],
+      max_tokens: 1,
+    };
+    const aboveThreshold = {
+      ...atThreshold,
+      messages: [{ role: 'user', content: `${contentAtThreshold}x` }],
+    };
+
+    expect(estimateManagedUsageCostCents(atThreshold, date)).toBe(
+      calculateManagedUsageCostCents(
+        candidate.id,
+        { inputTokens: threshold, outputTokens: 1 },
+        date,
+      ),
+    );
+    expect(estimateManagedUsageCostCents(aboveThreshold, date)).toBe(
+      calculateManagedUsageCostCents(
+        candidate.id,
+        { inputTokens: threshold + 1, outputTokens: 1 },
+        date,
+      ),
+    );
+  });
 });
 
 interface RpcResult {
@@ -59,7 +286,7 @@ function rpcClient(results: RpcResult[]) {
 }
 
 const requestBody = {
-  model: 'claude-opus-5',
+  model: FLAGSHIP_MODEL,
   messages: [{ role: 'user', content: 'Build a release plan' }],
   stream: true,
   max_tokens: 512,
@@ -81,19 +308,19 @@ describe('managed usage request identity', () => {
 
   it('uses canonical JSON so object-key order does not change the request fingerprint', () => {
     const first = fingerprintManagedUsageRequest({
-      model: 'claude-opus-5',
+      model: FLAGSHIP_MODEL,
       stream: true,
       messages: [{ content: 'hello', role: 'user' }],
     });
     const reordered = fingerprintManagedUsageRequest({
       messages: [{ role: 'user', content: 'hello' }],
       stream: true,
-      model: 'claude-opus-5',
+      model: FLAGSHIP_MODEL,
     });
     const changed = fingerprintManagedUsageRequest({
       messages: [{ role: 'user', content: 'different' }],
       stream: true,
-      model: 'claude-opus-5',
+      model: FLAGSHIP_MODEL,
     });
 
     expect(first).toMatch(/^[a-f0-9]{64}$/);
@@ -109,16 +336,16 @@ describe('managed usage registry-driven cost accounting', () => {
   });
 
   it('prices cache reads and writes from canonical usage without double-counting input', () => {
-    const uncached = calculateManagedUsageCostCents('claude-opus-5', {
+    const uncached = calculateManagedUsageCostCents(FLAGSHIP_MODEL, {
       inputTokens: 1_000_000,
       outputTokens: 0,
     });
-    const cached = calculateManagedUsageCostCents('claude-opus-5', {
+    const cached = calculateManagedUsageCostCents(FLAGSHIP_MODEL, {
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 1_000_000,
     });
-    const cacheWrite = calculateManagedUsageCostCents('claude-opus-5', {
+    const cacheWrite = calculateManagedUsageCostCents(FLAGSHIP_MODEL, {
       inputTokens: 0,
       outputTokens: 0,
       cacheWriteTokens: 1_000_000,
@@ -132,16 +359,14 @@ describe('managed usage registry-driven cost accounting', () => {
 
 /**
  * Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
- * 2026-08-05). The managed ledger bills Sonnet 5 at the founder-selected
- * standard $3/$15 per MTok (cache read $0.30, 5m write $3.75, 1h write $6.00)
- * on EVERY date: 300 cents per MTok of input, before and after the retired
- * 2026-09-01 boundary alike. Anthropic's introductory window is a provider-COST
- * fact recorded in the registry's verificationLog, never a product price. The
- * ledger must also resolve the same rate for the same date that apps/web's
- * LLMCostCalculator does, so every case passes a fixed date.
+ * 2026-08-05). The managed ledger bills the catalog-selected Anthropic
+ * workhorse at its founder-selected standard rates on every date. Provider
+ * promotional costs recorded in verification notes are not product prices.
+ * The ledger must resolve the same catalog rate for the same date that the Web
+ * calculator does, so every case passes a fixed date.
  */
-describe('managed usage Sonnet 5 standard pricing', () => {
-  const MODEL = 'claude-sonnet-5';
+describe('managed usage catalog-selected Anthropic workhorse pricing', () => {
+  const MODEL = STANDARD_ANTHROPIC_MODEL;
   const BEFORE_RETIRED_BOUNDARY = new Date('2026-08-30T23:59:59.999Z');
   const AT_RETIRED_BOUNDARY = new Date('2026-08-31T00:00:00.000Z');
   const AFTER_RETIRED_BOUNDARY = new Date('2026-09-01T00:00:00.000Z');
@@ -154,19 +379,23 @@ describe('managed usage Sonnet 5 standard pricing', () => {
     new Date('2020-01-01T00:00:00.000Z'),
   ];
 
-  it('bills 300 cents per MTok of input on every date', () => {
-    // Standard: $3/M input, $0.3/M cache read.
+  it('bills the catalog input and cache-read rates on every date', () => {
     for (const date of EVERY_DATE) {
+      const pricing = resolveEffectiveModelPricingForInputTokens(
+        getModelMetadataById(MODEL)!,
+        date,
+        1_000_000,
+      );
       expect(
         calculateManagedUsageCostCents(MODEL, { inputTokens: 1_000_000, outputTokens: 0 }, date),
-      ).toBe(300);
+      ).toBe(toLedgerCents(pricing.inputCost));
       expect(
         calculateManagedUsageCostCents(
           MODEL,
           { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
           date,
         ),
-      ).toBe(30);
+      ).toBe(toLedgerCents(pricing.cached_input ?? pricing.inputCost));
     }
   });
 
@@ -178,13 +407,28 @@ describe('managed usage Sonnet 5 standard pricing', () => {
       cacheWriteTokens: 1_000_000,
     };
 
-    // Standard: $3 + $15 + $0.3 + $3.75 = $22.05.
-    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_BOUNDARY)).toBe(2205);
-    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_BOUNDARY)).toBe(2205);
-    expect(calculateManagedUsageCostCents(MODEL, usage, WELL_AFTER_RETIRED_BOUNDARY)).toBe(2205);
+    for (const date of [
+      BEFORE_RETIRED_BOUNDARY,
+      AFTER_RETIRED_BOUNDARY,
+      WELL_AFTER_RETIRED_BOUNDARY,
+    ]) {
+      const pricing = resolveEffectiveModelPricingForInputTokens(
+        getModelMetadataById(MODEL)!,
+        date,
+        3_000_000,
+      );
+      const expectedDollars =
+        pricing.inputCost +
+        pricing.outputCost +
+        (pricing.cached_input ?? pricing.inputCost) +
+        (pricing.cached_write ?? pricing.inputCost * 1.25);
+      expect(calculateManagedUsageCostCents(MODEL, usage, date)).toBe(
+        toLedgerCents(expectedDollars),
+      );
+    }
   });
 
-  it('bills the 1h cache-write tier at the standard $6/M on every date', () => {
+  it('bills the catalog 1h cache-write tier on every date', () => {
     const usage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -192,7 +436,14 @@ describe('managed usage Sonnet 5 standard pricing', () => {
       cacheWrite1hTokens: 1_000_000,
     };
     for (const date of EVERY_DATE) {
-      expect(calculateManagedUsageCostCents(MODEL, usage, date)).toBe(600);
+      const pricing = resolveEffectiveModelPricingForInputTokens(
+        getModelMetadataById(MODEL)!,
+        date,
+        2_000_000,
+      );
+      expect(calculateManagedUsageCostCents(MODEL, usage, date)).toBe(
+        toLedgerCents(pricing.cached_write_1h ?? pricing.inputCost * 2),
+      );
     }
   });
 
@@ -205,8 +456,8 @@ describe('managed usage Sonnet 5 standard pricing', () => {
 
   it('leaves a model with no dated window unaffected by the date parameter', () => {
     const usage = { inputTokens: 1_000_000, outputTokens: 0 };
-    expect(calculateManagedUsageCostCents('claude-opus-5', usage, BEFORE_RETIRED_BOUNDARY)).toBe(
-      calculateManagedUsageCostCents('claude-opus-5', usage, AFTER_RETIRED_BOUNDARY),
+    expect(calculateManagedUsageCostCents(FLAGSHIP_MODEL, usage, BEFORE_RETIRED_BOUNDARY)).toBe(
+      calculateManagedUsageCostCents(FLAGSHIP_MODEL, usage, AFTER_RETIRED_BOUNDARY),
     );
   });
 
@@ -238,9 +489,14 @@ describe('managed usage Sonnet 5 standard pricing', () => {
       now: AFTER_RETIRED_BOUNDARY,
     });
 
+    const pricing = resolveEffectiveModelPricingForInputTokens(
+      getModelMetadataById(MODEL)!,
+      AFTER_RETIRED_BOUNDARY,
+      1_000_000,
+    );
     expect(rpc).toHaveBeenCalledWith(
       'finalize_managed_usage_request',
-      expect.objectContaining({ p_actual_cost_cents: 300 }),
+      expect.objectContaining({ p_actual_cost_cents: toLedgerCents(pricing.inputCost) }),
     );
   });
 });
@@ -319,56 +575,54 @@ describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
 });
 
 /**
- * OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family (1.25x
- * the uncached input rate). The catalog declares that as `cached_write`, so the
- * ledger bills a write only when a price is published for it.
+ * The catalog may publish an OpenAI cache-write rate distinct from uncached
+ * input. The ledger bills that declared rate without embedding a model ID.
  */
 describe('managed usage OpenAI cache-write billing', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
-  it('bills GPT-5.6 writes at the declared price, each prompt token once', () => {
-    // gpt-5.6-terra: $2/M input, $0.2/M read, $2.5/M write. A 1M prompt of
-    // 400k reads + 200k writes + 400k plain input = $0.80 + $0.08 + $0.50.
-    expect(
-      calculateManagedUsageCostCents(
-        'gpt-5.6-terra',
-        {
-          inputTokens: 1_000_000,
-          outputTokens: 0,
-          cacheReadTokens: 400_000,
-          cacheWriteTokens: 200_000,
-        },
-        PRICED_ON,
-      ),
-    ).toBe(138);
+  it('bills catalog-declared writes at the effective tier, each prompt token once', () => {
+    const usage = {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadTokens: 400_000,
+      cacheWriteTokens: 200_000,
+    };
+    const pricing = resolveEffectiveModelPricingForInputTokens(
+      OPENAI_TIERED_CACHE_MODEL,
+      PRICED_ON,
+      usage.inputTokens,
+    );
+    const expectedDollars =
+      (400_000 * pricing.inputCost +
+        usage.cacheReadTokens * (pricing.cached_input ?? pricing.inputCost) +
+        usage.cacheWriteTokens * (pricing.cached_write ?? pricing.inputCost)) /
+      1_000_000;
+    expect(calculateManagedUsageCostCents(OPENAI_TIERED_CACHE_MODEL.id, usage, PRICED_ON)).toBe(
+      toLedgerCents(expectedDollars),
+    );
   });
 
   it('bills an unpriced cache read at the full input rate', () => {
-    // grok-4.5 publishes no cached_input and IS billable here: it is in
-    // tierAllowedModels.flagship_additions, which routes/llm.ts turns into
-    // FLAGSHIP_ALLOWED_MODELS, and its xAI adapter reuses the OpenAI stream
-    // translator, so prompt_tokens_details.cached_tokens reaches this ledger.
-    // The full $2/M is charged, matching apps/web's LLMCostCalculator and the
-    // desktop calculator; a 90%-off fallback would bill 20 cents for a discount
-    // the catalog does not publish.
     expect(
       calculateManagedUsageCostCents(
-        'grok-4.5',
+        UNPRICED_REACHABLE_CACHE_MODEL.id,
         { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 1_000_000 },
         PRICED_ON,
       ),
-    ).toBe(200);
+    ).toBe(toLedgerCents(UNPRICED_REACHABLE_CACHE_MODEL.inputCost!));
   });
 
-  it('keeps writes free for a pre-5.6 OpenAI model that declares no write price', () => {
+  it('keeps writes free for a model that declares no write price', () => {
+    const model = 'fixture-no-cache-write';
     const base = { inputTokens: 1_000_000, outputTokens: 0 };
     const withWrites = calculateManagedUsageCostCents(
-      'gpt-5.4-mini',
+      model,
       { ...base, cacheWriteTokens: 1_000_000 },
       PRICED_ON,
     );
     expect(withWrites).toBe(75);
-    expect(withWrites).toBe(calculateManagedUsageCostCents('gpt-5.4-mini', base, PRICED_ON));
+    expect(withWrites).toBe(calculateManagedUsageCostCents(model, base, PRICED_ON));
   });
 });
 
@@ -416,7 +670,7 @@ describe('managed usage durable lifecycle client', () => {
         p_user_id: 'user-1',
         p_idempotency_key: 'turn_12345678',
         p_provider: 'anthropic',
-        p_model: 'claude-opus-5',
+        p_model: FLAGSHIP_MODEL,
         p_lease_token: 'lease-1',
         // Pro: 100 five-hour units and 500 weekly units at two units per cent,
         // flagship weekly at 30% of the weekly ceiling.
@@ -523,7 +777,7 @@ describe('managed usage durable lifecycle client', () => {
     }));
     const { client, rpc } = rpcClient(results);
 
-    for (const model of ['claude-opus-5', 'claude-sonnet-5']) {
+    for (const model of [FLAGSHIP_MODEL, STANDARD_ANTHROPIC_MODEL]) {
       await reserveManagedUsage({
         client,
         userId: 'user-1',
@@ -535,9 +789,8 @@ describe('managed usage durable lifecycle client', () => {
       });
     }
 
-    // The registry lists `claude-opus-5` under `flagship_coding` before
-    // `flagship_coding_pro_plus`, so a first-slot lookup would tag nothing and
-    // the flagship ceiling would never bind.
+    // A model shared by multiple flagship slots must still be tagged even when
+    // a first-slot lookup returns a different flagship slot.
     expect(rpc).toHaveBeenNthCalledWith(
       1,
       'reserve_managed_usage_request_with_limits',
@@ -647,7 +900,7 @@ describe('managed usage durable lifecycle client', () => {
     const result = await finalizeManagedUsage({
       ...identity,
       outcome: 'completed',
-      model: 'claude-opus-5',
+      model: FLAGSHIP_MODEL,
       usage: { inputTokens: 100_000, outputTokens: 20_000 },
     });
     await markManagedUsageClientDelivered(identity);
@@ -690,7 +943,7 @@ describe('managed usage durable lifecycle client', () => {
       requestHash: 'a'.repeat(64),
       leaseToken: 'lease-1',
       outcome: 'failed',
-      model: 'claude-opus-5',
+      model: FLAGSHIP_MODEL,
     });
 
     expect(rpc).toHaveBeenCalledWith(

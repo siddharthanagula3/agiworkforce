@@ -29,9 +29,9 @@ export default function TeamsPage() {
           em="Visible routes."
           lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop and CLI, and what runs in AGI managed cloud."
           ctas={[
-            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
+            { href: '/contact-sales', label: 'Enterprise sales' },
             { href: '/business', label: 'See the Business Overview' },
-            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -113,9 +113,9 @@ export default function TeamsPage() {
           title="Pilot the workspace before you buy compute."
           body="Start the team on free Local and BYOK modes today, then move selected users onto AGI managed cloud, which is open in public alpha."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/contact-sales', label: 'Contact Sales' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { href: '/pricing#pricing-team-title', label: 'Start with 2 seats' },
+            { href: '/settings/team', label: 'Manage Team' },
+            { href: '/contact-sales', label: 'Enterprise sales' },
           ]}
           stamp={LAUNCH.publicLabel}
         />

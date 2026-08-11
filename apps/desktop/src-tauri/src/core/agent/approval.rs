@@ -281,7 +281,9 @@ impl ApprovalResolution {
         match self {
             Self::Approved { trust: true } => "approved (trusted for this workflow)".to_string(),
             Self::Approved { trust: false } => "approved".to_string(),
-            Self::Rejected { reason: Some(reason) } => format!("rejected ({})", reason),
+            Self::Rejected {
+                reason: Some(reason),
+            } => format!("rejected ({})", reason),
             Self::Rejected { reason: None } => "rejected".to_string(),
         }
     }

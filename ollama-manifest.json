@@ -24,10 +24,6 @@
     "args": ["--provider", "ollama", "--yes", "--model", "{{model}}"],
     "flag": "--yes"
   },
-  "models": {
-    "recommended": ["qwen3-coder", "glm-4.7-flash", "llama3.2", "qwen3.5"],
-    "cloud": ["kimi-k2.5:cloud", "glm-5:cloud", "minimax-m2.7:cloud", "qwen3.5:cloud"]
-  },
   "minContextLength": 65536,
   "capabilities": [
     "code",

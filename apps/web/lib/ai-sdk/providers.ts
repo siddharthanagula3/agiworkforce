@@ -131,20 +131,7 @@ export function getGoogleModel(modelId: string, apiKey?: string): LanguageModel 
   return provider(modelId);
 }
 
-// ---------------------------------------------------------------------------
-// Provider detection helper
-// ---------------------------------------------------------------------------
-
 export type AiSdkProvider = 'anthropic' | 'openai' | 'google';
-
-export function detectAiSdkProvider(modelId: string): AiSdkProvider | null {
-  const m = modelId.toLowerCase();
-  if (m.includes('claude-')) return 'anthropic';
-  if (m.includes('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4'))
-    return 'openai';
-  if (m.includes('gemini-')) return 'google';
-  return null;
-}
 
 export function getModelForProvider(
   provider: AiSdkProvider,

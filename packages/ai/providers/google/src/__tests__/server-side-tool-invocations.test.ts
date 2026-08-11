@@ -1,7 +1,7 @@
 /**
  * Regression tests for combining Gemini built-in tools with function calling.
  *
- * Live repro (2026-07-10, gemini-3.5-flash, Web search toggle + url_fetch):
+ * Live repro (2026-07-10, then-current route, Web search toggle + url_fetch):
  * a request carrying BOTH a built-in tool ({ google_search: {} } via
  * rawVendorTools) AND functionDeclarations fails with 400 INVALID_ARGUMENT
  * ("Please enable tool_config.include_server_side_tool_invocations to use
@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
+import { GOOGLE_DEFAULT_MODEL_ID } from './model-fixtures';
 
 const FUNCTION_TOOL = {
   name: 'url_fetch',
@@ -23,7 +24,7 @@ const FUNCTION_TOOL = {
 describe('toolConfig.includeServerSideToolInvocations', () => {
   it('is set when built-in tools and functionDeclarations are combined', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'read https://example.com' }],
       tools: [FUNCTION_TOOL],
       rawVendorTools: [{ google_search: {} }],
@@ -34,7 +35,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('merges with a functionCallingConfig from toolChoice', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
       rawVendorTools: [{ google_search: {} }],
@@ -49,7 +50,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for functionDeclarations-only requests (byte-stable)', () => {
     const out = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
     });
@@ -59,7 +60,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for built-in-only requests (byte-stable)', () => {
     const out = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'x' }],
       rawVendorTools: [{ google_search: {} }],
     });
@@ -68,11 +69,11 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
   });
 
   it('replays assistant functionCall parts with the documented injected-call dummy signature', () => {
-    // Gemini 3 400s on replayed functionCall parts without a thought
+    // Current provider models 400 on replayed functionCall parts without a thought
     // signature; the OpenAI-compat wire cannot carry the real one, so the
     // translate layer attaches the documented skip value for injected calls.
     const out = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         { role: 'user', content: 'read the page' },
         {
@@ -104,13 +105,13 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for tool-free requests and keeps toolChoice-only configs unchanged', () => {
     const bare = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'x' }],
     });
     expect(bare.toolConfig).toBeUndefined();
 
     const choiceOnly = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
       toolChoice: 'required',

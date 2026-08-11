@@ -30,7 +30,7 @@ import { logger } from '@/lib/logger';
  * `@/lib/egress-policy`.
  */
 
-export type ManagedProviderId = 'openai' | 'anthropic';
+export type ManagedProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter';
 
 interface ProviderEndpointConvention {
   /**
@@ -94,7 +94,47 @@ const PROVIDER_ENDPOINTS: Record<ManagedProviderId, ProviderEndpointConvention> 
     envKey: 'ANTHROPIC_BASE_URL',
     versionSegment: 'v1',
   },
+  google: {
+    // GOOGLE_BASE_URL follows @ai-sdk/google's convention and carries the
+    // version segment itself (the installed SDK defaults to this exact root).
+    defaultRoot: 'https://generativelanguage.googleapis.com/v1beta',
+    envKey: 'GOOGLE_BASE_URL',
+    versionSegment: '',
+  },
+  openrouter: {
+    defaultRoot: 'https://openrouter.ai/api/v1',
+    envKey: 'OPENROUTER_BASE_URL',
+    versionSegment: '',
+  },
 };
+
+export type GoogleVideoOutputHostDisposition = 'api' | 'redirect' | null;
+
+/**
+ * Classify a Google Veo output host without duplicating the provider's API
+ * hostname at call sites. Initial download URLs may use only the canonical or
+ * validated configured Google API host. Redirects may additionally use
+ * Google-owned storage hosts; callers must not forward the API key to those
+ * redirect-only hosts because their signed URL is the authorization.
+ */
+export function googleVideoOutputHostDisposition(
+  hostname: string,
+  redirect = false,
+): GoogleVideoOutputHostDisposition {
+  const normalized = hostname.toLowerCase();
+  const defaultHostname = new URL(PROVIDER_ENDPOINTS.google.defaultRoot).hostname;
+  const configuredHostname = new URL(resolveProviderApiRoot('google')).hostname;
+  if (normalized === defaultHostname || normalized === configuredHostname) return 'api';
+  if (
+    redirect &&
+    (normalized === 'storage.googleapis.com' ||
+      normalized.endsWith('.googleapis.com') ||
+      normalized.endsWith('.googleusercontent.com'))
+  ) {
+    return 'redirect';
+  }
+  return null;
+}
 
 /**
  * Strip trailing slashes, then (when the provider's paths are versioned by

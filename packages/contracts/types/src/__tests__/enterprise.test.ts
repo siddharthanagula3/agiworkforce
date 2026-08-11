@@ -11,6 +11,8 @@ import {
   type ManagedUsageReservation,
 } from '../enterprise';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 describe('enterprise contracts', () => {
   it('keeps normal chat sync limited to web, desktop, and mobile by default', () => {
     expect(DEFAULT_ENTERPRISE_ADMIN_POLICY.chatSyncSurfaces).toEqual(['web', 'desktop', 'mobile']);
@@ -60,7 +62,7 @@ describe('enterprise contracts', () => {
       userId: 'user-1',
       privacyMode: 'managed',
       provider: 'openai',
-      model: 'gpt-5.6-sol',
+      model: FIXTURE_MODEL_ID,
       accountStatus: 'waitlisted',
       denialCode: 'public_launch_blocked',
       denialMessage: 'Managed compute is private beta only.',
@@ -79,7 +81,7 @@ describe('enterprise contracts', () => {
       accountId: 'account-1',
       userId: 'user-1',
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: FIXTURE_MODEL_ID,
       estimatedInputTokens: 1000,
       estimatedOutputTokens: 2000,
       reservedCents: 50,

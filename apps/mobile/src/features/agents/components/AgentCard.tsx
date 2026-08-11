@@ -6,6 +6,7 @@ import { AgentStatusBadge } from './AgentStatusBadge';
 import { useThemeColors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import type { Agent } from '@/stores/agentStore';
+import { getDisplayName } from '@/src/features/model-picker/service';
 
 interface AgentCardProps {
   agent: Agent;
@@ -68,7 +69,7 @@ export function AgentCard({ agent, index, onPress }: AgentCardProps) {
                 {agent.name}
               </Text>
               <Text variant="caption" className="text-white/40 text-[10px]" numberOfLines={1}>
-                {agent.model}
+                {getDisplayName(agent.model)}
               </Text>
             </View>
             {/* Status badge top-right */}

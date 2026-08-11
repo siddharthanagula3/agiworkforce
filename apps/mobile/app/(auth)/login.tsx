@@ -1,7 +1,8 @@
-import { Text, View } from 'react-native';
+import { useEffect, useLayoutEffect } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';
 import { AuthView } from '@clerk/expo/native';
 import { X } from 'lucide-react-native';
@@ -9,6 +10,18 @@ import { AgiMark } from '@/components/ui/AgiMark';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { CLERK_NATIVE_AUTH_OPTIONS } from '@/src/integrations/clerk';
 import { useThemeColors } from '@/src/ui/theme';
+import {
+  clearPostAuthIntent,
+  parsePostAuthIntent,
+  POST_AUTH_INTENT_PARAM,
+  stagePostAuthIntent,
+} from '@/src/features/auth/services/postAuthIntent';
+import {
+  completePendingPostAuthIntentForLoadedSession,
+  resetPostAuthDestinationToLocal,
+} from '@/src/features/auth/actions/postAuthIntent';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 
 /**
  * Cloud sign-in screen.
@@ -20,11 +33,61 @@ import { useThemeColors } from '@/src/ui/theme';
 export default function LoginScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isLoaded, isSignedIn } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
+  const { isLoaded, isSignedIn, userId } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
+  const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const subscriptionTier = useTierStore((state) => state.tier);
+  const params = useLocalSearchParams<{ postAuthIntent?: string | string[] }>();
+  const postAuthIntent = parsePostAuthIntent(params[POST_AUTH_INTENT_PARAM]);
+
+  // Layout timing is intentional: on a restored/already-loaded Clerk route,
+  // apply the validated intent before the root auth guard can redirect and
+  // unmount this screen. A signed-out route leaves it staged for ClerkTokenBridge.
+  useLayoutEffect(() => {
+    if (postAuthIntent) {
+      stagePostAuthIntent(postAuthIntent);
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded,
+        isSignedIn: isSignedIn === true,
+        userId,
+        cloudUnlocked,
+        subscriptionTier,
+      });
+      return;
+    }
+    clearPostAuthIntent();
+    resetPostAuthDestinationToLocal();
+  }, [cloudUnlocked, isLoaded, isSignedIn, postAuthIntent, subscriptionTier, userId]);
+
+  // Covers the native back gesture/system navigation in addition to the
+  // explicit close button. A consumed intent is already null, so successful
+  // handoff cleanup cannot undo the Cloud mode applied by either consumer.
+  useEffect(
+    () => () => {
+      if (clearPostAuthIntent()) resetPostAuthDestinationToLocal();
+    },
+    [],
+  );
+
+  const handleDismiss = () => {
+    clearPostAuthIntent();
+    resetPostAuthDestinationToLocal();
+    router.replace('/(app)');
+  };
 
   // Build gate: when cloud auth is disabled, Local Mode is the only path.
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
-  if (isLoaded && isSignedIn) return <Redirect href="/(app)" />;
+  if (isLoaded && isSignedIn) {
+    // The root Clerk bridge applies/consumes the intent before publishing its
+    // signed-in signal. That signal owns the redirect, keeping mode + model
+    // selection ahead of navigation rather than racing a <Redirect> render.
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator testID="cloud-sign-in-completing" color={colors.teal} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
@@ -83,7 +146,7 @@ export default function LoginScreen() {
             accessibilityLabel="Close Cloud sign in"
             accessibilityHint="Returns to Local Mode"
             hitSlop={8}
-            onPress={() => router.replace('/(app)')}
+            onPress={handleDismiss}
             style={({ pressed }) => ({
               width: 44,
               height: 44,

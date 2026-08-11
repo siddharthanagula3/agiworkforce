@@ -1,12 +1,16 @@
 /**
  * Tier-3 multimodal RAM gate wiring (W10 residual, wired 2026-07-16):
  * a device below the 3.5 GB floor must see an HONEST DISABLED state for the
- * Qwen3-VL-2B tier-3 path — locked with a reason, never a download button —
+ * catalog-owned tier-3 vision path — locked with a reason, never a download button —
  * and prepareModel must hard-refuse even if the UI raced hydration. Unknown
  * RAM fails closed, matching the package gate's default-deny posture.
  */
-import type { OnDeviceModel } from '@agiworkforce/types';
-import { getCapabilities, MULTIMODAL_MIN_RAM_MB } from '@agiworkforce/local-llm';
+import {
+  getCapabilities,
+  getDefaultModel,
+  getModelsForRole,
+  MULTIMODAL_MIN_RAM_MB,
+} from '@agiworkforce/local-llm';
 import {
   useModelInstallStore,
   MULTIMODAL_RAM_LOCK_REASON,
@@ -30,6 +34,14 @@ jest.mock('@agiworkforce/local-llm', () => ({
 }));
 
 const mockGetCapabilities = getCapabilities as jest.MockedFunction<typeof getCapabilities>;
+const VISION_CATALOG_MODEL = getModelsForRole('premium-vision-pack').find(
+  (model) => !model.shipsInV1 && model.format === 'gguf' && model.capabilities.visionIn,
+);
+const DEFAULT_CATALOG_MODEL = getDefaultModel();
+
+if (!VISION_CATALOG_MODEL) {
+  throw new Error('Local catalog has no hidden tier-3 vision model');
+}
 
 function capsWithRam(totalRAMMB: number) {
   return {
@@ -44,41 +56,38 @@ function capsWithRam(totalRAMMB: number) {
   };
 }
 
-/** ModelDef for the REAL tier-3 multimodal catalog row (qwen3-vl-2b). */
-function qwenVisionDef(): ModelDef {
+/** ModelDef derived from the catalog-owned tier-3 multimodal row. */
+function visionModelDef(): ModelDef {
   return {
-    id: 'qwen3-vl-2b-instruct',
-    name: 'AGI Vision Pack',
+    id: VISION_CATALOG_MODEL.id,
+    name: VISION_CATALOG_MODEL.displayName,
     provider: 'local',
     providerLabel: 'On device',
-    contextWindow: 262_144,
+    contextWindow: VISION_CATALOG_MODEL.contextWindow,
     maxOutput: 8192,
-    supportsVision: true,
+    supportsVision: VISION_CATALOG_MODEL.capabilities.visionIn,
     supportsThinking: false,
     tier: 'premium',
     surface: 'local',
     availability: 'download_required',
     runtimeLabel: 'llama.rn',
-    detailLabel: 'llama.rn - 1.0 GB - Vision',
-    fileSizeBytes: 1_107_409_952,
-    license: 'Apache-2.0',
+    detailLabel: 'llama.rn - Vision',
+    fileSizeBytes: VISION_CATALOG_MODEL.fileSizeBytes,
+    license: VISION_CATALOG_MODEL.license,
   };
 }
 
-/** ModelDef for a REAL text-only executorch catalog row (the default model). */
+/** ModelDef derived from the catalog-owned text-only default row. */
 function textDefaultDef(): ModelDef {
   return {
-    ...qwenVisionDef(),
-    id: 'qwen3-4b-instruct-2507',
-    name: 'AGI Standard',
-    supportsVision: false,
-    fileSizeBytes: 2_147_483_648,
-    executorchPreset: {
-      modelName: 'qwen3-4b-quantized',
-      modelSource: 'https://example.com/model.pte',
-      tokenizerSource: 'https://example.com/tokenizer.json',
-      tokenizerConfigSource: 'https://example.com/tokenizer_config.json',
-    },
+    ...visionModelDef(),
+    id: DEFAULT_CATALOG_MODEL.id,
+    name: DEFAULT_CATALOG_MODEL.displayName,
+    contextWindow: DEFAULT_CATALOG_MODEL.contextWindow,
+    supportsVision: DEFAULT_CATALOG_MODEL.capabilities.visionIn,
+    fileSizeBytes: DEFAULT_CATALOG_MODEL.fileSizeBytes,
+    license: DEFAULT_CATALOG_MODEL.license,
+    executorchPreset: DEFAULT_CATALOG_MODEL.executorchPreset,
   };
 }
 
@@ -101,7 +110,7 @@ describe('multimodal RAM gate (>=3.5GB) in the model picker install store', () =
     mockGetCapabilities.mockResolvedValue(capsWithRam(2048));
     await useModelInstallStore.getState().hydrateInstalledModels();
 
-    const status = useModelInstallStore.getState().statusForModel(qwenVisionDef());
+    const status = useModelInstallStore.getState().statusForModel(visionModelDef());
     expect(status.status).toBe('locked');
     expect(status.error).toBe(MULTIMODAL_RAM_LOCK_REASON);
   });
@@ -110,14 +119,14 @@ describe('multimodal RAM gate (>=3.5GB) in the model picker install store', () =
     mockGetCapabilities.mockResolvedValue(capsWithRam(MULTIMODAL_MIN_RAM_MB));
     await useModelInstallStore.getState().hydrateInstalledModels();
 
-    const status = useModelInstallStore.getState().statusForModel(qwenVisionDef());
+    const status = useModelInstallStore.getState().statusForModel(visionModelDef());
     expect(status.status).toBe('download_required');
     expect(status.error).toBeUndefined();
   });
 
   it('fails closed while RAM is unknown (no capability answer yet)', () => {
     // No hydrate — totalRAMMB is still null.
-    const status = useModelInstallStore.getState().statusForModel(qwenVisionDef());
+    const status = useModelInstallStore.getState().statusForModel(visionModelDef());
     expect(status.status).toBe('locked');
     expect(status.error).toBe(MULTIMODAL_RAM_LOCK_REASON);
   });
@@ -133,12 +142,12 @@ describe('multimodal RAM gate (>=3.5GB) in the model picker install store', () =
   it('prepareModel hard-refuses a below-floor multimodal install (no download starts)', async () => {
     mockGetCapabilities.mockResolvedValue(capsWithRam(2048));
 
-    await expect(useModelInstallStore.getState().prepareModel(qwenVisionDef())).rejects.toThrow(
+    await expect(useModelInstallStore.getState().prepareModel(visionModelDef())).rejects.toThrow(
       MULTIMODAL_RAM_LOCK_REASON,
     );
     expect(downloadModel).not.toHaveBeenCalled();
 
-    const job = useModelInstallStore.getState().jobs['qwen3-vl-2b-instruct'];
+    const job = useModelInstallStore.getState().jobs[VISION_CATALOG_MODEL.id];
     expect(job?.status).toBe('locked');
     expect(job?.error).toBe(MULTIMODAL_RAM_LOCK_REASON);
   });
@@ -146,9 +155,9 @@ describe('multimodal RAM gate (>=3.5GB) in the model picker install store', () =
   it('prepareModel allows the multimodal install at the floor (authoritative re-check)', async () => {
     mockGetCapabilities.mockResolvedValue(capsWithRam(8192));
 
-    await useModelInstallStore.getState().prepareModel(qwenVisionDef());
+    await useModelInstallStore.getState().prepareModel(visionModelDef());
 
     expect(downloadModel).toHaveBeenCalledTimes(1);
-    expect(useModelInstallStore.getState().jobs['qwen3-vl-2b-instruct']?.status).toBe('ready');
+    expect(useModelInstallStore.getState().jobs[VISION_CATALOG_MODEL.id]?.status).toBe('ready');
   });
 });

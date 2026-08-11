@@ -76,7 +76,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: 'fixture-model',
       feature: 'chat',
     });
     expect(res).toBeNull();
@@ -89,7 +89,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'openai',
-      model: 'gpt-5.6-sol',
+      model: 'fixture-model',
     });
     expect(res).not.toBeNull();
     expect(res!.status).toBe(403);
@@ -104,7 +104,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: 'fixture-model',
     });
     // null === gate passed; the route may proceed.
     expect(res).toBeNull();
@@ -122,7 +122,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: 'fixture-model',
       isFreeTrial: true,
     });
     expect(res).not.toBeNull();

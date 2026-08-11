@@ -288,7 +288,8 @@ describe('acceptInvitation', () => {
   it('looks the invitation up by token hash alone and never by a client-supplied org', async () => {
     h.query
       .mockResolvedValueOnce([invitationRow()]) // token lookup
-      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([]) // user advisory lock
+      .mockResolvedValueOnce([]) // organization advisory lock
       .mockResolvedValueOnce([]) // existing membership probe
       .mockResolvedValueOnce([
         invitationRow({ status: 'accepted', accepted_by_user_id: 'new-user' }),
@@ -314,6 +315,7 @@ describe('acceptInvitation', () => {
       .mockResolvedValueOnce([invitationRow()])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         invitationRow({ status: 'accepted', accepted_by_user_id: 'new-user' }),
       ]);
@@ -329,7 +331,7 @@ describe('acceptInvitation', () => {
     // seats_consumed + 1 and abort on a fully-licensed organization.
     const acceptSql = sqlCalls(h.query).findIndex((sql) => sql.includes("set status = 'accepted'"));
     expect(acceptSql).toBeGreaterThan(-1);
-    expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.execute).toHaveBeenCalledTimes(2);
     expect(String(h.execute.mock.calls[0]?.[0]).toLowerCase()).toContain(
       'insert into public.organization_members',
     );
@@ -342,6 +344,7 @@ describe('acceptInvitation', () => {
   it('binds the membership to the AUTHENTICATED user, not to the invited string', async () => {
     h.query
       .mockResolvedValueOnce([invitationRow({ role: 'admin' })])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
@@ -407,31 +410,78 @@ describe('acceptInvitation', () => {
     h.query
       .mockResolvedValueOnce([invitationRow()])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ user_id: 'new-user' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ organization_id: ORG_A, user_id: 'new-user', role: 'viewer' }])
       .mockResolvedValueOnce([
         invitationRow({ status: 'accepted', accepted_by_user_id: 'new-user' }),
       ]);
 
-    await acceptInvitation(h.db, {
+    const result = await acceptInvitation(h.db, {
       token: 'raw-token-value-that-is-long-enough',
       userId: 'new-user',
       userEmail: 'invitee@example.com',
     });
 
     // Otherwise the accept would consume a second seat for one person.
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(
+      h.execute.mock.calls.some(([sql]) =>
+        String(sql).toLowerCase().includes('insert into public.organization_members'),
+      ),
+    ).toBe(false);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.user_settings'),
+      ['new-user', ORG_A],
+    );
+    expect(result.role).toBe('viewer');
+    expect(result.invitation.role).toBe('member');
+  });
+
+  it('accepts another workspace membership and makes the invited workspace active', async () => {
+    h.query
+      .mockResolvedValueOnce([invitationRow()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        invitationRow({ status: 'accepted', accepted_by_user_id: 'new-user' }),
+      ]);
+
+    await expect(
+      acceptInvitation(h.db, {
+        token: 'raw-token-value-that-is-long-enough',
+        userId: 'new-user',
+        userEmail: 'invitee@example.com',
+      }),
+    ).resolves.toMatchObject({
+      role: 'member',
+    });
+
+    expect(sqlCalls(h.query).some((sql) => sql.includes("set status = 'accepted'"))).toBe(true);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.organization_members'),
+      [ORG_A, 'new-user', 'member'],
+    );
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.user_settings'),
+      ['new-user', ORG_A],
+    );
   });
 });
 
 describe('declineInvitation', () => {
   it('flips the invitation to declined by token hash and frees the seat', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([invitationRow({ status: 'declined' })]);
+    h.query
+      .mockResolvedValueOnce([invitationRow()])
+      .mockResolvedValueOnce([invitationRow({ status: 'declined' })]);
 
-    const declined = await declineInvitation(h.db, 'raw-token-value-that-is-long-enough');
+    const declined = await declineInvitation(h.db, {
+      token: 'raw-token-value-that-is-long-enough',
+      userEmail: 'invitee@example.com',
+    });
 
     expect(declined.status).toBe('declined');
-    const sql = sqlCalls(h.query)[0]!;
+    const sql = sqlCalls(h.query)[1]!;
     expect(sql).toContain("set status = 'declined'");
     expect(sql).toContain("status = 'pending'");
     expect(h.query.mock.calls[0]?.[1]).toEqual([
@@ -443,8 +493,24 @@ describe('declineInvitation', () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
     await expect(
-      declineInvitation(h.db, 'raw-token-value-that-is-long-enough'),
+      declineInvitation(h.db, {
+        token: 'raw-token-value-that-is-long-enough',
+        userEmail: 'invitee@example.com',
+      }),
     ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('does not let a different signed-in address decline a leaked invitation', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([invitationRow()]);
+
+    await expect(
+      declineInvitation(h.db, {
+        token: 'raw-token-value-that-is-long-enough',
+        userEmail: 'someone-else@example.com',
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(sqlCalls(h.query).some((sql) => sql.includes("set status = 'declined'"))).toBe(false);
   });
 });
 

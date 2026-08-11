@@ -84,11 +84,11 @@ describe('advanceAgiWorkPlan', () => {
 describe('agiWorkPlanEvent (additive x_agiwork_plan wire)', () => {
   it('emits the whole plan as an SSE frame with snake_case status', () => {
     const steps = advanceAgiWorkPlan(buildAgiWorkPlan(['do a thing']), 'start');
-    const frame = agiWorkPlanEvent(steps, 'gpt-5.6-sol');
+    const frame = agiWorkPlanEvent(steps, 'fixture-model');
     expect(frame.startsWith('data: ')).toBe(true);
     expect(frame.endsWith('\n\n')).toBe(true);
     const payload = JSON.parse(frame.slice('data: '.length));
-    expect(payload.model).toBe('gpt-5.6-sol');
+    expect(payload.model).toBe('fixture-model');
     expect(payload.choices[0].delta.x_agiwork_plan.steps).toEqual([
       { id: 'agiwork-plan-1', description: 'do a thing', status: 'in_progress' },
     ]);

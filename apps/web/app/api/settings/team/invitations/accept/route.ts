@@ -66,20 +66,25 @@ async function handleAccept(request: NextRequest) {
 
   const db = getNeonDb();
 
+  // Both accepting and declining are bound to the authenticated address. A
+  // leaked token must not let an unrelated signed-in user consume or release
+  // another person's invitation seat.
+  const [profile] = await db.query<Pick<ProfileRow, 'id' | 'email'>>(
+    `select id, email from public.profiles where id = $1 limit 1`,
+    [userId],
+  );
+
   if (action === 'decline') {
-    const invitation = await declineInvitation(db, token);
+    const invitation = await declineInvitation(db, {
+      token,
+      userEmail: profile?.email ?? null,
+    });
     logger.info(
       { userId, organizationId: invitation.organization_id, invitationId: invitation.id },
       'Organization invitation declined',
     );
     return NextResponse.json({ invitation: formatInvitation(invitation) });
   }
-
-  // Email identity is resolved from the database, never from a client claim.
-  const [profile] = await db.query<Pick<ProfileRow, 'id' | 'email'>>(
-    `select id, email from public.profiles where id = $1 limit 1`,
-    [userId],
-  );
 
   const { invitation, role } = await acceptInvitation(db, {
     token,

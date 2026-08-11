@@ -1,6 +1,6 @@
 //! # Agent Swarm System
 //!
-//! A high-performance, massively parallel agent orchestration system inspired by Kimi K2.5.
+//! A high-performance, massively parallel agent orchestration system.
 //!
 //! ## Architecture
 //!
@@ -18,7 +18,7 @@
 //!
 //! ## Critical Path Optimization
 //!
-//! Following Kimi K2.5's critical path metric:
+//! The critical-path metric is:
 //! ```text
 //! CriticalSteps = overhead + max(concurrent_duration)
 //! ```
@@ -254,7 +254,7 @@ pub mod constants {
     /// Maximum number of retries for failed subtasks.
     pub const MAX_SUBTASK_RETRIES: u32 = 2;
 
-    /// Target speedup ratio (Kimi K2.5 achieves ~4.5x).
+    /// Target speedup ratio for parallel execution.
     pub const TARGET_SPEEDUP_RATIO: f64 = 4.5;
 
     /// Minimum subtasks for parallel execution to be worthwhile.

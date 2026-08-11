@@ -20,6 +20,7 @@ import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade
 import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
+  assertSameCheckoutBillingInterval,
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
@@ -162,6 +163,15 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
   if (!stripeItem) throw createError.internal('Subscription has no items');
 
+  try {
+    assertSameCheckoutBillingInterval(stripeItem.price.recurring, billingInterval);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Billing cadence could not be verified';
+    if (message.startsWith('Mid-cycle upgrades')) throw createError.validation(message);
+    throw createError.internal(message);
+  }
+
   const planChange = classifyPlanChange({
     currentTier,
     targetPlan,
@@ -211,9 +221,8 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
       stripeSubId,
       {
         items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
-        // A replacement cycle charges the full target plan now and lets Stripe
-        // credit only the unused TIME on the old plan.
-        billing_cycle_anchor: 'now',
+        // Keep the current renewal date. Stripe invoices only the prorated
+        // price/seat difference for the remaining time in this period.
         proration_behavior: 'always_invoice',
         // Must match the signed invoice preview exactly. Stripe documents
         // using the same proration_date on preview and update to prevent a

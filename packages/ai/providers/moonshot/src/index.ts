@@ -53,7 +53,7 @@ import { withMoonshotCacheUsageNormalization } from './cache-usage';
  * pointed at the wrong platform.
  *
  * The default was `.cn`, so an international key — the kind `founder_work.md`
- * documents, and the kind that lists `kimi-k3` — failed out of the box with no
+ * documents, and the kind that lists the current curated model — failed out of the box with no
  * hint that the endpoint was the problem. `.cn` remains reachable through
  * `MOONSHOT_BASE_URL`; both hosts are allowlisted below and both are
  * registered in `MOONSHOT_NATIVE_BASE_URLS`, so the streaming-usage compat is

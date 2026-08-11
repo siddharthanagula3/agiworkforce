@@ -44,6 +44,17 @@ use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, ToolChoice, ToolDefin
 /// Matches the inline loop's `let max_tool_iterations = 25;`.
 const MAX_TOOL_ITERATIONS: usize = 25;
 
+#[derive(Debug, Default, Clone, Copy)]
+struct RequestCostAccumulator {
+    total: f64,
+}
+
+impl RequestCostAccumulator {
+    fn record(&mut self, outcome: &RouteOutcome) {
+        self.total += outcome.cost;
+    }
+}
+
 /// Everything `run_nonstreaming_chat` needs to finish the turn after the engine
 /// returns: the final assistant text plus the accounting the persistence + IPC
 /// tail reads (which the inline loop tracked in locals).
@@ -52,6 +63,11 @@ pub(super) struct LocalChatTurnResult {
     /// The last successful completion — carries provider/model/cost/tokens/
     /// credits for `save_or_skip_assistant_message` and the final `stream-end`.
     pub last_outcome: RouteOutcome,
+    /// Sum of the router-authoritative cost for every successful provider
+    /// completion in this turn. Request pricing is nonlinear, so this must be
+    /// accumulated per completion rather than reconstructed from aggregate
+    /// tokens after the tool loop.
+    pub total_cost: f64,
     /// Sum of every continuation completion's token count (matches the inline
     /// loop's `total_tool_tokens`, including its historical double-count of the
     /// final continuation).
@@ -103,6 +119,7 @@ pub(super) async fn run_local_chat_tool_loop(
         next_prefix_index: 1,
         pending_calls: Vec::new(),
         last_outcome: first_outcome,
+        request_cost: RequestCostAccumulator::default(),
         total_tool_tokens: 0,
         final_content,
         final_reasoning_content: None,
@@ -134,6 +151,7 @@ pub(super) async fn run_local_chat_tool_loop(
     LocalChatTurnResult {
         final_content: response,
         last_outcome: host.last_outcome,
+        total_cost: host.request_cost.total,
         total_tool_tokens: host.total_tool_tokens,
         final_reasoning_content: host.final_reasoning_content,
         final_reasoning_tokens: host.final_reasoning_tokens,
@@ -167,6 +185,7 @@ struct LocalChatTurnHost {
     /// execution, so bytes are never round-tripped through `serde_json::Value`.
     pending_calls: Vec<StreamingToolCall>,
     last_outcome: RouteOutcome,
+    request_cost: RequestCostAccumulator,
     total_tool_tokens: u32,
     final_content: String,
     final_reasoning_content: Option<String>,
@@ -199,6 +218,7 @@ impl LocalChatTurnHost {
             .reasoning_tokens
             .or(outcome.response.thinking_tokens);
         self.final_content = outcome.response.content.clone();
+        self.request_cost.record(outcome);
         self.last_outcome = outcome.clone();
 
         let _ = phase;
@@ -681,6 +701,49 @@ mod tests {
             completion_tokens: tokens / 2,
             cost: 0.0,
         }
+    }
+
+    #[test]
+    fn per_completion_costs_are_summed_without_repricing_aggregate_tokens() {
+        let calculator = crate::core::llm::cost_calculator::CostCalculator::new();
+        let (provider, model, threshold) = crate::core::llm::models_config::config()
+            .models
+            .values()
+            .find_map(|entry| {
+                let tier = entry.input_token_pricing_tiers.first()?;
+                let provider = crate::core::llm::models_config::get_provider_for_model(&entry.id)?;
+                Some((provider, entry.id.clone(), tier.threshold_tokens))
+            })
+            .expect("embedded catalog must include a tiered text model");
+        let prompt_tokens = u32::try_from(threshold).expect("catalog threshold must fit u32");
+        let per_request = calculator.calculate(
+            provider,
+            &model,
+            prompt_tokens,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        let aggregate_reprice = calculator.calculate(
+            provider,
+            &model,
+            prompt_tokens.saturating_mul(2),
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+
+        let mut accumulated = super::RequestCostAccumulator::default();
+        for _ in 0..2 {
+            let mut outcome = route_outcome("fixture", None, prompt_tokens);
+            outcome.cost = per_request;
+            outcome.response.cost = Some(per_request);
+            accumulated.record(&outcome);
+        }
+
+        assert!((accumulated.total - per_request * 2.0).abs() < f64::EPSILON);
+        assert_ne!(
+            accumulated.total, aggregate_reprice,
+            "two sub-threshold requests must not be repriced as one aggregate request"
+        );
     }
 
     /// A desktop-side scripted `TurnHost` that mirrors the local-chat mapping

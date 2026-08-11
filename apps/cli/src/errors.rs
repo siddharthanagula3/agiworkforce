@@ -247,11 +247,11 @@ impl CliError {
             } => match retry_after {
                 Some(secs) => format!(
                     "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
-                     `--model claude-sonnet-5,gpt-5.6-sol`."
+                     `--model <primary>,<fallback>`."
                 ),
                 None => format!(
                     "{provider} is rate-limiting. Switch to a fallback model with \
-                     `--model claude-sonnet-5,gpt-5.6-sol`."
+                     `--model <primary>,<fallback>`."
                 ),
             },
             CliError::StreamError { is_retryable, .. } => if *is_retryable {
@@ -519,10 +519,10 @@ mod tests {
 
     #[test]
     fn display_context_overflow() {
-        let err = CliError::context_overflow("gpt-5.6-sol", 200_000, 128_000);
+        let err = CliError::context_overflow("fixture-overflow-model", 200_000, 128_000);
         assert_eq!(
             err.to_string(),
-            "Context overflow for model 'gpt-5.6-sol': 200000 tokens exceeds limit of 128000"
+            "Context overflow for model 'fixture-overflow-model': 200000 tokens exceeds limit of 128000"
         );
     }
 
@@ -641,7 +641,7 @@ mod tests {
 
     #[test]
     fn not_retryable_context_overflow() {
-        let err = CliError::context_overflow("gpt-5.6-sol", 200_000, 128_000);
+        let err = CliError::context_overflow("fixture-overflow-model", 200_000, 128_000);
         assert!(!err.is_retryable());
     }
 
@@ -763,7 +763,7 @@ mod tests {
 
     #[test]
     fn context_overflow_variant_detected() {
-        let err = CliError::context_overflow("gpt-5.6-sol", 200_000, 128_000);
+        let err = CliError::context_overflow("fixture-overflow-model", 200_000, 128_000);
         assert!(err.is_context_overflow());
     }
 
@@ -816,7 +816,7 @@ mod tests {
     #[test]
     fn overflow_openai_context_window() {
         assert!(detect_context_overflow(
-            "This request exceeds the context window for gpt-4"
+            "This request exceeds the context window for fixture-context-model"
         ));
     }
 

@@ -555,8 +555,8 @@ struct OllamaChatMessage {
 /// Production SummaryLLM implementation that generates real embeddings via HTTP.
 ///
 /// Uses a 3-tier fallback strategy:
-/// 1. Ollama local embeddings (nomic-embed-text, no API key needed)
-/// 2. OpenAI embeddings (text-embedding-3-small, requires API key)
+/// 1. A provider-discovered Ollama embedding model (no API key needed)
+/// 2. A catalog-addressable OpenAI embedding model (requires API key)
 /// 3. Returns None (honest "no embedding available")
 ///
 /// NEVER returns zero vectors — that corrupts similarity search.
@@ -584,9 +584,15 @@ impl HttpSummaryLLM {
     /// Tier 1: Generate embedding via Ollama (local, no API key needed)
     async fn generate_ollama_embedding(&self, text: &str) -> std::result::Result<Vec<f32>, String> {
         let url = format!("{}/api/embed", self.ollama_url);
+        let model = crate::core::llm::capability_detection::find_installed_model_with_capability(
+            &self.http_client,
+            &self.ollama_url,
+            "embedding",
+        )
+        .await?;
 
         let body = serde_json::json!({
-            "model": "nomic-embed-text",
+            "model": model,
             "input": text
         });
 
@@ -623,11 +629,17 @@ impl HttpSummaryLLM {
         &self,
         full_prompt: &str,
     ) -> std::result::Result<String, String> {
+        let model = crate::core::llm::capability_detection::find_installed_model_with_capability(
+            &self.http_client,
+            &self.ollama_url,
+            "completion",
+        )
+        .await?;
         let response = self
             .http_client
             .post(format!("{}/api/chat", self.ollama_url))
             .json(&serde_json::json!({
-                "model": "llama3.2",
+                "model": model,
                 "messages": [{"role": "user", "content": full_prompt}],
                 "stream": false,
                 "format": "json"
@@ -722,9 +734,21 @@ impl HttpSummaryLLM {
             .openai_api_key
             .as_ref()
             .ok_or_else(|| "No OpenAI API key available".to_string())?;
+        let model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| {
+                entry.provider == "openai"
+                    && entry.model_type == "embedding"
+                    && entry.deprecated != Some(true)
+            })
+            .min_by(|left, right| left.id.cmp(&right.id))
+            .map(|entry| entry.api_model_id.as_deref().unwrap_or(&entry.id))
+            .ok_or_else(|| {
+                "The model catalog does not expose an active OpenAI embedding model".to_string()
+            })?;
 
         let body = serde_json::json!({
-            "model": "text-embedding-3-small",
+            "model": model,
             "input": text
         });
 
@@ -796,8 +820,8 @@ impl SummaryLLM for HttpSummaryLLM {
     }
 
     /// Generate embeddings with 3-tier fallback, stored at native dimensions.
-    /// 1. Ollama local (nomic-embed-text, 768-dim)
-    /// 2. OpenAI cloud (text-embedding-3-small, 1536-dim)
+    /// 1. Provider-discovered Ollama local embedding model
+    /// 2. Catalog-addressable OpenAI cloud embedding model
     /// 3. None (no embedding available — honest, no zero vectors)
     ///
     /// Embeddings are stored at their native dimension. The vector_search
@@ -1041,7 +1065,7 @@ mod tests {
         assert_eq!(
             vec.len(),
             768,
-            "Ollama nomic-embed-text produces 768-dim vectors"
+            "the mocked Ollama embedding path preserves its 768 dimensions"
         );
         assert!(
             vec.iter().any(|&v| v != 0.0),
@@ -1069,7 +1093,7 @@ mod tests {
         assert_eq!(
             vec.len(),
             1536,
-            "OpenAI text-embedding-3-small produces 1536-dim vectors"
+            "the cloud embedding fixture produces 1536-dimensional vectors"
         );
         assert!(
             vec.iter().any(|&v| v != 0.0),
@@ -1117,7 +1141,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ollama_embedding_stored_at_native_768_dim() {
-        // Ollama nomic-embed-text returns 768-dim; must be stored as-is, not padded
+        // The mocked Ollama path returns 768 dimensions; store it as-is.
         let store = Arc::new(MemoryStore::in_memory().unwrap());
         let llm = Arc::new(MockOllamaSucceeds);
         let summarizer = ConversationSummarizer::new(store, llm);
@@ -1139,7 +1163,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_openai_embedding_stored_at_native_1536_dim() {
-        // OpenAI text-embedding-3-small returns 1536-dim; must be stored as-is
+        // The mocked cloud path returns 1536 dimensions; store it as-is.
         let store = Arc::new(MemoryStore::in_memory().unwrap());
         let llm = Arc::new(MockOllamaFailsOpenAISucceeds);
         let summarizer = ConversationSummarizer::new(store, llm);

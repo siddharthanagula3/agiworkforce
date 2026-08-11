@@ -8,7 +8,12 @@ import {
   useEffect,
   type MutableRefObject,
 } from 'react';
-import { INTERACTIVE_CARD_DELTA_KEY, type InteractiveCard } from '@agiworkforce/types';
+import {
+  INTERACTIVE_CARD_DELTA_KEY,
+  INTERACTIVE_CARD_REQUEST_KEY,
+  INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+  type InteractiveCard,
+} from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useAuth } from '@clerk/nextjs';
 import { toast } from 'sonner';
@@ -77,6 +82,9 @@ import {
 
 interface SendMessageOptions {
   model?: string;
+  /** Stable client ids used by navigation handoffs and server idempotency. */
+  userMessageId?: string;
+  assistantMessageId?: string;
   temperature?: number;
   maxTokens?: number;
   attachments?: Attachment[];
@@ -128,6 +136,13 @@ interface SendMessageOptions {
    * never part of the send's success path.
    */
   onTurnCommitted?: () => void;
+}
+
+const CLIENT_MESSAGE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveClientMessageId(value: string | undefined): string {
+  return value && CLIENT_MESSAGE_ID_PATTERN.test(value) ? value : crypto.randomUUID();
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -341,10 +356,7 @@ async function saveMessageToDb(
       conversationId,
       {
         id:
-          message.id &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-            message.id,
-          )
+          message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id)
             ? message.id
             : crypto.randomUUID(),
         role: message.role as 'user' | 'assistant' | 'system',
@@ -715,7 +727,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
    * continuation does not drop the card the user just answered.
    */
   const interactiveCards = new Map<string, InteractiveCard>(
-    (seedMetadata?.interactiveCards ?? []).map((card) => [card.cardId, card]),
+    (seedMetadata?.interactiveCards ?? [])
+      .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
+      .map((card) => [card.cardId, card]),
   );
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
@@ -733,6 +747,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const completeLocalStartingActivity = () => {
     if (!currentAgentActivity || currentAgentActivity.lastSequence !== -1) return;
+    currentAgentActivity = {
+      ...currentAgentActivity,
+      entries: currentAgentActivity.entries.map((entry) =>
+        entry.kind === 'progress' && entry.progressId === 'local-starting'
+          ? { ...entry, summary: 'Response ready' }
+          : entry,
+      ),
+    };
     currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
       status: 'completed',
       completedAtMs: Date.now(),
@@ -974,6 +996,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (currentAgiWorkPlan) {
       metadata.agiWorkPlan = currentAgiWorkPlan.map((step) => ({ ...step }));
     }
+    if (interactiveCards.size > 0) {
+      metadata.interactiveCards = [...interactiveCards.values()];
+    }
     if (finishReason) {
       metadata.finishReason = finishReason;
     }
@@ -1035,6 +1060,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.searchResults ||
         metadata.codeExecutionResult ||
         metadata.research ||
+        (metadata.interactiveCards?.length ?? 0) > 0 ||
         metadata.cloudAgentRun ||
         metadata.cloudApproval ||
         metadata.thinkingContent ||
@@ -1534,7 +1560,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           const cardDelta = parsed.choices?.[0]?.delta?.[INTERACTIVE_CARD_DELTA_KEY];
           if (cardDelta) {
             const card = parseInteractiveCardDelta(cardDelta);
-            if (card) {
+            if (
+              card &&
+              (interactiveCards.has(card.cardId) ||
+                interactiveCards.size < INTERACTIVE_CARDS_MAX_PER_MESSAGE)
+            ) {
               interactiveCards.set(card.cardId, card);
               patchMessageMeta({ interactiveCards: [...interactiveCards.values()] });
             }
@@ -1885,6 +1915,7 @@ export function useChatStream(): UseChatStreamReturn {
   );
 
   const addMessage = useChatStore((state) => state.addMessage);
+  const deleteMessage = useChatStore((state) => state.deleteMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
@@ -1926,10 +1957,6 @@ export function useChatStream(): UseChatStreamReturn {
         return false;
       }
 
-      // AUDIT-FIX STR-2/BUG-16: abort ONLY this conversation's own previous
-      // turn. A send in another chat must never cancel this one.
-      const abortController = beginConversationRequest(conversationId);
-
       const model = options.model || selectedModel;
       const sendReplay = createSendReplayMetadata({
         webSearchEnabled: options.webSearch,
@@ -1968,7 +1995,7 @@ export function useChatStream(): UseChatStreamReturn {
         return false;
       }
 
-      const userMessageId = crypto.randomUUID();
+      const userMessageId = resolveClientMessageId(options.userMessageId);
       const userMessage: Message = {
         id: userMessageId,
         role: 'user',
@@ -1999,28 +2026,41 @@ export function useChatStream(): UseChatStreamReturn {
         }
       };
       if (!isTemporaryConversation) {
-        saveMessageToDb(
-          conversationId,
-          {
-            id: userMessageId,
-            role: 'user',
-            content: content.trim(),
-            metadata: userMetadata,
-          },
-          getAuthToken,
-        )
-          .then((saved) => {
-            if (saved?.id && saved.id !== userMessageId) {
-              updateMessage(userMessageId, { id: saved.id }, conversationId);
-            }
-            reportTurnCommitted();
-          })
-          .catch((err) => notifyPersistenceFailure('user', err));
+        try {
+          // The user row is the paid-turn admission fence. Await it before
+          // creating the assistant placeholder or starting provider egress;
+          // otherwise a slow/failed save can race a successful provider call
+          // and a retry buys the same turn twice with no durable prompt.
+          const saved = await saveMessageToDb(
+            conversationId,
+            {
+              id: userMessageId,
+              role: 'user',
+              content: content.trim(),
+              metadata: userMetadata,
+            },
+            getAuthToken,
+          );
+          if (saved.id !== userMessageId) {
+            updateMessage(userMessageId, { id: saved.id }, conversationId);
+          }
+          reportTurnCommitted();
+        } catch (error) {
+          notifyPersistenceFailure('user', error);
+          deleteMessage(userMessageId, conversationId);
+          setError('Your message was not saved, so no model was called.', conversationId);
+          return false;
+        }
       } else {
         reportTurnCommitted();
       }
 
-      const assistantMessageId = crypto.randomUUID();
+      // AUDIT-FIX STR-2/BUG-16: abort ONLY this conversation's own previous
+      // turn. Install the controller after the durable admission fence so a
+      // pre-egress persistence failure cannot leave a phantom active request.
+      const abortController = beginConversationRequest(conversationId);
+
+      const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
       const assistantStartedAtMs = Date.now();
       const assistantMessage: Message = {
         id: assistantMessageId,
@@ -2029,18 +2069,14 @@ export function useChatStream(): UseChatStreamReturn {
         createdAt: new Date(assistantStartedAtMs).toISOString(),
         model,
         isStreaming: true,
-        ...(options.workMode === 'agiwork'
-          ? {
-              metadata: {
-                agentActivity: startAgentActivityLocally({
-                  sessionId: conversationId,
-                  turnId: assistantMessageId,
-                  summary: 'Starting AGI Work',
-                  startedAtMs: assistantStartedAtMs,
-                }),
-              },
-            }
-          : {}),
+        metadata: {
+          agentActivity: startAgentActivityLocally({
+            sessionId: conversationId,
+            turnId: assistantMessageId,
+            summary: options.workMode === 'agiwork' ? 'Starting AGI Work' : 'Generating response',
+            startedAtMs: assistantStartedAtMs,
+          }),
+        },
       };
       addMessage(assistantMessage, conversationId);
       startStreaming(assistantMessageId, conversationId);
@@ -2120,6 +2156,10 @@ export function useChatStream(): UseChatStreamReturn {
             // the tab-close case it exists for.
             assistant_message_id: assistantMessageId,
             stream: true,
+            [INTERACTIVE_CARD_REQUEST_KEY]: {
+              supported: ['map-search.v1'],
+              canRespond: false,
+            },
             temperature: options.temperature,
             max_tokens: options.maxTokens,
             web_search: options.webSearch || options.research || undefined,
@@ -2203,7 +2243,7 @@ export function useChatStream(): UseChatStreamReturn {
           );
         }
       } catch (error) {
-        handleStreamError(error, {
+        await handleStreamError(error, {
           assistantMessageId,
           model,
           conversationId,
@@ -2228,6 +2268,7 @@ export function useChatStream(): UseChatStreamReturn {
     [
       selectedModel,
       addMessage,
+      deleteMessage,
       updateMessage,
       startStreaming,
       stopStreaming,
@@ -2771,7 +2812,7 @@ export function useResolveToolApproval(
           return;
         }
         pendingTurns.delete(assistantMessageId);
-        handleStreamError(error, {
+        await handleStreamError(error, {
           assistantMessageId,
           model: turn.model,
           conversationId: turn.conversationId,
@@ -2809,7 +2850,7 @@ interface StreamErrorContext {
   updateMessage: (id: string, updates: Partial<Message>, conversationId?: string) => void;
 }
 
-function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
+async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promise<void> {
   const {
     assistantMessageId,
     model,
@@ -2832,24 +2873,36 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
   const currentMessage = findConversationMessage(conversationId, assistantMessageId);
   const currentActivity = currentMessage?.metadata?.agentActivity;
   if (isAbort) {
+    const cancelledMetadata: MessageMetadata | undefined = currentActivity
+      ? {
+          ...currentMessage?.metadata,
+          agentActivity: finishAgentActivityLocally(currentActivity, {
+            status: 'cancelled',
+            completedAtMs: Date.now(),
+          }),
+        }
+      : currentMessage?.metadata;
     updateMessage(
       assistantMessageId,
       {
         isStreaming: false,
-        ...(currentActivity
-          ? {
-              metadata: {
-                ...currentMessage?.metadata,
-                agentActivity: finishAgentActivityLocally(currentActivity, {
-                  status: 'cancelled',
-                  completedAtMs: Date.now(),
-                }),
-              },
-            }
-          : {}),
+        ...(cancelledMetadata ? { metadata: cancelledMetadata } : {}),
       },
       conversationId,
     );
+    if (!isTemporaryConversation && currentMessage && cancelledMetadata) {
+      await saveMessageToDb(
+        conversationId,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: currentMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          model: currentMessage.model ?? model,
+          metadata: cancelledMetadata,
+        },
+        getAuthToken,
+      ).catch((err) => notifyPersistenceFailure('assistant', err));
+    }
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;

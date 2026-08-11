@@ -16,7 +16,7 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import { listCanonicalModels, type ChatRequest, type StreamChunk } from '@agiworkforce/types';
 
 type AdapterMode =
   | 'success'
@@ -216,16 +216,37 @@ function eventModels(events: unknown[]): string[] {
   ];
 }
 
-// Catalog anchors (see llm.test.ts tier-ladder pins): claude-opus-5 and
-// gpt-5.6-sol are flagship (Max/Enterprise only); claude-sonnet-5 and
-// gemini-3.6-flash are pro_additions on distinct providers.
-const PRIMARY_FLAGSHIP = 'claude-opus-5'; // anthropic
-const FALLBACK_FLAGSHIP = 'gpt-5.6-sol'; // openai
-const PRIMARY_PRO = 'claude-sonnet-5'; // anthropic
-const FALLBACK_PRO = 'gemini-3.6-flash'; // google
-// A second flagship on the PRIMARY's provider: the route a rejected
-// credential must skip rather than replay.
-const SAME_PROVIDER_FLAGSHIP = 'claude-fable-5'; // anthropic
+const CATALOG_MODELS = listCanonicalModels();
+function requireCatalogModel(
+  predicate: (model: (typeof CATALOG_MODELS)[number]) => boolean,
+  description: string,
+) {
+  const model = CATALOG_MODELS.find(predicate);
+  if (!model) throw new Error(`Canonical ${description} fixture is missing`);
+  return model.id;
+}
+
+const ANTHROPIC_FLAGSHIPS = CATALOG_MODELS.filter(
+  (model) => model.provider === 'anthropic' && model.tierPolicy?.minTier === 'max',
+);
+if (ANTHROPIC_FLAGSHIPS.length < 2) {
+  throw new Error('Canonical same-provider flagship fixtures are missing');
+}
+const PRIMARY_FLAGSHIP = ANTHROPIC_FLAGSHIPS[0]!.id;
+const SAME_PROVIDER_FLAGSHIP = ANTHROPIC_FLAGSHIPS[1]!.id;
+const FALLBACK_FLAGSHIP = requireCatalogModel(
+  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'max',
+  'cross-provider flagship',
+);
+const PRIMARY_PRO = requireCatalogModel(
+  (model) => model.provider === 'anthropic' && model.tierPolicy?.minTier === 'pro',
+  'Anthropic Pro',
+);
+const FALLBACK_PRO = requireCatalogModel(
+  (model) =>
+    model.provider === 'google' && ['basic', 'pro'].includes(model.tierPolicy?.minTier ?? ''),
+  'Google Pro-admitted',
+);
 
 describe('Managed gateway failover — resolver fallback plan consumption', () => {
   beforeEach(() => {

@@ -32,12 +32,13 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { z } from 'zod';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsPlugin, SettingsSkill } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
-import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 
 // Section components — real wired content, NOT route stubs
 import { GeneralSection } from '../sections/GeneralSection';
@@ -58,6 +59,11 @@ import { NotificationsSection } from '../sections/NotificationsSection';
 import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
+import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
+import {
+  ManagedSkillsResponseSchema,
+  type ManagedSkillSummary as ApiSkill,
+} from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating
@@ -73,15 +79,65 @@ function SectionSkeleton() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skills API type
-// ---------------------------------------------------------------------------
+const ApiPluginsResponseSchema = z.object({
+  entries: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string(),
+      status: z.enum(['preview', 'published', 'deprecated']),
+      webInstallable: z.boolean(),
+      publisher: z.object({ name: z.string().min(1) }),
+      declaredSkills: z.array(z.string()),
+      distribution: z.object({ manifestUrl: z.string().url() }).passthrough().nullable(),
+      updatedAt: z.string(),
+    }),
+  ),
+  total: z.number().int().nonnegative(),
+});
 
-interface ApiSkill {
-  name: string;
-  description: string;
-  source: string;
-}
+const PluginInstallationsResponseSchema = z.object({
+  installations: z.array(
+    z.object({
+      pluginId: z.string().min(1),
+      installedVersion: z.string().min(1),
+      enabled: z.boolean(),
+      installedAt: z.string(),
+      updatedAt: z.string(),
+    }),
+  ),
+});
+
+const ConnectorsResponseSchema = z.object({
+  connectors: z.array(
+    z.object({
+      connectorId: z.string().min(1),
+      connectedAt: z.string().optional(),
+      needsReauthorization: z.boolean().optional(),
+    }),
+  ),
+  available: z.array(z.string().min(1)).optional(),
+});
+
+const GitHubInstallationsResponseSchema = z.object({
+  installations: z.array(
+    z.object({
+      installation_id: z.number().int().positive(),
+      created_at: z.string().optional(),
+    }),
+  ),
+});
+
+const CustomConnectorsResponseSchema = z.object({
+  connectors: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      url: z.string().url(),
+      createdAt: z.string(),
+    }),
+  ),
+});
 
 // ---------------------------------------------------------------------------
 // URL segment -> section key mapping.
@@ -146,17 +202,6 @@ const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   statusLabel: c.phase > 1 ? 'Coming soon' : 'Not yet available on web',
 }));
 
-const SETTINGS_PLUGIN_CATALOG: SettingsPlugin[] = PLUGIN_CATALOG.map((plugin) => ({
-  id: plugin.id,
-  name: plugin.name,
-  description: plugin.description,
-  enabled: false,
-  author: plugin.author,
-  skillCount: plugin.skills.length,
-  statusLabel: 'Catalogue preview',
-  detailsHref: `/plugins/${plugin.id}`,
-}));
-
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -194,7 +239,7 @@ export function WebSettingsModal({
   // Sync the active section when the URL changes (deep-link) OR when the modal is
   // (re)opened to a requested section. The modal stays mounted (open=false) between
   // uses, so the useState initializer alone won't pick up a newly-requested
-  // initialSection (e.g. the rail's "Customize" → openSettings('skills')) — sync on open.
+  // initialSection (e.g. the rail's "Customize" → openSettings('general')) — sync on open.
   useEffect(() => {
     if (sectionFromPath) {
       setActiveSection(sectionFromPath);
@@ -258,61 +303,70 @@ export function WebSettingsModal({
     { id: string; name: string; url: string; createdAt: string }[]
   >([]);
 
-  const refreshCustomConnectors = useCallback(() => {
-    return fetch('/api/connectors/custom', { credentials: 'include' })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const json = (await res.json()) as {
-          connectors: Array<{ id: string; name: string; url: string; createdAt: string }>;
-        };
-        setCustomConnectors(json.connectors ?? []);
-      })
-      .catch(() => {
-        // degrade gracefully
-      });
+  const [connectorsLoading, setConnectorsLoading] = useState(false);
+  const [connectorsError, setConnectorsError] = useState<string | null>(null);
+
+  const refreshCustomConnectors = useCallback(async () => {
+    const response = await fetch('/api/connectors/custom', { credentials: 'include' });
+    if (!response.ok) throw new Error('Custom connector directory request failed.');
+    const parsed = CustomConnectorsResponseSchema.safeParse(await response.json());
+    if (!parsed.success) throw new Error('Custom connector directory returned invalid data.');
+    setCustomConnectors(parsed.data.connectors);
+  }, []);
+
+  const loadConnectors = useCallback(async (signal?: AbortSignal) => {
+    setConnectorsLoading(true);
+    setConnectorsError(null);
+    try {
+      const requestOptions = {
+        credentials: 'include' as const,
+        ...(signal ? { signal } : {}),
+      };
+      const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
+        fetch('/api/connectors', requestOptions),
+        fetch('/api/github/installations', requestOptions),
+        fetch('/api/connectors/custom', requestOptions),
+      ]);
+      if (!connectorsResponse.ok || !installationsResponse.ok || !customResponse.ok) {
+        throw new Error('A connector directory request failed.');
+      }
+      const [connectorsJson, installationsJson, customJson] = await Promise.all([
+        connectorsResponse.json(),
+        installationsResponse.json(),
+        customResponse.json(),
+      ]);
+      const connectorsResult = ConnectorsResponseSchema.safeParse(connectorsJson);
+      const installationsResult = GitHubInstallationsResponseSchema.safeParse(installationsJson);
+      const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
+      if (!connectorsResult.success || !installationsResult.success || !customResult.success) {
+        throw new Error('The connector directory returned invalid data.');
+      }
+      if (signal?.aborted) return;
+      setConnectedConnectors(connectorsResult.data.connectors);
+      setAvailableIds(connectorsResult.data.available ?? []);
+      setExpiredConnectorIds(
+        connectorsResult.data.connectors
+          .filter((connector) => connector.needsReauthorization)
+          .map((connector) => connector.connectorId),
+      );
+      setGithubInstallations(installationsResult.data.installations);
+      setCustomConnectors(customResult.data.connectors);
+    } catch (error) {
+      if (signal?.aborted) return;
+      setConnectorsError('Connectors could not be loaded. Check your connection and try again.');
+    } finally {
+      if (!signal?.aborted) setConnectorsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    fetch('/api/connectors', { credentials: 'include' })
-      .then(async (res) => {
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as {
-          connectors: Array<{
-            connectorId: string;
-            connectedAt?: string;
-            needsReauthorization?: boolean;
-          }>;
-          available?: string[];
-        };
-        if (!cancelled) {
-          setConnectedConnectors(json.connectors ?? []);
-          setAvailableIds(json.available ?? []);
-          setExpiredConnectorIds(
-            (json.connectors ?? []).filter((c) => c.needsReauthorization).map((c) => c.connectorId),
-          );
-        }
-      })
-      .catch(() => {
-        // degrade gracefully
-      });
-    fetch('/api/github/installations', { credentials: 'include' })
-      .then(async (res) => {
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as {
-          installations: Array<{ installation_id: number; created_at?: string }>;
-        };
-        if (!cancelled) setGithubInstallations(json.installations ?? []);
-      })
-      .catch(() => {
-        // degrade gracefully
-      });
-    void refreshCustomConnectors();
+    const controller = new AbortController();
+    void loadConnectors(controller.signal);
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [open, refreshCustomConnectors]);
+  }, [loadConnectors, open]);
 
   const customSettingsConnectors = useMemo(
     () =>
@@ -445,38 +499,215 @@ export function WebSettingsModal({
 
   const [skills, setSkills] = useState<SettingsSkill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [pluginCatalog, setPluginCatalog] = useState<SettingsPlugin[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [pluginsLoaded, setPluginsLoaded] = useState(false);
+  const [pluginsError, setPluginsError] = useState<string | null>(null);
+  const [pluginMutationIds, setPluginMutationIds] = useState<Set<string>>(new Set());
+  const [pluginMutationErrors, setPluginMutationErrors] = useState<Record<string, string>>({});
+
+  const loadSkills = useCallback(async (signal?: AbortSignal) => {
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      const response = await fetch('/api/skills', signal ? { signal } : undefined);
+      if (!response.ok) throw new Error('Skills request failed.');
+      const parsed = ManagedSkillsResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('Skills request returned invalid data.');
+      if (signal?.aborted) return;
+      setSkills(
+        parsed.data.skills.map((skill: ApiSkill) => ({
+          id: skill.name,
+          name: skill.name,
+          description: skill.description ?? '',
+          source: skill.source,
+          tab: skill.source === 'bundled' ? 'prompts' : 'agents',
+          statusLabel: skill.lifecycle === 'draft' ? 'Coming later' : 'Included',
+          ...(skill.downloadable
+            ? { downloadHref: `/api/skills/${encodeURIComponent(skill.name)}/download` }
+            : {}),
+        })),
+      );
+    } catch (error) {
+      if (signal?.aborted) return;
+      setSkillsError('Skills could not be loaded. Check your connection and try again.');
+    } finally {
+      if (!signal?.aborted) setSkillsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open || !['connectors', 'skills', 'plugins'].includes(activeSection)) return;
     if (skills.length > 0) return;
-    let cancelled = false;
-    setSkillsLoading(true);
-    fetch('/api/skills')
-      .then(async (res) => {
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as { skills: ApiSkill[] };
-        if (!cancelled) {
-          setSkills(
-            (json.skills ?? []).map((s) => ({
-              id: s.name,
-              name: s.name,
-              description: s.description ?? '',
-              source: s.source,
-              tab: s.source === 'builtin' ? 'prompts' : 'agents',
-            })),
-          );
-        }
-      })
-      .catch(() => {
-        /* degrade gracefully */
-      })
-      .finally(() => {
-        if (!cancelled) setSkillsLoading(false);
-      });
+    const controller = new AbortController();
+    void loadSkills(controller.signal);
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [open, activeSection, skills.length]);
+  }, [open, activeSection, skills.length, loadSkills]);
+
+  const loadPlugins = useCallback(async (signal?: AbortSignal) => {
+    setPluginsLoading(true);
+    setPluginsError(null);
+    try {
+      const [catalogResponse, installationsResponse] = await Promise.all([
+        fetch('/api/plugins?limit=100', { credentials: 'include', cache: 'no-store', signal }),
+        fetch('/api/plugins/installations', { credentials: 'include', signal }),
+      ]);
+      if (!catalogResponse.ok || !installationsResponse.ok) {
+        throw new Error('Plugin directory request failed.');
+      }
+      const [catalogJson, installationsJson] = await Promise.all([
+        catalogResponse.json(),
+        installationsResponse.json(),
+      ]);
+      const catalog = ApiPluginsResponseSchema.safeParse(catalogJson);
+      const installations = PluginInstallationsResponseSchema.safeParse(installationsJson);
+      if (!catalog.success || !installations.success) {
+        throw new Error('Plugin directory returned invalid data.');
+      }
+      if (signal?.aborted) return;
+      const installationByPlugin = new Map(
+        installations.data.installations.map((installation) => [
+          installation.pluginId,
+          installation,
+        ]),
+      );
+      setPluginCatalog(
+        catalog.data.entries.map((plugin) => {
+          const installation = installationByPlugin.get(plugin.id);
+          return {
+            id: plugin.id,
+            name: plugin.name,
+            description: plugin.description,
+            enabled: installation?.enabled ?? false,
+            installed: Boolean(installation),
+            installable: plugin.webInstallable,
+            author: plugin.publisher.name,
+            skillCount: plugin.declaredSkills.length,
+            updatedAt: plugin.updatedAt,
+            statusLabel: plugin.webInstallable
+              ? 'Available on Web'
+              : plugin.status === 'preview'
+                ? 'Coming later'
+                : plugin.status === 'deprecated'
+                  ? 'Deprecated'
+                  : plugin.distribution
+                    ? 'Available in CLI/Desktop'
+                    : 'Unavailable',
+            detailsHref: `/plugins/${plugin.id}`,
+          } satisfies SettingsPlugin;
+        }),
+      );
+    } catch {
+      if (signal?.aborted) return;
+      setPluginsError('Plugins could not be loaded. Check your connection and try again.');
+      setPluginCatalog([]);
+    } finally {
+      if (!signal?.aborted) {
+        setPluginsLoading(false);
+        setPluginsLoaded(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open || !['connectors', 'skills', 'plugins'].includes(activeSection)) return;
+    if (pluginsLoaded) return;
+    const controller = new AbortController();
+    void loadPlugins(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [open, activeSection, pluginsLoaded, loadPlugins]);
+
+  const mutatePlugin = useCallback(async (pluginId: string, request: () => Promise<Response>) => {
+    setPluginMutationIds((current) => new Set(current).add(pluginId));
+    setPluginMutationErrors((current) => {
+      const next = { ...current };
+      delete next[pluginId];
+      return next;
+    });
+    try {
+      const response = await request();
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message ?? 'Plugin update failed.');
+      }
+      setPluginCatalog([]);
+      setPluginsLoaded(false);
+      setSkills([]);
+      announceSkillCatalogChanged();
+    } catch (error) {
+      setPluginMutationErrors((current) => ({
+        ...current,
+        [pluginId]: error instanceof Error ? error.message : 'Plugin update failed.',
+      }));
+    } finally {
+      setPluginMutationIds((current) => {
+        const next = new Set(current);
+        next.delete(pluginId);
+        return next;
+      });
+    }
+  }, []);
+
+  const installPlugin = useCallback(
+    async (pluginId: string) => {
+      const csrfToken = await getCsrfToken();
+      await mutatePlugin(pluginId, () =>
+        fetch('/api/plugins/installations', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ pluginId }),
+        }),
+      );
+    },
+    [mutatePlugin],
+  );
+
+  const setPluginEnabled = useCallback(
+    async (pluginId: string, enabled: boolean) => {
+      const csrfToken = await getCsrfToken();
+      await mutatePlugin(pluginId, () =>
+        fetch(`/api/plugins/installations/${encodeURIComponent(pluginId)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ enabled }),
+        }),
+      );
+    },
+    [mutatePlugin],
+  );
+
+  const removePlugin = useCallback(
+    async (pluginId: string) => {
+      const csrfToken = await getCsrfToken();
+      await mutatePlugin(pluginId, () =>
+        fetch(`/api/plugins/installations/${encodeURIComponent(pluginId)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'x-csrf-token': csrfToken },
+        }),
+      );
+    },
+    [mutatePlugin],
+  );
+
+  const visiblePluginCatalog = useMemo(
+    () =>
+      pluginCatalog.map((plugin) => ({
+        ...plugin,
+        mutating: pluginMutationIds.has(plugin.id),
+        ...(pluginMutationErrors[plugin.id] ? { error: pluginMutationErrors[plugin.id] } : {}),
+      })),
+    [pluginCatalog, pluginMutationErrors, pluginMutationIds],
+  );
 
   // ── Data adapter ───────────────────────────────────────────────────────────
 
@@ -528,15 +759,25 @@ export function WebSettingsModal({
   const adapter: SettingsDataAdapter = {
     connectors: mergedSettingsConnectors,
     connectedConnectors: mergedConnectedConnectors,
+    connectorsLoading,
+    connectorsError,
+    retryConnectors: loadConnectors,
     connectConnector,
     disconnectConnector,
     addCustomConnector,
     customConnectorAuthTokenSupported: true,
     skills,
     skillsLoading,
-    plugins: [],
-    pluginsLoading: false,
-    pluginCatalog: SETTINGS_PLUGIN_CATALOG,
+    skillsError,
+    retrySkills: loadSkills,
+    plugins: visiblePluginCatalog.filter((plugin) => plugin.installed),
+    pluginsLoading,
+    pluginsError,
+    retryPlugins: loadPlugins,
+    pluginCatalog: visiblePluginCatalog,
+    installPlugin,
+    setPluginEnabled,
+    removePlugin,
   };
 
   // ── Section content map ────────────────────────────────────────────────────
@@ -575,18 +816,20 @@ export function WebSettingsModal({
 
   return (
     <Suspense fallback={<SectionSkeleton />}>
-      <SettingsModal
-        open={open}
-        onClose={onClose}
-        activeSection={activeSection}
-        onSectionChange={handleSectionChange}
-        sectionContent={sectionContent}
-        navGroups={SETTINGS_NAV_GROUPS_WEB}
-        adapter={adapter}
-        connectorDisclosure={<ConnectorConsentSummary />}
-        navBadges={navBadges}
-        title="Settings"
-      />
+      <SettingsSectionNavigationProvider onNavigate={handleSectionChange} onExit={onClose}>
+        <SettingsModal
+          open={open}
+          onClose={onClose}
+          activeSection={activeSection}
+          onSectionChange={handleSectionChange}
+          sectionContent={sectionContent}
+          navGroups={SETTINGS_NAV_GROUPS_WEB}
+          adapter={adapter}
+          connectorDisclosure={<ConnectorConsentSummary />}
+          navBadges={navBadges}
+          title="Settings"
+        />
+      </SettingsSectionNavigationProvider>
     </Suspense>
   );
 }

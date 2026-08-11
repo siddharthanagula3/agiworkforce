@@ -12,7 +12,11 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import type { ManagedUsageBalance } from '@agiworkforce/types';
+import {
+  effectivePlanTier,
+  normalizeBillingPlanTier,
+  type ManagedUsageBalance,
+} from '@agiworkforce/types';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
@@ -22,10 +26,11 @@ import { logger } from '../lib/logger';
 const router: Router = Router();
 
 const EMPTY_PUBLIC_USAGE_BALANCE: ManagedUsageBalance = Object.freeze({
-  usage_percentage: 0,
+  usage_percentage: null,
   reset_at: null,
   seconds_until_reset: 0,
   has_usage_remaining: false,
+  usage_visible: false,
 });
 
 function asNonNegativeNumber(value: unknown): number {
@@ -38,9 +43,16 @@ function asIsoTimestamp(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** Keep private ledger operands inside the service boundary. */
-function toPublicUsageBalance(balance: Record<string, unknown> | null): ManagedUsageBalance {
-  if (!balance?.['account_id']) return { ...EMPTY_PUBLIC_USAGE_BALANCE };
+/** Keep private ledger operands and unpublished Free-plan usage inside the service boundary. */
+function toPublicUsageBalance(
+  balance: Record<string, unknown> | null,
+  usageVisible: boolean,
+): ManagedUsageBalance {
+  if (!balance?.['account_id']) {
+    return usageVisible
+      ? { ...EMPTY_PUBLIC_USAGE_BALANCE, usage_percentage: 0, usage_visible: true }
+      : { ...EMPTY_PUBLIC_USAGE_BALANCE };
+  }
 
   const allocated = asNonNegativeNumber(balance['credits_allocated_cents']);
   const used = Math.min(allocated, asNonNegativeNumber(balance['credits_used_cents']));
@@ -49,12 +61,14 @@ function toPublicUsageBalance(balance: Record<string, unknown> | null): ManagedU
   const resetTime = resetAt ? Date.parse(resetAt) : Number.NaN;
 
   return {
-    usage_percentage: allocated > 0 ? Math.round((used / allocated) * 10_000) / 100 : 0,
+    usage_percentage:
+      usageVisible && allocated > 0 ? Math.round((used / allocated) * 10_000) / 100 : null,
     reset_at: resetAt,
     seconds_until_reset: Number.isNaN(resetTime)
       ? 0
       : Math.max(0, Math.floor((resetTime - Date.now()) / 1_000)),
     has_usage_remaining: allocated > 0 && remaining > 0,
+    usage_visible: usageVisible,
   };
 }
 
@@ -84,19 +98,40 @@ router.get(
     // binds the verified token via withUser(), so this RPC now runs under real
     // Postgres RLS as a backstop behind the explicit p_user_id parameter below.
     const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
-    const { data, error } = await userDb.rpc('get_credit_balance', {
-      p_user_id: user.userId,
-    });
+    const [balanceResult, subscriptionResult] = await Promise.all([
+      userDb.rpc('get_credit_balance', {
+        p_user_id: user.userId,
+      }),
+      userDb
+        .from('subscriptions')
+        .select('plan_tier, status')
+        .eq('user_id', user.userId)
+        .maybeSingle(),
+    ]);
 
-    if (error) {
-      logger.error({ error }, 'Failed to get credit balance');
+    if (balanceResult.error) {
+      logger.error({ error: balanceResult.error }, 'Failed to get credit balance');
       throw new AppError('Failed to get credit balance', 500);
     }
 
-    // The RPC returns an array, get the first row
-    const balance = Array.isArray(data) ? data[0] : data;
+    if (subscriptionResult.error) {
+      logger.error(
+        { error: subscriptionResult.error, userId: user.userId },
+        'Failed to determine credit usage visibility',
+      );
+      throw new AppError('Service temporarily unavailable', 503);
+    }
 
-    res.json(toPublicUsageBalance(balance ?? null));
+    const subscription = subscriptionResult.data;
+    const effectiveTier = normalizeBillingPlanTier(
+      effectivePlanTier(subscription?.plan_tier, subscription?.status),
+    );
+    const usageVisible = effectiveTier !== 'free';
+
+    // The RPC returns an array, get the first row
+    const balance = Array.isArray(balanceResult.data) ? balanceResult.data[0] : balanceResult.data;
+
+    res.json(toPublicUsageBalance(balance ?? null, usageVisible));
   },
 );
 

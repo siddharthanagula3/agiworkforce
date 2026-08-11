@@ -22,11 +22,15 @@ describe('mobile Skills service', () => {
           name: '  Documents  ',
           description: '  Create and edit documents.  ',
           source: 'bundled',
+          lifecycle: 'included',
+          downloadable: true,
         },
         {
           name: 'Team release',
           description: 'Prepare the release handoff.',
           source: 'workspace',
+          lifecycle: 'draft',
+          downloadable: false,
         },
       ],
     });
@@ -37,11 +41,15 @@ describe('mobile Skills service', () => {
         name: 'Documents',
         description: 'Create and edit documents.',
         source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
       },
       {
         name: 'Team release',
         description: 'Prepare the release handoff.',
         source: 'workspace',
+        lifecycle: 'draft',
+        downloadable: false,
       },
     ]);
     expect(apiMock.get).toHaveBeenCalledWith('/api/skills', {
@@ -53,9 +61,59 @@ describe('mobile Skills service', () => {
     null,
     {},
     { skills: null },
-    { skills: [{ name: '', description: 'Empty name', source: 'bundled' }] },
-    { skills: [{ name: 'Unknown', description: 'Bad source', source: 'marketplace' }] },
-    { skills: [{ name: 'Missing description', source: 'bundled' }] },
+    {
+      skills: [
+        {
+          name: '',
+          description: 'Empty name',
+          source: 'bundled',
+          lifecycle: 'included',
+          downloadable: false,
+        },
+      ],
+    },
+    {
+      skills: [
+        {
+          name: 'Unknown',
+          description: 'Bad source',
+          source: 'marketplace',
+          lifecycle: 'included',
+          downloadable: false,
+        },
+      ],
+    },
+    {
+      skills: [
+        {
+          name: 'Missing description',
+          source: 'bundled',
+          lifecycle: 'included',
+          downloadable: false,
+        },
+      ],
+    },
+    {
+      skills: [
+        {
+          name: 'Missing lifecycle',
+          description: '',
+          source: 'bundled',
+          downloadable: false,
+        },
+      ],
+    },
+    {
+      skills: [
+        {
+          name: 'Draft download',
+          description: '',
+          source: 'bundled',
+          lifecycle: 'draft',
+          downloadable: true,
+        },
+      ],
+    },
   ])('rejects malformed server payload %# instead of rendering drifted data', (payload) => {
     expect(() => parseManagedSkillsResponse(payload)).toThrow(
       'Skills returned an invalid response.',

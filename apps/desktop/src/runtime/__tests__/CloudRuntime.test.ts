@@ -13,6 +13,9 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+const FIXTURE_IMAGE_MODEL_ID = 'fixture-image-model';
+
 type TestFollowOptions = ManagedCloudAgentRunFollowOptions & {
   onEvent: NonNullable<ManagedCloudAgentRunFollowOptions['onEvent']>;
   onSnapshot: NonNullable<ManagedCloudAgentRunFollowOptions['onSnapshot']>;
@@ -28,7 +31,7 @@ function managedRun(state: CloudAgentRun['state'], lastEventSequence: number): C
     workMode: 'agiwork',
     state,
     provider: 'anthropic',
-    model: 'claude-sonnet-5',
+    model: FIXTURE_MODEL_ID,
     lastEventSequence,
     cancellationRequestedAt: null,
     completedAt: state === 'completed' ? '2026-07-17T20:00:00.000Z' : null,
@@ -231,7 +234,7 @@ describe('CloudRuntime', () => {
         id: 'image-asset-1',
         uri: 'https://cloud.example/api/files/image-asset-1',
         provider: 'google',
-        model: 'gemini-3.1-flash-image',
+        model: FIXTURE_IMAGE_MODEL_ID,
       });
 
       await runtime.sendMessage('conv_image', 'Create an image of a glass lighthouse at sunrise', {
@@ -932,7 +935,7 @@ describe('CloudRuntime', () => {
   describe('reattaching to a run this client never streamed', () => {
     const persisted = {
       assistantMessageId: 'assistant-reattach',
-      model: 'claude-sonnet-5',
+      model: FIXTURE_MODEL_ID,
       content: 'Analysing the repository.',
       runReference: { runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH, lastSequence: 4 },
     };
@@ -1089,7 +1092,7 @@ describe('CloudRuntime', () => {
       createConversation.mockResolvedValue({
         id: 'conv_1',
         title: 'New Conversation',
-        model: 'claude-sonnet-5',
+        model: FIXTURE_MODEL_ID,
         projectId: null,
         pinned: false,
         isTemporary: false,
@@ -1317,7 +1320,7 @@ describe('CloudRuntime', () => {
             conversationId: 'conv_1',
             role: 'assistant',
             content: 'Waiting.',
-            model: 'gpt-5',
+            model: FIXTURE_MODEL_ID,
             inputTokens: 0,
             outputTokens: 0,
             createdAt: '2026-01-01T00:00:00.000Z',
@@ -1443,7 +1446,7 @@ describe('CloudRuntime', () => {
         runtime.hasLiveApprovalTurn('conv_1', {
           assistantMessageId: 'assistant-1',
           runId: '0190a000-0000-7000-8000-000000000099',
-          model: 'gpt-5',
+          model: FIXTURE_MODEL_ID,
           assistantContent: '',
           calls: [{ toolCallId: 'call_1', name: 'read_file', args: {} }],
         }),
@@ -1459,7 +1462,7 @@ describe('CloudRuntime', () => {
           runPath: MANAGED_RUN_PATH,
           lastSequence: 3,
         },
-        model: 'gpt-5',
+        model: FIXTURE_MODEL_ID,
         assistantContent: 'Waiting.',
         calls: [{ toolCallId: 'call_approve', name: 'write_file', args: {} }],
       });

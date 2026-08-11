@@ -13,8 +13,9 @@
  *    `codeExecution` cap, which stays truthful as "has a native interpreter")
  *    plus the deployment cut-over flag (`AGI_E2B_EXECUTION=1`, surfaced via
  *    `/api/me` `feature_flags.code_execution`). This lets tools-capable
- *    open-weight models (kimi-k3, deepseek, qwen, glm…) get an honest Run-code
- *    toggle when E2B is live, without ever rendering a cosmetic dead control.
+ *    tools-capable models without a native provider interpreter get an honest
+ *    Run-code toggle when E2B is live, without ever rendering a cosmetic dead
+ *    control.
  *
  * One shared function so the composer's disabled state (`ChatInput`) and the
  * send-time gate (`useChat`) can never disagree about what "available" means.

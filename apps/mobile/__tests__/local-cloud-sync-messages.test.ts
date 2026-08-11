@@ -33,7 +33,12 @@ const conversation: ConversationSummary = {
 
 const localMessages: ChatMessage[] = [
   { id: 'm1', role: 'user', content: 'Hello there' } as ChatMessage,
-  { id: 'm2', role: 'assistant', content: 'Hi! How can I help?', model: 'gpt-5.4' } as ChatMessage,
+  {
+    id: 'm2',
+    role: 'assistant',
+    content: 'Hi! How can I help?',
+    model: 'fixture-model',
+  } as ChatMessage,
 ];
 
 function seedLocalStore() {
@@ -69,7 +74,7 @@ describe('syncLocalConversationsToCloud', () => {
     const [, body] = bulkCall as [string, { messages: Array<{ role: string; content: string }> }];
     expect(body.messages).toEqual([
       { role: 'user', content: 'Hello there', model: undefined },
-      { role: 'assistant', content: 'Hi! How can I help?', model: 'gpt-5.4' },
+      { role: 'assistant', content: 'Hi! How can I help?', model: 'fixture-model' },
     ]);
 
     expect(result.conversationsSynced).toBe(1);

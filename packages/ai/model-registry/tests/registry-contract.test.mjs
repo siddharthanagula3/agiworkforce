@@ -8,6 +8,7 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..', '..', '..');
 const REGISTRY_JSON = path.join(PACKAGE_ROOT, 'generated', 'registry.json');
 const REGISTRY_TS = path.join(PACKAGE_ROOT, 'generated', 'registry.ts');
+const ROUTING_POLICIES = path.join(PACKAGE_ROOT, 'catalog', 'routing-policies.json');
 const COMPATIBILITY_CATALOG = path.join(
   REPO_ROOT,
   'packages',
@@ -40,11 +41,17 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.ok(fs.existsSync(RUST_MODULE), 'Rust registry module must be generated');
 
   const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+  const catalog = JSON.parse(fs.readFileSync(COMPATIBILITY_CATALOG, 'utf8'));
+  const authoredRoutingPolicies = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
   assert.equal(registry.schemaVersion, 1);
 
-  const key = 'gpt-5.6-luna';
+  const key = catalog.providers.openai.taskRouting.fast_completion;
+  const compatibilityModel = catalog.models[key];
   assert.equal(registry.models[key].identity.provider, 'openai');
-  assert.equal(registry.models[key].identity.providerModelId, key);
+  assert.equal(
+    registry.models[key].identity.providerModelId,
+    compatibilityModel.apiModelId ?? compatibilityModel.id,
+  );
   assert.equal(registry.models[key].lifecycle.availability, 'live');
   assert.ok(
     registry.providerModelKeys.openai.includes(key),
@@ -70,23 +77,42 @@ test('emits separated registry records and cross-language artifacts', () => {
       );
     }
   }
-  assert.equal(registry.pricing[key].inputPerMillion, 0.2);
-  assert.equal(registry.pricing[key].cacheReadPerMillion, 0.02);
-  assert.equal(registry.pricing[key].cacheWritePerMillion, 0.25);
-  assert.equal(registry.limits[key].contextTokens, 1050000);
-  assert.equal(registry.limits[key].maxOutputTokens, 128000);
+  const providerTaskSlots = Object.entries(authoredRoutingPolicies.auto.slots).filter(
+    ([, slot]) => slot.providerTask,
+  );
+  assert.ok(providerTaskSlots.length > 0, 'provider-owned routing slots must be exercised');
+  for (const [slotId, slot] of providerTaskSlots) {
+    const { provider, task } = slot.providerTask;
+    assert.equal(
+      registry.policies.auto.slots[slotId].modelKey,
+      catalog.providers[provider].taskRouting[task],
+      `${slotId} must follow the canonical ${provider}.${task} route`,
+    );
+  }
+  assert.equal(registry.pricing[key].inputPerMillion, compatibilityModel.inputCost);
+  assert.equal(registry.pricing[key].cacheReadPerMillion, compatibilityModel.cached_input);
+  assert.equal(registry.pricing[key].cacheWritePerMillion, compatibilityModel.cached_write);
+  assert.equal(registry.limits[key].contextTokens, compatibilityModel.contextWindow);
+  assert.equal(registry.limits[key].maxOutputTokens, compatibilityModel.maxOutputTokens);
   assert.equal(registry.capabilities[key].imageInput, true);
   assert.equal('webSearch' in registry.capabilities[key], false);
 
-  assert.equal(registry.capabilities['gpt-image-2'].imageOutput, true);
-  assert.equal(registry.capabilities['gpt-image-2'].textOutput, false);
-  assert.equal(registry.capabilities['veo-3.1'].videoOutput, true);
-  assert.equal(registry.capabilities['gpt-4o-transcribe'].audioInput, true);
-  assert.equal(registry.capabilities['gpt-4o-transcribe'].textOutput, true);
-  assert.equal(registry.capabilities['gpt-4o-mini-tts'].textInput, true);
-  assert.equal(registry.capabilities['gpt-4o-mini-tts'].audioOutput, true);
+  const imageModelKey = registry.policies.auto.slots.image_generation.modelKey;
+  const videoModelKey = registry.policies.auto.slots.video_generation.modelKey;
+  const transcriptionModelKey = registry.policies.auto.slots.voice_transcription.modelKey;
+  const speechModelKey = registry.providerModelKeys.openai.find(
+    (modelKey) => registry.capabilities[modelKey].audioOutput,
+  );
+  assert.ok(speechModelKey, 'the OpenAI speech route must exist');
+  assert.equal(registry.capabilities[imageModelKey].imageOutput, true);
+  assert.equal(registry.capabilities[imageModelKey].textOutput, false);
+  assert.equal(registry.capabilities[videoModelKey].videoOutput, true);
+  assert.equal(registry.capabilities[transcriptionModelKey].audioInput, true);
+  assert.equal(registry.capabilities[transcriptionModelKey].textOutput, true);
+  assert.equal(registry.capabilities[speechModelKey].textInput, true);
+  assert.equal(registry.capabilities[speechModelKey].audioOutput, true);
 
-  const route = registry.routes['openai/gpt-5.6-luna'];
+  const route = registry.routes[`openai/${key}`];
   assert.equal(route.modelKey, key);
   assert.equal(route.harnessId, 'openai/responses');
   assert.equal(registry.harnesses['openai/responses'].features.webSearch.providerSupport, 'native');
@@ -98,6 +124,19 @@ test('emits separated registry records and cross-language artifacts', () => {
     providerSupport: 'native',
     implementation: 'implemented',
   });
+  for (const feature of [
+    'toolDiscovery',
+    'fileSearch',
+    'hostedShell',
+    'applyPatch',
+    'skills',
+    'computerUse',
+  ]) {
+    assert.deepEqual(registry.harnesses['openai/responses'].features[feature], {
+      providerSupport: 'native',
+      implementation: 'unwired',
+    });
+  }
   assert.deepEqual(
     registry.harnesses['anthropic/messages'].features.webSearch,
     { providerSupport: 'native', implementation: 'implemented' },
@@ -148,8 +187,10 @@ test('emits separated registry records and cross-language artifacts', () => {
     registry.policies.auto.tasks.image_generation.requiredCapabilities[0],
     'imageOutput',
   );
-  assert.equal(registry.policies.auto.slots.image_generation.modelKey, 'gemini-3.1-flash-image');
-  assert.equal(registry.policies.auto.slots.flagship_coding.modelKey, 'claude-opus-5');
+  assert.equal(registry.policies.auto.slots.image_generation.modelKey, imageModelKey);
+  const flagshipCodingModelKey = registry.policies.auto.slots.flagship_coding.modelKey;
+  assert.equal(registry.models[flagshipCodingModelKey].identity.provider, 'anthropic');
+  assert.equal(catalog.models[flagshipCodingModelKey].tierPolicy.minTier, 'max');
   for (const [slotId, slot] of Object.entries(registry.policies.auto.slots)) {
     assert.ok(slot.label?.trim(), `${slotId} must expose a generated presentation label`);
     assert.ok(

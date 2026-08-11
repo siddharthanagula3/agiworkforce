@@ -36,6 +36,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
+import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import {
   useChatStore,
   DEFAULT_COMPOSER_TOGGLES,
@@ -59,6 +60,7 @@ import Link from 'next/link';
 import {
   canUseBillingPlanCapability,
   getModels,
+  isExecutableVideoModel,
   type CloudWorkMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
@@ -71,6 +73,23 @@ import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
 import { CameraCaptureDialog } from './CameraCaptureDialog';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 import { AI_INTERACTION_DISCLOSURE } from '@/lib/compliance/ai-act';
+import {
+  getImageAspectOptionsForModel,
+  IMAGE_MODEL_DEFAULT,
+  IMAGE_MODELS,
+  isImageAspectRatioSupported,
+  type ImageAspectRatio,
+} from '../../lib/imageGenerationOptions';
+
+export {
+  getImageAspectOptionsForModel,
+  IMAGE_MODEL_DEFAULT,
+  IMAGE_MODELS,
+  isImageAspectRatioSupported,
+  type ImageAspectOption,
+  type ImageAspectRatio,
+  type ImageModelOption,
+} from '../../lib/imageGenerationOptions';
 
 /**
  * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
@@ -91,42 +110,31 @@ const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   agiwork: 'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
 };
 
+export interface ComposerSendMeta {
+  /** Active mode at send time. 'agiwork' = project-scoped work chat. */
+  workMode: ComposerWorkMode;
+  /** Project scoping the send (threads into conversation creation). */
+  projectId: string | null;
+  webSearchEnabled?: boolean;
+  thinkingEnabled?: boolean;
+  codeExecutionEnabled?: boolean;
+  officeCreationEnabled?: boolean;
+  /** Deep Research mode: server injects research system prompt and forces web search. */
+  researchEnabled?: boolean;
+  /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
+  styleInstruction?: string;
+  /** Exact server-catalog skill name; the server resolves and loads its body. */
+  skillName?: string;
+  /** CAP-048: structured AGI Work goal captured by the composer. */
+  agiWorkGoal?: AgiWorkGoalInput;
+}
+
 interface ChatComposerProps {
   onSend: (
     content: string,
     attachments?: File[],
     skillId?: string,
-    meta?: {
-      /** Active mode at send time. 'agiwork' = project-scoped work chat. */
-      workMode: ComposerWorkMode;
-      /** Project scoping the send (threads into conversation creation). */
-      projectId: string | null;
-      webSearchEnabled?: boolean;
-      thinkingEnabled?: boolean;
-      codeExecutionEnabled?: boolean;
-      officeCreationEnabled?: boolean;
-      /** Deep Research mode: server injects research system prompt and forces web search. */
-      researchEnabled?: boolean;
-      /**
-       * Resolved Response-Style instruction: the ONE style value this composer
-       * emits (AUDIT-FIX CMP-6/CMP-7). It composes the selected style with the
-       * new length axis and is never empty.
-       *
-       * The separate `styleMode` hint this meta used to carry is gone: the send
-       * path (`useChatStream`) always preferred `styleInstruction` and dropped
-       * `styleMode` on the floor, so emitting it only created a second, silently
-       * ignored vocabulary. `styleMode` survives in `SendReplayMetadata` purely
-       * to replay messages recorded before this change.
-       */
-      styleInstruction?: string;
-      /** Exact server-catalog skill name; the server resolves and loads its body. */
-      skillName?: string;
-      /**
-       * CAP-048: structured AGI Work goal (objective + optional scope /
-       * deliverable). Present only on an AGI Work send with non-empty content.
-       */
-      agiWorkGoal?: AgiWorkGoalInput;
-    },
+    meta?: ComposerSendMeta,
   ) => void | false;
   /**
    * Conversation this composer is currently editing for (`null` on the
@@ -178,6 +186,8 @@ interface ChatComposerProps {
   sendPreviewPresentation?: SendPreviewPresentation;
   /** Opens the upgrade plan dialog from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
+  /** Persists a model switch for the active conversation before it becomes current. */
+  onModelChange?: (modelId: string) => Promise<boolean>;
   /**
    * Called when the user submits in image-generation mode.
    * The composer clears its state regardless; the parent owns the async flow and
@@ -232,87 +242,20 @@ export interface ComposerProjectPicker {
   onCreateProject: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Image mode types and constants
-// ---------------------------------------------------------------------------
-
-export type ImageAspectRatio = 'auto' | '1:1' | '3:4' | '9:16' | '4:3' | '16:9';
-
-export interface ImageAspectOption {
-  id: ImageAspectRatio;
-  label: string;
-  /** Maps to the /api/media/image/generate `size` enum. */
-  size: '1024x1024' | '1024x1792' | '1792x1024';
-}
-
-export const IMAGE_ASPECT_OPTIONS: ImageAspectOption[] = [
-  { id: 'auto', label: 'Auto', size: '1024x1024' },
-  { id: '1:1', label: 'Square 1:1', size: '1024x1024' },
-  { id: '3:4', label: 'Portrait 3:4', size: '1024x1792' },
-  { id: '9:16', label: 'Story 9:16', size: '1024x1792' },
-  { id: '4:3', label: 'Landscape 4:3', size: '1792x1024' },
-  { id: '16:9', label: 'Widescreen 16:9', size: '1792x1024' },
-];
-
-export interface ImageModelOption {
-  id: string;
-  label: string;
-  provider: 'google' | 'openai' | 'stability';
-}
-
-// Map the catalog's declarative `imageApi` backend → the provider enum the
-// /api/media/image/generate route accepts. This is the ONLY place the two
-// vocabularies meet; everything else is data. An image model with no imageApi
-// route adapter is excluded from the picker.
-const IMAGE_API_TO_PROVIDER: Record<string, ImageModelOption['provider']> = {
-  gemini: 'google',
-  imagen: 'google',
-  openai: 'openai',
-  stability: 'stability',
-};
-
-// Image-generation models for the in-composer picker, derived entirely from the
-// canonical models.json catalog (single source of truth) — never hardcoded.
-// Adding a new image model is a model-registry curation edit (set modelType:'image'
-// + imageApi); it then shows up here and routes correctly with ZERO code change.
-export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'] })
-  .map((m) => {
-    const provider = m.imageApi ? IMAGE_API_TO_PROVIDER[m.imageApi] : undefined;
-    return provider ? { id: m.id, label: m.name, provider } : null;
-  })
-  .filter((m): m is ImageModelOption => m !== null);
-
-// Default = the first image model in catalog order (the founder controls the
-// default purely by ordering the curation file — no id referenced in code).
-const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]?.id ?? '';
-
 export interface VideoModelOption {
   id: string;
   label: string;
-  provider: 'google' | 'runway';
+  provider: string;
 }
 
-// Providers the video picker offers, mirroring IMAGE_API_TO_PROVIDER: the only
-// place the catalog's `provider` vocabulary meets the set of routes we are
-// willing to expose. `/api/media/video/generate` can execute BOTH google (Veo)
-// and runway (Gen-4) and already validates a caller-supplied model — but runway
-// additionally requires RUNWAY_API_KEY, and shipping a picker entry whose
-// generation would fail on a missing key is the fake-availability defect the
-// capability-honesty rule forbids. So launch offers the Google/Veo line only.
-// Enabling Runway later is one entry here — no model id appears in code.
-const VIDEO_PICKER_PROVIDERS: ReadonlySet<VideoModelOption['provider']> = new Set(['google']);
-
 // Video-generation models for the in-composer picker, derived entirely from the
-// canonical catalog (single source of truth) — never hardcoded. Adding a video
-// model is a model-registry curation edit (set modelType:'video'); it then shows
-// up here automatically once its provider is offered above.
+// canonical executable-video contract. Deployment-specific provider keys,
+// release policy, durable storage, and schema readiness are applied by the
+// authenticated availability handshake below. Adding a provider or model must
+// remain a catalog/adapter change, never another composer allowlist edit.
 export const VIDEO_MODELS: VideoModelOption[] = getModels({ modelTypes: ['video'] })
-  .map((m) =>
-    VIDEO_PICKER_PROVIDERS.has(m.provider as VideoModelOption['provider'])
-      ? { id: m.id, label: m.name, provider: m.provider as VideoModelOption['provider'] }
-      : null,
-  )
-  .filter((m): m is VideoModelOption => m !== null);
+  .filter(isExecutableVideoModel)
+  .map((model) => ({ id: model.id, label: model.name, provider: model.provider }));
 
 // Default = first video model in catalog order, same contract as images.
 const VIDEO_MODEL_DEFAULT = VIDEO_MODELS[0]?.id ?? '';
@@ -403,6 +346,7 @@ const ChatComposerNewComponent = ({
   attachmentPrivacyShortLabel,
   sendPreviewPresentation,
   onUpgradeRequest,
+  onModelChange,
   freeTrial,
   onGenerateImage,
   onGenerateVideo,
@@ -493,6 +437,8 @@ const ChatComposerNewComponent = ({
    */
   const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const billingPolicyError = useBillingStore((s) => s.error);
+  const refreshBillingPolicy = useBillingStore((s) => s.refreshUser);
   const canUseAgiWork =
     billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
   const canUseImageGeneration =
@@ -506,6 +452,12 @@ const ChatComposerNewComponent = ({
     billingPolicyReady &&
     !isFreeTrial &&
     canUseBillingPlanCapability(subscriptionTier, 'video_generation');
+  // A host must own the actual media turn. ChatComposerNew is also used by the
+  // project-detail handoff composer, which deliberately has no generation
+  // callbacks; rendering media controls there would accept and then discard a
+  // prompt through optional chaining.
+  const hostCanGenerateImage = typeof onGenerateImage === 'function';
+  const hostCanGenerateVideo = typeof onGenerateVideo === 'function';
 
   /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options now live in the
@@ -607,10 +559,60 @@ const ChatComposerNewComponent = ({
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
   const [showCompatibleModels, setShowCompatibleModels] = useState(false);
+  const {
+    status: mediaAvailabilityStatus,
+    error: mediaAvailabilityError,
+    admissionFor: mediaAdmissionFor,
+    retry: retryMediaAvailability,
+  } = useMediaModelAvailability();
+  const availableImageModels = useMemo(
+    () =>
+      mediaAvailabilityStatus === 'ready'
+        ? IMAGE_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled')
+        : [],
+    [mediaAdmissionFor, mediaAvailabilityStatus],
+  );
+  const availableVideoModels = useMemo(
+    () =>
+      mediaAvailabilityStatus === 'ready'
+        ? VIDEO_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled')
+        : [],
+    [mediaAdmissionFor, mediaAvailabilityStatus],
+  );
+  const imageAspectOptions = useMemo(
+    () => getImageAspectOptionsForModel(imageModelId),
+    [imageModelId],
+  );
+  // A model switch can invalidate the previous ratio. Derive the safe value
+  // during render (no state-setting effect or transient unsupported send), and
+  // also reset it in the model-selection event below for a truthful label.
+  const effectiveImageAspectRatio: ImageAspectRatio = imageAspectOptions.some(
+    (option) => option.id === imageAspectRatio,
+  )
+    ? imageAspectRatio
+    : 'auto';
 
   // Video generation mode state (videoMode itself is per-conversation, above).
   const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showVideoModelMenu, setShowVideoModelMenu] = useState(false);
+
+  // Catalog entries are candidates, not proof of this deployment's keys and
+  // durable storage. Once the server handshake resolves, keep each selection
+  // on an admitted model or an honest empty state.
+  useEffect(() => {
+    if (mediaAvailabilityStatus !== 'ready') return;
+    if (!availableImageModels.some((model) => model.id === imageModelId)) {
+      setImageModelId(availableImageModels[0]?.id ?? '');
+      setImageAspectRatio('auto');
+    }
+  }, [availableImageModels, imageModelId, mediaAvailabilityStatus]);
+
+  useEffect(() => {
+    if (mediaAvailabilityStatus !== 'ready') return;
+    if (!availableVideoModels.some((model) => model.id === videoModelId)) {
+      setVideoModelId(availableVideoModels[0]?.id ?? '');
+    }
+  }, [availableVideoModels, mediaAvailabilityStatus, videoModelId]);
 
   const trialExhausted = isFreeTrial && (freeTrial?.limitReached ?? false);
 
@@ -673,7 +675,7 @@ const ChatComposerNewComponent = ({
         genericBackendConfigured: genericWebSearchConfigured,
       });
   // Deep Research is its own capability field in models.json, distinct from
-  // plain web search. Current Claude Haiku 4.5, for example, has
+  // plain web search. A search-only catalog entry can have
   // search:true/research:false, so the two controls cannot share one flag.
   // Gating on modelSupportsSearch alone both wrongly exposes Research for
   // search-only models and wrongly blocks it for research-only models.
@@ -706,7 +708,7 @@ const ChatComposerNewComponent = ({
   // native-tier providers run code on their own interpreter (catalog codeExecution
   // cap decides); everyone else uses the model-agnostic platform E2B sandbox, which
   // only needs tool-calling + the E2B deployment flag — so a tools-capable
-  // open-weight model (kimi-k3/deepseek/qwen/glm, codeExecution:false) gets an honest
+  // open-weight model with `codeExecution:false` gets an honest
   // Run-code toggle when E2B is live, never a cosmetic dead control.
   const modelSupportsCodeExecution =
     isAutoSelected ||
@@ -758,6 +760,28 @@ const ChatComposerNewComponent = ({
     if (!billingPolicyReady) return;
     if (videoMode && !canUseVideoGeneration) setComposerToggles({ videoMode: false });
   }, [billingPolicyReady, videoMode, canUseVideoGeneration, setComposerToggles]);
+
+  // A deployment can lose a provider key/storage independently of the user's
+  // tier. Do not leave a persisted media mode active once the no-store server
+  // handshake proves that it has no executable model.
+  useEffect(() => {
+    if (mediaAvailabilityStatus !== 'ready') return;
+    if (imageMode && (!hostCanGenerateImage || availableImageModels.length === 0)) {
+      setComposerToggles({ imageMode: false });
+    }
+    if (videoMode && (!hostCanGenerateVideo || availableVideoModels.length === 0)) {
+      setComposerToggles({ videoMode: false });
+    }
+  }, [
+    availableImageModels.length,
+    availableVideoModels.length,
+    imageMode,
+    hostCanGenerateImage,
+    hostCanGenerateVideo,
+    mediaAvailabilityStatus,
+    setComposerToggles,
+    videoMode,
+  ]);
 
   // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -886,13 +910,21 @@ const ChatComposerNewComponent = ({
     setAgiWorkDeliverable('');
     setAgiWorkFieldsOpen(false);
     setImageAspectRatio('auto');
-    setImageModelId(IMAGE_MODEL_DEFAULT);
+    setImageModelId(availableImageModels[0]?.id ?? '');
+    setVideoModelId(availableVideoModels[0]?.id ?? '');
     setShowCompatibleModels(false);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [clearAttachments, clearDraftContent, conversationId, setComposerToggles]);
+  }, [
+    availableImageModels,
+    availableVideoModels,
+    clearAttachments,
+    clearDraftContent,
+    conversationId,
+    setComposerToggles,
+  ]);
 
   useEffect(() => {
     if (!isFreeTrial || !researchEnabled) return;
@@ -1041,6 +1073,16 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+    // On a narrow first paint the empty-state flex layout can temporarily make
+    // an `auto`-height textarea report the 240px container ceiling as its
+    // scrollHeight. Once the user types, the next measurement corrects itself,
+    // but the initial mobile composer has already consumed most of the screen.
+    // Empty content never needs measurement, so keep its stable one-line height
+    // and reserve scrollHeight reads for real text.
+    if (message.length === 0) {
+      textarea.style.height = '52px';
+      return;
+    }
     textarea.style.height = 'auto';
     const newHeight = Math.min(Math.max(textarea.scrollHeight, 52), 240);
     textarea.style.height = `${newHeight}px`;
@@ -1199,11 +1241,21 @@ const ChatComposerNewComponent = ({
       const before = message.substring(0, mentionStartIndex);
       const cursorPos = textareaRef.current?.selectionStart || message.length;
       const after = message.substring(cursorPos);
-      const newMessage = `${before}@${skill.name} ${after}`;
+      // Selecting a Skill commits it to composer state; the `@query` is only
+      // a picker affordance and must not leak into the user's prompt. Keep the
+      // text on either side while normalizing only the whitespace at the
+      // removed token boundary.
+      const left = before.replace(/[ \t]+$/, '');
+      const right = after.replace(/^[ \t]+/, '');
+      const newMessage = left && right ? `${left} ${right}` : left || right;
+      const nextCursor = left ? left.length + (right ? 1 : 0) : 0;
       setMessage(newMessage);
       setSelectedSkillName(skill.name);
       setShowMentions(false);
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      }, 0);
     },
     [message, mentionStartIndex, setSelectedSkillName],
   );
@@ -1258,6 +1310,21 @@ const ChatComposerNewComponent = ({
           }
           return { status: 'applied', content: argument, toggles: {}, enableThinking: true };
         case 'image':
+          if (!hostCanGenerateImage) {
+            return {
+              status: 'unavailable',
+              notice: 'Image generation is not available from this chat.',
+            };
+          }
+          if (mediaAvailabilityStatus !== 'ready' || availableImageModels.length === 0) {
+            return {
+              status: 'unavailable',
+              notice:
+                mediaAvailabilityStatus === 'error'
+                  ? (mediaAvailabilityError ?? 'Could not check image model availability.')
+                  : 'No image model is currently available in this deployment.',
+            };
+          }
           if (!canUseImageGeneration) {
             return {
               status: 'unavailable',
@@ -1291,6 +1358,10 @@ const ChatComposerNewComponent = ({
       modelSupportsCodeExecution,
       canUseImageGeneration,
       composerSelectedModelId,
+      hostCanGenerateImage,
+      mediaAvailabilityStatus,
+      mediaAvailabilityError,
+      availableImageModels.length,
     ],
   );
 
@@ -1389,6 +1460,13 @@ const ChatComposerNewComponent = ({
     }
     return null;
   }, [message, customCommands]);
+  const pendingSlashOutcome = useMemo(
+    () =>
+      pendingSlashCommand
+        ? resolveSlashCommand(pendingSlashCommand.commandId, pendingSlashCommand.argument)
+        : null,
+    [pendingSlashCommand, resolveSlashCommand],
+  );
 
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
@@ -1461,7 +1539,26 @@ const ChatComposerNewComponent = ({
       if (isTurnActive) return;
       const prompt = outgoingContent.trim();
       if (!prompt) return;
-      onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
+      if (!onGenerateImage) {
+        setLocalNotice('Image generation is not available from this composer.');
+        return;
+      }
+      if (
+        mediaAvailabilityStatus !== 'ready' ||
+        !imageModelId ||
+        mediaAdmissionFor(imageModelId)?.state !== 'enabled'
+      ) {
+        setLocalNotice(
+          mediaAvailabilityStatus === 'error'
+            ? (mediaAvailabilityError ?? 'Could not check image model availability.')
+            : 'No image model is currently available in this deployment.',
+        );
+        return;
+      }
+      onGenerateImage(prompt, {
+        aspectRatio: effectiveImageAspectRatio,
+        modelId: imageModelId,
+      });
       clearComposerState();
       return;
     }
@@ -1473,11 +1570,27 @@ const ChatComposerNewComponent = ({
       if (isTurnActive) return;
       const prompt = outgoingContent.trim();
       if (!prompt) return;
+      if (!onGenerateVideo) {
+        setLocalNotice('Video generation is not available from this composer.');
+        return;
+      }
+      if (
+        mediaAvailabilityStatus !== 'ready' ||
+        !videoModelId ||
+        mediaAdmissionFor(videoModelId)?.state !== 'enabled'
+      ) {
+        setLocalNotice(
+          mediaAvailabilityStatus === 'error'
+            ? (mediaAvailabilityError ?? 'Could not check video model availability.')
+            : 'No video model is currently available in this deployment.',
+        );
+        return;
+      }
       // Carry the picked model so the picker is a real control: the route at
       // /api/media/video/generate already validates a caller-supplied model
       // (modelType must be 'video', must be live, provider must be executable)
       // and falls back to the catalog's video_generation slot when omitted.
-      onGenerateVideo?.(prompt, videoModelId ? { modelId: videoModelId } : undefined);
+      onGenerateVideo(prompt, videoModelId ? { modelId: videoModelId } : undefined);
       clearComposerState();
       return;
     }
@@ -1547,8 +1660,11 @@ const ChatComposerNewComponent = ({
     trialExhausted,
     onUpgradeRequest,
     imageMode,
-    imageAspectRatio,
+    effectiveImageAspectRatio,
     imageModelId,
+    mediaAdmissionFor,
+    mediaAvailabilityError,
+    mediaAvailabilityStatus,
     onGenerateImage,
     videoMode,
     videoModelId,
@@ -1739,6 +1855,9 @@ const ChatComposerNewComponent = ({
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const composerDisabled = disabled || trialExhausted;
+  const selectedMediaModelUnavailable =
+    (imageMode && mediaAdmissionFor(imageModelId)?.state !== 'enabled') ||
+    (videoMode && mediaAdmissionFor(videoModelId)?.state !== 'enabled');
 
   // AUDIT-FIX CMP-32: length feedback against the real contract ceiling.
   const messageLength = message.length;
@@ -1787,7 +1906,7 @@ const ChatComposerNewComponent = ({
   // the iOS home indicator. layout.tsx sets viewportFit:'cover', which makes a
   // missing inset worse rather than neutral.
   return (
-    <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
+    <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
 
       {localNotice && (
@@ -1969,7 +2088,7 @@ const ChatComposerNewComponent = ({
       <div
         id="chat-composer"
         className={cn(
-          'relative border bg-[var(--chat-bg-elevated)] shadow-sm backdrop-blur-sm transition-all duration-200',
+          'relative border bg-[var(--chat-input-bg)] shadow-sm backdrop-blur-sm transition-all duration-200',
           emptyState ? 'rounded-[26px]' : 'rounded-2xl',
           isFocused
             ? 'border-[var(--chat-accent-primary)]/40 shadow-md ring-2 ring-[var(--chat-accent-primary)]/30'
@@ -1984,6 +2103,11 @@ const ChatComposerNewComponent = ({
             onSelect={handleSlashSelect}
             onSkillSelect={handleSkillSelect}
             skills={availableSkills}
+            imageCommandAvailable={
+              hostCanGenerateImage &&
+              mediaAvailabilityStatus === 'ready' &&
+              availableImageModels.length > 0
+            }
             onClose={() => setShowSlashMenu(false)}
           />
         )}
@@ -2098,11 +2222,17 @@ const ChatComposerNewComponent = ({
 
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
               before the user presses Enter. */}
-          {pendingSlashCommand && (
-            <p className="px-2 text-[11px] text-muted-foreground">
-              <span className="font-medium text-foreground">{pendingSlashCommand.label}</span> runs
-              on send
-              {pendingSlashCommand.argument ? ` with: ${pendingSlashCommand.argument}` : ''}
+          {pendingSlashCommand && pendingSlashOutcome && (
+            <p className="px-2 text-[11px] text-muted-foreground" role="status">
+              {pendingSlashOutcome.status === 'unavailable' ? (
+                pendingSlashOutcome.notice
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{pendingSlashCommand.label}</span>{' '}
+                  runs on send
+                  {pendingSlashCommand.argument ? ` with: ${pendingSlashCommand.argument}` : ''}
+                </>
+              )}
             </p>
           )}
 
@@ -2205,7 +2335,9 @@ const ChatComposerNewComponent = ({
                         <span className="flex-1 text-left">Add photos &amp; files</span>
                       </button>
 
-                      {/* 2. Create image.
+                      {hostCanGenerateImage && (
+                        <>
+                          {/* 2. Create image.
 
                         AUDIT-FIX CMP-11: this row had NO tier check in the
                         composer while /api/media/image/generate rejects
@@ -2213,42 +2345,90 @@ const ChatComposerNewComponent = ({
                         failed after a round trip, with `onUpgradeRequest`
                         available and never called. Deep Research one row below
                         was already gated correctly; this now matches it. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenu();
-                          if (!canUseImageGeneration) {
-                            onUpgradeRequest?.();
-                            return;
-                          }
-                          setImageMode(true);
-                          setTimeout(() => textareaRef.current?.focus(), 0);
-                        }}
-                        title={
-                          canUseImageGeneration
-                            ? undefined
-                            : 'Image generation is available on Pro and above.'
-                        }
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          imageMode && 'text-primary',
-                        )}
-                      >
-                        <ImagePlus
-                          className={cn(
-                            'h-4 w-4',
-                            imageMode ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span className="flex-1 text-left">Create image</span>
-                        {!canUseImageGeneration && (
-                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                            Upgrade
-                          </span>
-                        )}
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              closeMenu();
+                              if (!billingPolicyReady) {
+                                if (billingPolicyError) {
+                                  setLocalNotice("Couldn't verify your plan. Retrying…");
+                                  void refreshBillingPolicy();
+                                } else {
+                                  setLocalNotice('Checking your plan…');
+                                }
+                                return;
+                              }
+                              if (mediaAvailabilityStatus !== 'ready') {
+                                setLocalNotice(
+                                  mediaAvailabilityStatus === 'error'
+                                    ? (mediaAvailabilityError ??
+                                        'Could not check image model availability.')
+                                    : 'Checking image model availability…',
+                                );
+                                if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                                return;
+                              }
+                              if (availableImageModels.length === 0) {
+                                setLocalNotice(
+                                  'This deployment is not ready for image generation.',
+                                );
+                                return;
+                              }
+                              if (!canUseImageGeneration) {
+                                onUpgradeRequest?.();
+                                return;
+                              }
+                              setImageMode(true);
+                              setTimeout(() => textareaRef.current?.focus(), 0);
+                            }}
+                            title={
+                              !billingPolicyReady
+                                ? billingPolicyError
+                                  ? 'Your plan could not be verified. Click to retry.'
+                                  : 'Checking your plan.'
+                                : mediaAvailabilityStatus === 'loading'
+                                  ? 'Checking configured image providers.'
+                                  : mediaAvailabilityStatus === 'error'
+                                    ? 'Image provider availability could not be checked. Click to retry.'
+                                    : availableImageModels.length === 0
+                                      ? 'This deployment is not ready for image generation.'
+                                      : !canUseImageGeneration
+                                        ? 'Image generation is available on Pro and above.'
+                                        : undefined
+                            }
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                              imageMode && 'text-primary',
+                            )}
+                          >
+                            <ImagePlus
+                              className={cn(
+                                'h-4 w-4',
+                                imageMode ? 'text-primary' : 'text-muted-foreground',
+                              )}
+                            />
+                            <span className="flex-1 text-left">Create image</span>
+                            {!billingPolicyReady ? (
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {billingPolicyError ? 'Retry' : 'Checking'}
+                              </span>
+                            ) : mediaAvailabilityStatus !== 'ready' ||
+                              availableImageModels.length === 0 ? (
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
+                              </span>
+                            ) : !canUseImageGeneration ? (
+                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                Upgrade
+                              </span>
+                            ) : null}
+                          </button>
+                        </>
+                      )}
 
-                      {/* 2b. Create video.
+                      {hostCanGenerateVideo && (
+                        <>
+                          {/* 2b. Create video.
 
                         /api/media/video/generate has been implemented and
                         entitled (billing-catalog: max_15x + enterprise) all
@@ -2258,40 +2438,86 @@ const ChatComposerNewComponent = ({
                         composer was unreachable. Same component, same gating
                         idiom, same upgrade affordance as "Create image" one row
                         above; only the capability key differs. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenu();
-                          if (!canUseVideoGeneration) {
-                            onUpgradeRequest?.();
-                            return;
-                          }
-                          setVideoMode(true);
-                          setTimeout(() => textareaRef.current?.focus(), 0);
-                        }}
-                        title={
-                          canUseVideoGeneration
-                            ? undefined
-                            : 'Video generation is available on Max 15x and Enterprise.'
-                        }
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          videoMode && 'text-primary',
-                        )}
-                      >
-                        <Video
-                          className={cn(
-                            'h-4 w-4',
-                            videoMode ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span className="flex-1 text-left">Create video</span>
-                        {!canUseVideoGeneration && (
-                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                            Upgrade
-                          </span>
-                        )}
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              closeMenu();
+                              if (!billingPolicyReady) {
+                                if (billingPolicyError) {
+                                  setLocalNotice("Couldn't verify your plan. Retrying…");
+                                  void refreshBillingPolicy();
+                                } else {
+                                  setLocalNotice('Checking your plan…');
+                                }
+                                return;
+                              }
+                              if (mediaAvailabilityStatus !== 'ready') {
+                                setLocalNotice(
+                                  mediaAvailabilityStatus === 'error'
+                                    ? (mediaAvailabilityError ??
+                                        'Could not check video model availability.')
+                                    : 'Checking video model availability…',
+                                );
+                                if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                                return;
+                              }
+                              if (availableVideoModels.length === 0) {
+                                setLocalNotice(
+                                  'This deployment is not ready for video generation.',
+                                );
+                                return;
+                              }
+                              if (!canUseVideoGeneration) {
+                                onUpgradeRequest?.();
+                                return;
+                              }
+                              setVideoMode(true);
+                              setTimeout(() => textareaRef.current?.focus(), 0);
+                            }}
+                            title={
+                              !billingPolicyReady
+                                ? billingPolicyError
+                                  ? 'Your plan could not be verified. Click to retry.'
+                                  : 'Checking your plan.'
+                                : mediaAvailabilityStatus === 'loading'
+                                  ? 'Checking configured video providers.'
+                                  : mediaAvailabilityStatus === 'error'
+                                    ? 'Video provider availability could not be checked. Click to retry.'
+                                    : availableVideoModels.length === 0
+                                      ? 'This deployment is not ready for video generation.'
+                                      : !canUseVideoGeneration
+                                        ? 'Video generation is available on Max 15x and Enterprise.'
+                                        : undefined
+                            }
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                              videoMode && 'text-primary',
+                            )}
+                          >
+                            <Video
+                              className={cn(
+                                'h-4 w-4',
+                                videoMode ? 'text-primary' : 'text-muted-foreground',
+                              )}
+                            />
+                            <span className="flex-1 text-left">Create video</span>
+                            {!billingPolicyReady ? (
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {billingPolicyError ? 'Retry' : 'Checking'}
+                              </span>
+                            ) : mediaAvailabilityStatus !== 'ready' ||
+                              availableVideoModels.length === 0 ? (
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
+                              </span>
+                            ) : !canUseVideoGeneration ? (
+                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                Upgrade
+                              </span>
+                            ) : null}
+                          </button>
+                        </>
+                      )}
 
                       {/* 3. Take a screenshot — desktop-only capability. Render-gated
                         so it is ABSENT (not merely disabled) on web/mobile.
@@ -2502,7 +2728,7 @@ const ChatComposerNewComponent = ({
                           isFreeTrial
                             ? 'Upgrade to use Deep Research'
                             : !modelSupportsResearch
-                              ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                              ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
                               : undefined
                         }
                       />
@@ -2619,7 +2845,7 @@ const ChatComposerNewComponent = ({
                   onClick={() => {
                     setImageMode(false);
                     setImageAspectRatio('auto');
-                    setImageModelId(IMAGE_MODEL_DEFAULT);
+                    setImageModelId(availableImageModels[0]?.id ?? '');
                   }}
                   className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
                   aria-label="Exit image generation mode"
@@ -2641,12 +2867,13 @@ const ChatComposerNewComponent = ({
                     className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
                     aria-label="Select aspect ratio"
                   >
-                    {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
+                    {imageAspectOptions.find((option) => option.id === effectiveImageAspectRatio)
+                      ?.label ?? 'Auto'}
                     <ChevronDown className="h-3 w-3" />
                   </button>
                   {showImageAspectMenu && (
                     <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                      {IMAGE_ASPECT_OPTIONS.map((opt) => (
+                      {imageAspectOptions.map((opt) => (
                         <button
                           key={opt.id}
                           type="button"
@@ -2656,13 +2883,13 @@ const ChatComposerNewComponent = ({
                           }}
                           className={cn(
                             'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                            imageAspectRatio === opt.id
+                            effectiveImageAspectRatio === opt.id
                               ? 'bg-primary/10 text-primary'
                               : 'hover:bg-muted/60',
                           )}
                         >
                           <span className="flex-1 text-left">{opt.label}</span>
-                          {imageAspectRatio === opt.id && (
+                          {effectiveImageAspectRatio === opt.id && (
                             <Check className="h-3 w-3 shrink-0 text-primary" />
                           )}
                         </button>
@@ -2683,7 +2910,7 @@ const ChatComposerNewComponent = ({
                   type="button"
                   onClick={() => {
                     setVideoMode(false);
-                    setVideoModelId(VIDEO_MODEL_DEFAULT);
+                    setVideoModelId(availableVideoModels[0]?.id ?? '');
                   }}
                   className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
                   aria-label="Exit video generation mode"
@@ -2704,9 +2931,9 @@ const ChatComposerNewComponent = ({
 
               Video mode is excluded for the same reason as image mode, and it used
               not to be: the video pill above documents that video resolves its model
-              from the catalog's `video_generation` slot (currently `veo-3.1`) rather
+              from the catalog's `video_generation` slot rather
               than from this picker, but the picker still rendered, so entering video
-              mode left a TEXT model — e.g. "Gemini 3.5 Flash-Lite" — displayed beside
+              mode left an unrelated text-model label displayed beside
               "Describe the video you want". That label named a model which had no part
               in the generation the send button would actually run, which is exactly the
               stale-model-label class the capability-honesty rule forbids. Showing no
@@ -2720,6 +2947,7 @@ const ChatComposerNewComponent = ({
                 lockModelSelector={false}
                 showStyleSelector={!isFreeTrial}
                 onUpgradeRequest={onUpgradeRequest}
+                onModelChange={onModelChange}
               />
             )}
 
@@ -2739,19 +2967,24 @@ const ChatComposerNewComponent = ({
                       says so); when it yields none there is nothing to pick and
                       the honest label says exactly that. */}
                   <span className="max-w-[120px] truncate">
-                    {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
-                      'No image model available'}
+                    {availableImageModels.find((m) => m.id === imageModelId)?.label ??
+                      (mediaAvailabilityStatus === 'loading'
+                        ? 'Checking image models…'
+                        : 'No image model available')}
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
                 {showImageModelMenu && (
                   <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                    {IMAGE_MODELS.map((m) => (
+                    {availableImageModels.map((m) => (
                       <button
                         key={m.id}
                         type="button"
                         onClick={() => {
                           setImageModelId(m.id);
+                          if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
+                            setImageAspectRatio('auto');
+                          }
                           setShowImageModelMenu(false);
                         }}
                         className={cn(
@@ -2767,6 +3000,20 @@ const ChatComposerNewComponent = ({
                         )}
                       </button>
                     ))}
+                    {mediaAvailabilityStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryMediaAvailability}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry model availability
+                      </button>
+                    )}
+                    {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        This deployment is not ready for image generation.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -2776,7 +3023,7 @@ const ChatComposerNewComponent = ({
                 place of the text-model ComposerFooter, which is hidden in video
                 mode. Before this existed, entering video mode left the TEXT
                 selector on screen, so "Describe the video you want" sat beside a
-                model like "Gemini 3.5 Flash-Lite" that had no part in the
+                text model that had no part in the
                 generation the send button ran — a stale model label. */}
             {videoMode && (
               <div className="relative ml-auto shrink-0">
@@ -2790,14 +3037,16 @@ const ChatComposerNewComponent = ({
                       source, so an empty catalog says so instead of naming a
                       model that cannot run. */}
                   <span className="max-w-[120px] truncate">
-                    {VIDEO_MODELS.find((m) => m.id === videoModelId)?.label ??
-                      'No video model available'}
+                    {availableVideoModels.find((m) => m.id === videoModelId)?.label ??
+                      (mediaAvailabilityStatus === 'loading'
+                        ? 'Checking video models…'
+                        : 'No video model available')}
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
                 {showVideoModelMenu && (
                   <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                    {VIDEO_MODELS.map((m) => (
+                    {availableVideoModels.map((m) => (
                       <button
                         key={m.id}
                         type="button"
@@ -2818,6 +3067,20 @@ const ChatComposerNewComponent = ({
                         )}
                       </button>
                     ))}
+                    {mediaAvailabilityStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryMediaAvailability}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry model availability
+                      </button>
+                    )}
+                    {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        This deployment is not ready for video generation.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -2844,7 +3107,11 @@ const ChatComposerNewComponent = ({
             <SendButton
               mode={sendButtonMode}
               hasContent={hasContent}
-              disabled={composerDisabled || (sendButtonMode !== 'stop' && hasAttachmentConflict)}
+              disabled={
+                composerDisabled ||
+                (sendButtonMode !== 'stop' &&
+                  (hasAttachmentConflict || selectedMediaModelUnavailable))
+              }
               onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
               className="shrink-0"
             />
@@ -3145,6 +3412,9 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
     prev.sendPreviewPresentation === next.sendPreviewPresentation &&
     prev.onUpgradeRequest === next.onUpgradeRequest &&
+    prev.onModelChange === next.onModelChange &&
+    prev.onGenerateImage === next.onGenerateImage &&
+    prev.onGenerateVideo === next.onGenerateVideo &&
     prev.freeTrial?.enabled === next.freeTrial?.enabled &&
     prev.freeTrial?.limitReached === next.freeTrial?.limitReached &&
     prev.projectPicker?.projects === next.projectPicker?.projects &&

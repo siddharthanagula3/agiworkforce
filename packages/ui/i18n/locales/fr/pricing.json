@@ -76,5 +76,13 @@
   "pageTitle": "Tarifs",
   "freeLocalByok": "Modèles locaux et vos propres clés API, toujours gratuits",
   "seatTotal_one": "{{count}} siège · {{total}}/mois",
-  "seatTotal_other": "{{count}} sièges · {{total}}/mois"
+  "seatTotal_other": "{{count}} sièges · {{total}}/mois",
+  "perSeatPrice": "{{price}}/siège/mois",
+  "perSeatPriceAnnual": "{{price}}/siège/an",
+  "seatTotalAnnual_one": "{{count}} siège · {{total}}/an",
+  "seatTotalAnnual_other": "{{count}} sièges · {{total}}/an",
+  "seatCadenceMonthly_one": "{{count}} siège · facturation mensuelle",
+  "seatCadenceMonthly_other": "{{count}} sièges · facturation mensuelle",
+  "seatCadenceAnnual_one": "{{count}} siège · facturation annuelle",
+  "seatCadenceAnnual_other": "{{count}} sièges · facturation annuelle"
 }

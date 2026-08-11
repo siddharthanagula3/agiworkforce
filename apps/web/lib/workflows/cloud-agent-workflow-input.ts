@@ -38,6 +38,7 @@ const LlmRequestSchema = z
 const ProcessedRequestSchema = z
   .object({
     requestId: z.string().min(1),
+    organizationId: z.string().uuid().nullable().optional(),
     chatRequest: z
       .object({
         model: z.string().min(1),

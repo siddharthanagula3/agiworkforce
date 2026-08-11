@@ -74,7 +74,12 @@ export interface ModelMetadata {
     | 'stt'
     | 'embedding'
     | 'music';
-  contextWindow: number;
+  /**
+   * Published token context limit for text/chat models. Media APIs can omit
+   * this because their documented limits use other units (for example,
+   * characters and duration).
+   */
+  contextWindow?: number;
   inputCost: number;
   outputCost: number;
   capabilities: ModelCapabilities;
@@ -190,7 +195,12 @@ export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 export const PROVIDERS_IN_ORDER: Provider[] = config.providersInOrder as Provider[];
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
-  Object.entries(MODEL_METADATA).map(([id, m]) => [id, m.contextWindow]),
+  Object.entries(MODEL_METADATA).flatMap(([id, model]) => {
+    const contextWindow = model.contextWindow;
+    return typeof contextWindow === 'number' && Number.isFinite(contextWindow) && contextWindow > 0
+      ? [[id, contextWindow]]
+      : [];
+  }),
 );
 
 // ---- Tier logic (reads arrays from JSON) ----
@@ -229,7 +239,14 @@ export function getProviderModels(provider: Provider): ModelMetadata[] {
 
 export function getModelContextWindow(modelId: string): number {
   const canonicalModelId = normalizeModelId(modelId);
-  return (canonicalModelId ? MODEL_CONTEXT_WINDOWS[canonicalModelId] : undefined) ?? 128_000;
+  const metadata = canonicalModelId ? MODEL_METADATA[canonicalModelId] : undefined;
+  const publishedContextWindow = canonicalModelId
+    ? MODEL_CONTEXT_WINDOWS[canonicalModelId]
+    : undefined;
+  if (metadata && publishedContextWindow === undefined) {
+    throw new Error(`Model ${canonicalModelId} does not publish a token context window`);
+  }
+  return publishedContextWindow ?? 128_000;
 }
 
 export function formatCost(inputCost?: number, outputCost?: number): string {

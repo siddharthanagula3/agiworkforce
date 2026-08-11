@@ -53,7 +53,7 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
   });
 
   it('does not mutate non-anthropic routes (e.g. nvidia/*)', () => {
-    const params = buildParams('nvidia/nemotron-3-super-120b-a12b:free');
+    const params = buildParams('fixture-provider/fixture-model');
     const before = JSON.stringify(params.messages);
     applyOpenRouterAnthropicCacheControl(params, 'short');
     expect(JSON.stringify(params.messages)).toBe(before);

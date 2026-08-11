@@ -106,7 +106,7 @@ export default async function StatusPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Status</p>
           <h1 id="agi-status-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">One signal,</span>
+            <span className="agi-fl-h1-line">One signal,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">honestly checked.</em>
             </span>

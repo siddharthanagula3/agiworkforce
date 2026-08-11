@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
+import { loadCanonicalModelIdTokens } from './check-no-hardcoded-model-ids.mjs';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../');
 const MODELS_JSON = resolve(ROOT, 'packages/contracts/types/src/models.json');
@@ -30,13 +31,17 @@ const LOCKS_DIR = join(
   '.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/locks',
 );
 
-// Regex patterns for model ID references in lock markdown.
-// Greedy suffix so we capture the full ID (e.g. gemini-3.5-flash-lite, not just gemini-3.1).
-// The negative lookahead (?!-\w) prevents partial-version captures: we want the longest match.
-// sonar model IDs are short: sonar, sonar-pro, sonar-reasoning, sonar-deep-research.
-// Exclude sonar-[word]-[word] patterns that look like ESLint rule names (e.g. sonar-naming-convention).
-const MODEL_ID_RE =
-  /\b(claude-[\w.-]+-[\d.]+[\w-]*|gpt-[\d.]+[\w.-]*|gemini-[\d.]+[\w.-]*|deepseek-[\w.-]+-[\w.-]+|qwen[\w.-]+-[\w.-]+|grok-[\d.]+[\w.-]*|kimi-[\w.]+-[\d.]+[\w-]*|mistral-[\w.]+-[\d]+[\w-]*|glm-[\d.]+[\w.-]*|sonar(?:-(?:pro|reasoning(?:-pro)?|deep-research))?)\b/g;
+const guardedModelTokens = loadCanonicalModelIdTokens(ROOT).map(({ id }) => id.toLowerCase());
+const guardedModelTokenSet = new Set(guardedModelTokens);
+const modelFamilyPrefixes = new Set(
+  guardedModelTokens
+    .map((id) => {
+      const separator = id.search(/[-_./]/);
+      return separator > 0 ? id.slice(0, separator) : id;
+    })
+    .filter(Boolean),
+);
+const IDENTIFIER_TOKEN_RE = /[A-Za-z0-9][A-Za-z0-9._:/-]*/g;
 
 function readModelsJson() {
   if (!existsSync(MODELS_JSON)) return new Set();
@@ -59,8 +64,24 @@ function readCargoVersion() {
 
 function extractModelRefs(text) {
   const refs = new Set();
-  for (const m of text.matchAll(MODEL_ID_RE)) {
-    refs.add(m[1]);
+  for (const match of text.matchAll(IDENTIFIER_TOKEN_RE)) {
+    const candidate = match[0];
+    const lower = candidate.toLowerCase();
+    if (guardedModelTokenSet.has(lower)) {
+      refs.add(candidate);
+      continue;
+    }
+    for (const prefix of modelFamilyPrefixes) {
+      if (
+        lower.startsWith(`${prefix}-`) ||
+        lower.startsWith(`${prefix}_`) ||
+        lower.startsWith(`${prefix}.`) ||
+        lower.startsWith(`${prefix}/`)
+      ) {
+        refs.add(candidate);
+        break;
+      }
+    }
   }
   return refs;
 }

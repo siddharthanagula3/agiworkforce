@@ -361,19 +361,19 @@
         "modelKey": "gemini-3.5-flash-lite"
       },
       "general_balanced": {
-        "modelKey": "gpt-5.6-terra"
+        "providerTask": { "provider": "openai", "task": "chat" }
       },
       "general_premium": {
         "modelKey": "gemini-3.6-flash"
       },
       "flagship_general": {
-        "modelKey": "gpt-5.6-sol"
+        "providerTask": { "provider": "openai", "task": "complex_reasoning" }
       },
       "coding_fast": {
-        "modelKey": "gpt-5.4-mini"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "coding_premium": {
-        "modelKey": "gpt-5.6-sol"
+        "providerTask": { "provider": "openai", "task": "code_generation" }
       },
       "escalation_coding": {
         "modelKey": "glm-5.2"
@@ -451,7 +451,7 @@
         "modelKey": "gemini-3.5-flash-lite"
       },
       "general_balanced_pro": {
-        "modelKey": "gpt-5.6-terra"
+        "providerTask": { "provider": "openai", "task": "chat" }
       },
       "coding_premium_pro": {
         "modelKey": "claude-sonnet-5"
@@ -469,7 +469,7 @@
         "modelKey": "claude-opus-5"
       },
       "flagship_general_pro_plus": {
-        "modelKey": "gpt-5.6-sol"
+        "providerTask": { "provider": "openai", "task": "complex_reasoning" }
       },
       "video_generation_pro_plus": {
         "modelKey": "veo-3.1"

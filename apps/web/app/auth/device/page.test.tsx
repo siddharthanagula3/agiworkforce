@@ -313,6 +313,56 @@ describe('/auth/device page', () => {
     expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
   });
 
+  it('offers the authenticated acceptance flow when current terms block approval', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/auth/device/code?')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                user_code: 'ABCD-1234',
+                client: { name: 'AGI for VS Code', type: 'vscode' },
+                scopes: [
+                  { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
+                ],
+                expires_at: '2099-08-01T00:00:00.000Z',
+              }),
+          } as Partial<Response>);
+        }
+        if (url === '/api/csrf') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ token: 'csrf-token' }),
+          } as Partial<Response>);
+        }
+
+        return Promise.resolve({
+          ok: false,
+          json: () =>
+            Promise.resolve({
+              error: {
+                code: 'TERMS_ACCEPTANCE_REQUIRED',
+                message:
+                  'Review and accept the current Terms of Service before approving a device.',
+              },
+              acceptanceUrl: '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234',
+            }),
+        } as Partial<Response>);
+      }),
+    );
+
+    render(<AuthDevicePage />);
+    await screen.findByRole('heading', { name: 'AGI for VS Code' });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
+
+    expect(await screen.findByRole('link', { name: 'Review current policies' })).toHaveAttribute(
+      'href',
+      '/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234',
+    );
+  });
+
   // Pairing is the one sign-in a CLI/desktop user cannot skip, so English baked
   // into the JSX locks every non-English user out of the trust decision. These
   // two tests pin the copy to the corpus from both ends: swapping the bundle

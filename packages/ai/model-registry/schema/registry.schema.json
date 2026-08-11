@@ -97,6 +97,7 @@
         "displayName": { "$ref": "#/definitions/nonEmptyString" },
         "provider": { "$ref": "#/definitions/nonEmptyString" },
         "providerModelId": { "$ref": "#/definitions/nonEmptyString" },
+        "openRouterSlug": { "$ref": "#/definitions/nonEmptyString" },
         "kind": { "$ref": "#/definitions/nonEmptyString" },
         "familyPartner": { "$ref": "#/definitions/nonEmptyString" },
         "openWeight": { "type": "boolean" },
@@ -274,19 +275,57 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "480p": { "type": "number", "minimum": 0 },
             "720p": { "type": "number", "minimum": 0 },
             "1080p": { "type": "number", "minimum": 0 },
             "4k": { "type": "number", "minimum": 0 }
           }
         },
+        "videoTokenFormula": { "$ref": "#/definitions/videoTokenFormula" },
         "promoExpiresAt": { "type": ["string", "null"] },
         "postPromoPrices": { "type": ["object", "null"] },
+        "inputTokenPricingTiers": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordered provider-published price bands. The compiler additionally requires strictly increasing thresholds; consumers select the greatest threshold strictly below total request input tokens.",
+          "items": { "$ref": "#/definitions/inputTokenPricingTier" }
+        },
+        "longContext": {
+          "description": "Deprecated read-compatibility singleton. Current generated entries use inputTokenPricingTiers.",
+          "$ref": "#/definitions/inputTokenPricingTier"
+        },
         "schedule": {
           "type": "array",
           "minItems": 1,
           "description": "Dated pricing windows. effectiveFrom/effectiveUntil are UTC calendar days and both bounds are inclusive, so a changeover happens at UTC midnight. Windows must not overlap; the first window covering a date wins, and the top-level fields are the fallback for any rate a window omits.",
           "items": { "$ref": "#/definitions/pricingScheduleEntry" }
         }
+      }
+    },
+    "videoTokenFormula": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "framesPerSecond", "pixelsPerToken", "usdPerToken"],
+      "properties": {
+        "unit": { "const": "video_tokens" },
+        "framesPerSecond": { "type": "integer", "minimum": 1 },
+        "pixelsPerToken": { "type": "integer", "minimum": 1 },
+        "usdPerToken": { "type": "number", "exclusiveMinimum": 0 },
+        "usdPerTokenWithoutAudio": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "inputTokenPricingTier": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Provider-published rates used only when total input tokens are strictly above thresholdTokens.",
+      "required": ["thresholdTokens", "inputPerMillion", "outputPerMillion"],
+      "properties": {
+        "thresholdTokens": { "type": "integer", "minimum": 1 },
+        "inputPerMillion": { "type": "number", "minimum": 0 },
+        "outputPerMillion": { "type": "number", "minimum": 0 },
+        "cacheReadPerMillion": { "type": "number", "minimum": 0 },
+        "cacheWritePerMillion": { "type": "number", "minimum": 0 },
+        "cacheWrite1hPerMillion": { "type": "number", "minimum": 0 }
       }
     },
     "pricingScheduleEntry": {
@@ -311,7 +350,39 @@
         "contextTokens": { "type": "integer", "minimum": 1 },
         "maxInputTokens": { "type": "integer", "minimum": 1 },
         "maxOutputTokens": { "type": "integer", "minimum": 1 },
-        "knowledgeCutoff": { "$ref": "#/definitions/nonEmptyString" }
+        "knowledgeCutoff": { "$ref": "#/definitions/nonEmptyString" },
+        "videoGeneration": { "$ref": "#/definitions/videoGenerationLimits" }
+      }
+    },
+    "videoGenerationLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationSecs", "outputSizes", "supportsAudio"],
+      "properties": {
+        "durationSecs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "outputSizes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/videoOutputSize" }
+        },
+        "supportsAudio": { "type": "boolean" },
+        "supportsSeed": { "type": "boolean" }
+      }
+    },
+    "videoOutputSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resolution", "aspectRatio", "width", "height"],
+      "properties": {
+        "resolution": { "$ref": "#/definitions/nonEmptyString" },
+        "aspectRatio": { "$ref": "#/definitions/nonEmptyString" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
       }
     },
     "evidence": {

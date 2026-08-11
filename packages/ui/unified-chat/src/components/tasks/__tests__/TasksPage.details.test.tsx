@@ -21,7 +21,7 @@ const run: CloudAgentRun = {
   workMode: 'agiwork',
   state: 'completed',
   provider: 'openai',
-  model: 'gpt-5.6-sol',
+  model: 'fixture-task-model',
   lastEventSequence: 2,
   cancellationRequestedAt: null,
   completedAt: '2026-07-30T12:00:10.000Z',
@@ -98,6 +98,8 @@ describe('Tasks task-detail panel', () => {
         await screen.findByRole('button', { name: 'View details for AGI Work task' }),
       );
 
+      expect(screen.getByText('Unavailable model')).toBeTruthy();
+      expect(screen.queryByText(run.model)).toBeNull();
       expect(await screen.findByText('Prepared the benchmark')).toBeTruthy();
       expect(screen.getByText('Outputs · 1')).toBeTruthy();
       expect(screen.getByText('benchmark.csv')).toBeTruthy();
@@ -158,11 +160,35 @@ describe('Tasks task-detail panel', () => {
       />,
     );
 
+    expect(await screen.findByRole('heading', { name: 'Select a task' })).toBeTruthy();
+    expect(screen.getByLabelText('Task details').className.split(' ')).toContain('lg:self-start');
     fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
     await waitFor(() => expect(screen.getByLabelText('Task details')).toBeTruthy());
     expect(openConversation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
     expect(openConversation).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('opens selected task details as a mobile overlay while retaining the desktop split panel', async () => {
+    render(
+      <TasksPage
+        transport={{
+          client: client(),
+          openConversation: vi.fn(),
+          notifyError: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+
+    const details = screen.getByLabelText('Task details');
+    expect(details.className.split(' ')).toEqual(
+      expect.arrayContaining(['fixed', 'inset-0', 'overflow-y-auto', 'lg:sticky', 'lg:inset-auto']),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close task details' }));
+    expect(await screen.findByRole('heading', { name: 'Select a task' })).toBeTruthy();
   });
 });

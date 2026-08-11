@@ -25,6 +25,15 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { GET } from './route';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { listCanonicalModels } from '@agiworkforce/types';
+
+const CONTEXTLESS_MEDIA_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.modelType === 'video' && candidate.contextWindow === undefined,
+  );
+  if (!model) throw new Error('Canonical contextless media fixture is missing');
+  return model.id;
+})();
 
 function request(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('https://example.com/api/llm/v1/models', { headers });
@@ -97,6 +106,29 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     expect(authMocks.getClerkAuthUser).toHaveBeenCalledWith(expect.any(NextRequest), {
       apiKeyScope: 'models:read',
     });
+  });
+
+  it('publishes only chat models with provider-backed token context limits', async () => {
+    authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
+    subscriptionMocks.getSubscription.mockResolvedValueOnce({
+      plan_tier: 'max',
+      status: 'active',
+    });
+
+    const response = await GET(request({ Authorization: 'Bearer valid-token' }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data.length).toBeGreaterThan(0);
+    expect(payload.data).not.toContainEqual(
+      expect.objectContaining({ id: CONTEXTLESS_MEDIA_MODEL }),
+    );
+    expect(
+      payload.data.every(
+        (model: { context_window: number }) =>
+          Number.isFinite(model.context_window) && model.context_window > 0,
+      ),
+    ).toBe(true);
   });
 
   it.each(['canceled', 'past_due', 'unpaid', 'expired'])(

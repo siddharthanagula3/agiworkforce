@@ -737,14 +737,14 @@ mod tests {
         let mut session = ManagedSession::new("auto-session", Utc::now());
         session.auto_routing = Some(ManagedSessionAutoRouting {
             selection: "auto-balanced".to_string(),
-            model_key: "claude-sonnet-5".to_string(),
+            model_key: "fixture-route-model".to_string(),
             task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
         });
-        session.model = Some("claude-sonnet-5".to_string());
+        session.model = Some("fixture-route-model".to_string());
         session.routing_authority = Some(ManagedSessionRoutingAuthority {
             privacy_mode: PrivacyMode::Byok,
-            provider: "anthropic".to_string(),
+            provider: "fixture-provider".to_string(),
         });
 
         session.save_to_path(&path).expect("save Auto session");

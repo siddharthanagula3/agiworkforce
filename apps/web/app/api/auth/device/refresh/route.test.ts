@@ -23,6 +23,7 @@ vi.mock('@/lib/server/developer-token', () => ({
 }));
 
 import { hashDeviceRefreshToken } from '@/lib/server/device-refresh-token';
+import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 import { POST } from './route';
 
 const CURRENT_TOKEN = 'current-refresh-token-with-more-than-forty-random-characters';
@@ -65,6 +66,10 @@ describe('POST /api/auth/device/refresh', () => {
           expires_at: new Date(Date.now() + 60_000).toISOString(),
           used_at: null,
           revoked_at: null,
+          owner_missing: false,
+          owner_deletion_scheduled_for: null,
+          owner_terms_version: CURRENT_TERMS_VERSION,
+          owner_terms_accepted_at: new Date().toISOString(),
         },
       ])
       .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
@@ -98,6 +103,10 @@ describe('POST /api/auth/device/refresh', () => {
         expires_at: new Date(Date.now() + 60_000).toISOString(),
         used_at: new Date().toISOString(),
         revoked_at: null,
+        owner_missing: false,
+        owner_deletion_scheduled_for: null,
+        owner_terms_version: CURRENT_TERMS_VERSION,
+        owner_terms_accepted_at: new Date().toISOString(),
       },
     ]);
 
@@ -107,6 +116,31 @@ describe('POST /api/auth/device/refresh', () => {
     await expect(response.json()).resolves.toEqual({ error: 'invalid_grant' });
     expect(mocks.execute.mock.calls[0]?.[0]).toContain('WHERE family_id = $1');
     expect(mocks.execute.mock.calls[0]?.[1]?.[0]).toBe('22222222-2222-4222-8222-222222222222');
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+  });
+
+  it('revokes a refresh family whose account has not accepted the live revision', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        family_id: '22222222-2222-4222-8222-222222222222',
+        user_id: 'user-1',
+        user_email: null,
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        used_at: null,
+        revoked_at: null,
+        owner_missing: false,
+        owner_deletion_scheduled_for: null,
+        owner_terms_version: '1970-01-01',
+        owner_terms_accepted_at: new Date().toISOString(),
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: 'terms_acceptance_required' });
+    expect(mocks.execute.mock.calls[0]?.[0]).toContain('WHERE family_id = $1');
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
   });
 

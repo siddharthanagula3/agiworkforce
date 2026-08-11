@@ -76,10 +76,10 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
         inlineData: { mimeType: block.source.mediaType, data: block.source.data },
       };
     case 'tool_use':
-      // Gemini 3 strictly validates thought signatures on replayed functionCall
+      // Current provider models strictly validate thought signatures on replayed functionCall
       // parts: omitting one 400s with INVALID_ARGUMENT ("Function call is
       // missing a thought_signature in functionCall parts", live repro
-      // 2026-07-10 on gemini-3.5-flash with the tool loop's replayed assistant
+      // 2026-07-10 on a current Gemini tool-capable model with the tool loop's replayed assistant
       // turn). Our tool loops replay assistant tool calls over the
       // OpenAI-compatible wire, which cannot carry Gemini's signature — from
       // Gemini's perspective these are INJECTED function calls, and the docs
@@ -226,8 +226,8 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
     // omits the key entirely rather than sending it as a literal `false`
     // (Gemini's own default), matching the pre-adapter wire byte-for-byte.
     const includeThoughts = req.thinking.includeThoughts ?? true;
-    // Gemini 3.x: prefer the discrete `thinkingLevel` (current control). Fall back
-    // to the legacy `thinkingBudget` integer (2.5-era, still accepted) when no
+    // Prefer the discrete `thinkingLevel` control when the catalog exposes it. Fall back
+    // to the legacy `thinkingBudget` integer when no
     // level is set — preserving byte-stability for legacy callers that only ever
     // sent a budget. See reasoning-effort-capability-matrix-2026-07-10 flag 4.
     generationConfig.thinkingConfig = {

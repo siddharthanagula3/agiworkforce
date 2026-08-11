@@ -236,6 +236,21 @@ pub struct Model {
     pub requires_environment: Option<String>,
 }
 
+/// Absolute token rates selected for one request after catalog thresholds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TokenPricing {
+    pub input_price_per_1m: f64,
+    pub output_price_per_1m: f64,
+    pub cache_read_price_per_1m: f64,
+    pub cache_write_price_per_1m: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InputTokenPricingTier {
+    pub threshold_tokens: u64,
+    pub pricing: TokenPricing,
+}
+
 fn default_model_status() -> String {
     "active".to_string()
 }
@@ -284,8 +299,12 @@ struct SharedModelMetadata {
     model_type: String,
     #[serde(default, rename = "inputModalities")]
     input_modalities: Vec<String>,
-    #[serde(rename = "contextWindow")]
-    context_window: usize,
+    /// Prompt-consuming models must publish this. Media APIs may omit it
+    /// because token context is inapplicable; those entries are parsed so the
+    /// shared catalog remains readable, then excluded by the CLI model-type
+    /// boundary below rather than receiving an invented chat window.
+    #[serde(default, rename = "contextWindow")]
+    context_window: Option<usize>,
     #[serde(default, rename = "maxOutputTokens")]
     max_output_tokens: Option<usize>,
     #[serde(rename = "inputCost")]
@@ -319,6 +338,55 @@ struct SharedModelMetadata {
     requires_environment: Option<String>,
     #[serde(default)]
     reasoning: Option<SharedModelReasoning>,
+    #[serde(default, rename = "inputTokenPricingTiers")]
+    input_token_pricing_tiers: Vec<SharedLongContextPricing>,
+    /// Backward-compatible singular tier while generated catalogs migrate.
+    #[serde(default, rename = "longContext")]
+    long_context: Option<SharedLongContextPricing>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedLongContextPricing {
+    #[serde(rename = "thresholdTokens")]
+    threshold_tokens: u64,
+    #[serde(rename = "inputCost")]
+    input_cost: f64,
+    #[serde(rename = "outputCost")]
+    output_cost: f64,
+    #[serde(default, rename = "cached_input")]
+    cached_input: Option<f64>,
+    #[serde(default, rename = "cached_write")]
+    cached_write: Option<f64>,
+    #[serde(default, rename = "cached_write_1h")]
+    _cached_write_1h: Option<f64>,
+}
+
+fn select_input_token_pricing_tier<'a>(
+    tiers: &'a [SharedLongContextPricing],
+    legacy_tier: Option<&'a SharedLongContextPricing>,
+    input_tokens: u64,
+) -> Option<&'a SharedLongContextPricing> {
+    let tiers = if tiers.is_empty() {
+        legacy_tier.map(std::slice::from_ref).unwrap_or(&[])
+    } else {
+        tiers
+    };
+    tiers
+        .iter()
+        .filter(|tier| input_tokens > tier.threshold_tokens)
+        .max_by_key(|tier| tier.threshold_tokens)
+}
+
+fn input_token_pricing_thresholds(metadata: &SharedModelMetadata) -> Vec<u64> {
+    let tiers = if metadata.input_token_pricing_tiers.is_empty() {
+        metadata.long_context.as_slice()
+    } else {
+        metadata.input_token_pricing_tiers.as_slice()
+    };
+    let mut thresholds: Vec<u64> = tiers.iter().map(|tier| tier.threshold_tokens).collect();
+    thresholds.sort_unstable();
+    thresholds.dedup();
+    thresholds
 }
 
 #[derive(Debug, Deserialize)]
@@ -370,12 +438,34 @@ fn api_model_id_for_any(catalog: &SharedModelsCatalog, model_id: &str) -> Option
     })
 }
 
+fn shared_model_for_any<'a>(
+    catalog: &'a SharedModelsCatalog,
+    model_id: &str,
+) -> Option<&'a SharedModelMetadata> {
+    if let Some(model) = catalog.models.get(model_id) {
+        return Some(model);
+    }
+
+    if let Some(model) = catalog.models.values().find(|model| {
+        let api_id = model.api_model_id.as_deref().unwrap_or(&model.id);
+        api_id.eq_ignore_ascii_case(model_id) || model.id.eq_ignore_ascii_case(model_id)
+    }) {
+        return Some(model);
+    }
+
+    catalog.providers.values().find_map(|provider| {
+        provider
+            .canonicalization
+            .get(model_id)
+            .and_then(|canonical| catalog.models.get(canonical))
+    })
+}
+
 /// Resolve a user- or config-supplied model identifier to the **wire id** the
 /// provider API expects (`apiModelId`). The shared `models.json` catalog carries
-/// both the dotted display `id` (`claude-sonnet-5`, used on web/desktop/mobile)
-/// and the dashed `apiModelId` (`claude-sonnet-5`, the actual wire id). Callers
+/// both the cross-surface display `id` and provider `apiModelId`. Callers
 /// that put a model into a provider request body must resolve through this so a
-/// dotted display id does not 404 the provider.
+/// display id that differs from its wire id does not 404 the provider.
 ///
 /// Falls back to the input unchanged when the id is not in the shared catalog
 /// (local/Ollama/custom models, or already-wire ids), so it is safe to apply at
@@ -414,12 +504,14 @@ fn shared_catalog_lookup_aliases() -> Vec<(String, String)> {
     aliases
 }
 
-fn cache_read_price(provider: &str, input_price_per_1m: f64, explicit: Option<f64>) -> f64 {
+fn cache_read_price(_provider: &str, input_price_per_1m: f64, explicit: Option<f64>) -> f64 {
     if let Some(price) = explicit {
         return price;
     }
-    if matches!(provider, "anthropic" | "openai") && input_price_per_1m > DEFAULT_PRICE {
-        return input_price_per_1m * 0.1;
+    if input_price_per_1m > DEFAULT_PRICE {
+        // Missing cache metadata must not invent a discount. This matches the
+        // Web, gateway, and Desktop billing fallback.
+        return input_price_per_1m;
     }
     DEFAULT_PRICE
 }
@@ -692,6 +784,18 @@ fn bundled_models() -> Vec<Model> {
 
 fn shared_bundled_models() -> Option<Vec<Model>> {
     let catalog = shared_catalog()?;
+    // Fail closed if a model the CLI could actually route is missing a token
+    // contract. Contextless image/video APIs are intentionally outside
+    // `supports_cli_model_type` and must not make the entire shared catalog
+    // unparsable or inherit DEFAULT_CONTEXT_WINDOW.
+    if catalog.models.values().any(|model| {
+        SUPPORTED_SHARED_PROVIDERS.contains(&model.provider.as_str())
+            && supports_cli_model_type(&model.model_type)
+            && !model.deprecated.unwrap_or(false)
+            && model.context_window.filter(|window| *window > 0).is_none()
+    }) {
+        return None;
+    }
     let cloud_eligible_ids = HashSet::<String>::from_iter(
         catalog
             .tier_allowed_models
@@ -723,7 +827,10 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
                 id: api_id.clone(),
                 provider: canonical_cli_provider(&model.provider).to_string(),
                 display_name: model.name.clone(),
-                context_window: model.context_window,
+                context_window: model
+                    .context_window
+                    .filter(|window| *window > 0)
+                    .expect("validated CLI model context window"),
                 max_output_tokens: model.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
                 input_price_per_1m: model.input_cost,
                 output_price_per_1m: model.output_cost,
@@ -1334,6 +1441,85 @@ pub fn pricing(model_id: &str) -> (f64, f64) {
     catalog().pricing(model_id)
 }
 
+/// Catalog rates for one request. The greatest token-pricing threshold that
+/// the request input strictly exceeds wins; an exact threshold remains on the
+/// preceding tier.
+pub fn token_pricing(model_id: &str, input_tokens: u32) -> Option<TokenPricing> {
+    let model = find(model_id)?;
+    let mut pricing = TokenPricing {
+        input_price_per_1m: model.input_price_per_1m,
+        output_price_per_1m: model.output_price_per_1m,
+        cache_read_price_per_1m: model.cache_read_price_per_1m,
+        cache_write_price_per_1m: model.cache_write_price_per_1m,
+    };
+
+    let metadata = shared_catalog().and_then(|catalog| shared_model_for_any(catalog, model_id));
+    let Some(tier) = metadata.and_then(|metadata| {
+        select_input_token_pricing_tier(
+            &metadata.input_token_pricing_tiers,
+            metadata.long_context.as_ref(),
+            u64::from(input_tokens),
+        )
+    }) else {
+        return Some(pricing);
+    };
+
+    pricing.input_price_per_1m = tier.input_cost;
+    pricing.output_price_per_1m = tier.output_cost;
+    pricing.cache_read_price_per_1m = tier.cached_input.unwrap_or(pricing.cache_read_price_per_1m);
+    pricing.cache_write_price_per_1m = tier
+        .cached_write
+        .unwrap_or(pricing.cache_write_price_per_1m);
+    Some(pricing)
+}
+
+/// All catalog request-input pricing bands, ordered by strict threshold.
+pub fn input_token_pricing_tiers(model_id: &str) -> Vec<InputTokenPricingTier> {
+    let Some(base_model) = find(model_id) else {
+        return Vec::new();
+    };
+    let Some(metadata) =
+        shared_catalog().and_then(|catalog| shared_model_for_any(catalog, model_id))
+    else {
+        return Vec::new();
+    };
+    let tiers = if metadata.input_token_pricing_tiers.is_empty() {
+        metadata.long_context.as_slice()
+    } else {
+        metadata.input_token_pricing_tiers.as_slice()
+    };
+    let base = TokenPricing {
+        input_price_per_1m: base_model.input_price_per_1m,
+        output_price_per_1m: base_model.output_price_per_1m,
+        cache_read_price_per_1m: base_model.cache_read_price_per_1m,
+        cache_write_price_per_1m: base_model.cache_write_price_per_1m,
+    };
+    let mut result: Vec<InputTokenPricingTier> = tiers
+        .iter()
+        .map(|tier| InputTokenPricingTier {
+            threshold_tokens: tier.threshold_tokens,
+            pricing: TokenPricing {
+                input_price_per_1m: tier.input_cost,
+                output_price_per_1m: tier.output_cost,
+                cache_read_price_per_1m: tier.cached_input.unwrap_or(base.cache_read_price_per_1m),
+                cache_write_price_per_1m: tier
+                    .cached_write
+                    .unwrap_or(base.cache_write_price_per_1m),
+            },
+        })
+        .collect();
+    result.sort_by_key(|tier| tier.threshold_tokens);
+    result
+}
+
+/// Lowest request-wide input pricing threshold for a catalog model, if any.
+/// Kept under the old name for callers compiled against the singular schema.
+pub fn long_context_threshold(model_id: &str) -> Option<u64> {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .and_then(|metadata| input_token_pricing_thresholds(metadata).into_iter().next())
+}
+
 /// Convenience: provider for a model.
 pub fn provider_for(model_id: &str) -> Option<&'static str> {
     catalog().provider_for(model_id)
@@ -1354,6 +1540,39 @@ pub fn providers() -> Vec<&'static str> {
     catalog().providers()
 }
 
+/// Select the preferred live provider model for a catalog model type.
+///
+/// Model identity stays registry-owned: callers name only the provider and
+/// semantic type, while quality and release metadata determine the preferred
+/// row. The returned value is the provider wire ID.
+pub fn preferred_model_for_type(provider: &str, model_type: &str) -> Option<String> {
+    let catalog = shared_catalog()?;
+    catalog
+        .models
+        .values()
+        .filter(|model| model.provider == provider && model.model_type == model_type)
+        .filter(|model| model.deprecated != Some(true))
+        .filter(|model| model.status.as_deref() != Some("deprecated"))
+        .max_by(|left, right| {
+            let rank = |model: &SharedModelMetadata| match model.quality_tier.as_deref() {
+                Some("best") => 3,
+                Some("balanced") => 2,
+                Some("fast") | Some("economy") => 1,
+                _ => 0,
+            };
+            rank(left)
+                .cmp(&rank(right))
+                .then_with(|| left.released.cmp(&right.released))
+                .then_with(|| left.id.cmp(&right.id))
+        })
+        .map(|model| {
+            model
+                .api_model_id
+                .clone()
+                .unwrap_or_else(|| model.id.clone())
+        })
+}
+
 /// Return the qualityTier string for a model as declared in models.json.
 ///
 /// Returns `None` for models not in the bundled shared catalog (e.g. Ollama local
@@ -1366,8 +1585,8 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
     let Some(catalog) = shared_catalog() else {
         return None;
     };
-    // The shared catalog is keyed by canonical ID (e.g. "claude-sonnet-5"),
-    // but model_id may be an apiModelId (e.g. "claude-sonnet-5"). Try both.
+    // The shared catalog is keyed by canonical ID, but model_id may be an
+    // apiModelId. Try both forms without copying either identity here.
     let canonical = catalog
         .models
         .iter()
@@ -1497,6 +1716,103 @@ pub fn is_known_model(model_id: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn assert_source_has_no_catalog_model_literals(file: &str, source: &str) {
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        for model in catalog.models.values() {
+            for id in [Some(model.id.as_str()), model.api_model_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                assert!(
+                    !source.contains(id),
+                    "{file} contains catalog model literal {id}; derive it from model_catalog"
+                );
+            }
+        }
+    }
+
+    fn fixture_pricing_tier(threshold_tokens: u64, input_cost: f64) -> SharedLongContextPricing {
+        SharedLongContextPricing {
+            threshold_tokens,
+            input_cost,
+            output_cost: input_cost * 2.0,
+            cached_input: None,
+            cached_write: None,
+            _cached_write_1h: None,
+        }
+    }
+
+    #[test]
+    fn ordered_input_pricing_tiers_select_the_greatest_strict_threshold() {
+        let tiers = [
+            fixture_pricing_tier(128_000, 2.0),
+            fixture_pricing_tier(256_000, 4.0),
+        ];
+        let selected = |tokens| {
+            select_input_token_pricing_tier(&tiers, None, tokens).map(|tier| tier.input_cost)
+        };
+        assert_eq!(selected(128_000), None);
+        assert_eq!(selected(128_001), Some(2.0));
+        assert_eq!(selected(256_000), Some(2.0));
+        assert_eq!(selected(256_001), Some(4.0));
+    }
+
+    #[test]
+    fn bundled_multi_band_pricing_uses_every_strict_boundary() {
+        let catalog = shared_catalog().expect("bundled shared catalog must deserialize");
+        let metadata = catalog
+            .models
+            .values()
+            .find(|metadata| metadata.input_token_pricing_tiers.len() >= 2)
+            .expect("bundled catalog must contain a multi-band model");
+        let model = find(&metadata.id).expect("tiered shared model must exist in CLI catalog");
+        let mut tiers: Vec<&SharedLongContextPricing> =
+            metadata.input_token_pricing_tiers.iter().collect();
+        tiers.sort_by_key(|tier| tier.threshold_tokens);
+        let first = tiers[0];
+        let second = tiers[1];
+        let first_threshold = u32::try_from(first.threshold_tokens)
+            .expect("catalog threshold must fit the CLI token counter");
+        let second_threshold = u32::try_from(second.threshold_tokens)
+            .expect("catalog threshold must fit the CLI token counter");
+        let base = TokenPricing {
+            input_price_per_1m: model.input_price_per_1m,
+            output_price_per_1m: model.output_price_per_1m,
+            cache_read_price_per_1m: model.cache_read_price_per_1m,
+            cache_write_price_per_1m: model.cache_write_price_per_1m,
+        };
+        let apply = |tier: &SharedLongContextPricing| TokenPricing {
+            input_price_per_1m: tier.input_cost,
+            output_price_per_1m: tier.output_cost,
+            cache_read_price_per_1m: tier.cached_input.unwrap_or(base.cache_read_price_per_1m),
+            cache_write_price_per_1m: tier.cached_write.unwrap_or(base.cache_write_price_per_1m),
+        };
+
+        assert_eq!(token_pricing(&metadata.id, first_threshold), Some(base));
+        assert_eq!(
+            token_pricing(
+                &metadata.id,
+                first_threshold
+                    .checked_add(1)
+                    .expect("first threshold must allow a boundary token"),
+            ),
+            Some(apply(first))
+        );
+        assert_eq!(
+            token_pricing(&metadata.id, second_threshold),
+            Some(apply(first))
+        );
+        assert_eq!(
+            token_pricing(
+                &metadata.id,
+                second_threshold
+                    .checked_add(1)
+                    .expect("second threshold must allow a boundary token"),
+            ),
+            Some(apply(second))
+        );
+    }
+
     #[test]
     fn bundled_catalog_not_empty() {
         let cat = Catalog::bundled();
@@ -1511,6 +1827,22 @@ mod tests {
 
     #[test]
     fn cli_auto_selection_uses_the_canonical_registry_policy() {
+        let request = agiworkforce_model_registry::AutoRoutingRequest {
+            selection: Some("auto-premium"),
+            task_type: agiworkforce_model_registry::RoutingTaskType::Coding,
+            subscription_tier: Some("byok"),
+            trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+            runtime_profile_id: Some("cli/byok-chat"),
+            ..agiworkforce_model_registry::AutoRoutingRequest::default()
+        };
+        let expected = match agiworkforce_model_registry::resolve_auto_route(&request)
+            .expect("generated registry must resolve")
+        {
+            agiworkforce_model_registry::AutoRouteDecision::Selected(selected) => selected,
+            agiworkforce_model_registry::AutoRouteDecision::Unavailable(unavailable) => {
+                panic!("BYOK coding route unavailable: {:?}", unavailable.reasons)
+            }
+        };
         let selected = resolve_auto_model(
             "auto-premium",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -1519,25 +1851,25 @@ mod tests {
         )
         .expect("BYOK coding route should be available");
 
-        assert_eq!(selected.model_key, "claude-opus-5");
-        assert_eq!(selected.provider_model_id, "claude-opus-5");
-        assert_eq!(selected.upstream_provider, "anthropic");
+        assert_eq!(selected.model_key, expected.model_key);
+        assert_eq!(selected.provider_model_id, expected.provider_model_id);
+        assert_eq!(selected.upstream_provider, expected.provider);
         assert!(!selected.provider_model_id.starts_with("auto"));
     }
 
     #[test]
     fn api_wire_id_resolves_dotted_display_id_to_wire_id() {
-        // A dotted display id (the form web/desktop/mobile use) must resolve to
-        // the dashed provider wire id so it does not 404 at the provider.
-        assert_eq!(api_wire_id("claude-sonnet-5"), "claude-sonnet-5");
-        // An already-wire id is returned unchanged (idempotent).
-        assert_eq!(api_wire_id("claude-sonnet-5"), "claude-sonnet-5");
-        // Case-insensitive on the display id.
-        assert_eq!(api_wire_id("Claude-Sonnet-5"), "claude-sonnet-5");
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        for model in catalog.models.values() {
+            let expected = model.api_model_id.as_deref().unwrap_or(&model.id);
+            assert_eq!(api_wire_id(&model.id), expected);
+            assert_eq!(api_wire_id(expected), expected);
+            assert_eq!(api_wire_id(&model.id.to_ascii_uppercase()), expected);
+        }
         // Unknown ids (local/Ollama/custom) fall through unchanged.
         assert_eq!(
-            api_wire_id("my-local-model:latest"),
-            "my-local-model:latest"
+            api_wire_id("fixture-local-model:latest"),
+            "fixture-local-model:latest"
         );
     }
 
@@ -1592,8 +1924,22 @@ mod tests {
             );
         }
         assert_eq!(
-            cat.context_window("claude-does-not-exist"),
+            cat.context_window("fixture-unknown-model"),
             DEFAULT_CONTEXT_WINDOW
+        );
+
+        let shared = shared_catalog().expect("the embedded shared catalog must parse");
+        let media = shared
+            .models
+            .values()
+            .find(|model| {
+                model.context_window.is_none() && !supports_cli_model_type(&model.model_type)
+            })
+            .expect("canonical catalog must contain a contextless media entry");
+        assert_eq!(media.context_window, None);
+        assert!(
+            !supports_cli_model_type(&media.model_type),
+            "a contextless media API must be excluded instead of inheriting the CLI fallback"
         );
     }
 
@@ -1632,8 +1978,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("expected {provider} model in bundled catalog"));
             assert_eq!(cat.provider_for(&model.id), Some(provider), "{}", model.id);
         }
-        assert_eq!(cat.provider_for("claude-future"), None);
-        assert_eq!(cat.provider_for("gemini-99"), None);
+        assert_eq!(cat.provider_for("fixture-unknown-model-one"), None);
+        assert_eq!(cat.provider_for("fixture-unknown-model-two"), None);
     }
 
     #[test]
@@ -1650,7 +1996,7 @@ mod tests {
     fn user_override_wins() {
         let mut cat = Catalog::bundled();
         let ov = UserModelOverride {
-            id: "my-custom-model".into(),
+            id: "fixture-custom-model".into(),
             provider: "ollama".into(),
             display_name: Some("My Model".into()),
             context_window: Some(999_999),
@@ -1664,7 +2010,7 @@ mod tests {
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("my-custom-model").unwrap();
+        let found = cat.find("fixture-custom-model").unwrap();
         assert_eq!(found.context_window, 999_999);
         assert_eq!(found.provider, "ollama");
     }
@@ -1672,10 +2018,15 @@ mod tests {
     #[test]
     fn user_override_replaces_existing() {
         let mut cat = Catalog::bundled();
+        let existing = cat
+            .all()
+            .first()
+            .expect("bundled catalog must contain a model")
+            .clone();
         let ov = UserModelOverride {
-            id: "claude-opus-5".into(),
-            provider: "anthropic".into(),
-            display_name: Some("Custom Opus".into()),
+            id: existing.id.clone(),
+            provider: existing.provider,
+            display_name: Some("Fixture replacement".into()),
             context_window: Some(500_000),
             max_output_tokens: None,
             input_price_per_1m: None,
@@ -1687,9 +2038,9 @@ mod tests {
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("claude-opus-5").unwrap();
+        let found = cat.find(&existing.id).unwrap();
         assert_eq!(found.context_window, 500_000);
-        assert_eq!(found.display_name, "Custom Opus");
+        assert_eq!(found.display_name, "Fixture replacement");
     }
 
     #[test]
@@ -1740,40 +2091,14 @@ mod tests {
         );
     }
 
-    /// rule-models-json: no Rust source file in apps/cli/src/ (outside model_catalog.rs
-    /// and models.rs) may contain a hardcoded model ID literal matching the patterns
-    /// gpt-5\.\d, claude-(opus|sonnet|haiku)-\d, gemini-\d, or grok-\d.
-    ///
-    /// This test scans the live tui implementation files at compile time using include_str!
-    /// and asserts the known forbidden literals are absent.
+    /// Keep the live TUI free of every current catalog identity, including
+    /// provider wire IDs that differ from canonical keys.
     #[test]
     fn no_hardcoded_model_ids_in_tui() {
-        // tui_app.rs is the live ratatui implementation (~3K LOC). cost_hud.rs
-        // renders token/cost metrics. Both were identified as likely violation sites
-        // after the orphan tree removal in e3a316d39.
-        // Note: tui_app.rs contains a #[cfg(test)] fixture using "claude-sonnet-5"
-        // which is intentional and not in the forbidden list below.
         let tui_app_src = include_str!("tui/tui_app.rs");
         let cost_hud_src = include_str!("tui/cost_hud.rs");
-
-        // Patterns that would indicate a hardcoded model literal (not inside a comment).
-        let forbidden: &[&str] = &[
-            "\"gpt-5.5\"",
-            "\"gpt-5.5\"",
-            "\"claude-opus-4-6-mini\"",
-            "\"claude-sonnet-5\"", // must come from catalog, not hardcoded
-            "\"gpt-5.4-mini\"",    // must come from catalog, not hardcoded
-        ];
-
-        for literal in forbidden {
-            for (file, src) in [("tui_app.rs", tui_app_src), ("cost_hud.rs", cost_hud_src)] {
-                assert!(
-                    !src.contains(literal),
-                    "{file} contains hardcoded model literal {literal} — \
-                     use model_catalog::fast_completion_model() or model_catalog::find() instead"
-                );
-            }
-        }
+        assert_source_has_no_catalog_model_literals("tui_app.rs", tui_app_src);
+        assert_source_has_no_catalog_model_literals("cost_hud.rs", cost_hud_src);
     }
 
     // ── New tests for the 4 hardcoded-model-id violation fixes ──────────────
@@ -1782,29 +2107,19 @@ mod tests {
     /// known models, driving capability_for_model() without hardcoded literals.
     #[test]
     fn quality_tier_for_known_models() {
-        // Anthropic: opus → best, sonnet → balanced, haiku → fast
-        assert_eq!(
-            quality_tier_for_model("claude-opus-5").as_deref(),
-            Some("best"),
-            "claude-opus-5 should be qualityTier=best"
-        );
-        assert_eq!(
-            quality_tier_for_model("claude-sonnet-5").as_deref(),
-            Some("balanced"),
-            "claude-sonnet-5 should be qualityTier=balanced"
-        );
-        // OpenAI: gpt-5.6-sol → best (per models.json)
-        assert_eq!(
-            quality_tier_for_model("gpt-5.6-sol").as_deref(),
-            Some("best"),
-            "gpt-5.6-sol should be qualityTier=best"
-        );
-        // xAI: grok-4.5 → best
-        assert_eq!(
-            quality_tier_for_model("grok-4.5").as_deref(),
-            Some("best"),
-            "grok-4.5 should be qualityTier=best"
-        );
+        let shared = shared_catalog().expect("embedded catalog must deserialize");
+        for model in shared
+            .models
+            .values()
+            .filter(|model| model.quality_tier.is_some())
+        {
+            assert_eq!(
+                quality_tier_for_model(&model.id),
+                model.quality_tier,
+                "quality tier must come from catalog metadata for {}",
+                model.id
+            );
+        }
     }
 
     /// Site 2 fix: quality_tier_for_model() returns None for models not in the
@@ -1812,42 +2127,29 @@ mod tests {
     #[test]
     fn quality_tier_for_unknown_model_is_none() {
         assert!(
-            quality_tier_for_model("llama3.1").is_none(),
-            "llama3.1 is an Ollama local model not in the shared catalog — \
+            quality_tier_for_model("fixture-local-model:latest").is_none(),
+            "a synthetic local model is not in the shared catalog — \
              quality_tier_for_model should return None"
         );
         assert!(
-            quality_tier_for_model("my-custom-byo-endpoint").is_none(),
+            quality_tier_for_model("fixture-custom-byo-endpoint").is_none(),
             "user BYO model ID should return None from quality_tier_for_model"
         );
     }
 
-    /// Site 3 fix: is_known_model() returns true for well-known IDs and false
-    /// for deprecated / unknown IDs — the new warn_for_model logic in chatwidget.
+    /// is_known_model() returns true for catalog IDs and false for unknown IDs.
     #[test]
     fn is_known_model_reflects_catalog() {
         // Active models present in models.json must be known.
-        assert!(
-            is_known_model("claude-opus-5"),
-            "claude-opus-5 should be in the bundled catalog"
-        );
-        assert!(
-            is_known_model("gpt-5.6-sol"),
-            "gpt-5.6-sol should be in the bundled catalog"
-        );
-        assert!(
-            is_known_model("gemini-3.1-pro-preview"),
-            "gemini-3.1-pro-preview should be in the bundled catalog"
-        );
+        for model in catalog()
+            .all()
+            .iter()
+            .filter(|model| model.status == "active")
+        {
+            assert!(is_known_model(&model.id), "{} should be known", model.id);
+        }
         // Models that are NOT in models.json must be unknown.
-        assert!(
-            !is_known_model("gpt-5.2"),
-            "gpt-5.2 is not in models.json — is_known_model should return false"
-        );
-        assert!(
-            !is_known_model("claude-opus-4-6-mini"),
-            "claude-opus-4-6-mini is a ghost model — is_known_model should return false"
-        );
+        assert!(!is_known_model("fixture-unknown-provider-model"));
     }
 
     /// Site 4 fix: pick_fallback_default_model() returns a non-empty model ID
@@ -1865,94 +2167,31 @@ mod tests {
         );
     }
 
-    /// Site 1 fix: no_hardcoded_model_ids_in_onboarding verifies that onboarding.rs
-    /// no longer contains the 8 formerly-hardcoded model literals.
+    /// Onboarding must derive every displayed model from the catalog.
     #[test]
     fn no_hardcoded_model_ids_in_onboarding() {
         let onboarding_src = include_str!("onboarding.rs");
-        // These are the IDs that were hardcoded in ONBOARDING_MODEL_SPECS before the fix.
-        let formerly_hardcoded: &[&str] = &[
-            "\"claude-opus-4-6\"",
-            "\"claude-sonnet-4-6\"",
-            "\"claude-sonnet-5\"",
-            "\"gpt-5.5\"",
-            "\"gpt-5.4-mini\"",
-            "\"gpt-5.5-pro\"",
-            "\"gemini-3.1-pro-preview\"",
-            "\"gemini-3.5-flash-lite\"",
-        ];
-        for literal in formerly_hardcoded {
-            assert!(
-                !onboarding_src.contains(literal),
-                "onboarding.rs still contains hardcoded model literal {literal} — \
-                 ONBOARDING_MODEL_SPECS should be derived from the catalog"
-            );
-        }
+        assert_source_has_no_catalog_model_literals("onboarding.rs", onboarding_src);
     }
 
-    /// `voice.rs` owns its STT model as a `const` because the transcription
-    /// endpoint is not routed through the chat catalog. Its doc comment claims
-    /// the ID is absent from models.json, which is false — `gpt-4o-transcribe`
-    /// is a `modelType: "stt"` entry — so the constant can silently outlive a
-    /// retired model. While the literal is still there, this pins it: it must
-    /// name a live OpenAI STT model in the shared catalog.
-    ///
-    /// Conditional by design. Replacing the const with a catalog lookup is the
-    /// real remediation (#61); this test must not stand in its way, so it stops
-    /// once the literal is gone rather than demanding it stay.
+    /// Voice transcription selects a live OpenAI STT row from canonical metadata.
     #[test]
-    fn no_hardcoded_model_ids_voice_stt_pinned_to_catalog() {
-        let voice_src = include_str!("voice.rs");
-        let Some(literal) = voice_src
-            .split("const OPENAI_STT_MODEL: &str = \"")
-            .nth(1)
-            .and_then(|rest| rest.split('"').next())
-        else {
-            return;
-        };
-
+    fn preferred_voice_stt_model_is_live_openai_catalog_row() {
+        let model_id = preferred_model_for_type("openai", "stt")
+            .expect("catalog must contain a live OpenAI speech-to-text model");
         let catalog = shared_catalog().expect("bundled models.json must parse");
-        let entry = catalog.models.get(literal).unwrap_or_else(|| {
-            panic!("voice.rs OPENAI_STT_MODEL = \"{literal}\" is not in models.json")
-        });
-        assert_eq!(
-            entry.model_type, "stt",
-            "voice.rs OPENAI_STT_MODEL = \"{literal}\" is not a speech-to-text model"
-        );
-        assert_eq!(
-            entry.provider, "openai",
-            "voice.rs posts OPENAI_STT_MODEL to OpenAI's transcription endpoint"
-        );
+        let entry = shared_model_for_any(catalog, &model_id)
+            .expect("selected speech-to-text model must resolve in catalog");
+        assert_eq!(entry.model_type, "stt");
+        assert_eq!(entry.provider, "openai");
+        assert_ne!(entry.deprecated, Some(true));
     }
 
-    /// Site 2 fix: design_system.rs capability_for_model must not contain
-    /// the former 30-arm hardcoded match.  We verify by checking that model IDs
-    /// which were exclusively match arms (never used in tests) are absent from
-    /// the non-test portion of the file.
-    ///
-    /// Note: model IDs that appear in *test fixtures* in design_system.rs are
-    /// legitimately there and are not checked here.  Only production-code-only
-    /// literals are asserted absent.
+    /// design_system.rs derives production capability tiers from the catalog.
     #[test]
     fn no_hardcoded_model_ids_in_design_system() {
         let ds_src = include_str!("design_system.rs");
-        // Split at the #[cfg(test)] boundary to avoid scanning test fixtures.
         let production_src = ds_src.split("#[cfg(test)]").next().unwrap_or(ds_src);
-        // IDs that were only ever in the match arms, not in tests.
-        let formerly_hardcoded: &[&str] = &[
-            "\"grok-4.3\"",
-            "\"deepseek-chat\"",
-            "\"kimi-k2.5\"",
-            "\"glm-5.2\"",
-            "\"sonar-reasoning-pro\"",
-            "\"qwen-max\"",
-        ];
-        for literal in formerly_hardcoded {
-            assert!(
-                !production_src.contains(literal),
-                "design_system.rs production code still contains hardcoded model literal {literal} — \
-                 capability_for_model() should use quality_tier_for_model() from the catalog"
-            );
-        }
+        assert_source_has_no_catalog_model_literals("design_system.rs", production_src);
     }
 }

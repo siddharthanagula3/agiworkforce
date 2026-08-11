@@ -1079,10 +1079,12 @@ mod tests {
     #[test]
     fn test_default_config_is_valid() {
         let config = CliConfig::default();
-        // default model is derived from models.json anthropic.taskRouting.complex_reasoning
-        // → canonical id "claude-fable-5" → apiModelId "claude-fable-5"
-        assert_eq!(config.default.model, "claude-fable-5");
-        assert_eq!(config.default.provider, "anthropic");
+        // Both defaults are derived from the canonical provider routing metadata.
+        assert_eq!(config.default.model, crate::model_catalog::default_model());
+        assert_eq!(
+            config.default.provider,
+            crate::model_catalog::default_provider()
+        );
         assert!(config.default.stream);
         assert_eq!(config.default.max_tokens, 8192);
         assert!(config.providers.contains_key("anthropic"));
@@ -1185,14 +1187,19 @@ mod tests {
     #[test]
     fn test_effective_max_tokens_clamps_to_stated_capacity() {
         let mut config = CliConfig::default();
-        let limit = stated_max_output_tokens("claude-opus-5")
-            .expect("claude-opus-5 states an output capacity in the bundled catalog");
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| stated_max_output_tokens(&model.id).is_some())
+            .expect("bundled catalog should contain a model with stated output capacity");
+        let limit = stated_max_output_tokens(&model.id)
+            .expect("selected catalog model states an output capacity");
 
         config.default.max_tokens = limit + 50_000;
-        assert_eq!(config.effective_max_tokens("claude-opus-5"), limit);
+        assert_eq!(config.effective_max_tokens(&model.id), limit);
 
         config.default.max_tokens = 2_048;
-        assert_eq!(config.effective_max_tokens("claude-opus-5"), 2_048);
+        assert_eq!(config.effective_max_tokens(&model.id), 2_048);
     }
 
     #[test]
@@ -1270,7 +1277,7 @@ mod tests {
     #[test]
     fn test_roundtrip_toml_all_fields() {
         let mut config = CliConfig::default();
-        config.default.model = "gpt-5.6-sol".to_string();
+        config.default.model = "fixture-config-model".to_string();
         config.default.provider = "openai".to_string();
         config.default.stream = false;
         config.default.max_tokens = 4096;
@@ -1286,7 +1293,7 @@ mod tests {
         let serialized = toml::to_string_pretty(&config).unwrap();
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
 
-        assert_eq!(deserialized.default.model, "gpt-5.6-sol");
+        assert_eq!(deserialized.default.model, "fixture-config-model");
         assert_eq!(deserialized.default.provider, "openai");
         assert!(!deserialized.default.stream);
         assert_eq!(deserialized.default.max_tokens, 4096);
@@ -1391,8 +1398,7 @@ mod tests {
         let config = CliConfig::default();
         let out = config.display();
         assert!(out.contains("Model:"));
-        // default model is "claude-fable-5" (anthropic taskRouting.complex_reasoning per models.json)
-        assert!(out.contains("claude-fable-5"));
+        assert!(out.contains(crate::model_catalog::default_model()));
         assert!(out.contains("Provider:"));
         assert!(out.contains("anthropic"));
         assert!(out.contains("Stream:"));
@@ -1431,9 +1437,9 @@ mod tests {
     fn test_merge_env_model_override() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.6-sol");
+        std::env::set_var("AGIWORKFORCE_MODEL", "fixture-config-model");
         config.merge_env_overrides();
-        assert_eq!(config.default.model, "gpt-5.6-sol");
+        assert_eq!(config.default.model, "fixture-config-model");
         std::env::remove_var("AGIWORKFORCE_MODEL");
     }
 
@@ -1495,9 +1501,11 @@ mod tests {
 
         let mut config = CliConfig::default();
         config.merge_env_overrides();
-        // default model is "claude-fable-5" (anthropic taskRouting.complex_reasoning per models.json)
-        assert_eq!(config.default.model, "claude-fable-5");
-        assert_eq!(config.default.provider, "anthropic");
+        assert_eq!(config.default.model, crate::model_catalog::default_model());
+        assert_eq!(
+            config.default.provider,
+            crate::model_catalog::default_provider()
+        );
         assert_eq!(config.default.max_tokens, 8192);
     }
 
@@ -1513,7 +1521,7 @@ mod tests {
             &config_file,
             r#"
 [default]
-model = "gpt-5.6-sol"
+model = "fixture-config-model"
 provider = "openai"
 max_tokens = 2048
 "#,
@@ -1521,7 +1529,7 @@ max_tokens = 2048
         .unwrap();
 
         let project = CliConfig::load_project_config_from(tmp.path()).unwrap();
-        assert_eq!(project.default.model, "gpt-5.6-sol");
+        assert_eq!(project.default.model, "fixture-config-model");
         assert_eq!(project.default.provider, "openai");
         assert_eq!(project.default.max_tokens, 2048);
         assert!(project.source.project_path.is_some());
@@ -1573,10 +1581,10 @@ privacy_mode = "local"
     fn test_merge_from_overrides_non_default_model() {
         let mut base = CliConfig::default();
         let mut other = CliConfig::default();
-        other.default.model = "gpt-5.6-sol".to_string();
+        other.default.model = "fixture-config-model".to_string();
 
         base.merge_from(&other);
-        assert_eq!(base.default.model, "gpt-5.6-sol");
+        assert_eq!(base.default.model, "fixture-config-model");
     }
 
     #[test]
@@ -1699,7 +1707,7 @@ privacy_mode = "local"
     fn test_env_overrides_tracked_in_source() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.6-sol");
+        std::env::set_var("AGIWORKFORCE_MODEL", "fixture-config-model");
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
@@ -1745,7 +1753,7 @@ privacy_mode = "local"
         base.source.global_path = Some(PathBuf::from("/home/user/.agiworkforce/config.toml"));
 
         let mut other = CliConfig::default();
-        other.default.model = "gpt-5.6-sol".to_string();
+        other.default.model = "fixture-config-model".to_string();
         other.source.project_path = Some(PathBuf::from("/project/.agiworkforce/config.toml"));
 
         base.merge_from(&other);
@@ -1917,8 +1925,8 @@ base_url = "http://localhost:11434"
     #[test]
     fn test_set_value_model() {
         let mut config = CliConfig::default();
-        config.set_value("model", "gpt-5.6-sol").unwrap();
-        assert_eq!(config.default.model, "gpt-5.6-sol");
+        config.set_value("model", "fixture-config-model").unwrap();
+        assert_eq!(config.default.model, "fixture-config-model");
     }
 
     #[test]
@@ -1930,10 +1938,9 @@ base_url = "http://localhost:11434"
     #[test]
     fn test_get_value_model() {
         let config = CliConfig::default();
-        // default model is "claude-fable-5" (anthropic taskRouting.complex_reasoning per models.json)
         assert_eq!(
             config.get_value("model"),
-            Some("claude-fable-5".to_string())
+            Some(crate::model_catalog::default_model().to_string())
         );
     }
 
@@ -1947,25 +1954,30 @@ base_url = "http://localhost:11434"
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
         config
-            .set_value("fallback-chain", "gpt-5.6-sol, gemini-3.5-flash-lite")
+            .set_value(
+                "fallback-chain",
+                "fixture-primary-model, fixture-fallback-model",
+            )
             .unwrap();
         assert_eq!(
             config.default.fallback_chain,
-            vec!["gpt-5.6-sol", "gemini-3.5-flash-lite"]
+            vec!["fixture-primary-model", "fixture-fallback-model"]
         );
         assert_eq!(
             config.get_value("fallback-chain"),
-            Some("gpt-5.6-sol,gemini-3.5-flash-lite".to_string())
+            Some("fixture-primary-model,fixture-fallback-model".to_string())
         );
     }
 
     #[test]
     fn test_set_get_fast_model() {
         let mut config = CliConfig::default();
-        config.set_value("fast-model", "claude-sonnet-5").unwrap();
+        config
+            .set_value("fast-model", "fixture-fast-model")
+            .unwrap();
         assert_eq!(
             config.get_value("fast-model"),
-            Some("claude-sonnet-5".to_string())
+            Some("fixture-fast-model".to_string())
         );
     }
 
@@ -2013,7 +2025,7 @@ base_url = "http://localhost:11434"
             &config_file,
             r#"
 [default]
-model = "gpt-5.6-sol"
+model = "fixture-config-model"
 "#,
         )
         .unwrap();
@@ -2027,7 +2039,7 @@ model = "gpt-5.6-sol"
         let contents = std::fs::read_to_string(&saved).unwrap();
 
         assert_eq!(saved, config_file);
-        assert!(contents.contains("model = \"gpt-5.6-sol\""));
+        assert!(contents.contains("model = \"fixture-config-model\""));
         assert!(contents.contains("[ui]"));
         assert!(contents.contains("output_style = \"explanatory\""));
         assert!(contents.contains("privacy_mode = \"byok\""));
@@ -2037,15 +2049,15 @@ model = "gpt-5.6-sol"
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
         config.default.fallback_chain = vec![
-            "gpt-5.6-sol".to_string(),
-            "gemini-3.5-flash-lite".to_string(),
+            "fixture-primary-model".to_string(),
+            "fixture-fallback-model".to_string(),
         ];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.default.fallback_chain,
-            vec!["gpt-5.6-sol", "gemini-3.5-flash-lite"]
+            vec!["fixture-primary-model", "fixture-fallback-model"]
         );
     }
 
@@ -2084,7 +2096,7 @@ model = "gpt-5.6-sol"
     #[test]
     fn project_config_model_only_not_sensitive() {
         let mut project = CliConfig::default();
-        project.default.model = "claude-sonnet-5".to_string();
+        project.default.model = "fixture-project-model".to_string();
         // Remove any base_url entries so this is truly just a model override.
         for v in project.providers.values_mut() {
             v.base_url = None;

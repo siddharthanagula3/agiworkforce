@@ -27,8 +27,8 @@ DEFAULT_CONTEXT_LENGTH = 128_000
 # Default-model selection lives on each provider (see providers/<name>/provider.py
 # for ``DEFAULT_MODEL`` and ``SLOT_DEFAULTS``).  The active provider's
 # ``resolve_model`` runs the waterfall: ``SKILLSPECTOR_MODEL`` env > slot
-# default > general default.  OSS users pointing at build.nvidia.com or
-# stock OpenAI inherit ``NvBuildProvider``'s default model automatically.
+# default > general default. The default provider reads its model from the
+# catalog-generated registry artifact.
 _provider = get_metadata_provider()
 
 # Exposed for analyzers that need a final fallback symbol (e.g.,

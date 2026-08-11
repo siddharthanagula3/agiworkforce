@@ -47,6 +47,8 @@ interface CapturedLibraryTransport {
   isSignedIn: boolean;
   listPage(params: URLSearchParams): Promise<unknown>;
   fetchAsset(uri: string): Promise<unknown>;
+  deleteItem(id: string): Promise<unknown>;
+  permanentlyDeleteItem(id: string): Promise<unknown>;
   restoreItem(id: string): Promise<unknown>;
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
@@ -151,6 +153,26 @@ describe('DesktopLibrary transport', () => {
     const [url, init] = mocks.fetch.mock.calls[0]!;
     expect(url).toBe('https://agiworkforce.com/api/media?id=a%2Fb');
     expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer account-token');
+  });
+
+  it('soft-deletes through the account-pinned Cloud transport', async () => {
+    render(<DesktopLibrary />);
+    await transport().deleteItem('a/b');
+
+    const [url, init] = mocks.fetch.mock.calls[0]!;
+    expect(url).toBe('https://agiworkforce.com/api/media?id=a%2Fb');
+    expect(init.method).toBe('DELETE');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer account-token');
+  });
+
+  it('permanently deletes a trashed asset through the account-pinned Cloud transport', async () => {
+    render(<DesktopLibrary />);
+    await transport().permanentlyDeleteItem('a/b');
+
+    const [url, init] = mocks.fetch.mock.calls[0]!;
+    expect(url).toBe('https://agiworkforce.com/api/media?id=a%2Fb&permanent=true');
+    expect(init.method).toBe('DELETE');
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer account-token');
   });
 

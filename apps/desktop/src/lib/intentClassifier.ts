@@ -14,10 +14,9 @@
  * We use the fastest, cheapest model with the most recent knowledge cutoff for classification.
  * This ensures the classifier understands modern terminology, tools, and user expectations.
  *
- * Recommended classifier models (in order of preference):
- * 1. gemini-3.5-flash-lite - extremely fast, recent, strong structured output
- * 2. gpt-5.6-luna - reliable tool-aware OpenAI classifier
- * 3. claude-sonnet-5 - high-accuracy fallback for ambiguous tasks
+ * Concrete classifier models are resolved from the canonical routing catalog.
+ * Prefer its low-latency structured-output route, then its tool-aware and
+ * high-accuracy fallbacks for ambiguous tasks.
  *
  * Intent Types:
  * - Chat: Regular conversation, Q&A, explanations
@@ -363,9 +362,8 @@ const INTENT_KEYWORDS: Record<IntentType, { high: string[]; medium: string[] }> 
       'create artwork',
       'generate art',
       'make me an image',
-      'gpt image',
-      'midjourney style',
-      'stable diffusion',
+      'ai image',
+      'generative image',
     ],
     medium: ['visualize', 'illustration', 'graphic', 'render', 'create visual'],
   },

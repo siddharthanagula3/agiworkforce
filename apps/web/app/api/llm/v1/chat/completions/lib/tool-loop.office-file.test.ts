@@ -86,6 +86,7 @@ function makeProcessed(): ProcessedRequest {
     conversationId: undefined,
     requestedModel: 'test-model',
     provider: 'openai',
+    organizationId: '11111111-1111-4111-8111-111111111111',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 512,
@@ -172,6 +173,7 @@ describe('managed Office file tool loop', () => {
     expect(persistence.persist).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
+        organizationId: '11111111-1111-4111-8111-111111111111',
         filename: 'release-plan.docx',
         provider: 'agi-managed-office',
         origin: 'managed-office-tool',

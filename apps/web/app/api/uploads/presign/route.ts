@@ -8,16 +8,18 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getPresignedUploadUrl, isObjectStorageConfigured } from '@/lib/server/object-storage';
 import {
-  deleteObject,
-  getPresignedUploadUrl,
-  isObjectStorageConfigured,
-} from '@/lib/server/object-storage';
+  createLocalProjectKnowledgeUploadUrl,
+  deleteProjectKnowledgeObject,
+  isProjectKnowledgeObjectStorageConfigured,
+} from '@/lib/server/project-knowledge-object-storage';
 import { IMAGE_ATTACHMENT_MIME_TYPES, validateAttachmentMeta } from '@agiworkforce/types';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 /**
  * Presigned-upload API · client code never imports the R2/S3 SDK or holds
@@ -77,16 +79,19 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'uploads-presign');
   if (rateLimitResponse) return rateLimitResponse;
 
-  if (!isObjectStorageConfigured()) {
-    throw createError.internal('Object storage is not configured');
-  }
-
   const body = await request.json().catch(() => null);
   const parsed = PresignRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
   }
   const { kind, fileName, mimeType, byteCount, projectId } = parsed.data;
+
+  if (
+    !isObjectStorageConfigured() &&
+    !(kind === 'knowledge-file' && isProjectKnowledgeObjectStorageConfigured())
+  ) {
+    throw createError.internal('Object storage is not configured');
+  }
 
   const validation = validateAttachmentMeta(fileName, mimeType, byteCount);
   if (!validation.ok) {
@@ -128,12 +133,17 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
       throw createError.validation('projectId is required for knowledge-file uploads');
     }
     const db = getNeonDb();
+    const organizationId = await resolveActiveOrganizationId(db, userId);
     const [project] = await db.query<{ id: string }>(
       `select id
          from user_projects
-        where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3::uuid
+          and is_archived = false
+          and deleted_at is null
         limit 1`,
-      [projectId, userId],
+      [projectId, userId, organizationId],
     );
     if (!project) {
       throw createError.notFound('Project not found');
@@ -143,11 +153,21 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     key = `chat-attachments/${userId}/${suffix}`;
   }
 
-  const { uploadUrl, publicUrl } = await getPresignedUploadUrl({
-    key,
-    contentType: mimeType,
-    expiresInSeconds: 300,
-  });
+  const localKnowledgeUpload = kind === 'knowledge-file' && !isObjectStorageConfigured();
+  const { uploadUrl, publicUrl } = localKnowledgeUpload
+    ? {
+        uploadUrl: new URL(
+          await createLocalProjectKnowledgeUploadUrl({
+            userId,
+            key,
+            contentType: mimeType,
+            byteCount,
+          }),
+          request.nextUrl.origin,
+        ).toString(),
+        publicUrl: '',
+      }
+    : await getPresignedUploadUrl({ key, contentType: mimeType, expiresInSeconds: 300 });
 
   return NextResponse.json({
     attachmentId: randomUUID(),
@@ -179,15 +199,20 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid project upload key');
   }
 
-  const [project] = await getNeonDb().query<{ id: string }>(
+  const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
       limit 1`,
-    [projectId, userId],
+    [projectId, userId, organizationId],
   );
   if (!project) throw createError.notFound('Project not found');
-  await deleteObject(storageKey);
+  await deleteProjectKnowledgeObject(storageKey);
   return NextResponse.json({ success: true });
 }
 

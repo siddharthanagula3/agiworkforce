@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getProviderDefaultModel, requireProviderDefaultModel } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -22,7 +23,19 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: (...args: unknown[]) => loggerInfo(...args), warn: vi.fn() },
 }));
 
-import { buildServerProviderAdapter } from './provider-adapter-service';
+import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
+
+describe('resolveProviderFromModel', () => {
+  it('derives provider ownership from the canonical catalog', () => {
+    expect(resolveProviderFromModel(requireProviderDefaultModel('openai'))).toBe('openai');
+  });
+
+  it('fails closed for an unknown or retired model instead of guessing a provider', () => {
+    expect(() => resolveProviderFromModel('fixture-unknown-model')).toThrow(
+      /canonical model catalog/i,
+    );
+  });
+});
 
 describe('buildServerProviderAdapter', () => {
   beforeEach(() => {
@@ -65,6 +78,8 @@ describe('buildServerProviderAdapter', () => {
   });
 
   it('leaves native OpenAI models on the adapter default Responses path', () => {
+    const model = getProviderDefaultModel('openai');
+    expect(model).not.toBeNull();
     getOptionalEnv.mockImplementation((key) =>
       key === 'OPENAI_API_KEY' ? 'managed-openai-key' : undefined,
     );
@@ -83,7 +98,7 @@ describe('buildServerProviderAdapter', () => {
     const diagnostics = {
       requestId: 'req_123',
       request: {
-        model: 'gpt-5.4-mini',
+        model,
         inputItemTypes: { message: 1 },
         inputContentTypes: {},
         toolTypes: { function: 2 },

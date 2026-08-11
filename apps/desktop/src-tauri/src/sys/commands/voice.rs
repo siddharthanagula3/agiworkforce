@@ -47,8 +47,8 @@ pub struct VoiceSettings {
 /// This value is posted verbatim as the multipart `model` field to
 /// `api.openai.com/v1/audio/transcriptions` (and to the managed-cloud proxy in
 /// front of it), so it must be the wire ID: the catalog lookup returns the
-/// display ID, and `get_api_model_id` maps it to `apiModelId`. Today the two
-/// are identical for `gpt-4o-transcribe`; they need not stay that way.
+/// display ID, and `get_api_model_id` maps it to `apiModelId`; the two need not
+/// stay identical after a catalog update.
 ///
 /// If the catalog ever carries no cloud STT entry this yields an empty string,
 /// which the transcription endpoint rejects with a request error — an obvious
@@ -92,8 +92,8 @@ pub struct BargeInState {
 pub struct LocalWhisperState {
     /// Whisper instance (lazy loaded)
     pub whisper: Option<WhisperLocal>,
-    /// Selected model size
-    pub model_size: WhisperModelSize,
+    /// Selected runtime model identifier
+    pub model_id: Option<WhisperModelSize>,
     /// Models directory
     pub models_dir: PathBuf,
 }
@@ -104,7 +104,7 @@ impl Default for LocalWhisperState {
             .unwrap_or_else(|_| std::env::temp_dir().join("whisper"));
         Self {
             whisper: None,
-            model_size: WhisperModelSize::Base,
+            model_id: None,
             models_dir,
         }
     }
@@ -115,7 +115,7 @@ pub struct LocalPiperState {
     /// Piper instance (lazy loaded)
     pub piper: Option<PiperLocal>,
     /// Selected voice ID
-    pub voice_id: String,
+    pub voice_id: Option<String>,
     /// Models directory
     pub models_dir: PathBuf,
 }
@@ -126,10 +126,44 @@ impl Default for LocalPiperState {
             PiperLocal::default_models_dir().unwrap_or_else(|_| std::env::temp_dir().join("piper"));
         Self {
             piper: None,
-            voice_id: "en_US-lessac-medium".to_string(),
+            voice_id: None,
             models_dir,
         }
     }
+}
+
+fn selected_whisper_model(
+    state: &LocalWhisperState,
+) -> Result<(WhisperModelSize, PathBuf), String> {
+    let models = WhisperLocal::discover_models(&state.models_dir).map_err(|e| e.to_string())?;
+    let selected = state.model_id.as_ref().and_then(|selected| {
+        models
+            .iter()
+            .find(|model| &model.size == selected && model.is_downloaded)
+    });
+    let model = selected
+        .or_else(|| models.iter().find(|model| model.is_downloaded))
+        .ok_or_else(|| "No local speech model is installed".to_string())?;
+    let path = model
+        .path
+        .clone()
+        .ok_or_else(|| "Selected local speech model has no installed artifact".to_string())?;
+    Ok((model.size.clone(), path))
+}
+
+fn selected_piper_voice(state: &LocalPiperState) -> Result<String, String> {
+    let voices = PiperVoiceDefinitions::discover(&state.models_dir).map_err(|e| e.to_string())?;
+    state
+        .voice_id
+        .as_ref()
+        .and_then(|selected| {
+            voices
+                .iter()
+                .find(|voice| &voice.id == selected && voice.is_downloaded)
+        })
+        .or_else(|| voices.iter().find(|voice| voice.is_downloaded))
+        .map(|voice| voice.id.clone())
+        .ok_or_else(|| "No local voice is installed".to_string())
 }
 
 // The native capture session state now lives in
@@ -578,16 +612,7 @@ async fn transcribe_with_local_whisper(
     local_state: &LocalWhisperState,
     language: Option<String>,
 ) -> Result<VoiceTranscription, String> {
-    // Check if model exists
-    let model_path = local_state
-        .models_dir
-        .join(local_state.model_size.model_filename());
-    if !model_path.exists() {
-        return Err(format!(
-            "Local Whisper model not found. Please download the {} model first.",
-            local_state.model_size
-        ));
-    }
+    let (_model_id, model_path) = selected_whisper_model(local_state)?;
 
     // Read audio file and convert to f32 samples
     let audio_data =
@@ -599,7 +624,7 @@ async fn transcribe_with_local_whisper(
         .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
     // Create Whisper instance
-    let whisper = WhisperLocal::new(model_path, local_state.model_size)
+    let whisper = WhisperLocal::new(model_path)
         .map_err(|e| format!("Failed to initialize Whisper: {}", e))?;
 
     // Configure transcription
@@ -739,8 +764,17 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
 fn tts_provider_available(config: &TtsConfig, system_tts_supported: bool) -> bool {
     match config.provider {
         TtsProvider::System => system_tts_supported,
-        // Network providers are reachable exactly when a key is configured.
-        TtsProvider::ElevenLabs | TtsProvider::OpenAi => config.api_key.is_some(),
+        TtsProvider::ElevenLabs => {
+            config.api_key.is_some()
+                && config
+                    .model_id
+                    .as_deref()
+                    .is_some_and(|model_id| !model_id.trim().is_empty())
+        }
+        TtsProvider::OpenAi => {
+            config.api_key.is_some()
+                && !crate::features::speech::tts::openai_default_tts_model().is_empty()
+        }
     }
 }
 
@@ -760,11 +794,8 @@ pub async fn voice_get_capabilities(
 
     let tts_playing = tts_player.as_ref().map(|p| p.is_playing()).unwrap_or(false);
 
-    // Check if local whisper model is available
-    let whisper_model_path = local_whisper
-        .models_dir
-        .join(local_whisper.model_size.model_filename());
-    let local_stt_available = whisper_model_path.exists();
+    let whisper_selection = selected_whisper_model(&local_whisper).ok();
+    let local_stt_available = whisper_selection.is_some();
 
     // Local Piper TTS needs BOTH the voice model and the piper binary. Checking
     // only `<voice>.onnx` made Settings > Voice print "Local TTS: <voice>" for a
@@ -772,8 +803,10 @@ pub async fn voice_get_capabilities(
     // and `voice_tts_speak_local` then failed with "Piper binary not found".
     // `PiperLocal::new` is the exact constructor that command calls and it
     // verifies both, so this cannot drift away from what speaking requires.
-    let local_tts_available =
-        PiperLocal::new(local_piper.models_dir.clone(), &local_piper.voice_id).is_ok();
+    let piper_voice = selected_piper_voice(&local_piper).ok();
+    let local_tts_available = piper_voice
+        .as_deref()
+        .is_some_and(|voice_id| PiperLocal::new(local_piper.models_dir.clone(), voice_id).is_ok());
 
     Ok(VoiceCapabilities {
         tts_available: tts_provider_available(&tts_config, SystemTts::platform_supported()),
@@ -787,13 +820,13 @@ pub async fn voice_get_capabilities(
         vad_available: cfg!(feature = "vad"),
         local_stt_available,
         local_stt_model: if local_stt_available {
-            Some(local_whisper.model_size.to_string())
+            whisper_selection.map(|(model_id, _)| model_id.to_string())
         } else {
             None
         },
         local_tts_available,
         local_tts_voice: if local_tts_available {
-            Some(local_piper.voice_id.clone())
+            piper_voice
         } else {
             None
         },
@@ -1135,7 +1168,7 @@ pub async fn voice_download_whisper_model(
     state: State<'_, Arc<Mutex<VoiceState>>>,
     model_size: String,
 ) -> Result<String, String> {
-    let size: WhisperModelSize = model_size
+    let model_id: WhisperModelSize = model_size
         .parse()
         .map_err(|e: anyhow::Error| e.to_string())?;
 
@@ -1143,28 +1176,33 @@ pub async fn voice_download_whisper_model(
     let models_dir = voice_state.local_whisper.read().await.models_dir.clone();
     drop(voice_state);
 
-    tracing::info!("Downloading Whisper {} model to {:?}", size, models_dir);
+    tracing::info!(
+        "Downloading local speech model {} to {:?}",
+        model_id,
+        models_dir
+    );
 
     let app_handle = app.clone();
-    let model_path = WhisperLocal::download_model(size, models_dir, move |downloaded, total| {
-        let progress = DownloadProgress {
-            bytes_downloaded: downloaded,
-            total_bytes: total,
-            percentage: if total > 0 {
-                (downloaded as f32 / total as f32) * 100.0
-            } else {
-                0.0
-            },
-        };
-        let _ = app_handle.emit("voice:whisper_download_progress", progress);
-    })
-    .await
-    .map_err(|e| format!("Failed to download Whisper model: {}", e))?;
+    let model_path =
+        WhisperLocal::download_model(model_id.clone(), models_dir, move |downloaded, total| {
+            let progress = DownloadProgress {
+                bytes_downloaded: downloaded,
+                total_bytes: total,
+                percentage: if total > 0 {
+                    (downloaded as f32 / total as f32) * 100.0
+                } else {
+                    0.0
+                },
+            };
+            let _ = app_handle.emit("voice:whisper_download_progress", progress);
+        })
+        .await
+        .map_err(|e| format!("Failed to download Whisper model: {}", e))?;
 
     // Update state with new model
     let voice_state = state.lock().await;
     let mut local_whisper = voice_state.local_whisper.write().await;
-    local_whisper.model_size = size;
+    local_whisper.model_id = Some(model_id);
 
     Ok(model_path.to_string_lossy().to_string())
 }
@@ -1177,14 +1215,7 @@ pub async fn voice_list_whisper_models(
     let voice_state = state.lock().await;
     let models_dir = voice_state.local_whisper.read().await.models_dir.clone();
 
-    let models = vec![
-        WhisperModelInfo::new(WhisperModelSize::Tiny, &models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Base, &models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Small, &models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Medium, &models_dir),
-    ];
-
-    Ok(models)
+    WhisperLocal::discover_models(&models_dir).map_err(|e| e.to_string())
 }
 
 /// Set the active Whisper model size
@@ -1193,17 +1224,19 @@ pub async fn voice_set_whisper_model(
     state: State<'_, Arc<Mutex<VoiceState>>>,
     model_size: String,
 ) -> Result<(), String> {
-    let size: WhisperModelSize = model_size
+    let model_id: WhisperModelSize = model_size
         .parse()
         .map_err(|e: anyhow::Error| e.to_string())?;
 
     let voice_state = state.lock().await;
     let mut local_whisper = voice_state.local_whisper.write().await;
-    local_whisper.model_size = size;
+    WhisperLocal::resolve_model_path(&local_whisper.models_dir, &model_id)
+        .map_err(|e| e.to_string())?;
+    local_whisper.model_id = Some(model_id.clone());
     // Clear existing whisper instance so it will be reloaded with new model
     local_whisper.whisper = None;
 
-    tracing::info!("Set local Whisper model to {}", size);
+    tracing::info!("Set local speech model to {}", model_id);
     Ok(())
 }
 
@@ -1213,18 +1246,25 @@ pub async fn voice_delete_whisper_model(
     state: State<'_, Arc<Mutex<VoiceState>>>,
     model_size: String,
 ) -> Result<(), String> {
-    let size: WhisperModelSize = model_size
+    let model_id: WhisperModelSize = model_size
         .parse()
         .map_err(|e: anyhow::Error| e.to_string())?;
 
     let voice_state = state.lock().await;
     let models_dir = voice_state.local_whisper.read().await.models_dir.clone();
+    drop(voice_state);
 
-    WhisperLocal::delete_model(&models_dir, size)
+    WhisperLocal::delete_model(&models_dir, &model_id)
         .await
         .map_err(|e| format!("Failed to delete model: {}", e))?;
 
-    tracing::info!("Deleted Whisper {} model", size);
+    let voice_state = state.lock().await;
+    let mut local_whisper = voice_state.local_whisper.write().await;
+    if local_whisper.model_id.as_ref() == Some(&model_id) {
+        local_whisper.model_id = None;
+        local_whisper.whisper = None;
+    }
+    tracing::info!("Deleted local speech model {}", model_id);
     Ok(())
 }
 
@@ -1282,7 +1322,7 @@ pub async fn voice_download_piper_voice(
     // Update state with new voice
     let voice_state = state.lock().await;
     let mut local_piper = voice_state.local_piper.write().await;
-    local_piper.voice_id = voice_id;
+    local_piper.voice_id = Some(voice_id);
 
     Ok(model_path.to_string_lossy().to_string())
 }
@@ -1293,29 +1333,8 @@ pub async fn voice_list_piper_voices(
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<Vec<PiperVoiceInfo>, String> {
     let voice_state = state.lock().await;
-    let local_piper = voice_state.local_piper.read().await;
-    let models_dir = local_piper.models_dir.clone();
-
-    // Get popular voices and mark which are downloaded
-    let mut voices = PiperVoiceDefinitions::popular_voices();
-    for voice in &mut voices {
-        let model_path = models_dir.join(format!("{}.onnx", voice.id));
-        voice.is_downloaded = model_path.exists();
-        if voice.is_downloaded {
-            voice.model_path = Some(model_path);
-        }
-    }
-
-    // Also add any locally downloaded voices not in the popular list
-    if let Some(piper) = &local_piper.piper {
-        for local_voice in piper.list_available_voices() {
-            if !voices.iter().any(|v| v.id == local_voice.id) {
-                voices.push(local_voice);
-            }
-        }
-    }
-
-    Ok(voices)
+    let models_dir = voice_state.local_piper.read().await.models_dir.clone();
+    PiperVoiceDefinitions::discover(&models_dir).map_err(|e| e.to_string())
 }
 
 /// Set the active Piper voice
@@ -1326,7 +1345,15 @@ pub async fn voice_set_piper_voice(
 ) -> Result<(), String> {
     let voice_state = state.lock().await;
     let mut local_piper = voice_state.local_piper.write().await;
-    local_piper.voice_id = voice_id.clone();
+    let voices =
+        PiperVoiceDefinitions::discover(&local_piper.models_dir).map_err(|e| e.to_string())?;
+    if !voices
+        .iter()
+        .any(|voice| voice.id == voice_id && voice.is_downloaded)
+    {
+        return Err(format!("Local voice '{}' is not installed", voice_id));
+    }
+    local_piper.voice_id = Some(voice_id.clone());
     // Clear existing piper instance so it will be reloaded with new voice
     local_piper.piper = None;
 
@@ -1342,11 +1369,18 @@ pub async fn voice_delete_piper_voice(
 ) -> Result<(), String> {
     let voice_state = state.lock().await;
     let models_dir = voice_state.local_piper.read().await.models_dir.clone();
+    drop(voice_state);
 
     PiperLocal::delete_voice(&models_dir, &voice_id)
         .await
         .map_err(|e| format!("Failed to delete voice: {}", e))?;
 
+    let voice_state = state.lock().await;
+    let mut local_piper = voice_state.local_piper.write().await;
+    if local_piper.voice_id.as_deref() == Some(voice_id.as_str()) {
+        local_piper.voice_id = None;
+        local_piper.piper = None;
+    }
     tracing::info!("Deleted Piper voice {}", voice_id);
     Ok(())
 }
@@ -1363,7 +1397,8 @@ pub async fn voice_tts_speak_local(
     let local_piper = voice_state.local_piper.read().await;
 
     // Check if piper binary is available
-    let piper = PiperLocal::new(local_piper.models_dir.clone(), &local_piper.voice_id)
+    let voice_id = selected_piper_voice(&local_piper)?;
+    let piper = PiperLocal::new(local_piper.models_dir.clone(), &voice_id)
         .map_err(|e| format!("Failed to initialize Piper: {}", e))?;
 
     let config = SynthesisConfig {
@@ -1411,33 +1446,7 @@ pub async fn voice_download_piper_binary(app: AppHandle) -> Result<String, Strin
 /// Check if Piper binary is available
 #[tauri::command]
 pub async fn voice_check_piper_binary() -> Result<bool, String> {
-    let possible_paths = ["/usr/local/bin/piper", "/usr/bin/piper", "/opt/piper/piper"];
-
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            return Ok(true);
-        }
-    }
-
-    // Check home directory paths
-    if let Some(home) = dirs::home_dir() {
-        let paths = [
-            home.join(".local/bin/piper"),
-            home.join(".agiworkforce/bin/piper"),
-        ];
-        for path in &paths {
-            if path.exists() {
-                return Ok(true);
-            }
-        }
-    }
-
-    // Check PATH
-    if which::which("piper").is_ok() {
-        return Ok(true);
-    }
-
-    Ok(false)
+    Ok(PiperLocal::binary_available())
 }
 
 // =============================================================================
@@ -1466,29 +1475,13 @@ pub async fn voice_list_local_models(
     let whisper_models_dir = local_whisper.models_dir.clone();
     let piper_models_dir = local_piper.models_dir.clone();
 
-    // Get Whisper models
-    let whisper_models = vec![
-        WhisperModelInfo::new(WhisperModelSize::Tiny, &whisper_models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Base, &whisper_models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Small, &whisper_models_dir),
-        WhisperModelInfo::new(WhisperModelSize::Medium, &whisper_models_dir),
-    ];
-
-    // Get Piper voices
-    let mut piper_voices = PiperVoiceDefinitions::popular_voices();
-    for voice in &mut piper_voices {
-        let model_path = piper_models_dir.join(format!("{}.onnx", voice.id));
-        voice.is_downloaded = model_path.exists();
-        if voice.is_downloaded {
-            voice.model_path = Some(model_path);
-        }
-    }
+    let whisper_models =
+        WhisperLocal::discover_models(&whisper_models_dir).map_err(|e| e.to_string())?;
+    let piper_voices =
+        PiperVoiceDefinitions::discover(&piper_models_dir).map_err(|e| e.to_string())?;
 
     // Check if Piper binary is available
-    let piper_binary_available = which::which("piper").is_ok()
-        || PiperLocal::default_bin_dir()
-            .map(|d| d.join("piper").exists())
-            .unwrap_or(false);
+    let piper_binary_available = PiperLocal::binary_available();
 
     Ok(LocalModelsInfo {
         whisper_models,
@@ -2351,33 +2344,29 @@ mod tts_availability_tests {
         assert!(!tts_provider_available(&config, false));
     }
 
-    /// The network arms keep their real gate: reachable exactly when keyed, and
-    /// never affected by whether the OS synthesiser happens to work here.
+    /// Network providers require a key, and providers absent from the canonical
+    /// catalog additionally require an explicit runtime model identifier.
     #[test]
-    fn network_providers_remain_gated_on_a_configured_key() {
-        for provider in [TtsProvider::ElevenLabs, TtsProvider::OpenAi] {
-            for system_supported in [false, true] {
-                let unkeyed = TtsConfig {
-                    provider,
-                    api_key: None,
-                    ..TtsConfig::default()
-                };
-                assert!(
-                    !tts_provider_available(&unkeyed, system_supported),
-                    "{provider:?} without a key must not report available"
-                );
+    fn network_providers_fail_closed_without_required_runtime_configuration() {
+        let openai = TtsConfig {
+            provider: TtsProvider::OpenAi,
+            api_key: Some("fixture-key".to_string()),
+            ..TtsConfig::default()
+        };
+        assert!(tts_provider_available(&openai, false));
 
-                let keyed = TtsConfig {
-                    provider,
-                    api_key: Some("sk-test".to_string()),
-                    ..TtsConfig::default()
-                };
-                assert!(
-                    tts_provider_available(&keyed, system_supported),
-                    "{provider:?} with a key must report available"
-                );
-            }
-        }
+        let elevenlabs_without_model = TtsConfig {
+            provider: TtsProvider::ElevenLabs,
+            api_key: Some("fixture-key".to_string()),
+            ..TtsConfig::default()
+        };
+        assert!(!tts_provider_available(&elevenlabs_without_model, true));
+
+        let elevenlabs_with_model = TtsConfig {
+            model_id: Some("fixture-elevenlabs-tts".to_string()),
+            ..elevenlabs_without_model
+        };
+        assert!(tts_provider_available(&elevenlabs_with_model, false));
     }
 
     /// The production call site must pass the real platform fact. If someone

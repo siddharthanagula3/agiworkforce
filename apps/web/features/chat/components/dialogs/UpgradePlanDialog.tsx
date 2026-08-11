@@ -29,6 +29,8 @@ interface UpgradePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentTier?: string;
+  /** Exact tier requested by a persisted refusal card; null keeps the generic comparison. */
+  targetTier?: UpgradeTarget | null;
   /**
    * Called when the user picks a paid tier. Wires to the real Stripe checkout
    * flow on the parent. Managed cloud itself is public-alpha-open; this upgrade
@@ -237,6 +239,7 @@ export function UpgradePlanDialog({
   open,
   onOpenChange,
   currentTier = 'free',
+  targetTier = null,
   onUpgrade,
 }: UpgradePlanDialogProps) {
   const [annual, setAnnual] = useState(false);
@@ -262,13 +265,17 @@ export function UpgradePlanDialog({
   const currentIdx = tierOrder.indexOf(currentTier as PlanCardId);
   const safeIdx = currentIdx >= 0 ? currentIdx : 0;
 
+  const currentPlan = PLAN_CARDS.find((plan) => plan.id === currentTier) ?? PLAN_CARDS[0];
+  const focusedPlan = targetTier
+    ? PLAN_CARDS.find((plan) => plan.id === targetTier)
+    : PLAN_CARDS[Math.min(safeIdx + 1, PLAN_CARDS.length - 1)];
   const compactPlans: PlanCard[] = expanded
     ? PLAN_CARDS
-    : [
-        PLAN_CARDS[safeIdx] ?? PLAN_CARDS[0]!,
-        // Recommend next tier, or the last one if already at max
-        PLAN_CARDS[Math.min(safeIdx + 1, PLAN_CARDS.length - 1)]!,
-      ].filter((p, idx, arr): p is PlanCard => p !== undefined && arr.indexOf(p) === idx);
+    : [currentPlan, focusedPlan].filter(
+        (plan, index, plans): plan is PlanCard =>
+          plan !== undefined && plans.findIndex((candidate) => candidate?.id === plan.id) === index,
+      );
+  const focusedPlanLabel = targetTier ? getBillingPlanDisplay(targetTier).pricing.label : null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -282,7 +289,9 @@ export function UpgradePlanDialog({
         closeLabel="Close upgrade plan dialog"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Upgrade your plan</DialogTitle>
+          <DialogTitle>
+            {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}
+          </DialogTitle>
           <DialogDescription>
             Compare AGI plans and upgrade for higher managed-cloud capacity.
           </DialogDescription>
@@ -292,7 +301,9 @@ export function UpgradePlanDialog({
           {/* Header */}
           <div className="mb-6 flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-foreground">Upgrade your plan</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Managed cloud is open in public alpha; sign in and start now. Upgrade for higher
                 hosted capacity. Local and BYOK stay free on Desktop and CLI.

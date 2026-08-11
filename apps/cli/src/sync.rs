@@ -501,7 +501,11 @@ mod tests {
         let home = dir.path();
         setup_home(home);
 
-        fs::write(home.join("config.toml"), "[default]\nmodel = \"gpt-4o\"").unwrap();
+        fs::write(
+            home.join("config.toml"),
+            "[default]\nmodel = \"fixture-config-model\"",
+        )
+        .unwrap();
         fs::write(home.join("INSTRUCTIONS.md"), "# My instructions").unwrap();
 
         let manifest = ConfigSync::compute_manifest(home).unwrap();
@@ -520,7 +524,7 @@ mod tests {
         // Write files on source
         fs::write(
             src.path().join("config.toml"),
-            "[default]\nmodel = \"claude-opus-5\"\n",
+            "[default]\nmodel = \"fixture-sync-model\"\n",
         )
         .unwrap();
         fs::write(src.path().join("INSTRUCTIONS.md"), "# Source instructions").unwrap();
@@ -536,7 +540,7 @@ mod tests {
 
         // Verify files exist on destination
         let dst_config = fs::read_to_string(dst.path().join("config.toml")).unwrap();
-        assert!(dst_config.contains("claude-opus-5"));
+        assert!(dst_config.contains("fixture-sync-model"));
     }
 
     #[test]
@@ -681,11 +685,11 @@ mod tests {
 
     #[test]
     fn test_merge_toml_adds_new_keys() {
-        let local = b"[default]\nmodel = \"gpt-5.6-sol\"\n";
-        let remote = "[default]\nmodel = \"claude-opus-5\"\nstream = true\n\n[providers.new]\napi_key_env = \"NEW_KEY\"\n";
+        let local = b"[default]\nmodel = \"fixture-local-config-model\"\n";
+        let remote = "[default]\nmodel = \"fixture-remote-config-model\"\nstream = true\n\n[providers.new]\napi_key_env = \"NEW_KEY\"\n";
         let merged = ConfigSync::merge_toml(local, remote).unwrap();
         // Local model should be preserved
-        assert!(merged.contains("gpt-5.6-sol"));
+        assert!(merged.contains("fixture-local-config-model"));
         // New key 'stream' should be added
         assert!(merged.contains("stream"));
         // New provider section should be added

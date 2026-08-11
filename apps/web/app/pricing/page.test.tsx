@@ -18,13 +18,27 @@ const stripeMocks = vi.hoisted(() => ({
   previewUpgrade: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const routerMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, values?: Record<string, unknown>) =>
-      key === 'compareProInterval' && values?.['yearly']
-        ? `${key} ${String(values['yearly'])}`
-        : key,
+    t: (key: string, values?: Record<string, unknown>) => {
+      if (key === 'compareProInterval' && values?.['yearly']) {
+        return `${key} ${String(values['yearly'])}`;
+      }
+      if (key === 'seatCadenceMonthly') {
+        return `${String(values?.['count'])} seats · billed monthly`;
+      }
+      if (key === 'seatCadenceAnnual') {
+        return `${String(values?.['count'])} seats · billed annually`;
+      }
+      if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
+      if (key === 'perSeatPriceAnnual') return `${String(values?.['price'])}/seat/yr`;
+      return key;
+    },
   }),
 }));
 vi.mock('sonner', () => ({
@@ -78,6 +92,7 @@ describe('PricingPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/pricing');
     testState.auth.user = null;
     testState.billing = null;
     vi.spyOn(global, 'fetch').mockImplementation(() => new Promise<Response>(() => undefined));
@@ -99,7 +114,7 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
     // Team is a real per-seat plan: its $25/seat unit price renders in the Team
     // card (alongside a "per seat" sub), so the unit amount is expected here.
-    expect(screen.getAllByText('$25').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$25/seat/mo').length).toBeGreaterThan(0);
   });
 
   it('offers Team as a real per-seat checkout instead of a sales hand-off', async () => {
@@ -117,6 +132,49 @@ describe('PricingPage', () => {
 
     expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toBeInTheDocument();
+  });
+
+  it('reveals the Team seat selector when a Team CTA links to its pricing anchor', async () => {
+    window.history.replaceState(null, '', '/pricing#pricing-team-title');
+
+    render(<PricingPage />);
+
+    expect(await screen.findByRole('button', { name: 'audienceBusiness' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(
+      MIN_PURCHASABLE_SEATS,
+    );
+  });
+
+  it('makes the prominent Team total track the canonical per-seat price at multiple quantities', async () => {
+    render(<PricingPage />);
+    await showTeamAndEnterprise();
+
+    const teamCard = screen.getByRole('heading', { name: 'Team' }).closest('article');
+    expect(teamCard).not.toBeNull();
+    const card = within(teamCard!);
+    expect(card.getByText('$50')).toBeVisible();
+    expect(card.getByText('2 seats · billed monthly')).toBeVisible();
+    expect(card.getByText('$25/seat/mo')).toBeVisible();
+
+    fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
+      target: { value: '7' },
+    });
+
+    expect(card.getByText('$175')).toBeVisible();
+    expect(card.getByText('7 seats · billed monthly')).toBeVisible();
+    expect(card.getByText('$25/seat/mo')).toBeVisible();
+  });
+
+  it('prefills Team seat management from the licensed-seat link state', async () => {
+    window.history.replaceState(null, '', '/pricing?seats=5#pricing-team-title');
+
+    render(<PricingPage />);
+
+    expect(await screen.findByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(5);
+    expect(screen.getByText('$125')).toBeVisible();
   });
 
   it('sends the chosen seat count to Team checkout', async () => {
@@ -149,11 +207,27 @@ describe('PricingPage', () => {
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '14' } });
 
+    expect(screen.getByText('$280')).toBeVisible();
+    expect(screen.getByText('14 seats · billed monthly')).toBeVisible();
+
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
     fireEvent.click(teamCta);
 
     await waitFor(() => expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: 14 }));
+  });
+
+  it('preserves the chosen Team seats through signed-out authentication', async () => {
+    render(<PricingPage />);
+
+    await showTeamAndEnterprise();
+    const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    fireEvent.change(seatInput, { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'teamCta' }));
+
+    expect(routerMocks.push).toHaveBeenCalledWith(
+      '/login?redirectTo=%2Fpricing%3Fseats%3D3%23pricing-team-title',
+    );
   });
 
   it('offers a Team yearly cadence and sends billingPeriod yearly when the yearly Price is ready', async () => {
@@ -183,6 +257,10 @@ describe('PricingPage', () => {
     await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     fireEvent.click(within(teamCadence).getByRole('button', { name: /annual/i }));
+
+    expect(screen.getByText('$480')).toBeVisible();
+    expect(screen.getByText('2 seats · billed annually')).toBeVisible();
+    expect(screen.getByText('$240/seat/yr')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
@@ -268,7 +346,7 @@ describe('PricingPage', () => {
       'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team perSeatPrice compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes compareTeamBestFor',
+      'Team $25/seat/mo compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes compareTeamBestFor',
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits
@@ -539,8 +617,8 @@ describe('PricingPage', () => {
     expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£15');
     // Team is per seat and monthly-only: the annual toggle must not divide its
     // per-seat price by twelve the way it does Pro's yearly price.
-    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('perSeatPrice');
-    expect(screen.getAllByText('£18').length).toBeGreaterThan(0);
+    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('£18/seat/mo');
+    expect(screen.getAllByText('£18/seat/mo').length).toBeGreaterThan(0);
   });
 
   it('does not render the obsolete managed-cloud early-access waitlist', () => {

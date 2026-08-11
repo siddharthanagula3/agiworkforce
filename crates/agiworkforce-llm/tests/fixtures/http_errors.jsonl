@@ -6,6 +6,6 @@
 {"name": "anthropic_529_overloaded", "provider": "anthropic", "status": 529, "body": "overloaded", "expected": {"kind": "api", "message_contains": "Anthropic is overloaded"}}
 {"name": "openai_404_model_not_found", "provider": "openai", "status": 404, "body": "model does not exist", "expected": {"kind": "api", "message_contains": "Model not found or not available"}}
 {"name": "google_400_bad_api_key", "provider": "google", "status": 400, "body": "API key not valid. Please pass a valid API key.", "expected": {"kind": "auth", "message_contains": "Invalid Google API key"}}
-{"name": "context_overflow_detected_from_body", "provider": "openai", "model": "gpt-test", "status": 400, "body": "This request's context exceeds the model's maximum length", "expected": {"kind": "context_overflow"}}
+{"name": "context_overflow_detected_from_body", "provider": "openai", "model": "fixture-http-error-model", "status": 400, "body": "This request's context exceeds the model's maximum length", "expected": {"kind": "context_overflow"}}
 {"name": "openrouter_nested_raw_message_402", "provider": "openrouter", "status": 402, "body": "{\"error\":{\"message\":\"Provider returned error\",\"code\":402,\"metadata\":{\"raw\":\"{\\\"error\\\":\\\"API key USD spend limit exceeded.\\\"}\",\"provider_name\":\"Venice\"}}}", "expected": {"kind": "api", "message_contains": "spend limit"}}
 {"name": "server_500_generic_api", "provider": "google", "status": 500, "body": "internal error", "expected": {"kind": "api", "message_contains": "request failed (HTTP 500)"}}

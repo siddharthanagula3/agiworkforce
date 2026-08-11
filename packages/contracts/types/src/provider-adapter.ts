@@ -170,9 +170,9 @@ export type ThinkingConfig =
       type: 'enabled';
       budgetTokens?: number;
       /**
-       * Gemini 3.x discrete thinking level (`generationConfig.thinkingConfig.
-       * thinkingLevel` ∈ `minimal|low|medium|high`). This is the CURRENT Gemini
-       * 3.x control; the 2.5-era `thinkingBudget` integer is still accepted as a
+       * Provider discrete thinking level (`generationConfig.thinkingConfig.
+       * thinkingLevel` ∈ `minimal|low|medium|high`). This is the current
+       * control; the integer `thinkingBudget` form is still accepted as a
        * legacy fallback. When set, the Google adapter emits `thinkingLevel` and
        * omits `thinkingBudget`. See reasoning-effort-capability-matrix-2026-07-10
        * flag 4.

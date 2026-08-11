@@ -16,6 +16,7 @@ const workspaceRoot = path.resolve(configDir, '../..');
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  outputFileTracingRoot: workspaceRoot,
   // Turbopack config (Next.js 16+ default bundler)
   turbopack: {
     root: workspaceRoot,
@@ -60,7 +61,10 @@ const nextConfig: NextConfig = {
   // The glob targets the pnpm store path because that is the realpath __dirname
   // resolves to at runtime, as the error above shows.
   outputFileTracingIncludes: {
-    '/**': ['../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**'],
+    '/**': [
+      '../../.agents/skills/**',
+      '../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**',
+    ],
   },
   // Type checking during build — all TS errors resolved as of 2026-02-28.
   typescript: {

@@ -13,6 +13,10 @@ import {
   refreshAccountTierCache,
   resolveTier,
 } from '../integrations/tierResolver';
+import { requireCatalogModel } from './catalogModelFixtures';
+
+const FIRST_PROVIDER_MODEL = requireCatalogModel('anthropic').id;
+const SECOND_PROVIDER_MODEL = requireCatalogModel('openai').id;
 
 function makeContext(cachedTier?: string): vscode.ExtensionContext {
   return {
@@ -70,7 +74,9 @@ describe('resolveTier workspace-spoofing hardening', () => {
     stubTierInspect(undefined, 'max');
     const tier = await resolveTier(makeContext());
 
-    expect(guardProviderSwitch('claude-sonnet-4.6', 'gpt-5.6-sol', tier)).toBe('upgrade-required');
+    expect(guardProviderSwitch(FIRST_PROVIDER_MODEL, SECOND_PROVIDER_MODEL, tier)).toBe(
+      'upgrade-required',
+    );
   });
 
   it('replaces a stale cached tier immediately after account sign-in', async () => {

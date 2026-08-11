@@ -135,7 +135,7 @@ jest.mock('../src/features/voice/services/voice', () => ({
 
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ selectedModel: 'claude-sonnet-5', thinkingEnabledPerModel: {} }),
+    selector({ selectedModel: 'fixture-cloud-model', thinkingEnabledPerModel: {} }),
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
@@ -172,7 +172,7 @@ jest.mock('../src/features/billing/store', () => ({
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
-  getShortDisplayName: () => 'Claude Sonnet 5',
+  getShortDisplayName: () => 'Fixture Model',
 }));
 
 jest.mock('../stores/settingsStore', () => ({

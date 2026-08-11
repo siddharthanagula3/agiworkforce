@@ -3,12 +3,13 @@
 /**
  * SearchOverlay — the centered command-palette-style search modal the desktop
  * Sidebar opens. Pure presentation: results + handlers are passed in. Uses a
- * CSS fade (no framer-motion) and a plain backdrop. Escape/backdrop close.
+ * CSS fade (no framer-motion) inside the shared modal primitive so focus,
+ * Escape, backdrop dismissal, and background accessibility are consistent.
  */
-import { useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
 import type { SidebarSession } from './types';
 
 export interface SearchOverlayProps {
@@ -31,44 +32,39 @@ export function SearchOverlay({
   onClose,
 }: SearchOverlayProps) {
   const { t } = useUiTranslation('chat');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
-      data-state="open"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
     >
-      <div
-        className="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 px-4"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        closeLabel={t('sidebar.closeSearch', 'Close search')}
+        overlayProps={{ className: 'bg-black/50' }}
+        className="block w-[min(96vw,42rem)] max-w-2xl gap-0 border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
       >
+        <DialogTitle className="sr-only">
+          {t('sidebar.searchConversations', 'Search conversations')}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {t(
+            'sidebar.searchConversationsDescription',
+            'Search your conversation history and open a matching conversation.',
+          )}
+        </DialogDescription>
         <div className="overflow-hidden rounded-xl bg-[hsl(var(--card))] shadow-2xl">
           <div className="flex items-center gap-3 border-b border-[hsl(var(--border))] px-5 py-4">
             <Search className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
             <input
-              ref={inputRef}
+              aria-label={t('sidebar.searchConversations', 'Search conversations')}
               placeholder={t('sidebar.searchConversations', 'Search conversations...')}
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               className="flex-1 bg-transparent text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
+              autoFocus
             />
             <kbd className="rounded bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
               ESC
@@ -108,7 +104,7 @@ export function SearchOverlay({
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

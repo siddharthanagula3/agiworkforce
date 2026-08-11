@@ -119,7 +119,7 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                 // For user/tool messages — tool results become separate "tool" role messages.
                 // Text and Image blocks accumulate together into a single content-parts array
                 // so that mixed text+image input is sent as ONE user message with a content
-                // array (the format required by gpt-4o and other vision-capable models).
+                // array (the format required by vision-capable chat models).
                 let mut msgs = Vec::new();
                 // `content_parts` accumulates text/image parts for the current user message.
                 // It holds JSON Value objects: text parts as {"type":"text","text":"..."} and
@@ -710,6 +710,8 @@ pub fn ollama_chat_request_body(
 mod tests {
     use super::*;
 
+    const FIXTURE_OLLAMA_MODEL_ID: &str = "fixture-ollama-model";
+
     fn image_block() -> ContentBlock {
         ContentBlock::Image {
             mime: "image/png".to_string(),
@@ -1004,7 +1006,7 @@ mod tests {
     #[test]
     fn ollama_chat_request_body_forwards_explicit_think_false() {
         let body = ollama_chat_request_body(
-            "qwen3.5:9b",
+            FIXTURE_OLLAMA_MODEL_ID,
             vec![serde_json::json!({"role": "user", "content": "hi"})],
             Some(&[test_tool("read_file")]),
             &OllamaRequestOpts {
@@ -1016,7 +1018,7 @@ mod tests {
             },
         );
 
-        assert_eq!(body["model"], "qwen3.5:9b");
+        assert_eq!(body["model"], FIXTURE_OLLAMA_MODEL_ID);
         assert_eq!(body["stream"], true);
         assert_eq!(body["think"], false);
         let temperature = body["options"]["temperature"]
@@ -1038,7 +1040,7 @@ mod tests {
     #[test]
     fn ollama_chat_request_body_omits_num_predict_when_unbounded() {
         let body = ollama_chat_request_body(
-            "qwen3.5:9b",
+            FIXTURE_OLLAMA_MODEL_ID,
             vec![serde_json::json!({"role": "user", "content": "hi"})],
             None,
             &OllamaRequestOpts {
@@ -1062,7 +1064,7 @@ mod tests {
         // context window must land in `options.num_ctx`. `stream: false`
         // covers the desktop's blocking send path.
         let body = ollama_chat_request_body(
-            "qwen3.5:9b",
+            FIXTURE_OLLAMA_MODEL_ID,
             vec![serde_json::json!({"role": "user", "content": "hi"})],
             None,
             &OllamaRequestOpts {
@@ -1086,7 +1088,7 @@ mod tests {
     #[test]
     fn ollama_chat_request_body_forwards_think_true() {
         let body = ollama_chat_request_body(
-            "qwen3.5:9b",
+            FIXTURE_OLLAMA_MODEL_ID,
             vec![serde_json::json!({"role": "user", "content": "hi"})],
             None,
             &OllamaRequestOpts {

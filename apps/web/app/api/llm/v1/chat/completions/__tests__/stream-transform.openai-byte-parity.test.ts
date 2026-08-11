@@ -69,8 +69,8 @@ import type { ProcessedRequest } from '../lib/request-processor';
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-parity-001',
-    chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as any,
-    requestedModel: 'gpt-5.6-sol',
+    chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    requestedModel: 'fixture-model',
     provider: 'openai',
     estimatedCostCents: 0,
     quotaWarningHeader: null,
@@ -150,7 +150,7 @@ const textFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-abc123',
     object: 'chat.completion.chunk',
     created: 1750000000,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [
@@ -166,7 +166,7 @@ const textFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-abc123',
     object: 'chat.completion.chunk',
     created: 1750000000,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [{ index: 0, delta: { content: 'Cats are ' }, logprobs: null, finish_reason: null }],
@@ -175,7 +175,7 @@ const textFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-abc123',
     object: 'chat.completion.chunk',
     created: 1750000000,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [{ index: 0, delta: { content: 'mammals.' }, logprobs: null, finish_reason: null }],
@@ -184,7 +184,7 @@ const textFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-abc123',
     object: 'chat.completion.chunk',
     created: 1750000000,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: 'stop' }],
@@ -193,7 +193,7 @@ const textFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-abc123',
     object: 'chat.completion.chunk',
     created: 1750000000,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [],
@@ -216,7 +216,7 @@ const toolCallFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-tool456',
     object: 'chat.completion.chunk',
     created: 1750000100,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [
@@ -232,7 +232,7 @@ const toolCallFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-tool456',
     object: 'chat.completion.chunk',
     created: 1750000100,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [
@@ -257,7 +257,7 @@ const toolCallFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-tool456',
     object: 'chat.completion.chunk',
     created: 1750000100,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [
@@ -273,7 +273,7 @@ const toolCallFixture: OpenAIChatCompletionChunk[] = [
     id: 'chatcmpl-real-openai-id-tool456',
     object: 'chat.completion.chunk',
     created: 1750000100,
-    model: 'gpt-5.6-sol-2026-01-01',
+    model: 'provider-upstream-model',
     system_fingerprint: 'fp_real_openai_value',
     service_tier: 'default',
     choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: 'tool_calls' }],
@@ -419,7 +419,7 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
         id: 'chatcmpl-logprobs-test',
         object: 'chat.completion.chunk',
         created: 1750000300,
-        model: 'gpt-5.6-sol-2026-01-01',
+        model: 'provider-upstream-model',
         choices: [
           {
             index: 0,
@@ -433,7 +433,7 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
         id: 'chatcmpl-logprobs-test',
         object: 'chat.completion.chunk',
         created: 1750000300,
-        model: 'gpt-5.6-sol-2026-01-01',
+        model: 'provider-upstream-model',
         choices: [
           {
             index: 0,
@@ -447,7 +447,7 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
         id: 'chatcmpl-logprobs-test',
         object: 'chat.completion.chunk',
         created: 1750000300,
-        model: 'gpt-5.6-sol-2026-01-01',
+        model: 'provider-upstream-model',
         choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: 'stop' }],
       } as unknown as OpenAIChatCompletionChunk,
     ];

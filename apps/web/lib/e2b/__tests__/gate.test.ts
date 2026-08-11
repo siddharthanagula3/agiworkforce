@@ -15,6 +15,10 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/managed-compute-gate', () => ({
   isManagedComputePrivateBetaEnabled: vi.fn(() => false),
 }));
+const computeIsPriceableMock = vi.hoisted(() => vi.fn(() => true));
+vi.mock('../compute-metering', () => ({
+  sandboxComputeIsPriceable: computeIsPriceableMock,
+}));
 
 const ENV_KEY = 'AGI_E2B_EXECUTION';
 const API_KEY = 'E2B_API_KEY';
@@ -116,6 +120,7 @@ describe('e2bProvisioningReady', () => {
   beforeEach(() => {
     delete process.env[ENV_KEY];
     delete process.env[API_KEY];
+    computeIsPriceableMock.mockReturnValue(true);
     vi.resetModules();
   });
 
@@ -135,6 +140,16 @@ describe('e2bProvisioningReady', () => {
     expect(e2bProvisioningReady()).toBe(true);
 
     process.env[ENV_KEY] = '0';
+    expect(e2bProvisioningReady()).toBe(false);
+  });
+
+  it('refuses to advertise provisioning when sandbox compute cannot be priced', async () => {
+    process.env[ENV_KEY] = '1';
+    process.env[API_KEY] = 'e2b-test-key';
+    computeIsPriceableMock.mockReturnValue(false);
+    vi.resetModules();
+
+    const { e2bProvisioningReady } = await import('../gate');
     expect(e2bProvisioningReady()).toBe(false);
   });
 });

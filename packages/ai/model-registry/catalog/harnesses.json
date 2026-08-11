@@ -45,6 +45,26 @@
           "providerSupport": "native",
           "implementation": "unwired"
         },
+        "fileSearch": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "hostedShell": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "applyPatch": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "skills": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "computerUse": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
         "mcp": {
           "providerSupport": "native",
           "implementation": "unwired"
@@ -207,6 +227,13 @@
       "trustModes": ["byok"],
       "features": {}
     },
+    "open_router/media": {
+      "provider": "open_router",
+      "apiFamily": "media",
+      "adapter": "managed-media",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    },
     "nvidia-nim/chat-completions": {
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
@@ -255,7 +282,13 @@
       "nvidia-nim/chat-completions",
       "minimax/chat-completions"
     ],
-    "managed-media": ["managed-cloud/gateway", "openai/media", "google/media", "runway/media"]
+    "managed-media": [
+      "managed-cloud/gateway",
+      "openai/media",
+      "google/media",
+      "runway/media",
+      "open_router/media"
+    ]
   },
   "runtimeProfiles": {
     "web/cloud-chat": {

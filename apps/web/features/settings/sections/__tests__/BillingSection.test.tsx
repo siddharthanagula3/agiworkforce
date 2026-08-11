@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+const billingMocks = vi.hoisted(() => ({
+  openBillingPortal: vi.fn(),
+  startTopUpCheckout: vi.fn(),
+}));
+
+vi.mock('@/features/billing/services/stripe-payments', () => billingMocks);
 
 interface MockSubscription {
   tier: string;
@@ -31,6 +38,7 @@ import { BillingSection } from '../BillingSection';
 const originalFetch = global.fetch;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mockSubscription = {
     tier: 'pro',
     display_name: 'Pro',
@@ -161,5 +169,28 @@ describe('BillingSection', () => {
     // A manual row may still have a Stripe customer carrying past invoices, so
     // the portal stays reachable.
     expect(screen.getByText('Manage billing')).toBeTruthy();
+  });
+
+  it('shows the $10 minimum and sends the canonical 500-unit top-up to checkout', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    billingMocks.startTopUpCheckout.mockResolvedValue(undefined);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('50 units for every $1')).toBeTruthy();
+    expect(screen.getByText(/Minimum \$10/)).toBeTruthy();
+    const buyButton = screen.getByRole('button', { name: 'Buy 500 units · $10' });
+    fireEvent.click(buyButton);
+    await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(10));
+  });
+
+  it('disables top-up checkout below the minimum', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    render(<BillingSection />);
+
+    fireEvent.change(screen.getByLabelText('Custom top-up amount in dollars'), {
+      target: { value: '9' },
+    });
+    expect(screen.getByRole('button', { name: 'Minimum $10' })).toBeDisabled();
   });
 });

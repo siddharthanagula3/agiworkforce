@@ -54,7 +54,7 @@ pub enum OpenAIServerTool {
     ComputerUsePreview,
     /// Shell command execution (current)
     Shell,
-    /// Local shell command execution (legacy/codex-mini)
+    /// Local shell command execution (legacy Responses dialect)
     LocalShell,
     /// Apply patch for code modifications
     ApplyPatch,
@@ -143,7 +143,7 @@ pub enum OpenAIToolParams {
     /// Image generation configuration
     ImageGeneration {
         #[serde(skip_serializing_if = "Option::is_none")]
-        model: Option<String>, // e.g. "gpt-image-2"
+        model: Option<String>, // Catalog-resolved image-generation model.
         #[serde(skip_serializing_if = "Option::is_none")]
         quality: Option<String>, // "medium" or "high"
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -302,9 +302,9 @@ impl ProviderAdapterFactory {
 /// OpenAI/OpenAI-compatible adapter (used by XAI, Qwen, Perplexity, etc.)
 ///
 /// Supports:
-/// - Responses API (modern, gpt-5+)
+/// - Responses API for catalog-declared OpenAI reasoning models
 /// - Chat Completions API (legacy, backward compatible)
-/// - Reasoning models (o3, o4-mini, GPT-5 with reasoning.effort)
+/// - Reasoning models with catalog-declared `reasoning.effort`
 /// - Structured outputs (text.format with JSON schema, strict mode)
 /// - Prompt caching (automatic for 1024+ token prefixes)
 /// - Built-in tools (web_search, code_interpreter, file_search, mcp, image_generation)
@@ -315,7 +315,7 @@ pub(crate) struct OpenAIAdapter;
 
 impl ProviderAdapter for OpenAIAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Determine if we should use Responses API (for gpt-5+) or Chat Completions API
+        // Select the API shape from the canonical model catalog.
         let use_responses_api = super::models_config::model_uses_responses_api(&request.model);
 
         if use_responses_api {
@@ -357,7 +357,7 @@ impl ProviderAdapter for OpenAIAdapter {
     }
 
     fn supports_extended_thinking(&self) -> bool {
-        // GPT-5 and reasoning models support reasoning.effort
+        // Cataloged OpenAI reasoning models support reasoning.effort.
         true
     }
 
@@ -370,7 +370,7 @@ impl ProviderAdapter for OpenAIAdapter {
     }
 
     fn supports_background_mode(&self) -> bool {
-        // OpenAI supports background mode for GPT-5+ and reasoning models
+        // OpenAI supports background mode for Responses reasoning models.
         true
     }
 
@@ -571,7 +571,7 @@ impl OpenAIAdapter {
                     "low" => "low",
                     "medium" => "medium",
                     "high" => "high",
-                    // xhigh is natively supported in GPT-5.4
+                    // Extreme reasoning maps to the provider-native xhigh level.
                     "extreme" | "xhigh" => "xhigh",
                     _ => "medium",
                 }),
@@ -715,7 +715,7 @@ impl OpenAIAdapter {
         } else if model.ends_with("-high") {
             Some("high")
         } else if model.ends_with("-xhigh") {
-            // GPT-5.4 supports xhigh natively (added in GPT-5.4, not available in GPT-5.2)
+            // Preserve the provider-native xhigh suffix override.
             Some("xhigh")
         } else {
             None
@@ -992,7 +992,7 @@ impl OpenAIAdapter {
         Ok((serde_json::json!(processed_parts), total_image_tokens))
     }
 
-    /// Adapt request to modern Responses API format (gpt-5+, o3, o4-mini).
+    /// Adapt a catalog-selected reasoning request to the Responses API format.
     ///
     /// LEGACY TWIN since c3 (2026-07-16) — the FALLBACK for request shapes
     /// [`Self::responses_crate_expressible`] cannot route to the shared crate
@@ -1041,7 +1041,7 @@ impl OpenAIAdapter {
         if let Some(ref effort) = resolved_reasoning_effort {
             api_request["reasoning"] = serde_json::json!({ "effort": effort });
         }
-        // temperature, top_p, logprobs are forbidden for GPT-5 when any reasoning effort is set
+        // Sampling parameters are forbidden when reasoning effort is set.
         let suppress_sampling_params = resolved_reasoning_effort.is_some();
 
         // Add response format (structured outputs)
@@ -1096,7 +1096,7 @@ impl OpenAIAdapter {
             }
         }
 
-        // temperature and top_p are forbidden for GPT-5/o-series when reasoning effort is set.
+        // Temperature and top_p are forbidden when reasoning effort is set.
         // When effort is unset (default "none"), sampling params are allowed.
         if !suppress_sampling_params {
             if let Some(temp) = request.temperature {
@@ -1169,8 +1169,8 @@ impl OpenAIAdapter {
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Resolve the wire API model ID: catalog keys like "minimax-m3" must be
-        // translated to the actual API string ("MiniMax-M3") before being sent
+        // Resolve the wire API model ID: internal catalog keys must be
+        // translated to their provider wire strings before being sent
         // to the provider.  get_api_model_id returns the apiModelId from models.json when
         // set, otherwise returns the model string unchanged.
         let wire_model = super::models_config::get_api_model_id(&request.model);
@@ -1229,7 +1229,7 @@ impl OpenAIAdapter {
                 );
             }
             // OpenAI-managed `/chat/completions` deprecated `max_tokens` and
-            // rejects it outright for gpt-5/o-series with a 400 ("Unsupported
+            // rejects it for current catalog reasoning models with a 400 ("Unsupported
             // parameter: 'max_tokens' is not supported with this model. Use
             // 'max_completion_tokens' instead."). Third-party OpenAI-compatible
             // providers (xAI, Qwen, DeepSeek, Moonshot, local runtimes, …) that
@@ -1549,7 +1549,7 @@ impl OpenAIAdapter {
     }
 
     /// Process multimodal content and extract audio inputs
-    // Used by: audio-capable model support (e.g., GPT-4o audio, Gemini audio)
+    // Used by audio-capable OpenAI and Google models.
     fn _process_audio_content(
         &self,
         content_parts: &[super::ContentPart],
@@ -1852,7 +1852,7 @@ impl OpenAIAdapter {
         let completion_tokens = usage["output_tokens"].as_u64().map(|v| v as u32);
         let total_tokens = usage["total_tokens"].as_u64().map(|v| v as u32);
 
-        // Extract reasoning tokens (for o3, o4-mini, GPT-5)
+        // Extract provider-reported reasoning tokens.
         let reasoning_tokens = usage["output_tokens_details"]["reasoning_tokens"]
             .as_u64()
             .map(|v| v as u32);
@@ -2362,9 +2362,8 @@ impl AnthropicAdapter {
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         Self::validate_model_request_contract(request)?;
-        // Resolve the wire API model ID: catalog keys carrying a dotted internal
-        // id (e.g. "claude-sonnet-5") must be translated to the real Anthropic
-        // API string ("claude-sonnet-5") before being sent in the request body.
+        // Resolve the wire API model ID: catalog keys carrying an internal ID
+        // distinct from the Anthropic wire ID must be translated before send.
         // `get_api_model_id` returns the `apiModelId` from models.json when set
         // (and is idempotent for an already-wire id), otherwise the input
         // unchanged. Using `get_canonicalized_id` here instead would send the
@@ -3497,7 +3496,7 @@ impl GoogleAdapter {
             });
         }
 
-        // ── Thinking config (Gemini Pro models only) ─────────────────
+        // ── Thinking config (catalog-capable Google models only) ─────
         // Gemini REST API requires camelCase: thinkingConfig / thinkingBudget
         // (snake_case is silently ignored by Google's API)
         if super::models_config::model_supports_gemini_thinking(&request.model) {

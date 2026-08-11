@@ -27,6 +27,7 @@ import {
 
 const ISO_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FIXTURE_MODEL_ID = 'fixture-model';
 
 function makeMinimalParams(overrides: Partial<Parameters<typeof createAuditEvent>[0]> = {}) {
   return {
@@ -226,13 +227,15 @@ describe('metadata field', () => {
 
   it('handles deeply nested metadata', () => {
     const metadata = {
-      agent: { id: 'agent-1', model: 'claude-opus-5', iterations: 5 },
+      agent: { id: 'agent-1', model: FIXTURE_MODEL_ID, iterations: 5 },
       context: { path: '/home/user', filesChanged: ['a.ts', 'b.ts'] },
     };
 
     const event = createAuditEvent({ ...makeMinimalParams(), metadata });
 
-    expect((event.metadata?.['agent'] as Record<string, unknown>)?.['model']).toBe('claude-opus-5');
+    expect((event.metadata?.['agent'] as Record<string, unknown>)?.['model']).toBe(
+      FIXTURE_MODEL_ID,
+    );
     expect(event.metadata?.['context']).toBeDefined();
   });
 });

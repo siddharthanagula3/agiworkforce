@@ -130,16 +130,93 @@ import {
   CLOUD_LOCK_REASON,
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
+  DEFAULT_AUTO_MODE_ID,
   LOCKED_CLOUD_MODELS,
   MODEL_LIST,
   getDefaultCloudModelIdForTier,
   getModelByIdForCloudAccess,
   getModelListForCloudAccess,
 } from '../src/features/model-picker/service';
+import {
+  getMinimumRequiredTier,
+  getModelReasoning,
+  type ModelReasoning,
+} from '@agiworkforce/types';
+import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const LITE_MODEL_ID = requireLocalModel(
+  (model) => model.role === 'lite-mode',
+  'lite-mode model',
+).id;
+const LITE_MODEL = MODEL_LIST.find((model) => model.id === LITE_MODEL_ID);
+if (!LITE_MODEL) throw new Error('Mobile picker does not expose the catalog lite-mode model');
+
+const MAX_ONLY_MODEL = requireMobileCloudModel(
+  (model) =>
+    getMinimumRequiredTier(model.id) === 'max' &&
+    getModelReasoning(model.id).control === 'effort_levels',
+  'Max-only effort model',
+);
+const EFFORT_MODEL = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  return (
+    reasoning.control === 'effort_levels' &&
+    reasoning.canDisableThinking !== false &&
+    reasoning.supportedEfforts?.length === 5 &&
+    reasoning.supportedEfforts.includes('low') &&
+    reasoning.supportedEfforts.includes('medium') &&
+    reasoning.supportedEfforts.includes('high') &&
+    reasoning.supportedEfforts.includes('max')
+  );
+}, 'five-step effort model');
+const EFFORT_MODEL_REASONING = getModelReasoning(EFFORT_MODEL.id);
+const FULL_LADDER_MODEL = requireMobileCloudModel((model) => {
+  const efforts = getModelReasoning(model.id).supportedEfforts ?? [];
+  return efforts.includes('none') && efforts.includes('max');
+}, 'effort model with none and max');
+const EXACT_EFFORT_MODEL = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  const efforts = reasoning.supportedEfforts ?? [];
+  return (
+    reasoning.control === 'effort_levels' &&
+    efforts.length === 4 &&
+    efforts.includes('minimal') &&
+    efforts.includes('medium')
+  );
+}, 'four-step exact effort model');
+const THINKING_TOGGLE_MODEL = requireMobileCloudModel(
+  (model) => getModelReasoning(model.id).control === 'thinking_toggle',
+  'thinking-toggle model',
+);
+const CLAMP_TARGET_MODEL = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  const efforts = reasoning.supportedEfforts ?? [];
+  return (
+    reasoning.control === 'effort_levels' &&
+    !efforts.includes('max') &&
+    reasoning.defaultEffort === 'medium'
+  );
+}, 'effort model without max and with a medium default');
+const MANDATORY_REASONING_MODEL = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  return reasoning.control === 'effort_levels' && reasoning.canDisableThinking === false;
+}, 'model with mandatory reasoning');
+
+function sortedEfforts(reasoning: ModelReasoning): readonly string[] {
+  const order = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+  return [...(reasoning.supportedEfforts ?? [])].sort(
+    (left, right) => order.indexOf(left) - order.indexOf(right),
+  );
+}
+
+function effortLabel(effort: string): string {
+  if (effort === 'xhigh') return 'xHigh';
+  return `${effort.charAt(0).toUpperCase()}${effort.slice(1)}`;
+}
 
 function resetModelStore() {
   const hydrateInstalledModels = jest.fn<Promise<void>, []>(async () => undefined);
@@ -163,7 +240,7 @@ function resetModelStore() {
     thinkingEnabledPerModel: {},
   });
   useModelInstallStore.setState({
-    installedModelIds: [DEFAULT_LOCAL_MODEL_ID, 'llama-3.2-1b-instruct-spinquant'],
+    installedModelIds: [DEFAULT_LOCAL_MODEL_ID, LITE_MODEL_ID],
     readySystemModelIds: [],
     jobs: {},
     hydrateInstalledModels,
@@ -226,7 +303,7 @@ describe('ModelPickerSheet', () => {
   });
 
   it('marks the selected auto mode as selected', () => {
-    useModelStore.setState({ selectedModel: 'auto' });
+    useModelStore.setState({ selectedModel: DEFAULT_AUTO_MODE_ID });
     const { getByLabelText } = renderPicker();
 
     const autoCard = getByLabelText(
@@ -240,7 +317,7 @@ describe('ModelPickerSheet', () => {
 
     expect(getByText('AGI Standard')).toBeTruthy();
     expect(getByText('AGI Lite')).toBeTruthy();
-    // Apple Intelligence and Gemini Nano are hidden in v1 (stub native impl).
+    // OS-resident Apple and Google runtimes are hidden in v1 (stub native impl).
     // They are preserved in the catalog (shipsInV1:true) but filtered from the
     // picker in model-picker/service.ts until the native impl ships.
     expect(queryByText('Apple Intelligence')).toBeNull();
@@ -301,7 +378,7 @@ describe('ModelPickerSheet', () => {
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 
-    expect(useModelStore.getState().selectedModel).toBe('llama-3.2-1b-instruct-spinquant');
+    expect(useModelStore.getState().selectedModel).toBe(LITE_MODEL_ID);
   });
 
   it('does not select an unprepared downloaded model until preparation finishes', async () => {
@@ -325,7 +402,7 @@ describe('ModelPickerSheet', () => {
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 
-    expect(onSelect).toHaveBeenCalledWith('llama-3.2-1b-instruct-spinquant');
+    expect(onSelect).toHaveBeenCalledWith(LITE_MODEL_ID);
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
@@ -398,25 +475,25 @@ describe('ModelPickerSheet', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('shows an upgrade lock (not sign-in) for a flagship model on a Pro subscription', () => {
+  it('shows an upgrade lock (not sign-in) for a Max-only model on a Pro subscription', () => {
     // Regression: cloudUnlocked-only gating meant a Pro user could select a
-    // Max-only model (Opus-class) with no upgrade indicator at all — the server
+    // Max-only model with no upgrade indicator at all — the server
     // would then reject it. Being cloud-unlocked and tier-locked must show
     // "Upgrade required" and route to billing, not the sign-in flow.
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
 
-    const opusForFree = getModelByIdForCloudAccess('claude-opus-5', true, 'free');
-    const opusForPro = getModelByIdForCloudAccess('claude-opus-5', true, 'pro');
-    const opusForMax = getModelByIdForCloudAccess('claude-opus-5', true, 'max');
-    expect(opusForFree?.availability).toBe('locked');
-    expect(opusForPro?.availability).toBe('locked');
-    expect(opusForPro?.lockReason).not.toBe(CLOUD_LOCK_REASON);
-    expect(opusForPro?.detailLabel).toBe('Upgrade required');
-    expect(opusForMax?.availability).toBe('ready');
+    const maxOnlyForFree = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'free');
+    const maxOnlyForPro = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro');
+    const maxOnlyForMax = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'max');
+    expect(maxOnlyForFree?.availability).toBe('locked');
+    expect(maxOnlyForPro?.availability).toBe('locked');
+    expect(maxOnlyForPro?.lockReason).not.toBe(CLOUD_LOCK_REASON);
+    expect(maxOnlyForPro?.detailLabel).toBe('Upgrade required');
+    expect(maxOnlyForMax?.availability).toBe('ready');
 
     const { getByText } = renderPicker({ modelScope: 'cloud' });
-    fireEvent.press(getByText(opusForPro!.name));
+    fireEvent.press(getByText(maxOnlyForPro!.name));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
@@ -445,10 +522,12 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
 
-    const opus = getModelByIdForCloudAccess('claude-opus-5', true, 'pro')!;
+    const maxOnlyModel = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro')!;
     const { getAllByText, getByLabelText, queryByText } = renderPicker({ modelScope: 'cloud' });
 
-    const row = getByLabelText(`${opus.name}, upgrade required, ${opus.lockReason}`);
+    const row = getByLabelText(
+      `${maxOnlyModel.name}, upgrade required, ${maxOnlyModel.lockReason}`,
+    );
     expect(row.props.accessibilityHint).toBe('Opens plan upgrade options');
     expect(getAllByText('Upgrade').length).toBeGreaterThan(0);
     // A signed-in tier lock must not masquerade as a sign-in lock.
@@ -458,21 +537,26 @@ describe('ModelPickerSheet', () => {
   it('suppresses the selected checkmark when the selected cloud model is tier-locked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
-    useModelStore.setState({ selectedModel: 'claude-opus-5', selectedProvider: 'cloud_managed' });
+    useModelStore.setState({
+      selectedModel: MAX_ONLY_MODEL.id,
+      selectedProvider: 'cloud_managed',
+    });
 
-    const opus = getModelByIdForCloudAccess('claude-opus-5', true, 'pro')!;
+    const maxOnlyModel = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro')!;
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     // No ", selected" suffix and no selected a11y state on a locked row.
-    const row = getByLabelText(`${opus.name}, upgrade required, ${opus.lockReason}`);
+    const row = getByLabelText(
+      `${maxOnlyModel.name}, upgrade required, ${maxOnlyModel.lockReason}`,
+    );
     expect(row.props.accessibilityState.selected).toBe(false);
   });
 
   it('falls back to the default cloud model when a tier downgrade locks the selection', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-opus-5');
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-5');
+    useModelStore.getState().setModel(MAX_ONLY_MODEL.id);
+    expect(useModelStore.getState().selectedModel).toBe(MAX_ONLY_MODEL.id);
 
     useTierStore.setState({ tier: 'pro' });
 
@@ -505,17 +589,25 @@ describe('ModelPickerSheet', () => {
     // The reasoning-effort selector only renders for a reasoning-capable model
     // (component gate: modelScope==='cloud' && selectedSupportsReasoning), so
     // select one first.
-    useModelStore.getState().setModel('claude-opus-5');
+    useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
+    const efforts = sortedEfforts(EFFORT_MODEL_REASONING);
+    const selectedEffort = 'medium';
+    const nextEffort = 'high';
     const slider = getByLabelText('Reasoning effort');
-    expect(slider.props.accessibilityValue).toEqual({ min: 0, max: 4, now: 1, text: 'Medium' });
+    expect(slider.props.accessibilityValue).toEqual({
+      min: 0,
+      max: efforts.length - 1,
+      now: efforts.indexOf(selectedEffort),
+      text: effortLabel(selectedEffort),
+    });
 
-    fireEvent(slider, 'valueChange', 2);
+    fireEvent(slider, 'valueChange', efforts.indexOf(nextEffort));
 
-    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('high');
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(nextEffort);
     // Effort and model choice are independent: no selection change, no close.
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-5');
+    expect(useModelStore.getState().selectedModel).toBe(EFFORT_MODEL.id);
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
@@ -523,88 +615,94 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     // Effort selector needs a reasoning-capable model selected (see above).
-    useModelStore.getState().setModel('claude-opus-5');
+    useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 0);
 
-    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe('low');
+    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe(
+      sortedEfforts(EFFORT_MODEL_REASONING)[0],
+    );
     expect(useAgentControlStore.getState().byConversation).toEqual({});
   });
 
-  it('renders the full current GPT-5.6 Sol effort ladder, including none and max', () => {
+  it('renders the full catalog effort ladder, including none and max', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('gpt-5.6-sol');
+    useModelStore.getState().setModel(FULL_LADDER_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
+    const efforts = sortedEfforts(getModelReasoning(FULL_LADDER_MODEL.id));
+    const selectedEffort = 'medium';
     expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
       min: 0,
-      max: 5,
-      now: 2,
-      text: 'Medium',
+      max: efforts.length - 1,
+      now: efforts.indexOf(selectedEffort),
+      text: effortLabel(selectedEffort),
     });
   });
 
-  it('shows the exact reasoning effort control for Gemini 3.5 Flash-Lite', () => {
+  it('shows the exact catalog reasoning effort control for a four-step model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('gemini-3.5-flash-lite');
+    useModelStore.getState().setModel(EXACT_EFFORT_MODEL.id);
     const { getByTestId, getByText, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
+    const efforts = sortedEfforts(getModelReasoning(EXACT_EFFORT_MODEL.id));
+    const selectedEffort = 'medium';
     expect(getByTestId('model-picker-effort-selector')).toBeTruthy();
     expect(getByText('Effort')).toBeTruthy();
     expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
       min: 0,
-      max: 3,
-      now: 2,
-      text: 'Medium',
+      max: efforts.length - 1,
+      now: efforts.indexOf(selectedEffort),
+      text: effortLabel(selectedEffort),
     });
   });
 
-  // Covers the branch where a model exposes an on/off thinking toggle INSTEAD of
-  // the graded effort slider. Claude Haiku 4.5 used to carry this test via its
-  // thinking_budget control; when Haiku was removed the blanket rename pointed
-  // it at claude-sonnet-5, which has effort_levels — so the assertion
-  // contradicted itself and the test failed. DeepSeek V4 Pro is the current
-  // thinking_toggle model, so the branch is covered again rather than deleted.
+  // Covers the branch where catalog metadata exposes an on/off thinking toggle
+  // instead of the graded effort slider.
   it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('deepseek-v4-pro');
+    useModelStore.getState().setModel(THINKING_TOGGLE_MODEL.id);
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
     // The thinking block only renders on an expanded row (ModelRow.tsx:222).
-    fireEvent.press(getByLabelText('DeepSeek V4 Pro, selected'));
-    expect(getByLabelText('Thinking mode for DeepSeek V4 Pro')).toBeTruthy();
+    fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected`));
+    expect(getByLabelText(`Thinking mode for ${THINKING_TOGGLE_MODEL.name}`)).toBeTruthy();
   });
 
   it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-opus-5');
+    useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText, getByTestId } = renderPicker({
       modelScope: 'cloud',
       conversationId: 'conv-1',
     });
 
-    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 4);
+    const sourceEfforts = sortedEfforts(EFFORT_MODEL_REASONING);
+    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', sourceEfforts.indexOf('max'));
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
 
-    // Gemini 3.5 Flash's supportedEfforts has no 'max' — selecting it must clamp
-    // the conversation's effort to the new model's own defaultEffort instead
-    // of silently keeping a value the new model doesn't support.
-    fireEvent.press(getByTestId('model-row-gemini-3.6-flash'));
+    // The target catalog model has no 'max' — selecting it must clamp the
+    // conversation effort to the new model's own default instead of silently
+    // keeping a value the new model does not support.
+    fireEvent.press(getByTestId(`model-row-${CLAMP_TARGET_MODEL.id}`));
 
-    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('medium');
-    expect(getByLabelText('Reasoning effort').props.accessibilityValue.text).toBe('Medium');
+    const targetDefault = getModelReasoning(CLAMP_TARGET_MODEL.id).defaultEffort!;
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(targetDefault);
+    expect(getByLabelText('Reasoning effort').props.accessibilityValue.text).toBe(
+      effortLabel(targetDefault),
+    );
   });
 
   it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    const thinkingModel = getModelByIdForCloudAccess('claude-opus-5', true, 'max')!;
+    const thinkingModel = getModelByIdForCloudAccess(EFFORT_MODEL.id, true, 'max')!;
     expect(thinkingModel.supportsThinking).toBe(true);
     useModelStore.getState().setModel(thinkingModel.id);
 
@@ -618,36 +716,36 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
-  it('shows Fable 5 reasoning as always on and never renders an off switch', () => {
+  it('shows mandatory reasoning as always on and never renders an off switch', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-fable-5');
+    useModelStore.getState().setModel(MANDATORY_REASONING_MODEL.id);
 
     const { getByLabelText, getByText, queryByLabelText } = renderPicker({
       modelScope: 'cloud',
     });
-    fireEvent.press(getByLabelText('Claude Fable 5, selected'));
+    fireEvent.press(getByLabelText(`${MANDATORY_REASONING_MODEL.name}, selected`));
 
     expect(getByText('Reasoning always on')).toBeTruthy();
-    expect(queryByLabelText('Thinking mode for Claude Fable 5')).toBeNull();
-    expect(useModelStore.getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
+    expect(queryByLabelText(`Thinking mode for ${MANDATORY_REASONING_MODEL.name}`)).toBeNull();
+    expect(useModelStore.getState().thinkingEnabledPerModel[MANDATORY_REASONING_MODEL.id]).toBe(
+      true,
+    );
   });
 
-  it('renders the current OpenAI and Anthropic roster without stale coming-soon copy', () => {
+  it('renders the catalog OpenAI and Anthropic roster without stale coming-soon copy', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     const { getByTestId, queryByText } = renderPicker({ modelScope: 'cloud' });
 
-    for (const id of [
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-      'claude-fable-5',
-      'claude-opus-5',
-      'claude-sonnet-5',
-      'claude-sonnet-5',
-    ]) {
-      expect(getByTestId(`model-row-${id}`)).toBeTruthy();
+    const providerModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) =>
+        model.surface === 'cloud_managed' &&
+        (model.provider === 'openai' || model.provider === 'anthropic'),
+    );
+    expect(providerModels.length).toBeGreaterThan(0);
+    for (const model of providerModels) {
+      expect(getByTestId(`model-row-${model.id}`)).toBeTruthy();
     }
     expect(queryByText('Coming soon')).toBeNull();
   });
@@ -661,11 +759,11 @@ describe('ModelPickerSheet', () => {
       ),
     );
 
-    expect(useModelStore.getState().selectedModel).toBe('auto');
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_AUTO_MODE_ID);
   });
 
   it('does not expand thinking for auto modes', () => {
-    useModelStore.setState({ selectedModel: 'auto' });
+    useModelStore.setState({ selectedModel: DEFAULT_AUTO_MODE_ID });
     const { getByLabelText, queryByText } = renderPicker();
 
     fireEvent.press(

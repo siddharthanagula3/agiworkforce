@@ -47,6 +47,7 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import { SYNTHETIC_IMAGE_MODEL_ID } from '../test-utils/modelFixtures';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
@@ -330,12 +331,12 @@ describe('syncNow — pull', () => {
         msgDelta('m-image', 'c1', '6', {
           role: 'assistant',
           content: 'Generated image',
-          model: 'gpt-image-2',
+          model: SYNTHETIC_IMAGE_MODEL_ID,
           metadata: {
             toolType: 'image-generation',
             imageUrl,
             imageGenPrompt: 'A clean enterprise dashboard',
-            imageGenModel: 'gpt-image-2',
+            imageGenModel: SYNTHETIC_IMAGE_MODEL_ID,
             revisedPrompt: 'A polished enterprise dashboard',
           },
         }),
@@ -450,7 +451,7 @@ describe('syncNow — pull', () => {
 
 describe('syncNow — push', () => {
   it('pushes dirty conversations + messages, then clears the dirty queue', async () => {
-    seedConversation('c1', { model: 'gpt-5.4', messageCount: 1 });
+    seedConversation('c1', { model: 'fixture-model', messageCount: 1 });
     seedMessage('c1', { id: 'm1', role: 'user', content: 'hi there' });
     markConversationForSync('c1');
     markMessageForSync('c1', 'm1');
@@ -464,7 +465,11 @@ describe('syncNow — push', () => {
     ];
     expect(path).toBe('/api/chat/sync');
     expect(body.conversations).toHaveLength(1);
-    expect(body.conversations[0]).toMatchObject({ id: 'c1', title: 'Chat c1', model: 'gpt-5.4' });
+    expect(body.conversations[0]).toMatchObject({
+      id: 'c1',
+      title: 'Chat c1',
+      model: 'fixture-model',
+    });
     expect(body).toMatchObject({ protocolVersion: 2 });
     expect(body.conversations[0]).toMatchObject({ baseVersion: '0' });
     expect(body.conversations[0]).not.toHaveProperty('updatedAt');
@@ -493,7 +498,7 @@ describe('syncNow — push', () => {
       imageUrl,
       imageGenPrompt: 'A clean enterprise dashboard',
       revisedPrompt: 'A polished enterprise dashboard',
-      model: 'gpt-image-2',
+      model: SYNTHETIC_IMAGE_MODEL_ID,
       metadata: { traceId: 'safe-trace' },
     });
     markMessageForSync('c1', 'm-image');
@@ -506,7 +511,7 @@ describe('syncNow — push', () => {
       toolType: 'image-generation',
       imageUrl,
       imageGenPrompt: 'A clean enterprise dashboard',
-      imageGenModel: 'gpt-image-2',
+      imageGenModel: SYNTHETIC_IMAGE_MODEL_ID,
       revisedPrompt: 'A polished enterprise dashboard',
     });
   });

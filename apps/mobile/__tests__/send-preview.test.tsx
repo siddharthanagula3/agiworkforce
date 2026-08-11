@@ -41,10 +41,12 @@ jest.mock('lucide-react-native', () => {
 
 import { SendPreview } from '@/src/features/chat/components/SendPreview';
 
+const FIXTURE_LOCAL_MODEL_LABEL = 'Fixture Local Model';
+
 function localPresentation(): SendPreviewPresentation {
   return summarizeSendPreview({
     providerMode: 'Local',
-    modelLabel: 'Llama 3.2 8B',
+    modelLabel: FIXTURE_LOCAL_MODEL_LABEL,
     messageBody: 'hi',
   });
 }
@@ -85,7 +87,7 @@ describe('Mobile SendPreview', () => {
 
   it('shows the model label when present', () => {
     const { getByText } = render(<SendPreview presentation={localPresentation()} />);
-    expect(getByText('Llama 3.2 8B')).toBeTruthy();
+    expect(getByText(FIXTURE_LOCAL_MODEL_LABEL)).toBeTruthy();
   });
 
   it('hides details by default and reveals them on tap', () => {

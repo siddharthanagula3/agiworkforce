@@ -11,13 +11,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { StreamChunk } from '@agiworkforce/types';
+import { getTaskModelForProvider, type StreamChunk } from '@agiworkforce/types';
 
 import { createOpenAIAdapter } from './index';
 
 const liveEnabled = process.env['AGIWORKFORCE_LIVE_TEST'] === '1';
 const apiKey = process.env['OPENAI_API_KEY'];
 const skip = !liveEnabled || !apiKey;
+const LIVE_MODEL_ID = getTaskModelForProvider('openai', 'fast_completion');
+
+if (!LIVE_MODEL_ID) {
+  throw new Error('The canonical OpenAI fast-completion route must exist');
+}
 
 // llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('OpenAI adapter live', () => {
@@ -28,7 +33,7 @@ describe.skipIf(skip)('OpenAI adapter live', () => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of adapter.stream(
       {
-        model: 'gpt-5.6-luna',
+        model: LIVE_MODEL_ID,
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       },

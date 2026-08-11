@@ -90,7 +90,7 @@ describe('resolveThinkingSendPolicy', () => {
 
   it('preserves the caller request for a model that is not in the static catalog', () => {
     const policy = resolveThinkingSendPolicy({
-      modelId: 'openrouter/some-private-gateway-model',
+      modelId: 'fixture-dynamic-provider-model',
       requestedThinking: false,
       requestedEffort: 'max',
     });

@@ -135,7 +135,8 @@ export const designTokens = {
 
   // No `zIndex` scale here on purpose. Stacking is decided in CSS: the layers
   // are `--z-*` in apps/web/app/globals.css and the overlay primitives in
-  // packages/ui/ui/src/primitives select one with `z-[var(--z-<layer>,…)]`.
+  // packages/ui/ui/src/primitives select the appropriate named layer through
+  // a Tailwind arbitrary-value utility with a concrete numeric fallback.
   // A TypeScript copy of those numbers had no importer and drifted to a
   // different scale entirely (1000–1800) than the stylesheets used, which is
   // the defect ExecutionPlan #99 describes; it was deleted rather than renumbered.

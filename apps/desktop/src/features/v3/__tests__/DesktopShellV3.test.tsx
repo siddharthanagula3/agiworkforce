@@ -263,12 +263,14 @@ describe('DesktopShellV3 duplication ownership', () => {
     // shell still owns the composer and capability-aware category chips.
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
 
-    expect(unifiedChatMock.chatInterfaceProps).toHaveLength(1);
-    expect(unifiedChatMock.chatInterfaceProps[0]?.['sidebarSlot']).toBeNull();
-    expect(unifiedChatMock.chatInterfaceProps[0]?.['enableSearchOverlay']).toBe(false);
-    expect(unifiedChatMock.chatInterfaceProps[0]?.['emptyStateSlot']).toBeTruthy();
-    expect(unifiedChatMock.chatInterfaceProps[0]?.['voiceInputController']).toBeUndefined();
-    expect(unifiedChatMock.chatInterfaceProps[0]?.['allowModelFallbackModels']).toBe(true);
+    // Async catalog hydration may re-render ChatInterface; the invariant is
+    // one rendered shell/sidebar with the latest shared-chat contract.
+    const props = unifiedChatMock.chatInterfaceProps.at(-1);
+    expect(props?.['sidebarSlot']).toBeNull();
+    expect(props?.['enableSearchOverlay']).toBe(false);
+    expect(props?.['emptyStateSlot']).toBeTruthy();
+    expect(props?.['voiceInputController']).toBeUndefined();
+    expect(props?.['allowModelFallbackModels']).toBe(true);
   });
 
   it('shows a native MCP approval in live chat and executes it only after Approve', async () => {
@@ -789,6 +791,17 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(
       (props?.['conversationActions'] as { onShare?: (id: string) => Promise<void> })?.onShare,
     ).toBeTypeOf('function');
+  });
+
+  it('does not advertise Local/BYOK API-key settings in the Managed Cloud model picker', () => {
+    const openModelSettings = vi.fn();
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    render(
+      <DesktopShellV3 runtime={null} hostBridge={null} onModelSelectorClick={openModelSettings} />,
+    );
+
+    expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['onModelSelectorClick']).toBeUndefined();
   });
 
   it('invalidates an open Cloud folder review when the signed-in account changes', async () => {

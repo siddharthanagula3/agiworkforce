@@ -616,7 +616,7 @@ impl LLMProvider for DirectApiProvider {
     }
 
     fn supports_function_calling(&self) -> bool {
-        // Perplexity/Sonar and Sambanova do not support function calling
+        // Perplexity search and Sambanova routes do not support function calling.
         !matches!(self.provider, Provider::Perplexity | Provider::Sambanova)
     }
 }
@@ -749,8 +749,7 @@ mod tests {
             .expect("should create");
         // Only OpenAI reasoning-tier models use the Responses API; every other
         // OpenAI model type routes to Chat Completions. The catalog carries no
-        // `chat`-type OpenAI model since the latest-family-only sweep (the
-        // gpt-5.6 line is all reasoning), so exercise the non-Responses branch
+        // `chat`-type OpenAI model since the latest-family-only sweep, so exercise the non-Responses branch
         // with any non-reasoning OpenAI model.
         let model = crate::core::llm::models_config::get_all_model_entries()
             .values()
@@ -789,7 +788,7 @@ mod tests {
     fn google_endpoint_non_streaming() {
         let p = DirectApiProvider::new(Provider::Google, "test-key".to_string(), None)
             .expect("should create");
-        let url = p.google_endpoint("gemini-2.5-pro", false);
+        let url = p.google_endpoint("fixture-google-model", false);
         assert!(url.contains("generateContent"));
         // API key must NOT appear in the URL (sent via x-goog-api-key header instead)
         assert!(!url.contains("key="), "API key should not be in URL");
@@ -800,7 +799,7 @@ mod tests {
     fn google_endpoint_streaming() {
         let p = DirectApiProvider::new(Provider::Google, "test-key".to_string(), None)
             .expect("should create");
-        let url = p.google_endpoint("gemini-2.5-pro", true);
+        let url = p.google_endpoint("fixture-google-model", true);
         assert!(url.contains("streamGenerateContent"));
         assert!(url.contains("alt=sse"));
         // API key must NOT appear in the URL (sent via x-goog-api-key header instead)

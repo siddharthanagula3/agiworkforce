@@ -81,6 +81,16 @@ const routingPolicies = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
 for (const [slot, definition] of Object.entries(routingPolicies.auto?.slots ?? {})) {
   if (definition?.modelKey) {
     refs.push({ id: definition.modelKey, where: `routingPolicies.auto.slots.${slot}` });
+  } else if (definition?.providerTask) {
+    const { provider, task } = definition.providerTask;
+    const id = catalog.providers?.[provider]?.taskRouting?.[task];
+    if (!id) {
+      console.error(
+        `FAIL: routingPolicies.auto.slots.${slot} references missing provider task ${provider}.${task}`,
+      );
+      process.exit(1);
+    }
+    refs.push({ id, where: `routingPolicies.auto.slots.${slot}.providerTask` });
   }
 }
 

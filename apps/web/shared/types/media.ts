@@ -3,17 +3,7 @@
  * Types for image and video generation providers and options
  */
 
-export type ImageProviderId =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'stability'
-  | 'replicate'
-  | 'fal'
-  | 'google_imagen'
-  | 'google_imagen_lite'
-  | 'dalle'
-  | 'stable_diffusion';
+export type ImageProviderId = 'openai' | 'anthropic' | 'google' | 'stability' | 'replicate' | 'fal';
 
 export type ImageQualityId = 'standard' | 'hd' | 'ultra' | 'premium';
 

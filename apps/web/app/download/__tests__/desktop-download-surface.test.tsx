@@ -42,6 +42,12 @@ beforeEach(() => {
 });
 
 describe('public Desktop download surfaces', () => {
+  it('exposes the two-line hero as one correctly spaced heading', () => {
+    render(<DownloadPage />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'AGI on every surface.' })).toBeVisible();
+  });
+
   it('offers only the verified Linux AppImage from the shared download API', async () => {
     // Two DIFFERENT endpoints are queried: the Tauri channel manifest and
     // /api/releases/desktop-cloud/latest. A single mockResolvedValue handed the

@@ -70,7 +70,8 @@ describe('withAGIShareIntent patchMainActivity', () => {
 
   it('adds onNewIntent and the rewriteShareIntent handler covering SEND and PROCESS_TEXT', () => {
     const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
-    expect(out).toContain('override fun onNewIntent(intent: Intent?)');
+    expect(out).toContain('override fun onNewIntent(intent: Intent)');
+    expect(out).toContain('val rewritten = rewriteShareIntent(intent)');
     expect(out).toContain('Intent.ACTION_SEND');
     expect(out).toContain('Intent.ACTION_PROCESS_TEXT');
     expect(out).toContain('agiworkforce');

@@ -113,9 +113,31 @@ export async function buildNonStreamResponse(
   try {
     cacheMetrics = calculateCacheSavings(
       llmResponse,
-      LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model, pricedAt),
-      LLMCostCalculator.getCacheWriteCostPerMtok(provider, llmResponse.model, pricedAt),
+      LLMCostCalculator.getInputCostPerMtok(
+        provider,
+        llmResponse.model,
+        pricedAt,
+        llmResponse.promptTokens,
+        llmResponse.cachedInputTokens,
+        llmResponse.cacheCreationInputTokens,
+      ),
+      LLMCostCalculator.getCacheWriteCostPerMtok(
+        provider,
+        llmResponse.model,
+        pricedAt,
+        llmResponse.promptTokens,
+        llmResponse.cachedInputTokens,
+        llmResponse.cacheCreationInputTokens,
+      ),
       pricedAt,
+      LLMCostCalculator.getCacheReadCostPerMtok(
+        provider,
+        llmResponse.model,
+        pricedAt,
+        llmResponse.promptTokens,
+        llmResponse.cachedInputTokens,
+        llmResponse.cacheCreationInputTokens,
+      ),
     );
 
     if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {

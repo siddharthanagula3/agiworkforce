@@ -3,7 +3,9 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { CreditService, type CreditSettlementQueueSummary } from '@/lib/services/credit-service';
+import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
@@ -105,56 +107,103 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let summary: CreditSettlementQueueSummary;
+  let summary: CreditSettlementQueueSummary | null = null;
+  let creditError: unknown;
   try {
     summary = await CreditService.processPendingSettlements(100);
   } catch (error) {
+    creditError = error;
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
       'Credit settlement recovery cron failed',
     );
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
+  let videoAlertFailure:
+    | 'video_incident_alert_pending'
+    | 'video_incident_alert_exhausted'
+    | 'video_incident_alert_recovery_failed'
+    | null = null;
+  try {
+    const videoAlerts = await deliverDueVideoIncidentAlerts(getNeonDb(), 20);
+    if (videoAlerts.pending > 0 || videoAlerts.exhausted > 0) {
+      logger.error(
+        { event: 'video_billing_incident_alerts_pending', ...videoAlerts },
+        'One or more video billing incident alerts remain undelivered',
+      );
+      videoAlertFailure =
+        videoAlerts.exhausted > 0
+          ? 'video_incident_alert_exhausted'
+          : 'video_incident_alert_pending';
+    }
+  } catch (error) {
+    logger.error(
+      {
+        event: 'video_billing_incident_alert_recovery_failed',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Video billing incident alert recovery failed',
+    );
+    videoAlertFailure = 'video_incident_alert_recovery_failed';
+  }
+
+  if (creditError || !summary) {
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        ...(videoAlertFailure ? { reason: videoAlertFailure } : {}),
+      },
+      { status: 500 },
+    );
+  }
+
+  let responseBody: ReconcileSummary;
+  let responseStatus = 200;
+
   if (summary.terminal === 0) {
-    return NextResponse.json({
+    responseBody = {
       ...summary,
       alerted: false,
       delivery: 'not_needed',
-    } satisfies ReconcileSummary);
+    };
+  } else {
+    const { subject, text, html } = buildDriftAlert(summary);
+    const sent = await sendSupportEmail({
+      to: getHandoffConfig().fallbackEmail,
+      subject,
+      text,
+      html,
+    });
+
+    if (sent.delivered) {
+      logger.error(
+        { event: 'credit_settlement_drift', ...summary },
+        'Credit settlement drift alert dispatched',
+      );
+      responseBody = {
+        ...summary,
+        alerted: true,
+        delivery: 'delivered',
+      };
+    } else {
+      logger.error(
+        { event: 'credit_settlement_drift', ...summary, reason: sent.reason },
+        'Credit settlement drift alert could NOT be delivered · no human has been told',
+      );
+      responseBody = {
+        ...summary,
+        alerted: true,
+        delivery: 'undeliverable',
+        reason: sent.reason,
+      };
+      responseStatus = 500;
+    }
   }
 
-  const { subject, text, html } = buildDriftAlert(summary);
-  const sent = await sendSupportEmail({
-    to: getHandoffConfig().fallbackEmail,
-    subject,
-    text,
-    html,
-  });
-
-  if (sent.delivered) {
-    logger.error(
-      { event: 'credit_settlement_drift', ...summary },
-      'Credit settlement drift alert dispatched',
-    );
-    return NextResponse.json({
-      ...summary,
-      alerted: true,
-      delivery: 'delivered',
-    } satisfies ReconcileSummary);
+  if (videoAlertFailure) {
+    responseBody.reason ??= videoAlertFailure;
+    responseStatus = 500;
   }
 
-  logger.error(
-    { event: 'credit_settlement_drift', ...summary, reason: sent.reason },
-    'Credit settlement drift alert could NOT be delivered · no human has been told',
-  );
-  return NextResponse.json(
-    {
-      ...summary,
-      alerted: true,
-      delivery: 'undeliverable',
-      reason: sent.reason,
-    } satisfies ReconcileSummary,
-    { status: 500 },
-  );
+  return NextResponse.json(responseBody, { status: responseStatus });
 }

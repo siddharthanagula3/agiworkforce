@@ -196,6 +196,38 @@ export default function PricingPage() {
   // yearly when the yearly Team Price is actually configured and checkout-ready.
   const [teamAnnual, setTeamAnnual] = useState(false);
 
+  // Team CTAs across marketing, billing, chat upgrades, and Team settings all
+  // link to this anchor. The Team card lives behind the business audience tab,
+  // so honoring the hash must also reveal that tab; otherwise a buyer lands on
+  // the Individual cards with no visible seat selector.
+  useEffect(() => {
+    const revealTeamPricing = () => {
+      if (window.location.hash === '#pricing-team-title') {
+        setAudience('business');
+        const requestedSeats = Number.parseInt(
+          new URLSearchParams(window.location.search).get('seats') ?? '',
+          10,
+        );
+        if (
+          Number.isInteger(requestedSeats) &&
+          requestedSeats >= MIN_PURCHASABLE_SEATS &&
+          requestedSeats <= MAX_PURCHASABLE_SEATS
+        ) {
+          setTeamSeats(requestedSeats);
+        }
+      }
+    };
+
+    revealTeamPricing();
+    window.addEventListener('hashchange', revealTeamPricing);
+    return () => window.removeEventListener('hashchange', revealTeamPricing);
+  }, []);
+
+  useEffect(() => {
+    if (audience !== 'business' || window.location.hash !== '#pricing-team-title') return;
+    document.getElementById('pricing-team-title')?.scrollIntoView?.({ block: 'start' });
+  }, [audience]);
+
   // Display the exact same trusted country-derived Stripe prices that Checkout
   // validates server-side. A malformed/unavailable response falls back to the
   // public USD catalog without changing the charged amount.
@@ -348,7 +380,9 @@ export default function PricingPage() {
 
   async function handleUpgrade(plan: CheckoutPlan) {
     if (!user) {
-      router.push('/login?redirectTo=%2Fpricing');
+      const returnTo =
+        plan === 'team' ? `/pricing?seats=${teamSeats}#pricing-team-title` : '/pricing';
+      router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
       return;
     }
 
@@ -633,7 +667,9 @@ export default function PricingPage() {
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
-              <h3 className="agi-tier-name">{team.label}</h3>
+              <h3 id="pricing-team-title" className="agi-tier-name">
+                {team.label}
+              </h3>
               {teamYearlyAvailable ? (
                 <div
                   className="agi-tier-toggle"
@@ -674,13 +710,18 @@ export default function PricingPage() {
               ) : null}
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">
-                  {teamInterval === 'yearly' ? teamYearlySeatPrice : teamSeatPrice}
+                  {teamInterval === 'yearly' ? teamYearlyTotalPrice : teamTotalPrice}
                 </span>
                 <span className="agi-tier-price-sub">
                   {teamInterval === 'yearly'
-                    ? t('perSeatPricingSubAnnual')
-                    : t('perSeatPricingSub')}
+                    ? t('seatCadenceAnnual', { count: teamSeats })
+                    : t('seatCadenceMonthly', { count: teamSeats })}
                 </span>
+              </p>
+              <p className="agi-tier-seats-total" style={{ marginTop: -8, marginBottom: 16 }}>
+                {teamInterval === 'yearly'
+                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPrice })
+                  : t('perSeatPrice', { price: teamSeatPrice })}
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
@@ -733,11 +774,6 @@ export default function PricingPage() {
                     );
                   }}
                 />
-                <p className="agi-tier-seats-total">
-                  {teamInterval === 'yearly'
-                    ? t('seatTotalAnnual', { total: teamYearlyTotalPrice, seats: teamSeats })
-                    : t('seatTotal', { total: teamTotalPrice, count: teamSeats })}
-                </p>
               </div>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(

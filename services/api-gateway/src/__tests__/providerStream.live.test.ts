@@ -16,10 +16,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const liveEnabled = process.env['AGIWORKFORCE_LIVE_TEST'] === '1';
 const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
+const ANTHROPIC_CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
 // llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
@@ -46,7 +48,7 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
       .set('authorization', 'Bearer live-test')
       .set('x-requested-with', 'live-test')
       .send({
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_CHAT_MODEL,
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       })

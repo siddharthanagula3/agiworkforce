@@ -6,9 +6,13 @@ fn generated_model_registry_is_available_to_rust_consumers() {
         .expect("generated model registry must be valid JSON");
 
     assert_eq!(registry["schemaVersion"], 1);
-    assert_eq!(
-        registry["models"]["gpt-5.6-luna"]["identity"]["provider"],
-        "openai"
+    let models = registry["models"]
+        .as_object()
+        .expect("generated registry models must be an object");
+    assert!(
+        models
+            .values()
+            .any(|model| model["identity"]["provider"] == "openai")
     );
     assert!(registry["models"].get("auto").is_none());
     assert_eq!(registry["policies"]["auto"]["kind"], "routing_policy");

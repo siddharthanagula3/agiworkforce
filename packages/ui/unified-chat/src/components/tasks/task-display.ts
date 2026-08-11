@@ -85,14 +85,12 @@ export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
 };
 
 // A run can be cancelled only while it is still doing (or waiting to do) work.
-// Terminal states (completed/failed/cancelled/archived) are not cancellable.
+// Terminal states (ready_for_review/completed/failed/cancelled/archived) are
+// not cancellable. `ready_for_review` is the workflow's successful final state,
+// even though its presentation tone still calls for the user's attention.
 export function isCancellableState(state: AgentTaskState): boolean {
   return (
-    state === 'queued' ||
-    state === 'running' ||
-    state === 'awaiting_input' ||
-    state === 'ready_for_review' ||
-    state === 'paused'
+    state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'
   );
 }
 

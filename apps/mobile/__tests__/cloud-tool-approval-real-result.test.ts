@@ -80,6 +80,7 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -93,7 +94,7 @@ const mockStreamResume = streamToolApprovalResume as jest.MockedFunction<
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000004'; // a valid UUIDv7 conversation id
 const RUN_ID = '0190a000-0000-7000-8000-000000000014';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();

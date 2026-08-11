@@ -61,8 +61,8 @@ const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof v
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-adapter-001',
-    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as any,
-    requestedModel: 'claude-opus-5',
+    chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 5,
     quotaWarningHeader: null,
@@ -174,9 +174,9 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
 
     expect(text).toBe(
       [
-        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'claude-opus-5' })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'fixture-model' })}`,
         '',
-        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'claude-opus-5' })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' })}`,
         '',
         'data: [DONE]',
         '',
@@ -204,7 +204,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).toHaveBeenCalledWith('anthropic', 'claude-opus-5', {
+    expect(mockCalculateCost).toHaveBeenCalledWith('anthropic', 'fixture-model', {
       promptTokens: 120,
       completionTokens: 80,
       totalTokens: 200,
@@ -293,7 +293,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: 'fixture-model',
       usage: expect.objectContaining({
         promptTokens: 100,
         completionTokens: 50,
@@ -331,7 +331,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-005',
-      'claude-opus-5',
+      'fixture-model',
       expect.objectContaining({
         inputTokens: 500,
         outputTokens: 42,

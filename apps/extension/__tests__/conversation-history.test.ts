@@ -28,6 +28,8 @@ import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedClou
 const _store: Record<string, unknown> = {};
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
 const OTHER_OWNER: ManagedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };
+const FIXTURE_MODEL_A = 'fixture-provider-a/model-alpha';
+const FIXTURE_MODEL_B = 'fixture-provider-b/model-beta';
 
 const activateConversation = (id: string) => activateOwnedConversation(OWNER, id);
 const getActiveConversation = () => getOwnedActiveConversation(OWNER);
@@ -191,7 +193,7 @@ describe('conversation-history', () => {
   it('durably seeds a collision branch without changing the active conversation', async () => {
     const source = await saveActiveConversation(msgs(4), {
       selectedModel: 'auto',
-      currentModelKey: 'openai/gpt-current',
+      currentModelKey: FIXTURE_MODEL_A,
       previousTaskType: 'reasoning',
       effort: 'medium',
     });
@@ -419,14 +421,14 @@ describe('conversation-history', () => {
   it('restores a saved browser conversation as the active conversation', async () => {
     const first = await saveActiveConversation(msgs(2), {
       selectedModel: 'auto',
-      currentModelKey: 'anthropic/claude-current',
+      currentModelKey: FIXTURE_MODEL_B,
       previousTaskType: 'coding',
       effort: 'high',
     });
     await startNewConversation();
     await saveActiveConversation(msgs(4), {
-      selectedModel: 'openai/gpt-current',
-      currentModelKey: 'openai/gpt-current',
+      selectedModel: FIXTURE_MODEL_A,
+      currentModelKey: FIXTURE_MODEL_A,
       previousTaskType: 'reasoning',
       effort: 'medium',
     });
@@ -435,7 +437,7 @@ describe('conversation-history', () => {
     expect(restored?.id).toBe(first?.id);
     expect(restored?.routing).toEqual({
       selectedModel: 'auto',
-      currentModelKey: 'anthropic/claude-current',
+      currentModelKey: FIXTURE_MODEL_B,
       previousTaskType: 'coding',
       effort: 'high',
     });
@@ -656,28 +658,24 @@ describe('conversation-history', () => {
   it('keeps route continuity isolated across new, restored, and deleted conversations', async () => {
     const first = await saveActiveConversation(msgs(2), {
       selectedModel: 'auto',
-      currentModelKey: 'anthropic/claude-current',
+      currentModelKey: FIXTURE_MODEL_B,
       previousTaskType: 'coding',
     });
     await startNewConversation();
     expect(await getActiveConversation()).toBeUndefined();
 
     const second = await saveActiveConversation(msgs(4), {
-      selectedModel: 'openai/gpt-current',
-      currentModelKey: 'openai/gpt-current',
+      selectedModel: FIXTURE_MODEL_A,
+      currentModelKey: FIXTURE_MODEL_A,
       previousTaskType: 'general',
     });
-    expect(second?.routing.currentModelKey).toBe('openai/gpt-current');
+    expect(second?.routing.currentModelKey).toBe(FIXTURE_MODEL_A);
 
-    expect((await activateConversation(first!.id))?.routing.currentModelKey).toBe(
-      'anthropic/claude-current',
-    );
+    expect((await activateConversation(first!.id))?.routing.currentModelKey).toBe(FIXTURE_MODEL_B);
     await deleteConversation(first!.id);
     expect(await getActiveConversation()).toBeUndefined();
 
-    expect((await activateConversation(second!.id))?.routing.currentModelKey).toBe(
-      'openai/gpt-current',
-    );
+    expect((await activateConversation(second!.id))?.routing.currentModelKey).toBe(FIXTURE_MODEL_A);
   });
 
   it('discards legacy live and archive records that have no account owner', async () => {

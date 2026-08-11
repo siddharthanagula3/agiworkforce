@@ -190,11 +190,37 @@ describe('legal policy set — prohibited claims', () => {
   });
 
   it('discloses the object-storage access model on the privacy page', () => {
-    // Uploaded and generated files are served from permanent public URLs, so
-    // they are not covered by the per-user database controls. Removing this
-    // disclosure without making the bucket private would restore the mismatch.
-    const privacy = readAppFile('privacy', 'page.tsx');
-    expect(/permanent public URLs/i.test(privacy)).toBe(true);
+    const privacy = readPublishedCopy('privacy', 'page.tsx').replace(/\s+/g, ' ');
+    const subprocessors = readPublishedCopy('subprocessors', 'page.tsx').replace(/\s+/g, ' ');
+    expect(privacy).toMatch(/authenticated same-origin file route/i);
+    expect(privacy).toMatch(/owning account.*active Personal or organisation workspace/i);
+    expect(privacy).toMatch(/videos use a.*private bucket/i);
+    expect(privacy).toMatch(/non-video files remain in a public R2.*without signing in/i);
+    expect(subprocessors).toMatch(/signed-in, active-workspace-scoped app route/i);
+    expect(subprocessors).toMatch(/non-video files remain in a public bucket/i);
+    expect(privacy).not.toMatch(/served from permanent public URLs/i);
+    expect(subprocessors).not.toMatch(/served from permanent public URLs/i);
+  });
+
+  it('does not turn AGI no-training language into a promise about third-party providers', () => {
+    const privacy = readPublishedCopy('privacy', 'page.tsx');
+    const terms = readPublishedCopy('terms', 'page.tsx');
+    for (const source of [privacy, terms]) {
+      const normalized = source.replace(/\s+/g, ' ');
+      expect(normalized).toMatch(/AGI-owned models/i);
+      expect(normalized).toMatch(/applicable terms and data-use policies/i);
+      expect(normalized).toMatch(/not a promise/i);
+      expect(normalized).toMatch(/OpenRouter/i);
+    }
+  });
+
+  it('uses the proven contact routing and avoids unsupported response deadlines', () => {
+    const privacy = readPublishedCopy('privacy', 'page.tsx');
+    const security = readAppFile('security', 'page.tsx');
+    expect(privacy).toContain('contactMailto(CONTACT_SUBJECTS.privacy)');
+    expect(privacy).not.toMatch(/respond within 30 days/i);
+    expect(security).toContain('contactMailto(CONTACT_SUBJECTS.security)');
+    expect(security).not.toMatch(/within 3 business days|within 10 business days/i);
   });
 });
 

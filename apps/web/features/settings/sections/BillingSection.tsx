@@ -1,17 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { openBillingPortal } from '@/features/billing/services/stripe-payments';
+import { openBillingPortal, startTopUpCheckout } from '@/features/billing/services/stripe-payments';
 import {
   getBillingPlanPricing,
   getPlanPriceUsd,
   isBillingPlanTier,
   isContractPricedPlan,
   isPerSeatBillingPlan,
+  MAX_TOP_UP_AMOUNT_USD,
+  MIN_TOP_UP_AMOUNT_USD,
+  TOP_UP_PRESET_AMOUNTS_USD,
+  TOP_UP_UNITS_PER_USD,
+  topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 // Real Stripe-backed shapes returned by the web billing routes.
 interface PaymentMethod {
@@ -181,6 +186,9 @@ export function BillingSection() {
   // open the portal, which is what their labels have always claimed.
   const [portalPending, setPortalPending] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [topUpAmountUsd, setTopUpAmountUsd] = useState(MIN_TOP_UP_AMOUNT_USD);
+  const [topUpPending, setTopUpPending] = useState(false);
+  const [topUpError, setTopUpError] = useState<string | null>(null);
 
   async function openPortal() {
     if (portalPending) return;
@@ -222,6 +230,26 @@ export function BillingSection() {
   const isManagedPaid = !isFreeTier && subscription?.status === 'active';
   /** Only a Stripe-billed account has a Stripe customer to read cards/invoices from. */
   const hasStripeBilling = isManagedPaid && !isStoreBilled;
+  const canBuyTopUps = hasStripeBilling && billingSource === 'stripe';
+  const selectedTopUpUnits = topUpUnitsForUsd(topUpAmountUsd);
+  const invalidTopUpLabel =
+    topUpAmountUsd < MIN_TOP_UP_AMOUNT_USD
+      ? `Minimum $${MIN_TOP_UP_AMOUNT_USD}`
+      : topUpAmountUsd > MAX_TOP_UP_AMOUNT_USD
+        ? `Maximum $${MAX_TOP_UP_AMOUNT_USD}`
+        : 'Whole dollars only';
+
+  async function buyTopUp() {
+    if (topUpPending || selectedTopUpUnits === null) return;
+    setTopUpPending(true);
+    setTopUpError(null);
+    try {
+      await startTopUpCheckout(topUpAmountUsd);
+    } catch (error) {
+      setTopUpError(error instanceof Error ? error.message : 'Could not start top-up checkout.');
+      setTopUpPending(false);
+    }
+  }
 
   // Real Stripe data (empty for free/unbilled users — the routes return [] when
   // there is no Stripe customer, which we render as an honest empty state).
@@ -411,7 +439,7 @@ export function BillingSection() {
             gap: 8,
           }}
         >
-          <Link
+          <SettingsPageLink
             href="/pricing"
             style={{
               padding: '7px 14px',
@@ -426,7 +454,7 @@ export function BillingSection() {
             }}
           >
             {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
-          </Link>
+          </SettingsPageLink>
           {/* A store-owned subscription cannot be managed in the Stripe portal —
               send the user to the store that actually holds it. */}
           {!isFreeTier && isStoreBilled && (
@@ -548,6 +576,116 @@ export function BillingSection() {
             >
               {portalPending ? 'Opening…' : defaultCard ? 'Update' : 'Add payment method'}
             </button>
+          </div>
+        </section>
+      )}
+
+      {canBuyTopUps && (
+        <section
+          id="top-up"
+          style={{
+            border: '1px solid var(--settings-border)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-elev)',
+            overflow: 'hidden',
+          }}
+        >
+          <SectionHeader title="Usage top-up" />
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+                {TOP_UP_UNITS_PER_USD} units for every $1
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
+                Minimum ${MIN_TOP_UP_AMOUNT_USD}; self-serve maximum ${MAX_TOP_UP_AMOUNT_USD}.
+                Top-ups add managed-usage balance and do not change your plan or renewal date.
+                Unused purchased balance carries across renewals for up to 12 months.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {TOP_UP_PRESET_AMOUNTS_USD.map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  aria-pressed={topUpAmountUsd === amount}
+                  onClick={() => setTopUpAmountUsd(amount)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${
+                      topUpAmountUsd === amount
+                        ? 'var(--chat-accent-primary, #c8892a)'
+                        : 'var(--settings-border)'
+                    }`,
+                    background: topUpAmountUsd === amount ? 'rgba(200,137,42,0.12)' : 'transparent',
+                    color: 'var(--text-1)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ${amount}
+                </button>
+              ))}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-3)' }}>Custom amount</span>
+                <span style={{ color: 'var(--text-2)' }}>$</span>
+                <input
+                  aria-label="Custom top-up amount in dollars"
+                  type="number"
+                  min={MIN_TOP_UP_AMOUNT_USD}
+                  max={MAX_TOP_UP_AMOUNT_USD}
+                  step={1}
+                  value={topUpAmountUsd}
+                  onChange={(event) => setTopUpAmountUsd(Number(event.target.value))}
+                  style={{
+                    width: 92,
+                    padding: '7px 9px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--settings-border)',
+                    background: 'var(--bg-base)',
+                    color: 'var(--text-1)',
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void buyTopUp()}
+                disabled={topUpPending || selectedTopUpUnits === null}
+                style={{
+                  padding: '8px 14px',
+                  border: 0,
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--chat-accent-primary, #c8892a)',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: topUpPending || selectedTopUpUnits === null ? 'not-allowed' : 'pointer',
+                  opacity: topUpPending || selectedTopUpUnits === null ? 0.55 : 1,
+                }}
+              >
+                {topUpPending
+                  ? 'Opening checkout…'
+                  : selectedTopUpUnits === null
+                    ? invalidTopUpLabel
+                    : `Buy ${selectedTopUpUnits.toLocaleString('en-US')} units · $${topUpAmountUsd}`}
+              </button>
+            </div>
+            {topUpError && (
+              <p role="alert" style={{ margin: 0, fontSize: 13, color: 'var(--danger, #b3261e)' }}>
+                {topUpError}
+              </p>
+            )}
           </div>
         </section>
       )}

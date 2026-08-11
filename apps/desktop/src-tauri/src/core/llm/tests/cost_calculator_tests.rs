@@ -56,7 +56,7 @@ mod media_pricing_tests {
     #[test]
     fn test_image_standard_cost_google() {
         let calc = CostCalculator::new();
-        // Google Imagen 4 standard image: $0.04 per image
+        // Google catalog standard image: $0.04 per image
         let cost = calc.calculate_media_cost(Provider::Google, MediaType::ImageStandard, 1);
         assert!((cost - 0.04).abs() < 1e-10, "expected $0.04, got ${}", cost);
     }
@@ -64,7 +64,7 @@ mod media_pricing_tests {
     #[test]
     fn test_image_hd_cost_google() {
         let calc = CostCalculator::new();
-        // Google Imagen 4 Ultra HD: $0.08 per image
+        // Google catalog HD image: $0.08 per image
         let hd_cost = calc.calculate_media_cost(Provider::Google, MediaType::ImageHD, 1);
         let std_cost = calc.calculate_media_cost(Provider::Google, MediaType::ImageStandard, 1);
         assert!(
@@ -89,7 +89,7 @@ mod media_pricing_tests {
     #[test]
     fn test_video_per_second_cost_google() {
         let calc = CostCalculator::new();
-        // Google Veo 3: $0.08/second
+        // Google catalog video route: $0.08/second
         let cost_1s = calc.calculate_media_cost(Provider::Google, MediaType::VideoPerSecond, 1);
         let cost_5s = calc.calculate_media_cost(Provider::Google, MediaType::VideoPerSecond, 5);
         assert!(
@@ -160,7 +160,22 @@ mod media_pricing_tests {
 #[cfg(test)]
 mod tests {
     use crate::core::llm::cost_calculator::CostCalculator;
+    use crate::core::llm::models_config::ModelEntry;
     use crate::core::llm::Provider;
+
+    fn catalog_model(
+        provider: Provider,
+        predicate: impl Fn(&ModelEntry) -> bool,
+    ) -> &'static ModelEntry {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == provider.as_string()
+                    && entry.deprecated != Some(true)
+                    && predicate(entry)
+            })
+            .expect("catalog must include a model matching the pricing test")
+    }
 
     // ------------------------------------------------------------------
     // Basic token cost correctness
@@ -169,102 +184,97 @@ mod tests {
     #[test]
     fn test_zero_tokens_returns_zero() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 0, 0, super::priced_on());
+        let cost = calc.calculate(
+            Provider::OpenAI,
+            Provider::OpenAI.default_model(),
+            0,
+            0,
+            super::priced_on(),
+        );
         assert_eq!(cost, 0.0, "Zero tokens must produce zero cost");
     }
 
     #[test]
-    fn test_deepseek_v4_flash_cost() {
+    fn test_low_cost_deepseek_model_cost() {
         let calc = CostCalculator::new();
-        // deepseek-v4-flash: $0.14/M input, $0.28/M output
-        // 1_000_000 input + 1_000_000 output = $0.14 + $0.28 = $0.42
+        let model = catalog_model(Provider::DeepSeek, |entry| {
+            entry.input_cost == 0.14 && entry.output_cost == 0.28
+        });
         let cost = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            &model.id,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 0.42).abs() < 1e-9,
-            "Expected $0.42 for deepseek-v4-flash 1M+1M tokens, got ${}",
+            "Expected $0.42 for the selected DeepSeek model, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_anthropic_sonnet_5_cost() {
+    fn test_standard_anthropic_model_cost() {
         let calc = CostCalculator::new();
-        // claude-sonnet-5: $3.00/M input, $15.00/M output
-        // 1_000_000 input + 1_000_000 output = $3.00 + $15.00 = $18.00
+        let model = catalog_model(Provider::Anthropic, |entry| {
+            entry.input_cost == 3.0 && entry.output_cost == 15.0
+        });
         let cost = calc.calculate(
             Provider::Anthropic,
-            "claude-sonnet-5",
+            &model.id,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 18.0).abs() < 1e-9,
-            "Expected $18.00 for claude-sonnet-5 1M+1M tokens, got ${}",
+            "Expected $18.00 for the standard Anthropic route, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_anthropic_opus_5_cost() {
+    fn test_premium_anthropic_model_cost() {
         let calc = CostCalculator::new();
-        // claude-opus-5: $5.00/M input, $25.00/M output
-        // 1_000_000 + 1_000_000 = $30.00
+        let model = catalog_model(Provider::Anthropic, |entry| {
+            entry.input_cost == 5.0 && entry.output_cost == 25.0
+        });
         let cost = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &model.id,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 30.0).abs() < 1e-9,
-            "Expected $30.00 for Opus 5 1M+1M tokens, got ${}",
+            "Expected $30.00 for the selected premium Anthropic model, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_openai_gpt5_cost() {
+    fn test_openai_catalog_costs_match_effective_pricing() {
         let calc = CostCalculator::new();
-        // gpt-5.6-sol: $5.00/M input, $30.00/M output = $35.00
-        let cost = calc.calculate(
-            Provider::OpenAI,
-            "gpt-5.6-sol",
-            1_000_000,
-            1_000_000,
-            super::priced_on(),
-        );
-        assert!(
-            (cost - 35.00).abs() < 1e-9,
-            "Expected $35.00 for gpt-5.6-sol 1M+1M tokens, got ${}",
-            cost
-        );
-    }
-
-    #[test]
-    fn test_openai_gpt56_luna_cost() {
-        let calc = CostCalculator::new();
-        // gpt-5.6-luna: $0.20/M input, $1.20/M output after OpenAI's 2026-07-30
-        // price cut (verified 2026-08-05 against the official pricing page).
-        let cost = calc.calculate(
-            Provider::OpenAI,
-            "gpt-5.6-luna",
-            1_000_000,
-            0,
-            super::priced_on(),
-        );
-        assert!(
-            (cost - 0.2).abs() < 1e-9,
-            "Expected $0.20 for gpt-5.6-luna 1M input only, got ${}",
-            cost
-        );
+        for model in crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| entry.provider == "openai")
+        {
+            let effective = model.effective_pricing_for_input(super::priced_on(), 1_000_000);
+            let cost = calc.calculate(
+                Provider::OpenAI,
+                &model.id,
+                1_000_000,
+                1_000_000,
+                super::priced_on(),
+            );
+            assert!(
+                (cost - effective.input_cost - effective.output_cost).abs() < 1e-9,
+                "catalog pricing mismatch for {}",
+                model.id
+            );
+        }
     }
 
     #[test]
@@ -297,7 +307,7 @@ mod tests {
         // Ollama default: $0.00/M — local models are free
         let cost = calc.calculate(
             Provider::Ollama,
-            "llama4-maverick",
+            "fixture-local-model",
             1_000_000,
             1_000_000,
             super::priced_on(),
@@ -330,19 +340,21 @@ mod tests {
     }
 
     #[test]
-    fn test_xai_grok45_cost() {
+    fn test_xai_catalog_cost() {
         let calc = CostCalculator::new();
-        // grok-4.5: $2.00/M input, $6.00/M output
+        let model = catalog_model(Provider::XAI, |entry| {
+            entry.input_cost == 2.0 && entry.output_cost == 6.0
+        });
         let cost = calc.calculate(
             Provider::XAI,
-            "grok-4.5",
+            &model.id,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 8.0).abs() < 1e-9,
-            "Expected $8.00 for grok-4.5 1M+1M tokens, got ${}",
+            "Expected $8.00 for the selected xAI model, got ${}",
             cost
         );
     }
@@ -350,17 +362,17 @@ mod tests {
     #[test]
     fn test_cost_only_input_tokens() {
         let calc = CostCalculator::new();
-        // deepseek-v4-flash: $0.14/M input; 500k input tokens → $0.07
+        let model = catalog_model(Provider::DeepSeek, |entry| entry.input_cost == 0.14);
         let cost = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            &model.id,
             500_000,
             0,
             super::priced_on(),
         );
         assert!(
             (cost - 0.07).abs() < 1e-9,
-            "Expected $0.07 for 500k input-only deepseek-v4-flash, got ${}",
+            "Expected $0.07 for 500k input-only tokens, got ${}",
             cost
         );
     }
@@ -368,17 +380,17 @@ mod tests {
     #[test]
     fn test_cost_only_output_tokens() {
         let calc = CostCalculator::new();
-        // deepseek-v4-flash: $0.28/M output; 1M output → $0.28
+        let model = catalog_model(Provider::DeepSeek, |entry| entry.output_cost == 0.28);
         let cost = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            &model.id,
             0,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 0.28).abs() < 1e-9,
-            "Expected $0.28 for 1M output-only deepseek-v4-flash, got ${}",
+            "Expected $0.28 for 1M output-only tokens, got ${}",
             cost
         );
     }
@@ -386,23 +398,29 @@ mod tests {
     #[test]
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
+        let cheap_model = catalog_model(Provider::DeepSeek, |entry| {
+            entry.input_cost == 0.14 && entry.output_cost == 0.28
+        });
+        let expensive_model = catalog_model(Provider::Anthropic, |entry| {
+            entry.input_cost == 5.0 && entry.output_cost == 25.0
+        });
         let cheap = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            &cheap_model.id,
             100_000,
             100_000,
             super::priced_on(),
         );
         let expensive = calc.calculate(
             Provider::Anthropic,
-            "claude-opus-5",
+            &expensive_model.id,
             100_000,
             100_000,
             super::priced_on(),
         );
         assert!(
             expensive > cheap,
-            "Opus-5 (${}) must cost more than deepseek-v4-flash (${}) for equal tokens",
+            "premium catalog model (${}) must cost more than economy catalog model (${})",
             expensive,
             cheap
         );
@@ -411,24 +429,24 @@ mod tests {
     #[test]
     fn test_managed_cloud_falls_through_to_origin_provider() {
         let calc = CostCalculator::new();
-        // ManagedCloud with deepseek-v4-flash should match DeepSeek pricing (origin-provider lookup)
+        let model = Provider::DeepSeek.default_model();
         let managed = calc.calculate(
             Provider::ManagedCloud,
-            "deepseek-v4-flash",
+            model,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         let origin = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            model,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (managed - origin).abs() < 1e-9,
-            "ManagedCloud must proxy deepseek-v4-flash pricing: managed=${managed}, origin=${origin}"
+            "ManagedCloud must proxy origin pricing: managed=${managed}, origin=${origin}"
         );
     }
 
@@ -458,16 +476,19 @@ mod tests {
     #[test]
     fn test_cost_scales_linearly_with_token_count() {
         let calc = CostCalculator::new();
+        let model = catalog_model(Provider::Anthropic, |entry| {
+            entry.input_token_pricing_tiers.is_empty() && entry.long_context.is_none()
+        });
         let cost_1m = calc.calculate(
             Provider::Anthropic,
-            "claude-sonnet-5",
+            &model.id,
             1_000_000,
             0,
             super::priced_on(),
         );
         let cost_2m = calc.calculate(
             Provider::Anthropic,
-            "claude-sonnet-5",
+            &model.id,
             2_000_000,
             0,
             super::priced_on(),
@@ -479,19 +500,21 @@ mod tests {
     }
 
     #[test]
-    fn test_perplexity_sonar_pro_cost() {
+    fn test_perplexity_professional_search_cost() {
         let calc = CostCalculator::new();
-        // sonar-pro: $3.00/M input, $15.00/M output
+        let model = catalog_model(Provider::Perplexity, |entry| {
+            entry.model_type == "search" && entry.input_cost == 3.0
+        });
         let cost = calc.calculate(
             Provider::Perplexity,
-            "sonar-pro",
+            &model.id,
             1_000_000,
             0,
             super::priced_on(),
         );
         assert!(
             (cost - 3.0).abs() < 1e-9,
-            "Expected $3.00 for sonar-pro 1M input, got ${}",
+            "Expected $3.00 for the selected professional search model, got ${}",
             cost
         );
     }
@@ -499,36 +522,41 @@ mod tests {
     #[test]
     fn test_qwen_plus_cost() {
         let calc = CostCalculator::new();
-        // qwen-3.7-plus: $0.40/M input, $1.60/M output.
-        // SSOT: packages/contracts/types/src/models.json "qwen-3.7-plus" inputCost/outputCost.
+        let model = Provider::Qwen.default_model();
+        let metadata = crate::core::llm::models_config::get_all_model_entries()
+            .get(model)
+            .expect("Qwen default model must exist in the catalog");
+        let expected = metadata.effective_pricing_for_input(super::priced_on(), 1_000_000);
         let cost = calc.calculate(
             Provider::Qwen,
-            "qwen-3.7-plus",
+            model,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
-            (cost - 2.00).abs() < 1e-9,
-            "Expected $2.00 for qwen-3.7-plus 1M+1M tokens, got ${}",
+            (cost - expected.input_cost - expected.output_cost).abs() < 1e-9,
+            "Qwen default model must use its effective catalog tier, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_moonshot_kimi_k3_cost() {
+    fn test_moonshot_catalog_cost() {
         let calc = CostCalculator::new();
-        // kimi-k3: $3.00/M input, $15.00/M output
+        let model = catalog_model(Provider::Moonshot, |entry| {
+            entry.input_cost == 3.0 && entry.output_cost == 15.0
+        });
         let cost = calc.calculate(
             Provider::Moonshot,
-            "kimi-k3",
+            &model.id,
             1_000_000,
             1_000_000,
             super::priced_on(),
         );
         assert!(
             (cost - 18.0).abs() < 1e-9,
-            "Expected $18.00 for kimi-k3 1M+1M tokens, got ${}",
+            "Expected $18.00 for the selected Moonshot model, got ${}",
             cost
         );
     }

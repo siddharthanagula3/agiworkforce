@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { ChatStreamRuntimeProvider } from '@/features/chat/components/ChatStreamRuntimeProvider';
 import { WebChatRoot } from '@/features/chat/components/WebChatRoot';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
+import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 
 /**
  * The root domain is auth-aware, the same shape chatgpt.com uses: a signed-in
@@ -54,6 +55,7 @@ export default async function Home() {
   const { userId } = await auth();
 
   if (userId) {
+    await requireCurrentTermsAcceptance(userId, '/');
     return (
       <ChatStreamRuntimeProvider>
         <WebChatRoot />

@@ -98,6 +98,175 @@ impl Default for RetryConfig {
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
+/// Record a completed streaming request. Unlike non-streaming preflight, this
+/// runs after provider delivery has begun, so the real charge is always added
+/// even when it crosses the defense-in-depth cap; the returned error then stops
+/// the stream and every subsequent request sees the exceeded cumulative total.
+fn record_completed_request_cost(
+    cumulative_cost: &parking_lot::Mutex<f64>,
+    request_cost: f64,
+    request_kind: &str,
+) -> Result<()> {
+    if !request_cost.is_finite() || request_cost < 0.0 {
+        return Err(anyhow!("Invalid streaming request cost"));
+    }
+
+    let mut cumulative = cumulative_cost.lock();
+    *cumulative += request_cost;
+    if *cumulative > SESSION_COST_SAFETY_CAP {
+        return Err(anyhow!(
+            "Session cost safety cap exceeded after {request_kind} request: \
+             cumulative=${:.4}, limit=${:.2}. Reset the router to continue.",
+            *cumulative,
+            SESSION_COST_SAFETY_CAP
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn record_streaming_cost(
+    cumulative_cost: &parking_lot::Mutex<f64>,
+    request_cost: f64,
+) -> Result<()> {
+    record_completed_request_cost(cumulative_cost, request_cost, "streaming")
+}
+
+pub(crate) fn record_non_streaming_cost(
+    cumulative_cost: &parking_lot::Mutex<f64>,
+    request_cost: f64,
+) -> Result<()> {
+    record_completed_request_cost(cumulative_cost, request_cost, "non-streaming")
+}
+
+fn streaming_request_cost(
+    calculator: &CostCalculator,
+    provider: Provider,
+    model: &str,
+    fallback_prompt_tokens: u32,
+    fallback_completion_tokens: u32,
+    usage: Option<&crate::core::llm::sse_parser::TokenUsage>,
+    completed_normally: bool,
+    as_of: chrono::NaiveDate,
+) -> f64 {
+    let prompt_tokens = usage
+        .and_then(|usage| usage.prompt_tokens)
+        .unwrap_or(fallback_prompt_tokens);
+    let completion_tokens = match usage.and_then(|usage| usage.completion_tokens) {
+        // A normal end makes the latest non-zero provider usage authoritative.
+        // An aborted stream may only have a partial usage snapshot, so fail
+        // closed by retaining at least the locally observed output.
+        Some(reported) if completed_normally && reported > 0 => reported,
+        Some(reported) => reported.max(fallback_completion_tokens),
+        None => fallback_completion_tokens,
+    };
+    calculator.calculate_with_cache(
+        provider,
+        model,
+        prompt_tokens,
+        completion_tokens,
+        usage
+            .and_then(|usage| usage.cache_read_input_tokens)
+            .unwrap_or(0),
+        usage
+            .and_then(|usage| usage.cache_creation_input_tokens)
+            .unwrap_or(0),
+        as_of,
+    )
+}
+
+/// Ensures a started streaming request reaches the cumulative ledger exactly
+/// once, including when the consumer cancels or drops the stream before the
+/// provider's final usage event. Provider usage is preferred; local estimates
+/// are the fail-closed fallback.
+struct StreamingCostGuard {
+    calculator: CostCalculator,
+    cumulative_cost: Arc<parking_lot::Mutex<f64>>,
+    provider: Provider,
+    model: String,
+    fallback_prompt_tokens: u32,
+    fallback_completion_tokens: u32,
+    latest_usage: Option<crate::core::llm::sse_parser::TokenUsage>,
+    latest_authoritative_cost: Option<f64>,
+    priced_on: chrono::NaiveDate,
+    recorded: bool,
+}
+
+impl StreamingCostGuard {
+    fn observe(&mut self, chunk: &StreamChunk) {
+        if let Some(response_model) = chunk.model.as_ref() {
+            self.model.clone_from(response_model);
+        }
+        if let Some(credits) = chunk.credits.as_ref() {
+            let cost = credits.cost_cents / 100.0;
+            if cost.is_finite() && cost >= 0.0 {
+                self.latest_authoritative_cost = Some(cost);
+            }
+        }
+        let estimated_chunk_tokens = TokenCounter::estimate_text_tokens(&chunk.content)
+            .saturating_add(
+                chunk
+                    .reasoning
+                    .as_deref()
+                    .map(TokenCounter::estimate_text_tokens)
+                    .unwrap_or(0),
+            );
+        self.fallback_completion_tokens = self
+            .fallback_completion_tokens
+            .saturating_add(u32::try_from(estimated_chunk_tokens).unwrap_or(u32::MAX));
+
+        if let Some(incoming) = chunk.usage.as_ref() {
+            let latest = self.latest_usage.get_or_insert_with(|| incoming.clone());
+            let merge = |current: &mut Option<u32>, next: Option<u32>| {
+                if let Some(next) = next {
+                    *current = Some(current.map_or(next, |value| value.max(next)));
+                }
+            };
+            merge(&mut latest.prompt_tokens, incoming.prompt_tokens);
+            merge(&mut latest.completion_tokens, incoming.completion_tokens);
+            merge(&mut latest.total_tokens, incoming.total_tokens);
+            merge(
+                &mut latest.cache_read_input_tokens,
+                incoming.cache_read_input_tokens,
+            );
+            merge(
+                &mut latest.cache_creation_input_tokens,
+                incoming.cache_creation_input_tokens,
+            );
+        }
+    }
+
+    fn record(&mut self, completed_normally: bool) -> Result<()> {
+        if self.recorded {
+            return Ok(());
+        }
+        self.recorded = true;
+        let request_cost = self.latest_authoritative_cost.unwrap_or_else(|| {
+            streaming_request_cost(
+                &self.calculator,
+                self.provider,
+                &self.model,
+                self.fallback_prompt_tokens,
+                self.fallback_completion_tokens,
+                self.latest_usage.as_ref(),
+                completed_normally,
+                self.priced_on,
+            )
+        });
+        record_streaming_cost(&self.cumulative_cost, request_cost)
+    }
+}
+
+impl Drop for StreamingCostGuard {
+    fn drop(&mut self) {
+        if let Err(error) = self.record(false) {
+            tracing::error!(
+                error = %error,
+                "streaming request crossed the cost cap while its stream was dropped"
+            );
+        }
+    }
+}
+
 /// Maximum idle time (no data received) before a streaming SSE connection is
 /// closed with a `StreamingError::IdleTimeout`.
 ///
@@ -451,34 +620,39 @@ impl LLMRouter {
         if let Some(selected_model) = &context.selected_model {
             if !selected_model.is_empty() {
                 let normalized = normalize_model_id(selected_model);
-                let provider = self.infer_provider_from_model(&normalized);
-                let reason = context
-                    .routing_reason
-                    .clone()
-                    .unwrap_or_else(|| format!("Intelligent routing selected: {}", normalized));
+                if let Some(provider) = self.infer_provider_from_model(&normalized) {
+                    let reason = context
+                        .routing_reason
+                        .clone()
+                        .unwrap_or_else(|| format!("Intelligent routing selected: {}", normalized));
 
-                tracing::info!(
-                    "Using intelligent routing: model={} (normalized from {}), provider={:?}, intent={:?}, confidence={:?}",
-                    normalized,
-                    selected_model,
-                    provider,
-                    context.intent_type,
-                    context.confidence
-                );
-
-                // Check if provider is available, otherwise fallback
-                if self.has_provider(provider) {
-                    return RouterSuggestion {
+                    tracing::info!(
+                        "Using intelligent routing: model={} (normalized from {}), provider={:?}, intent={:?}, confidence={:?}",
+                        normalized,
+                        selected_model,
                         provider,
-                        model: normalized,
-                        reason,
-                    };
+                        context.intent_type,
+                        context.confidence
+                    );
+
+                    if self.has_provider(provider) {
+                        return RouterSuggestion {
+                            provider,
+                            model: normalized,
+                            reason,
+                        };
+                    }
+                    tracing::warn!(
+                        selected_model = %selected_model,
+                        inferred_provider = ?provider,
+                        "Intelligent routing selection cannot be honored: provider not configured, falling back to legacy routing"
+                    );
+                } else {
+                    tracing::warn!(
+                        selected_model = %selected_model,
+                        "Intelligent routing selection is not catalog-addressable; refusing the model and falling back to catalog routing"
+                    );
                 }
-                tracing::warn!(
-                    selected_model = %selected_model,
-                    inferred_provider = ?provider,
-                    "Intelligent routing selection cannot be honored: provider not configured, falling back to legacy routing"
-                );
                 // Provider not available, fall through to legacy routing with intelligent context
             }
         }
@@ -504,8 +678,7 @@ impl LLMRouter {
         let mut provider = Provider::Google;
         let mut task_category = TaskCategory::Simple;
         let mut reason = if is_budget_plan {
-            "Budget plan detected - routing to current low-cost core models (Gemini Flash Lite / GPT-5.6 Luna)."
-                .to_string()
+            "Budget plan detected - routing to current low-cost catalog models.".to_string()
         } else {
             "General developer chat - routing to balanced core models.".to_string()
         };
@@ -535,13 +708,13 @@ impl LLMRouter {
                 provider = Provider::OpenAI;
                 task_category = TaskCategory::Complex;
                 reason =
-                    "Developer workflow + budget plan - routing to GPT-5.6 Luna for affordable coding."
+                    "Developer workflow + budget plan - routing to the affordable coding catalog slot."
                         .to_string();
             } else {
                 provider = Provider::Anthropic;
                 task_category = TaskCategory::Complex;
                 reason =
-                    "Developer or automation workflow detected - routing to Anthropic Claude for deep reasoning."
+                    "Developer or automation workflow detected - routing to the Anthropic reasoning catalog slot."
                         .to_string();
             }
         } else if normalized_intents
@@ -549,13 +722,14 @@ impl LLMRouter {
             .any(|intent| matches!(intent.as_str(), "writing" | "research"))
         {
             provider = if is_budget_plan {
-                Provider::Google // Use Gemini Flash
+                Provider::Google // Use the Google economy catalog slot.
             } else {
                 Provider::OpenAI
             };
             task_category = TaskCategory::Complex;
             reason = if is_budget_plan {
-                "Writing/research + budget plan - routing to affordable Gemini.".to_string()
+                "Writing/research + budget plan - routing to the affordable Google catalog slot."
+                    .to_string()
             } else {
                 "Writing or research task detected - routing to OpenAI GPT for quality output."
                     .to_string()
@@ -563,7 +737,7 @@ impl LLMRouter {
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
             provider = Provider::OpenAI;
             task_category = TaskCategory::Simple;
-            reason = "Cost priority is low - routing to GPT-5.6 Luna for efficient low-cost loops."
+            reason = "Cost priority is low - routing to the efficient low-cost catalog slot."
                 .to_string();
         }
 
@@ -721,9 +895,8 @@ impl LLMRouter {
 
     /// Infer provider from model name for intelligent routing.
     /// Delegates to the single-source-of-truth model catalog.
-    pub(crate) fn infer_provider_from_model(&self, model: &str) -> Provider {
-        crate::core::llm::models_config::get_provider_for_model(model)
-            .unwrap_or(Provider::ManagedCloud)
+    pub(crate) fn infer_provider_from_model(&self, model: &str) -> Option<Provider> {
+        crate::core::llm::models_config::get_provider_for_model(&normalize_model_id(model))
     }
 
     fn prepare_context_suggestion(
@@ -1187,13 +1360,13 @@ impl LLMRouter {
                     {
                         let prompt_tokens = cached_response.prompt_tokens.unwrap_or(0);
                         let completion_tokens = cached_response.completion_tokens.unwrap_or(0);
-                        let cost = cached_response.cost.unwrap_or(0.0);
+                        let saved_cost = cached_response.cost.unwrap_or(0.0);
 
                         let _ = cache_manager.update_cache_hit(
                             &conn,
                             &cache_key,
                             prompt_tokens + completion_tokens,
-                            cost,
+                            saved_cost,
                         );
 
                         tracing::info!(
@@ -1201,11 +1374,17 @@ impl LLMRouter {
                             candidate.provider.as_string(),
                             candidate.model,
                             prompt_tokens + completion_tokens,
-                            cost
+                            saved_cost
                         );
 
                         let mut response = cached_response;
                         response.cached = true;
+                        // The cached response's stored cost is historical: it
+                        // measures what the original provider request cost and
+                        // is useful for cache-savings telemetry. Serving this
+                        // response incurs no new provider request, so the
+                        // current request's authoritative cost is zero.
+                        response.cost = Some(0.0);
 
                         return Ok(RouteOutcome {
                             provider: candidate.provider,
@@ -1213,7 +1392,7 @@ impl LLMRouter {
                             response,
                             prompt_tokens,
                             completion_tokens,
-                            cost,
+                            cost: 0.0,
                         });
                     }
                 }
@@ -1365,18 +1544,10 @@ impl LLMRouter {
             cost: total_cost,
         };
 
-        // Defense-in-depth: hard-stop if the session cost safety cap would be exceeded.
-        // AutonomousAgent enforces configurable caps; this catches all other callers.
-        // Check BEFORE accumulating so we never exceed the cap.
-        {
-            let mut cost = self.cumulative_cost.lock();
-            if *cost + outcome.cost > SESSION_COST_SAFETY_CAP {
-                return Err(anyhow!(
-                    "Session cost safety cap exceeded. Reset the router to continue."
-                ));
-            }
-            *cost += outcome.cost;
-        }
+        // The provider already completed this request, so its cost must remain
+        // in the cumulative ledger even when this response crosses the
+        // defense-in-depth cap and is withheld from the caller.
+        record_non_streaming_cost(&self.cumulative_cost, outcome.cost)?;
 
         Ok(outcome)
     }
@@ -1603,21 +1774,23 @@ impl LLMRouter {
     ) -> Vec<RouteCandidate> {
         match strategy {
             RoutingStrategy::LocalFirst => {
-                vec![
-                    RouteCandidate {
+                let mut candidates = Vec::new();
+                let local_model = super::models_config::get_default_model(&Provider::Ollama);
+                if !local_model.is_empty() {
+                    candidates.push(RouteCandidate {
                         strategy: None,
                         provider: Provider::Ollama,
-                        model: super::models_config::get_default_model(&Provider::Ollama)
-                            .to_string(),
+                        model: local_model.to_string(),
                         reason: "strategy-local-first",
-                    },
-                    RouteCandidate {
-                        strategy: None,
-                        provider: Provider::ManagedCloud,
-                        model: "managed-cloud-auto".to_string(),
-                        reason: "strategy-local-first-fallback",
-                    },
-                ]
+                    });
+                }
+                candidates.push(RouteCandidate {
+                    strategy: None,
+                    provider: Provider::ManagedCloud,
+                    model: "managed-cloud-auto".to_string(),
+                    reason: "strategy-local-first-fallback",
+                });
+                candidates
             }
             RoutingStrategy::CostOptimized => match task {
                 TaskCategory::Simple => vec![
@@ -1814,6 +1987,235 @@ impl LLMRouter {
     }
 }
 
+#[cfg(test)]
+mod streaming_cost_guard_tests {
+    use super::*;
+    use crate::core::llm::sse_parser::TokenUsage;
+
+    fn priced_model() -> (&'static str, Provider) {
+        let model = crate::core::llm::models_config::config()
+            .models
+            .values()
+            .find(|entry| {
+                entry.provider == Provider::Anthropic.as_string()
+                    && entry.deprecated != Some(true)
+                    && entry.input_cost > 0.0
+                    && entry.output_cost > 0.0
+            })
+            .expect("catalog must contain an active paid model for streaming tests");
+        (model.id.as_str(), Provider::Anthropic)
+    }
+
+    fn usage_chunk(content: &str, usage: TokenUsage) -> StreamChunk {
+        StreamChunk {
+            content: content.to_string(),
+            done: false,
+            finish_reason: None,
+            model: None,
+            usage: Some(usage),
+            credits: None,
+            tool_calls: None,
+            reasoning: None,
+            keepalive: false,
+        }
+    }
+
+    fn guard(
+        calculator: CostCalculator,
+        cumulative_cost: Arc<parking_lot::Mutex<f64>>,
+        model: &str,
+        provider: Provider,
+        fallback_prompt_tokens: u32,
+    ) -> StreamingCostGuard {
+        StreamingCostGuard {
+            calculator,
+            cumulative_cost,
+            provider,
+            model: model.to_string(),
+            fallback_prompt_tokens,
+            fallback_completion_tokens: 0,
+            latest_usage: None,
+            latest_authoritative_cost: None,
+            priced_on: chrono::NaiveDate::from_ymd_opt(2026, 9, 1)
+                .expect("valid fixed pricing date"),
+            recorded: false,
+        }
+    }
+
+    #[test]
+    fn partial_then_final_usage_records_final_output_exactly_once() {
+        let calculator = CostCalculator::new();
+        let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
+        let (model, provider) = priced_model();
+        let mut guard = guard(
+            calculator.clone(),
+            Arc::clone(&cumulative),
+            model,
+            provider,
+            1_000,
+        );
+        guard.observe(&usage_chunk(
+            "",
+            TokenUsage {
+                prompt_tokens: Some(1_000),
+                completion_tokens: Some(0),
+                total_tokens: Some(1_000),
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
+            },
+        ));
+        guard.observe(&usage_chunk(
+            "final output",
+            TokenUsage {
+                prompt_tokens: None,
+                completion_tokens: Some(500),
+                total_tokens: Some(1_500),
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
+            },
+        ));
+
+        guard
+            .record(true)
+            .expect("final usage should remain under the cap");
+        let expected =
+            calculator.calculate_with_cache(provider, model, 1_000, 500, 0, 0, guard.priced_on);
+        assert!((*cumulative.lock() - expected).abs() < 1e-12);
+        guard.record(true).expect("a second record must be a no-op");
+        assert!((*cumulative.lock() - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn managed_credit_cost_overrides_catalog_estimate() {
+        let calculator = CostCalculator::new();
+        let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
+        let (model, _) = priced_model();
+        let mut guard = guard(
+            calculator.clone(),
+            Arc::clone(&cumulative),
+            model,
+            Provider::ManagedCloud,
+            1_000,
+        );
+        let authoritative_cost = 0.1234;
+        let mut chunk = usage_chunk(
+            "managed response",
+            TokenUsage {
+                prompt_tokens: Some(1_000),
+                completion_tokens: Some(500),
+                total_tokens: Some(1_500),
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
+            },
+        );
+        chunk.credits = Some(crate::core::llm::CreditsInfo {
+            cost_cents: authoritative_cost * 100.0,
+            remaining_cents: 100.0,
+            daily_limit: None,
+            daily_used: None,
+            daily_remaining: None,
+            daily_reset_at: None,
+        });
+        guard.observe(&chunk);
+
+        let catalog_estimate =
+            calculator.calculate(Provider::ManagedCloud, model, 1_000, 500, guard.priced_on);
+        assert_ne!(catalog_estimate, authoritative_cost);
+        guard
+            .record(true)
+            .expect("authoritative managed charge should remain below the cap");
+        assert!((*cumulative.lock() - authoritative_cost).abs() < 1e-12);
+    }
+
+    #[test]
+    fn dropped_stream_keeps_partial_usage_and_locally_observed_output() {
+        let calculator = CostCalculator::new();
+        let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
+        let (model, provider) = priced_model();
+        let content = "observed streamed output before cancellation";
+        let observed_output = u32::try_from(TokenCounter::estimate_text_tokens(content))
+            .expect("test output estimate must fit");
+        let priced_on =
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("valid fixed pricing date");
+        {
+            let mut guard = guard(
+                calculator.clone(),
+                Arc::clone(&cumulative),
+                model,
+                provider,
+                1_000,
+            );
+            guard.observe(&usage_chunk(
+                content,
+                TokenUsage {
+                    prompt_tokens: Some(1_000),
+                    completion_tokens: Some(0),
+                    total_tokens: Some(1_000),
+                    cache_read_input_tokens: Some(100),
+                    cache_creation_input_tokens: None,
+                },
+            ));
+        }
+
+        let expected = calculator.calculate_with_cache(
+            provider,
+            model,
+            1_000,
+            observed_output,
+            100,
+            0,
+            priced_on,
+        );
+        assert!((*cumulative.lock() - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn dropped_stream_uses_observed_output_above_nonzero_partial_usage() {
+        let calculator = CostCalculator::new();
+        let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
+        let (model, provider) = priced_model();
+        let content = "enough observed streamed output to exceed one partial token";
+        let observed_output = u32::try_from(TokenCounter::estimate_text_tokens(content))
+            .expect("test output estimate must fit");
+        assert!(
+            observed_output > 1,
+            "fixture must exceed partial provider usage"
+        );
+        let priced_on =
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("valid fixed pricing date");
+        {
+            let mut guard = guard(
+                calculator.clone(),
+                Arc::clone(&cumulative),
+                model,
+                provider,
+                1_000,
+            );
+            guard.observe(&usage_chunk(
+                content,
+                TokenUsage {
+                    prompt_tokens: Some(1_000),
+                    completion_tokens: Some(1),
+                    total_tokens: Some(1_001),
+                    cache_read_input_tokens: None,
+                    cache_creation_input_tokens: None,
+                },
+            ));
+        }
+
+        let expected = calculator.calculate_with_cache(
+            provider,
+            model,
+            1_000,
+            observed_output,
+            0,
+            0,
+            priced_on,
+        );
+        assert!((*cumulative.lock() - expected).abs() < 1e-12);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TaskCategory {
     Simple,
@@ -1842,7 +2244,7 @@ fn provider_task_model(provider: Provider, task: &'static str) -> String {
 ///
 /// The tier is what carries the protection; the fallback does not. A catalog
 /// that stopped declaring a tier would land both intents on Perplexity's
-/// `defaultModel` (today `sonar-deep-research`), i.e. quick search would inherit
+/// `defaultModel`, i.e. quick search would inherit
 /// deep-research cost. `models_config`'s
 /// `get_model_by_type_and_tier_resolves_non_chat_modalities` asserts both tiers
 /// resolve and differ, so that is a catalog regression the test suite catches
@@ -2158,31 +2560,77 @@ impl LLMRouter {
                     // the provider goes silent (stops sending chunks without closing
                     // the connection) the frontend does not freeze indefinitely.
                     //
-                    // The state is `Option<Stream>`: `Some(stream)` while active,
-                    // `None` after an idle timeout has been emitted.  This ensures
-                    // the underlying connection is dropped (via the inner stream)
-                    // immediately after the timeout error is surfaced, rather than
-                    // keeping a silent connection alive until the consumer task ends.
+                    // The unfold state carries the active stream plus fallback
+                    // output-token estimates and a one-shot metering flag. `None`
+                    // after an idle timeout or cap error drops the connection
+                    // immediately. Final provider usage wins over the estimates.
                     let provider_name = candidate.provider.as_string().to_string();
-                    let model_name = candidate.model.clone();
-                    let wrapped = futures_util::stream::unfold(Some(stream), move |state| {
-                        let provider_name = provider_name.clone();
-                        let model_name = model_name.clone();
-                        async move {
-                            let mut s = state?; // None => stream already terminated
-                            match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
-                                Ok(Some(item)) => Some((item, Some(s))),
-                                Ok(None) => None, // stream ended normally
-                                Err(_elapsed) => {
-                                    let timeout_secs = CHUNK_IDLE_TIMEOUT.as_secs();
-                                    tracing::error!(
-                                        provider = %provider_name,
-                                        model = %model_name,
-                                        idle_timeout_secs = timeout_secs,
-                                        "Streaming idle timeout: provider went silent \
-                                         for {timeout_secs}s with no data — closing connection"
-                                    );
-                                    let err: Box<dyn std::error::Error + Send + Sync> =
+                    let cost_guard = StreamingCostGuard {
+                        calculator: self.cost_calculator.clone(),
+                        cumulative_cost: Arc::clone(&self.cumulative_cost),
+                        provider: candidate.provider,
+                        model: candidate.model.clone(),
+                        fallback_prompt_tokens: u32::try_from(
+                            TokenCounter::estimate_prompt_tokens(&request.messages),
+                        )
+                        .unwrap_or(u32::MAX),
+                        fallback_completion_tokens: 0,
+                        latest_usage: None,
+                        latest_authoritative_cost: None,
+                        priced_on: chrono::Utc::now().date_naive(),
+                        recorded: false,
+                    };
+                    let wrapped = futures_util::stream::unfold(
+                        Some((stream, cost_guard)),
+                        move |state| {
+                            let provider_name = provider_name.clone();
+                            async move {
+                                let (mut stream, mut cost_guard) = state?;
+                                match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, stream.next()).await
+                                {
+                                    Ok(Some(item)) => {
+                                        let mut metering_error = None;
+                                        if let Ok(chunk) = &item {
+                                            cost_guard.observe(chunk);
+                                        } else {
+                                            // A provider-side stream error may be the last item the
+                                            // consumer polls. Record observed usage now rather than
+                                            // relying only on the guard's drop fallback.
+                                            metering_error = cost_guard.record(false).err();
+                                        }
+
+                                        if let Some(error) = metering_error {
+                                            let error: Box<dyn std::error::Error + Send + Sync> =
+                                                error.to_string().into();
+                                            return Some((Err(error), None));
+                                        }
+                                        Some((item, Some((stream, cost_guard))))
+                                    }
+                                    Ok(None) => match cost_guard.record(true) {
+                                        Ok(()) => None,
+                                        Err(error) => {
+                                            let error: Box<dyn std::error::Error + Send + Sync> =
+                                                error.to_string().into();
+                                            Some((Err(error), None))
+                                        }
+                                    },
+                                    Err(_elapsed) => {
+                                        if let Err(error) = cost_guard.record(false) {
+                                            tracing::error!(
+                                                error = %error,
+                                                "streaming cost cap crossed while handling idle timeout"
+                                            );
+                                        }
+                                        let model_name = cost_guard.model.clone();
+                                        let timeout_secs = CHUNK_IDLE_TIMEOUT.as_secs();
+                                        tracing::error!(
+                                            provider = %provider_name,
+                                            model = %model_name,
+                                            idle_timeout_secs = timeout_secs,
+                                            "Streaming idle timeout: provider went silent \
+                                             for {timeout_secs}s with no data — closing connection"
+                                        );
+                                        let err: Box<dyn std::error::Error + Send + Sync> =
                                             format!(
                                                 "StreamingError::IdleTimeout — no data received \
                                                  for {timeout_secs}s (provider: {provider_name}, \
@@ -2192,14 +2640,15 @@ impl LLMRouter {
                                                  stopped sending data."
                                             )
                                             .into();
-                                    // Yield the error and set state to None so the
-                                    // next poll terminates the stream (and drops the
-                                    // inner stream, closing the HTTP connection).
-                                    Some((Err(err), None))
+                                        // Yield the error and set state to None so the
+                                        // next poll terminates the stream (and drops the
+                                        // inner stream, closing the HTTP connection).
+                                        Some((Err(err), None))
+                                    }
                                 }
                             }
-                        }
-                    });
+                        },
+                    );
                     return Ok(Box::pin(wrapped));
                 }
                 Err(e) => {

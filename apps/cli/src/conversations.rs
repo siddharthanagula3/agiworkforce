@@ -468,6 +468,10 @@ mod tests {
         }
     }
 
+    fn catalog_cloud_model() -> String {
+        crate::model_catalog::default_model().to_string()
+    }
+
     #[test]
     fn test_export_markdown() {
         let ctx = test_ctx();
@@ -494,7 +498,8 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
+        let model = catalog_cloud_model();
+        let mut session = AgentSession::new(&model, &ctx, None);
         session
             .messages
             .push(Message::text("user", "What is Rust?"));
@@ -509,7 +514,7 @@ mod tests {
         let loaded = load_conversation_in_dir(&id, dir).unwrap();
 
         assert_eq!(loaded.id, id);
-        assert_eq!(loaded.model, "claude-opus-5");
+        assert_eq!(loaded.model, model);
         assert_eq!(loaded.total_input_tokens, 10);
         assert_eq!(loaded.total_output_tokens, 25);
         // system + user + assistant = 3 messages
@@ -528,7 +533,7 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-5.6-sol", &ctx, None);
+        let mut session = AgentSession::new("fixture-conversation-model", &ctx, None);
         session.messages.push(Message::text("user", "Hello world"));
         session.messages.push(Message::text("assistant", "Hi!"));
 
@@ -537,7 +542,7 @@ mod tests {
 
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, id);
-        assert_eq!(summaries[0].model, "gpt-5.6-sol");
+        assert_eq!(summaries[0].model, "fixture-conversation-model");
         assert_eq!(summaries[0].title, "Hello world");
         // system + user + assistant = 3 messages
         assert_eq!(summaries[0].message_count, 3);
@@ -634,7 +639,8 @@ mod tests {
     #[test]
     fn test_export_as_json_basic() {
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
+        let model = catalog_cloud_model();
+        let mut session = AgentSession::new(&model, &ctx, None);
         session.messages.push(Message::text("user", "Hello"));
         session
             .messages
@@ -646,7 +652,7 @@ mod tests {
         let json_str = export_as_json(&session).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        assert_eq!(parsed["model"], "claude-opus-5");
+        assert_eq!(parsed["model"], model);
         assert_eq!(parsed["total_input_tokens"], 10);
         assert_eq!(parsed["total_output_tokens"], 20);
         assert_eq!(parsed["turn_count"], 1);
@@ -742,10 +748,22 @@ mod tests {
 
     #[test]
     fn test_restore_into_session() {
+        let models = crate::model_catalog::models_for("anthropic");
+        let session_model = models
+            .first()
+            .expect("catalog must contain an Anthropic session model")
+            .id
+            .clone();
+        let restored_model = models
+            .iter()
+            .find(|model| model.id != session_model)
+            .expect("catalog must contain a distinct Anthropic restored model")
+            .id
+            .clone();
         let conv = SavedConversation {
             id: "20260317_120000".to_string(),
             title: "Test restore".to_string(),
-            model: "claude-sonnet-5".to_string(),
+            model: restored_model.clone(),
             created_at: "2026-03-17T12:00:00Z".to_string(),
             updated_at: "2026-03-17T12:00:00Z".to_string(),
             messages: vec![
@@ -775,10 +793,10 @@ mod tests {
         };
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-5.6-sol", &ctx, None);
+        let mut session = AgentSession::new(&session_model, &ctx, None);
         restore_into_session(&mut session, &conv);
 
-        assert_eq!(session.model, "claude-sonnet-5");
+        assert_eq!(session.model, restored_model);
         assert_eq!(session.total_input_tokens, 100);
         assert_eq!(session.total_output_tokens, 200);
         // 2 user messages = 2 turns
@@ -790,10 +808,11 @@ mod tests {
 
     #[test]
     fn legacy_restore_cannot_replace_a_local_session_with_cloud_history() {
+        let cloud_model = catalog_cloud_model();
         let conv = SavedConversation {
             id: "legacy-cloud".to_string(),
             title: "Legacy cloud conversation".to_string(),
-            model: "claude-sonnet-5".to_string(),
+            model: cloud_model,
             created_at: "2026-03-17T12:00:00Z".to_string(),
             updated_at: "2026-03-17T12:00:00Z".to_string(),
             messages: vec![SavedMessage {
@@ -804,7 +823,7 @@ mod tests {
             total_input_tokens: 100,
             total_output_tokens: 200,
         };
-        let mut session = AgentSession::new("llama3", &test_ctx(), None);
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_ctx(), None);
         session
             .messages
             .push(Message::text("user", "existing local transcript"));
@@ -812,7 +831,7 @@ mod tests {
 
         restore_into_session(&mut session, &conv);
 
-        assert_eq!(session.model, "llama3");
+        assert_eq!(session.model, "fixture-local-model:latest");
         assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
         assert_eq!(
             serde_json::to_value(&session.messages).expect("serialize messages"),

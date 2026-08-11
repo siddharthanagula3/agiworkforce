@@ -58,11 +58,9 @@ function toOption(
 
 const googleImageModels = liveImageModels('google');
 const openAIImageModels = liveImageModels('openai');
-const managedImageModels = liveImageModels('managed_cloud');
-
 const imageProviderOptions = [
   toOption(
-    'google_imagen',
+    'google_balanced',
     'Google',
     newestModel(
       googleImageModels,
@@ -71,7 +69,7 @@ const imageProviderOptions = [
     'Recommended',
   ),
   toOption(
-    'google_imagen_lite',
+    'google_fast',
     'Google',
     newestModel(
       googleImageModels,
@@ -80,14 +78,9 @@ const imageProviderOptions = [
     'Fast',
   ),
   toOption(
-    'dalle',
+    'openai',
     'OpenAI',
     newestModel(openAIImageModels, (model) => model.imageApi === 'openai'),
-  ),
-  toOption(
-    'stable_diffusion',
-    'Managed Cloud',
-    newestModel(managedImageModels, (model) => model.imageApi === 'stability'),
   ),
 ]
   .filter((option): option is MediaImageProviderOption => option !== null)

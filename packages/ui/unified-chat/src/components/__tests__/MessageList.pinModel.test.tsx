@@ -18,6 +18,8 @@ import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { ChatMessage } from '../../lib/types';
 
+const FIXTURE_ROUTED_MODEL_ID = 'fixture-routed-model';
+
 const autoRouted: ChatMessage = {
   id: 'a1',
   role: 'assistant',
@@ -27,7 +29,7 @@ const autoRouted: ChatMessage = {
     source: 'auto',
     task: 'code',
     reason: 'preferred_slot via harness-a',
-    pinModel: 'routed-model-id',
+    pinModel: FIXTURE_ROUTED_MODEL_ID,
   },
 };
 
@@ -55,7 +57,7 @@ describe('MessageList pin-to-model wiring', () => {
     } as never);
     render(<MessageList conversationId="c1" />);
 
-    expect(screen.getByText('Pin to routed-model-id')).toBeTruthy();
+    expect(screen.getByText(`Pin to ${FIXTURE_ROUTED_MODEL_ID}`)).toBeTruthy();
   });
 
   it('pins the model selection to routing.pinModel when clicked', () => {
@@ -65,9 +67,9 @@ describe('MessageList pin-to-model wiring', () => {
     } as never);
     render(<MessageList conversationId="c1" />);
 
-    fireEvent.click(screen.getByText('Pin to routed-model-id'));
+    fireEvent.click(screen.getByText(`Pin to ${FIXTURE_ROUTED_MODEL_ID}`));
 
-    expect(useModelStore.getState().selectedModelId).toBe('routed-model-id');
+    expect(useModelStore.getState().selectedModelId).toBe(FIXTURE_ROUTED_MODEL_ID);
   });
 
   it('renders no Pin button for a manually-selected assistant message', () => {

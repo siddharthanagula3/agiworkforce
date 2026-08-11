@@ -12,10 +12,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { summarizeSendPreview, type SendPreviewPresentation } from '@agiworkforce/types';
 import { SendPreview } from '../SendPreview';
 
+const LOCAL_MODEL_LABEL = 'Local Model Fixture';
+const DIRECT_MODEL_LABEL = 'Direct Model Fixture';
+
 function localPresentation(): SendPreviewPresentation {
   return summarizeSendPreview({
     providerMode: 'Local',
-    modelLabel: 'Llama 3.2 8B',
+    modelLabel: LOCAL_MODEL_LABEL,
     messageBody: 'hi',
     attachmentSummaries: [{ name: 'a.png', mimeType: 'image/png' }],
   });
@@ -33,7 +36,7 @@ describe('SendPreview', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
-      modelLabel: 'Claude Sonnet 4.6',
+      modelLabel: DIRECT_MODEL_LABEL,
     });
     render(<SendPreview presentation={presentation} />);
     expect(screen.getByText('Sent to api.anthropic.com')).toBeDefined();
@@ -60,7 +63,7 @@ describe('SendPreview', () => {
 
   it('shows the model label in the header strip', () => {
     render(<SendPreview presentation={localPresentation()} />);
-    expect(screen.getByText('Llama 3.2 8B')).toBeDefined();
+    expect(screen.getByText(LOCAL_MODEL_LABEL)).toBeDefined();
   });
 
   it('hides the details block by default and reveals it when expanded', () => {

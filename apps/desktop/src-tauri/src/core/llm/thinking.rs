@@ -32,7 +32,7 @@ pub const THINKING_BUDGET_MEDIUM: u32 = 32_000;
 /// Default token budget for high thinking mode ("ultrathink")
 pub const THINKING_BUDGET_HIGH: u32 = 128_000;
 
-/// Maximum output tokens when thinking is enabled (Claude 4.5 supports up to 128K)
+/// Maximum output tokens when thinking is enabled for the current catalog route.
 pub const MAX_OUTPUT_WITH_THINKING: u32 = 128_000;
 
 /// Thinking budget levels that map to different token allocations.
@@ -191,8 +191,9 @@ impl ThinkingConfig {
 
     /// Convert this thinking config into a `ThinkingParameter` suitable for `LLMRequest`.
     ///
-    /// Returns `None` when thinking is disabled.  For Anthropic Claude Opus 4.x models
-    /// with tool use the caller should prefer `ThinkingParameter::Adaptive` — this
+    /// Returns `None` when thinking is disabled. For catalog models that expose
+    /// adaptive reasoning with tool use, the caller should prefer
+    /// `ThinkingParameter::Adaptive` — this
     /// method produces `Budget` or `Enabled` variants which are correct for all other
     /// thinking-capable models.
     #[must_use]
@@ -217,10 +218,9 @@ impl ThinkingConfig {
     /// Reads `capabilities.thinking` from the bundled `models.json` catalog
     /// (via `models_config::CONFIG`). The catalog is the SSOT.
     ///
-    /// Per locked rules: never hardcode model IDs OR year-of-release
-    /// model families (claude-4-x, gpt-5-x, o3, o4, claude-3-5-sonnet
-    /// will all be deprecated; future families "just work" by being
-    /// added to the catalog with `capabilities.thinking: true`).
+    /// Per locked rules, model families are never hardcoded here. Future
+    /// releases become eligible only after the catalog declares
+    /// `capabilities.thinking: true`.
     ///
     /// Catalog miss returns `false`. Hosts can still enable thinking
     /// per-request via `ThinkingConfig::new()` for custom BYO models.

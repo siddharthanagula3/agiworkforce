@@ -295,6 +295,12 @@ export interface PluginRegistryEntry {
   source: PluginSourceKind;
   /** Availability. See {@link PluginRegistryStatus}. */
   status: PluginRegistryStatus;
+  /**
+   * Whether Managed Cloud can install this first-party pack from its embedded
+   * registry manifest. This is independent of `distribution`: CLI/Desktop
+   * installation still requires a downloadable, integrity-pinned artifact.
+   */
+  webInstallable: boolean;
   /** Skill names the pack declares it bundles. */
   declaredSkills: string[];
   /** Connector ids the pack requires (ids from the connector catalogue). */
@@ -328,6 +334,25 @@ export interface PluginRegistryEntry {
  */
 export function isPluginEntryInstallable(entry: PluginRegistryEntry): boolean {
   return entry.status === 'published' && entry.distribution !== null;
+}
+
+/** True when the authenticated Web runtime can install an embedded pack. */
+export function isPluginEntryWebInstallable(entry: PluginRegistryEntry): boolean {
+  return entry.status === 'published' && entry.webInstallable;
+}
+
+/** One user-owned Managed Cloud plugin installation. */
+export interface PluginInstallation {
+  pluginId: string;
+  installedVersion: string;
+  enabled: boolean;
+  installedAt: string;
+  updatedAt: string;
+}
+
+/** Authenticated response from `/api/plugins/installations`. */
+export interface PluginInstallationsResponse {
+  installations: PluginInstallation[];
 }
 
 /** Response body of `GET /api/plugins`. */

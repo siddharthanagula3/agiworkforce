@@ -896,6 +896,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       workMode?: CloudWorkMode,
       projectId?: string | null,
       replacement?: SendReplacement,
+      skillName?: string,
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
@@ -1051,6 +1052,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         id: userMessageId,
         role: 'user',
         content,
+        ...(skillName
+          ? {
+              metadata: {
+                sendReplay: { hasSkillInstruction: true },
+              },
+            }
+          : {}),
         ...(attachments?.length
           ? {
               attachments: attachments.map((file) => ({
@@ -1099,8 +1107,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const requestedWebSearch = replacement?.replay?.webSearchEnabled ?? store.webSearchEnabled;
 
       // Resolve the selected model's provider so the backend can route it.
-      // Without this, a dynamic Local model — e.g. an Ollama model like
-      // "gemma4:e4b" that is NOT in the static catalog — reaches the Rust
+      // Without this, a host-discovered Local model that is NOT in the static
+      // catalog reaches the Rust
       // resolver (resolve_provider_and_model) with provider=None and is never
       // routed to Ollama: the send silently no-ops (no /api/chat, no response,
       // no error). The model store carries each model's provider; forward it.
@@ -1203,6 +1211,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           webSearch: webSearchEnabled,
           ...(research ? { research: true } : {}),
           ...(effectiveWorkMode ? { workMode: effectiveWorkMode } : {}),
+          ...(skillName ? { skillName } : {}),
           ...(projectId !== undefined ? { projectId } : {}),
           // `undefined` means the model declares no thinking contract — the
           // field must be OMITTED, not sent as false (DES-C03).

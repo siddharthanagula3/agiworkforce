@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { applyResearchMode, RESEARCH_SYSTEM_PROMPT } from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
+
+const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
 function makeRequest(
   messages: ChatCompletionRequest['messages'],
   extra: Partial<ChatCompletionRequest> = {},
 ): ChatCompletionRequest {
   return {
-    model: 'claude-opus-5',
+    model: CHAT_MODEL,
     messages,
     ...extra,
   } as ChatCompletionRequest;

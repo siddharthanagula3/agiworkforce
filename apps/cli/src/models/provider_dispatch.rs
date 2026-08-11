@@ -61,17 +61,7 @@ fn catalog_provider_for(model: &str) -> Option<Provider> {
 
 fn looks_like_local_ollama_model(model: &str) -> bool {
     let m = model.to_lowercase();
-    m.starts_with("ollama:")
-        || (m.contains(':') && !m.contains('/'))
-        || m.starts_with("llama")
-        || m.starts_with("codellama")
-        || m.starts_with("qwen2")
-        || m.starts_with("qwen3")
-        || m.starts_with("gemma")
-        || m.starts_with("phi")
-        || m.starts_with("deepseek-r1")
-        || m.starts_with("nomic-embed")
-        || m.contains("command-r")
+    m.starts_with("ollama:") || (m.contains(':') && !m.contains('/'))
 }
 
 /// Detect the provider from a model name string.
@@ -788,7 +778,7 @@ mod tests {
             "google"
         );
         assert_eq!(
-            detect_provider("llama3.1:8b"),
+            detect_provider("fixture-local-model:latest"),
             Provider::Ollama(OllamaMode::Local)
         );
         assert_eq!(
@@ -804,7 +794,7 @@ mod tests {
             "deepseek"
         );
         assert_eq!(
-            detect_provider("qwen2.5"),
+            detect_provider("ollama:fixture-model"),
             Provider::Ollama(OllamaMode::Local)
         );
         assert_eq!(
@@ -815,10 +805,14 @@ mod tests {
             provider_name(&detect_provider(&sample_model_for("moonshot"))),
             "moonshot"
         );
-        assert!(try_detect_provider("claude-definitely-fake").is_none());
-        assert!(try_detect_provider("gemini-definitely-fake").is_none());
-        assert!(try_detect_provider("unknown-model").is_none());
-        assert_eq!(provider_name(&detect_provider("unknown-model")), "openai");
+        assert!(try_detect_provider("fixture-unknown-cloud-model-a").is_none());
+        assert!(try_detect_provider("fixture-unknown-cloud-model-b").is_none());
+        assert!(try_detect_provider("fixture-local-model").is_none());
+        assert!(try_detect_provider("fixture-unknown-model").is_none());
+        assert_eq!(
+            provider_name(&detect_provider("fixture-unknown-model")),
+            "openai"
+        );
     }
 
     #[test]

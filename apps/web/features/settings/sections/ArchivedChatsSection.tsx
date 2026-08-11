@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
@@ -11,6 +10,7 @@ import {
   restoreArchivedConversation,
   type ArchivedConversationSummary,
 } from '../services/conversation-data-service';
+import { SettingsSectionLink } from '../components/SettingsSectionLink';
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -168,12 +168,12 @@ export function ArchivedChatsSection() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <Link
-          href="/settings/privacy"
+        <SettingsSectionLink
+          section="privacy"
           style={{ color: 'var(--text-3)', fontSize: 12, textDecoration: 'none' }}
         >
           ← Privacy
-        </Link>
+        </SettingsSectionLink>
         <h1
           style={{
             fontFamily: 'var(--serif)',

@@ -55,7 +55,7 @@ async function handlePull(request: NextRequest, url: URL) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const sinceRaw = url.searchParams.get('since') ?? '0';
   const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
@@ -70,11 +70,13 @@ async function handlePull(request: NextRequest, url: URL) {
         select id, name, description, instructions, color, is_archived, metadata,
                created_at, updated_at, deleted_at, server_version
         from user_projects
-        where user_id = $1 and server_version > $2
+        where user_id = $1
+          and organization_id is not distinct from $3::uuid
+          and server_version > $2
         order by server_version asc
         limit ${MAX_PROJECTS_PULL}
       `,
-      [userId, since],
+      [userId, since, organizationId],
     );
 
     const saturated = projects.length >= MAX_PROJECTS_PULL;
@@ -96,7 +98,7 @@ async function handleGet(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 async function handlePost(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -162,13 +164,14 @@ async function handlePost(request: NextRequest) {
             from input as incoming
            where existing.id = incoming.id
              and existing.user_id = $1
+             and existing.organization_id is not distinct from $4::uuid
              and existing.server_version = incoming.base_version
           returning existing.id, existing.server_version
         ), inserted as (
           insert into user_projects
-            (id, user_id, name, description, instructions, color, is_archived, metadata,
+            (id, user_id, organization_id, name, description, instructions, color, is_archived, metadata,
              created_at, updated_at, deleted_at)
-          select incoming.id, $1, incoming.name, incoming.description, incoming.instructions,
+          select incoming.id, $1, $4, incoming.name, incoming.description, incoming.instructions,
                  incoming.color, incoming.is_archived, incoming.metadata, now(), now(),
                  case when incoming.should_delete then now() else null end
             from input as incoming
@@ -203,7 +206,9 @@ async function handlePost(request: NextRequest) {
                  ) end as current
             from input as incoming
             left join user_projects as current
-              on current.id = incoming.id and current.user_id = $1
+              on current.id = incoming.id
+             and current.user_id = $1
+             and current.organization_id is not distinct from $4::uuid
            where not exists (
              select 1 from applied_rows where applied_rows.id = incoming.id
            )
@@ -222,7 +227,7 @@ async function handlePost(request: NextRequest) {
           from conflict_rows
           cross join quota_guard
       `,
-      [userId, JSON.stringify(projects), projectLimit],
+      [userId, JSON.stringify(projects), projectLimit, organizationId],
     );
 
     for (const row of rows) {

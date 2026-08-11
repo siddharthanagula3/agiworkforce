@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { getSubscription, mockQuery } = vi.hoisted(() => ({
+const { getSubscription, mockQuery, resolveOrganizationEntitlementPlan } = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   mockQuery: vi.fn(),
+  resolveOrganizationEntitlementPlan: vi.fn(),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription },
 }));
+vi.mock('@/lib/services/org-entitlements', () => ({ resolveOrganizationEntitlementPlan }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -31,6 +33,7 @@ describe('team administration billing capability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockQuery.mockResolvedValue([]);
+    resolveOrganizationEntitlementPlan.mockResolvedValue('team');
   });
 
   it.each(['team', 'enterprise'])('admits an active %s subscription', async (planTier) => {
@@ -69,7 +72,7 @@ describe('team administration billing capability', () => {
   });
 
   it('reports the organization real licensed seat state when one is named', async () => {
-    getSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('team');
     mockQuery.mockResolvedValueOnce([
       {
         licensed_seats: 25,
@@ -90,10 +93,12 @@ describe('team administration billing capability', () => {
       seatSource: 'billing',
     });
     expect(mockQuery.mock.calls[0]?.[1]).toEqual([ORG_A]);
+    expect(resolveOrganizationEntitlementPlan).toHaveBeenCalledWith(db, ORG_A);
+    expect(getSubscription).not.toHaveBeenCalled();
   });
 
   it('marks the seat count unprovisioned when no subscription is linked to the org', async () => {
-    getSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('team');
     mockQuery.mockResolvedValueOnce([
       {
         licensed_seats: 4,
@@ -113,7 +118,7 @@ describe('team administration billing capability', () => {
   });
 
   it('falls back to the no-org shape rather than inventing seats for an unreadable org', async () => {
-    getSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('team');
     mockQuery.mockResolvedValueOnce([]);
 
     const access = await getTeamAdminAccess(db, 'user-1', ORG_A);
@@ -123,7 +128,7 @@ describe('team administration billing capability', () => {
   });
 
   it('still fails closed on the capability before any seat number is trusted', async () => {
-    getSubscription.mockResolvedValue({ plan_tier: 'free', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('free');
     mockQuery.mockResolvedValueOnce([
       {
         licensed_seats: 100,
@@ -139,5 +144,45 @@ describe('team administration billing capability', () => {
       code: 'SUBSCRIPTION_REQUIRED',
       statusCode: 403,
     });
+    expect(getSubscription).not.toHaveBeenCalled();
+  });
+
+  it('uses the organization entitlement even when the caller personally has no Team plan', async () => {
+    getSubscription.mockResolvedValue({ plan_tier: 'free', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('enterprise');
+    mockQuery.mockResolvedValueOnce([
+      {
+        licensed_seats: 12,
+        seats_consumed: 4,
+        stripe_subscription_id: 'sub_org_live',
+        owner_user_id: 'owner-1',
+      },
+    ]);
+
+    await expect(getTeamAdminAccess(db, 'admin-with-free-plan', ORG_A)).resolves.toMatchObject({
+      plan: 'enterprise',
+      canManageTeam: true,
+      maxMembers: 12,
+      seatsAvailable: 8,
+    });
+    expect(getSubscription).not.toHaveBeenCalled();
+  });
+
+  it('rejects a personally entitled admin when the organization entitlement is inactive', async () => {
+    getSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
+    resolveOrganizationEntitlementPlan.mockResolvedValue('free');
+    mockQuery.mockResolvedValueOnce([
+      {
+        licensed_seats: 12,
+        seats_consumed: 4,
+        stripe_subscription_id: null,
+        owner_user_id: 'owner-1',
+      },
+    ]);
+
+    await expect(
+      requireTeamAdminAccess(db, 'personally-entitled-admin', ORG_A),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'SUBSCRIPTION_REQUIRED' });
+    expect(getSubscription).not.toHaveBeenCalled();
   });
 });

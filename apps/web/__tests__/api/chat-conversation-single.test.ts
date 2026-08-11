@@ -6,6 +6,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+const CHAT_MODEL = requireProviderDefaultModel('openai');
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
@@ -44,6 +47,10 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
+
 // Import after mocks
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
 
@@ -74,7 +81,7 @@ describe('Single Conversation API', () => {
       id: 'msg-2',
       role: 'assistant',
       content: 'Hi there!',
-      model: 'gpt-5.6-sol',
+      model: CHAT_MODEL,
       provider: 'openai',
       input_tokens: 10,
       output_tokens: 5,
@@ -207,7 +214,7 @@ describe('Single Conversation API', () => {
       });
 
       it('should update conversation model', async () => {
-        const updated = { ...mockConversation, model: 'gpt-5.6-sol' };
+        const updated = { ...mockConversation, model: CHAT_MODEL };
         mockQuery.mockResolvedValueOnce([updated]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
@@ -216,14 +223,14 @@ describe('Single Conversation API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-5.6-sol' }),
+          body: JSON.stringify({ model: CHAT_MODEL }),
         });
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
-          expect.arrayContaining(['gpt-5.6-sol']),
+          expect.arrayContaining([CHAT_MODEL]),
         );
       });
 
@@ -392,8 +399,8 @@ describe('Single Conversation API', () => {
 
         // Verify user_id filter is applied
         expect(mockExecute).toHaveBeenCalledWith(
-          expect.stringContaining('user_id'),
-          expect.arrayContaining(['user-123']),
+          expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
+          ['conv-1', 'user-123', null],
         );
         expect(mockKillE2BSession).toHaveBeenCalledWith({
           tenantId: 'managed-cloud',

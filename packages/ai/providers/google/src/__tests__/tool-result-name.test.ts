@@ -14,11 +14,12 @@ import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 
 import { translateChatRequest } from '../translate';
+import { GOOGLE_DEFAULT_MODEL_ID } from './model-fixtures';
 
 describe('Gemini tool_result name mapping', () => {
   it('translates canonical file bytes to Gemini inlineData', () => {
     const translated = translateChatRequest({
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -42,7 +43,7 @@ describe('Gemini tool_result name mapping', () => {
 
   it('uses the original function name from the preceding tool_use', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         { role: 'user', content: 'What is the weather in SF?' },
         {
@@ -85,7 +86,7 @@ describe('Gemini tool_result name mapping', () => {
 
   it('handles multiple tool_use → tool_result pairs in one turn', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         { role: 'user', content: 'Run the diagnostics.' },
         {
@@ -126,7 +127,7 @@ describe('Gemini tool_result name mapping', () => {
     // Defensive fallback: malformed transcript with no preceding tool_use.
     // We don't crash; we use the toolUseId so the call still has *some* name.
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -148,7 +149,7 @@ describe('Gemini tool_result name mapping', () => {
     // via array position. This test would fail if the translator paired
     // results to uses by index.
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
         { role: 'user', content: 'parallel calls in flipped order' },
         {

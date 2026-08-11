@@ -245,6 +245,9 @@ pub struct TurnResult {
     pub output_tokens: u32,
     pub cache_read_tokens: u32,
     pub cache_creation_tokens: u32,
+    /// Exact sum of this turn's per-provider-request catalog charges. Tool-loop
+    /// completions are priced independently before they are aggregated here.
+    pub cost_usd: f64,
     pub via_subscription: bool,
 }
 
@@ -1776,7 +1779,7 @@ mod tests {
         let store = crate::runtime::session_control::ManagedSessionStore::new(
             temp_dir.path().to_path_buf(),
         );
-        let mut session = AgentSession::new("llama3", &test_context(), None);
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         // This helper exercises durable handoff mechanics, independent of the
         // process-global CLI flag mutated by unrelated policy tests.
         session.set_session_persistence(true);
@@ -1789,7 +1792,7 @@ mod tests {
             chrono::Utc::now(),
             session.messages.clone(),
         );
-        source.model = Some("llama3".to_string());
+        source.model = Some("fixture-local-model:latest".to_string());
         source.routing_authority = Some(ManagedSessionRoutingAuthority {
             privacy_mode: PrivacyMode::Local,
             provider: "ollama".to_string(),
@@ -2259,7 +2262,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("llama3", &ctx, None);
+        let mut session = AgentSession::new("fixture-local-model:latest", &ctx, None);
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
         let cloud_model = crate::model_catalog::models_for("openai")
@@ -2285,7 +2288,7 @@ mod tests {
         session.set_managed_auto_routing(Some(
             crate::runtime::session::ManagedSessionAutoRouting {
                 selection: "auto-balanced".to_string(),
-                model_key: "llama3".to_string(),
+                model_key: "fixture-local-model:latest".to_string(),
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
                 trust_mode: agiworkforce_model_registry::TrustMode::Local,
@@ -2370,7 +2373,7 @@ mod tests {
             Some(PrivacyMode::Byok)
         );
 
-        let mut resumed = AgentSession::new("llama3", &test_context(), None);
+        let mut resumed = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         resumed
             .adopt_managed_session(destination, destination_resolved.path)
             .expect("restore BYOK authority after restart");
@@ -2398,7 +2401,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let session = AgentSession::new("claude-sonnet-5", &ctx, None);
+        let session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Byok);
         assert!(session.validate_privacy_boundary().is_ok());
@@ -2421,8 +2424,14 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
+        let managed_model = crate::model_catalog::cloud_models()
+            .into_iter()
+            .next()
+            .expect("managed-cloud eligible model")
+            .id
+            .clone();
         let session =
-            AgentSession::new_with_provider("claude-sonnet-5", &ctx, None, Provider::ManagedCloud);
+            AgentSession::new_with_provider(&managed_model, &ctx, None, Provider::ManagedCloud);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
         assert_eq!(session.provider_privacy_mode(), PrivacyMode::Managed);
@@ -2483,7 +2492,7 @@ mod tests {
         assert!(byok_error.to_string().contains("established byok"));
         assert_eq!(byok.privacy_mode, PrivacyMode::Byok);
 
-        let mut local = AgentSession::new("llama3", &test_context(), None);
+        let mut local = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         local
             .messages
             .push(Message::text("user", "Local transcript"));
@@ -2597,7 +2606,7 @@ mod tests {
             Some((&PrivacyMode::Managed, "managed_cloud"))
         );
 
-        let mut resumed = AgentSession::new("llama3", &test_context(), None);
+        let mut resumed = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         resumed
             .adopt_managed_session(destination, destination_resolved.path)
             .expect("restore Managed Cloud authority after restart");
@@ -2701,7 +2710,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-sonnet-5", &ctx, None);
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
         let mut config = CliConfig::default();
         config.ui.output_style = Some("learning".to_string());
         config.ui.privacy_mode = Some("local".to_string());

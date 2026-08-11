@@ -10,6 +10,8 @@ import type { StreamChunk } from '@agiworkforce/types';
 import { translateOllamaStream } from '../stream';
 import type { OllamaChatStreamChunk } from '../types';
 
+const FIXTURE_MODEL_ID = 'fixture-ollama-model';
+
 async function* fromArray(records: OllamaChatStreamChunk[]): AsyncIterable<OllamaChatStreamChunk> {
   for (const r of records) yield r;
 }
@@ -24,12 +26,12 @@ describe('translateOllamaStream — truncation safety (P1-3)', () => {
   it('emits a fallback stop chunk when the NDJSON stream drains without done:true', async () => {
     const records: OllamaChatStreamChunk[] = [
       {
-        model: 'llama3',
+        model: FIXTURE_MODEL_ID,
         message: { role: 'assistant', content: 'Hello' },
         done: false,
       } as OllamaChatStreamChunk,
       {
-        model: 'llama3',
+        model: FIXTURE_MODEL_ID,
         message: { role: 'assistant', content: ' world' },
         done: false,
       } as OllamaChatStreamChunk,
@@ -46,12 +48,12 @@ describe('translateOllamaStream — truncation safety (P1-3)', () => {
   it('does NOT emit a duplicate stop chunk when done:true closed the stream cleanly', async () => {
     const records: OllamaChatStreamChunk[] = [
       {
-        model: 'llama3',
+        model: FIXTURE_MODEL_ID,
         message: { role: 'assistant', content: 'Hi' },
         done: false,
       } as OllamaChatStreamChunk,
       {
-        model: 'llama3',
+        model: FIXTURE_MODEL_ID,
         message: { role: 'assistant', content: '' },
         done: true,
         done_reason: 'stop',
@@ -66,7 +68,7 @@ describe('translateOllamaStream — truncation safety (P1-3)', () => {
   it('still emits a fallback stop when the iterator throws partway through', async () => {
     async function* throwingStream(): AsyncIterable<OllamaChatStreamChunk> {
       yield {
-        model: 'llama3',
+        model: FIXTURE_MODEL_ID,
         message: { role: 'assistant', content: 'partial' },
         done: false,
       } as OllamaChatStreamChunk;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { translateChatRequest } from '@agiworkforce/providers-google';
 import { translateChatRequest as translateAnthropicChatRequest } from '@agiworkforce/providers-anthropic';
+import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 import {
   toCanonicalChatRequest,
   toCanonicalThinking,
@@ -15,11 +16,45 @@ import type { ProcessedRequest } from './request-processor';
 
 type LlmRequest = ProcessedRequest['llmRequest'];
 
+function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): ModelMetadata {
+  const model = listCanonicalModels().find(predicate);
+  if (!model) throw new Error('Canonical request test model fixture is missing');
+  return model;
+}
+
+const ANTHROPIC_ADAPTIVE_MODEL = requireCatalogModel(
+  (model) => model.provider === 'anthropic' && model.reasoning?.thinkingDefault === 'adaptive',
+);
+const DISTINCT_API_MODEL = requireCatalogModel(
+  (model) => !!model.apiModelId && model.apiModelId !== model.id && model.modelType !== 'video',
+);
+const UNCHANGED_API_MODEL = requireCatalogModel(
+  (model) => !model.apiModelId || model.apiModelId === model.id,
+);
+const OPENAI_MAX_EFFORT_MODEL = requireCatalogModel(
+  (model) => model.provider === 'openai' && !!model.reasoning?.supportedEfforts?.includes('max'),
+);
+const OPENAI_NON_REASONING_MODEL = requireCatalogModel(
+  (model) => model.provider === 'openai' && model.reasoning?.capable === false,
+);
+const GOOGLE_THINKING_LEVEL_MODEL = requireCatalogModel(
+  (model) =>
+    model.provider === 'google' &&
+    model.reasoning?.request?.effortPath === 'thinkingConfig.thinkingLevel',
+);
+const GOOGLE_MINIMAL_THINKING_MODEL = requireCatalogModel(
+  (model) =>
+    model.provider === 'google' &&
+    model.reasoning?.request?.effortPath === 'thinkingConfig.thinkingLevel' &&
+    !!model.reasoning.supportedEfforts?.includes('minimal'),
+);
+const LEGACY_GOOGLE_BUDGET_FIXTURE = 'fixture-google-budget-model';
+
 function makeProcessed(llmRequest: Partial<LlmRequest>, provider = 'anthropic'): ProcessedRequest {
   return {
     provider,
     llmRequest: {
-      model: 'claude-opus-5',
+      model: ANTHROPIC_ADAPTIVE_MODEL.id,
       messages: [],
       max_tokens: 1024,
       ...llmRequest,
@@ -39,7 +74,9 @@ describe('toCanonicalChatRequest', () => {
 
     const chatRequest = toCanonicalChatRequest(processed);
 
-    expect(chatRequest.model).toBe('claude-opus-5');
+    expect(chatRequest.model).toBe(
+      ANTHROPIC_ADAPTIVE_MODEL.apiModelId ?? ANTHROPIC_ADAPTIVE_MODEL.id,
+    );
     expect(chatRequest.system).toBe('You are helpful.');
     expect(chatRequest.messages).toEqual([
       { role: 'user', content: 'hi' },
@@ -166,30 +203,28 @@ describe('toCanonicalChatRequest', () => {
     expect(chatRequest.temperature).toBe(0.4);
   });
 
-  it('maps the internal dot-form model id to its provider apiModelId (fails without the mapping)', () => {
-    const processed = makeProcessed({
-      model: 'claude-sonnet-5',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
+  it('maps a canonical id to its distinct provider apiModelId', () => {
+    const processed = makeProcessed(
+      {
+        model: DISTINCT_API_MODEL.id,
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      DISTINCT_API_MODEL.provider,
+    );
     const chatRequest = toCanonicalChatRequest(processed);
-    // LLMProviderFactory.mapModelIdToApiId did this on a local copy right
-    // before the provider HTTP call (factory.ts:310-321) -- toCanonicalChatRequest
-    // sits at that same point, so `claude-sonnet-5` (the internal/catalog id
-    // request-processor.ts routes on) must become `claude-sonnet-5` (what
-    // Anthropic's API actually accepts) here. Every existing fixture in this
-    // file uses a model id that's already dash-form, so none of them would
-    // catch a regression that dropped this mapping -- this test's input is
-    // deliberately dot-form.
-    expect(chatRequest.model).toBe('claude-sonnet-5');
+    expect(chatRequest.model).toBe(DISTINCT_API_MODEL.apiModelId);
   });
 
   it('passes through a model id unchanged when it has no distinct apiModelId', () => {
-    const processed = makeProcessed({
-      model: 'claude-opus-5',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
+    const processed = makeProcessed(
+      {
+        model: UNCHANGED_API_MODEL.id,
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      UNCHANGED_API_MODEL.provider,
+    );
     const chatRequest = toCanonicalChatRequest(processed);
-    expect(chatRequest.model).toBe('claude-opus-5');
+    expect(chatRequest.model).toBe(UNCHANGED_API_MODEL.id);
   });
 });
 
@@ -236,9 +271,9 @@ describe('toCanonicalEffort', () => {
 });
 
 describe('buildAnthropicChatRequest -> translateChatRequest wire', () => {
-  it('emits Opus 5 adaptive thinking and suppresses forbidden sampling parameters', () => {
+  it('emits catalog-declared adaptive thinking and suppresses forbidden sampling parameters', () => {
     const processed = makeProcessed({
-      model: 'claude-opus-5',
+      model: ANTHROPIC_ADAPTIVE_MODEL.id,
       messages: [{ role: 'user', content: 'hi' }],
       temperature: 0.4,
       thinking: { type: 'adaptive' },
@@ -258,9 +293,12 @@ describe('buildAnthropicChatRequest -> translateChatRequest wire', () => {
 
 describe('resolveWebOpenAIReasoningEffort', () => {
   it('passes max through only when the canonical model metadata supports it', () => {
-    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-5.6-sol')).toBe('max');
-    // gpt-image-2 is a live catalog OpenAI model with no reasoning-effort support.
-    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-image-2')).toBeUndefined();
+    expect(resolveWebOpenAIReasoningEffort('openai', 'max', OPENAI_MAX_EFFORT_MODEL.id)).toBe(
+      'max',
+    );
+    expect(
+      resolveWebOpenAIReasoningEffort('openai', 'max', OPENAI_NON_REASONING_MODEL.id),
+    ).toBeUndefined();
   });
 });
 
@@ -301,8 +339,8 @@ describe('toCanonicalGoogleThinking', () => {
     expect(toCanonicalGoogleThinking('google', 'max')).toBeUndefined();
   });
 
-  it('does not infer a thinking-level wire contract from an unregistered model family name', () => {
-    expect(toCanonicalGoogleThinking('google', 'high', 'gemini-3-unregistered')).toEqual({
+  it('does not infer a thinking-level wire contract from an unregistered model id', () => {
+    expect(toCanonicalGoogleThinking('google', 'high', 'fixture-unregistered-model')).toEqual({
       type: 'enabled',
       budgetTokens: 24576,
       includeThoughts: false,
@@ -321,7 +359,7 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
   it('sends thinkingBudget only, with NO includeThoughts key, for an effort-tier request (byte-matches legacy, which only ever sent thinkingBudget)', () => {
     const processed = makeProcessed(
       {
-        model: 'gemini-2.5-pro',
+        model: LEGACY_GOOGLE_BUDGET_FIXTURE,
         messages: [{ role: 'user', content: 'hi' }],
         effort: 'high',
       },
@@ -343,7 +381,7 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
   it('omits thinkingConfig entirely when no effort is set (no gratuitous includeThoughts for a plain request)', () => {
     const processed = makeProcessed(
       {
-        model: 'gemini-2.5-pro',
+        model: GOOGLE_THINKING_LEVEL_MODEL.id,
         messages: [{ role: 'user', content: 'hi' }],
       },
       'google',
@@ -356,13 +394,10 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
     expect(geminiBody.generationConfig?.thinkingConfig).toBeUndefined();
   });
 
-  // Reasoning-effort-capability wave (2026-07-10, flag 4): Gemini 3.x migrates to
-  // the discrete `thinkingLevel` control. Legacy 2.5 stays on `thinkingBudget`
-  // (the byte-stability test above), so the migration is gated on a 3.x id.
-  it('sends thinkingConfig.thinkingLevel (NOT thinkingBudget) for a Gemini 3.x model', () => {
+  it('sends thinkingConfig.thinkingLevel when the catalog declares that wire contract', () => {
     const processed = makeProcessed(
       {
-        model: 'gemini-3.6-flash',
+        model: GOOGLE_THINKING_LEVEL_MODEL.id,
         messages: [{ role: 'user', content: 'hi' }],
         effort: 'high',
       },
@@ -382,10 +417,10 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
     expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('includeThoughts');
   });
 
-  it('sends Gemini Flash-Lite minimal as the exact thinking level', () => {
+  it('sends minimal as the exact thinking level when the catalog model supports it', () => {
     const processed = makeProcessed(
       {
-        model: 'gemini-3.5-flash-lite',
+        model: GOOGLE_MINIMAL_THINKING_MODEL.id,
         messages: [{ role: 'user', content: 'hi' }],
         effort: 'minimal',
       },

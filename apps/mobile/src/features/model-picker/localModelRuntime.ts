@@ -6,6 +6,7 @@ import {
 } from '../../../storage/installedModels';
 import {
   DEFAULT_LOCAL_MODEL_ID,
+  getAutoModeById,
   getSelectableModelById,
   isAutoMode,
   isSelectableModelId,
@@ -33,7 +34,10 @@ function firstModelMatching(predicate: (model: ModelDef) => boolean): ModelDef |
   return LOCAL_MODEL_LIST.find(predicate);
 }
 
-async function resolveAutoModelId(autoModeId: string, installedIds: Set<string>): Promise<string> {
+async function resolveAutoModelId(
+  profile: 'economy' | 'balanced' | 'premium',
+  installedIds: Set<string>,
+): Promise<string> {
   const caps = await getCapabilities().catch(() => null);
   const activeSystemModel = LOCAL_MODEL_LIST.find(
     (model) =>
@@ -44,7 +48,7 @@ async function resolveAutoModelId(autoModeId: string, installedIds: Set<string>)
     defaultModel && installedIds.has(defaultModel.id) ? defaultModel : undefined;
   const installedAny = LOCAL_MODEL_LIST.find((model) => installedIds.has(model.id));
 
-  if (autoModeId === 'auto-economy') {
+  if (profile === 'economy') {
     const lite = firstModelMatching((model) => model.tier === 'economy');
     if (lite && installedIds.has(lite.id)) return lite.id;
     if (installedDefault) return installedDefault.id;
@@ -52,7 +56,7 @@ async function resolveAutoModelId(autoModeId: string, installedIds: Set<string>)
     return lite?.id ?? defaultModel?.id ?? DEFAULT_LOCAL_MODEL_ID;
   }
 
-  if (autoModeId === 'auto-premium') {
+  if (profile === 'premium') {
     const vision = firstModelMatching((model) => model.supportsVision && !isSystemModel(model));
     if (vision && installedIds.has(vision.id)) return vision.id;
     if (activeSystemModel?.supportsVision) return activeSystemModel.id;
@@ -70,8 +74,9 @@ async function resolveAutoModelId(autoModeId: string, installedIds: Set<string>)
 export async function resolveLocalModelRef(requestedModelId: string): Promise<LocalModelRef> {
   const installed = await listInstalledModels().catch(() => []);
   const installedIds = new Set(installed.map((model) => model.id));
-  const modelId = isAutoMode(requestedModelId)
-    ? await resolveAutoModelId(requestedModelId, installedIds)
+  const autoMode = getAutoModeById(requestedModelId);
+  const modelId = autoMode
+    ? await resolveAutoModelId(autoMode.tier, installedIds)
     : requestedModelId;
 
   if (!isAutoMode(requestedModelId) && !isSelectableModelId(modelId)) {

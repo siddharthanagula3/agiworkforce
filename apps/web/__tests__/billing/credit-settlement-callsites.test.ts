@@ -20,17 +20,29 @@ describe('durable post-provider credit settlements', () => {
     expect(contents).not.toMatch(/CreditService\.(deductCredits|settleCreditsDurably)\(/);
   });
 
-  it.each(['app/api/media/image/generate/route.ts', 'app/api/media/video/generate/route.ts'])(
-    '%s uses the shared managed reservation lifecycle',
-    (path) => {
-      const contents = source(path);
+  it('image generation uses the shared managed reservation lifecycle directly', () => {
+    const contents = source('app/api/media/image/generate/route.ts');
 
-      expect(contents).toMatch(/reserveManagedUsageRequest\(/);
-      expect(contents).toMatch(/markManagedUsageProviderStarted\(/);
-      expect(contents).toMatch(/finalizeManagedUsageRequest\(/);
-      expect(contents).toMatch(/markManagedUsageClientDelivered\(/);
-    },
-  );
+    expect(contents).toMatch(/reserveManagedUsageRequest\(/);
+    expect(contents).toMatch(/markManagedUsageProviderStarted\(/);
+    expect(contents).toMatch(/finalizeManagedUsageRequest\(/);
+    expect(contents).toMatch(/markManagedUsageClientDelivered\(/);
+  });
+
+  it('video generation owns provider start and final settlement transactionally', () => {
+    const route = source('app/api/media/video/generate/route.ts');
+    const jobs = source('lib/server/video-generation-jobs.ts');
+    const reconciler = source('lib/services/video-job-reconciliation-service.ts');
+    const migration = source('db/neon/0105_durable_video_generation_jobs.sql');
+
+    expect(route).toMatch(/reserveManagedUsageRequest\(/);
+    expect(route).toMatch(/beginVideoProviderSubmission\(/);
+    expect(jobs).toMatch(/public\.begin_video_generation_provider_submission\(/);
+    expect(jobs).toMatch(/public\.finalize_video_generation_job\(/);
+    expect(reconciler).toMatch(/finalizeVideoGenerationJob\(/);
+    expect(migration).toMatch(/from public\.mark_managed_usage_provider_started\(/);
+    expect(migration).toMatch(/from public\.finalize_managed_usage_request\(/);
+  });
 
   it.each([
     'app/api/mission/route.ts',

@@ -11,6 +11,14 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
+
+const ANTHROPIC_FAILOVER_MODEL = listCanonicalModels().find(
+  (model) => model.provider === 'anthropic' && !!model.openRouterSlug,
+)?.id;
+if (!ANTHROPIC_FAILOVER_MODEL) {
+  throw new Error('Canonical Anthropic OpenRouter failover fixture is missing');
+}
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -308,11 +316,11 @@ describe('OpenRouter route failover', () => {
     return makeProcessed({
       provider: 'anthropic',
       chatRequest: {
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_FAILOVER_MODEL,
         messages: [{ role: 'user', content: 'hi' }],
       } as unknown as ProcessedRequest['chatRequest'],
       llmRequest: {
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_FAILOVER_MODEL,
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 100,
       } as unknown as ProcessedRequest['llmRequest'],
@@ -324,8 +332,8 @@ describe('OpenRouter route failover', () => {
     const attempt = makePlan(anthropicRequest()).next(httpError(503));
     expect(attempt).not.toBeNull();
     expect(attempt!.provider).toBe('openrouter');
-    // The user asked for Haiku and still gets Haiku — that is the whole point.
-    expect(attempt!.model).toBe('claude-sonnet-5');
+    // The user asked for one model and gets that same model — that is the point.
+    expect(attempt!.model).toBe(ANTHROPIC_FAILOVER_MODEL);
     expect(attempt!.processed.fallbackReason).toBe('openrouter_route_failover');
   });
 
@@ -334,7 +342,7 @@ describe('OpenRouter route failover', () => {
     // here; a route retry is not, because the answer is unchanged.
     const attempt = makePlan(anthropicRequest({ fallbackModels: [] })).next(httpError(503));
     expect(attempt?.provider).toBe('openrouter');
-    expect(attempt?.model).toBe('claude-sonnet-5');
+    expect(attempt?.model).toBe(ANTHROPIC_FAILOVER_MODEL);
   });
 
   it('is attempted at most once, then falls through to model rotation', () => {
@@ -355,7 +363,7 @@ describe('OpenRouter route failover', () => {
   it('fires on a credential failure: OpenRouter carries its own key for the same model', () => {
     const attempt = makePlan(anthropicRequest()).next(httpError(401, 'authentication error'));
     expect(attempt?.provider).toBe('openrouter');
-    expect(attempt?.model).toBe('claude-sonnet-5');
+    expect(attempt?.model).toBe(ANTHROPIC_FAILOVER_MODEL);
   });
 
   it('does not fire after a client abort', () => {
@@ -376,7 +384,7 @@ describe('OpenRouter route failover', () => {
     const withNativeTools = anthropicRequest({
       fallbackModels: [],
       llmRequest: {
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_FAILOVER_MODEL,
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 100,
         tools: [{ type: 'web_search_20260209', name: 'web_search' }],
@@ -389,7 +397,7 @@ describe('OpenRouter route failover', () => {
     const withFunctionTools = anthropicRequest({
       fallbackModels: [],
       llmRequest: {
-        model: 'claude-sonnet-5',
+        model: ANTHROPIC_FAILOVER_MODEL,
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 100,
         tools: [{ type: 'function', function: { name: 'get_weather', parameters: {} } }],

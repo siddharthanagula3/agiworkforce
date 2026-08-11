@@ -42,6 +42,13 @@ describe('WebChatPage header copy', () => {
     expect(SOURCE).not.toContain('aria-label="Open navigation"');
   });
 
+  it('keeps the closed mobile drawer inert and exposes the open drawer as a modal', () => {
+    expect(SOURCE).toContain("role={isNarrowViewport && mobileNavOpen ? 'dialog' : undefined}");
+    expect(SOURCE).toContain('inert={isNarrowViewport && !mobileNavOpen ? true : undefined}');
+    expect(SOURCE).toContain('aria-expanded={mobileNavOpen}');
+    expect(SOURCE).toContain('aria-controls="chat-mobile-navigation"');
+  });
+
   it('asks only for chat and common keys the English corpus actually defines', () => {
     const referenced = [...SOURCE.matchAll(/t\('(chat|common):([^']+)'/g)];
     expect(referenced.length).toBeGreaterThan(0);

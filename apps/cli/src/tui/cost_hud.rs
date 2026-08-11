@@ -19,7 +19,6 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use crate::model_catalog;
 use crate::output::format_tokens;
 use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success, ui_warning};
 
@@ -32,6 +31,10 @@ pub struct CostHud {
     pub out_tokens: u32,
     pub cache_read: u32,
     pub cache_creation: u32,
+    /// Sum of per-provider-request ledger costs. Never recompute this from the
+    /// cumulative token fields: several short requests may exceed a model's
+    /// long-context threshold only in aggregate.
+    pub total_usd: f64,
     /// Reasoning output tokens from extended-thinking / chain-of-thought.
     /// Only shown in the HUD when non-zero (i.e., for reasoning models only).
     pub reasoning_tokens: u32,
@@ -40,20 +43,9 @@ pub struct CostHud {
 }
 
 impl CostHud {
-    /// Cumulative dollars spent for the supplied model, using catalog pricing.
-    pub fn dollars(&self, model_id: &str) -> f64 {
-        let Some(model) = model_catalog::find(model_id) else {
-            return 0.0;
-        };
-        let price_in = model.input_price_per_1m;
-        let price_out = model.output_price_per_1m;
-        let cache_read_price = model.cache_read_price_per_1m;
-        let cache_write_price = model.cache_write_price_per_1m;
-        (self.in_tokens as f64 * price_in
-            + self.out_tokens as f64 * price_out
-            + self.cache_read as f64 * cache_read_price
-            + self.cache_creation as f64 * cache_write_price)
-            / 1_000_000.0
+    /// Cumulative dollars already resolved per provider request by the ledger.
+    pub fn dollars(&self, _model_id: &str) -> f64 {
+        self.total_usd
     }
 
     pub fn context_percent(&self) -> u8 {
@@ -153,39 +145,25 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model_catalog;
 
     #[test]
     fn dollars_zero_when_empty() {
         let hud = CostHud::default();
-        let probe = model_catalog::fast_completion_model("anthropic");
+        let probe = crate::model_catalog::fast_completion_model("anthropic");
         assert_eq!(hud.dollars(&probe), 0.0);
     }
 
     #[test]
-    fn dollars_scales_linearly_with_tokens() {
+    fn dollars_uses_the_per_completion_ledger_total() {
         let hud = CostHud {
             in_tokens: 1_000_000,
             out_tokens: 0,
+            total_usd: 1.2345,
             ..Default::default()
         };
-        let probe = model_catalog::fast_completion_model("anthropic");
-        let (price_in, _) = model_catalog::pricing(&probe);
-        assert!((hud.dollars(&probe) - price_in).abs() < 1e-6);
-    }
-
-    #[test]
-    fn cache_creation_uses_catalog_write_rate() {
-        let model_id = model_catalog::fast_completion_model("anthropic");
-        let model_id = model_id.as_str();
-        let expected = model_catalog::find(model_id)
-            .map(|model| model.cache_write_price_per_1m)
-            .unwrap_or(0.0);
-        let hud = CostHud {
-            in_tokens: 0,
-            cache_creation: 1_000_000,
-            ..Default::default()
-        };
-        assert!((hud.dollars(model_id) - expected).abs() < 1e-6);
+        let probe = crate::model_catalog::fast_completion_model("anthropic");
+        assert!((hud.dollars(&probe) - hud.total_usd).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -207,11 +185,15 @@ mod tests {
             out_tokens: 900,
             cache_read: 200,
             cache_creation: 0,
+            total_usd: 0.0,
             reasoning_tokens: 0,
             context_used: 2_100,
             context_window: 200_000,
         };
-        let line = build_line(&hud, &model_catalog::fast_completion_model("anthropic"));
+        let line = build_line(
+            &hud,
+            &crate::model_catalog::fast_completion_model("anthropic"),
+        );
         let text = line
             .spans
             .iter()
@@ -290,6 +272,7 @@ mod tests {
             out_tokens: 900,
             cache_read: 200,
             cache_creation: 0,
+            total_usd: 0.0,
             reasoning_tokens: 150,
             context_used: 2_100,
             context_window: 200_000,

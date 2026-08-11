@@ -13,21 +13,17 @@ export interface ExecutorchPreset {
   modelSource: string;
   tokenizerSource: string;
   tokenizerConfigSource: string;
+  /** Runtime capabilities required when loading this preset. */
+  capabilities?: readonly string[];
+  /** Catalog-owned model-card sampling configuration. */
+  generationConfig?: Readonly<Record<string, number>>;
 }
 
 export interface OnDeviceModel {
   id: string;
   displayName: string;
-  family:
-    | 'qwen3'
-    | 'qwen3-vl'
-    | 'qwen2.5-vl'
-    | 'lfm2-vl'
-    | 'gemma4'
-    | 'llama3.2'
-    | 'phi4-mini'
-    | 'apple-fm'
-    | 'gemini-nano';
+  /** Catalog-owned opaque grouping. Consumers must branch on capabilities and roles. */
+  family: string;
   paramCountB: number;
   fileSizeBytes: number;
   supportedRuntimes: OnDeviceRuntime[];

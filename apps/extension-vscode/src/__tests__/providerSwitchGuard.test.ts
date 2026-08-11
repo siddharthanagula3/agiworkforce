@@ -7,56 +7,29 @@
  *   - tierResolver helpers: tierAtLeast, TIER_ORDER
  */
 
+import { getCoreManualModelOptions } from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
 import { extractProvider, guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { tierAtLeast, TIER_ORDER } from '../integrations/tierResolver';
+import { requireCatalogModel, SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+
+const CATALOG_MODELS = getCoreManualModelOptions();
+const ANTHROPIC_PRIMARY = requireCatalogModel('anthropic').id;
+const ANTHROPIC_SECONDARY = requireCatalogModel('anthropic', 1).id;
+const OPENAI_PRIMARY = requireCatalogModel('openai').id;
+const OPENAI_SECONDARY = requireCatalogModel('openai', 1).id;
+const GOOGLE_PRIMARY = requireCatalogModel('google').id;
+const XAI_PRIMARY = requireCatalogModel('xai').id;
+const SYNTHETIC_UNKNOWN_MODEL_ID = 'fixture-unknown-model';
 
 // ─── extractProvider ──────────────────────────────────────────────────────────
 
 describe('extractProvider', () => {
-  it('identifies Anthropic models by claude- prefix', () => {
-    expect(extractProvider('claude-opus-5')).toBe('anthropic');
-    expect(extractProvider('claude-sonnet-4.6')).toBe('anthropic');
-    expect(extractProvider('claude-sonnet-5')).toBe('anthropic');
-  });
-
-  it('identifies OpenAI models by gpt- prefix', () => {
-    expect(extractProvider('gpt-5.6-sol')).toBe('openai');
-    expect(extractProvider('gpt-5.6-luna')).toBe('openai');
-    expect(extractProvider('gpt-4o')).toBe('openai');
-  });
-
-  it('identifies OpenAI o-series by o[1-9]- prefix', () => {
-    expect(extractProvider('o1-mini')).toBe('openai');
-    expect(extractProvider('o3-mini')).toBe('openai');
-    expect(extractProvider('o4-preview')).toBe('openai');
-  });
-
-  it('identifies Google models by gemini- prefix', () => {
-    expect(extractProvider('gemini-3.1-pro-preview')).toBe('google');
-    expect(extractProvider('gemini-3.5-flash-lite')).toBe('google');
-  });
-
-  it('identifies xAI models by grok- prefix', () => {
-    expect(extractProvider('grok-4.5')).toBe('xai');
-  });
-
-  it('identifies DeepSeek models by deepseek- prefix', () => {
-    expect(extractProvider('deepseek-chat')).toBe('deepseek');
-    expect(extractProvider('deepseek-reasoner')).toBe('deepseek');
-  });
-
-  it('identifies Qwen models by qwen- prefix', () => {
-    expect(extractProvider('qwen-max')).toBe('qwen');
-  });
-
-  it('identifies Moonshot/Kimi models', () => {
-    expect(extractProvider('kimi-k3')).toBe('moonshot');
-    expect(extractProvider('moonshot-v1')).toBe('moonshot');
-  });
-
-  it('identifies Zhipu models by glm- prefix', () => {
-    expect(extractProvider('glm-4.7')).toBe('zhipu');
+  it('derives every manual model provider from canonical catalog metadata', () => {
+    expect(CATALOG_MODELS.length).toBeGreaterThan(0);
+    for (const model of CATALOG_MODELS) {
+      expect(extractProvider(model.id)).toBe(String(model.provider));
+    }
   });
 
   it('returns auto for auto-* model IDs', () => {
@@ -67,8 +40,8 @@ describe('extractProvider', () => {
   });
 
   it('returns unknown for unrecognized model IDs', () => {
-    expect(extractProvider('llama3')).toBe('unknown');
-    expect(extractProvider('phi3')).toBe('unknown');
+    expect(extractProvider(SYNTHETIC_LOCAL_MODEL_ID)).toBe('unknown');
+    expect(extractProvider(SYNTHETIC_UNKNOWN_MODEL_ID)).toBe('unknown');
     expect(extractProvider('')).toBe('unknown');
   });
 });
@@ -89,12 +62,12 @@ describe('guardProviderSwitch — same-provider switches are always allowed', ()
   ] as const;
 
   for (const tier of TIERS) {
-    it(`allows claude→claude on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-5', 'claude-sonnet-4.6', tier)).toBe('allow');
+    it(`allows Anthropic→Anthropic on tier=${tier}`, () => {
+      expect(guardProviderSwitch(ANTHROPIC_PRIMARY, ANTHROPIC_SECONDARY, tier)).toBe('allow');
     });
 
-    it(`allows gpt→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.6-sol', 'gpt-5.6-luna', tier)).toBe('allow');
+    it(`allows OpenAI→OpenAI on tier=${tier}`, () => {
+      expect(guardProviderSwitch(OPENAI_PRIMARY, OPENAI_SECONDARY, tier)).toBe('allow');
     });
   }
 });
@@ -113,12 +86,12 @@ describe('guardProviderSwitch — auto-mode switches are always allowed', () => 
   ] as const;
 
   for (const tier of TIERS) {
-    it(`allows claude→auto-balanced on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-5', 'auto-balanced', tier)).toBe('allow');
+    it(`allows Anthropic→auto-balanced on tier=${tier}`, () => {
+      expect(guardProviderSwitch(ANTHROPIC_PRIMARY, 'auto-balanced', tier)).toBe('allow');
     });
 
-    it(`allows auto-balanced→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('auto-balanced', 'gpt-5.6-sol', tier)).toBe('allow');
+    it(`allows auto-balanced→OpenAI on tier=${tier}`, () => {
+      expect(guardProviderSwitch('auto-balanced', OPENAI_PRIMARY, tier)).toBe('allow');
     });
   }
 });
@@ -128,39 +101,39 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
   const ALLOWED_TIERS = ['max', 'max_15x', 'enterprise'] as const;
 
   for (const tier of BLOCKED_TIERS) {
-    it(`blocks claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-5', 'gpt-5.6-sol', tier)).toBe('upgrade-required');
+    it(`blocks Anthropic→OpenAI on tier=${tier}`, () => {
+      expect(guardProviderSwitch(ANTHROPIC_PRIMARY, OPENAI_PRIMARY, tier)).toBe('upgrade-required');
     });
 
-    it(`blocks gpt→gemini on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.6-sol', 'gemini-3.1-pro-preview', tier)).toBe(
-        'upgrade-required',
-      );
+    it(`blocks OpenAI→Google on tier=${tier}`, () => {
+      expect(guardProviderSwitch(OPENAI_PRIMARY, GOOGLE_PRIMARY, tier)).toBe('upgrade-required');
     });
 
-    it(`blocks claude→grok on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-5', 'grok-4.5', tier)).toBe('upgrade-required');
+    it(`blocks Anthropic→xAI on tier=${tier}`, () => {
+      expect(guardProviderSwitch(ANTHROPIC_PRIMARY, XAI_PRIMARY, tier)).toBe('upgrade-required');
     });
   }
 
   for (const tier of ALLOWED_TIERS) {
-    it(`allows claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-5', 'gpt-5.6-sol', tier)).toBe('allow');
+    it(`allows Anthropic→OpenAI on tier=${tier}`, () => {
+      expect(guardProviderSwitch(ANTHROPIC_PRIMARY, OPENAI_PRIMARY, tier)).toBe('allow');
     });
 
-    it(`allows gpt→gemini on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.6-sol', 'gemini-3.1-pro-preview', tier)).toBe('allow');
+    it(`allows OpenAI→Google on tier=${tier}`, () => {
+      expect(guardProviderSwitch(OPENAI_PRIMARY, GOOGLE_PRIMARY, tier)).toBe('allow');
     });
   }
 });
 
 describe('guardProviderSwitch — unknown provider does not trigger gate', () => {
-  it('allows unknown→claude (unknown side is never gated)', () => {
-    expect(guardProviderSwitch('llama3', 'claude-opus-5', 'byok')).toBe('allow');
+  it('allows unknown→catalog model (unknown side is never gated)', () => {
+    expect(guardProviderSwitch(SYNTHETIC_LOCAL_MODEL_ID, ANTHROPIC_PRIMARY, 'byok')).toBe('allow');
   });
 
-  it('allows claude→unknown on byok', () => {
-    expect(guardProviderSwitch('claude-opus-5', 'llama3', 'byok')).toBe('allow');
+  it('allows catalog model→unknown on byok', () => {
+    expect(guardProviderSwitch(ANTHROPIC_PRIMARY, SYNTHETIC_UNKNOWN_MODEL_ID, 'byok')).toBe(
+      'allow',
+    );
   });
 });
 

@@ -287,7 +287,8 @@ introduced and it blocks the pre-push gate. (b) `cargo test --workspace --lib`
 is 6,770 passed / 4 failed / 34 ignored across 14 binaries, all four failures
 inside `agiworkforce-desktop` and all four reproducing deterministically in
 isolation — two effort-catalog assertions in `core::llm` that contradict
-`claude-sonnet-5`'s `supportedEfforts` since `3044350c5`, and two `v59`
+the catalog-selected Anthropic balanced model's `supportedEfforts` since
+`3044350c5`, and two `v59`
 migration tests that expose a real hazard where the `v76` step runs
 `CREATE INDEX` against `realtime_metrics` without guarding that the table
 exists. All four files are byte-identical between `main` and this branch, so

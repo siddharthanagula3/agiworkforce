@@ -1,7 +1,7 @@
-//! Deepgram Nova-3 WebSocket Speech-to-Text Integration
+//! Deepgram WebSocket Speech-to-Text Integration
 //!
 //! This module provides real-time streaming speech-to-text using Deepgram's
-//! Nova-2/Nova-3 models via WebSocket connection.
+//! provider models via WebSocket connection.
 //!
 //! # Features
 //!
@@ -18,7 +18,7 @@
 //!
 //! let config = DeepgramConfig {
 //!     api_key: "your-api-key".to_string(),
-//!     model: "nova-2".to_string(),
+//!     model: configured_model_id,
 //!     ..Default::default()
 //! };
 //!
@@ -56,7 +56,7 @@ pub const DEFAULT_ENCODING: &str = "linear16";
 pub struct DeepgramConfig {
     /// Deepgram API key
     pub api_key: String,
-    /// Model to use (e.g., "nova-2", "nova-3")
+    /// Provider model ID, supplied by the catalog or explicit configuration
     pub model: String,
     /// Language code (e.g., "en-US", "en")
     pub language: String,
@@ -92,7 +92,7 @@ impl Default for DeepgramConfig {
     fn default() -> Self {
         Self {
             api_key: String::new(),
-            model: "nova-2".to_string(),
+            model: default_deepgram_model(),
             language: "en-US".to_string(),
             punctuate: true,
             interim_results: true,
@@ -109,6 +109,32 @@ impl Default for DeepgramConfig {
             keywords_boost: None,
         }
     }
+}
+
+/// Select the maintained provider wire ID from the canonical model catalog.
+///
+/// The current catalog does not advertise this provider, so an empty result is
+/// intentional: the API requires a model and `start_streaming` then fails
+/// closed until the caller supplies one explicitly.
+fn default_deepgram_model() -> String {
+    crate::core::llm::models_config::get_all_model_entries()
+        .values()
+        .filter(|entry| entry.provider == "deepgram" && entry.model_type == "stt")
+        .min_by_key(|entry| {
+            (
+                entry.deprecated == Some(true),
+                entry.quality_tier.as_str() != "balanced",
+                entry.id.as_str(),
+            )
+        })
+        .map(|entry| {
+            entry
+                .api_model_id
+                .as_deref()
+                .unwrap_or(&entry.id)
+                .to_string()
+        })
+        .unwrap_or_default()
 }
 
 /// A single word in the transcript with timing information
@@ -283,6 +309,13 @@ impl DeepgramClient {
         if self.config.api_key.is_empty() {
             return Err(Error::Config(
                 "Deepgram API key is required. Please configure your API key.".to_string(),
+            ));
+        }
+
+        if self.config.model.trim().is_empty() {
+            return Err(Error::Config(
+                "Deepgram model is required. Select a catalog model or configure one explicitly."
+                    .to_string(),
             ));
         }
 
@@ -794,7 +827,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = DeepgramConfig::default();
-        assert_eq!(config.model, "nova-2");
+        assert_eq!(config.model, default_deepgram_model());
         assert_eq!(config.language, "en-US");
         assert!(config.punctuate);
         assert!(config.interim_results);
@@ -805,7 +838,7 @@ mod tests {
     fn test_build_ws_url() {
         let config = DeepgramConfig {
             api_key: "test-key".to_string(),
-            model: "nova-2".to_string(),
+            model: "fixture-deepgram-stt".to_string(),
             language: "en-US".to_string(),
             punctuate: true,
             interim_results: true,
@@ -826,11 +859,25 @@ mod tests {
         let url = client.build_ws_url();
 
         assert!(url.starts_with("wss://api.deepgram.com/v1/listen?"));
-        assert!(url.contains("model=nova-2"));
+        assert!(url.contains("model=fixture-deepgram-stt"));
         assert!(url.contains("language=en-US"));
         assert!(url.contains("punctuate=true"));
         assert!(url.contains("interim_results=true"));
         assert!(url.contains("sample_rate=16000"));
+    }
+
+    #[tokio::test]
+    async fn missing_catalog_or_explicit_model_fails_before_network() {
+        let client = DeepgramClient::new(DeepgramConfig {
+            api_key: "fixture-key".to_string(),
+            model: String::new(),
+            ..Default::default()
+        });
+        let error = client
+            .start_streaming()
+            .await
+            .expect_err("an empty provider model must fail closed");
+        assert!(error.to_string().contains("model is required"));
     }
 
     #[test]

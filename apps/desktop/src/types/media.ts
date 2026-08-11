@@ -1,8 +1,4 @@
-export type ImageProviderId =
-  | 'google_imagen'
-  | 'google_imagen_lite'
-  | 'dalle'
-  | 'stable_diffusion';
+export type ImageProviderId = 'google_balanced' | 'google_fast' | 'openai';
 
 export type ImageSizeId = 'small' | 'medium' | 'large' | 'wide' | 'portrait';
 export type ImageQualityId = 'standard' | 'hd' | 'premium';

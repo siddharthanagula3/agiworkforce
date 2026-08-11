@@ -162,7 +162,7 @@ impl ToolCallAssembler {
         self.completed.push(call);
     }
 
-    /// Number of completed calls so far (used to synthesize `gemini_N` /
+    /// Number of completed calls so far (used to synthesize provider-neutral tool IDs /
     /// `ollama_N` ids for dialects that don't provide call ids).
     pub fn completed_len(&self) -> usize {
         self.completed.len()

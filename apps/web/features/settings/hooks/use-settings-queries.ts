@@ -13,6 +13,7 @@ import {
   type UseMutationResult,
   type QueryClient,
 } from '@tanstack/react-query';
+import { z } from 'zod';
 import { queryKeys } from '@shared/stores/query-client';
 import settingsService, {
   type UserProfile,
@@ -21,6 +22,7 @@ import settingsService, {
 } from '../services/user-preferences';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
+import { TimeoutPresets, withTimeout } from '@shared/lib/error-utils';
 import { requireProviderDefaultModel, type BillingPlanTier } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -161,13 +163,27 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
 export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
   return useQuery<APIKey[], Error>({
     queryKey: queryKeys.settings.apiKeys(),
-    queryFn: async (): Promise<APIKey[]> => {
-      const { data, error } = await settingsService.getAPIKeys();
-      if (error) {
-        logger.error('[SettingsQuery] API keys error:', error);
-        return [];
+    queryFn: async ({ signal }): Promise<APIKey[]> => {
+      const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
+      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
+
+      try {
+        const { data, error } = await withTimeout(
+          settingsService.getAPIKeys(requestSignal),
+          TimeoutPresets.FAST,
+          'API keys took too long to load.',
+        );
+        if (error) throw new Error(error);
+        return data;
+      } catch (error) {
+        const message = timeoutSignal.aborted
+          ? 'API keys took too long to load. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'Unable to load API keys.';
+        logger.error('[SettingsQuery] API keys error:', message);
+        throw new Error(message);
       }
-      return data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -578,12 +594,58 @@ export interface OrganizationAccess {
   plan: BillingPlanTier;
   canManageTeam: boolean;
   maxMembers: number | null;
+  seatsConsumed: number | null;
+  seatsAvailable: number | null;
+  seatSource: 'billing' | 'unprovisioned' | 'unknown';
 }
 
 export interface OrganizationOverview {
   organization: OrganizationSettings | null;
+  activeOrganizationId: string | null;
+  workspaces: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    role: OrganizationSettings['currentUserRole'];
+    joinedAt: string;
+  }>;
   access: OrganizationAccess;
 }
+
+const OrganizationRoleSchema = z.enum(['owner', 'admin', 'member', 'viewer']);
+const OrganizationOverviewSchema = z.object({
+  organization: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      slug: z.string(),
+      plan: z.string(),
+      memberCount: z.number().int().nonnegative(),
+      maxMembers: z.number().int().nonnegative().nullable(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+      currentUserRole: OrganizationRoleSchema,
+    })
+    .nullable(),
+  activeOrganizationId: z.string().uuid().nullable(),
+  workspaces: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      slug: z.string(),
+      role: OrganizationRoleSchema,
+      joinedAt: z.string(),
+    }),
+  ),
+  access: z.object({
+    plan: z.string(),
+    canManageTeam: z.boolean(),
+    maxMembers: z.number().int().nonnegative().nullable(),
+    seatsConsumed: z.number().int().nonnegative().nullable(),
+    seatsAvailable: z.number().int().nonnegative().nullable(),
+    seatSource: z.enum(['billing', 'unprovisioned', 'unknown']),
+  }),
+});
 
 interface ApiErrorEnvelope {
   error?: string | { message?: string };
@@ -618,7 +680,9 @@ async function fetchOrganizationOverview(): Promise<OrganizationOverview> {
     throw new Error(await readApiError(response));
   }
 
-  return (await response.json()) as OrganizationOverview;
+  const parsed = OrganizationOverviewSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error('The workspace response was invalid');
+  return parsed.data as OrganizationOverview;
 }
 
 export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, Error> {
@@ -633,6 +697,34 @@ export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, 
   });
 }
 
+export function useSwitchWorkspace(): UseMutationResult<void, Error, string | null> {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string | null>({
+    mutationFn: async (organizationId) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/settings/organization/active', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ organizationId }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+    },
+    onSuccess: async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      toast.success('Workspace switched');
+      window.location.reload();
+    },
+    onError: (error) => toast.error(error.message || 'Failed to switch workspace'),
+  });
+}
+
 /**
  * Fetch organization settings
  *
@@ -642,7 +734,7 @@ export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, 
 export function useOrganizationSettings(
   organizationId?: string,
 ): UseQueryResult<OrganizationSettings | null, Error> {
-  void organizationId; // reserved for future org-switcher; route returns current user's org
+  void organizationId; // compatibility only; the route returns the durable active workspace
   return useQuery<OrganizationOverview, Error, OrganizationSettings | null>({
     queryKey: ['settings', 'organization', 'current'],
     queryFn: fetchOrganizationOverview,
@@ -691,9 +783,11 @@ export function useCreateOrganization(): UseMutationResult<
       if (!body.organization) throw new Error('Invalid response from server');
       return body.organization;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+    onSuccess: async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
       toast.success('Workspace created');
+      window.location.reload();
     },
     onError: (error) => {
       logger.error('Failed to create workspace:', error);
@@ -810,6 +904,247 @@ export function useTeamMembers(
     meta: {
       errorMessage: 'Failed to load team members',
     },
+  });
+}
+
+export type TeamInvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
+
+export interface TeamInvitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: 'admin' | 'member' | 'viewer';
+  status: TeamInvitationStatus;
+  invitedByUserId: string;
+  acceptedByUserId: string | null;
+  expiresAt: string;
+  resentAt: string | null;
+  resendCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamSeatState {
+  organizationId: string;
+  licensedSeats: number;
+  seatsConsumed: number;
+  seatsAvailable: number;
+  seatSource: 'billing' | 'unprovisioned';
+  ownerUserId: string | null;
+}
+
+export interface TeamInvitationsOverview {
+  invitations: TeamInvitation[];
+  seats: TeamSeatState | null;
+}
+
+export interface TeamInvitationCredentialResult {
+  invitation: TeamInvitation;
+  inviteToken: string;
+  delivery: {
+    emailSent: false;
+    reason: string;
+  };
+}
+
+const TeamInvitationSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  email: z.string().email(),
+  role: z.enum(['admin', 'member', 'viewer']),
+  status: z.enum(['pending', 'accepted', 'declined', 'revoked', 'expired']),
+  invitedByUserId: z.string(),
+  acceptedByUserId: z.string().nullable(),
+  expiresAt: z.string(),
+  resentAt: z.string().nullable(),
+  resendCount: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const TeamSeatStateSchema = z.object({
+  organizationId: z.string(),
+  licensedSeats: z.number().int().nonnegative(),
+  seatsConsumed: z.number().int().nonnegative(),
+  seatsAvailable: z.number().int().nonnegative(),
+  seatSource: z.enum(['billing', 'unprovisioned']),
+  ownerUserId: z.string().nullable(),
+});
+
+const TeamInvitationsOverviewSchema = z.object({
+  invitations: z.array(TeamInvitationSchema),
+  seats: TeamSeatStateSchema.nullable(),
+});
+
+const TeamInvitationCredentialResultSchema = z.object({
+  invitation: TeamInvitationSchema,
+  inviteToken: z.string().min(20).max(512),
+  delivery: z.object({
+    emailSent: z.literal(false),
+    reason: z.string(),
+  }),
+});
+
+export function useTeamInvitations(
+  organizationId: string | undefined,
+): UseQueryResult<TeamInvitationsOverview, Error> {
+  return useQuery<TeamInvitationsOverview, Error>({
+    queryKey: ['settings', 'team', organizationId ?? '', 'invitations'],
+    queryFn: async () => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const response = await fetch(
+        `/api/settings/team/invitations?organizationId=${encodeURIComponent(organizationId!)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) throw new Error(await readApiError(response));
+      return TeamInvitationsOverviewSchema.parse(await response.json());
+    },
+    enabled: !!organizationId,
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    meta: { errorMessage: 'Failed to load team invitations' },
+  });
+}
+
+export function useCreateTeamInvitation(): UseMutationResult<
+  TeamInvitationCredentialResult,
+  Error,
+  { organizationId: string; email: string; role: TeamInvitation['role'] }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/settings/team/invitations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+      return TeamInvitationCredentialResultSchema.parse(await response.json());
+    },
+    onSuccess: (_, { organizationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings', 'team', organizationId, 'invitations'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success('Invitation created. Copy the private link to share it.');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to create invitation'),
+  });
+}
+
+export function useResendTeamInvitation(): UseMutationResult<
+  TeamInvitationCredentialResult,
+  Error,
+  { organizationId: string; invitationId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ organizationId, invitationId }) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch(
+        `/api/settings/team/invitations/${encodeURIComponent(invitationId)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({ organizationId, action: 'resend' }),
+        },
+      );
+      if (!response.ok) throw new Error(await readApiError(response));
+      return TeamInvitationCredentialResultSchema.parse(await response.json());
+    },
+    onSuccess: (_, { organizationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings', 'team', organizationId, 'invitations'],
+      });
+      toast.success('A new private invitation link is ready.');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to renew invitation'),
+  });
+}
+
+export function useRevokeTeamInvitation(): UseMutationResult<
+  void,
+  Error,
+  { organizationId: string; invitationId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ organizationId, invitationId }) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch(
+        `/api/settings/team/invitations/${encodeURIComponent(invitationId)}?organizationId=${encodeURIComponent(organizationId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-csrf-token': csrfToken,
+          },
+        },
+      );
+      if (!response.ok) throw new Error(await readApiError(response));
+    },
+    onSuccess: (_, { organizationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings', 'team', organizationId, 'invitations'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success('Invitation revoked and its seat released.');
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to revoke invitation'),
+  });
+}
+
+export function useLeaveOrganization(): UseMutationResult<
+  void,
+  Error,
+  { successorUserId?: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ successorUserId }) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/settings/organization/leave', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(successorUserId ? { successorUserId } : {}),
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+    },
+    onSuccess: async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      toast.success('You left the workspace. You can now join or create another one.');
+      window.location.reload();
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to leave workspace'),
   });
 }
 

@@ -22,9 +22,7 @@ jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8', Base64: 'base64' },
   getInfoAsync: jest.fn(async (uri: string) => {
     const f = mockFiles.get(uri);
-    return f
-      ? { exists: true, size: f.length, isDirectory: false, uri }
-      : { exists: false, uri };
+    return f ? { exists: true, size: f.length, isDirectory: false, uri } : { exists: false, uri };
   }),
   makeDirectoryAsync: jest.fn(async () => undefined),
   deleteAsync: jest.fn(async (uri: string) => {
@@ -89,7 +87,7 @@ jest.mock('@/storage/installedModels', () => ({
 
 import { downloadModel } from '@/services/modelDownload';
 import { runVisionQuery, resolveVisionRoute } from '../src/features/image/services/vision';
-import { _setLlamaModuleForTesting, tier3Release } from '@agiworkforce/local-llm';
+import { _setLlamaModuleForTesting, getModelsForRole, tier3Release } from '@agiworkforce/local-llm';
 import type { InstalledModel } from '@/storage/types';
 
 function hex(bytes: Uint8Array): string {
@@ -101,8 +99,15 @@ function hex(bytes: Uint8Array): string {
 // Fake artifact bytes large enough to exercise the chunked hasher's loop.
 const baseBytes = new Uint8Array(1024).map((_, i) => (i * 7) % 256);
 const mmprojBytes = new Uint8Array(512).map((_, i) => (i * 13) % 256);
-const BASE_URL = 'https://models.example/qwen3-vl.gguf';
-const MMPROJ_URL = 'https://models.example/qwen3-vl.mmproj.gguf';
+const BASE_URL = 'https://models.example/fixture-vision-base.gguf';
+const MMPROJ_URL = 'https://models.example/fixture-vision-projector.gguf';
+const VISION_CATALOG_MODEL = getModelsForRole('premium-vision-pack').find(
+  (model) => model.format === 'gguf' && model.mmprojUrl && model.mmprojChecksum,
+);
+
+if (!VISION_CATALOG_MODEL) {
+  throw new Error('Local catalog has no GGUF vision model with a projector');
+}
 
 describe('gguf vision full chain: install -> select -> multimodal generate', () => {
   beforeAll(() => {
@@ -119,10 +124,10 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
     // --- 1. Install: download + verify BOTH artifacts (real sha256 over fake bytes).
     const progress: number[] = [];
     const record = await downloadModel({
-      // Use the real catalog id so vision routing + tier-3 context sizing hit
-      // the real qwen3-vl catalog row; artifact bytes/checksums are test-local.
-      modelId: 'qwen3-vl-2b-instruct',
-      displayName: 'AGI Vision Pack',
+      // Use the catalog row so vision routing and tier-3 context sizing exercise
+      // production metadata; artifact bytes and checksums remain test-local.
+      modelId: VISION_CATALOG_MODEL.id,
+      displayName: VISION_CATALOG_MODEL.displayName,
       downloadUrl: BASE_URL,
       checksum: hex(nobleSha256(baseBytes)),
       fileSizeBytes: baseBytes.length,
@@ -135,21 +140,21 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
       onProgress: (downloaded, total) => progress.push(downloaded / total),
     });
 
-    const expectedModelPath = 'file:///doc/models/qwen3-vl-2b-instruct/model.gguf';
+    const expectedModelPath = `file:///doc/models/${VISION_CATALOG_MODEL.id}/model.gguf`;
     const expectedMmprojPath = `${expectedModelPath}.mmproj.gguf`;
     expect(record.local_path).toBe(expectedModelPath);
     expect(mockFiles.has(expectedModelPath)).toBe(true);
     expect(mockFiles.has(expectedMmprojPath)).toBe(true);
     expect(progress[progress.length - 1]).toBe(1);
-    const stored = mockRecords.get('qwen3-vl-2b-instruct') as InstalledModel;
+    const stored = mockRecords.get(VISION_CATALOG_MODEL.id) as InstalledModel;
     expect(stored.local_path).toBe(expectedModelPath);
 
     // --- 2. Select: the vision router resolves the installed vl-pack.
     const route = await resolveVisionRoute();
     expect(route).toEqual({
       kind: 'vl-pack',
-      modelId: 'qwen3-vl-2b-instruct',
-      displayName: 'AGI Vision Pack',
+      modelId: VISION_CATALOG_MODEL.id,
+      displayName: VISION_CATALOG_MODEL.displayName,
     });
 
     // --- 3. Generate: tier-3 loads with ctx_shift:false + attaches the mmproj,
@@ -175,7 +180,9 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
       expect.objectContaining({ path: expectedMmprojPath }),
     );
     const sentMessages = (
-      completion.mock.calls[0] as unknown as [{ messages: Array<{ role: string; content: unknown }> }]
+      completion.mock.calls[0] as unknown as [
+        { messages: Array<{ role: string; content: unknown }> },
+      ]
     )[0].messages;
     expect(sentMessages[sentMessages.length - 1]).toEqual({
       role: 'user',
@@ -196,8 +203,8 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
 
     await expect(
       downloadModel({
-        modelId: 'qwen3-vl-2b-instruct',
-        displayName: 'AGI Vision Pack',
+        modelId: VISION_CATALOG_MODEL.id,
+        displayName: VISION_CATALOG_MODEL.displayName,
         downloadUrl: BASE_URL,
         checksum: hex(nobleSha256(baseBytes)),
         fileSizeBytes: baseBytes.length,
@@ -210,9 +217,9 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
       }),
     ).rejects.toMatchObject({ kind: 'checksum_mismatch' });
 
-    const mmprojPath = 'file:///doc/models/qwen3-vl-2b-instruct/model.gguf.mmproj.gguf';
+    const mmprojPath = `file:///doc/models/${VISION_CATALOG_MODEL.id}/model.gguf.mmproj.gguf`;
     expect(mockFiles.has(mmprojPath)).toBe(false);
     // No install record was written for the failed install.
-    expect(mockRecords.has('qwen3-vl-2b-instruct')).toBe(false);
+    expect(mockRecords.has(VISION_CATALOG_MODEL.id)).toBe(false);
   });
 });

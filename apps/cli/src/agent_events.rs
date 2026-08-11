@@ -144,12 +144,12 @@ mod tests {
     fn spawning_serializes_with_event_tag() {
         let ev = AgentEvent::Spawning {
             session_id: "s1".into(),
-            model: "claude-sonnet-5".into(),
+            model: "fixture-event-model".into(),
             provider: "anthropic".into(),
         };
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains(r#""event":"spawning""#));
-        assert!(json.contains(r#""model":"claude-sonnet-5""#));
+        assert!(json.contains(r#""model":"fixture-event-model""#));
     }
 
     #[test]

@@ -10,6 +10,9 @@ import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAcco
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { isSelectableModelIdForAccess } from '@/src/features/model-picker/service';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
@@ -83,6 +86,8 @@ interface MessageState {
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
+  /** Persist the active model in the Local or Cloud store that owns the conversation. */
+  setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   markConversationRead: (id: string) => void;
@@ -490,6 +495,43 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
+      },
+
+      setConversationModel: async (id, model) => {
+        const localConversation = get().conversations.find(
+          (conversation) => conversation.id === id,
+        );
+        if (localConversation) {
+          if (!isConversationModelSelectionAllowed(localConversation, model)) return false;
+          set((state) => ({
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === id ? { ...conversation, model } : conversation,
+            ),
+          }));
+          return true;
+        }
+
+        const cloudStore = getCloudStore();
+        const cloudConversation = cloudStore
+          .getState()
+          .conversations.find((conversation) => conversation.id === id);
+        if (!cloudConversation) return false;
+        if (!isConversationModelSelectionAllowed(cloudConversation, model)) return false;
+
+        cloudStore.getState().patchCloudConversation(id, { model });
+        if (shouldSyncConversationRemote(cloudConversation)) {
+          markConversationForSync(id);
+          try {
+            await api.put(
+              managedCloudConversationPath(id),
+              ManagedCloudUpdateConversationRequestSchema.parse({ model }),
+            );
+          } catch {
+            // The optimistic row is durable in the Cloud cache and remains in
+            // the sync sidecar until a later push confirms it server-side.
+          }
+        }
+        return true;
       },
 
       pinConversation: async (id) => {
@@ -1185,6 +1227,30 @@ function isCloudConversation(conversation: ConversationSummary | undefined): boo
 
 function shouldSyncConversationRemote(conversation: ConversationSummary | undefined): boolean {
   return isCloudChatEnabled() && isCloudConversation(conversation);
+}
+
+/**
+ * Validate model identity, entitlement, and immutable conversation boundary
+ * before either Local or Cloud persistence mutates. This is intentionally
+ * repeated at the store action boundary rather than trusting picker state:
+ * account/tier state can change between render and press, and future callers
+ * must not be able to queue an invalid Cloud model for sync.
+ */
+function isConversationModelSelectionAllowed(
+  conversation: ConversationSummary,
+  model: string,
+): boolean {
+  const executionMode = executionModeForConversation(conversation);
+  if (
+    !isSelectableModelIdForAccess(
+      model,
+      useWaitlistStore.getState().cloudUnlocked,
+      useTierStore.getState().tier,
+    )
+  ) {
+    return false;
+  }
+  return executionModeForSelection(model, executionMode) === executionMode;
 }
 
 function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined): boolean {

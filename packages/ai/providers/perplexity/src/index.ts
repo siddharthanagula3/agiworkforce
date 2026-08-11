@@ -1,9 +1,9 @@
 /**
  * @agiworkforce/providers-perplexity
  *
- * Perplexity (Sonar) provider adapter implementing `ProviderAdapter` from
+ * Perplexity provider adapter implementing `ProviderAdapter` from
  * `@agiworkforce/types`. Perplexity ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.perplexity.ai`. Sonar models are search-augmented:
+ * endpoint at `https://api.perplexity.ai`. Its models are search-augmented:
  * the response includes a `citations` array of source URLs (or richer
  * `search_results`) appended to the final stream chunk.
  *

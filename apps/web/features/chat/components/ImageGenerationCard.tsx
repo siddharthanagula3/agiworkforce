@@ -33,13 +33,17 @@ import {
   Send,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { ImageAspectRatio } from './Composer/ChatComposerNew';
+import {
+  getImageAspectOptionsForModel,
+  normalizeImageAspectRatioForModel,
+  type ImageAspectRatio,
+} from '../lib/imageGenerationOptions';
 
 // ---------------------------------------------------------------------------
-// Re-export from composer so callers don't need the circular dep
+// Re-export the shared media option type for existing card consumers.
 // ---------------------------------------------------------------------------
 
-export type { ImageAspectRatio };
+export type { ImageAspectRatio } from '../lib/imageGenerationOptions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,6 +67,8 @@ interface ImageGenerationCardProps {
   aspectRatio?: ImageAspectRatio;
   /** Model id that was requested */
   modelId?: string;
+  /** Bounded ISO instant before which retry remains an explicit disabled control. */
+  retryAt?: string;
   /**
    * Called when the user requests a re-generation from within the card
    * (aspect-ratio change or edit description).
@@ -77,37 +83,33 @@ interface ImageGenerationCardProps {
 }
 
 // ---------------------------------------------------------------------------
-// Aspect ratio options (subset – no "Auto" here since Auto defaults to 1:1)
-// ---------------------------------------------------------------------------
-
-const ASPECT_OPTIONS: Array<{ id: ImageAspectRatio; label: string }> = [
-  { id: '1:1', label: 'Square 1:1' },
-  { id: '3:4', label: 'Portrait 3:4' },
-  { id: '9:16', label: 'Story 9:16' },
-  { id: '4:3', label: 'Landscape 4:3' },
-  { id: '16:9', label: 'Widescreen 16:9' },
-];
-
-// ---------------------------------------------------------------------------
 // Download helper (works for both remote URLs and data: URIs)
 // ---------------------------------------------------------------------------
 
-async function downloadImage(url: string, filename = 'image.png') {
+const IMAGE_EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
+  'image/avif': 'avif',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export function imageDownloadFilename(filenameBase: string, mimeType: string): string {
+  const extension = IMAGE_EXTENSION_BY_MIME[mimeType.toLowerCase()] ?? 'img';
+  return `${filenameBase}.${extension}`;
+}
+
+async function downloadImage(url: string, filenameBase = 'image') {
   try {
-    let objectUrl: string;
-    if (url.startsWith('data:')) {
-      // data: URI – convert to blob directly
-      const res = await fetch(url);
-      const blob = await res.blob();
-      objectUrl = URL.createObjectURL(blob);
-    } else {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      objectUrl = URL.createObjectURL(blob);
-    }
+    // Fetch both authenticated /api/files URLs and data: URIs so the filename
+    // comes from the bytes' real Content-Type rather than a hardcoded suffix.
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Image download failed with HTTP ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = filename;
+    a.download = imageDownloadFilename(filenameBase, blob.type);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -116,7 +118,9 @@ async function downloadImage(url: string, filename = 'image.png') {
     // Fallback: let the browser handle it natively
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    // With no trustworthy response MIME, omit the extension instead of
+    // mislabeling JPEG/WebP bytes as PNG.
+    a.download = filenameBase;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -200,7 +204,7 @@ function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
   }, [imageUrl]);
 
   const handleDownload = useCallback(
-    () => void downloadImage(imageUrl, `ai-image-${Date.now()}.png`),
+    () => void downloadImage(imageUrl, `ai-image-${Date.now()}`),
     [imageUrl],
   );
 
@@ -330,6 +334,8 @@ interface EditPanelProps {
   prompt: string;
   aspectRatio: ImageAspectRatio;
   modelId?: string;
+  retryBlocked: boolean;
+  retryLabel?: string;
   onClose: () => void;
   onShare: () => void;
   onRegenerate?: (opts: {
@@ -346,6 +352,8 @@ function EditPanel({
   prompt,
   aspectRatio,
   modelId,
+  retryBlocked,
+  retryLabel,
   onClose,
   onShare,
   onRegenerate,
@@ -353,19 +361,22 @@ function EditPanel({
 }: EditPanelProps) {
   const [currentUrl, setCurrentUrl] = useState(imageUrl);
   const [currentPrompt, setCurrentPrompt] = useState(prompt);
-  const [currentAspect, setCurrentAspect] = useState<ImageAspectRatio>(aspectRatio);
+  const [currentAspect, setCurrentAspect] = useState<ImageAspectRatio>(() =>
+    normalizeImageAspectRatioForModel(modelId, aspectRatio),
+  );
   const [editText, setEditText] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const aspectOptions = getImageAspectOptionsForModel(modelId);
 
   const titleText = currentPrompt.length > 36 ? currentPrompt.slice(0, 36) + '...' : currentPrompt;
 
   const handleAspectChange = useCallback(
     async (newAspect: ImageAspectRatio) => {
       setShowAspectMenu(false);
-      if (!onRegenerate) return;
+      if (!onRegenerate || retryBlocked) return;
       setCurrentAspect(newAspect);
       setGenerating(true);
       setGenError(null);
@@ -384,12 +395,12 @@ function EditPanel({
         setGenerating(false);
       }
     },
-    [onRegenerate, currentPrompt, modelId, onImageUpdated],
+    [onRegenerate, retryBlocked, currentPrompt, modelId, onImageUpdated],
   );
 
   const handleDescribeEdit = useCallback(async () => {
     const text = editText.trim();
-    if (!text || !onRegenerate) return;
+    if (!text || !onRegenerate || retryBlocked) return;
     setGenerating(true);
     setGenError(null);
     // Combine original prompt with edit instruction
@@ -410,10 +421,10 @@ function EditPanel({
     } finally {
       setGenerating(false);
     }
-  }, [editText, onRegenerate, currentPrompt, currentAspect, modelId, onImageUpdated]);
+  }, [editText, onRegenerate, retryBlocked, currentPrompt, currentAspect, modelId, onImageUpdated]);
 
   const handleDownload = useCallback(
-    () => void downloadImage(currentUrl, `ai-image-${Date.now()}.png`),
+    () => void downloadImage(currentUrl, `ai-image-${Date.now()}`),
     [currentUrl],
   );
 
@@ -469,25 +480,27 @@ function EditPanel({
               <button
                 type="button"
                 onClick={() => setShowAspectMenu((p) => !p)}
-                disabled={generating}
+                disabled={generating || retryBlocked}
                 className={cn(
                   'flex h-7 items-center gap-1 rounded-lg border border-border/40 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
-                  generating && 'cursor-not-allowed opacity-50',
+                  (generating || retryBlocked) && 'cursor-not-allowed opacity-50',
                 )}
                 title="Generate this image with a different aspect ratio"
               >
-                {ASPECT_OPTIONS.find((o) => o.id === currentAspect)?.label ?? 'Aspect'}
+                {aspectOptions.find((option) => option.id === currentAspect)?.label ?? 'Aspect'}
                 <ChevronDown className="h-3 w-3" />
               </button>
               {showAspectMenu && (
                 <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                  {ASPECT_OPTIONS.map((opt) => (
+                  {aspectOptions.map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
                       onClick={() => void handleAspectChange(opt.id)}
+                      disabled={generating || retryBlocked}
                       className={cn(
                         'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                        (generating || retryBlocked) && 'cursor-not-allowed opacity-50',
                         currentAspect === opt.id
                           ? 'bg-primary/10 text-primary'
                           : 'hover:bg-muted/60',
@@ -553,6 +566,14 @@ function EditPanel({
             Describing a change generates a new image from the updated description. The image above
             is not modified.
           </p>
+          {retryBlocked && retryLabel ? (
+            <p
+              className="px-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+              aria-live="polite"
+            >
+              {retryLabel} before generating another version.
+            </p>
+          ) : null}
 
           {/* Describe-a-change composer */}
           <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-[var(--chat-bg-elevated)] px-3 py-2">
@@ -568,16 +589,16 @@ function EditPanel({
                 }
               }}
               placeholder="Describe a change to generate a new version..."
-              disabled={generating}
+              disabled={generating || retryBlocked}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none disabled:opacity-50"
             />
             <button
               type="button"
               onClick={() => void handleDescribeEdit()}
-              disabled={generating || !editText.trim()}
+              disabled={generating || retryBlocked || !editText.trim()}
               className={cn(
                 'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                editText.trim() && !generating
+                editText.trim() && !generating && !retryBlocked
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'text-muted-foreground/40 cursor-not-allowed',
               )}
@@ -620,7 +641,7 @@ function ResultCard({ imageUrl, prompt, onEdit, onShare }: ResultCardProps) {
   }, [imageUrl]);
 
   const handleDownload = useCallback(
-    () => void downloadImage(imageUrl, `ai-image-${Date.now()}.png`),
+    () => void downloadImage(imageUrl, `ai-image-${Date.now()}`),
     [imageUrl],
   );
 
@@ -757,17 +778,44 @@ export function ImageGenerationCard({
   prompt = '',
   aspectRatio = '1:1',
   modelId,
+  retryAt,
   onRegenerate,
 }: ImageGenerationCardProps) {
   const [showEdit, setShowEdit] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const retryAspectRatio = normalizeImageAspectRatioForModel(modelId, aspectRatio);
+  const [retryClockMs, setRetryClockMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!retryAt || !Number.isFinite(Date.parse(retryAt))) return;
+    const updateClock = () => setRetryClockMs(Date.now());
+    updateClock();
+    const interval = window.setInterval(updateClock, 1_000);
+    return () => window.clearInterval(interval);
+  }, [retryAt]);
+
+  const retryTimestampMs = retryAt ? Date.parse(retryAt) : Number.NaN;
+  const retryDeltaMs = retryClockMs === null ? Number.NaN : retryTimestampMs - retryClockMs;
+  const retryWindowIsBounded = retryDeltaMs <= 5 * 60_000;
+  const retryBlocked =
+    Number.isFinite(retryTimestampMs) &&
+    (retryClockMs === null || (retryDeltaMs > 0 && retryWindowIsBounded));
+  const retrySecondsRemaining =
+    retryClockMs === null || !retryBlocked ? 0 : Math.max(1, Math.ceil(retryDeltaMs / 1_000));
+  const retryLabel = retryBlocked
+    ? retryClockMs === null
+      ? 'Try again shortly'
+      : `Try again in ${retrySecondsRemaining}s`
+    : undefined;
 
   // Track the live imageUrl and prompt locally so edits update the display
   // without a full message re-render (the parent will update its metadata
   // separately via onImageUpdated → handleRegenerateImageInPlace).
   const [liveUrl, setLiveUrl] = useState(imageUrl);
   const [livePrompt, setLivePrompt] = useState(prompt);
-  const [liveAspect, setLiveAspect] = useState<ImageAspectRatio>(aspectRatio);
+  const [liveAspect, setLiveAspect] = useState<ImageAspectRatio>(() =>
+    normalizeImageAspectRatioForModel(modelId, aspectRatio),
+  );
 
   // Keep local state in sync when the parent message updates.
   useEffect(() => {
@@ -777,8 +825,8 @@ export function ImageGenerationCard({
     if (prompt) setLivePrompt(prompt);
   }, [prompt]);
   useEffect(() => {
-    setLiveAspect(aspectRatio);
-  }, [aspectRatio]);
+    setLiveAspect(normalizeImageAspectRatioForModel(modelId, aspectRatio));
+  }, [aspectRatio, modelId]);
 
   const handleImageUpdated = useCallback(
     (newUrl: string, newAspect: ImageAspectRatio, newPrompt: string) => {
@@ -804,18 +852,32 @@ export function ImageGenerationCard({
         role="status"
         aria-label="Image generation stopped"
       >
-        <span className="text-sm text-muted-foreground">
-          Image generation stopped before a result was received.
-        </span>
+        <div>
+          <span className="text-sm text-muted-foreground">
+            Image generation stopped before a result was received.
+          </span>
+          {retryAspectRatio !== aspectRatio && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              The saved {aspectRatio} ratio is unavailable for this model. Retry will use Auto.
+            </p>
+          )}
+        </div>
         {onRegenerate && prompt ? (
           <button
             type="button"
-            className="shrink-0 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
+            className="shrink-0 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={retryBlocked}
+            aria-live="polite"
             onClick={() => {
-              void onRegenerate({ prompt, aspectRatio, modelId }).catch(() => undefined);
+              if (retryBlocked) return;
+              void onRegenerate({
+                prompt,
+                aspectRatio: retryAspectRatio,
+                modelId,
+              }).catch(() => undefined);
             }}
           >
-            Try again
+            {retryLabel ?? 'Try again'}
           </button>
         ) : null}
       </div>
@@ -840,6 +902,8 @@ export function ImageGenerationCard({
           prompt={livePrompt}
           aspectRatio={liveAspect}
           modelId={modelId}
+          retryBlocked={retryBlocked}
+          retryLabel={retryLabel}
           onClose={() => setShowEdit(false)}
           onShare={() => {
             setShowEdit(false);

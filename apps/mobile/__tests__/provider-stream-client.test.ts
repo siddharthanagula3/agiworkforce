@@ -26,7 +26,7 @@ async function collectStream(params: Partial<Parameters<typeof streamFromProvide
     providerId: 'qwen',
     authToken: 'cloud-token',
     request: {
-      model: 'qwen-max',
+      model: 'fixture-provider-model',
       messages: [{ role: 'user', content: 'hello' }],
     },
     ...params,
@@ -48,7 +48,10 @@ describe('provider stream client', () => {
       body: makeBody('data: [DONE]\n\n'),
     } as Response);
 
-    await collectStream({ providerId: 'moonshot', request: { model: 'kimi-k3', messages: [] } });
+    await collectStream({
+      providerId: 'moonshot',
+      request: { model: 'fixture-provider-model', messages: [] },
+    });
 
     expect(secureFetchMock).toHaveBeenCalledWith(
       'https://api.agi.test/api/v1/providers/moonshot/stream',
@@ -59,7 +62,7 @@ describe('provider stream client', () => {
           'content-type': 'application/json',
           'x-requested-with': 'agiworkforce-mobile',
         }),
-        body: JSON.stringify({ model: 'kimi-k3', messages: [] }),
+        body: JSON.stringify({ model: 'fixture-provider-model', messages: [] }),
         signal: expect.any(AbortSignal),
       }),
       // Streaming requests opt into expo/fetch so `res.body` is a real

@@ -7,6 +7,13 @@ import {
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
+export const PREFERENCE_NAMESPACE_SAVED_EVENT = 'agi:preference-namespace-saved';
+
+export interface PreferenceNamespaceSavedDetail {
+  namespace: string;
+  value: unknown;
+}
+
 /**
  * Read a namespace and return EXACTLY what the server stored — no merge with a
  * client-side fallback.
@@ -105,5 +112,16 @@ export async function savePreferenceNamespace<T extends object>(
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(data.error?.message ?? 'Failed to save settings');
+  }
+
+  // Keep active consumers in the current tab aligned with the value that was
+  // just durably accepted. This fires only after a successful response, so a
+  // failed save cannot make runtime behavior diverge from the server value.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<PreferenceNamespaceSavedDetail>(PREFERENCE_NAMESPACE_SAVED_EVENT, {
+        detail: { namespace, value },
+      }),
+    );
   }
 }

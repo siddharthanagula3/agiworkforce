@@ -31,6 +31,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -70,11 +71,18 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   const { messages } = parsed.data;
 
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   // Verify conversation ownership
   const [conv] = await db.query<{ id: string }>(
-    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
-    [conversationId, userId],
+    `select id
+       from web_conversations
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
+      limit 1`,
+    [conversationId, userId, organizationId],
   );
   if (!conv) throw createError.notFound('Conversation not found');
 

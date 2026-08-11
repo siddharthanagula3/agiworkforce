@@ -8,6 +8,7 @@
         "displayName": "GPT-5.6 Sol",
         "provider": "openai",
         "providerModelId": "gpt-5.6-sol",
+        "openRouterSlug": "openai/gpt-5.6-sol",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary"
@@ -27,6 +28,7 @@
         "displayName": "GPT-5.6 Terra",
         "provider": "openai",
         "providerModelId": "gpt-5.6-terra",
+        "openRouterSlug": "openai/gpt-5.6-terra",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary"
@@ -46,6 +48,7 @@
         "displayName": "GPT-5.6 Luna",
         "provider": "openai",
         "providerModelId": "gpt-5.6-luna",
+        "openRouterSlug": "openai/gpt-5.6-luna",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary"
@@ -59,31 +62,13 @@
       },
       "evidenceRefs": []
     },
-    "gpt-5.4-mini": {
-      "identity": {
-        "key": "gpt-5.4-mini",
-        "displayName": "GPT-5.4 Mini",
-        "provider": "openai",
-        "providerModelId": "gpt-5.4-mini",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "March 17, 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "claude-fable-5": {
       "identity": {
         "key": "claude-fable-5",
         "displayName": "Claude Fable 5",
         "provider": "anthropic",
         "providerModelId": "claude-fable-5",
+        "openRouterSlug": "anthropic/claude-fable-5",
         "kind": "reasoning",
         "familyPartner": "claude-sonnet-5",
         "openWeight": false,
@@ -104,6 +89,7 @@
         "displayName": "Claude Opus 5",
         "provider": "anthropic",
         "providerModelId": "claude-opus-5",
+        "openRouterSlug": "anthropic/claude-opus-5",
         "kind": "reasoning",
         "familyPartner": "claude-sonnet-5",
         "openWeight": false,
@@ -124,6 +110,7 @@
         "displayName": "Claude Sonnet 5",
         "provider": "anthropic",
         "providerModelId": "claude-sonnet-5",
+        "openRouterSlug": "anthropic/claude-sonnet-5",
         "kind": "code",
         "familyPartner": "claude-opus-5",
         "openWeight": false,
@@ -163,6 +150,7 @@
         "displayName": "Gemini 3.1 Pro",
         "provider": "google",
         "providerModelId": "gemini-3.1-pro-preview",
+        "openRouterSlug": "google/gemini-3.1-pro-preview",
         "kind": "reasoning",
         "familyPartner": "gemini-3.5-flash-lite",
         "openWeight": false,
@@ -183,6 +171,7 @@
         "displayName": "Gemini 3.5 Flash-Lite",
         "provider": "google",
         "providerModelId": "gemini-3.5-flash-lite",
+        "openRouterSlug": "google/gemini-3.5-flash-lite",
         "kind": "multimodal",
         "familyPartner": "gemini-3.1-pro-preview",
         "openWeight": false,
@@ -222,6 +211,7 @@
         "displayName": "DeepSeek V4 Flash",
         "provider": "deepseek",
         "providerModelId": "deepseek-v4-flash",
+        "openRouterSlug": "deepseek/deepseek-v4-flash",
         "kind": "code",
         "familyPartner": "deepseek-v4-pro",
         "openWeight": true,
@@ -242,6 +232,7 @@
         "displayName": "DeepSeek V4 Pro",
         "provider": "deepseek",
         "providerModelId": "deepseek-v4-pro",
+        "openRouterSlug": "deepseek/deepseek-v4-pro",
         "kind": "reasoning",
         "familyPartner": "deepseek-v4-flash",
         "openWeight": true,
@@ -262,6 +253,7 @@
         "displayName": "Qwen 3.5 Flash",
         "provider": "qwen",
         "providerModelId": "qwen3.5-flash",
+        "openRouterSlug": "qwen/qwen3.5-flash-02-23",
         "kind": "multimodal"
       },
       "lifecycle": {
@@ -279,6 +271,7 @@
         "displayName": "Sonar",
         "provider": "perplexity",
         "providerModelId": "sonar",
+        "openRouterSlug": "perplexity/sonar",
         "kind": "search",
         "openWeight": false,
         "license": "proprietary"
@@ -298,6 +291,7 @@
         "displayName": "Sonar Reasoning Pro",
         "provider": "perplexity",
         "providerModelId": "sonar-reasoning-pro",
+        "openRouterSlug": "perplexity/sonar-reasoning-pro",
         "kind": "search",
         "openWeight": false,
         "license": "proprietary"
@@ -317,6 +311,7 @@
         "displayName": "Sonar Pro",
         "provider": "perplexity",
         "providerModelId": "sonar-pro",
+        "openRouterSlug": "perplexity/sonar-pro",
         "kind": "search",
         "openWeight": false,
         "license": "proprietary"
@@ -336,6 +331,7 @@
         "displayName": "Sonar Deep Research",
         "provider": "perplexity",
         "providerModelId": "sonar-deep-research",
+        "openRouterSlug": "perplexity/sonar-deep-research",
         "kind": "search",
         "openWeight": false,
         "license": "proprietary"
@@ -352,32 +348,35 @@
     "runway-gen-4": {
       "identity": {
         "key": "runway-gen-4",
-        "displayName": "Runway Gen-4",
+        "displayName": "Runway Gen-4.5",
         "provider": "runway",
-        "providerModelId": "gen4_turbo",
+        "providerModelId": "gen4.5",
         "kind": "video"
       },
       "lifecycle": {
         "status": "active",
-        "availability": "live",
-        "released": "2025",
+        "availability": "unavailable",
+        "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
+        "released": "December 2025",
         "deprecationDate": null,
         "deprecated": false
       },
       "evidenceRefs": []
     },
-    "stable-image-core": {
+    "seedance-2.5": {
       "identity": {
-        "key": "stable-image-core",
-        "displayName": "Stable Image Core",
-        "provider": "managed_cloud",
-        "providerModelId": "stable-image-core",
-        "kind": "image"
+        "key": "seedance-2.5",
+        "displayName": "ByteDance: Seedance 2.5",
+        "provider": "open_router",
+        "providerModelId": "bytedance/seedance-2.5",
+        "kind": "video",
+        "openWeight": false,
+        "license": "proprietary"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "March 2024",
+        "released": "August 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -423,6 +422,7 @@
         "displayName": "Gemini 3.6 Flash",
         "provider": "google",
         "providerModelId": "gemini-3.6-flash",
+        "openRouterSlug": "google/gemini-3.6-flash",
         "kind": "multimodal",
         "familyPartner": "gemini-3.1-pro-preview",
         "openWeight": false,
@@ -443,6 +443,7 @@
         "displayName": "GLM-5.2",
         "provider": "zhipu",
         "providerModelId": "glm-5.2",
+        "openRouterSlug": "z-ai/glm-5.2",
         "kind": "reasoning",
         "openWeight": true,
         "license": "MIT"
@@ -462,6 +463,7 @@
         "displayName": "Qwen 3.7 Plus",
         "provider": "qwen",
         "providerModelId": "qwen3.7-plus",
+        "openRouterSlug": "qwen/qwen3.7-plus",
         "kind": "multimodal"
       },
       "lifecycle": {
@@ -479,6 +481,7 @@
         "displayName": "Kimi K3",
         "provider": "moonshot",
         "providerModelId": "kimi-k3",
+        "openRouterSlug": "moonshotai/kimi-k3",
         "kind": "multimodal",
         "openWeight": true
       },
@@ -497,6 +500,7 @@
         "displayName": "Grok 4.5",
         "provider": "xai",
         "providerModelId": "grok-4.5",
+        "openRouterSlug": "x-ai/grok-4.5",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary"
@@ -567,6 +571,7 @@
         "displayName": "MiniMax M3",
         "provider": "minimax",
         "providerModelId": "MiniMax-M3",
+        "openRouterSlug": "minimax/minimax-m3",
         "kind": "reasoning",
         "openWeight": true
       },
@@ -636,7 +641,6 @@
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
-      "gpt-5.4-mini",
       "gpt-image-2",
       "gpt-4o-mini-tts",
       "gpt-4o-transcribe",
@@ -658,7 +662,7 @@
     "qwen": ["qwen-3.5-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
-    "managed_cloud": ["stable-image-core"],
+    "open_router": ["seedance-2.5"],
     "zhipu": ["glm-5.2"],
     "moonshot": ["kimi-k3"],
     "xai": ["grok-4.5"],
@@ -687,15 +691,6 @@
       "modelKey": "gpt-5.6-luna",
       "provider": "openai",
       "providerModelId": "gpt-5.6-luna",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "openai/gpt-5.4-mini": {
-      "modelKey": "gpt-5.4-mini",
-      "provider": "openai",
-      "providerModelId": "gpt-5.4-mini",
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -830,17 +825,17 @@
     "runway/runway-gen-4": {
       "modelKey": "runway-gen-4",
       "provider": "runway",
-      "providerModelId": "gen4_turbo",
+      "providerModelId": "gen4.5",
       "harnessId": "runway/media",
       "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true
+      "availability": "unavailable",
+      "selectable": false
     },
-    "managed_cloud/stable-image-core": {
-      "modelKey": "stable-image-core",
-      "provider": "managed_cloud",
-      "providerModelId": "stable-image-core",
-      "harnessId": "managed-cloud/gateway",
+    "open_router/seedance-2.5": {
+      "modelKey": "seedance-2.5",
+      "provider": "open_router",
+      "providerModelId": "bytedance/seedance-2.5",
+      "harnessId": "open_router/media",
       "trustModes": ["managed_cloud"],
       "availability": "live",
       "selectable": true
@@ -1003,6 +998,11 @@
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" },
         "toolDiscovery": { "providerSupport": "native", "implementation": "unwired" },
+        "fileSearch": { "providerSupport": "native", "implementation": "unwired" },
+        "hostedShell": { "providerSupport": "native", "implementation": "unwired" },
+        "applyPatch": { "providerSupport": "native", "implementation": "unwired" },
+        "skills": { "providerSupport": "native", "implementation": "unwired" },
+        "computerUse": { "providerSupport": "native", "implementation": "unwired" },
         "mcp": { "providerSupport": "native", "implementation": "unwired" },
         "memory": { "providerSupport": "agi", "implementation": "unwired" },
         "codeExecution": { "providerSupport": "native", "implementation": "unwired" },
@@ -1130,6 +1130,13 @@
       "trustModes": ["byok"],
       "features": {}
     },
+    "open_router/media": {
+      "provider": "open_router",
+      "apiFamily": "media",
+      "adapter": "managed-media",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    },
     "nvidia-nim/chat-completions": {
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
@@ -1176,7 +1183,8 @@
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
-        "runway/media"
+        "runway/media",
+        "open_router/media"
       ]
     },
     "desktop/cloud-chat": {
@@ -1209,7 +1217,8 @@
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
-        "runway/media"
+        "runway/media",
+        "open_router/media"
       ]
     },
     "desktop/byok-chat": {
@@ -1275,7 +1284,8 @@
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
-        "runway/media"
+        "runway/media",
+        "open_router/media"
       ]
     },
     "mobile/local-chat": {
@@ -1464,20 +1474,6 @@
       "reasoning": true
     },
     "gpt-5.6-luna": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
-    "gpt-5.4-mini": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -1701,15 +1697,15 @@
       "functionCalling": false,
       "reasoning": false
     },
-    "stable-image-core": {
+    "seedance-2.5": {
       "textInput": true,
       "imageInput": false,
       "audioInput": false,
       "videoInput": false,
       "textOutput": false,
-      "imageOutput": true,
+      "imageOutput": false,
       "audioOutput": false,
-      "videoOutput": false,
+      "videoOutput": true,
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
@@ -1919,7 +1915,16 @@
       "inputPerMillion": 5,
       "outputPerMillion": 30,
       "cacheReadPerMillion": 0.5,
-      "cacheWritePerMillion": 6.25
+      "cacheWritePerMillion": 6.25,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 10,
+          "outputPerMillion": 45,
+          "cacheReadPerMillion": 1,
+          "cacheWritePerMillion": 12.5
+        }
+      ]
     },
     "gpt-5.6-terra": {
       "currency": "USD",
@@ -1927,7 +1932,16 @@
       "inputPerMillion": 2,
       "outputPerMillion": 12,
       "cacheReadPerMillion": 0.2,
-      "cacheWritePerMillion": 2.5
+      "cacheWritePerMillion": 2.5,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 4,
+          "outputPerMillion": 18,
+          "cacheReadPerMillion": 0.4,
+          "cacheWritePerMillion": 5
+        }
+      ]
     },
     "gpt-5.6-luna": {
       "currency": "USD",
@@ -1935,14 +1949,16 @@
       "inputPerMillion": 0.2,
       "outputPerMillion": 1.2,
       "cacheReadPerMillion": 0.02,
-      "cacheWritePerMillion": 0.25
-    },
-    "gpt-5.4-mini": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.75,
-      "outputPerMillion": 4.5,
-      "cacheReadPerMillion": 0.075
+      "cacheWritePerMillion": 0.25,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 0.4,
+          "outputPerMillion": 1.8,
+          "cacheReadPerMillion": 0.04,
+          "cacheWritePerMillion": 0.5
+        }
+      ]
     },
     "claude-fable-5": {
       "currency": "USD",
@@ -2018,7 +2034,23 @@
       "inputPerMillion": 0.029,
       "outputPerMillion": 0.287,
       "cacheReadPerMillion": 0.0058,
-      "cacheWritePerMillion": 0.03625
+      "cacheWritePerMillion": 0.03625,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 128000,
+          "inputPerMillion": 0.115,
+          "outputPerMillion": 1.147,
+          "cacheReadPerMillion": 0.023,
+          "cacheWritePerMillion": 0.14375
+        },
+        {
+          "thresholdTokens": 256000,
+          "inputPerMillion": 0.172,
+          "outputPerMillion": 1.72,
+          "cacheReadPerMillion": 0.0344,
+          "cacheWritePerMillion": 0.215
+        }
+      ]
     },
     "sonar": {
       "currency": "USD",
@@ -2049,15 +2081,21 @@
       "unit": "per_second",
       "inputPerMillion": 0,
       "outputPerMillion": 0,
-      "videoPerSecond": 0.05,
-      "videoPerSecondByResolution": { "720p": 0.05 }
+      "videoPerSecond": 0.12,
+      "videoPerSecondByResolution": { "720p": 0.12 }
     },
-    "stable-image-core": {
+    "seedance-2.5": {
       "currency": "USD",
-      "unit": "per_image",
+      "unit": "video_tokens",
       "inputPerMillion": 0,
-      "outputPerMillion": 30,
-      "imagePerImage": 0.03
+      "outputPerMillion": 0,
+      "videoTokenFormula": {
+        "unit": "video_tokens",
+        "framesPerSecond": 24,
+        "pixelsPerToken": 1024,
+        "usdPerToken": 0.0000107,
+        "usdPerTokenWithoutAudio": 0.0000107
+      }
     },
     "gpt-image-2": {
       "currency": "USD",
@@ -2089,10 +2127,19 @@
     "qwen-3.7-plus": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.4,
-      "outputPerMillion": 1.6,
-      "cacheReadPerMillion": 0.08,
-      "cacheWritePerMillion": 0.5
+      "inputPerMillion": 0.276,
+      "outputPerMillion": 1.101,
+      "cacheReadPerMillion": 0.0552,
+      "cacheWritePerMillion": 0.345,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 256000,
+          "inputPerMillion": 0.826,
+          "outputPerMillion": 3.301,
+          "cacheReadPerMillion": 0.1652,
+          "cacheWritePerMillion": 1.0325
+        }
+      ]
     },
     "kimi-k3": {
       "currency": "USD",
@@ -2158,27 +2205,18 @@
   "limits": {
     "gpt-5.6-sol": {
       "contextTokens": 1050000,
-      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16"
     },
     "gpt-5.6-terra": {
       "contextTokens": 1050000,
-      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16"
     },
     "gpt-5.6-luna": {
       "contextTokens": 1050000,
-      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16"
-    },
-    "gpt-5.4-mini": {
-      "contextTokens": 400000,
-      "maxInputTokens": 272000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2025-08-31"
     },
     "claude-fable-5": {
       "contextTokens": 1000000,
@@ -2209,8 +2247,31 @@
     "sonar-reasoning-pro": { "contextTokens": 128000 },
     "sonar-pro": { "contextTokens": 200000 },
     "sonar-deep-research": { "contextTokens": 128000 },
-    "runway-gen-4": { "contextTokens": 4000 },
-    "stable-image-core": { "contextTokens": 4000 },
+    "runway-gen-4": {},
+    "seedance-2.5": {
+      "videoGeneration": {
+        "durationSecs": [
+          4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+          28, 29, 30
+        ],
+        "outputSizes": [
+          { "resolution": "480p", "aspectRatio": "16:9", "width": 854, "height": 480 },
+          { "resolution": "480p", "aspectRatio": "4:3", "width": 752, "height": 560 },
+          { "resolution": "480p", "aspectRatio": "1:1", "width": 640, "height": 640 },
+          { "resolution": "480p", "aspectRatio": "3:4", "width": 560, "height": 752 },
+          { "resolution": "480p", "aspectRatio": "9:16", "width": 480, "height": 854 },
+          { "resolution": "480p", "aspectRatio": "21:9", "width": 992, "height": 432 },
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "4:3", "width": 1112, "height": 834 },
+          { "resolution": "720p", "aspectRatio": "1:1", "width": 960, "height": 960 },
+          { "resolution": "720p", "aspectRatio": "3:4", "width": 834, "height": 1112 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          { "resolution": "720p", "aspectRatio": "21:9", "width": 1470, "height": 630 }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      }
+    },
     "gpt-image-2": { "contextTokens": 4000 },
     "gpt-4o-mini-tts": { "contextTokens": 2000 },
     "gemini-3.6-flash": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
@@ -2230,7 +2291,6 @@
     "gpt-5.6-sol": {},
     "gpt-5.6-terra": {},
     "gpt-5.6-luna": {},
-    "gpt-5.4-mini": {},
     "claude-fable-5": {},
     "claude-opus-5": {},
     "claude-sonnet-5": {},
@@ -2252,7 +2312,7 @@
     "sonar-pro": { "mmlu": 88 },
     "sonar-deep-research": { "mmlu": 88 },
     "runway-gen-4": {},
-    "stable-image-core": {},
+    "seedance-2.5": {},
     "gpt-image-2": {},
     "gpt-4o-mini-tts": {},
     "gemini-3.6-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
@@ -2270,182 +2330,231 @@
   },
   "evidence": [
     {
-      "id": "verification/2026-08-05/1",
+      "id": "verification/2026-08-10/1",
+      "date": "2026-08-10",
+      "verifiedBy": "official-openrouter-video-model-api-and-video-generation-contract",
+      "status": "PASS",
+      "notes": "Added OpenRouter's current ByteDance Seedance 2.5 video route from the live official video-model catalog and current create, poll, authenticated-content, and signed-webhook documentation. The canonical record carries every supported 4-30 second duration, each exact resolution/aspect/pixel tuple, audio and seed support, and the provider-published video-token formula so reservation cost is derived from pixels rather than a misleading flat resolution rate. The managed adapter polls and downloads authenticated content into AGI private storage; provider URLs never become client output. Sources retrieved 2026-08-10: openrouter.ai/api/v1/videos/models, openrouter.ai/docs/guides/overview/multimodal/video-generation, and the OpenRouter video API reference."
+    },
+    {
+      "id": "verification/2026-08-10/2",
+      "date": "2026-08-10",
+      "verifiedBy": "official-alibaba-model-studio-pricing-cache-docs-and-canonical-endpoint-audit",
+      "status": "CORRECTION",
+      "notes": "Reverified current Qwen pricing against Alibaba Cloud Model Studio and tied catalog prices to the deployment scope the production adapter actually calls. The canonical Qwen adapter defaults to dashscope.aliyuncs.com, the Chinese-mainland deployment, not dashscope-intl.aliyuncs.com. In that scope qwen3.5-flash uses three input-length bands: $0.029/$0.287 through 128K input, $0.115/$1.147 above 128K through 256K, and $0.172/$1.72 above 256K through 1M. qwen3.7-plus uses $0.276/$1.101 through 256K and $0.826/$3.301 above 256K through 1M; the former International-scope $0.40/$1.60 and $1.20/$4.80 values did not match the production endpoint and were removed. Implicit cache reads cost 20% of the active input band and explicit cache creation costs 125%, so every band carries its matching cache rates. Limited-time discounts remain excluded. Sources retrieved 2026-08-10: alibabacloud.com/help/en/model-studio/model-pricing and alibabacloud.com/help/en/model-studio/context-cache. The pricing page identifies qwen3.5-flash as the current alias of the 2026-02-23 snapshot and qwen3.7-plus as the current alias of the 2026-05-26 snapshot."
+    },
+    {
+      "id": "verification/2026-08-10/3",
+      "date": "2026-08-10",
+      "verifiedBy": "official-openai-model-pages-and-founder-screenshot",
+      "status": "CORRECTION",
+      "notes": "Reverified the complete current OpenAI reasoning family against each official model page, the official GPT-5.6 model guidance, and the founder-provided official comparison screenshot. The published short-context rates were already correct: Sol $5 input / $0.50 cached input / $30 output, Terra $2 / $0.20 / $12, and Luna $0.20 / $0.02 / $1.20 per million tokens. All three publish a 1,050,000-token context window, 128,000 maximum output, and a 2026-02-16 knowledge cutoff. The cards do not publish a separate 922,000 maximum-input limit, so that previously derived field was removed rather than presented as an upstream fact. Requests above 272,000 input tokens are charged at 2x input and 1.5x output; the missing Terra and Luna long-context blocks are restored from those published multipliers, including the family's 1.25x cache-write rate. Image input supports low, high, original, and auto detail. Provider-hosted tools remain separate from AGI application capability flags: catalog search is true only because the Responses search harness is implemented, while computer use, code execution, and image generation stay false until their AGI execution paths are wired and verified. Sources retrieved 2026-08-10: developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, and developers.openai.com/api/docs/guides/latest-model."
+    },
+    {
+      "id": "verification/2026-08-10/4",
+      "date": "2026-08-10",
+      "verifiedBy": "founder-directive-remove-prior-stability-image-model",
+      "status": "POLICY",
+      "notes": "Founder directive: remove the prior Stability image model from the canonical registry and every generated or authored product surface. The generic provider adapter remains dormant so a future verified replacement can be introduced through this canonical catalog without adding model identifiers to application code."
+    },
+    {
+      "id": "verification/2026-08-10/5",
+      "date": "2026-08-10",
+      "verifiedBy": "founder-directive-remove-prior-generation-compact-openai-model",
+      "status": "POLICY",
+      "notes": "Founder directive: remove the prior-generation compact OpenAI reasoning model from the canonical registry, every subscription roster, Auto-routing, examples, tests, snapshots, and historical product copy. Free coding now uses the current Free tool-capable model selected by the canonical coding_fast slot. No compatibility alias is retained, so stale explicit selections fail closed instead of silently routing to a different model."
+    },
+    {
+      "id": "verification/2026-08-09/6",
+      "date": "2026-08-09",
+      "verifiedBy": "official-google-interactions-image-docs-and-live-contract-probe",
+      "status": "CORRECTION",
+      "notes": "Gemini 3.1 Flash Image generation now uses Google's current v1beta Interactions API. The current REST examples and a live AGI-owned request prove response_format.mime_type=image/jpeg; the endpoint rejects image/png for this model. The output MIME is model metadata so a future image-model replacement changes the canonical curation row rather than Web/Mobile/Desktop route code. Source retrieved 2026-08-09: ai.google.dev/gemini-api/docs/image-generation."
+    },
+    {
+      "id": "verification/2026-08-09/7",
+      "date": "2026-08-09",
+      "verifiedBy": "official-runway-text-to-video-model-pricing-output-docs",
+      "status": "CORRECTION",
+      "notes": "Corrected the stable internal runway-gen-4 catalog entry from the image-to-video-only gen4_turbo wire model to Runway's current text-to-video-capable gen4.5 model. Runway announced Gen-4.5 in December 2025; its POST /v1/text_to_video reference accepts gen4.5 but not gen4_turbo, constrains prompts to 1-1,000 UTF-16 code units, supports only 1280:720 landscape and 720:1280 portrait output, and accepts integer durations from 2-10 seconds. Runway prices gen4.5 at 12 credits per output second and sells credits for $0.01 each, so canonical cost is $0.12/second for the supported 720p orientations. The separate API changelog dates Gen-4.5 API availability to 2026-02-10; that API date is not the model release date. Removed the prior invented 4,000-token context because Runway documents a character limit, not a token context window. Documentation availability is not account provisioning: the entry remains availability=unavailable and Runway has no provider default until a live AGI-owned account probe returns 200. Runway also requires successful task output URLs to be downloaded and stored because they expire after 24-48 hours and must not be exposed directly. Sources retrieved 2026-08-09: docs.dev.runwayml.com/api, docs.dev.runwayml.com/assets/inputs, docs.dev.runwayml.com/guides/models, docs.dev.runwayml.com/guides/pricing, docs.dev.runwayml.com/api-details/api_changelog, and docs.dev.runwayml.com/assets/outputs."
+    },
+    {
+      "id": "verification/2026-08-05/8",
       "date": "2026-08-05",
       "verifiedBy": "founder-decision-22-sonnet-5-standard-pricing",
       "status": "POLICY",
-      "notes": "Founder reaffirmed 2026-08-05 (docs/decisions/CURRENT_DECISIONS.md Decision #22) that a provider introductory window is a PROVIDER-COST fact, never a product price. Claude Sonnet 5 is billed to users at the founder-selected standard $3/$15 per MTok with cache read $0.30, 5m write $3.75 and 1h write $6.00 on EVERY date, restoring the 2026-07-15 and 2026-07-18 founder pins. The intro pricingSchedule added earlier the same day (Anthropic's $2/$10 through 2026-08-31) is REMOVED from claude-sonnet-5: Anthropic's promotional rate lowers our cost of goods and does not change what the product charges. The dated pricingSchedule MECHANISM stays in the catalog, compiler, schema, and every consumer for future real product price changes; packages/ai/model-registry/tests/catalog-policy.test.mjs now fails if any Sonnet 5 schedule window prices below the standard top-level rates. Also removed in this pass: the stale longContext blocks on gpt-5.6-terra and gpt-5.6-luna, whose numbers were derived from the pre-2026-07-30 base prices — removed stale derived long-context prices pending verified numbers (no consumer reads longContext; only the optional ModelMetadata field declaration in packages/contracts/types/src/model-catalog.ts references it). gpt-5.6-sol keeps its longContext block: its base price did not change in the cut. No upstream model fact was re-probed in this entry."
+      "notes": "Founder reaffirmed 2026-08-05 (docs/decisions/CURRENT_DECISIONS.md Decision #22) that a provider introductory window is a PROVIDER-COST fact, never a product price. Claude Sonnet 5 is billed to users at the founder-selected standard $3/$15 per MTok with cache read $0.30, 5m write $3.75 and 1h write $6.00 on EVERY date, restoring the 2026-07-15 and 2026-07-18 founder pins. The intro pricingSchedule added earlier the same day (Anthropic's $2/$10 through 2026-08-31) is REMOVED from claude-sonnet-5: Anthropic's promotional rate lowers our cost of goods and does not change what the product charges. The dated pricingSchedule MECHANISM stays in the catalog, compiler, schema, and every consumer for future real product price changes; packages/ai/model-registry/tests/catalog-policy.test.mjs now fails if any Sonnet 5 schedule window prices below the standard top-level rates. SUPERSEDED 2026-08-10: this historical pass temporarily removed two unverified long-context blocks; the top 2026-08-10 verification entry records the subsequently reverified current tiers and their production consumers. No upstream model fact was re-probed in this entry."
     },
     {
-      "id": "verification/2026-08-05/2",
+      "id": "verification/2026-08-05/9",
       "date": "2026-08-05",
       "verifiedBy": "official-anthropic-and-openai-pricing-pages",
       "status": "CORRECTION",
-      "notes": "Pricing verified 2026-08-05 against the official Anthropic and OpenAI pricing pages. (1) SUPERSEDED the same day by Decision #22 (entry above): Anthropic publishes introductory Sonnet 5 rates of $2/$10 per MTok with cache read $0.20, 5m write $2.50 and 1h write $4.00 through 2026-08-31, then $3/$15 with cache read $0.30, 5m write $3.75 and 1h write $6.00. That is a provider-cost fact and is recorded here only; it is NOT a product price and no longer appears as a claude-sonnet-5 pricingSchedule. Batch prices for the two provider windows are $1.00/$5.00 and $1.50/$7.50 per MTok, recorded here because the catalog has no batch-pricing field. (2) OpenAI's 2026-07-30 price cut is applied: gpt-5.6-terra $2/$12 with cached input $0.20 and cache write $2.50, gpt-5.6-luna $0.20/$1.20 with cached input $0.02 and cache write $0.25; gpt-5.6-sol was already correct at $5/$30 with cached input $0.50 and cache write $6.25. (3) OpenAI charges prompt-cache WRITES at 1.25x the uncached input rate starting with the GPT-5.6 family, so gpt-5.4-mini's speculative cached_write was removed — pre-5.6 models publish no write price and their writes stay free. (4) openWeight/license metadata added only where verified or secondary-sourced; hosted Qwen variants and every other unverified model are left absent, which means unknown."
+      "notes": "Pricing verified 2026-08-05 against the official Anthropic and OpenAI pricing pages. (1) SUPERSEDED the same day by Decision #22 (entry above): Anthropic publishes introductory Sonnet 5 rates of $2/$10 per MTok with cache read $0.20, 5m write $2.50 and 1h write $4.00 through 2026-08-31, then $3/$15 with cache read $0.30, 5m write $3.75 and 1h write $6.00. That is a provider-cost fact and is recorded here only; it is NOT a product price and no longer appears as a claude-sonnet-5 pricingSchedule. Batch prices for the two provider windows are $1.00/$5.00 and $1.50/$7.50 per MTok, recorded here because the catalog has no batch-pricing field. (2) OpenAI's 2026-07-30 price cut is applied: gpt-5.6-terra $2/$12 with cached input $0.20 and cache write $2.50, gpt-5.6-luna $0.20/$1.20 with cached input $0.02 and cache write $0.25; gpt-5.6-sol was already correct at $5/$30 with cached input $0.50 and cache write $6.25. (3) OpenAI charges prompt-cache WRITES at 1.25x the uncached input rate starting with the GPT-5.6 family; earlier compact models published no write price. (4) openWeight/license metadata added only where verified or secondary-sourced; hosted Qwen variants and every other unverified model are left absent, which means unknown."
     },
     {
-      "id": "verification/2026-08-04/3",
+      "id": "verification/2026-08-04/10",
       "date": "2026-08-04",
       "verifiedBy": "founder-decision-free-roster",
       "status": "POLICY",
-      "notes": "Founder decision 2026-08-04: gpt-5.6-luna moves to tierPolicy.minTier 'free' following its permanent price reduction. The Free managed-cloud roster is therefore exactly gemini-3.5-flash-lite, gpt-5.4-mini, and gpt-5.6-luna. FREE_TRIAL_MODELS (apps/web/lib/free-trial-config.ts) derives from this field intersected with the economy roster, so no hand-maintained Free model list exists on any surface. This is a product/pricing policy change, not a model-capability verification: no upstream model fact was re-probed and no cost/limit data changed. Paired with a fix to canAccessModelForSubscriptionTier (packages/contracts/types/src/model-catalog.ts), which previously returned false for every model on Free and forced services/api-gateway to carry a divergent free-roster special case that admitted Free to the entire economy roster."
+      "notes": "Founder decision 2026-08-04: gpt-5.6-luna moves to tierPolicy.minTier 'free' following its permanent price reduction. FREE_TRIAL_MODELS (apps/web/lib/free-trial-config.ts) derives from this field intersected with the economy roster, so no hand-maintained Free model list exists on any surface. This is a product/pricing policy change, not a model-capability verification: no upstream model fact was re-probed and no cost/limit data changed. Paired with a fix to canAccessModelForSubscriptionTier (packages/contracts/types/src/model-catalog.ts), which previously returned false for every model on Free and forced services/api-gateway to carry a divergent free-roster special case that admitted Free to the entire economy roster."
     },
     {
-      "id": "verification/2026-07-25/4",
+      "id": "verification/2026-07-25/11",
       "date": "2026-07-25",
       "verifiedBy": "official-anthropic-opus-5-docs",
       "status": "CORRECTION",
       "notes": "Replaced the prior Opus generation with Claude Opus 5 under AGI's latest-family-only policy. Official Anthropic documentation confirms the claude-opus-5 API ID, 1M context, 128K synchronous output, May 2026 knowledge cutoff, $5/M input and $25/M output pricing, adaptive thinking by default, low/medium/high/xhigh/max effort, disabled-thinking limited to low/medium/high effort, sampling-parameter restrictions, 512-token prompt-cache minimum, native web-fetch unavailability, and current computer-use tool contract. Sources retrieved 2026-07-25 from platform.claude.com model overview, model comparison, extended thinking, effort, prompt caching, web fetch, and computer use documentation."
     },
     {
-      "id": "verification/2026-07-22/5",
+      "id": "verification/2026-07-22/12",
       "date": "2026-07-22",
       "verifiedBy": "founder-directive-and-official-google-model-thinking-pricing-docs",
       "status": "CORRECTION",
       "notes": "Replaced the previous Flash-Lite chat model with the GA Gemini 3.5 Flash-Lite across the catalog, routing slots, and product surfaces. Official Google documentation confirms the exact gemini-3.5-flash-lite API ID, 1,048,576-token input and 65,536-token output limits, $0.30/M standard input, $2.50/M output, $0.03/M cache-read pricing, multimodal/PDF input, function calling, code execution, search grounding, URL context, caching, and minimal/low/medium/high thinking levels with minimal as default. The same pricing page corrects Gemini 3.6 Flash output pricing to $7.50/M and its current model page confirms the same 1,048,576/65,536 token limits. Sources retrieved 2026-07-22: ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite, /docs/models/gemini-3.6-flash, /docs/latest-model, /docs/thinking, and /docs/pricing."
     },
     {
-      "id": "verification/2026-07-22/6",
+      "id": "verification/2026-07-22/13",
       "date": "2026-07-22",
       "verifiedBy": "founder-tier-directive-and-official-openai-model-docs",
       "status": "CORRECTION",
-      "notes": "Founder override to the latest-family-only picker policy: restored GPT-5.4 Mini as the Free OpenAI tool-capable model and kept GPT-5.6 Luna at Basic+. Moved Gemini 3.6 Flash from Pro to Basic. GPT-5.4 Mini identity, 400K context, 128K max output, Aug 31 2025 cutoff, $0.75/$4.50 pricing with $0.075 cache reads, reasoning levels, and hosted/tool capabilities were reverified against developers.openai.com/api/docs/models/gpt-5.4-mini on 2026-07-22. Free Auto coding/agentic tasks now use GPT-5.4 Mini; ordinary Free chat uses Gemini 3.5 Flash-Lite."
+      "notes": "Historical founder override restored a prior-generation compact OpenAI model for Free tool-capable tasks and moved Gemini 3.6 Flash from Pro to Basic. The later 2026-08-10 founder directive supersedes the compact-model portion of this decision; ordinary Free chat continues to use Gemini 3.5 Flash-Lite."
     },
     {
-      "id": "verification/2026-07-20/7",
+      "id": "verification/2026-07-20/14",
       "date": "2026-07-20",
       "verifiedBy": "live-provider-docs-sweep-2026-07-20",
       "status": "CORRECTION",
-      "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). RENAMED+UPDATED: grok-4.3 to grok-4.5 ($2/$6, 500k ctx, reasoning_effort low-medium-high default high, cannot disable); mistral-medium-3 to mistral-medium-3.5 (mistral-medium-3-5, $1.5/$7.5, 256k, multimodal - designated upstream replacement for Pixtral/Devstral/Magistral); mistral-small-3 to mistral-small-4 (wire id mistral-small-2603 was ALREADY current but catalog pricing/ctx were stale-wrong: now $0.15/$0.60, 256k); codestral-2 to codestral-2508 (catalog id was invented, wire id was already correct; $0.30/$0.90, 128k, July 2025 - still latest Codestral); veo-3 to veo-3.1 (wire id was already veo-3.1-generate-preview). REMOVED (dead or deprecated upstream): pixtral-large (retired 5/30/26), sonar-reasoning (gone from Perplexity lineup; -pro remains), imagen-4/-fast/-ultra (deprecated by Google; gemini-3.1-flash-image is the successor line), whisper-1 (replaced by gpt-4o-transcribe $2.50/$10 and gpt-4o-mini-transcribe $1.25/$5), and all four OpenRouter :free entries (verified gone via live models API; replaced with verified nvidia/nemotron-3-super-120b-a12b:free 1M ctx and google/gemma-4-26b-a4b-it:free 262k ctx). KEPT with note: tts-1/tts-1-hd (successor gpt-4o-mini-tts pricing row not yet verifiable - follow-up), groq llama entries (host serves no newer llama), NIM llama-3.3 (llama-4 on NIM available but unpriced - follow-up), the then-current Google Pro/Flash-Lite/Flash Image lines, and stable-image-core (lineup unchanged). Qwen3.8-Max previewed 2026-07-19 but has NO official API id/pricing - deliberately NOT added. ADDENDUM: kimi-k3 added to tierAllowedModels.pro_additions (was registered but absent from every tier bucket = unselectable despite minTier pro — caught by sweep-web-packages). Auto-routing slots deliberately unchanged: no slot routed to kimi at HEAD either; giving kimi an auto slot is a product decision, picker-selectable + BYOK is the shipped state."
+      "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). Provider model replacements, removals, corrected pricing, and corrected capability metadata from that sweep remain recorded in the generated changelog for the dated registry revision. A later founder directive removed the prior Stability image record, so this historical note no longer repeats retired model identifiers."
     },
     {
-      "id": "verification/2026-07-20/8",
+      "id": "verification/2026-07-20/15",
       "date": "2026-07-20",
       "verifiedBy": "founder-directive-latest-family-versions-only",
       "status": "CORRECTION",
-      "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed gpt-5.4-mini, gpt-5.4-nano, gpt-4.1-nano (older GPT generations; the gpt-5.6 sol/terra/luna family covers flagship/chat/fast slots and provider taskRouting already targets it). tierAllowedModels economy list dropped gpt-5.4-nano (gpt-5.6-luna remains the economy OpenAI slot). Families needing LIVE lineup verification before further action (older entries retained pending verified replacements, tracked follow-up): the then-current Google Pro/Flash-Lite/Flash Image lines vs newer generations; mistral-large-3/medium-3/small-3/pixtral-large vs current Mistral lineup; groq + nvidia_nim + open_router Llama 3.x vintages vs Llama 4 availability; tts-1/tts-1-hd (2023) and whisper-1 (2022) vs current OpenAI audio models; managed_cloud stable-image-core (2024) vs current Stability lineup."
+      "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed older compact and nano GPT generations because the current sol/terra/luna family covers flagship/chat/fast slots. Every retained family still requires live lineup verification before replacement; a later founder directive removed the prior Stability image record instead of retaining an unverified legacy model."
     },
     {
-      "id": "verification/2026-07-20/9",
+      "id": "verification/2026-07-20/16",
       "date": "2026-07-20",
       "verifiedBy": "founder-directive-and-official-moonshot-platform-docs",
       "status": "CORRECTION",
-      "notes": "Founder directive: removed ALL legacy kimi models (kimi-k2.6 lingered in models.synced.json after 7a78ecbd0 removed it from curation, leaving moonshot with zero models) and the entire gpt-5.5 entry (gpt-5.6 sol/terra/luna family is the current OpenAI lineup; provider defaultModel/taskRouting already point at 5.6). Added kimi-k3, verified 2026-07-20 against platform.moonshot.ai (quickstart + pricing/chat-k3 + api/chat docs): id kimi-k3, context 1,048,576 tokens, $3.00/M input ($0.30 cache hit), $15.00/M output, tool calling + vision confirmed, thinking ALWAYS-ON (Preserved Thinking; reasoning_effort field exists but only value 'max' is accepted for k3, cannot disable). Released 2026-07-16 via API; open weights announced for 2026-07-27. Benchmarks omitted pending official verifiable numbers; codeExecution/search capabilities left false pending explicit platform-tool verification for k3."
+      "notes": "Founder directive: removed ALL legacy kimi models (kimi-k2.6 lingered in models.synced.json after 7a78ecbd0 removed it from curation, leaving moonshot with zero models) and the prior OpenAI text generation; the sol/terra/luna family is the current OpenAI lineup and provider routing already points at it. Added kimi-k3, verified 2026-07-20 against platform.moonshot.ai (quickstart + pricing/chat-k3 + api/chat docs): id kimi-k3, context 1,048,576 tokens, $3.00/M input ($0.30 cache hit), $15.00/M output, tool calling + vision confirmed, thinking ALWAYS-ON (Preserved Thinking; reasoning_effort field exists but only value 'max' is accepted for k3, cannot disable). Released 2026-07-16 via API; open weights announced for 2026-07-27. Benchmarks omitted pending official verifiable numbers; codeExecution/search capabilities left false pending explicit platform-tool verification for k3."
     },
     {
-      "id": "verification/2026-07-18/10",
+      "id": "verification/2026-07-18/17",
       "date": "2026-07-18",
       "verifiedBy": "founder-provider-policy-and-official-qwen-anthropic-docs",
       "status": "CORRECTION",
       "notes": "Removed founder-banned provider stubs and retired model records. Added the exact current qwen3.7-plus and qwen3.5-flash API IDs. Alibaba Cloud Model Studio official documentation confirms text+image+video input, text output, 1M context, 64K max output, function calling, structured output, thinking, and context caching for both models. Qwen pricing is deployment- and prompt-length-dependent; the catalog records published list-price tiers and does not use limited-time discounts. Claude Sonnet 5 uses its founder-selected standard $3/$15 per-million prices with $0.30 cache reads, $3.75 five-minute cache writes, and $6 one-hour cache writes rather than a temporary introductory price. Sources retrieved 2026-07-18: alibabacloud.com/help/en/model-studio/vision-model, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/context-cache, alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions, platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5, and platform.claude.com/docs/en/build-with-claude/prompt-caching."
     },
     {
-      "id": "verification/2026-07-17/11",
+      "id": "verification/2026-07-17/18",
       "date": "2026-07-17",
       "verifiedBy": "official-openai-responses-web-search-docs-and-regression-contract",
       "status": "PASS",
-      "notes": "Wired OpenAI Responses native web search end-to-end for current catalog models. The managed Web route no longer forces Chat Completions, injects the stable {type:web_search} tool, requests web_search_call.action.sources, translates search lifecycle/citation/source events into the canonical stream, and exposes additive source-card events to Web, Desktop, and Mobile. capabilities.search is now true for gpt-5.5, the GPT-5.6 family, GPT-5.4 Mini, and GPT-5.4 Nano because the application execution path is covered by focused provider, wire, registry, and route tests. Official sources retrieved 2026-07-17: developers.openai.com/api/docs/guides/tools-web-search and developers.openai.com/api/docs/guides/your-data."
+      "notes": "Wired OpenAI Responses native web search end-to-end for current catalog models. The managed Web route no longer forces Chat Completions, injects the stable {type:web_search} tool, requests web_search_call.action.sources, translates search lifecycle/citation/source events into the canonical stream, and exposes additive source-card events to Web, Desktop, and Mobile. Search capability is published only where the application execution path is covered by focused provider, wire, registry, and route tests. Official sources retrieved 2026-07-17: developers.openai.com/api/docs/guides/tools-web-search and developers.openai.com/api/docs/guides/your-data."
     },
     {
-      "id": "verification/2026-07-17/12",
+      "id": "verification/2026-07-17/19",
       "date": "2026-07-17",
       "verifiedBy": "founder-tier-policy-and-official-openai-nano-docs",
       "status": "CORRECTION",
-      "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes GPT-5.4 Nano and excludes GPT-5.4 Mini and Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. GPT-5.4 Nano identity, context, modalities, endpoints, and pricing were rechecked against the official OpenAI model page and OpenRouter catalog on 2026-07-17. This changes admission only; runtime profiles and harness status still fail closed independently."
+      "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes the then-current nano OpenAI model and excludes Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. This changes admission only; runtime profiles and harness status still fail closed independently."
     },
     {
-      "id": "verification/2026-07-15/13",
+      "id": "verification/2026-07-15/20",
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
       "status": "CORRECTION",
-      "notes": "Corrected the then-current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic probes covered Fable 5, the then-current Opus generation, Sonnet 5, and Haiku 4.5; the 2026-07-25 verification entry supersedes the Opus portion of this historical note. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
+      "notes": "Corrected the then-current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirmed exact IDs, 1,050,000 context, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. A previously recorded 922,000 maximum-input value was a derived context-minus-output budget rather than a standalone provider-published limit and was removed in the 2026-08-10 verification. Anthropic probes covered Fable 5, the then-current Opus generation, Sonnet 5, and Haiku 4.5; the 2026-07-25 verification entry supersedes the Opus portion of this historical note. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
     },
     {
-      "id": "verification/2026-07-15/14",
+      "id": "verification/2026-07-15/21",
       "date": "2026-07-15",
       "verifiedBy": "official-google-gemini-embedding-docs",
       "status": "CORRECTION",
       "notes": "Replaced the Desktop Google Batch app-owned gemini-embedding-001 default with the current gemini-embedding-2 model in the canonical registry. Official Google Gemini Embeddings documentation lists gemini-embedding-2 as the latest multimodal embedding model (April 2026), with text, image, video, audio, and PDF input, an 8,192-token input limit, flexible 128-3,072 dimensions, $0.20 per 1M standard text-input tokens, and $0.10 per 1M Batch text-input tokens. Embedding spaces are incompatible with gemini-embedding-001, so data migration/re-embedding remains an explicit application concern rather than an alias redirect. Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/embeddings and ai.google.dev/gemini-api/docs/pricing."
     },
     {
-      "id": "verification/2026-07-15/15",
+      "id": "verification/2026-07-15/22",
       "date": "2026-07-15",
       "verifiedBy": "official-google-runway-video-pricing-docs",
       "status": "CORRECTION",
       "notes": "Moved Web video reservations onto canonical per-second model pricing. Official Google Gemini API pricing lists Veo 3.1 Standard at $0.40/second for 720p and 1080p and $0.60/second for 4k; the Veo guide requires 8-second output for 1080p/4k. Official Runway pricing lists gen4_turbo at 5 credits/second with credits costing $0.01 ($0.05/second). Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/pricing, ai.google.dev/gemini-api/docs/veo, docs.dev.runwayml.com/guides/pricing, and docs.dev.runwayml.com/api-details/api_changelog."
     },
     {
-      "id": "verification/2026-07-14/16",
+      "id": "verification/2026-07-14/23",
       "date": "2026-07-14",
-      "verifiedBy": "official-openai-docs-gpt-5.4-nano",
+      "verifiedBy": "official-openai-compact-model-docs",
       "status": "CORRECTION",
-      "notes": "Replaced legacy gpt-5-nano with current gpt-5.4-nano. Official OpenAI model documentation confirms exact ID gpt-5.4-nano, model type reasoning, snapshot gpt-5.4-nano-2026-03-17, 400K context, 272K maximum input, 128K maximum output, text+image input, text output, Responses + Chat Completions + Batch support, and reasoning efforts none/low/medium/high/xhigh. Official pricing is $0.20 input, $0.02 cached input, and $1.25 output per 1M tokens. AGI selects the Responses path for this reasoning model. Provider-native web search and hosted tools remain false in the legacy global capability flags until each application route actually wires them; those features belong in the future route/harness registry rather than intrinsic model metadata."
+      "notes": "Historical compact-model correction verified the then-current OpenAI reasoning entry, limits, modalities, Responses support, effort controls, and published prices. The latest-family-only founder policy later removed that prior generation completely; active truth now comes only from current curated records."
     },
     {
-      "id": "verification/2026-07-11/17",
+      "id": "verification/2026-07-11/24",
       "date": "2026-07-11",
       "verifiedBy": "websearch-enable-2026-07-11",
       "status": "CORRECTION",
       "notes": "Founder directive: capabilities.search must be true only for models that genuinely produce web results through the application path, false wherever it would be a cosmetic no-op. The Web request path, provider translation, wire payload, and canonical source events were traced rather than trusting a provider allowlist. Anthropic and Google native search were confirmed end-to-end. Providers without an implemented search request shape were corrected to false and remain fail-closed until their real tool or request parameter is wired and covered by provider, route, and source-event tests."
     },
     {
-      "id": "verification/2026-06-03/18",
+      "id": "verification/2026-06-03/25",
       "date": "2026-06-03",
       "verifiedBy": "official-docs-model-repair",
       "status": "PASS",
       "notes": "Historical catalog repair verified provider identities and media routes from official documentation. Later audits supersede this roster: active selectable models come only from the current curated records and generated tier lists. AGI keeps unverified video IDs out of the selectable catalog and routes video generation only through verified current media records."
     },
     {
-      "id": "verification/2026-06-20/19",
+      "id": "verification/2026-06-20/26",
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
       "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
-      "id": "verification/2026-06-20/20",
+      "id": "verification/2026-06-20/27",
       "date": "2026-06-20",
       "verifiedBy": "research-agent-2026-06-20",
       "status": "PASS",
       "notes": "Re-verified the active GLM, Groq, Qwen, NVIDIA, xAI, DeepSeek, and Moonshot roster against official provider documentation. Deprecated or retired records were removed from the selectable catalog, and current API IDs, context limits, and multimodal capabilities now live only on active records. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, and Alibaba Cloud Model Studio."
     },
     {
-      "id": "verification/2026-06-23/21",
+      "id": "verification/2026-06-23/28",
       "date": "2026-06-23",
       "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
       "status": "PASS",
-      "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
+      "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com), and added them to tierAllowedModels.economy. Release dates came from public launch information; the Compare page shows knowledge cutoff rather than release date. Later latest-family-only policy superseded these roster entries."
     },
     {
-      "id": "verification/2026-07-09/22",
+      "id": "verification/2026-07-09/29",
       "date": "2026-07-09",
       "verifiedBy": "research-agent-2026-07-09",
       "status": "PASS",
-      "notes": "Added GPT-5.6 family (GA 2026-07-09), verified from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (platform.openai.com/docs/models now 301s to this host). Exact API IDs gpt-5.6-sol/-terra/-luna; bare alias gpt-5.6 routes to Sol per the sol page. All: 1,050,000 ctx, 128K max output, reasoning+vision+tools+streaming, knowledge cutoff 2026-02-16. Pricing per 1M: sol $5/$0.50/$30, terra $2.50/$0.25/$15, luna $1/$0.10/$6. No dated snapshot IDs published yet for 5.6 (do not invent). computerUse/codeExecution enumerated on the terra page (web search, file search, image generation, code interpreter, computer use, MCP); carried to sol/luna as family-level API tools pending per-page enumeration. gpt-5.5 NOT deprecated: still listed as Default frontier model with gpt-5.5 + gpt-5.5-2026-04-23 IDs; 5.6 launched alongside, not replacing. Benchmarks intentionally omitted for 5.6 (none published on the model pages)."
+      "notes": "Added the GPT-5.6 family at launch and verified its published identities, limits, modalities, and knowledge cutoff from the official model pages. The launch-era prices recorded during this pass were superseded by the current official rates in the top 2026-08-10 verification entry and are intentionally not repeated here. No dated snapshot identities were published. Provider-hosted tools observed in documentation remained separate from AGI application capabilities pending an implemented harness. Historical notes about the prior frontier generation were removed under the latest-family-only founder policy."
     },
     {
-      "id": "verification/2026-07-10/23",
+      "id": "verification/2026-07-10/30",
       "date": "2026-07-10",
       "verifiedBy": "live-api-verification-2026-07-10",
       "status": "CORRECTION",
-      "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 — LIVE curl to api.openai.com/v1/chat/completions with a real key returns HTTP 404 'model does not exist' for gpt-5.6-sol/-terra/-luna and bare gpt-5.6. The 2026-07-09 'verified from developers.openai.com' claim was a documentation hallucination, not provisioned models. Confirmed REAL and retained: gpt-5.5 (HTTP 200 with max_completion_tokens; the earlier 400 was the max_tokens-vs-max_completion_tokens param, not model absence), gpt-5.4/-mini/-nano/-pro, gpt-5-nano, gpt-4.1-nano. Latest real OpenAI flagship in this account = gpt-5.5. Lesson: verify model IDs against a live API call, not just doc pages."
+      "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 after live requests returned HTTP 404 for that account. The documentation-only claim did not prove account provisioning. Later live probes superseded this result and restored the current family. Lesson: verify model IDs against a live API call, not just documentation pages."
     },
     {
-      "id": "verification/2026-07-10/24",
+      "id": "verification/2026-07-10/31",
       "date": "2026-07-10",
       "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
       "status": "PASS",
-      "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave — the family is non-routable while coming_soon); kept OUT of tierAllowedModels/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). 5.6 pricing/limits from founder screenshot corpus (Addendum D): ctx 1,050,000, max output 128K, knowledge cutoff 2026-02-16; short-context per-1M sol 5/0.5/30 (cache write 6.25), terra 2.5/0.25/15 (3.125), luna 1/0.1/6 (1.25); INERT longContext price tier sol 10/1/45, terra 5/0.5/22.5, luna 2/0.2/9 (5.6-only additive sub-block, applied by the AT-GA metering wave). reasoningDots sol 5 / terra 4 / luna 3."
+      "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave — the family is non-routable while coming_soon); kept OUT of tierAllowedModels/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). The launch-era pricing figures in this historical note were superseded by the current official rates verified in the top 2026-08-10 entry; reasoningDots remains 5/4/3."
     },
     {
-      "id": "verification/2026-07-28/25",
+      "id": "verification/2026-07-28/32",
       "date": "2026-07-28",
       "verifiedBy": "voice-model-sweep-2026-07-28",
       "status": "PASS",
       "notes": "Voice/audio lineup swept live against developers.openai.com/api/docs/models and elevenlabs.io/docs/overview/models. REMOVED tts-1 + tts-1-hd (November 2023, superseded); the previous wave kept them because gpt-4o-mini-tts pricing was not then verifiable — it now is. ADDED gpt-4o-mini-tts ($0.60/1M input text, $12/1M output audio, 2k input cap, default snapshot gpt-4o-mini-tts-2025-12-15), which also removes a unit inconsistency: tts-1 was priced per 1M CHARACTERS in inputCost, a field every other model uses for dollars per 1M TOKENS. FIXED gpt-4o-transcribe and gpt-4o-mini-transcribe: both carried whisper-1 leftovers after that model was retired — released \"September 2022\" (whisper-1's date) and costOverride.inputCost 0.006 (whisper-1's $/minute), which published transcription at $0.006/1M tokens against real prices of $2.50/1M and $1.25/1M, understating by ~417x and ~208x. Now $2.50/$10 and $1.25/$5 with 16k context. Desktop TTS defaults fixed in the same pass: ElevenLabs eleven_monolingual_v1 was REMOVED upstream 2026-07-09 and was still the fallback for any user who never set a model, so unconfigured ElevenLabs playback was calling a nonexistent model — now eleven_flash_v2_5; OpenAI tts-1 -> gpt-4o-mini-tts. NOT DONE (follow-up): TTS has no routing slot, so apps/desktop/src-tauri/src/features/speech/tts.rs still hardcodes both defaults; a voice_tts slot would only cover OpenAI because the catalog carries no ElevenLabs provider. Also unaddressed: gpt-4o-transcribe-diarize (new upstream, not added), and managed-cloud transcription is rate-limited but never metered against the usage balance."
     },
     {
-      "id": "verification/2026-07-28/26",
+      "id": "verification/2026-07-28/33",
       "date": "2026-07-28",
       "verifiedBy": "voice-model-sweep-2026-07-28-followup",
       "status": "PASS",
@@ -2809,7 +2918,7 @@
           "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
         },
         "coding_fast": {
-          "modelKey": "gpt-5.4-mini",
+          "modelKey": "gemini-3.5-flash-lite",
           "label": "Coding Fast",
           "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
         },
@@ -2986,13 +3095,7 @@
       }
     },
     "legacyTiers": {
-      "economy": [
-        "gpt-5.4-mini",
-        "gpt-5.6-luna",
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
-        "qwen-3.5-flash"
-      ],
+      "economy": ["gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.6-flash", "qwen-3.5-flash"],
       "pro_additions": [
         "gpt-5.6-terra",
         "claude-sonnet-5",

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { requireProviderDefaultModel, type PricedModel } from '@agiworkforce/types';
+
+const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
 /**
  * The embeddings route, focused on the two things that are expensive to get
@@ -49,7 +52,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   };
 });
 
-const { POST } = await import('./route');
+const { POST, estimateEmbeddingCostCents } = await import('./route');
 
 const KEY = 'agi.embeddings.web.1234567890ab';
 
@@ -132,6 +135,25 @@ describe('POST /api/llm/v1/embeddings — success', () => {
   });
 });
 
+describe('embedding pricing contract', () => {
+  it('uses strict ordered catalog tiers and returns ledger cents', () => {
+    const model: PricedModel = {
+      inputCost: 1_000_000,
+      outputCost: 0,
+      inputTokenPricingTiers: [
+        { thresholdTokens: 10, inputCost: 2_000_000, outputCost: 0 },
+        { thresholdTokens: 20, inputCost: 3_000_000, outputCost: 0 },
+      ],
+    };
+    const pricedAt = new Date('2030-01-01T00:00:00Z');
+
+    expect(estimateEmbeddingCostCents(model, 10, pricedAt)).toBe(1_000);
+    expect(estimateEmbeddingCostCents(model, 11, pricedAt)).toBe(2_200);
+    expect(estimateEmbeddingCostCents(model, 20, pricedAt)).toBe(4_000);
+    expect(estimateEmbeddingCostCents(model, 21, pricedAt)).toBe(6_300);
+  });
+});
+
 describe('POST /api/llm/v1/embeddings — billing on failure', () => {
   it('releases the reservation when the provider fails', async () => {
     mocks.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
@@ -201,7 +223,7 @@ describe('POST /api/llm/v1/embeddings — provider result integrity', () => {
 
 describe('POST /api/llm/v1/embeddings — model selection', () => {
   it('rejects a chat model and names the valid ids', async () => {
-    const response = await POST(post({ input: 'hello', model: 'claude-sonnet-5' }));
+    const response = await POST(post({ input: 'hello', model: CHAT_MODEL }));
 
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error?: { message?: string } };

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   authUser: vi.fn(async () => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (): Promise<Response | null> => null),
+  resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -19,6 +20,9 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: () => mocks.authUser() }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: () => mocks.rateLimit() }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
@@ -40,6 +44,7 @@ describe('GET /api/projects/[id]/export', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   });
 
   it('returns a self-contained snapshot as a download', async () => {

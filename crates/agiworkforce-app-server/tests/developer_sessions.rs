@@ -99,7 +99,7 @@ impl DeveloperSessionHost for FakeHost {
     async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         Ok(LocalModelListResponse {
             models: vec![LocalModelSummary {
-                id: "gemma4:e4b".to_string(),
+                id: "fixture-local-model".to_string(),
                 provider: LocalModelProvider::Ollama,
             }],
         })

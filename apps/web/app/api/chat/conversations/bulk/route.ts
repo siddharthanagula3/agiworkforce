@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const BulkConversationActionSchema = z.object({
@@ -41,12 +42,15 @@ async function handleBulkConversationAction(request: NextRequest) {
 
   let affected: Array<{ id: string }>;
   try {
-    affected = await getNeonChatDb().query<{ id: string }>(
+    const db = getNeonChatDb();
+    const organizationId = await resolveActiveOrganizationId(db, userId);
+    affected = await db.query<{ id: string }>(
       isDelete
         ? `
             update web_conversations
                set deleted_at = now(), updated_at = now()
              where user_id = $1
+               and organization_id is not distinct from $2
                and deleted_at is null
                ${archivedOnly ? 'and archived = true' : ''}
              returning id
@@ -55,11 +59,12 @@ async function handleBulkConversationAction(request: NextRequest) {
             update web_conversations
                set archived = true, updated_at = now()
              where user_id = $1
+               and organization_id is not distinct from $2
                and deleted_at is null
                and archived = false
              returning id
           `,
-      [userId],
+      [userId, organizationId],
     );
   } catch (error) {
     logger.error({ error, userId, action }, 'Failed to apply bulk conversation action');

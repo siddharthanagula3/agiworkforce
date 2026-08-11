@@ -45,10 +45,9 @@ pub use agiworkforce_agent_core::memory::MemoryCategory;
 // CONSTANTS
 // =============================================================================
 
-/// Reference dimension for the OpenAI text-embedding-3-small model.
-/// Embeddings are stored at their native dimensions (768 for Ollama,
-/// 1536 for OpenAI). The vector_search function skips comparisons
-/// between embeddings of different dimensions.
+/// Legacy default dimension used by records that predate per-vector metadata.
+/// New embeddings are stored at their observed native dimensions, and vector
+/// search skips comparisons between incompatible dimensions.
 pub const DEFAULT_EMBEDDING_DIM: usize = 1536;
 
 /// MEM-016 fix: Maximum embeddings to load for vector search

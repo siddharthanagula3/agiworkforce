@@ -13,7 +13,7 @@
 //!
 //! The executor supports model preferences through parameters:
 //! - `provider`: Override the default provider (anthropic, openai, google, etc.)
-//! - `model`: Specify a particular model (claude-sonnet-5, gpt-5.6-luna, etc.)
+//! - `model`: Specify a model ID resolved from the catalog.
 //! - `temperature`: Control response randomness (0.0 - 1.0, default 0.7)
 //! - `max_tokens`: Limit response length (default 2000)
 //! - `stream`: Enable streaming responses (default false)
@@ -25,7 +25,7 @@
 //!     "prompt": "Analyze this code for potential security issues...",
 //!     "temperature": 0.3,
 //!     "max_tokens": 4000,
-//!     "model": "claude-sonnet-5"
+//!     "model": "fixture-catalog-model"
 //! }
 //! ```
 
@@ -63,13 +63,19 @@ impl LlmExecutor {
     ///
     /// Supports common provider names in lowercase.
     fn parse_provider(provider_str: &str) -> Option<Provider> {
-        match provider_str.to_lowercase().as_str() {
+        let normalized = provider_str.to_lowercase();
+        match normalized.as_str() {
             // All cloud providers route via ManagedCloud (no local API keys)
             "anthropic" | "claude" | "openai" | "gpt" | "google" | "gemini" | "deepseek"
             | "xai" | "grok" | "qwen" | "alibaba" | "moonshot" | "kimi" | "zhipu" | "glm"
-            | "perplexity" | "sonar" => Some(Provider::ManagedCloud),
+            | "perplexity" => Some(Provider::ManagedCloud),
             "ollama" | "local" => Some(Provider::Ollama),
             "managed" | "cloud" | "managed-cloud" => Some(Provider::ManagedCloud),
+            _ if crate::core::llm::models_config::get_provider_for_model(&normalized)
+                == Some(Provider::Perplexity) =>
+            {
+                Some(Provider::ManagedCloud)
+            }
             _ => None,
         }
     }
@@ -190,7 +196,14 @@ impl LlmExecutor {
         let (default_provider, default_model) = match (&provider_override, &model_override) {
             (Some(p), Some(m)) => (Some(*p), Some(m.clone())),
             (Some(p), None) => (Some(*p), Some(self.default_model_for_provider(*p))),
-            (None, Some(m)) => (Some(self.infer_provider_from_model(m)), Some(m.clone())),
+            (None, Some(m)) => {
+                let provider = self.infer_provider_from_model(m).ok_or_else(|| {
+                    anyhow!(
+                        "An uncataloged model override requires an explicit provider; model names are not provider declarations"
+                    )
+                })?;
+                (Some(provider), Some(m.clone()))
+            }
             (None, None) => (None, None),
         };
 
@@ -400,26 +413,16 @@ impl LlmExecutor {
         crate::core::llm::models_config::get_default_model(&provider).to_string()
     }
 
-    /// Infer provider from model name.
-    fn infer_provider_from_model(&self, model: &str) -> Provider {
-        let model_lower = model.to_lowercase();
-
-        // Local models - these run via Ollama
-        if model_lower.starts_with("llama")
-            || model_lower.starts_with("mistral")
-            || model_lower.starts_with("phi")
-        {
-            return Provider::Ollama;
-        }
-
-        // Anthropic models
-        if model_lower.contains("claude") || model_lower.contains("anthropic") {
-            return Provider::Anthropic;
-        }
-
-        // All other cloud models route through ManagedCloud
-        // This includes: gpt-*, gemini-*, grok-*, deepseek-*, qwen-*, kim-*, glm-*, sonar-*, etc.
-        Provider::ManagedCloud
+    /// Resolve only catalog-addressable model overrides. Local runtime models
+    /// are dynamic and therefore require the caller's explicit provider.
+    fn infer_provider_from_model(&self, model: &str) -> Option<Provider> {
+        crate::core::llm::models_config::get_provider_for_model(model).map(|provider| {
+            if provider == Provider::Anthropic {
+                Provider::Anthropic
+            } else {
+                Provider::ManagedCloud
+            }
+        })
     }
 }
 
@@ -569,50 +572,37 @@ mod tests {
         let router = create_test_router();
         let executor = LlmExecutor::new(router);
 
+        let anthropic_model =
+            crate::core::llm::models_config::get_default_model(&Provider::Anthropic);
         assert_eq!(
-            executor.infer_provider_from_model("claude-sonnet-5"),
-            Provider::Anthropic
+            executor.infer_provider_from_model(anthropic_model),
+            Some(Provider::Anthropic)
         );
         assert_eq!(
-            executor.infer_provider_from_model("gpt-5.6-luna"),
-            Provider::ManagedCloud
+            executor.infer_provider_from_model("fixture-openai-model"),
+            None
         );
+        for provider in [
+            Provider::Google,
+            Provider::DeepSeek,
+            Provider::XAI,
+            Provider::Qwen,
+            Provider::Moonshot,
+            Provider::Zhipu,
+            Provider::Perplexity,
+        ] {
+            let model = crate::core::llm::models_config::get_default_model(&provider);
+            assert_eq!(
+                executor.infer_provider_from_model(model),
+                Some(Provider::ManagedCloud),
+                "{provider:?} catalog models must route through Managed Cloud"
+            );
+        }
         assert_eq!(
-            executor.infer_provider_from_model("gemini-3.6-flash"),
-            Provider::ManagedCloud
+            executor.infer_provider_from_model("fixture-local-model:dynamic"),
+            None
         );
-        assert_eq!(
-            executor.infer_provider_from_model("deepseek-v4-flash"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("grok-4.5"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("qwen-3.7-plus"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("kimi-k3"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("glm-5.2"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("sonar-pro"),
-            Provider::ManagedCloud
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("llama4-maverick"),
-            Provider::Ollama
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("unknown-model"),
-            Provider::ManagedCloud
-        );
+        assert_eq!(executor.infer_provider_from_model("unknown-model"), None);
     }
 
     #[test]

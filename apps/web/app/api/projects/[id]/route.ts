@@ -24,6 +24,7 @@ import {
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -33,6 +34,7 @@ async function selectProjectWithConversationCount(
   db: ReturnType<typeof getNeonDb>,
   id: string,
   userId: string,
+  organizationId: string | null,
 ): Promise<Record<string, unknown> | undefined> {
   const [project] = await db.query<Record<string, unknown>>(
     `select p.*,
@@ -40,11 +42,15 @@ async function selectProjectWithConversationCount(
                from web_conversations c
               where c.project_id = p.id::text
                 and c.user_id = $2
+                and c.organization_id is not distinct from $3::uuid
                 and c.deleted_at is null) as conversation_count
        from user_projects p
-      where p.id = $1 and p.user_id = $2 and p.deleted_at is null
+      where p.id = $1
+        and p.user_id = $2
+        and p.organization_id is not distinct from $3::uuid
+        and p.deleted_at is null
       limit 1`,
-    [id, userId],
+    [id, userId, organizationId],
   );
   return project;
 }
@@ -68,6 +74,7 @@ async function selectSharedProjectWithConversationCount(
   id: string,
   userId: string,
   sharedProjectIds: string[],
+  organizationId: string,
 ): Promise<Record<string, unknown> | undefined> {
   if (sharedProjectIds.length === 0) return undefined;
   const [project] = await db.query<Record<string, unknown>>(
@@ -77,13 +84,15 @@ async function selectSharedProjectWithConversationCount(
                from web_conversations c
               where c.project_id = p.id::text
                 and c.user_id = $2
+                and c.organization_id is not distinct from $4::uuid
                 and c.deleted_at is null) as conversation_count
        from user_projects p
       where p.id = $1
         and p.id = any($3::uuid[])
+        and p.organization_id is not distinct from $4::uuid
         and p.deleted_at is null
       limit 1`,
-    [id, userId, sharedProjectIds],
+    [id, userId, sharedProjectIds, organizationId],
   );
   return project;
 }
@@ -95,17 +104,21 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  let data = await selectProjectWithConversationCount(db, id, userId);
+  let data = await selectProjectWithConversationCount(db, id, userId, organizationId);
 
-  if (!data) {
+  if (!data && organizationId) {
     const sharedScope = await resolveSharedProjectScope(db, userId);
-    data = await selectSharedProjectWithConversationCount(
-      db,
-      id,
-      userId,
-      sharedScope?.projectIds ?? [],
-    );
+    if (sharedScope?.organizationId === organizationId) {
+      data = await selectSharedProjectWithConversationCount(
+        db,
+        id,
+        userId,
+        sharedScope.projectIds,
+        organizationId,
+      );
+    }
   }
 
   if (!data) {
@@ -129,6 +142,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
 
   const db = getNeonDb();
   const { id } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let rawBody: unknown;
   try {
@@ -197,9 +211,10 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     // WHERE clause params come after SET params
     const idIdx = params.length + 1;
     const userIdx = params.length + 2;
+    const organizationIdx = params.length + 3;
     return {
-      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} and deleted_at is null returning *`,
-      params: [...params, id, userId],
+      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
+      params: [...params, id, userId, organizationId],
     };
   }
 
@@ -214,6 +229,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
       await executeUpdate(tx, includeRound10);
       await replaceProjectConversationMembership(tx, {
         userId,
+        organizationId,
         projectId: id,
         conversationIds: body.isArchived === true ? [] : (body.conversationIds ?? []),
       });
@@ -258,7 +274,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     throw error;
   }
 
-  const projectWithCount = await selectProjectWithConversationCount(db, id, userId);
+  const projectWithCount = await selectProjectWithConversationCount(db, id, userId, organizationId);
   if (!projectWithCount) throw createError.notFound('Project not found');
 
   return NextResponse.json({ project: mapProjectRow(projectWithCount) });
@@ -276,6 +292,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
 
   const db = getNeonDb();
   const { id } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let affected: number;
   try {
@@ -289,15 +306,21 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
       const deleted = await tx.execute(
         `update user_projects
            set deleted_at = now(), updated_at = now()
-         where id = $1 and user_id = $2 and deleted_at is null`,
-        [id, userId],
+         where id = $1
+           and user_id = $2
+           and organization_id is not distinct from $3::uuid
+           and deleted_at is null`,
+        [id, userId, organizationId],
       );
       if (deleted > 0) {
         await tx.execute(
           `update web_conversations
               set project_id = null, updated_at = now()
-            where project_id = $1 and user_id = $2 and deleted_at is null`,
-          [id, userId],
+            where project_id = $1
+              and user_id = $2
+              and organization_id is not distinct from $3::uuid
+              and deleted_at is null`,
+          [id, userId, organizationId],
         );
       }
       return deleted;

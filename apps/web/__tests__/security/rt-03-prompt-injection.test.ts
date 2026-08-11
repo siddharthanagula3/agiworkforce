@@ -18,6 +18,7 @@ vi.mock('server-only', () => ({}));
 
 vi.mock('@shared/utils/env', () => ({
   requireEnv: (_key: string) => '',
+  getOptionalEnv: (_key: string) => undefined,
 }));
 
 const { mockLogger } = vi.hoisted(() => ({
@@ -28,8 +29,8 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('@agiworkforce/types', () => ({
-  getTaskModelForProvider: () => 'claude-sonnet-5',
-  getProviderDefaultModel: () => 'claude-sonnet-5',
+  getTaskModelForProvider: () => 'fixture-model',
+  getProviderDefaultModel: () => 'fixture-model',
 }));
 
 // ─── Capture the LLM prompt that was sent ────────────────────────────────────

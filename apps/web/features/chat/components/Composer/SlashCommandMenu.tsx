@@ -78,10 +78,14 @@ interface SlashCommandMenuProps {
   onClose: () => void;
   skills: readonly SkillMeta[];
   onSkillSelect?: (skillName: string) => void;
+  imageCommandAvailable: boolean;
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
-  function SlashCommandMenu({ query, onSelect, onClose, onSkillSelect, skills }, ref) {
+  function SlashCommandMenu(
+    { query, onSelect, onClose, onSkillSelect, skills, imageCommandAvailable },
+    ref,
+  ) {
     const customCommands = useSettingsStore((state) => state.customCommands);
     const platform = usePlatform();
     const [activeIndex, setActiveIndex] = useState(0);
@@ -90,16 +94,18 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     const suggestions = useMemo<CommandSuggestion[]>(() => {
       const builtIns = filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
         isCapabilityEnabled(platform, capability),
-      ).map((command): CommandSuggestion => {
-        const Icon = SLASH_ICONS[command.iconName];
-        return {
-          id: command.id,
-          command: command.label,
-          description: command.description,
-          example: command.example,
-          icon: <Icon className="h-4 w-4 text-muted-foreground" />,
-        };
-      });
+      )
+        .filter((command) => command.id !== 'image' || imageCommandAvailable)
+        .map((command): CommandSuggestion => {
+          const Icon = SLASH_ICONS[command.iconName];
+          return {
+            id: command.id,
+            command: command.label,
+            description: command.description,
+            example: command.example,
+            icon: <Icon className="h-4 w-4 text-muted-foreground" />,
+          };
+        });
 
       const custom = customCommands.map(
         (command): CommandSuggestion => ({
@@ -131,7 +137,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           suggestion.command.slice(1).toLowerCase().startsWith(normalizedQuery)
         );
       });
-    }, [customCommands, platform, query, skills]);
+    }, [customCommands, imageCommandAvailable, platform, query, skills]);
 
     useEffect(() => {
       if (previousQueryRef.current === query) return;

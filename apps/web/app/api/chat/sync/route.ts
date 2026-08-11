@@ -26,6 +26,7 @@ import {
   ChatSyncPushResponseSchema,
   ServerVersionSchema,
   type ArtifactWireDelta,
+  type ConversationSyncPushItem,
   type ConversationWireDelta,
   type MessageWireDelta,
 } from '@agiworkforce/cloud-contracts';
@@ -44,6 +45,37 @@ const MAX_ARTIFACTS_PULL = 500;
 type ConversationDelta = ConversationWireDelta;
 type MessageDelta = MessageWireDelta;
 type ArtifactDelta = ArtifactWireDelta;
+
+async function assertProjectsBelongToActiveWorkspace(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  userId: string,
+  organizationId: string | null,
+  conversations: ConversationSyncPushItem[],
+): Promise<void> {
+  const projectIds = [
+    ...new Set(
+      conversations.flatMap((conversation) =>
+        typeof conversation.projectId === 'string' && conversation.projectId.length > 0
+          ? [conversation.projectId]
+          : [],
+      ),
+    ),
+  ];
+  if (projectIds.length === 0) return;
+
+  const owned = await db.query<{ id: string }>(
+    `select id::text as id
+       from public.user_projects
+      where user_id = $1
+        and organization_id is not distinct from $2::uuid
+        and id::text = any($3::text[])`,
+    [userId, organizationId, projectIds],
+  );
+  const ownedIds = new Set(owned.map((row) => row.id));
+  if (projectIds.some((projectId) => !ownedIds.has(projectId))) {
+    throw createError.validation('projectId is not owned in the active workspace');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Pull
@@ -148,7 +180,7 @@ type BatchRow<T> = {
 };
 
 async function handlePush(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -180,6 +212,11 @@ async function handlePush(request: NextRequest) {
     throw createError.validation('Invalid sync payload', parsed.error);
   }
   const { conversations = [], messages = [], artifacts = [] } = parsed.data;
+
+  // A conversation and its project are one workspace-scoped aggregate. RLS
+  // isolates the conversation row, but a foreign key alone cannot prove that a
+  // client-supplied project belongs to this owner in this exact active scope.
+  await assertProjectsBelongToActiveWorkspace(db, userId, organizationId, conversations);
 
   const applied = {
     conversations: [] as Array<{ id: string; server_version: string }>,
@@ -221,6 +258,16 @@ async function handlePush(request: NextRequest) {
                and existing.user_id = $1
                and existing.server_version = incoming.base_version
                and (existing.deleted_at is null or incoming.should_delete)
+               and (
+                 not incoming.has_project_id
+                 or incoming.project_id is null
+                 or exists (
+                   select 1 from public.user_projects as project
+                    where project.id::text = incoming.project_id
+                      and project.user_id = $1
+                      and project.organization_id is not distinct from $3::uuid
+                 )
+               )
             returning existing.id, existing.server_version
           ), inserted as (
             insert into web_conversations
@@ -230,6 +277,16 @@ async function handlePush(request: NextRequest) {
                    case when incoming.should_delete then now() else null end
               from input as incoming
              where incoming.base_version = 0
+               and (
+                 not incoming.has_project_id
+                 or incoming.project_id is null
+                 or exists (
+                   select 1 from public.user_projects as project
+                    where project.id::text = incoming.project_id
+                      and project.user_id = $1
+                      and project.organization_id is not distinct from $3::uuid
+                 )
+               )
             on conflict (id) do nothing
             returning id, server_version
           ), applied_rows as materialized (
@@ -254,7 +311,7 @@ async function handlePush(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(conversations)],
+        [userId, JSON.stringify(conversations), organizationId],
       );
       collectBatchRows(rows, applied.conversations, conflicts.conversations);
     }

@@ -50,10 +50,10 @@ impl SearchType {
     #[must_use]
     pub fn to_perplexity_model(self) -> PerplexityModel {
         match self {
-            Self::General | Self::News => PerplexityModel::Sonar,
-            Self::Code => PerplexityModel::SonarPro, // Pro for better code understanding
-            Self::Academic => PerplexityModel::SonarReasoning, // Reasoning for academic analysis
-            Self::Research => PerplexityModel::SonarDeepResearch, // Deep research for comprehensive analysis
+            Self::General | Self::News => PerplexityModel::Fast,
+            Self::Code => PerplexityModel::Thorough,
+            Self::Academic => PerplexityModel::Reasoning,
+            Self::Research => PerplexityModel::DeepResearch,
         }
     }
 
@@ -861,19 +861,19 @@ mod tests {
     fn test_search_type_to_model() {
         assert_eq!(
             SearchType::General.to_perplexity_model(),
-            PerplexityModel::Sonar
+            PerplexityModel::Fast
         );
         assert_eq!(
             SearchType::Code.to_perplexity_model(),
-            PerplexityModel::SonarPro
+            PerplexityModel::Thorough
         );
         assert_eq!(
             SearchType::Academic.to_perplexity_model(),
-            PerplexityModel::SonarReasoning
+            PerplexityModel::Reasoning
         );
         assert_eq!(
             SearchType::Research.to_perplexity_model(),
-            PerplexityModel::SonarDeepResearch
+            PerplexityModel::DeepResearch
         );
     }
 

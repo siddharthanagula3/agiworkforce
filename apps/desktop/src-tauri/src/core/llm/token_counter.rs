@@ -42,7 +42,7 @@ impl TokenCounter {
         Self
     }
 
-    /// Estimate tokens for a single string using cl100k_base (GPT-4/3.5 standard)
+    /// Estimate tokens for a single string using the cl100k_base tokenizer.
     pub fn estimate_text_tokens(text: &str) -> u32 {
         if text.is_empty() {
             return 0;
@@ -150,7 +150,7 @@ impl TokenCounter {
     pub fn estimate_prompt_tokens(messages: &[ChatMessage]) -> u32 {
         let mut total_tokens = 0;
 
-        // Per-message overhead (approximate for GPT-4)
+        // Approximate per-message ChatML overhead.
         // <|im_start|>role\ncontent<|im_end|>\n
         let tokens_per_message = 3;
 

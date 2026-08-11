@@ -124,8 +124,8 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// ```text
 /// Model             Provider   Cost
 /// ─────────────────────────────────
-/// claude-opus-5   anthropic  $5.00
-/// gpt-5.6-sol       openai     $5.00
+/// fixture-model-a   provider-a  $5.00
+/// fixture-model-b   provider-b  $2.00
 /// ```
 #[allow(dead_code)]
 pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
@@ -259,11 +259,73 @@ pub fn model_pricing(model: &str) -> (f64, f64) {
     model_catalog::pricing(model)
 }
 
+fn format_per_million_rate(rate: f64) -> String {
+    if rate >= 1.0 {
+        format!("{rate:.2}")
+    } else if rate >= 0.01 {
+        format!("{rate:.4}")
+    } else {
+        format!("{rate:.6}")
+    }
+}
+
+fn pricing_band(label: &str, pricing: model_catalog::TokenPricing) -> String {
+    format!(
+        "  {label}:\n    Input:       ${}/1M tokens\n    Output:      ${}/1M tokens\n    Cache read:  ${}/1M tokens\n    Cache write: ${}/1M tokens",
+        format_per_million_rate(pricing.input_price_per_1m),
+        format_per_million_rate(pricing.output_price_per_1m),
+        format_per_million_rate(pricing.cache_read_price_per_1m),
+        format_per_million_rate(pricing.cache_write_price_per_1m),
+    )
+}
+
+/// Complete catalog pricing report for `agi --cost` with no prompt.
+pub fn format_model_pricing_report(model: &str) -> String {
+    let Some(base) = model_catalog::token_pricing(model, 0) else {
+        return format!("Model '{model}' — no cost (local/unknown model)");
+    };
+    let tiers = model_catalog::input_token_pricing_tiers(model);
+    let has_paid_rate = [
+        base.input_price_per_1m,
+        base.output_price_per_1m,
+        base.cache_read_price_per_1m,
+        base.cache_write_price_per_1m,
+    ]
+    .into_iter()
+    .chain(tiers.iter().flat_map(|tier| {
+        [
+            tier.pricing.input_price_per_1m,
+            tier.pricing.output_price_per_1m,
+            tier.pricing.cache_read_price_per_1m,
+            tier.pricing.cache_write_price_per_1m,
+        ]
+    }))
+    .any(|rate| rate > 0.0);
+    if !has_paid_rate {
+        return format!("Model '{model}' — no cost (local/unknown model)");
+    }
+
+    let base_label = tiers.first().map_or_else(
+        || "Base".to_string(),
+        |tier| format!("Base (input tokens ≤ {})", tier.threshold_tokens),
+    );
+    let mut bands = vec![pricing_band(&base_label, base)];
+    for (index, tier) in tiers.iter().enumerate() {
+        let start = tier.threshold_tokens.saturating_add(1);
+        let label = tiers.get(index + 1).map_or_else(
+            || format!("Input tokens ≥ {start}"),
+            |next| format!("Input tokens {start}–{}", next.threshold_tokens),
+        );
+        bands.push(pricing_band(&label, tier.pricing));
+    }
+    format!("Model '{model}' pricing:\n{}", bands.join("\n"))
+}
+
 /// Format a cost summary string.
 pub fn format_cost(model: &str, input_tokens: u32, output_tokens: u32) -> String {
-    let (input_rate, output_rate) = model_pricing(model);
-    let input_cost = (input_tokens as f64 / 1_000_000.0) * input_rate;
-    let output_cost = (output_tokens as f64 / 1_000_000.0) * output_rate;
+    let rates = crate::cost_ledger::rates_for_input(model, input_tokens);
+    let input_cost = (input_tokens as f64 / 1_000_000.0) * rates.input_per_mtok;
+    let output_cost = (output_tokens as f64 / 1_000_000.0) * rates.output_per_mtok;
     let total = input_cost + output_cost;
 
     if total == 0.0 {
@@ -277,6 +339,36 @@ pub fn format_cost(model: &str, input_tokens: u32, output_tokens: u32) -> String
             input_tokens, output_tokens, total, input_cost, output_cost
         )
     }
+}
+
+/// Format tokens alongside a cost already resolved per provider request. Never
+/// recompute `recorded_usd` from the aggregate token fields: a tool loop may
+/// contain several requests on different models or pricing tiers.
+pub fn format_recorded_cost(
+    total_input_tokens: u32,
+    total_output_tokens: u32,
+    recorded_usd: f64,
+) -> String {
+    if recorded_usd == 0.0 {
+        format!(
+            "Tokens: {} in / {} out (no cost — local model)",
+            total_input_tokens, total_output_tokens
+        )
+    } else {
+        format!(
+            "Tokens: {} in / {} out | Cost: ${:.4}",
+            total_input_tokens, total_output_tokens, recorded_usd
+        )
+    }
+}
+
+/// Format cumulative session cost from the per-request ledger total.
+pub fn format_accumulated_cost(
+    total_input_tokens: u32,
+    total_output_tokens: u32,
+    total_usd: f64,
+) -> String {
+    format_recorded_cost(total_input_tokens, total_output_tokens, total_usd)
 }
 
 /// Format a cost summary for subscription-routed requests ($0.00).
@@ -293,6 +385,12 @@ pub fn print_cost(model: &str, input_tokens: u32, output_tokens: u32) {
     eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
+/// Print a turn cost already resolved per provider request by the ledger.
+pub fn print_recorded_cost(input_tokens: u32, output_tokens: u32, recorded_usd: f64) {
+    let summary = format_recorded_cost(input_tokens, output_tokens, recorded_usd);
+    eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
+}
+
 /// Print a cost summary line for a subscription-routed request.
 pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
     let summary = format_subscription_cost(input_tokens, output_tokens);
@@ -300,8 +398,8 @@ pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
 }
 
 /// Print a session total cost.
-pub fn print_session_cost(model: &str, total_input: u32, total_output: u32, turn_count: u32) {
-    let summary = format_cost(model, total_input, total_output);
+pub fn print_session_cost(total_input: u32, total_output: u32, turn_count: u32, total_usd: f64) {
+    let summary = format_accumulated_cost(total_input, total_output, total_usd);
     eprintln!(
         "\n{}\n  {} turns | {} in / {} out\n  {}",
         ts::accent_header("Session Summary"),
@@ -553,55 +651,38 @@ mod tests {
             .expect("env test lock")
     }
 
+    fn paid_catalog_model() -> &'static crate::model_catalog::Model {
+        crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0)
+            .expect("catalog must contain a paid model")
+    }
+
+    fn base_tier_input_tokens(model_id: &str) -> u32 {
+        crate::model_catalog::long_context_threshold(model_id)
+            .and_then(|threshold| u32::try_from(threshold).ok())
+            .unwrap_or(1_000_000)
+    }
+
     // -- model_pricing tests ------------------------------------------------
 
     #[test]
-    fn test_model_pricing_anthropic_opus() {
-        // canonical apiModelId for claude-opus-5 per models.json
-        let (i, o) = model_pricing("claude-opus-5");
-        assert_eq!(i, 5.0);
-        assert_eq!(o, 25.0);
-    }
-
-    #[test]
-    fn test_model_pricing_anthropic_sonnet() {
-        let (i, o) = model_pricing("claude-sonnet-5");
-        assert_eq!(i, 3.0);
-        assert_eq!(o, 15.0);
-    }
-
-    // The Haiku 4.5 pricing case was removed with the model on 2026-07-27; the
-    // Sonnet 5 case above already covers Anthropic pricing lookup.
-
-    #[test]
-    fn test_model_pricing_openai_flagship() {
-        // Current OpenAI flagship pricing comes from models.json.
-        let (i, o) = model_pricing("gpt-5.6-sol");
-        assert_eq!(i, 5.0);
-        assert_eq!(o, 30.0);
-    }
-
-    #[test]
-    fn test_model_pricing_openai_luna() {
-        // Post-2026-07-30 OpenAI price cut, verified 2026-08-05 against the
-        // official pricing page: $0.20/M input, $1.20/M output.
-        let (i, o) = model_pricing("gpt-5.6-luna");
-        assert_eq!(i, 0.2);
-        assert_eq!(o, 1.2);
-    }
-
-    #[test]
-    fn test_model_pricing_deepseek_v4_pro() {
-        // deepseek-v4-pro pricing per models.json: input $0.435/output $0.87 per 1M tokens.
-        // (DeepSeek made the 75% launch discount permanent on 2026-05-22.)
-        let (i, o) = model_pricing("deepseek-v4-pro");
-        assert_eq!(i, 0.435);
-        assert_eq!(o, 0.87);
+    fn test_model_pricing_matches_catalog() {
+        for model in crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .filter(|model| model.input_price_per_1m > 0.0)
+        {
+            let (input, output) = model_pricing(&model.id);
+            assert_eq!(input, model.input_price_per_1m);
+            assert_eq!(output, model.output_price_per_1m);
+        }
     }
 
     #[test]
     fn test_model_pricing_unknown_returns_zero() {
-        let (i, o) = model_pricing("llama3.1:8b");
+        let (i, o) = model_pricing("fixture-unknown-local-model");
         assert_eq!(i, 0.0);
         assert_eq!(o, 0.0);
     }
@@ -609,30 +690,69 @@ mod tests {
     #[test]
     fn test_model_pricing_case_insensitive() {
         // Same model, different case → identical pricing (lookup is case-insensitive).
-        let (i1, o1) = model_pricing("Claude-Opus-5");
-        let (i2, o2) = model_pricing("claude-opus-5");
+        let model = paid_catalog_model();
+        let (i1, o1) = model_pricing(&model.id.to_uppercase());
+        let (i2, o2) = model_pricing(&model.id);
         assert_eq!(i1, i2);
         assert_eq!(o1, o2);
+    }
+
+    #[test]
+    fn pricing_report_includes_all_catalog_input_bands_and_cache_rates() {
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| crate::model_catalog::input_token_pricing_tiers(&model.id).len() >= 2)
+            .expect("catalog must contain a multi-band model");
+        let base = crate::model_catalog::token_pricing(&model.id, 0)
+            .expect("catalog model must expose base pricing");
+        let tiers = crate::model_catalog::input_token_pricing_tiers(&model.id);
+        let report = format_model_pricing_report(&model.id);
+
+        assert!(report.contains(&format!("≤ {}", tiers[0].threshold_tokens)));
+        for tier in &tiers {
+            assert!(report.contains(&tier.threshold_tokens.saturating_add(1).to_string()));
+            for rate in [
+                tier.pricing.input_price_per_1m,
+                tier.pricing.output_price_per_1m,
+                tier.pricing.cache_read_price_per_1m,
+                tier.pricing.cache_write_price_per_1m,
+            ] {
+                assert!(report.contains(&format_per_million_rate(rate)));
+            }
+        }
+        assert!(report.contains(&format_per_million_rate(base.cache_read_price_per_1m)));
+        assert!(report.contains(&format_per_million_rate(base.cache_write_price_per_1m)));
+        assert_eq!(report.matches("Cache read:").count(), tiers.len() + 1);
+        assert_eq!(report.matches("Cache write:").count(), tiers.len() + 1);
+    }
+
+    #[test]
+    fn pricing_report_marks_unknown_models_as_no_cost() {
+        assert!(format_model_pricing_report("fixture-unknown-local-model").contains("no cost"));
     }
 
     // -- format_cost tests --------------------------------------------------
 
     #[test]
     fn test_format_cost_with_known_model() {
-        let result = format_cost("claude-sonnet-5", 1_000_000, 500_000);
-        // Input: 1M * $3.0/1M = $3.0000
-        // Output: 500K * $15.0/1M = $7.5000
-        // Total: $10.5000
-        assert!(result.contains("1000000 in"));
+        let model = paid_catalog_model();
+        let input_tokens = base_tier_input_tokens(&model.id);
+        let output_tokens = 500_000;
+        let rates = crate::cost_ledger::rates_for(&model.id);
+        let input_cost = f64::from(input_tokens) / 1_000_000.0 * rates.input_per_mtok;
+        let output_cost = f64::from(output_tokens) / 1_000_000.0 * rates.output_per_mtok;
+        let result = format_cost(&model.id, input_tokens, output_tokens);
+        assert!(result.contains(&format!("{input_tokens} in")));
         assert!(result.contains("500000 out"));
-        assert!(result.contains("$10.5000"));
-        assert!(result.contains("$3.0000 in"));
-        assert!(result.contains("$7.5000 out"));
+        assert!(result.contains(&format!("${:.4}", input_cost + output_cost)));
+        assert!(result.contains(&format!("${input_cost:.4} in")));
+        assert!(result.contains(&format!("${output_cost:.4} out")));
     }
 
     #[test]
     fn test_format_cost_local_model_zero() {
-        let result = format_cost("llama3.1:8b", 5000, 2000);
+        let result = format_cost("fixture-unknown-local-model", 5000, 2000);
         assert!(result.contains("no cost"));
         assert!(result.contains("local model"));
         assert!(result.contains("5000 in"));
@@ -648,14 +768,56 @@ mod tests {
 
     #[test]
     fn test_format_cost_small_token_counts() {
-        // claude-opus-5: input $5/1M, output $25/1M
-        // Input: 100/1M * 5  = $0.0005
-        // Output: 50/1M  * 25 = $0.00125
-        // Total: ~$0.00175
-        let result = format_cost("claude-opus-5", 100, 50);
+        let model = paid_catalog_model();
+        let result = format_cost(&model.id, 100, 50);
         assert!(result.contains("Cost:"));
         assert!(result.contains("100 in"));
         assert!(result.contains("50 out"));
+    }
+
+    #[test]
+    fn recorded_turn_display_does_not_reprice_aggregate_tool_loop_tokens() {
+        let (model, threshold) = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find_map(|model| {
+                crate::model_catalog::long_context_threshold(&model.id).and_then(|threshold| {
+                    let threshold = u32::try_from(threshold).ok()?;
+                    let above = threshold.checked_add(1)?;
+                    (crate::cost_ledger::rates_for(&model.id)
+                        != crate::cost_ledger::rates_for_input(&model.id, above))
+                    .then(|| (model.id.clone(), threshold))
+                })
+            })
+            .expect("catalog must contain a model with a distinct long-context tier");
+        let per_request_input = threshold / 2 + 1;
+        let completions = [
+            crate::cost_ledger::CompletionUsage {
+                model: model.clone(),
+                input_tokens: per_request_input,
+                output_tokens: 0,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+                included_in_subscription: false,
+            },
+            crate::cost_ledger::CompletionUsage {
+                model: model.clone(),
+                input_tokens: per_request_input,
+                output_tokens: 0,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+                included_in_subscription: false,
+            },
+        ];
+        let aggregate_input = per_request_input * 2;
+        let recorded = crate::cost_ledger::dollars_for_completions(&completions);
+        let retroactively_repriced =
+            crate::cost_ledger::dollars_for(&model, aggregate_input, 0, 0, 0);
+        assert_ne!(recorded, retroactively_repriced);
+
+        let result = format_recorded_cost(aggregate_input, 0, recorded);
+        assert!(result.contains(&format!("${recorded:.4}")));
+        assert!(!result.contains(&format!("${retroactively_repriced:.4}")));
     }
 
     // -- format_subscription_cost tests ------------------------------------
@@ -681,27 +843,12 @@ mod tests {
 
     #[test]
     fn test_all_pricing_branches_non_negative() {
-        let models = [
-            "claude-opus-5",
-            "claude-sonnet-5",
-            "claude-sonnet-5",
-            "gpt-5.6-luna",
-            "gpt-5.6-sol",
-            "gemini-3.5-flash-lite",
-            "gemini-3.1-pro-preview",
-            "minimax-m3",
-            "kimi-k3",
-            "grok-4.5",
-            "deepseek-v4-pro",
-            "deepseek-v4-flash",
-            "unknown-local-model",
-        ];
-
-        for model in &models {
-            let (i, o) = model_pricing(model);
-            assert!(i >= 0.0, "negative input rate for {}", model);
-            assert!(o >= 0.0, "negative output rate for {}", model);
+        for model in crate::model_catalog::catalog().all() {
+            let (i, o) = model_pricing(&model.id);
+            assert!(i >= 0.0, "negative input rate for {}", model.id);
+            assert!(o >= 0.0, "negative output rate for {}", model.id);
         }
+        assert_eq!(model_pricing("fixture-unknown-local-model"), (0.0, 0.0));
     }
 
     // -- detect_color_level tests ------------------------------------------
@@ -923,18 +1070,18 @@ mod tests {
     fn test_format_table_alignment() {
         let headers = &["Model", "Cost"];
         let rows = vec![
-            vec!["gpt-5.6-sol".to_string(), "$2.50".to_string()],
-            vec!["claude-opus-4".to_string(), "$15.00".to_string()],
+            vec!["fixture-short".to_string(), "$2.50".to_string()],
+            vec!["fixture-model-long".to_string(), "$15.00".to_string()],
         ];
         let result = format_table(headers, &rows);
         let lines: Vec<&str> = result.lines().collect();
         assert_eq!(lines.len(), 4); // header + separator + 2 data rows
 
-        // Widest cell in col 0 is "claude-opus-4" (13 chars), so all rows
+        // The widest fixture cell determines the padding for every row.
         // in col 0 should be padded to at least that width.
         assert!(lines[0].starts_with("Model"));
-        assert!(lines[2].starts_with("gpt-5.6-sol"));
-        assert!(lines[3].starts_with("claude-opus-4"));
+        assert!(lines[2].starts_with("fixture-short"));
+        assert!(lines[3].starts_with("fixture-model-long"));
     }
 
     #[test]

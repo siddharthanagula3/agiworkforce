@@ -153,3 +153,25 @@ jest.mock('expo-speech-recognition', () => ({
   useSpeechRecognitionEvent: jest.fn(),
   addSpeechRecognitionListener: jest.fn(() => ({ remove: jest.fn() })),
 }));
+
+// expo-iap requires StoreKit/Play Billing native modules and is unavailable in
+// Jest/Expo Go. Individual billing tests override these spies to drive purchase
+// and restore callbacks without making a real store call.
+jest.mock('expo-iap', () => ({
+  __esModule: true,
+  useIAP: jest.fn(() => ({
+    connected: false,
+    products: [],
+    subscriptions: [],
+    availablePurchases: [],
+    activeSubscriptions: [],
+    fetchProducts: jest.fn().mockResolvedValue(undefined),
+    requestPurchase: jest.fn().mockResolvedValue(null),
+    finishTransaction: jest.fn().mockResolvedValue(undefined),
+    getAvailablePurchases: jest.fn().mockResolvedValue(undefined),
+    restorePurchases: jest.fn().mockResolvedValue(undefined),
+    getActiveSubscriptions: jest.fn().mockResolvedValue(undefined),
+    hasActiveSubscriptions: jest.fn().mockResolvedValue(false),
+    reconnect: jest.fn().mockResolvedValue(false),
+  })),
+}));

@@ -19,6 +19,7 @@ import {
   Telescope,
   Terminal,
   Paintbrush,
+  Sparkles,
 } from 'lucide-react-native';
 import {
   canUseBillingPlanCapability,
@@ -161,6 +162,9 @@ interface ChatInputProps {
   draftKey?: string;
   /** Trust-boundary owner for a persisted draft. Required whenever draftKey is set. */
   draftProvenance?: DraftProvenance;
+  /** Included Managed Cloud Skill attached to the next message only. */
+  selectedSkillName?: string;
+  onClearSelectedSkill?: () => void;
 }
 
 export function ChatInput({
@@ -181,6 +185,8 @@ export function ChatInput({
   initialText,
   draftKey,
   draftProvenance,
+  selectedSkillName,
+  onClearSelectedSkill,
 }: ChatInputProps) {
   // Seed from a saved draft (if any) first, else the one-time initialText prop.
   const [text, setText] = useState(() =>
@@ -238,9 +244,9 @@ export function ChatInput({
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const mediaModelId = mediaModelIdForMode(mediaMode);
   // Read the name from the CATALOG, not `getShortDisplayName`. That helper only
-  // knows models the mobile picker can select (local + cloud chat); a media slot
-  // model like `veo-3.1` is not selectable, so it returned UNKNOWN_MODEL_LABEL
-  // and the chip read "Video Not set".
+  // knows models the mobile picker can select (local + cloud chat); media slot
+  // models are not selectable there, so it returned UNKNOWN_MODEL_LABEL and
+  // the chip read "Video Not set".
   const mediaModelName = mediaModelId
     ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
     : null;
@@ -756,6 +762,45 @@ export function ChatInput({
           disclosure above. */}
       {mediaMode !== 'text' && !isRecording && !isTranscribing ? (
         <MediaModeChip mode={mediaMode} modelName={mediaModelName} onExit={handleExitMediaMode} />
+      ) : null}
+
+      {selectedSkillName && !isRecording && !isTranscribing ? (
+        <View
+          accessible
+          accessibilityLabel={`Skill ${selectedSkillName} selected for the next Cloud message`}
+          testID="chat.composer.skill"
+          style={{
+            minHeight: 32,
+            marginBottom: 8,
+            alignSelf: 'flex-start',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingLeft: 10,
+            paddingRight: 4,
+            borderRadius: radii.full,
+            borderWidth: 1,
+            borderColor: themeColors.accentBorder,
+            backgroundColor: themeColors.accentSurface,
+          }}
+        >
+          <Sparkles size={13} color={themeColors.teal} />
+          <Text
+            numberOfLines={1}
+            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: 12 }}
+          >
+            {selectedSkillName}
+          </Text>
+          <Pressable
+            onPress={onClearSelectedSkill}
+            accessibilityRole="button"
+            accessibilityLabel="Clear selected Skill"
+            hitSlop={8}
+            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={14} color={themeColors.textMuted} />
+          </Pressable>
+        </View>
       ) : null}
 
       {/* Attachment preview strip */}

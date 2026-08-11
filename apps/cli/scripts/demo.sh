@@ -12,12 +12,12 @@ set -e
 
 CLI=${CLI:-agi}
 
-# Demo fallback-chain models. Defaults track the canonical catalog in
-# packages/contracts/types/src/models.json. Override when the catalog IDs are
-# renamed or retired so the demo never points at a dead model:
+# Demo fallback-chain models are discovered from the CLI's catalog JSON.
+# Explicit overrides remain available for a particular presentation:
 #   DEMO_PRIMARY_MODEL=… DEMO_FALLBACK_MODEL=… ./demo.sh
-DEMO_PRIMARY_MODEL=${DEMO_PRIMARY_MODEL:-claude-sonnet-5}
-DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-gpt-5.6-terra}
+MODEL_CATALOG_JSON=$($CLI --output json --list-models)
+DEMO_PRIMARY_MODEL=${DEMO_PRIMARY_MODEL:-$(jq -er 'map(select(.provider == "anthropic"))[0].id' <<<"$MODEL_CATALOG_JSON")}
+DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-$(jq -er 'map(select(.provider == "openai"))[0].id' <<<"$MODEL_CATALOG_JSON")}
 
 pause() { read -r -p "" _; }
 

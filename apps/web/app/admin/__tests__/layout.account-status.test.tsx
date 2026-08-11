@@ -15,12 +15,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetUser, mockRedirect, mockAssertAccountActive } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
-  mockGetUser: vi.fn(),
-  mockRedirect: vi.fn(),
-  mockAssertAccountActive: vi.fn(),
-}));
+const { mockAuth, mockGetUser, mockRedirect, mockAssertAccountActive, mockRequireCurrentTerms } =
+  vi.hoisted(() => ({
+    mockAuth: vi.fn(),
+    mockGetUser: vi.fn(),
+    mockRedirect: vi.fn(),
+    mockAssertAccountActive: vi.fn(),
+    mockRequireCurrentTerms: vi.fn(),
+  }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -47,6 +49,9 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
 }));
+vi.mock('@/lib/server/require-current-terms', () => ({
+  requireCurrentTermsAcceptance: (...args: unknown[]) => mockRequireCurrentTerms(...args),
+}));
 
 import AdminLayout from '../layout';
 import { createError } from '@/lib/errors';
@@ -69,6 +74,7 @@ beforeEach(() => {
   mockAuth.mockResolvedValue({ userId: ADMIN_ID });
   mockGetUser.mockResolvedValue({ publicMetadata: { role: 'admin' } });
   mockAssertAccountActive.mockResolvedValue(undefined);
+  mockRequireCurrentTerms.mockResolvedValue(undefined);
 });
 
 describe('admin layout account-status gate', () => {

@@ -2,6 +2,13 @@
 
 import { useCallback } from 'react';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils';
+import {
+  classifyManagedQuotaErrorCode,
+  getModelMetadataById,
+  isExecutableImageModel,
+  isExecutableVideoModel,
+} from '@agiworkforce/types';
+import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import { useMediaStore } from '@shared/stores/media-store';
 import {
   generateVideo as startVideoGeneration,
@@ -15,18 +22,51 @@ async function getAuthToken(): Promise<string> {
 }
 
 export interface GenerateVideoOptions {
-  /** Seconds of footage. The route defaults to 5 and clamps per provider. */
+  /** Seconds of footage. The route defaults to the cheapest valid Google duration (4s). */
   durationSecs?: number;
   resolution?: '720p' | '1080p' | '4k';
-  provider?: 'runway' | 'google';
+  provider?: 'runway' | 'google' | 'openrouter';
   /** Catalog model id chosen in the composer's video picker; see VideoGenerationRequest.model. */
   modelId?: string;
+  /** Persisted Web conversation; paired with assistantMessageId. */
+  conversationId?: string;
+  /** Pre-persisted assistant placeholder and stable idempotency identity. */
+  assistantMessageId?: string;
 }
 
-export interface GeneratedVideo {
+export interface StartedVideoGeneration {
+  taskId: string;
+  provider: 'runway' | 'google' | 'openrouter';
+  model: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  estimatedDurationSecs: number;
+  localJobId: string;
+}
+
+export interface CompletedVideoGeneration {
+  status: 'completed';
+  taskId: string;
   videoUrl: string;
   thumbnailUrl?: string;
 }
+
+export interface PendingVideoGeneration {
+  status: 'pending';
+  taskId: string;
+  taskStatus: 'queued' | 'processing';
+  progress?: number;
+}
+
+export interface FailedVideoGeneration {
+  status: 'failed';
+  taskId: string;
+  error: string;
+}
+
+export type VideoWatchResult =
+  | CompletedVideoGeneration
+  | PendingVideoGeneration
+  | FailedVideoGeneration;
 
 /**
  * Poll cadence for /api/media/video/status. The route's own doc comment
@@ -37,19 +77,63 @@ const VIDEO_POLL_INTERVAL_MS = 5_000;
 const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
 export interface GenerateImageOptions {
+  /** Exact provider-native shape used by new Web callers. */
+  aspectRatio?: ManagedMediaImageAspectRatio;
+  /** Legacy compatibility for older callers; prefer `aspectRatio` on Web. */
   size?: '1024x1024' | '1792x1024' | '1024x1792';
-  provider?: 'google' | 'openai' | 'stability';
-  /** Catalog model id (e.g. 'gemini-3.1-flash-image'). The route resolves it to the real API id. */
+  provider?: 'google' | 'openai';
+  /** Catalog model id chosen by the picker. The route resolves the provider wire id. */
   model?: string;
+  /** Persisted Web conversation owner. Temporary chats deliberately omit it. */
+  conversationId?: string;
 }
 
-/** Error codes/types the media-generation API uses to signal a paywall (upgrade-required) failure. */
-const PAYWALL_ERROR_CODES = new Set([
-  'insufficient_credits',
-  'plan_upgrade_required',
-  'subscription_required',
-]);
+export interface GeneratedImageResult {
+  imageUrl: string;
+  provider: 'google' | 'openai';
+  /** Canonical catalog identity returned by the authenticated generation route. */
+  model: string;
+}
+
+export type MediaPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+
+/** Error codes/types the media-generation API uses to signal a billing recovery path. */
+const PAYWALL_ERROR_RECOVERY: Readonly<Record<string, MediaPaywallRecoveryAction>> = {
+  insufficient_credits: 'upgrade',
+  plan_upgrade_required: 'upgrade',
+  subscription_required: 'subscribe',
+  subscription_inactive: 'manage_billing',
+};
 const PAYWALL_ERROR_TYPES = new Set(['insufficient_quota', 'plan_upgrade_required']);
+const MAX_MEDIA_RETRY_AFTER_SECONDS = 5 * 60;
+
+function retryAtFromStructuredSeconds(value: unknown): string | undefined {
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > MAX_MEDIA_RETRY_AFTER_SECONDS
+  ) {
+    return undefined;
+  }
+  return new Date(Date.now() + value * 1_000).toISOString();
+}
+
+function mediaPaywallRecoveryAction(input: {
+  status?: number;
+  code?: string;
+  type?: string;
+}): MediaPaywallRecoveryAction | null {
+  const codeRecovery = input.code ? PAYWALL_ERROR_RECOVERY[input.code] : undefined;
+  if (codeRecovery) return codeRecovery;
+  if (classifyManagedQuotaErrorCode(input.code)) return 'view_usage';
+  if (input.type && PAYWALL_ERROR_TYPES.has(input.type)) return 'upgrade';
+  // HTTP 402 is intrinsically a payment/usage refusal. HTTP 403 is not: it is
+  // also used for ordinary authorization failures, which must never be turned
+  // into a misleading sales prompt without a recognized server code.
+  if (input.status === 402) return 'upgrade';
+  return null;
+}
 
 /**
  * Structured error thrown by media-generation requests. Preserves the API's
@@ -61,6 +145,10 @@ export class MediaGenerationApiError extends Error {
   status: number | undefined;
   code: string | undefined;
   type: string | undefined;
+  currentPlan: string | undefined;
+  requiredPlans: readonly string[] | undefined;
+  resetAt: string | undefined;
+  recoveryAction: MediaPaywallRecoveryAction | null;
   isPaywall: boolean;
 
   constructor(
@@ -69,6 +157,9 @@ export class MediaGenerationApiError extends Error {
       status?: number;
       code?: string;
       type?: string;
+      currentPlan?: string;
+      requiredPlans?: readonly string[];
+      resetAt?: string;
     } = {},
   ) {
     super(message);
@@ -76,11 +167,11 @@ export class MediaGenerationApiError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.type = options.type;
-    this.isPaywall =
-      options.status === 402 ||
-      options.status === 403 ||
-      (options.code ? PAYWALL_ERROR_CODES.has(options.code) : false) ||
-      (options.type ? PAYWALL_ERROR_TYPES.has(options.type) : false);
+    this.currentPlan = options.currentPlan;
+    this.requiredPlans = options.requiredPlans;
+    this.resetAt = options.resetAt;
+    this.recoveryAction = mediaPaywallRecoveryAction(options);
+    this.isPaywall = this.recoveryAction !== null;
   }
 }
 
@@ -130,6 +221,9 @@ function toMediaGenerationError(err: unknown): unknown {
     ...(err.status !== undefined ? { status: err.status } : {}),
     ...(err.code !== undefined ? { code: err.code } : {}),
     ...(err.type !== undefined ? { type: err.type } : {}),
+    ...(err.currentPlan !== undefined ? { currentPlan: err.currentPlan } : {}),
+    ...(err.requiredPlans !== undefined ? { requiredPlans: err.requiredPlans } : {}),
+    ...(err.resetAt !== undefined ? { resetAt: err.resetAt } : {}),
   });
 }
 
@@ -153,7 +247,7 @@ export function useMediaGeneration() {
         type: 'image',
         prompt,
         status: 'generating',
-        size: options.size || '1024x1024',
+        size: options.aspectRatio ?? options.size ?? '1024x1024',
         provider: options.provider,
         createdAt: new Date().toISOString(),
       });
@@ -168,9 +262,11 @@ export function useMediaGeneration() {
           },
           body: JSON.stringify({
             prompt,
-            size: options.size || '1024x1024',
-            provider: options.provider,
-            model: options.model,
+            ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
+            ...(options.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
+            ...(options.size ? { size: options.size } : {}),
+            ...(options.provider ? { provider: options.provider } : {}),
+            ...(options.model ? { model: options.model } : {}),
           }),
         });
 
@@ -183,21 +279,52 @@ export function useMediaGeneration() {
             `Request failed: ${response.status}`;
           const code = typeof errorField === 'object' ? errorField?.code : undefined;
           const type = typeof errorField === 'object' ? errorField?.type : undefined;
+          const currentPlan =
+            typeof errorField === 'object' && typeof errorField?.current_plan === 'string'
+              ? errorField.current_plan
+              : undefined;
+          const requiredPlans =
+            typeof errorField === 'object' && Array.isArray(errorField?.required_plans)
+              ? errorField.required_plans.filter(
+                  (plan: unknown): plan is string => typeof plan === 'string',
+                )
+              : undefined;
+          const resetAt =
+            typeof errorField === 'object' && typeof errorField?.reset_at === 'string'
+              ? errorField.reset_at
+              : response.status === 429
+                ? retryAtFromStructuredSeconds(err?.retry_after_seconds)
+                : undefined;
           throw new MediaGenerationApiError(message, {
             status: response.status,
             code,
             type,
+            currentPlan,
+            requiredPlans,
+            resetAt,
           });
         }
 
         const data = (await response.json()) as {
           images?: Array<{ url?: string; b64_json?: string }>;
           persisted?: boolean;
+          provider?: unknown;
+          catalog_model?: unknown;
         };
         const first = data.images?.[0];
         const resultUrl = first?.url ?? objectUrlFromBase64(first?.b64_json);
 
         if (!resultUrl) throw new Error('No image URL in response');
+
+        const catalogModel =
+          typeof data.catalog_model === 'string' ? getModelMetadataById(data.catalog_model) : null;
+        if (
+          !isExecutableImageModel(catalogModel) ||
+          (data.provider !== 'google' && data.provider !== 'openai') ||
+          catalogModel.provider !== data.provider
+        ) {
+          throw new Error('Image response did not include valid canonical model provenance');
+        }
 
         updateJob(jobId, {
           status: 'completed',
@@ -205,7 +332,11 @@ export function useMediaGeneration() {
           completedAt: new Date().toISOString(),
         });
 
-        return resultUrl;
+        return {
+          imageUrl: resultUrl,
+          provider: data.provider,
+          model: catalogModel.id,
+        } satisfies GeneratedImageResult;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
@@ -215,15 +346,9 @@ export function useMediaGeneration() {
     [addJob, updateJob],
   );
 
-  /**
-   * Video generation is asynchronous: POST returns a task id, and
-   * GET /api/media/video/status is polled until the provider finishes. The
-   * promise settles only when a URL exists (or the task fails/times out), so
-   * the caller can keep the message in its in-flight state for the whole wait
-   * — which is what renders MessageBubble's shimmer placeholder.
-   */
-  const generateVideo = useCallback(
-    async (prompt: string, options: GenerateVideoOptions = {}): Promise<GeneratedVideo> => {
+  /** Start exactly one paid provider job after the caller's transcript commit. */
+  const startVideo = useCallback(
+    async (prompt: string, options: GenerateVideoOptions = {}): Promise<StartedVideoGeneration> => {
       const jobId = crypto.randomUUID();
       addJob({
         id: jobId,
@@ -241,38 +366,34 @@ export function useMediaGeneration() {
           ...(options.resolution ? { resolution: options.resolution } : {}),
           ...(options.provider ? { provider: options.provider } : {}),
           ...(options.modelId ? { model: options.modelId } : {}),
+          ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
+          ...(options.assistantMessageId
+            ? { assistant_message_id: options.assistantMessageId }
+            : {}),
         }).catch((err: unknown) => {
           throw toMediaGenerationError(err);
         });
 
-        const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS;
-        for (;;) {
-          await sleep(VIDEO_POLL_INTERVAL_MS);
-          const status = await getVideoStatus(started.task_id).catch((err: unknown) => {
-            throw toMediaGenerationError(err);
-          });
-
-          if (status.status === 'completed') {
-            if (!status.video_url) throw new Error('Video finished with no URL');
-            const result: GeneratedVideo = {
-              videoUrl: status.video_url,
-              ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
-            };
-            updateJob(jobId, {
-              status: 'completed',
-              resultUrl: result.videoUrl,
-              ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
-              completedAt: new Date().toISOString(),
-            });
-            return result;
-          }
-          if (status.status === 'failed' || status.status === 'timeout') {
-            throw new Error(status.error || `Video generation ${status.status}`);
-          }
-          if (Date.now() >= deadline) {
-            throw new Error('Video generation timed out. The task may still finish; try again.');
-          }
+        const catalogModel = getModelMetadataById(started.model);
+        const expectedProvider =
+          catalogModel?.provider === 'open_router' ? 'openrouter' : catalogModel?.provider;
+        if (
+          !isExecutableVideoModel(catalogModel) ||
+          (started.provider !== 'google' &&
+            started.provider !== 'runway' &&
+            started.provider !== 'openrouter') ||
+          expectedProvider !== started.provider
+        ) {
+          throw new Error('Video response did not include valid canonical model provenance');
         }
+        return {
+          taskId: started.task_id,
+          provider: started.provider,
+          model: catalogModel.id,
+          status: started.status,
+          estimatedDurationSecs: started.estimated_duration_secs,
+          localJobId: jobId,
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
@@ -282,5 +403,77 @@ export function useMediaGeneration() {
     [addJob, updateJob],
   );
 
-  return { generateImage, generateVideo };
+  /**
+   * Watch an existing durable task. This performs no POST and is therefore
+   * safe after reload. Reaching the client deadline pauses observation only;
+   * Workflow keeps the job queued/processing and the caller gets a resumable
+   * state instead of a false terminal failure.
+   */
+  const watchVideo = useCallback(
+    async (
+      taskId: string,
+      options: { localJobId?: string; timeoutMs?: number } = {},
+    ): Promise<VideoWatchResult> => {
+      const localJobId = options.localJobId ?? taskId;
+      const deadline = Date.now() + (options.timeoutMs ?? VIDEO_POLL_TIMEOUT_MS);
+      let lastStatus: 'queued' | 'processing' = 'queued';
+      let lastProgress: number | undefined;
+
+      for (;;) {
+        await sleep(VIDEO_POLL_INTERVAL_MS);
+        const status = await getVideoStatus(taskId).catch((err: unknown) => {
+          throw toMediaGenerationError(err);
+        });
+
+        if (status.status === 'completed') {
+          if (!status.video_url) throw new Error('Video finished with no URL');
+          const result: CompletedVideoGeneration = {
+            status: 'completed',
+            taskId,
+            videoUrl: status.video_url,
+            ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
+          };
+          updateJob(localJobId, {
+            status: 'completed',
+            resultUrl: result.videoUrl,
+            ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
+            completedAt: new Date().toISOString(),
+          });
+          return result;
+        }
+        if (status.status === 'failed' || status.status === 'timeout') {
+          const message = status.error || `Video generation ${status.status}`;
+          updateJob(localJobId, { status: 'failed', errorMessage: message });
+          return { status: 'failed', taskId, error: message };
+        }
+        lastStatus = status.status;
+        lastProgress = status.progress;
+        if (Date.now() >= deadline) {
+          return {
+            status: 'pending',
+            taskId,
+            taskStatus: lastStatus,
+            ...(lastProgress === undefined ? {} : { progress: lastProgress }),
+          };
+        }
+      }
+    },
+    [updateJob],
+  );
+
+  /** Compatibility helper for callers that do not need the start/watch seam. */
+  const generateVideo = useCallback(
+    async (prompt: string, options: GenerateVideoOptions = {}): Promise<VideoWatchResult> => {
+      const started = await startVideo(prompt, options);
+      return watchVideo(started.taskId, { localJobId: started.localJobId });
+    },
+    [startVideo, watchVideo],
+  );
+
+  return {
+    generateImage,
+    generateVideo,
+    startVideoGeneration: startVideo,
+    watchVideoGeneration: watchVideo,
+  };
 }

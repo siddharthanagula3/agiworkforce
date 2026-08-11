@@ -38,7 +38,6 @@
 export type PaywallFeature =
   | 'video_generation'
   | 'opus_5'
-  | 'gpt_5_5'
   | 'computer_use'
   | 'deep_research'
   | 'image_quota'
@@ -66,10 +65,6 @@ export const PAYWALL_FEATURE_COPY: Readonly<Record<PaywallFeature, PaywallFeatur
     opus_5: {
       upgradeLabel: 'Opus 5 access',
       limitHeadline: 'You have reached your Opus 5 limit',
-    },
-    gpt_5_5: {
-      upgradeLabel: 'GPT-5.5 access',
-      limitHeadline: 'You have reached your GPT-5.5 limit',
     },
     computer_use: {
       upgradeLabel: 'computer use',

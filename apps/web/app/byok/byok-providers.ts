@@ -6,8 +6,8 @@ import { modelsCatalogJson } from '@agiworkforce/types';
  * The page copy promises these chips come "straight from the catalog". They
  * did not: the list was a hand-typed array of display names, so when `mistral`
  * and `groq` were dropped from `models.json` (`5a165d78b`, 2026-07-22 — every
- * `mistral-*` id now canonicalizes to `claude-sonnet-5` and every `groq-*` id
- * to `gemini-3.5-flash-lite`) the public page kept advertising both as
+ * retired vendor IDs now canonicalize to current catalog routes) the public
+ * page kept advertising both as
  * supported BYOK providers. Neither has an adapter in
  * `packages/ai/providers/`, a key field in the Desktop BYOK panel
  * (`apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx`), or a

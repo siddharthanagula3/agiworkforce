@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_REFLECT_PATH,
@@ -10,6 +9,7 @@ import {
   type ManagedCloudReflectRecap,
 } from '@agiworkforce/cloud-contracts';
 import { RefreshCw } from 'lucide-react';
+import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 
 const RANGE_OPTIONS: ReadonlyArray<{ value: ManagedCloudReflectRange; label: string }> = [
   { value: '30d', label: 'Past 30 days' },
@@ -151,12 +151,12 @@ export function ReflectSection() {
             Reflect uses the same account chat history controls as Memory. Turn on Memory and
             Generate from past chats to create a recap.
           </p>
-          <Link
-            href="/settings/capabilities"
+          <SettingsSectionLink
+            section="capabilities"
             className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
           >
             Open Capabilities settings
-          </Link>
+          </SettingsSectionLink>
         </div>
       ) : null}
 
@@ -205,9 +205,12 @@ export function ReflectSection() {
                   Conversation starts, not screen time.
                 </p>
               </div>
-              <Link href="/settings/time-focus" className="text-sm text-primary hover:underline">
+              <SettingsSectionLink
+                section="time-focus"
+                className="text-sm text-primary hover:underline"
+              >
                 Set quiet hours and breaks
-              </Link>
+              </SettingsSectionLink>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-border/50 p-4">
@@ -297,12 +300,12 @@ export function ReflectSection() {
                   <p className="mt-2 text-sm text-muted-foreground">{insight.observation}</p>
                   <p className="mt-3 text-sm text-foreground">{insight.nextStep}</p>
                   {insight.href ? (
-                    <Link
+                    <SettingsPageLink
                       href={insight.href}
                       className="mt-3 inline-flex text-xs text-primary hover:underline"
                     >
                       Open {insight.title}
-                    </Link>
+                    </SettingsPageLink>
                   ) : null}
                 </article>
               ))}

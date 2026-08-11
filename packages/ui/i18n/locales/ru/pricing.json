@@ -76,5 +76,13 @@
   "pageTitle": "Цены",
   "freeLocalByok": "Локальные модели и собственные API-ключи — всегда бесплатно",
   "seatTotal_one": "{{count}} место · {{total}}/мес.",
-  "seatTotal_other": "{{count}} мест · {{total}}/мес."
+  "seatTotal_other": "{{count}} мест · {{total}}/мес.",
+  "perSeatPrice": "{{price}}/место/мес.",
+  "perSeatPriceAnnual": "{{price}}/место/год",
+  "seatTotalAnnual_one": "{{count}} место · {{total}}/год",
+  "seatTotalAnnual_other": "{{count}} мест · {{total}}/год",
+  "seatCadenceMonthly_one": "{{count}} место · ежемесячная оплата",
+  "seatCadenceMonthly_other": "{{count}} мест · ежемесячная оплата",
+  "seatCadenceAnnual_one": "{{count}} место · ежегодная оплата",
+  "seatCadenceAnnual_other": "{{count}} мест · ежегодная оплата"
 }

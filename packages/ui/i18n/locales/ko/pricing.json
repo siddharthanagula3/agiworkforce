@@ -76,5 +76,13 @@
   "pageTitle": "요금제",
   "freeLocalByok": "로컬 모델과 직접 보유한 API 키는 항상 무료",
   "seatTotal_one": "{{count}}석 · {{total}}/월",
-  "seatTotal_other": "{{count}}석 · {{total}}/월"
+  "seatTotal_other": "{{count}}석 · {{total}}/월",
+  "perSeatPrice": "{{price}}/석/월",
+  "perSeatPriceAnnual": "{{price}}/석/년",
+  "seatTotalAnnual_one": "{{count}}석 · {{total}}/년",
+  "seatTotalAnnual_other": "{{count}}석 · {{total}}/년",
+  "seatCadenceMonthly_one": "{{count}}석 · 월별 청구",
+  "seatCadenceMonthly_other": "{{count}}석 · 월별 청구",
+  "seatCadenceAnnual_one": "{{count}}석 · 연간 청구",
+  "seatCadenceAnnual_other": "{{count}}석 · 연간 청구"
 }

@@ -753,9 +753,7 @@ impl PatternMatcher {
                     "draw",
                     "generate video",
                     "create video",
-                    "dalle",
-                    "midjourney",
-                    "stable diffusion",
+                    "ai image",
                 ],
                 regex_patterns: vec![
                     r"(?i)(?:generate|create|make|draw)\s+(?:an?\s+)?(?:image|picture|photo)",

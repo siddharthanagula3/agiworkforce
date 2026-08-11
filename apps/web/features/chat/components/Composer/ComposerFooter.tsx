@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
@@ -518,6 +519,11 @@ interface ComposerFooterProps {
    */
   showModelSearch?: boolean;
   onUpgradeRequest?: () => void;
+  /**
+   * Durably change the active conversation's model. When absent (for example
+   * the Settings default-model row), selection remains local-only.
+   */
+  onModelChange?: (modelId: string) => Promise<boolean>;
   /** When true, render the selected model as a locked status pill instead of a dropdown. */
   lockModelSelector?: boolean;
   /** Controls whether the response style selector is visible. */
@@ -536,11 +542,13 @@ export function ComposerFooter({
   showModelSelector = true,
   showModelSearch = true,
   onUpgradeRequest,
+  onModelChange,
   lockModelSelector = false,
   showStyleSelector = true,
   inline = false,
   className,
 }: ComposerFooterProps) {
+  const modelSelectorTitleId = useId();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [moreExpanded, setMoreExpanded] = useState(false);
@@ -575,13 +583,33 @@ export function ComposerFooter({
       : 0,
   );
   const [pendingSwitch, setPendingSwitch] = useState<{ id: string; message: string } | null>(null);
+  const [modelChangePending, setModelChangePending] = useState(false);
 
   const commitModel = useCallback(
-    (id: string) => {
-      setSelectedModelId(id);
+    async (id: string) => {
       setOpen(false);
+      if (!onModelChange) {
+        setSelectedModelId(id);
+        return;
+      }
+      if (modelChangePending) return;
+      setModelChangePending(true);
+      try {
+        const saved = await onModelChange(id);
+        if (!saved) {
+          toast.error(
+            'Could not save the model for this conversation. The previous model remains active.',
+          );
+        }
+      } catch {
+        toast.error(
+          'Could not save the model for this conversation. The previous model remains active.',
+        );
+      } finally {
+        setModelChangePending(false);
+      }
     },
-    [setSelectedModelId],
+    [modelChangePending, onModelChange, setSelectedModelId],
   );
 
   const handleSelectModel = useCallback(
@@ -602,7 +630,7 @@ export function ComposerFooter({
         setOpen(false);
         return;
       }
-      commitModel(model.id);
+      void commitModel(model.id);
     },
     [selectedModelId, assistantTurnCount, selectedModel, commitModel],
   );
@@ -762,8 +790,9 @@ export function ComposerFooter({
               <PopoverTrigger asChild>
                 <button
                   id="model-selector"
+                  disabled={modelChangePending}
                   className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                  aria-label="Change model"
+                  aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
                   {/* truncate lets the model name shrink so the composer bottom row
@@ -775,7 +804,7 @@ export function ComposerFooter({
                       keep this selector visible, tappable, and clear of Send down to
                       ~320px. */}
                   <span className="min-w-[3.5rem] max-w-[140px] shrink truncate">
-                    {selectedModel.name}
+                    {modelChangePending ? 'Saving…' : selectedModel.name}
                   </span>
                   {hasEffortControl && (
                     <span className="text-xs text-muted-foreground/70">
@@ -785,10 +814,17 @@ export function ComposerFooter({
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
+              <PopoverContent
+                align="end"
+                sideOffset={6}
+                className="w-72 p-0"
+                aria-labelledby={modelSelectorTitleId}
+              >
                 {/* Header · model count badge removed per Claude reference */}
                 <div className="flex items-center border-b border-border/40 px-3 py-2">
-                  <span className="text-xs font-medium text-foreground">Models</span>
+                  <span id={modelSelectorTitleId} className="text-xs font-medium text-foreground">
+                    Models
+                  </span>
                 </div>
 
                 {/* Search input · AUDIT-FIX CMP-30. Hidden for a roster short
@@ -887,7 +923,11 @@ export function ComposerFooter({
                         lockKind={model.lockKind}
                         lockReason={model.lockReason}
                         onUpgradeRequest={model.lockKind === 'tier' ? onUpgradeRequest : undefined}
-                        onSelect={model.isLocked ? undefined : () => handleSelectModel(model)}
+                        onSelect={
+                          model.isLocked || modelChangePending
+                            ? undefined
+                            : () => handleSelectModel(model)
+                        }
                       />
                     );
                   })}
@@ -926,7 +966,11 @@ export function ComposerFooter({
                               lockKind={lock.kind}
                               lockReason={lock.reason}
                               onUpgradeRequest={lock.kind === 'tier' ? onUpgradeRequest : undefined}
-                              onSelect={lock.locked ? undefined : () => handleSelectModel(model)}
+                              onSelect={
+                                lock.locked || modelChangePending
+                                  ? undefined
+                                  : () => handleSelectModel(model)
+                              }
                             />
                           );
                         })}
@@ -961,7 +1005,7 @@ export function ComposerFooter({
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (pendingSwitch) commitModel(pendingSwitch.id);
+                if (pendingSwitch) void commitModel(pendingSwitch.id);
                 setPendingSwitch(null);
               }}
             >

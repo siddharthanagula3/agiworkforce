@@ -35,13 +35,24 @@ import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useTierStore } from '../src/features/billing/store';
 import { applyConversationDeltas } from '../services/cloudSyncEngine';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
+import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { canAccessCloudModelForTier } from '../src/features/model-picker/service';
 
 const mockDelete = api.delete as jest.MockedFunction<typeof api.delete>;
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPut = api.put as jest.MockedFunction<typeof api.put>;
 const T = '2026-06-20T00:00:00.000Z';
+const CLOUD_MODEL_ID = requireMobileCloudModel().id;
+const LOCAL_MODEL_ID = requireLocalModel().id;
+const MAX_ONLY_MODEL_ID = requireMobileCloudModel(
+  (model) =>
+    canAccessCloudModelForTier(model.id, 'max') && !canAccessCloudModelForTier(model.id, 'pro'),
+  'Max-only Mobile Cloud model',
+).id;
 
 function seedCloud(id: string, title = `Chat ${id}`): void {
   useChatCloudMessageStore.getState().addCloudConversation({
@@ -54,11 +65,33 @@ function seedCloud(id: string, title = `Chat ${id}`): void {
   });
 }
 
+function seedLocal(id: string, model = LOCAL_MODEL_ID): void {
+  useChatMessageStore.setState({
+    conversations: [
+      {
+        id,
+        title: `Chat ${id}`,
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 0,
+        pinned: false,
+        model,
+        provider: 'local',
+        executionMode: 'local',
+      },
+    ],
+    messages: { [id]: [] },
+  });
+}
+
 function convTitle(id: string): string | undefined {
   return useChatCloudMessageStore.getState().conversations.find((c) => c.id === id)?.title;
 }
 function convExists(id: string): boolean {
   return useChatCloudMessageStore.getState().conversations.some((c) => c.id === id);
+}
+function convModel(id: string): string | undefined {
+  return useChatCloudMessageStore.getState().conversations.find((c) => c.id === id)?.model;
 }
 function convDelta(id: string, title: string, deletedAt: string | null) {
   return {
@@ -80,6 +113,8 @@ beforeEach(() => {
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {}, currentConversationId: null });
   useChatAppModeStore.getState().setAppMode('cloud');
+  useWaitlistStore.setState({ cloudUnlocked: true });
+  useTierStore.setState({ tier: 'max', billingTier: 'max' });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
 });
 
@@ -231,6 +266,80 @@ describe('cloud conversation rename durability', () => {
     // A tombstone delta MUST remove it even though it is dirty (delete wins).
     applyConversationDeltas([convDelta('c1', 'Old', T)]);
     expect(convExists('c1')).toBe(false);
+  });
+});
+
+describe('cloud conversation model durability', () => {
+  it('updates the owning conversation and queues the model for cross-device sync', async () => {
+    seedCloud('c1');
+    mockPut.mockRejectedValue(new Error('HTTP 500'));
+
+    const updated = await useChatMessageStore.getState().setConversationModel('c1', CLOUD_MODEL_ID);
+
+    expect(updated).toBe(true);
+    expect(convModel('c1')).toBe(CLOUD_MODEL_ID);
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.stringContaining('c1'),
+      expect.objectContaining({ model: CLOUD_MODEL_ID }),
+    );
+  });
+
+  it('rejects a Local model before mutating or queueing a Cloud conversation', async () => {
+    seedCloud('c1');
+
+    const updated = await useChatMessageStore.getState().setConversationModel('c1', LOCAL_MODEL_ID);
+
+    expect(updated).toBe(false);
+    expect(convModel('c1')).toBeUndefined();
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).not.toContain('c1');
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+
+  it('rejects a plan-locked Cloud model before mutation or sync', async () => {
+    seedCloud('c1');
+    useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+
+    const updated = await useChatMessageStore
+      .getState()
+      .setConversationModel('c1', MAX_ONLY_MODEL_ID);
+
+    expect(updated).toBe(false);
+    expect(convModel('c1')).toBeUndefined();
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).not.toContain('c1');
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+});
+
+describe('local conversation model durability', () => {
+  it('persists an eligible Local model without touching Cloud sync', async () => {
+    seedLocal('local-1');
+
+    const updated = await useChatMessageStore
+      .getState()
+      .setConversationModel('local-1', LOCAL_MODEL_ID);
+
+    expect(updated).toBe(true);
+    expect(
+      useChatMessageStore.getState().conversations.find((item) => item.id === 'local-1')?.model,
+    ).toBe(LOCAL_MODEL_ID);
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toEqual([]);
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Cloud model before mutating a Local conversation', async () => {
+    seedLocal('local-1');
+
+    const updated = await useChatMessageStore
+      .getState()
+      .setConversationModel('local-1', CLOUD_MODEL_ID);
+
+    expect(updated).toBe(false);
+    expect(
+      useChatMessageStore.getState().conversations.find((item) => item.id === 'local-1')?.model,
+    ).toBe(LOCAL_MODEL_ID);
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toEqual([]);
+    expect(mockPut).not.toHaveBeenCalled();
   });
 });
 

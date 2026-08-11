@@ -12,40 +12,31 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
 /**
- * Organization-derived entitlement, for the SHARED surface only.
+ * Organization-derived entitlement for organization-owned capabilities.
  *
  * HONEST SCOPE — read this before reusing it anywhere else.
  *
- * Today every entitlement gate in the product resolves a plan from the CALLER's
- * own `subscriptions` row (`SubscriptionService.getSubscription(db, userId)`),
- * because `subscriptions` is unique-per-user with no organization link. That is
- * the right answer for a personal project or a personal connector, and it stays
- * the answer for both.
- *
- * It is the WRONG answer for an org-wide ceiling. "The org may share at most 25
- * connectors" is a property of what the ORGANIZATION bought, not of whichever
- * admin happens to be clicking. So the org's plan is derived here from the
- * organization's OWNER — the one member whose subscription is the org's billing
- * anchor today.
+ * Personal capabilities resolve from the caller's own subscription. An
+ * organization capability must instead resolve through the billing anchor on
+ * the organization row introduced by migration 0085. When Stripe has not bound
+ * that anchor yet, the organization owner is the fail-closed legacy anchor; an
+ * admin's unrelated personal subscription is never consulted.
  *
  * This is deliberately a small, read-only derivation over data that already
  * exists. It is NOT a second entitlement resolver and it must not grow into
  * one:
- *   - it never grants a member anything (a member's personal limits are still
- *     read from their own plan, unchanged);
- *   - it only ever CAPS the org's shared set;
+ *   - it never grants personal capabilities (a member's personal limits are
+ *     still read from their own plan, unchanged);
+ *   - it gates Team administration and caps the org's shared set;
  *   - it is not used by chat, billing, or usage metering.
  *
- * DEPENDENCY: the org↔subscription link and true seat-derived entitlement are
- * owned by the seats/lifecycle builder (migration 0085). When
- * `organizations.stripe_subscription_id` / licensed seats land, this function
- * should read the org's own subscription row directly and the owner lookup
- * below should be deleted. Until then, an org whose owner is on a free personal
- * plan shares nothing — which fails closed, and is the correct posture.
+ * The subscription status is re-evaluated on every read. Persisted seat counts
+ * and `billing_plan_tier` are useful billing state, but neither can turn a dead
+ * subscription into an active entitlement.
  */
 export interface OrganizationEntitlements {
   organizationId: string;
-  /** The plan the ORGANIZATION is entitled to, derived from its owner. */
+  /** The plan the ORGANIZATION is entitled to through its billing anchor. */
   plan: BillingPlanTier;
   /** Max shared projects org-wide. `null` means uncapped, `0` means none. */
   sharedProjectLimit: number | null;
@@ -74,36 +65,68 @@ export interface OrganizationEntitlements {
  */
 
 /**
- * Resolve the organization's plan from its owner's subscription.
+ * Resolve the organization's active plan from its 0085 billing anchor.
  *
- * Runs on the privileged control-plane connection on purpose: `subscriptions`
- * is under 0037's user-scoped RLS policy, so an admin reading the OWNER's row
- * over `app_rls` would correctly get nothing. Both statements below are bound
- * to a single organization id / user id, so the isolation gate's requirement
- * (a scope predicate on every privileged statement) is satisfied literally.
+ * Current callers provide the privileged control-plane adapter because
+ * `subscriptions` is under 0037's user-scoped RLS policy. The direct Stripe
+ * anchor wins whenever present; only an unbound organization falls back to its
+ * derived owner. Both fallback shapes refuse a billing identity already
+ * claimed by another organization. The statement is always scoped to exactly
+ * one organization, then the canonical SubscriptionService derives any
+ * store-expiry status before capability checks consume it.
  */
-export async function getOrganizationEntitlements(
+export async function resolveOrganizationEntitlementPlan(
+  db: DatabaseAdapter,
   organizationId: string,
-): Promise<OrganizationEntitlements> {
-  const db: DatabaseAdapter = getNeonDb();
-
-  const [owner] = await db.query<{ user_id: string }>(
-    `select user_id
-       from public.organization_members
-      where organization_id = $1
-        and role = 'owner'
-      order by joined_at asc
+): Promise<BillingPlanTier> {
+  const [billing] = await db.query<{
+    user_id: string | null;
+    plan_tier: string | null;
+    status: string | null;
+  }>(
+    `select s.user_id, s.plan_tier, s.status
+       from public.organizations o
+       left join public.subscriptions s
+         on (
+           o.stripe_subscription_id is not null
+           and s.stripe_subscription_id = o.stripe_subscription_id
+         ) or (
+           o.stripe_subscription_id is null
+           and s.user_id = o.owner_user_id
+           and (
+             s.stripe_subscription_id is null
+             or not exists (
+               select 1
+                 from public.organizations claimed
+               where claimed.stripe_subscription_id = s.stripe_subscription_id
+             )
+           )
+           and (
+             s.stripe_subscription_id is not null
+             or not exists (
+               select 1
+                 from public.organizations claimed_owner
+                where claimed_owner.id <> o.id
+                  and claimed_owner.stripe_subscription_id is null
+                  and claimed_owner.owner_user_id = o.owner_user_id
+             )
+           )
+         )
+      where o.id = $1
       limit 1`,
     [organizationId],
   );
 
-  let plan: BillingPlanTier = normalizeBillingPlanTier('free');
-  if (owner?.user_id) {
-    const subscription = await SubscriptionService.getSubscription(db, owner.user_id);
-    plan = normalizeBillingPlanTier(
-      effectivePlanTier(subscription?.plan_tier, subscription?.status),
-    );
-  }
+  if (!billing?.user_id) return normalizeBillingPlanTier('free');
+  const subscription = await SubscriptionService.getSubscription(db, billing.user_id);
+  return normalizeBillingPlanTier(effectivePlanTier(subscription?.plan_tier, subscription?.status));
+}
+
+export async function getOrganizationEntitlements(
+  organizationId: string,
+): Promise<OrganizationEntitlements> {
+  const db: DatabaseAdapter = getNeonDb();
+  const plan = await resolveOrganizationEntitlementPlan(db, organizationId);
 
   const limits = getBillingPlanProductLimits(plan);
   return {

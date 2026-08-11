@@ -57,10 +57,15 @@ export const metadata = buildMetadata({
  * exists, but no cron route calls it, so do not describe a window here until
  * one runs.
  *
- * CLAIM ADDED: object storage. Uploaded and generated files are stored in
- * Cloudflare R2 and served from permanent public URLs (lib/server/object-storage.ts),
- * so anyone holding the link can open the file. That is a disclosure, not a
- * feature; making the bucket private is a product fix, not a copy fix.
+ * CLAIM CORRECTED: object storage. Clients now receive only the same-origin
+ * `/api/files/{mediaAssetId}` address from `authenticatedMediaUrl()`. That route
+ * authenticates the caller, resolves the active workspace, filters the catalog
+ * row by owner + workspace + `deleted_at`, and returns `private, no-store`.
+ * The storage layer is still split: generated videos use the private bucket,
+ * while images/files use `putObject()` in the public bucket. Normal client
+ * responses no longer expose those raw URLs, but the underlying non-video
+ * object remains public if its storage URL is obtained. Do not collapse these
+ * two access layers into either absolute.
  */
 
 export default function PrivacyPage() {
@@ -173,10 +178,14 @@ export default function PrivacyPage() {
                 <td>Files you upload or generate</td>
                 <td>Attachments, generated images, and other stored media.</td>
                 <td>
-                  Stored in Cloudflare R2 and served from <strong>permanent public URLs</strong>.
-                  The bytes do not sit behind the per-user database controls above: anyone who
-                  obtains the link can open the file without signing in. Treat a file URL as a
-                  secret, and do not upload material you cannot accept being link-accessible.
+                  Stored in Cloudflare R2 and catalogued in Neon. The product gives clients an
+                  authenticated same-origin file route that requires both the owning account and its
+                  active Personal or organisation workspace to match. Missing, deleted, foreign, and
+                  inactive-workspace files all return the same not-found response, and those
+                  responses are private and not stored by browser caches. Generated videos use a
+                  separate private bucket. Images and other non-video files remain in a public R2
+                  bucket: normal product responses do not expose its raw URLs, but anyone who
+                  obtains an underlying storage URL can access that object without signing in.
                 </td>
               </tr>
               <tr>
@@ -231,9 +240,13 @@ export default function PrivacyPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Training data</h3>
               <p className="agi-reason-p">
-                AGI does not train AGI-owned models on customer prompts, responses, or files.
-                Provider-side handling in BYOK mode is governed by your own provider account and
-                terms.
+                AGI does not train AGI-owned models on customer prompts, responses, or files. In
+                Managed Cloud, we send prompts and attached content to the provider serving the
+                model you select and receive its response; for routed models, the request passes
+                through OpenRouter. Those third parties handle that content under their applicable
+                terms and data-use policies; this statement about AGI-owned models is not a promise
+                on their behalf. In BYOK mode, provider handling is governed by your own provider
+                account and terms.
               </p>
             </li>
             <li className="agi-reason">
@@ -396,9 +409,10 @@ export default function PrivacyPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">06 &middot; Your rights, and how to use them</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Under the GDPR, UK GDPR, CCPA and similar laws you have rights of access, correction,
-            deletion, portability, and objection or restriction, and the right not to be
-            discriminated against for exercising them. Two of these are self-serve in the product:
+            Depending on where you live and subject to applicable exceptions, privacy laws such as
+            the GDPR, UK GDPR, and CCPA may give you rights of access, correction, deletion,
+            portability, objection or restriction, and non-discrimination. Two requests are
+            self-serve in the product:
           </p>
           <table className="agi-ledger" style={{ marginTop: 16 }}>
             <tbody>
@@ -430,8 +444,8 @@ export default function PrivacyPage() {
                     {CONTACT_EMAIL}
                   </a>{' '}
                   from your account address with the subject line &ldquo;
-                  {CONTACT_SUBJECTS.privacy}&rdquo;. We respond within 30 days. You may use an
-                  authorised agent where the law allows.
+                  {CONTACT_SUBJECTS.privacy}&rdquo;. Applicable law determines the response period.
+                  You may use an authorised agent where the law allows.
                 </td>
               </tr>
             </tbody>

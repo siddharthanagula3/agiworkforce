@@ -9,6 +9,10 @@ module.exports = {
   ],
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
+  // Expo 57 installs its native `expo/fetch` lazy getter during preset setup.
+  // Unit tests must never reach that native module or the network; install a
+  // writable post-preset mock that individual suites can safely spy on.
+  setupFilesAfterEnv: ['./jest.after-setup.js'],
   // @testing-library/react-native v13+ auto-extends jest matchers — no explicit setup needed
   // The extend-expect subpath was removed; matchers register automatically on import
   // The pnpm package store resolves to paths like:
@@ -17,12 +21,16 @@ module.exports = {
   // so React Native packages that use Flow types still get transformed by Babel.
   transformIgnorePatterns: [
     // uuid and shared ESM workspaces are included in the Babel transform.
-    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid))',
+    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid))',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
     '^react$': '<rootDir>/node_modules/react',
+    // Workspace packages can resolve a second pnpm peer-context copy of React
+    // Native. Keep every tested workspace module on jest-expo's configured
+    // instance so its NativeModules/Platform test bridge remains available.
+    '^react-native$': '<rootDir>/node_modules/react-native',
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/platform/local-llm/src/index',
     '^@agiworkforce/artifacts$': '<rootDir>/../../packages/platform/artifacts/src/index',

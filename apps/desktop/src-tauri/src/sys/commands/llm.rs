@@ -1417,6 +1417,10 @@ mod tests {
     use std::error::Error;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    fn openai_catalog_model() -> String {
+        crate::core::llm::models_config::get_default_model(&Provider::OpenAI).to_string()
+    }
+
     struct MockProvider {
         calls: Arc<AtomicUsize>,
     }
@@ -1430,7 +1434,7 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LLMResponse {
                 content: format!("echo: {}", request.messages[0].content),
-                model: "gpt-5.6-luna".to_string(),
+                model: request.model.clone(),
                 cached: false,
                 tokens: Some(12),
                 prompt_tokens: Some(7),
@@ -1473,7 +1477,7 @@ mod tests {
     #[tokio::test]
     async fn capability_probe_rejects_cloud_models_instead_of_inventing_defaults() {
         let result =
-            get_model_capabilities("openai".to_string(), "gpt-5.6-luna".to_string(), None).await;
+            get_model_capabilities("openai".to_string(), openai_catalog_model(), None).await;
 
         assert!(
             result.is_err(),
@@ -1500,7 +1504,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: Some("gpt-5.6-luna".to_string()),
+            model: Some("fixture-direct-model".to_string()),
             provider: Some("openai".to_string()),
             temperature: Some(0.2),
             max_tokens: Some(500),
@@ -1508,9 +1512,9 @@ mod tests {
             trust_mode: None,
         };
 
-        let llm_request = build_plain_llm_request(&request, "gpt-5.6-luna".to_string());
+        let llm_request = build_plain_llm_request(&request, "fixture-direct-model".to_string());
 
-        assert_eq!(llm_request.model, "gpt-5.6-luna");
+        assert_eq!(llm_request.model, "fixture-direct-model");
         assert_eq!(llm_request.messages.len(), 2);
         assert_eq!(llm_request.temperature, Some(0.2));
         assert_eq!(llm_request.max_tokens, Some(500));
@@ -1555,6 +1559,7 @@ mod tests {
             );
         }
 
+        let model = openai_catalog_model();
         let request = LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
@@ -1563,7 +1568,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-luna".to_string(),
+            model: model.clone(),
             temperature: Some(0.0),
             max_tokens: Some(32),
             stream: false,
@@ -1575,7 +1580,7 @@ mod tests {
 
         let preferences = RouterPreferences {
             provider: Some(Provider::OpenAI),
-            model: Some("gpt-5.6-luna".to_string()),
+            model: Some(model),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -1598,12 +1603,15 @@ mod tests {
             router.invoke_candidate(&candidate, &request).await.unwrap()
         };
         assert!(!first.response.cached);
+        assert_eq!(first.cost, 0.01);
 
         let second = {
             let router = state.router.read().await;
             router.invoke_candidate(&candidate, &request).await.unwrap()
         };
         assert!(second.response.cached);
+        assert_eq!(second.response.cost, Some(0.0));
+        assert_eq!(second.cost, 0.0);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
@@ -1616,12 +1624,12 @@ mod tests {
     #[test]
     fn map_openrouter_entry_maps_id_and_name() {
         let entry = openrouter_entry(serde_json::json!({
-            "id": "google/gemma-4-26b-a4b-it:free",
-            "name": "Gemma 4 26B A4B IT (Free)",
+            "id": "fixture-provider/fixture-chat-model:free",
+            "name": "Fixture Catalog Model (Free)",
         }));
         let model = map_openrouter_entry(&entry).expect("should map");
-        assert_eq!(model.id, "google/gemma-4-26b-a4b-it:free");
-        assert_eq!(model.name, "Gemma 4 26B A4B IT (Free)");
+        assert_eq!(model.id, "fixture-provider/fixture-chat-model:free");
+        assert_eq!(model.name, "Fixture Catalog Model (Free)");
         assert_eq!(model.provider, "open_router");
         assert!(model.available);
     }
@@ -1665,8 +1673,8 @@ mod tests {
         let body = serde_json::json!({
             "data": [
                 {
-                    "id": "google/gemma-4-26b-a4b-it:free",
-                    "name": "Gemma 4 26B A4B IT (Free)",
+                    "id": "fixture-provider/fixture-chat-model:free",
+                    "name": "Fixture Catalog Model (Free)",
                     "context_length": 131072,
                     "pricing": { "prompt": "0", "completion": "0" },
                     "architecture": { "output_modalities": ["text"] }
@@ -1686,6 +1694,6 @@ mod tests {
             .filter_map(map_openrouter_entry)
             .collect();
         assert_eq!(models.len(), 1, "audio-output model should be filtered out");
-        assert_eq!(models[0].id, "google/gemma-4-26b-a4b-it:free");
+        assert_eq!(models[0].id, "fixture-provider/fixture-chat-model:free");
     }
 }

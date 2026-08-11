@@ -62,6 +62,8 @@ import {
 } from '../user-connector-tools';
 import { EgressPolicyError } from '@/lib/egress-policy';
 
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+
 /** Route the neon query mock by SQL fragment so both tables can be stubbed. */
 function stubDb(opts: {
   installations?: Array<{ installation_id: number; account_login: string }>;
@@ -252,6 +254,53 @@ describe('loadUserConnectorToolDefs — custom remote MCP plan limit', () => {
     expect(defs.map((definition) => definition.qualifiedName)).toEqual([
       'mcp__custom-aaaaaaaaaa__search',
     ]);
+  });
+});
+
+describe('organization workspace scope', () => {
+  it('does not expose shared connector tools for a forged captured workspace', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    mockNeonQuery.mockResolvedValue([]);
+
+    const defs = await loadUserConnectorToolDefs('user-1', {
+      organizationId: ORGANIZATION_ID,
+    });
+
+    expect(defs).toEqual([]);
+    expect(
+      mockNeonQuery.mock.calls.some(
+        ([sql, params]) =>
+          String(sql).includes('from public.organization_members') &&
+          JSON.stringify(params) === JSON.stringify([ORGANIZATION_ID, 'user-1']),
+      ),
+    ).toBe(true);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('from public.organization_shared_connectors'),
+      ),
+    ).toBe(false);
+  });
+
+  it('re-verifies captured workspace membership before privileged execution', async () => {
+    mockNeonQuery.mockResolvedValue([]);
+
+    const result = await makeUserConnectorExecutor('user-1', ORGANIZATION_ID)(
+      'orgmcp-a1b2c3d4e5',
+      'whoami',
+      {},
+    );
+
+    expect(result).toEqual({
+      handled: true,
+      content: 'This shared connector is not available for this account.',
+      isError: true,
+    });
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('from public.organization_shared_connectors'),
+      ),
+    ).toBe(false);
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
   });
 });
 

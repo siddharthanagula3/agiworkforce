@@ -5,7 +5,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({
 }));
 
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
-import { generateImages, generateVideo } from './media-api-service';
+import { generateImages, generateVideo, MediaApiError } from './media-api-service';
 
 describe('media API service idempotency', () => {
   beforeEach(() => {
@@ -66,5 +66,28 @@ describe('media API service idempotency', () => {
       operation: 'video',
       operationId,
     });
+  });
+
+  it('preserves billing tier evidence from a video refusal', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: {
+          message: 'Video generation requires Max 15x.',
+          code: 'plan_upgrade_required',
+          type: 'invalid_request_error',
+          current_plan: 'pro',
+          required_plans: ['max_15x', 'enterprise', 42],
+        },
+      }),
+    } as Response);
+
+    await expect(generateVideo({ prompt: 'animate an observatory' })).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof MediaApiError &&
+        error.currentPlan === 'pro' &&
+        error.requiredPlans?.join(',') === 'max_15x,enterprise',
+    );
   });
 });

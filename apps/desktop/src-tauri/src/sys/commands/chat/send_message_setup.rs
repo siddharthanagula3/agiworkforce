@@ -1017,6 +1017,40 @@ mod tests {
     use crate::core::skills::Skill;
     use crate::sys::commands::chat::types::{ChatExecutionMode, ChatSendMessageRequest};
 
+    fn openai_reasoning_model() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.capabilities.thinking)
+            .map(|entry| entry.id.as_str())
+            .expect("catalog must include an OpenAI reasoning model")
+    }
+
+    fn adaptive_anthropic_model() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == "anthropic"
+                    && entry.reasoning.as_ref().is_some_and(|reasoning| {
+                        reasoning.thinking_default.as_deref() == Some("adaptive")
+                    })
+            })
+            .map(|entry| entry.id.as_str())
+            .expect("catalog must include an adaptive Anthropic reasoning model")
+    }
+
+    fn manually_controlled_anthropic_model() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == "anthropic"
+                    && entry.capabilities.thinking
+                    && entry.quality_tier == "balanced"
+                    && !crate::core::llm::models_config::model_uses_adaptive_thinking(&entry.id)
+            })
+            .map(|entry| entry.id.as_str())
+            .expect("catalog must include a manually controlled Anthropic reasoning model")
+    }
+
     // ── DESKTOP-SKILLS-EAGER-INJECTION-01: progressive disclosure ─────────────
     // The prompt block this turn injects is the metadata catalog, never a body.
     // `maybe_inject_skill_catalog` itself needs an AppHandle, so pin the payload it
@@ -1114,7 +1148,7 @@ mod tests {
         use crate::core::llm::Provider;
         let mut req = minimal_request_with_mode(Some("local"), false);
         req.provider = Some("ollama".to_string());
-        req.model_override = Some("gemma4:e4b".to_string()); // dynamic, not in catalog
+        req.model_override = Some("fixture-local-model:dynamic".to_string());
         let (provider, model) = resolve_provider_and_model(&req);
         assert!(
             matches!(provider, Some(Provider::Ollama)),
@@ -1122,7 +1156,7 @@ mod tests {
              None forces the Auto path and silently drops the Ollama send (LOCAL-CHAT-NOINVOKE-01)"
         );
         assert_eq!(
-            model, "gemma4:e4b",
+            model, "fixture-local-model:dynamic",
             "the dynamic model id must pass through unchanged"
         );
     }
@@ -1278,7 +1312,7 @@ mod tests {
         let preferences = build_router_preferences(
             &req,
             Some(Provider::OpenAI),
-            "gpt-5.6-sol",
+            openai_reasoning_model(),
             "pro".to_string(),
         );
 
@@ -1305,28 +1339,34 @@ mod tests {
             RoutingStrategy::AutoPremium
         ));
         assert!(matches!(
-            resolve_routing_strategy("gpt-5.6-sol"),
+            resolve_routing_strategy("fixture-explicit-model"),
             RoutingStrategy::Auto
         ));
     }
 
     #[test]
-    fn opus_tool_workflows_default_to_adaptive_thinking() {
-        let thinking = resolve_thinking_parameter("claude-opus-5", None, None, true, "hello world");
-        assert!(matches!(thinking, Some(ThinkingParameter::Adaptive { .. })));
-    }
-
-    #[test]
-    fn opus_explicit_thinking_with_a_legacy_budget_uses_adaptive_thinking() {
+    fn adaptive_models_default_tool_workflows_to_adaptive_thinking() {
         let thinking =
-            resolve_thinking_parameter("claude-opus-5", Some(true), Some(32_000), false, "analyze");
+            resolve_thinking_parameter(adaptive_anthropic_model(), None, None, true, "hello world");
         assert!(matches!(thinking, Some(ThinkingParameter::Adaptive { .. })));
     }
 
     #[test]
-    fn opus_triggered_thinking_uses_adaptive_thinking() {
+    fn adaptive_model_explicit_thinking_with_a_legacy_budget_stays_adaptive() {
         let thinking = resolve_thinking_parameter(
-            "claude-opus-5",
+            adaptive_anthropic_model(),
+            Some(true),
+            Some(32_000),
+            false,
+            "analyze",
+        );
+        assert!(matches!(thinking, Some(ThinkingParameter::Adaptive { .. })));
+    }
+
+    #[test]
+    fn adaptive_model_triggered_thinking_stays_adaptive() {
+        let thinking = resolve_thinking_parameter(
+            adaptive_anthropic_model(),
             None,
             None,
             false,
@@ -1337,15 +1377,20 @@ mod tests {
 
     #[test]
     fn explicit_thinking_mode_true_returns_enabled() {
-        let thinking =
-            resolve_thinking_parameter("claude-sonnet-5", Some(true), None, false, "write code");
+        let thinking = resolve_thinking_parameter(
+            manually_controlled_anthropic_model(),
+            Some(true),
+            None,
+            false,
+            "write code",
+        );
         assert!(matches!(thinking, Some(ThinkingParameter::Enabled(true))));
     }
 
     #[test]
     fn explicit_thinking_mode_true_with_budget_returns_budget() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             Some(true),
             Some(32_000),
             false,
@@ -1368,7 +1413,7 @@ mod tests {
         // provider layer rather than being omitted (see resolve_thinking_parameter
         // §2). Either way thinking is disabled — the trigger never re-enables it.
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             Some(false),
             None,
             false,
@@ -1383,7 +1428,7 @@ mod tests {
     #[test]
     fn auto_detect_ultrathink_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             None,
             None,
             false,
@@ -1400,7 +1445,7 @@ mod tests {
     #[test]
     fn auto_detect_think_hard_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             None,
             None,
             false,
@@ -1417,7 +1462,7 @@ mod tests {
     #[test]
     fn auto_detect_think_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             None,
             None,
             false,
@@ -1433,16 +1478,21 @@ mod tests {
 
     #[test]
     fn auto_detect_skipped_for_unsupported_model() {
-        // GPT-4 does not support thinking
-        let thinking =
-            resolve_thinking_parameter("gpt-4", None, None, false, "ultrathink about this");
+        // An unknown synthetic model has no catalog thinking capability.
+        let thinking = resolve_thinking_parameter(
+            "fixture-primary-model",
+            None,
+            None,
+            false,
+            "ultrathink about this",
+        );
         assert!(thinking.is_none());
     }
 
     #[test]
-    fn no_trigger_no_thinking_on_non_opus_model() {
+    fn no_trigger_no_thinking_on_manually_controlled_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-5",
+            manually_controlled_anthropic_model(),
             None,
             None,
             false,
@@ -1453,10 +1503,9 @@ mod tests {
 
     #[test]
     fn auto_detect_works_on_openai_reasoning_model() {
-        // Uses "gpt-5.6-sol" (catalog reasoning model with capabilities.thinking=true).
         // The "think about" trigger phrase produces ThinkingBudget::Low = 10K tokens.
         let thinking = resolve_thinking_parameter(
-            "gpt-5.6-sol",
+            openai_reasoning_model(),
             None,
             None,
             false,

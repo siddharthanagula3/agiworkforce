@@ -13,10 +13,11 @@ import {
   resolveMultimodalArtifacts,
   type FileSystemDeps,
 } from '../multimodal.js';
-import { getModelById } from '../catalog.js';
+import { getDefaultModel } from '../catalog.js';
+import { requireExecutorchVisionModel, requireGgufVisionModel } from './catalog-fixtures.js';
 
-const CHECK = '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae';
-const MMPROJ = 'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82';
+const CHECK = requireGgufVisionModel().checksum!;
+const MMPROJ = requireGgufVisionModel().mmprojChecksum!;
 
 function makeDeps(overrides: Partial<FileSystemDeps> = {}): FileSystemDeps {
   return {
@@ -29,25 +30,25 @@ function makeDeps(overrides: Partial<FileSystemDeps> = {}): FileSystemDeps {
 }
 
 describe('multimodal: resolveMultimodalArtifacts', () => {
-  it('resolves the qwen3-vl-2b base + mmproj artifact pair from the real catalog entry', () => {
-    const model = getModelById('qwen3-vl-2b-instruct')!;
+  it('resolves the base + projector artifact pair from the catalog vision entry', () => {
+    const model = requireGgufVisionModel();
     const artifacts = resolveMultimodalArtifacts(model);
     expect(artifacts).not.toBeNull();
     expect(artifacts!.model.checksum).toBe(CHECK);
     expect(artifacts!.mmproj.checksum).toBe(MMPROJ);
-    expect(artifacts!.model.sizeBytes).toBe(1_107_409_952);
-    expect(artifacts!.mmproj.sizeBytes).toBe(445_053_216);
+    expect(artifacts!.model.sizeBytes).toBe(model.fileSizeBytes);
+    expect(artifacts!.mmproj.sizeBytes).toBe(model.mmprojSizeBytes);
     expect(isMultimodalModel(model)).toBe(true);
   });
 
-  it('returns null for a text-only model (default qwen3-4b)', () => {
-    const model = getModelById('qwen3-4b-instruct-2507')!;
+  it('returns null for the catalog text-only default', () => {
+    const model = getDefaultModel();
     expect(resolveMultimodalArtifacts(model)).toBeNull();
     expect(isMultimodalModel(model)).toBe(false);
   });
 
   it('returns null when the mmproj fields are absent even if visionIn is true', () => {
-    const base = getModelById('qwen3-vl-2b-instruct')!;
+    const base = requireGgufVisionModel();
     const noMmproj: OnDeviceModel = {
       ...base,
       mmprojUrl: undefined,
@@ -60,13 +61,13 @@ describe('multimodal: resolveMultimodalArtifacts', () => {
 
 describe('multimodal: effectiveVisionIn (§8 gate)', () => {
   it('is false when the mmproj is not installed, even for a visionIn model', () => {
-    const model = getModelById('qwen3-vl-2b-instruct')!;
+    const model = requireGgufVisionModel();
     expect(effectiveVisionIn(model, { mmprojInstalled: false })).toBe(false);
     expect(effectiveVisionIn(model, { mmprojInstalled: true })).toBe(true);
   });
 
   it('is always false for a text-only model regardless of mmproj flag', () => {
-    const model = getModelById('qwen3-4b-instruct-2507')!;
+    const model = getDefaultModel();
     expect(effectiveVisionIn(model, { mmprojInstalled: true })).toBe(false);
   });
 });
@@ -114,7 +115,7 @@ describe('multimodal: ensureVerifiedArtifact', () => {
 
 describe('multimodal: ensureMultimodalArtifacts', () => {
   it('downloads+verifies both files and reports monotonic aggregate progress', async () => {
-    const model = getModelById('qwen3-vl-2b-instruct')!;
+    const model = requireGgufVisionModel();
     const artifacts = resolveMultimodalArtifacts(model)!;
     const sha256OfFile = vi
       .fn()
@@ -131,15 +132,15 @@ describe('multimodal: ensureMultimodalArtifacts', () => {
 
     const result = await ensureMultimodalArtifacts({
       artifacts,
-      modelPath: '/d/qwen3-vl.gguf',
-      mmprojPath: '/d/qwen3-vl.mmproj.gguf',
+      modelPath: '/d/fixture-vision-model.gguf',
+      mmprojPath: '/d/fixture-vision-projector.gguf',
       deps,
       onProgress: (f) => progress.push(f),
     });
 
     expect(result).toEqual({
-      modelPath: '/d/qwen3-vl.gguf',
-      mmprojPath: '/d/qwen3-vl.mmproj.gguf',
+      modelPath: '/d/fixture-vision-model.gguf',
+      mmprojPath: '/d/fixture-vision-projector.gguf',
     });
     expect(downloadToFile).toHaveBeenCalledTimes(2);
     // progress never decreases and ends at 1.
@@ -183,26 +184,26 @@ describe('multimodal: buildMultimodalMessages', () => {
 });
 
 describe('multimodal: hasRunnableGgufArtifacts (picker installability predicate)', () => {
-  it('is true for the qwen3-vl entry (verified base + mmproj artifacts)', () => {
-    expect(hasRunnableGgufArtifacts(getModelById('qwen3-vl-2b-instruct')!)).toBe(true);
+  it('is true for the catalog GGUF vision entry with verified artifacts', () => {
+    expect(hasRunnableGgufArtifacts(requireGgufVisionModel())).toBe(true);
   });
 
-  it('is false for non-gguf catalog rows (default qwen3-4b, ExecuTorch-managed)', () => {
-    expect(hasRunnableGgufArtifacts(getModelById('qwen3-4b-instruct-2507')!)).toBe(false);
+  it('is false for the non-GGUF catalog default', () => {
+    expect(hasRunnableGgufArtifacts(getDefaultModel())).toBe(false);
   });
 
-  it('is false for the gated lfm2-vl row (no verified download url)', () => {
-    expect(hasRunnableGgufArtifacts(getModelById('lfm2-vl-450m')!)).toBe(false);
+  it('is false for the gated ExecuTorch vision row', () => {
+    expect(hasRunnableGgufArtifacts(requireExecutorchVisionModel())).toBe(false);
   });
 
   it('is false for a vision gguf row missing its mmproj triple', () => {
-    const base = getModelById('qwen3-vl-2b-instruct')!;
+    const base = requireGgufVisionModel();
     const broken: OnDeviceModel = { ...base, mmprojChecksum: undefined };
     expect(hasRunnableGgufArtifacts(broken)).toBe(false);
   });
 
   it('is true for a text-only gguf row with just the base triple', () => {
-    const base = getModelById('qwen3-vl-2b-instruct')!;
+    const base = requireGgufVisionModel();
     const textOnly: OnDeviceModel = {
       ...base,
       capabilities: { ...base.capabilities, visionIn: false },

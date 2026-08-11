@@ -1408,6 +1408,9 @@ export function getWebviewContent(
       margin-left: 8px;
       opacity: 0.8;
     }
+    .tool-call-done--error {
+      color: var(--agi-vscode-danger);
+    }
 
     /* ── Structured plan visualization ── */
     .plan-card {
@@ -3168,6 +3171,7 @@ export function getWebviewContent(
         if (tcEnd) {
           tcEnd.el.classList.remove('tool-call--pending');
           tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done');
+          if (msg.payload.isError) toolCallStackHasError = true;
           tcEnd.responseEl.textContent = formatToolPayload(msg.payload.output);
           tcEnd.responseSection.style.display = '';
           if (typeof msg.payload.elapsedMs === 'number') {
@@ -3178,6 +3182,10 @@ export function getWebviewContent(
 
       else if (msg.type === 'error') {
         removeTyping();
+        if (toolCallStack) {
+          toolCallStackHasError = true;
+          finalizeToolCallStack();
+        }
         addMessage('error', msg.payload.message);
         setStreaming(false);
         if (activeQueuedClientMessageId) {
@@ -3568,6 +3576,7 @@ export function getWebviewContent(
     var toolCallStack = null; // active .tool-call-stack container
     var toolCallMap = {}; // toolUseId → inline disclosure state
     var progressMap = {}; // progressId → inline disclosure state
+    var toolCallStackHasError = false;
 
     function upsertPlanCard(plan) {
       if (!activePlanCard) {
@@ -3675,6 +3684,7 @@ export function getWebviewContent(
 
     function ensureToolCallStack() {
       if (toolCallStack) return toolCallStack;
+      toolCallStackHasError = false;
       var stackEl = document.createElement('div');
       stackEl.className = 'tool-call-stack';
       messagesEl.appendChild(stackEl);
@@ -3831,6 +3841,7 @@ export function getWebviewContent(
         existing.el.classList.add('tool-call--pending');
         existing.iconEl.classList.add('codicon-loading');
       } else if (status === 'failed') {
+        toolCallStackHasError = true;
         existing.el.classList.add('tool-call--error');
         existing.iconEl.classList.add('codicon-error');
       } else {
@@ -3844,12 +3855,15 @@ export function getWebviewContent(
     function finalizeToolCallStack() {
       if (!toolCallStack) return;
       var doneEl = document.createElement('div');
-      doneEl.className = 'tool-call-done';
-      doneEl.innerHTML = '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
+      doneEl.className = 'tool-call-done' + (toolCallStackHasError ? ' tool-call-done--error' : '');
+      doneEl.innerHTML = toolCallStackHasError
+        ? '<span class="codicon codicon-error" aria-hidden="true"></span> Completed with errors'
+        : '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
       toolCallStack.appendChild(doneEl);
       toolCallStack = null;
       toolCallMap = {};
       progressMap = {};
+      toolCallStackHasError = false;
     }
 
     // ── Empty-state prompt chips (design-spec §8) ────────────────────────────

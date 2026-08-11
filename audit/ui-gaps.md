@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 545aadc3581ee768a7f05e8d845787be80bf3b761ba54433539add46fcf0fe36 -->
+<!-- ui-gaps-csv-sha256: f495ef48ac098d39e6f5dfe1a1f1c99a9221cf35aceba4aec5f0cf50efaac861 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -3557,7 +3557,7 @@ Consider rendering VoiceConversationScreen as a semi-transparent overlay above t
 
 **Gap**
 
-Codex's remote composer shows the active model+effort ('5.6 Sol High') as a tappable chip, opening first a quick paged picker then an Advanced sheet with Model, Intelligence, and Speed dropdowns. agiworkforce has a comparable Model+Effort picker (ModelPickerSheet) but it is wired only into the main chat tab; the Dispatch screen and Code Session screen composers have no model/effort affordance at all, so users cannot choose which model runs a dispatched task or coding session from mobile.
+Codex's remote composer shows the active model+effort as a tappable chip, opening first a quick paged picker then an Advanced sheet with Model, Intelligence, and Speed dropdowns. agiworkforce has a comparable Model+Effort picker (ModelPickerSheet) but it is wired only into the main chat tab; the Dispatch screen and Code Session screen composers have no model/effort affordance at all, so users cannot choose which model runs a dispatched task or coding session from mobile.
 
 **Evidence**
 
@@ -4753,7 +4753,7 @@ Completed. Keep these chips runtime-capability-aware and editable; add categorie
 
 **Gap**
 
-The reference dropdown leads with an 'Intelligence' group — Instant 5.5 / Medium / High / Extra High / Pro — and demotes the model family to a single submenu row ('GPT-5.6 Sol >'). That matches how people choose ('how hard should it think?') rather than how vendors ship. agiworkforce inverts it: a recommended/more model roster is primary and effort lives in a nested flyout, and the effort marks use provider vocabulary (none/minimal/low/medium/high/xhigh/max) rather than human labels.
+The reference dropdown leads with an 'Intelligence' group — Instant 5.5 / Medium / High / Extra High / Pro — and demotes the model family to a single submenu row ('current flagship OpenAI model >'). That matches how people choose ('how hard should it think?') rather than how vendors ship. agiworkforce inverts it: a recommended/more model roster is primary and effort lives in a nested flyout, and the effort marks use provider vocabulary (none/minimal/low/medium/high/xhigh/max) rather than human labels.
 
 **Evidence**
 
@@ -6605,7 +6605,7 @@ Render the top 3 threads inline at the head of the webview using the existing Th
 
 **Reference screenshot(s)**
 
-- `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt-5-6-sol-announcement.png`
+- `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt%2D5%2D6%2Dsol%2Dannouncement.png`
 
 ### GAP-287 — No dedicated session-browser sidebar (Local/Web tabs, search, New session)
 
@@ -6720,7 +6720,7 @@ Drive an announcement card from the model catalogue metadata (packages/contracts
 
 **Reference screenshot(s)**
 
-- `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt-5-6-sol-announcement.png`
+- `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt%2D5%2D6%2Dsol%2Dannouncement.png`
 
 ### GAP-292 — Effort picker leaves the webview and shows no selected-state checkmark
 

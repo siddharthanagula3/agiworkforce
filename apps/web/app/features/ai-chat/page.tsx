@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
@@ -17,13 +15,6 @@ export const metadata = buildMetadata({
 export default function AiChatFeaturePage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={breadcrumbSchema([
-          { name: 'Home', path: '/' },
-          { name: 'Features', path: '/features' },
-          { name: 'AI Chat', path: '/features/ai-chat' },
-        ])}
-      />
       <main className="agi-shell">
         <Header />
 

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizePricingSchedule } from '../scripts/compile.mjs';
+import {
+  normalizeInputTokenPricingTiers,
+  normalizeLongContextPricing,
+  normalizePricingSchedule,
+} from '../scripts/compile.mjs';
 
 /**
  * Compiler-side coverage for the dated-pricing MECHANISM.
@@ -18,6 +22,85 @@ import { normalizePricingSchedule } from '../scripts/compile.mjs';
  */
 
 const MODEL = 'fixture-model';
+
+test('normalizes ordered input-length tiers into explicit registry rate names', () => {
+  assert.deepEqual(
+    normalizeInputTokenPricingTiers(MODEL, [
+      {
+        thresholdTokens: 10,
+        inputCost: 2,
+        outputCost: 6,
+        cached_input: 0.2,
+        cached_write: 2.5,
+      },
+      {
+        thresholdTokens: 20,
+        inputCost: 3,
+        outputCost: 9,
+        cached_input: 0.3,
+        cached_write: 3.75,
+        cached_write_1h: 6,
+      },
+    ]),
+    [
+      {
+        thresholdTokens: 10,
+        inputPerMillion: 2,
+        outputPerMillion: 6,
+        cacheReadPerMillion: 0.2,
+        cacheWritePerMillion: 2.5,
+      },
+      {
+        thresholdTokens: 20,
+        inputPerMillion: 3,
+        outputPerMillion: 9,
+        cacheReadPerMillion: 0.3,
+        cacheWritePerMillion: 3.75,
+        cacheWrite1hPerMillion: 6,
+      },
+    ],
+  );
+});
+
+test('rejects unusable or silently lossy input-length tiers', () => {
+  assert.throws(
+    () =>
+      normalizeInputTokenPricingTiers(MODEL, [{ thresholdTokens: 0, inputCost: 2, outputCost: 6 }]),
+    /thresholdTokens must be a positive integer/u,
+  );
+  assert.throws(
+    () =>
+      normalizeInputTokenPricingTiers(MODEL, [
+        {
+          thresholdTokens: 10,
+          inputCost: 2,
+          outputCost: 6,
+          inventedRate: 1,
+        },
+      ]),
+    /has unsupported keys: inventedRate/u,
+  );
+  assert.throws(() => normalizeInputTokenPricingTiers(MODEL, []), /must be a non-empty array/u);
+  assert.throws(
+    () =>
+      normalizeInputTokenPricingTiers(MODEL, [
+        { thresholdTokens: 20, inputCost: 3, outputCost: 9 },
+        { thresholdTokens: 10, inputCost: 2, outputCost: 6 },
+      ]),
+    /thresholds must be strictly increasing/u,
+  );
+});
+
+test('normalizes the legacy singleton only for read compatibility', () => {
+  assert.deepEqual(
+    normalizeLongContextPricing(MODEL, {
+      thresholdTokens: 10,
+      inputCost: 2,
+      outputCost: 6,
+    }),
+    { thresholdTokens: 10, inputPerMillion: 2, outputPerMillion: 6 },
+  );
+});
 
 test('normalizes a dated window into registry pricing fields', () => {
   const schedule = normalizePricingSchedule(MODEL, [

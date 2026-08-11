@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
+import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
-    model: 'claude-opus-5',
+    model: ANTHROPIC_PREMIUM_MODEL_ID,
     messages: [{ role: 'user', content: 'hi' }],
     ...overrides,
   };

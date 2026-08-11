@@ -7,6 +7,50 @@ import {
   selectIsConversationStreaming,
 } from './web-chat-store';
 
+const conversationFixture = (id: string) => ({
+  id,
+  title: `Conversation ${id}`,
+  model: null,
+  projectId: null,
+  isPinned: false,
+  isStarred: false,
+  isArchived: false,
+  isTemporary: false,
+  createdAt: '2026-08-11T00:00:00.000Z',
+  updatedAt: '2026-08-11T00:00:00.000Z',
+});
+
+describe('chatStore — paginated conversation identity', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('upserts a fully loaded deep-linked conversation that is absent from the sidebar page', () => {
+    const deepLinked = conversationFixture('deep-linked');
+
+    useChatStore.getState().upsertConversation(deepLinked);
+    useChatStore.getState().upsertConversation({ ...deepLinked, title: 'Loaded detail' });
+
+    expect(useChatStore.getState().conversations).toEqual([
+      expect.objectContaining({ id: deepLinked.id, title: 'Loaded detail' }),
+    ]);
+  });
+
+  it('preserves the active detailed row when a concurrent first sidebar page omits it', () => {
+    const deepLinked = conversationFixture('deep-linked');
+    const recent = conversationFixture('recent');
+
+    useChatStore.getState().upsertConversation(deepLinked);
+    useChatStore.getState().setActiveConversation(deepLinked.id);
+    useChatStore.getState().setConversations([recent]);
+
+    expect(useChatStore.getState().conversations.map(({ id }) => id)).toEqual([
+      deepLinked.id,
+      recent.id,
+    ]);
+  });
+});
+
 describe('chatStore — ambient managed search', () => {
   beforeEach(() => {
     useChatStore.getState().reset();

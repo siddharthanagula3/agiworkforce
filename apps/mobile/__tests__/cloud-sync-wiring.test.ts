@@ -92,6 +92,12 @@ import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatStore } from '../stores/chatStore';
 import type { ChatMessage } from '../types/chat';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import {
+  requireLocalModel,
+  requireAutoMode,
+  requireMediaSlotModel,
+  requireMobileCloudModel,
+} from '../test-utils/modelFixtures';
 import { syncNow } from '../services/cloudSyncEngine';
 import { useAuthStore } from '../src/features/auth/store';
 import {
@@ -104,8 +110,10 @@ const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000001'; // a valid UUIDv7 conversation id
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
-const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const LOCAL_MODEL = requireLocalModel().id;
+const IMAGE_MODEL = requireMediaSlotModel('image').id;
+const AUTO_MODEL = requireAutoMode().id;
 
 /** Drive streamChat to emit one content delta then complete. */
 function streamReplies(text: string) {
@@ -206,21 +214,16 @@ describe('cloud send → sync write-through', () => {
       pinned: false,
       starred: false,
       archived: false,
-      model: 'auto-balanced',
+      model: AUTO_MODEL,
       executionMode: 'cloud',
     });
 
     const assistantId = useChatStore
       .getState()
-      .beginImageGeneration(
-        CONV_ID,
-        'Create an image',
-        'a blue observatory',
-        'gemini-3.1-flash-image',
-      );
+      .beginImageGeneration(CONV_ID, 'Create an image', 'a blue observatory', IMAGE_MODEL);
     useChatStore.getState().completeImageGeneration(CONV_ID, assistantId, {
       imageUrl: 'https://example.com/observatory.png',
-      model: 'gemini-3.1-flash-image',
+      model: IMAGE_MODEL,
     });
 
     expect(useChatMessageStore.getState().messages[CONV_ID]).toBeUndefined();
@@ -237,7 +240,7 @@ describe('cloud send → sync write-through', () => {
     );
     expect(
       useChatCloudMessageStore.getState().conversations.find((c) => c.id === CONV_ID)?.model,
-    ).toBe('auto-balanced');
+    ).toBe(AUTO_MODEL);
   });
 
   it('forks a Cloud conversation wholly inside the Cloud repository', async () => {

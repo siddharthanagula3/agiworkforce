@@ -1,40 +1,28 @@
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use super::Vector;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EmbeddingModel {
-    OllamaNomicEmbedText,
-
-    OllamaMxbaiEmbedLarge,
-
-    FastembedAllMiniLM,
-}
-
-impl EmbeddingModel {
-    pub fn dimensions(&self) -> usize {
-        match self {
-            Self::OllamaNomicEmbedText => 768,
-            Self::OllamaMxbaiEmbedLarge => 1024,
-            Self::FastembedAllMiniLM => 384,
-        }
-    }
-
-    pub fn ollama_model_name(&self) -> Option<&str> {
-        match self {
-            Self::OllamaNomicEmbedText => Some("nomic-embed-text"),
-            Self::OllamaMxbaiEmbedLarge => Some("mxbai-embed-large"),
-            Self::FastembedAllMiniLM => None,
-        }
-    }
+    /// Discover an installed Ollama model whose provider metadata declares
+    /// embedding support. The concrete model identity stays runtime-owned.
+    OllamaRuntime,
+    /// Reserved for a future bundled embedding runtime. It remains explicitly
+    /// unavailable until that runtime is actually wired.
+    BundledUnavailable,
 }
 
 #[derive(Debug, Clone)]
 pub struct EmbeddingConfig {
     pub model: EmbeddingModel,
+    /// Optional model selected by Ollama runtime discovery or explicit local
+    /// configuration. No provider model is compiled into the application.
+    pub ollama_model: Option<String>,
     pub ollama_url: String,
     pub enable_fallback: bool,
     pub timeout: Duration,
@@ -43,7 +31,8 @@ pub struct EmbeddingConfig {
 impl Default for EmbeddingConfig {
     fn default() -> Self {
         Self {
-            model: EmbeddingModel::OllamaNomicEmbedText,
+            model: EmbeddingModel::OllamaRuntime,
+            ollama_model: None,
             ollama_url: crate::core::llm::OLLAMA_DEFAULT_BASE_URL.to_string(),
             enable_fallback: true,
             timeout: Duration::from_secs(30),
@@ -54,6 +43,8 @@ impl Default for EmbeddingConfig {
 pub struct EmbeddingGenerator {
     config: EmbeddingConfig,
     client: Client,
+    ollama_model: Option<String>,
+    observed_dimensions: AtomicUsize,
 }
 
 impl EmbeddingGenerator {
@@ -61,15 +52,43 @@ impl EmbeddingGenerator {
     /// Used when the full async initialization fails and we need a valid but non-functional state.
     pub fn new_degraded(config: EmbeddingConfig) -> Result<Self> {
         let client = Client::builder().timeout(config.timeout).build()?;
-        Ok(Self { config, client })
+        let ollama_model = config.ollama_model.clone();
+        Ok(Self {
+            config,
+            client,
+            ollama_model,
+            observed_dimensions: AtomicUsize::new(0),
+        })
     }
 
     pub async fn new(config: EmbeddingConfig) -> Result<Self> {
         let client = Client::builder().timeout(config.timeout).build()?;
 
-        let generator = Self { config, client };
+        let mut ollama_model = config.ollama_model.clone();
+        if config.model == EmbeddingModel::OllamaRuntime && ollama_model.is_none() {
+            match crate::core::llm::capability_detection::find_installed_model_with_capability(
+                &client,
+                &config.ollama_url,
+                "embedding",
+            )
+            .await
+            {
+                Ok(discovered) => ollama_model = Some(discovered),
+                Err(error) => tracing::warn!(
+                    "Ollama embedding-model discovery failed: {}. Will use fallback if enabled.",
+                    error
+                ),
+            }
+        }
 
-        if generator.config.model.ollama_model_name().is_some() {
+        let generator = Self {
+            config,
+            client,
+            ollama_model,
+            observed_dimensions: AtomicUsize::new(0),
+        };
+
+        if generator.config.model == EmbeddingModel::OllamaRuntime {
             if let Err(e) = generator.test_ollama_connection().await {
                 tracing::warn!(
                     "Ollama connection test failed: {}. Will use fallback if enabled.",
@@ -79,6 +98,12 @@ impl EmbeddingGenerator {
                 if !generator.config.enable_fallback {
                     return Err(anyhow!("Ollama unavailable and fallback disabled"));
                 }
+            }
+
+            if generator.ollama_model.is_none() && !generator.config.enable_fallback {
+                return Err(anyhow!(
+                    "No installed Ollama model declares embedding capability"
+                ));
             }
         }
 
@@ -97,9 +122,13 @@ impl EmbeddingGenerator {
     }
 
     pub async fn generate(&self, text: &str) -> Result<Vector> {
-        if let Some(model_name) = self.config.model.ollama_model_name() {
+        if let Some(model_name) = self.ollama_model.as_deref() {
             match self.generate_ollama(text, model_name).await {
-                Ok(embedding) => return Ok(embedding),
+                Ok(embedding) => {
+                    self.observed_dimensions
+                        .store(embedding.len(), Ordering::Relaxed);
+                    return Ok(embedding);
+                }
                 Err(e) => {
                     tracing::warn!("Ollama embedding generation failed: {}", e);
 
@@ -156,7 +185,7 @@ impl EmbeddingGenerator {
     async fn generate_fastembed(&self, _text: &str) -> Result<Vector> {
         Err(anyhow!(
             "Local embedding generation via fastembed is not available. To generate embeddings locally, \
-             install and start Ollama (https://ollama.com), then run: ollama pull nomic-embed-text. \
+             install and start Ollama (https://ollama.com), then install a model whose runtime metadata declares embedding capability. \
              Alternatively, configure an OpenAI or Google API key in Settings for cloud-based embeddings."
         ))
     }
@@ -173,17 +202,17 @@ impl EmbeddingGenerator {
     }
 
     pub fn dimensions(&self) -> usize {
-        self.config.model.dimensions()
+        self.observed_dimensions.load(Ordering::Relaxed)
     }
 
     /// Returns a stable identifier for the current embedding model.
     /// Used to tag stored embeddings so they are only compared within
     /// the same vector space.
     pub fn model_id(&self) -> String {
-        match &self.config.model {
-            EmbeddingModel::OllamaNomicEmbedText => "ollama:nomic-embed-text".to_string(),
-            EmbeddingModel::OllamaMxbaiEmbedLarge => "ollama:mxbai-embed-large".to_string(),
-            EmbeddingModel::FastembedAllMiniLM => "fastembed:all-MiniLM-L6-v2".to_string(),
+        match (&self.config.model, self.ollama_model.as_deref()) {
+            (EmbeddingModel::OllamaRuntime, Some(model)) => format!("ollama:{model}"),
+            (EmbeddingModel::OllamaRuntime, None) => "embedding:runtime-unresolved".to_string(),
+            (EmbeddingModel::BundledUnavailable, _) => "embedding:bundled-unavailable".to_string(),
         }
     }
 }
@@ -224,7 +253,8 @@ mod tests {
 
             match result {
                 Ok(embedding) => {
-                    assert_eq!(embedding.len(), 768);
+                    assert!(!embedding.is_empty());
+                    assert_eq!(generator.dimensions(), embedding.len());
                     println!("Generated embedding with {} dimensions", embedding.len());
                 }
                 Err(e) => {

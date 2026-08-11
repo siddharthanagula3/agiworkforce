@@ -17,17 +17,7 @@
     "lmstudio": "LM Studio"
   },
   "models": {
-    "auto": "Авто (Рекомендуется)",
-    "claude-sonnet": "Claude Sonnet",
-    "claude-opus": "Claude Opus",
-    "claude-haiku": "Claude Haiku",
-    "gpt-5.6-sol": "GPT-5.6 Sol",
-    "gpt-5.6-luna": "GPT-5.6 Luna",
-    "gemini-pro": "Gemini Pro",
-    "gemini-flash": "Gemini Flash",
-    "mistral": "Mistral",
-    "mixtral": "Mixtral",
-    "codellama": "CodeLlama"
+    "auto": "Авто (Рекомендуется)"
   },
   "selectProvider": "Выбрать провайдера",
   "selectModel": "Выбрать модель",

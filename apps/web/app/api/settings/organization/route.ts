@@ -23,6 +23,11 @@ import {
   resolvePurchasedSeatsForOwner,
   type OwnerPurchasedSeats,
 } from '@/app/api/stripe-webhook/lib/seats';
+import {
+  listWorkspaceMemberships,
+  persistProvenActiveWorkspaceSelection,
+  resolveActiveOrganizationId,
+} from '@/lib/services/active-workspace-service';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -103,7 +108,8 @@ function buildOrgResponse(
 
 /**
  * GET /api/settings/organization
- * Return the organization the current user belongs to (first match).
+ * Return the active workspace plus every organization membership available to
+ * the account. Personal scope is represented by a null active organization.
  */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
@@ -112,22 +118,32 @@ async function handleGet(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  // Find the organization the user is a member of.
-  const [membership] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where user_id = $1
-     order by joined_at asc
-     limit 1`,
-    [userId],
-  );
+  const [activeOrganizationId, workspaces] = await Promise.all([
+    resolveActiveOrganizationId(db, userId),
+    listWorkspaceMemberships(db, userId),
+  ]);
+
+  const [membership] = activeOrganizationId
+    ? await db.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+           from public.organization_members
+          where organization_id = $1 and user_id = $2
+          limit 1`,
+        [activeOrganizationId, userId],
+      )
+    : [];
 
   // Seat state is only meaningful for an organization in scope, so the
   // capability is resolved AFTER membership rather than before it.
   const access = await getTeamAdminAccess(db, userId, membership?.organization_id ?? null);
 
   if (!membership) {
-    return NextResponse.json({ organization: null, access });
+    return NextResponse.json({
+      organization: null,
+      activeOrganizationId: null,
+      workspaces,
+      access,
+    });
   }
 
   const [org] = await db.query<OrgWithCount>(
@@ -141,19 +157,26 @@ async function handleGet(request: NextRequest) {
   );
 
   if (!org) {
-    return NextResponse.json({ organization: null, access });
+    return NextResponse.json({
+      organization: null,
+      activeOrganizationId: null,
+      workspaces,
+      access,
+    });
   }
 
   return NextResponse.json({
     organization: buildOrgResponse(org, membership, access),
+    activeOrganizationId: org.id,
+    workspaces,
     access,
   });
 }
 
 /**
  * POST /api/settings/organization
- * Provision the current Team/Enterprise user into their one supported
- * organization and atomically make them its owner.
+ * Provision a Team/Enterprise user's owned organization and make it active.
+ * An account may also be a member of other workspaces through invitations.
  */
 async function handleCreate(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
@@ -177,16 +200,16 @@ async function handleCreate(request: NextRequest) {
   // repeat attempt, and during a Stripe outage they would get a 503 where the
   // honest answer is 409. The authoritative check is still the serialized one
   // inside the transaction — this only short-circuits the obvious case.
-  const [priorMembership] = await db.query<OrganizationMemberRow>(
+  const [priorOwnership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
-      where user_id = $1
+      where user_id = $1 and role = 'owner'
       order by joined_at asc
       limit 1`,
     [userId],
   );
-  if (priorMembership) {
-    throw createError.conflict('You already belong to an organization');
+  if (priorOwnership) {
+    throw createError.conflict('You already own a workspace. Switch to it from the account menu.');
   }
 
   // A per-seat purchase can only precede this call — creating an organization
@@ -221,23 +244,25 @@ async function handleCreate(request: NextRequest) {
   try {
     const organization = await db.transaction(async (tx) => {
       // Serialize provisioning by user so concurrent create requests cannot
-      // both pass the single-organization membership check.
+      // both pass the single-owned-workspace check.
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-owner:' || $1, 0))`,
         [userId],
       );
 
-      const [existingMembership] = await tx.query<OrganizationMemberRow>(
+      const [existingOwnership] = await tx.query<OrganizationMemberRow>(
         `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
          from public.organization_members
-         where user_id = $1
+         where user_id = $1 and role = 'owner'
          order by joined_at asc
          limit 1`,
         [userId],
       );
 
-      if (existingMembership) {
-        throw createError.conflict('You already belong to an organization');
+      if (existingOwnership) {
+        throw createError.conflict(
+          'You already own a workspace. Switch to it from the account menu.',
+        );
       }
 
       // Seats land on the INSERT rather than a follow-up UPDATE: a failure
@@ -280,6 +305,8 @@ async function handleCreate(request: NextRequest) {
          values ($1, $2, $3, 'manual', now(), now())`,
         [created.id, userId, 'owner'],
       );
+
+      await persistProvenActiveWorkspaceSelection(tx, userId, created.id);
 
       return created;
     });
@@ -332,37 +359,11 @@ async function handlePatch(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  await requireTeamAdminAccess(db, userId);
-
-  // Verify the user has an admin/owner role.
-  const [membership] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where user_id = $1
-     order by joined_at asc
-     limit 1`,
-    [userId],
-  );
-
-  if (!membership) {
-    throw createError.notFound('You are not a member of any organization');
-  }
-
-  // Re-resolve with the organization in scope so the response carries this
-  // org's real licensed seat state rather than the no-org placeholder.
-  const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
-
-  if (!['owner', 'admin'].includes(membership.role)) {
-    throw createError.forbidden('Only owners and admins can update organization settings');
-  }
-
   const body = await request.json().catch(() => ({}));
   const parsed = PatchSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
-
   const updates = parsed.data;
   const unsupportedFields = UNSUPPORTED_PATCH_FIELDS.filter(
     (field) => updates[field] !== undefined,
@@ -375,6 +376,34 @@ async function handlePatch(request: NextRequest) {
   }
   if (updates.name === undefined && updates.slug === undefined) {
     throw createError.validation('Provide an organization name or slug to update');
+  }
+
+  const db = getNeonDb();
+
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  if (!activeOrganizationId) {
+    throw createError.notFound('Select a workspace before updating its settings');
+  }
+
+  // Verify the user has an admin/owner role in the active workspace.
+  const [membership] = await db.query<OrganizationMemberRow>(
+    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+     from public.organization_members
+     where organization_id = $1 and user_id = $2
+     limit 1`,
+    [activeOrganizationId, userId],
+  );
+
+  if (!membership) {
+    throw createError.notFound('You are not a member of any organization');
+  }
+
+  // Re-resolve with the organization in scope so the response carries this
+  // org's real licensed seat state rather than the no-org placeholder.
+  const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
+
+  if (!['owner', 'admin'].includes(membership.role)) {
+    throw createError.forbidden('Only owners and admins can update organization settings');
   }
 
   const setClauses: string[] = ['updated_at = now()'];

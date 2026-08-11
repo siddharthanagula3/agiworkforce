@@ -1,3 +1,5 @@
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
 const streamFromProviderMock = jest.fn();
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
@@ -69,7 +71,7 @@ describe('managed mobile stream routing', () => {
 
     await streamChat(
       {
-        model: 'grok-4.5',
+        model: requireMobileCloudModel().id,
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
         operationId,

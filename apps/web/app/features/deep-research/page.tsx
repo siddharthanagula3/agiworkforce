@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -55,13 +53,6 @@ const RESEARCH_FEATURES = [
 export default function DeepResearchPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={breadcrumbSchema([
-          { name: 'Home', path: '/' },
-          { name: 'Features', path: '/features' },
-          { name: 'Deep Research', path: '/features/deep-research' },
-        ])}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -69,7 +60,7 @@ export default function DeepResearchPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Deep Research</p>
           <h1 id="agi-fl-research-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Answers that</span>
+            <span className="agi-fl-h1-line">Answers that</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">show their sources.</em>
             </span>

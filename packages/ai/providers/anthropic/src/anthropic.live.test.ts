@@ -11,13 +11,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { StreamChunk } from '@agiworkforce/types';
+import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
 
 import { createAnthropicAdapter } from './index';
 
 const liveEnabled = process.env['AGIWORKFORCE_LIVE_TEST'] === '1';
 const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
+const LIVE_MODEL_ID = requireProviderDefaultModel('anthropic');
 
 // llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('Anthropic adapter live', () => {
@@ -28,7 +29,7 @@ describe.skipIf(skip)('Anthropic adapter live', () => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of adapter.stream(
       {
-        model: 'claude-sonnet-5',
+        model: LIVE_MODEL_ID,
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       },

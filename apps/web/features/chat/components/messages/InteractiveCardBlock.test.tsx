@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
@@ -75,6 +75,78 @@ describe('InteractiveCardBlock', () => {
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Packed' })).toBeInTheDocument();
     expect(screen.queryByTestId('interactive-card-fallback')).not.toBeInTheDocument();
+  });
+
+  it('renders a real map search card and opens only the selected provider URL', () => {
+    const mapCard = clone(envelope) as Record<string, unknown>;
+    mapCard['kind'] = 'map-search.v1';
+    mapCard['producedBy'] = { toolCallId: 'toolu_01abc', toolName: 'search_maps' };
+    mapCard['fallback'] = {
+      headline: 'Coffee near Austin',
+      text: 'Map search: coffee shops near Austin, Texas',
+    };
+    mapCard['body'] = {
+      title: 'Coffee near Austin',
+      query: 'coffee shops near Austin, Texas',
+      actions: [
+        {
+          provider: 'google_maps',
+          label: 'Open in Google Maps',
+          url: 'https://www.google.com/maps/search/?api=1&query=coffee',
+        },
+        {
+          provider: 'openstreetmap',
+          label: 'Open in OpenStreetMap',
+          url: 'https://www.openstreetmap.org/search?query=coffee',
+        },
+      ],
+    };
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(<InteractiveCardBlock cards={[decodeDelta(mapCard)]} />);
+    expect(screen.getByTestId('interactive-card-map-search')).toBeVisible();
+    expect(screen.getByText('coffee shops near Austin, Texas')).toBeVisible();
+    screen.getByRole('button', { name: /Open in Google Maps/ }).click();
+    expect(open).toHaveBeenCalledWith(
+      'https://www.google.com/maps/search/?api=1&query=coffee',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    open.mockRestore();
+  });
+
+  it('refuses an arbitrary HTTPS URL even if a caller bypasses card hydration', () => {
+    const mapCard = clone(envelope) as Record<string, unknown>;
+    mapCard['kind'] = 'map-search.v1';
+    mapCard['producedBy'] = { toolCallId: 'toolu_01abc', toolName: 'search_maps' };
+    mapCard['body'] = {
+      title: 'Coffee near Austin',
+      query: 'coffee near Austin',
+      actions: [
+        {
+          provider: 'google_maps',
+          label: 'Open map',
+          url: 'https://www.google.com/maps/search/?api=1&query=coffee',
+        },
+      ],
+    };
+    const parsed = decodeDelta(mapCard);
+    if (!parsed.recognized || parsed.kind !== 'map-search.v1') {
+      throw new Error('map fixture did not parse');
+    }
+    const bypassed = {
+      ...parsed,
+      body: {
+        ...parsed.body,
+        actions: [{ ...parsed.body.actions[0]!, url: 'https://example.test/collect' }],
+      },
+    } as InteractiveCard;
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(<InteractiveCardBlock cards={[bypassed]} />);
+    screen.getByRole('button', { name: 'Open map' }).click();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
   it('still renders the fallback for a recognized kind with no renderer yet', () => {

@@ -10,7 +10,7 @@ mod tests {
             prompt_tokens: Some(20),
             completion_tokens: Some(80),
             cost: Some(0.01),
-            model: "gpt-4".to_string(),
+            model: "fixture-primary-model".to_string(),
             cached: false,
             finish_reason: None,
             tool_calls: None,
@@ -32,7 +32,7 @@ mod tests {
             prompt_tokens: Some(10),
             completion_tokens: Some(40),
             cost: Some(0.0),
-            model: "gpt-3.5-turbo".to_string(),
+            model: "fixture-secondary-model".to_string(),
             cached: true,
             finish_reason: None,
             tool_calls: None,
@@ -78,12 +78,12 @@ mod tests {
     #[test]
     fn test_provider_model_combinations() {
         let combinations = [
-            (Provider::OpenAI, "gpt-4"),
-            (Provider::OpenAI, "gpt-3.5-turbo"),
-            (Provider::Anthropic, "claude-3-opus-20240229"),
-            (Provider::Anthropic, "claude-3-sonnet-20240229"),
-            (Provider::Google, "gemini-pro"),
-            (Provider::Ollama, "llama3"),
+            (Provider::OpenAI, "fixture-primary-model"),
+            (Provider::OpenAI, "fixture-secondary-model"),
+            (Provider::Anthropic, "fixture-anthropic-primary-model"),
+            (Provider::Anthropic, "fixture-anthropic-secondary-model"),
+            (Provider::Google, "fixture-fast-model"),
+            (Provider::Ollama, "fixture-local-model"),
         ];
 
         assert_eq!(combinations.len(), 6);

@@ -2,8 +2,8 @@
  * Tests for context budgeting, memory compaction, and RAG chunking.
  *
  * Uses two model fixtures to exercise both extremes:
- *   - applefm-4k:   contextWindow = 4096  (Apple Foundation Models)
- *   - qwen3-262k:   contextWindow = 262144 (Qwen3-4B-Instruct-2507)
+ *   - fixture-small-context-model: contextWindow = 4096
+ *   - fixture-large-context-model: contextWindow = 262144
  *
  * All contextWindow values are read from the mocked catalog — no numbers
  * are hardcoded in the production code under test.
@@ -14,17 +14,17 @@
 // so the catalog data is defined inline inside the factory.
 // ---------------------------------------------------------------------------
 
-const APPLE_FM_ID = 'applefm-4k';
-const QWEN3_ID = 'qwen3-262k';
+const SMALL_CONTEXT_MODEL_ID = 'fixture-small-context-model';
+const LARGE_CONTEXT_MODEL_ID = 'fixture-large-context-model';
 
 jest.mock('@/lib/models', () => {
   const catalog = new Map([
     [
-      'applefm-4k',
+      'fixture-small-context-model',
       {
-        id: 'applefm-4k',
-        name: 'Apple FM (test)',
-        provider: 'apple',
+        id: 'fixture-small-context-model',
+        name: 'Small Context Fixture',
+        provider: 'fixture-provider',
         contextWindow: 4096,
         maxOutput: 512,
         supportsVision: false,
@@ -33,11 +33,11 @@ jest.mock('@/lib/models', () => {
       },
     ],
     [
-      'qwen3-262k',
+      'fixture-large-context-model',
       {
-        id: 'qwen3-262k',
-        name: 'Qwen3 4B (test)',
-        provider: 'qwen',
+        id: 'fixture-large-context-model',
+        name: 'Large Context Fixture',
+        provider: 'fixture-provider',
         contextWindow: 262144,
         maxOutput: 8192,
         supportsVision: false,
@@ -112,8 +112,8 @@ describe('contextBudgeter', () => {
     });
   });
 
-  describe('computeContextBudget — Apple FM (4K)', () => {
-    const modelId = APPLE_FM_ID;
+  describe('computeContextBudget — small context (4K)', () => {
+    const modelId = SMALL_CONTEXT_MODEL_ID;
     // contextWindow = 4096
     // hardCap = floor(4096 * 0.8) = 3276
     // warnThreshold = floor(4096 * 0.7) = 2867
@@ -154,8 +154,8 @@ describe('contextBudgeter', () => {
     });
   });
 
-  describe('computeContextBudget — Qwen3 (262K)', () => {
-    const modelId = QWEN3_ID;
+  describe('computeContextBudget — large context (262K)', () => {
+    const modelId = LARGE_CONTEXT_MODEL_ID;
     // contextWindow = 262144
     // hardCap = floor(262144 * 0.8) = 209715
     // warnThreshold = floor(262144 * 0.7) = 183500
@@ -176,12 +176,12 @@ describe('contextBudgeter', () => {
   describe('needsCompaction', () => {
     it('returns false when status is ok', () => {
       const messages = makeMessages(2, 10);
-      expect(needsCompaction(APPLE_FM_ID, messages)).toBe(false);
+      expect(needsCompaction(SMALL_CONTEXT_MODEL_ID, messages)).toBe(false);
     });
 
     it('returns true when status is compact', () => {
       const messages = makeMessages(5, 2800);
-      expect(needsCompaction(APPLE_FM_ID, messages)).toBe(true);
+      expect(needsCompaction(SMALL_CONTEXT_MODEL_ID, messages)).toBe(true);
     });
   });
 });
@@ -191,8 +191,8 @@ describe('contextBudgeter', () => {
 // ---------------------------------------------------------------------------
 
 describe('memoryCompactor', () => {
-  describe('compact — Apple FM (4K)', () => {
-    const modelId = APPLE_FM_ID;
+  describe('compact — small context (4K)', () => {
+    const modelId = SMALL_CONTEXT_MODEL_ID;
 
     it('no-ops when budget is ok', async () => {
       const messages = makeMessages(4, 50);
@@ -260,29 +260,29 @@ describe('memoryCompactor', () => {
 
 describe('ragChunker', () => {
   describe('getRagChunkingConfig', () => {
-    it('Apple FM (4K) → targetTokens = 25% of 4096', () => {
-      const config = getRagChunkingConfig(APPLE_FM_ID);
+    it('small context (4K) → targetTokens = 25% of 4096', () => {
+      const config = getRagChunkingConfig(SMALL_CONTEXT_MODEL_ID);
       expect(config.targetTokens).toBe(Math.floor(4096 * 0.25)); // 1024
     });
 
-    it('Apple FM (4K) → overlapTokens = 10% of targetTokens', () => {
-      const config = getRagChunkingConfig(APPLE_FM_ID);
+    it('small context (4K) → overlapTokens = 10% of targetTokens', () => {
+      const config = getRagChunkingConfig(SMALL_CONTEXT_MODEL_ID);
       const expectedTarget = Math.floor(4096 * 0.25);
       expect(config.overlapTokens).toBe(Math.floor(expectedTarget * 0.1));
     });
 
-    it('Apple FM (4K) → maxChunksPerQuery = 4 (small context)', () => {
-      const config = getRagChunkingConfig(APPLE_FM_ID);
+    it('small context (4K) → maxChunksPerQuery = 4', () => {
+      const config = getRagChunkingConfig(SMALL_CONTEXT_MODEL_ID);
       expect(config.maxChunksPerQuery).toBe(4);
     });
 
-    it('Qwen3 (262K) → targetTokens = 25% of 262144', () => {
-      const config = getRagChunkingConfig(QWEN3_ID);
+    it('large context (262K) → targetTokens = 25% of 262144', () => {
+      const config = getRagChunkingConfig(LARGE_CONTEXT_MODEL_ID);
       expect(config.targetTokens).toBe(Math.floor(262144 * 0.25)); // 65536
     });
 
-    it('Qwen3 (262K) → maxChunksPerQuery = 16 (large context)', () => {
-      const config = getRagChunkingConfig(QWEN3_ID);
+    it('large context (262K) → maxChunksPerQuery = 16', () => {
+      const config = getRagChunkingConfig(LARGE_CONTEXT_MODEL_ID);
       expect(config.maxChunksPerQuery).toBe(16);
     });
   });
@@ -290,25 +290,25 @@ describe('ragChunker', () => {
   describe('chunkForModel', () => {
     it('returns single chunk for short text', () => {
       const text = 'Hello world this is a short document.';
-      const chunks = chunkForModel(text, APPLE_FM_ID);
+      const chunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
       expect(chunks.length).toBe(1);
       expect(chunks[0].chunkIndex).toBe(0);
     });
 
     it('returns empty array for empty text', () => {
-      const chunks = chunkForModel('', APPLE_FM_ID);
+      const chunks = chunkForModel('', SMALL_CONTEXT_MODEL_ID);
       expect(chunks.length).toBe(0);
     });
 
-    it('Apple FM produces smaller chunks than Qwen3 for same document', () => {
-      // 5000-word document: Apple FM targetWords = floor(1024/1.3) ≈ 787 words/chunk
+    it('the small-context fixture produces smaller chunks than the large fixture', () => {
+      // 5000-word document: small targetWords = floor(1024/1.3) ≈ 787 words/chunk
       // → multiple chunks expected
       const text = Array.from({ length: 5000 }, (_, i) => `word${i}`).join(' ');
-      const appleFmChunks = chunkForModel(text, APPLE_FM_ID);
-      const qwen3Chunks = chunkForModel(text, QWEN3_ID);
+      const smallContextChunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
+      const largeContextChunks = chunkForModel(text, LARGE_CONTEXT_MODEL_ID);
 
-      // Apple FM must produce more chunks (smaller targetWords)
-      expect(appleFmChunks.length).toBeGreaterThan(qwen3Chunks.length);
+      // The small-context fixture must produce more chunks (smaller targetWords).
+      expect(smallContextChunks.length).toBeGreaterThan(largeContextChunks.length);
     });
 
     it('chunks have overlapping content', () => {
@@ -318,7 +318,7 @@ describe('ragChunker', () => {
       const wordCount = 2000;
       const words = Array.from({ length: wordCount }, (_, i) => `word${i}`);
       const text = words.join(' ');
-      const chunks = chunkForModel(text, APPLE_FM_ID);
+      const chunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
       if (chunks.length < 2) return; // can't test overlap with 1 chunk
 
       // Verify the second chunk starts before the last word of the first chunk
@@ -332,7 +332,7 @@ describe('ragChunker', () => {
 
     it('each chunk has a positive tokenCount', () => {
       const text = Array.from({ length: 500 }, (_, i) => `tok${i}`).join(' ');
-      const chunks = chunkForModel(text, APPLE_FM_ID);
+      const chunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
       for (const chunk of chunks) {
         expect(chunk.tokenCount).toBeGreaterThan(0);
       }
@@ -340,7 +340,7 @@ describe('ragChunker', () => {
 
     it('chunkIndex is sequential from 0', () => {
       const text = Array.from({ length: 3000 }, (_, i) => `w${i}`).join(' ');
-      const chunks = chunkForModel(text, APPLE_FM_ID);
+      const chunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
       chunks.forEach((chunk, i) => {
         expect(chunk.chunkIndex).toBe(i);
       });
@@ -348,12 +348,12 @@ describe('ragChunker', () => {
   });
 
   describe('getMaxChunksForModel', () => {
-    it('returns 4 for small-context model (Apple FM)', () => {
-      expect(getMaxChunksForModel(APPLE_FM_ID)).toBe(4);
+    it('returns 4 for the small-context model', () => {
+      expect(getMaxChunksForModel(SMALL_CONTEXT_MODEL_ID)).toBe(4);
     });
 
-    it('returns 16 for large-context model (Qwen3)', () => {
-      expect(getMaxChunksForModel(QWEN3_ID)).toBe(16);
+    it('returns 16 for the large-context model', () => {
+      expect(getMaxChunksForModel(LARGE_CONTEXT_MODEL_ID)).toBe(16);
     });
   });
 });

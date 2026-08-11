@@ -6,7 +6,7 @@ use std::fmt;
 
 /// Whether a base URL targets an OpenAI-managed endpoint (the public API or the
 /// ChatGPT/Codex backend). OpenAI deprecated `max_tokens` in favor of
-/// `max_completion_tokens`, and reasoning-class models (o-series, gpt-5 family)
+/// `max_completion_tokens`, and reasoning-class models
 /// reject `max_tokens` outright with a 400. Third-party OpenAI-compatible
 /// servers (xAI, DeepSeek, Mistral, OpenRouter, LM Studio, …) still expect the
 /// legacy `max_tokens` field, so the detection is intentionally narrow.

@@ -29,6 +29,7 @@ import {
   ChevronUp,
   LibraryBig,
   CalendarClock,
+  FolderOpen,
   ListChecks,
   Menu,
   MessageSquare,
@@ -55,6 +56,7 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { toast } from 'sonner';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 
 interface WebAppShellProps {
   children: React.ReactNode;
@@ -65,8 +67,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
   const { signOut: clerkSignOut } = useClerk();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isLoading: isAuthLoading, initialized: isAuthInitialized } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
+  const isBillingLoading = useBillingStore((s) => s.isLoading);
+  const isBillingInitialized = useBillingStore((s) => s.initialized);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -111,7 +115,12 @@ export function WebAppShell({ children }: WebAppShellProps) {
   }, [mobileNavOpen]);
 
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
-  const { conversations, deleteConversation, updateConversation } = useConversations();
+  const {
+    conversations,
+    deleteConversation,
+    updateConversation,
+    isLoading: isConversationsLoading,
+  } = useConversations();
 
   // ---- Projects ----
   const { projects: storeProjects } = useManagedCloudProjects();
@@ -240,6 +249,16 @@ export function WebAppShell({ children }: WebAppShellProps) {
         onClick: () => router.push('/chat/code'),
         isActive: pathname.startsWith('/chat/code'),
       },
+      // Keep the section that owns this shell visible and selected. Without
+      // this item the Projects hub/detail pages dropped their own primary nav
+      // destination, even though the chat shell exposes it persistently.
+      {
+        id: 'projects',
+        label: 'Projects',
+        icon: FolderOpen,
+        onClick: () => router.push('/chat/projects'),
+        isActive: pathname.startsWith('/chat/projects'),
+      },
       // Library — same persistent entry the chat page's sidebar carries, so
       // navigating between /projects and /library keeps the link visible.
       {
@@ -293,7 +312,23 @@ export function WebAppShell({ children }: WebAppShellProps) {
     await clerkSignOut({ redirectUrl: '/login' });
   }, [clerkSignOut, logout]);
 
-  const footerSlot = (
+  const isAccountLoading =
+    !isAuthInitialized || isAuthLoading || !isBillingInitialized || isBillingLoading;
+
+  const footerSlot = isAccountLoading ? (
+    <div
+      role="status"
+      aria-label="Loading account"
+      className="flex w-full items-center gap-2 px-3 py-3"
+    >
+      <span className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" aria-hidden />
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5" aria-hidden>
+        <span className="h-3 w-24 animate-pulse rounded bg-muted" />
+        <span className="h-2.5 w-32 animate-pulse rounded bg-muted/70" />
+      </span>
+      <span className="sr-only">Loading account…</span>
+    </div>
+  ) : (
     <div className="w-full">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -331,6 +366,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
               <DropdownMenuSeparator />
             </>
           )}
+          <WorkspaceMenuItems onManage={() => openSettings('team')} />
           {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
           <DropdownMenuItem onClick={() => openSettings('general')}>
             <Settings className="mr-2 h-4 w-4" />
@@ -352,6 +388,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const sharedSidebarProps = {
     sessions: sidebarSessions,
     projects: sidebarProjects,
+    // The conversations hook cannot start until auth settles. Treat that
+    // bootstrap interval as loading too, otherwise a signed-in reload briefly
+    // claims the account has no conversations.
+    isLoading: isAccountLoading || isConversationsLoading,
     mode: 'cloud' as const,
     headerSlot: <SidebarWordmark />,
     navItems: sidebarNavItems,

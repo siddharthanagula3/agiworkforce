@@ -30,6 +30,7 @@ import {
   type FreeTrialReservation,
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
@@ -94,18 +95,24 @@ import {
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
+  SKILL_TOOL_NAME,
   type Skill,
 } from '@agiworkforce/skills';
 import {
-  getManagedSkillCatalog,
+  getManagedSkillCatalogForPlugins,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
+import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import {
+  createMapSearchToolDefinition,
+  MAP_SEARCH_TOOL_NAME,
+} from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
 // PER-7: Settings promises "AGI will keep these in mind across chats"; this is
 // the read side that makes that true (see the injection site below).
@@ -183,6 +190,13 @@ export const ChatCompletionRequestSchema = z
     user: z.string().optional(),
     tools: z.array(ToolDefinitionSchema).max(64).optional(),
     tool_choice: ToolChoiceSchema.optional(),
+    x_interactive_cards: z
+      .object({
+        supported: z.array(z.string().min(1).max(64)).max(16),
+        canRespond: z.boolean(),
+      })
+      .strict()
+      .optional(),
     /*
      * CAPABILITY HONESTY: this field was once validated here and read nowhere
      * else, so a caller could ask for `json_object` / `json_schema`, receive
@@ -459,6 +473,14 @@ export function applyManagedSkillSelection(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== 'skill'),
     createSkillToolDefinition(),
   ];
+  // Selecting a Skill in the composer is an execution instruction, not a hint
+  // the model may silently ignore. Force the first provider step through the
+  // canonical Skill tool; the tool loop restores `auto` after that call so the
+  // model can finish or use other explicitly enabled tools without looping.
+  request.tool_choice = {
+    type: 'function',
+    function: { name: SKILL_TOOL_NAME },
+  };
   return { ok: true };
 }
 
@@ -468,6 +490,30 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
     createManagedOfficeFileToolDefinition(),
+  ];
+}
+
+/**
+ * Offer the server-owned map-search tool only when the caller explicitly says
+ * it can render the matching card. The public API and older clients therefore
+ * never receive a tool result they cannot display.
+ */
+export function applyMapSearchCardCapability(
+  request: ChatCompletionRequest,
+  params: { surface: CloudChatSurface; toolsCapable: boolean; userMessage: string },
+): void {
+  if (
+    params.surface !== 'web' ||
+    !params.toolsCapable ||
+    !request.stream ||
+    !/\b(map|maps|mapped|nearby|near me|on a map|where is|where are)\b/i.test(params.userMessage) ||
+    !request.x_interactive_cards?.supported.includes('map-search.v1')
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
+    createMapSearchToolDefinition(),
   ];
 }
 
@@ -542,6 +588,8 @@ export function resolveManagedUsageLeaseSeconds(
 
 export type ProcessedRequest = {
   requestId: string;
+  /** Active organization captured at admission; null means Personal. */
+  organizationId?: string | null;
   /** Durable paid-request lifecycle; absent only for the free-trial path. */
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
@@ -1239,24 +1287,18 @@ function findCheaperFallbackModel(
   );
 
   const canonicalCurrentModel = normalizeModelId(currentModel) ?? currentModel.toLowerCase();
-  const fallbackModels = getEconomyFallbackModels();
-
-  for (const fallback of fallbackModels) {
-    if (fallback.model === canonicalCurrentModel || fallback.model === currentModel.toLowerCase()) {
-      continue;
-    }
-
-    const fallbackCost = LLMCostCalculator.estimateCost(
-      fallback.provider,
-      fallback.model,
-      estimatedPromptTokens,
-      maxTokens,
-    );
-
-    if (fallbackCost < currentCost) return fallback;
-  }
-
-  return null;
+  return selectCheapestRequestFallback({
+    currentModelIds: new Set([canonicalCurrentModel, currentModel.toLowerCase()]),
+    currentRequestCostCents: currentCost,
+    candidates: getEconomyFallbackModels(),
+    estimateRequestCostCents: (fallback) =>
+      LLMCostCalculator.estimateCost(
+        fallback.provider,
+        fallback.model,
+        estimatedPromptTokens,
+        maxTokens,
+      ),
+  });
 }
 
 export function handleCreditError(_deductResult: {
@@ -1801,7 +1843,7 @@ export async function processRequest(
     const trialProviderLower =
       getModelMetadataById(requestedModel)?.provider?.toLowerCase() ?? null;
     // Model-agnostic web search: a tools-capable model WITHOUT a native search path
-    // (kimi-k3, deepseek, qwen, glm, groq, minimax…) still gets platform web search
+    // (for example, an open-weight tools model) still gets platform web search
     // via the generic Perplexity fallback tool. The composer lights the Web-search
     // toggle for these on `tools`, not `search`, so the trial capability gate must
     // match — do not 403 them just because the model's intrinsic `search` cap is
@@ -2183,7 +2225,9 @@ export async function processRequest(
   if (chatRequest.skill_name) {
     let managedSkillCatalog: Skill[];
     try {
-      managedSkillCatalog = await getManagedSkillCatalog();
+      managedSkillCatalog = await getManagedSkillCatalogForPlugins(
+        await listEnabledPluginIdsForUser(userId),
+      );
     } catch (error) {
       if (error instanceof SkillCatalogUnavailableError) {
         return {
@@ -2273,6 +2317,12 @@ export async function processRequest(
     }
     applyManagedOfficeFileCreation(chatRequest);
   }
+
+  applyMapSearchCardCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+  });
 
   const originalModel = chatRequest.model;
   let usedFallback = false;
@@ -2730,7 +2780,7 @@ export async function processRequest(
     // Model-agnostic: the E2B sandbox is platform-executed — it only needs the model to emit
     // tool calls, exactly like the url_fetch tool above — so it is gated on the `tools`
     // capability, NOT the per-model `codeExecution` cap. That lets tools-capable open-weight
-    // models (kimi-k3, deepseek, qwen, glm…) that carry `codeExecution:false` (meaning "no
+    // models that carry `codeExecution:false` (meaning "no
     // *native* interpreter", which stays truthful in the catalog) still run code in the shared
     // sandbox. The AGI_E2B_EXECUTION flag remains the single operator gate protecting
     // managed-compute billing/abuse. The NATIVE fallback path keeps the `codeExecution` cap:
@@ -2861,9 +2911,12 @@ export async function processRequest(
     maxTokens = llmRequest.max_tokens;
   }
 
+  const { organizationId } = await scopedDbPromise;
+
   return {
     ok: true,
     requestId,
+    organizationId,
     managedUsage,
     chatRequest,
     conversationId: chatRequest.conversation_id,

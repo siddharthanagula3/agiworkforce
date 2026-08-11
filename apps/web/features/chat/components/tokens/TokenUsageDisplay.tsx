@@ -5,6 +5,7 @@
 
 import { Badge } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
+import { getModelPresentationLabel } from '@agiworkforce/unified-chat';
 import { Zap, TrendingUp, DollarSign } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -59,7 +60,11 @@ export function TokenUsageDisplay({
           </TooltipTrigger>
           <TooltipContent className="max-w-xs">
             <div className="space-y-1 text-xs">
-              {model && <div className="font-medium text-foreground">{model}</div>}
+              {model && (
+                <div className="font-medium text-foreground">
+                  {getModelPresentationLabel(model)}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <span className="text-muted-foreground">Input tokens:</span>
                 <span className="font-mono">{inputTokens ? formatTokens(inputTokens) : 'N/A'}</span>
@@ -98,7 +103,7 @@ export function TokenUsageDisplay({
       {model && (
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <TrendingUp className="h-3.5 w-3.5" />
-          <span className="font-medium">{model}</span>
+          <span className="font-medium">{getModelPresentationLabel(model)}</span>
         </div>
       )}
 

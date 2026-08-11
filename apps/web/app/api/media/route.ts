@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   listMediaAssets,
+  permanentlyDeleteMediaAsset,
   softDeleteMediaAsset,
   restoreMediaAsset,
 } from '@/lib/server/media-assets';
@@ -19,6 +20,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  * Media Library API
  *   GET    /api/media?kind=image|video  - list the current user's generated media
  *   DELETE /api/media?id=<uuid>         - soft-delete one of the user's assets
+ *   DELETE /api/media?id=<uuid>&permanent=true - erase a soft-deleted asset
  *   POST   /api/media?id=<uuid>         - restore from the Recently-deleted bin
  *
  * User-scoped: every cloud surface (web/desktop/mobile cloud) reads the same
@@ -35,6 +37,7 @@ export const runtime = 'nodejs';
 
 const DeleteMediaQuerySchema = z.object({
   id: z.string().uuid(),
+  permanent: z.enum(['true']).optional(),
 });
 
 function headers(request: NextRequest) {
@@ -70,12 +73,17 @@ async function handleDeleteMedia(request: NextRequest): Promise<NextResponse> {
 
   const { userId } = await getClerkAuthUser(request);
   const rawId = request.nextUrl.searchParams.get('id');
-  const parsed = DeleteMediaQuerySchema.safeParse({ id: rawId });
+  const parsed = DeleteMediaQuerySchema.safeParse({
+    id: rawId,
+    permanent: request.nextUrl.searchParams.get('permanent') ?? undefined,
+  });
   if (!parsed.success) {
     throw createError.validation('A valid id query parameter (uuid) is required');
   }
 
-  const deleted = await softDeleteMediaAsset(userId, parsed.data.id);
+  const deleted = parsed.data.permanent
+    ? await permanentlyDeleteMediaAsset(userId, parsed.data.id)
+    : await softDeleteMediaAsset(userId, parsed.data.id);
   return NextResponse.json({ success: deleted }, { headers: headers(request) });
 }
 

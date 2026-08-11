@@ -26,6 +26,8 @@ import {
   type EffectiveCapabilityDocumentWire,
 } from '../capability-handshake';
 
+const FIXTURE_MODEL_SOURCE = 'model:fixture-capability-model';
+
 function grant(
   layer: CapabilityLayerGrant['layer'],
   sourceId: string,
@@ -40,7 +42,7 @@ function sampleDocument(): EffectiveCapabilityDocument {
     version: 'v1',
     computedAt: '2026-07-15T00:00:00.000Z',
     layers: {
-      model: grant('model', 'model:sonnet-5', ['canUseWebSearch', 'canUseImages']),
+      model: grant('model', FIXTURE_MODEL_SOURCE, ['canUseWebSearch', 'canUseImages']),
       tier: grant('tier', 'tier:pro', ['canUseWebSearch', 'canUseImages']),
       surface: grant('surface', 'surface:desktop', ['canUseWebSearch']), // partial on purpose
       settings: grant('settings', 'settings:default', ['canUseWebSearch', 'canUseImages']),

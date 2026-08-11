@@ -117,7 +117,7 @@
   "inIndia": "India",
   "foreverLabel": "forever",
   "freeTierBody": "A small free monthly allowance to try AGI Cloud on our fastest economy models, no credit card required.",
-  "freeFeature1": "GPT-5.4 Mini, GPT-5.6 Luna, and Gemini 3.5 Flash-Lite",
+  "freeFeature1": "Current fast OpenAI and Google models",
   "freeFeature2": "No credit card required",
   "freeFeature3": "Upgrade anytime as you need more",
   "freeCta": "Start free",
@@ -174,6 +174,7 @@
   "checkoutFailed": "Failed to start checkout. Please try again.",
   "perSeatPricingSub": "per seat, per month",
   "perSeatPrice": "{{price}}/seat/mo",
+  "perSeatPriceAnnual": "{{price}}/seat/yr",
   "seatCountLabel": "Seats",
   "changeSeatsCta": "Update seats",
   "audienceLabel": "Billing audience",
@@ -188,5 +189,11 @@
   "heroLede": "See pricing for individual, team, and enterprise plans.",
   "freeLocalByok": "Local models and your own API keys, always free",
   "seatTotal_one": "{{count}} seat · {{total}}/mo",
-  "seatTotal_other": "{{count}} seats · {{total}}/mo"
+  "seatTotal_other": "{{count}} seats · {{total}}/mo",
+  "seatTotalAnnual_one": "{{count}} seat · {{total}}/yr",
+  "seatTotalAnnual_other": "{{count}} seats · {{total}}/yr",
+  "seatCadenceMonthly_one": "{{count}} seat · billed monthly",
+  "seatCadenceMonthly_other": "{{count}} seats · billed monthly",
+  "seatCadenceAnnual_one": "{{count}} seat · billed annually",
+  "seatCadenceAnnual_other": "{{count}} seats · billed annually"
 }

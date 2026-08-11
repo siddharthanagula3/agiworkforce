@@ -32,6 +32,8 @@
 
 import 'server-only';
 
+import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
+import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import type { ProcessedRequest } from './request-processor';
@@ -49,6 +51,8 @@ export interface AssistantTurnSnapshot {
   outputTokens: number;
   /** True when the stream ended by cancellation/abort rather than completion. */
   truncated: boolean;
+  /** Validated structured cards emitted beside this turn's prose. */
+  interactiveCards?: readonly InteractiveCard[];
   /**
    * Durable run this turn belongs to, when it was produced by the managed
    * agent workflow. Stored under the `cloudAgentRun` metadata key — the SAME
@@ -113,11 +117,21 @@ export async function persistAssistantTurn(params: {
     return;
   }
 
-  // An empty, non-truncated turn carries nothing worth a row. A truncated turn
-  // with no text still records that the turn existed and was cut off, and a
-  // turn carrying a run reference is the reattachment anchor for work that is
-  // still running server-side — dropping it would strand the run.
-  if (!snapshot.content.trim() && !snapshot.truncated && !snapshot.runReference) return;
+  const interactiveCards = readPersistedInteractiveCards({
+    [INTERACTIVE_CARDS_METADATA_KEY]: snapshot.interactiveCards,
+  });
+  // An empty, non-truncated turn carries nothing worth a row unless it carries
+  // a validated card. A truncated turn with no text still records that the turn
+  // existed and was cut off, and a turn carrying a run reference is the
+  // reattachment anchor for work that is still running server-side.
+  if (
+    !snapshot.content.trim() &&
+    !snapshot.truncated &&
+    !snapshot.runReference &&
+    interactiveCards.length === 0
+  ) {
+    return;
+  }
 
   const metadata: Record<string, unknown> = {
     serverPersisted: true,
@@ -128,12 +142,14 @@ export async function persistAssistantTurn(params: {
       : {}),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
   };
+  if (interactiveCards.length > 0) {
+    metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;
+  }
 
   try {
-    // Ownership is re-asserted in SQL through web_conversations.user_id rather
-    // than trusted from the already-validated request: the INSERT ... SELECT
-    // produces zero rows for a conversation the caller does not own, so a
-    // future refactor that loses the upstream check cannot write cross-tenant.
+    // Ownership and the workspace captured at admission are both re-asserted
+    // in SQL. A later workspace switch cannot redirect this already-started
+    // turn, and a Personal turn cannot be written into an organization chat.
     // `on conflict (id) do update ... where conversation_id matches` mirrors
     // the client message route exactly, which is what makes the two writers
     // idempotent with each other.
@@ -142,7 +158,10 @@ export async function persistAssistantTurn(params: {
          (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata)
        select $1::uuid, c.id, 'assistant', $3, $4, $5, $6, $7, $8::jsonb
          from public.web_conversations c
-        where c.id = $2::uuid and c.user_id = $9 and c.deleted_at is null
+        where c.id = $2::uuid
+          and c.user_id = $9
+          and c.organization_id is not distinct from $10::uuid
+          and c.deleted_at is null
        on conflict (id) do update
           set content = excluded.content,
               model = excluded.model,
@@ -161,6 +180,7 @@ export async function persistAssistantTurn(params: {
         Math.max(0, Math.trunc(snapshot.outputTokens)),
         JSON.stringify(metadata),
         userId,
+        processed.organizationId ?? null,
       ],
     );
   } catch (error) {

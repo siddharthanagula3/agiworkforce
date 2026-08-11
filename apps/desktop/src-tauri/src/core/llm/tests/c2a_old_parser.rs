@@ -426,7 +426,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
             }
 
             // ── OpenAI Responses API fallback ───────────────────────────
-            // The Responses API (used by o3, o4-mini, gpt-4.1) emits different
+            // The Responses API emits different
             // event types than Chat Completions.  Only activate when the Chat
             // Completions `choices` block above did not produce content.
             if content.is_empty() {

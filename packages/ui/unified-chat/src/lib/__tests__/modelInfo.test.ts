@@ -1,30 +1,54 @@
 import { describe, expect, it } from 'vitest';
-import { createChatModelInfo, parseDiscoveredChatModels } from '../modelInfo';
+import {
+  createChatModelInfo,
+  getManagedModelPresentationLabel,
+  getModelPresentationLabel,
+  parseDiscoveredChatModels,
+} from '../modelInfo';
+import { requireCatalogModel } from '../../test/modelCatalogFixtures';
+
+const canonicalChatModel = requireCatalogModel(
+  (model) =>
+    model.contextWindow !== undefined &&
+    model.capabilities.thinking &&
+    model.capabilities.vision &&
+    model.capabilities.tools &&
+    model.availability !== 'coming_soon' &&
+    model.availability !== 'unavailable',
+  'a live chat model with thinking, vision, and tool capabilities',
+);
+
+const expectedPresentationTier =
+  canonicalChatModel.qualityTier === 'best'
+    ? 'flagship'
+    : canonicalChatModel.qualityTier === 'fast'
+      ? 'fast'
+      : 'standard';
 
 describe('createChatModelInfo', () => {
   it('derives canonical identity and capabilities from the shared model catalog', () => {
     expect(
       createChatModelInfo({
-        id: 'claude-sonnet-5',
+        id: canonicalChatModel.id,
         name: 'stale host label',
-        provider: 'wrong-provider',
+        provider: 'fixture-wrong-provider',
         isLocal: false,
         isByok: true,
       }),
     ).toEqual(
       expect.objectContaining({
-        id: 'claude-sonnet-5',
-        name: 'Claude Sonnet 5',
-        provider: 'anthropic',
-        tier: 'standard',
-        supportsThinking: true,
-        supportsVision: true,
-        supportsTools: true,
-        contextWindow: 1_000_000,
+        id: canonicalChatModel.id,
+        name: canonicalChatModel.name,
+        provider: canonicalChatModel.provider,
+        tier: expectedPresentationTier,
+        supportsThinking: canonicalChatModel.capabilities.thinking,
+        supportsVision: canonicalChatModel.capabilities.vision,
+        supportsTools: canonicalChatModel.capabilities.tools,
+        contextWindow: canonicalChatModel.contextWindow,
         isLocal: false,
         isByok: true,
         metadataSource: 'registry',
-        availability: 'live',
+        availability: canonicalChatModel.availability ?? 'live',
       }),
     );
   });
@@ -32,16 +56,16 @@ describe('createChatModelInfo', () => {
   it('preserves truthful unknown capability state for a dynamically discovered model', () => {
     expect(
       createChatModelInfo({
-        id: 'private-gateway/custom-model',
-        name: 'Custom Model',
-        provider: 'private_gateway',
+        id: 'fixture-private-gateway-model',
+        name: 'Custom Model Fixture',
+        provider: 'fixture_private_gateway',
         isLocal: false,
         isByok: true,
       }),
     ).toEqual({
-      id: 'private-gateway/custom-model',
-      name: 'Custom Model',
-      provider: 'private_gateway',
+      id: 'fixture-private-gateway-model',
+      name: 'Custom Model Fixture',
+      provider: 'fixture_private_gateway',
       tier: 'standard',
       supportsThinking: false,
       supportsVision: false,
@@ -57,9 +81,9 @@ describe('createChatModelInfo', () => {
   it('carries current live registry availability into the selector DTO', () => {
     expect(
       createChatModelInfo({
-        id: 'gpt-5.6-sol',
-        name: 'GPT-5.6 Sol',
-        provider: 'openai',
+        id: canonicalChatModel.id,
+        name: 'stale host label',
+        provider: 'fixture-wrong-provider',
         isLocal: false,
         isByok: false,
       }),
@@ -68,6 +92,30 @@ describe('createChatModelInfo', () => {
         availability: 'live',
         metadataSource: 'registry',
       }),
+    );
+  });
+});
+
+describe('getModelPresentationLabel', () => {
+  it('uses the canonical display name for a catalog model', () => {
+    expect(getModelPresentationLabel(canonicalChatModel.id)).toBe(canonicalChatModel.name);
+  });
+
+  it('preserves an unknown Local/BYOK identifier honestly', () => {
+    expect(getModelPresentationLabel('fixture-private-gateway-model')).toBe(
+      'fixture-private-gateway-model',
+    );
+  });
+});
+
+describe('getManagedModelPresentationLabel', () => {
+  it('uses the canonical display name for a managed catalog model', () => {
+    expect(getManagedModelPresentationLabel(canonicalChatModel.id)).toBe(canonicalChatModel.name);
+  });
+
+  it('does not expose an unknown historical managed transport identifier', () => {
+    expect(getManagedModelPresentationLabel('fixture-retired-managed-model')).toBe(
+      'Unavailable model',
     );
   });
 });

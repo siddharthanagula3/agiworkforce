@@ -11,10 +11,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockGetClerkAuthUser, mockNeonQuery, mockGetPresignedUploadUrl } = vi.hoisted(() => ({
+const {
+  mockGetClerkAuthUser,
+  mockNeonQuery,
+  mockGetPresignedUploadUrl,
+  mockResolveActiveOrganizationId,
+} = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockGetPresignedUploadUrl: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -41,6 +47,9 @@ vi.mock('@/lib/server/object-storage', () => ({
   getPresignedUploadUrl: mockGetPresignedUploadUrl,
   deleteObject: vi.fn(),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 
 import { POST } from '@/app/api/uploads/presign/route';
 
@@ -64,6 +73,7 @@ const ALL_KINDS = ['avatar', 'knowledge-file', 'chat-attachment'] as const;
 
 beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+  mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
   // Project ownership lookup for the knowledge-file kind.
   mockNeonQuery.mockResolvedValue([{ id: 'proj-1' }]);
   mockGetPresignedUploadUrl.mockResolvedValue({
@@ -151,6 +161,27 @@ describe('POST /api/uploads/presign · type policy', () => {
 
     expect(response.status).toBe(200);
     expect(mockGetPresignedUploadUrl).toHaveBeenCalledTimes(1);
+    expect(mockNeonQuery).toHaveBeenCalledWith(
+      expect.stringContaining('organization_id is not distinct from $3::uuid'),
+      ['proj-1', 'user-abc', '11111111-1111-4111-8111-111111111111'],
+    );
+  });
+
+  it('does not sign a knowledge upload for a project outside the active workspace', async () => {
+    mockNeonQuery.mockResolvedValueOnce([]);
+
+    const response = await POST(
+      presignRequest({
+        kind: 'knowledge-file',
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 900_000,
+        projectId: 'proj-1',
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
   });
 });
 

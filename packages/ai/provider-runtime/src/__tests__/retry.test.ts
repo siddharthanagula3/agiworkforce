@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { CannotRetryError, FallbackTriggeredError } from '../errors';
 import { computeDelay, createRetryContext, withRetry, type RetryEvent } from '../retry';
 
+const PRIMARY_FIXTURE_MODEL_ID = 'fixture-primary-model';
+const FALLBACK_FIXTURE_MODEL_ID = 'fixture-fallback-model';
+
 describe('computeDelay', () => {
   it('honours retry-after when present', () => {
     expect(computeDelay(1, 7, 500, 32_000, () => 0)).toBe(7000);
@@ -32,7 +35,7 @@ describe('computeDelay', () => {
 describe('withRetry', () => {
   it('returns immediately on success', async () => {
     const events: RetryEvent[] = [];
-    const ctx = createRetryContext({ model: 'm-1' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     const result = await withRetry(async () => 'ok', ctx, { onEvent: (e) => events.push(e) });
     expect(result).toBe('ok');
     expect(events.find((e) => e.type === 'success')).toBeTruthy();
@@ -40,7 +43,7 @@ describe('withRetry', () => {
   });
 
   it('retries on connection errors and eventually succeeds', async () => {
-    const ctx = createRetryContext({ model: 'm-1' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     let calls = 0;
     const result = await withRetry(
       async () => {
@@ -56,7 +59,7 @@ describe('withRetry', () => {
   });
 
   it('throws CannotRetryError on auth_403', async () => {
-    const ctx = createRetryContext({ model: 'm-1' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     await expect(
       withRetry(
         async () => {
@@ -70,8 +73,8 @@ describe('withRetry', () => {
 
   it('throws FallbackTriggeredError after MAX_OVERLOAD_RETRIES consecutive 529s', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-5',
-      fallbackModel: 'claude-sonnet-4.6',
+      model: PRIMARY_FIXTURE_MODEL_ID,
+      fallbackModel: FALLBACK_FIXTURE_MODEL_ID,
     });
     await expect(
       withRetry(
@@ -85,7 +88,7 @@ describe('withRetry', () => {
   });
 
   it('does NOT throw FallbackTriggeredError when no fallbackModel set', async () => {
-    const ctx = createRetryContext({ model: 'claude-opus-5' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     await expect(
       withRetry(
         async () => {
@@ -100,14 +103,14 @@ describe('withRetry', () => {
   it('rejects abort signal before any attempt', async () => {
     const ac = new AbortController();
     ac.abort();
-    const ctx = createRetryContext({ model: 'm-1', signal: ac.signal });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID, signal: ac.signal });
     await expect(withRetry(async () => 'ok', ctx, { baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CannotRetryError,
     );
   });
 
   it('shrinks maxTokensOverride on context_overflow', async () => {
-    const ctx = createRetryContext({ model: 'claude-opus-5' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     let calls = 0;
     let observedOverride: number | undefined;
     await withRetry(
@@ -131,8 +134,8 @@ describe('withRetry', () => {
 
   it('triggers fallback when context_overflow has zero headroom', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-5',
-      fallbackModel: 'claude-sonnet-4.6',
+      model: PRIMARY_FIXTURE_MODEL_ID,
+      fallbackModel: FALLBACK_FIXTURE_MODEL_ID,
     });
     await expect(
       withRetry(
@@ -150,8 +153,8 @@ describe('withRetry', () => {
 
   it('respects shouldFallback hook returning false', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-5',
-      fallbackModel: 'claude-sonnet-4.6',
+      model: PRIMARY_FIXTURE_MODEL_ID,
+      fallbackModel: FALLBACK_FIXTURE_MODEL_ID,
     });
     await expect(
       withRetry(
@@ -170,8 +173,8 @@ describe('withRetry', () => {
 
   it('respects disableFallback flag', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-5',
-      fallbackModel: 'claude-sonnet-4.6',
+      model: PRIMARY_FIXTURE_MODEL_ID,
+      fallbackModel: FALLBACK_FIXTURE_MODEL_ID,
     });
     await expect(
       withRetry(
@@ -186,7 +189,7 @@ describe('withRetry', () => {
 
   it('emits delay events with computed delay', async () => {
     const events: RetryEvent[] = [];
-    const ctx = createRetryContext({ model: 'm-1' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     let calls = 0;
     await withRetry(
       async () => {
@@ -238,8 +241,8 @@ describe('withRetry', () => {
       // Randomise per-iteration: model, fallback, picked error, retries.
       const errIdx = Math.floor(Math.random() * fakeErrors.length);
       const ctx = createRetryContext({
-        model: 'claude-opus-5',
-        fallbackModel: i % 2 === 0 ? 'claude-sonnet-4.6' : undefined,
+        model: PRIMARY_FIXTURE_MODEL_ID,
+        fallbackModel: i % 2 === 0 ? FALLBACK_FIXTURE_MODEL_ID : undefined,
       });
       const errSpec = fakeErrors[errIdx]!;
       try {
@@ -268,7 +271,7 @@ describe('withRetry', () => {
 
   it('telemetry: emits success once and exactly one of give-up|fallback on failure', async () => {
     const events: RetryEvent[] = [];
-    const ctx = createRetryContext({ model: 'm-1' });
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
     await expect(
       withRetry(
         async () => {

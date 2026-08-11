@@ -1,10 +1,12 @@
 import {
   getAutoRoutingProfiles,
+  getDefaultAutoRoutingProfile,
   getModelsForTierAndSurface,
   PROVIDER_DISPLAY,
   normalizeModelId,
   providerLabels,
   type PickerModelTier,
+  type PickerModelView,
   type Provider,
   type ProviderId,
 } from '@agiworkforce/types';
@@ -57,6 +59,9 @@ export const AUTO_MODES: AutoModeDef[] = getAutoRoutingProfiles().map((profile) 
   tier: profile.profile,
 }));
 
+/** Canonical default Auto selection; identity is owned by the routing registry. */
+export const DEFAULT_AUTO_MODE_ID = getDefaultAutoRoutingProfile().id;
+
 const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>>> = {
   openai: { icon: 'Sparkles' },
   anthropic: { icon: 'Brain' },
@@ -71,15 +76,32 @@ const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>
 
 const MOBILE_MODEL_OPTIONS = {
   // Some general-purpose, vision-capable models are cataloged as `code`
-  // because coding is their primary strength (for example Claude Sonnet 5).
+  // because coding is their primary catalog-declared strength.
   // Mobile chat can still run them, so excluding the type hid a current model
   // even though the registry admitted it to this runtime profile.
   modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'] as const,
 };
 
+type MobileChatPickerModel = PickerModelView & { contextWindow: number };
+
+/**
+ * Mobile context budgeting needs a provider-published token window. Media APIs
+ * may intentionally omit that field because they are bounded by characters,
+ * duration, or output size instead; never turn those contracts into a fake
+ * token count. A chat row without a proven token window therefore fails closed
+ * at this projection boundary.
+ */
+function hasTokenContextWindow(model: PickerModelView): model is MobileChatPickerModel {
+  return (
+    typeof model.contextWindow === 'number' &&
+    Number.isFinite(model.contextWindow) &&
+    model.contextWindow > 0
+  );
+}
+
 const MOBILE_PICKER_MODELS = getModelsForTierAndSurface('max', 'mobile/cloud-chat', {
   modelTypes: [...MOBILE_MODEL_OPTIONS.modelTypes],
-});
+}).filter(hasTokenContextWindow);
 
 const MOBILE_PROVIDER_IDS = Array.from(
   new Set(MOBILE_PICKER_MODELS.map((model) => model.provider)),
@@ -94,7 +116,7 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
     PROVIDER_DISPLAY['custom-openai-compatible'].brandColor,
 }));
 
-function toModelDef(model: (typeof MOBILE_PICKER_MODELS)[number]): ModelDef {
+function toModelDef(model: MobileChatPickerModel): ModelDef {
   return {
     id: model.id,
     name: model.name,
@@ -113,7 +135,9 @@ export const MODEL_LIST: ModelDef[] = MOBILE_PICKER_MODELS.map(toModelDef);
 export function getCloudModelsForTier(subscriptionTier: string): ModelDef[] {
   return getModelsForTierAndSurface(subscriptionTier, 'mobile/cloud-chat', {
     modelTypes: [...MOBILE_MODEL_OPTIONS.modelTypes],
-  }).map(toModelDef);
+  })
+    .filter(hasTokenContextWindow)
+    .map(toModelDef);
 }
 
 const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));

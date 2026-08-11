@@ -92,7 +92,7 @@ export default function CliPage() {
               */}
               <p className="agi-fl-eyebrow">AGI CLI · {SURFACE_STATUS.cli}</p>
               <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">An agent in</span>
+                <span className="agi-fl-h1-line">An agent in</span>{' '}
                 <span className="agi-fl-h1-line">
                   <em className="agi-fl-h1-em">your terminal.</em>
                 </span>
